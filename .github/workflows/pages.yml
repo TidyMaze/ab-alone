@@ -37,7 +37,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Always the head of main, never the event's commit: runs can finish out of order (#1267), and
+      # a late older run then still deploys the newest code.
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - id: wasm-cache
         uses: actions/cache@v4
         with:

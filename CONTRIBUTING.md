@@ -454,6 +454,11 @@ rebases on `main` without conflict (section 6.4, merge gate). It runs the CI che
   uploads its own `playwright-report-<n>` artifact. On CI the browser window is 960x540, not
   1280x720: software WebGL cost follows the pixels.
 
+- **Pages deploy** (`.github/workflows/pages.yml`): runs on a push to `main` that changes the built
+  game. The build always checks out the head of `main`, not the commit of the run, so a run that
+  finishes late still deploys the newest code (#1267). To redeploy the head of `main` by hand (for
+  example after a failed run): `gh workflow run pages.yml --ref main`.
+
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
 After pulling main, rebuild it from the repo root:
 
