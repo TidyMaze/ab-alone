@@ -92,6 +92,19 @@ The move from 1 to 2 keeps the engine and the move log. Only the transport and t
 - Measure a real load profile before any 10k cost estimate.
 - A `Decision` issue is still to be opened from this spec (not created in this PR).
 
+## 7. Relays, privacy and age (#1305, best effort, not reviewed by a lawyer)
+
+Owner decision, 2026-11-01: the game does not use Trystero's 29 default relays. Read on 2026-11-01 (one NIP-11 GET each, comment on #1305): none publishes a `posting_policy` or a game-use term, none declares `payment_required` or `auth_required` true. "Allowed" is never stated; "not forbidden in what was readable".
+
+- **Shortlist** (`relayUrls` of `joinRoom`): `wss://relay.piazza.today`, `wss://nos.lol`, `wss://nostr.red5d.dev`, `wss://relay.bitmacro.cloud`; optional `wss://nostr.rblb.it`. Re-check NIP-11 before shipping. Not read: the nos.lol terms.
+- **Avoid:** the default 29, `relay.kaleidoswap.com` (restricted writes), dev and test relays, relays that were down.
+- **Rules:** ephemeral kinds (NIP-01: 20000-29999) only; positions and live play on WebRTC, never on a relay; one beacon per room; stop and back off on `rate-limited:`; no game history stored on a relay.
+- **STUN:** Trystero defaults (Google `stun`, `stun1`, `stun2` on 19302, Cloudflare 3478). No fair-use term found. Use no TURN.
+- **Controller:** the project's owners, contact by GitHub issue. **Age:** online play from 16 (GDPR art. 8 default, the strictest member-state value; no verification). **Notice:** [docs/privacy.md](../privacy.md).
+- **In-game opt-in**, shown once before any connection (ships with #1305's first slice; a Decline keeps solo play):
+
+> Online play connects you directly to other players. They, the STUN servers (Google, Cloudflare) and the Nostr relays can see your IP address. Your public name, a random key and your moves or position are visible to the players in your room. Anything other players already received cannot be taken back. I am 16 or older. [Accept] [Stay solo] [Privacy notice]
+
 ## Sources
 
 - [Trystero](https://github.com/dmotz/trystero)
