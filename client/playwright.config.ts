@@ -19,6 +19,14 @@ process.env.E2E_PREVIEW_PORT ??= String(20_000 + Math.floor(Math.random() * 40_0
 const previewPort = process.env.E2E_PREVIEW_PORT;
 process.env.E2E_PREVIEW_URL ??= baseURL ?? `http://localhost:${previewPort}/ab-alone/`;
 
+// The Chromium options, shared by the chromium project and chromium-serial (#1391).
+const chromiumUse = {
+  browserName: 'chromium' as const,
+  ...(!process.env.CI && process.platform === 'darwin'
+    ? { launchOptions: { args: ['--enable-gpu', '--disable-features=WebGPUService'] } }
+    : {}),
+};
+
 // On CI, the HTML report is uploaded with test-results/ when the e2e job fails.
 // scripts/shard-reporter.ts does the --shard split: it deals the tests to the shards back and forth, so a run of slow
 // tests is spread over every shard instead of landing in one (#333). Without --shard it does nothing.
@@ -63,13 +71,18 @@ export default defineConfig({
     {
       name: 'chromium',
       // The contrast checks (tag @contrast) are a report for the art director, not a gate: `bun run e2e:contrast` runs them (#1383).
-      grepInvert: process.env.E2E_CONTRAST ? undefined : /@contrast/,
-      use: {
-        browserName: 'chromium',
-        ...(!process.env.CI && process.platform === 'darwin'
-          ? { launchOptions: { args: ['--enable-gpu', '--disable-features=WebGPUService'] } }
-          : {}),
-      },
+      // The frame-time check (bug #777) runs alone in chromium-serial below: under the other workers' load it drops frames (#1391).
+      grepInvert: [...(process.env.E2E_CONTRAST ? [] : [/@contrast/]), /bug #777/],
+      use: chromiumUse,
+    },
+    {
+      // The frame-time check (bug #777) measures frame gaps: it runs after every chromium test has finished, with one worker,
+      // so no other page loads or draws in the same run (#1391). The limit stays at 60 ms.
+      name: 'chromium-serial',
+      grep: /bug #777/,
+      dependencies: ['chromium'],
+      workers: 1,
+      use: chromiumUse,
     },
     { name: 'firefox', use: { browserName: 'firefox' } },
     { name: 'webkit', use: { browserName: 'webkit' } },
