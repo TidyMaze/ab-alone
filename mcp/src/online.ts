@@ -15,7 +15,7 @@ export class Room {
   private left = false;
   private desync = false;
 
-  constructor(id: string, side: number, keys: Keys, private readonly transport: Transport, judge: Judge) {
+  constructor(id: string, side: number, keys: Keys, private readonly transport: Transport, judge: Judge, creator?: string) {
     // The client's counters say which refusals are a desync (docs/specs/tech.md section 10).
     const counters = new NetCounters(Date.now);
     const changed = (): void => {
@@ -29,6 +29,7 @@ export class Room {
       keys,
       transport,
       judge,
+      creator,
       onMove: changed,
       onRefuse: (reason) => {
         this.desync ||= counters.refuse(reason);

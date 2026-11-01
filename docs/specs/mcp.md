@@ -239,7 +239,7 @@ Output:
 }
 ```
 
-The game starts when a second peer joins and both `Hello` are verified. `room` is `newRoomId` and `invite` is `inviteUrl` of `client/src/invite.ts`, on the live site. Errors: `already_in_room`, `transport_failed`.
+The game starts when a second peer joins and both `Hello` are verified. `room` is `newRoomId` and `invite` is `inviteUrl` of `client/src/invite.ts`, on the live site, ending with `&key=<fingerprint>`: the `fingerprint` of the agent's public key (#1323), so a human who joins binds seat 1 only to this agent. Errors: `already_in_room`, `transport_failed`.
 
 ### `join_room`
 
@@ -250,6 +250,8 @@ Input:
 ```json
 { "room": "string, a room code or an invite link" }
 ```
+
+An invite link that ends with `&key=<fingerprint>` (`creatorFromHash`) is passed to the session as `creator`: the agent binds seat 1 only to the creator whose public key has this fingerprint, and ignores any other first `Hello` (#1323). A link without `&key=` (an older one) and a bare room code bind seat 1 to the first `Hello`, as before; `invite` in the output keeps the link's own `&key=`.
 
 Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). The call returns once the creator's `Hello` gave the agent its seat. A failed join keeps the game in progress. Errors: `already_in_room`, `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout, `SIGNALING_TIMEOUT_MS` of `client/src/netcounters.ts`, 30 s, the only creator runs another engine version (tech.md section 9), or the input holds no room code), `transport_failed`.
 
