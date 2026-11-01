@@ -124,3 +124,33 @@ describe('the medal count of the Open world HUD (#1171)', () => {
     out.remove();
   });
 });
+
+describe("Tally's line in the Open world HUD (#1171)", () => {
+  const withTally = (tally: () => string) =>
+    new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally);
+
+  it('writes the line the page gives when a world opens, and clears it when the page gives none', () => {
+    const out = document.createElement('p');
+    out.id = 'openworld-tally';
+    document.body.append(out);
+    const lines = ['Claim 0412: unworked.', ''];
+    const m = withTally(() => lines.shift()!);
+    m.enter(7, 800, 600);
+    expect(out.textContent).toBe('Claim 0412: unworked.');
+    m.enter(7, 800, 600);
+    expect(out.textContent).toBe('');
+    out.remove();
+    m.enter(7, 800, 600); // no element: nothing to write to
+    expect(body().openworld).toBe('7');
+  });
+
+  it('shows no line by default', () => {
+    const out = document.createElement('p');
+    out.id = 'openworld-tally';
+    out.textContent = 'old';
+    document.body.append(out);
+    setup().m.enter(7, 800, 600);
+    expect(out.textContent).toBe('');
+    out.remove();
+  });
+});
