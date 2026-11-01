@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { RIVALS_STORAGE_KEY, MAX_RIVALS, boardHtml, buildBoard, loadRivals, recordRival } from './leaderboard';
+import { RIVALS_STORAGE_KEY, MAX_RIVALS, boardHtml, buildBoard, loadRivals, ratingHistory, recordRival } from './leaderboard';
 
 describe('local 1v1 leaderboard (#1287)', () => {
   beforeEach(() => localStorage.clear());
@@ -78,5 +78,21 @@ describe('local 1v1 leaderboard (#1287)', () => {
     expect(html).toContain('<tr data-me="true" aria-current="true">');
     expect(html).toContain('Player abcdef');
     expect(boardHtml(buildBoard(1200, []))).toContain('Play a ranked match to meet opponents');
+  });
+
+  it('takes the ratings after your last 1v1 matches, oldest first, ten at most', () => {
+    const matches = [
+      { mode: 'royale' as const, newRating: 900 },
+      ...Array.from({ length: 12 }, (_, i) => ({ mode: '1v1' as const, newRating: 1200 + i })),
+    ];
+    expect(ratingHistory(matches)).toEqual([1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211]);
+    expect(ratingHistory([{ mode: 'royale', newRating: 900 }])).toEqual([]);
+    expect(ratingHistory([])).toEqual([]);
+  });
+
+  it('lists the rating history in the board, and not when there is none', () => {
+    const html = boardHtml(buildBoard(1250, []), [1200, 1250]);
+    expect(html).toContain('<ol id="board-history" aria-label="Your rating over your last matches"><li>1200</li><li>1250</li></ol>');
+    expect(boardHtml(buildBoard(1250, []), [])).not.toContain('board-history');
   });
 });
