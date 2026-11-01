@@ -3,6 +3,7 @@
 
 use abalone_core::world::{self, Terrain};
 use abalone_core::worldfight::{self, Fall, Outcome};
+use abalone_core::worldoverlay::Overlay;
 use abalone_core::worldstep::{self, Entry};
 use wasm_bindgen::prelude::*;
 
@@ -191,6 +192,92 @@ pub fn world_trail(troop: Vec<i32>, q: i32, r: i32, tq: i32, tr: i32) -> Vec<i32
         .into_iter()
         .flat_map(|(q, r)| [q, r])
         .collect()
+}
+
+/// The cells of a flat `q, r` list.
+fn cells_of_flat(flat: &[i32]) -> Vec<(i32, i32)> {
+    pairs(flat)
+}
+
+/// The flat `q, r` list of cells.
+fn flat_of(cells: &[(i32, i32)]) -> Vec<i32> {
+    cells.iter().flat_map(|&(q, r)| [q, r]).collect()
+}
+
+/// The enemies of the Open world fight as the pushes of the troop left them (abalone-core `worldoverlay`). The generated enemies of a
+/// chunk come in with each call, so the object holds only what the pushes changed.
+#[wasm_bindgen]
+pub struct WorldFight {
+    overlay: Overlay,
+}
+
+#[wasm_bindgen]
+impl WorldFight {
+    /// A fight with no push.
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WorldFight {
+        WorldFight {
+            overlay: Overlay::new(),
+        }
+    }
+
+    /// The fight of a save: the generated enemies gone and the enemies on other cells (`q, r` pairs), the number ejected.
+    pub fn restore(removed: Vec<i32>, added: Vec<i32>, beaten: u32) -> WorldFight {
+        WorldFight {
+            overlay: Overlay::from_parts(cells_of_flat(&removed), cells_of_flat(&added), beaten),
+        }
+    }
+
+    /// Forgets every push.
+    pub fn reset(&mut self) {
+        self.overlay = Overlay::new();
+    }
+
+    /// Hides generated enemies (`q, r` pairs).
+    pub fn hide(&mut self, cells: Vec<i32>) {
+        self.overlay.hide(&cells_of_flat(&cells));
+    }
+
+    /// Whether an enemy stands on `(q, r)`, `generated` being the generated enemies of its chunk.
+    pub fn occupied(&self, generated: Vec<i32>, q: i32, r: i32) -> bool {
+        self.overlay.occupied(&cells_of_flat(&generated), (q, r))
+    }
+
+    /// The enemies on chunk `(cx, cy)` now, `generated` being its generated ones.
+    pub fn chunk_enemies(&self, generated: Vec<i32>, cx: i32, cy: i32) -> Vec<i32> {
+        flat_of(
+            &self
+                .overlay
+                .chunk_enemies(&cells_of_flat(&generated), (cx, cy)),
+        )
+    }
+
+    /// Plays a push: the enemies `old` leave, the enemies `new` stand, `ejected` of them are beaten.
+    pub fn apply(&mut self, old: Vec<i32>, new: Vec<i32>, ejected: u32) {
+        self.overlay
+            .apply(&cells_of_flat(&old), &cells_of_flat(&new), ejected as usize);
+    }
+
+    /// The generated enemies gone, `q, r` pairs in the order they went.
+    pub fn removed(&self) -> Vec<i32> {
+        flat_of(self.overlay.removed())
+    }
+
+    /// The enemies on other cells, `q, r` pairs in the order they came.
+    pub fn added(&self) -> Vec<i32> {
+        flat_of(self.overlay.added())
+    }
+
+    /// The enemies ejected so far.
+    pub fn beaten(&self) -> u32 {
+        self.overlay.beaten()
+    }
+}
+
+impl Default for WorldFight {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// The terrain of a cell of the world `seed`, `None` off the world.
@@ -432,5 +519,31 @@ mod tests {
             let out = world_push(9, troop, enemies, vec![q, r]);
             assert_eq!(out[..3], [0, 0, 0], "{kind:?} broken: the enemy slides");
         }
+    }
+
+    #[test]
+    fn a_fight_plays_a_push_and_answers_for_the_chunk() {
+        let mut fight = WorldFight::new();
+        assert!(fight.occupied(vec![1, 0], 1, 0));
+        fight.apply(vec![1, 0], vec![2, 0], 1);
+        assert!(!fight.occupied(vec![1, 0], 1, 0));
+        assert!(fight.occupied(vec![], 2, 0));
+        assert_eq!(fight.chunk_enemies(vec![1, 0, 5, 5], 0, 0), vec![5, 5, 2, 0]);
+        assert_eq!(fight.removed(), vec![1, 0]);
+        assert_eq!(fight.added(), vec![2, 0]);
+        assert_eq!(fight.beaten(), 1);
+    }
+
+    #[test]
+    fn a_fight_hides_resets_and_restores() {
+        let mut fight = WorldFight::default();
+        fight.hide(vec![1, 0]);
+        assert_eq!(fight.removed(), vec![1, 0]);
+        fight.reset();
+        assert!(fight.removed().is_empty() && fight.beaten() == 0);
+        let saved = WorldFight::restore(vec![4, 4, 1, 1], vec![2, 2], 7);
+        assert_eq!(saved.removed(), vec![4, 4, 1, 1]);
+        assert_eq!(saved.added(), vec![2, 2]);
+        assert_eq!(saved.beaten(), 7);
     }
 }
