@@ -282,8 +282,6 @@ test('the Open world is saved after a push and resumes after a reload, the troop
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBe('1');
   await page.reload();
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(at).toBe('2,0');
   expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0 -2,0');
   expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
@@ -431,8 +429,6 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
   await expect.poll(stored).toBe(30);
   await page.reload();
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(yaw).toBe('30');
 });
 
@@ -682,8 +678,6 @@ test('the hero breaks the isolated boulder it rolls into, and it stays broken af
   await page.screenshot({ path: test.info().outputPath('break-after.png') });
   await page.reload();
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(at).toBe('4,2');
   expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
   expect(await boulders()).toBe(before - 1);

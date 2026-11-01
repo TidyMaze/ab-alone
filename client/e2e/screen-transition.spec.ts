@@ -36,13 +36,14 @@ test('Reduced motion cuts the fade to a hard cut (#1099)', async ({ page }) => {
 });
 
 test('the fade really plays when the Open world is entered by its button (#1099)', async ({ page }) => {
-  await page.goto('./?bot=off&openworld=7');
+  await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.evaluate(() => {
     (window as any).__started = [];
     document.addEventListener('animationstart', (e) => (window as any).__started.push((e as AnimationEvent).animationName), true);
   });
+  await page.locator('#openworld').click();
   await expect(page.locator('#openworld-hud')).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as any).__started)).toContain('screen-in-world');
 });
