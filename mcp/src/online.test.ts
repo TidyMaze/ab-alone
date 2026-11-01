@@ -3,7 +3,7 @@
 // would. The run over real WebRTC is e2e/online.spec.ts.
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { SITE } from '../../client/src/daily';
-import { inviteUrl } from '../../client/src/invite';
+import { fingerprint, inviteUrl } from '../../client/src/invite';
 import { generateKeys, signHello, type Wire } from '../../client/src/moverecord';
 import { OnlineSession } from '../../client/src/session';
 import { localPair, type Transport } from '../../client/src/transport';
@@ -59,11 +59,12 @@ async function peer(transport: Transport, game: string, side: number) {
   const engine = newEngine();
   const moves: string[] = [];
   const refused: string[] = [];
+  const keys = await generateKeys();
   const session = new OnlineSession({
     game,
     side,
     engine: engineVersion(),
-    keys: await generateKeys(),
+    keys,
     transport,
     judge: {
       to_move: () => engine.to_move(),
@@ -80,7 +81,7 @@ async function peer(transport: Transport, game: string, side: number) {
     engine.play(mv);
     await session.send(Array.from(mv));
   };
-  return { engine, session, moves, refused, play };
+  return { engine, session, moves, refused, play, keys };
 }
 
 afterEach(() => {
@@ -92,7 +93,8 @@ describe('create_room', () => {
     const { session, rooms } = agent();
     const room = value(await session.createRoom());
     expect(room.room).toMatch(/^[\w-]{8,}$/);
-    expect(room.invite).toBe(inviteUrl(SITE, room.room));
+    expect(room.invite).toBe(inviteUrl(SITE, room.room, undefined, await fingerprint(room.pub)));
+    expect(room.invite).toMatch(/#room=[\w-]+&key=[\w-]{8}$/);
     expect(room.you).toBe('black');
     expect(room.pub).toMatch(/^[\w-]{43}$/);
     expect(rooms).toEqual([room.room]);
@@ -279,6 +281,23 @@ describe('join_room', () => {
     });
     value(session.playMove({ move: '(2,-2)>SE' }));
     await vi.waitFor(() => expect(human.engine.to_move()).toBe(1));
+  });
+
+  test('a link with the creator fingerprint seats the agent when the creator key matches', async () => {
+    const { session, theirs } = agent();
+    const human = await peer(theirs, 'keyed-room', 1);
+    const link = inviteUrl(SITE, 'keyed-room', undefined, await fingerprint(human.keys.pub));
+    expect(value(await session.joinRoom({ room: link }))).toMatchObject({ room: 'keyed-room', invite: link, you: 'white' });
+  });
+
+  test('a link whose fingerprint is not the key of the first Hello is room_not_found: seat 1 is not bound to it', async () => {
+    const { session, theirs } = agent();
+    await peer(theirs, 'keyed-room', 1);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    let result: Result<unknown> | undefined;
+    void session.joinRoom({ room: inviteUrl(SITE, 'keyed-room', undefined, 'AAAAAAAA') }).then((r) => (result = r));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(failure(result!).code).toBe('room_not_found');
   });
 
   test('takes a bare room code too', async () => {
