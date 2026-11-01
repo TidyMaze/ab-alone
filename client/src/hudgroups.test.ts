@@ -9,7 +9,7 @@ const doc = new DOMParser().parseFromString(page, 'text/html');
 const children = (id: string): string[] => [...doc.getElementById(id)!.children].map((el) => el.id);
 
 describe('The page controls', () => {
-  it('the thumb dock holds the game controls in order: Retry, Rematch, Goal, New game, View, Hint, Replay, the replay steps, the Console (#1369), Hold, Lobby, Modes, Auto-play', () => {
+  it('the thumb dock holds the game controls in order: Retry, Rematch, Goal, New game, View, Hint, Replay, the replay steps, Hold, Lobby, Modes, Auto-play', () => {
     expect(children('dock')).toEqual([
       'boss-retry',
       'rematch',
@@ -19,7 +19,6 @@ describe('The page controls', () => {
       'hint',
       'replay',
       'dock-replay',
-      'console-entry',
       'royale-hold',
       'lobby',
       'modes',

@@ -1273,8 +1273,11 @@ const reader = document.getElementById('reader')!;
 reader.classList.toggle('flat', flatHud);
 let consoleScreen!: THREE.Mesh; // set by drawProps
 let recorder!: THREE.Mesh; // set by drawProps
-// The terrace has no console screen (#1369): its Console button opens the same reader, the page as a plate, the camera stays.
-document.getElementById('console-entry')!.addEventListener('click', () => openReader());
+// The terrace has no console screen (#1369): its Console entry of Game modes opens the same reader, the page as a plate, the camera stays.
+document.getElementById('console-entry')!.addEventListener('click', () => {
+  moveModes('outside'); // the menu closes, as Leaderboard's does
+  openReader();
+});
 function openReader(id?: string): void {
   if (id) layoutConsole(id); // an entry of the log archive (#513)
   if (!consolePages.length) return; // the fonts are not in yet
@@ -3545,7 +3548,7 @@ const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
   const on = tableZeroActive({ room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
-  document.getElementById('console-entry')!.hidden = !on; // the terrace's console is the dock's button, the room's is its screen (#1369)
+  document.getElementById('console-entry')!.hidden = !on; // the terrace's console is a Game modes entry, the room's is its screen (#1369)
   terraceMarbles(on);
   showBoard();
   if (on && isDefaultView(view, resetView(4))) {

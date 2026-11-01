@@ -163,14 +163,20 @@ describe('main.ts, the terminal reader (#512)', () => {
     await game.settle();
   });
 
-  // #1369: the terrace has no console screen, so its dock button opens the deck's entry in the reader, as a plate.
-  it('the terrace has a Console button that reads the deck entry as a plate, and the room has none, #1369', async () => {
+  // #1369: the terrace has no console screen, so its Game modes entry opens the deck's entry in the reader, as a plate.
+  it('the terrace has a Console entry in Game modes that reads the deck entry as a plate, and the room has none, #1369', async () => {
     const game = await ready();
     await vi.waitFor(() => expect(data().scene).toBe('table-zero'));
     const button = document.getElementById('console-entry') as HTMLButtonElement;
+    expect(document.getElementById('mode-menu')!.contains(button)).toBe(true); // an entry of the menu, after Leaderboard
+    expect(button.previousElementSibling?.id).toBe('leaderboard');
     expect(button.hidden).toBe(false);
+    expect(document.getElementById('mode-menu')!.hidden).toBe(true);
+    (document.getElementById('modes') as HTMLButtonElement).click();
+    expect(document.getElementById('mode-menu')!.hidden).toBe(false);
     const board = screen(game, 0, 0);
     button.click();
+    expect(document.getElementById('mode-menu')!.hidden).toBe(true); // the menu closes, as Leaderboard's does
     expect(reader().hidden).toBe(false);
     expect(reader().classList.contains('flat')).toBe(true); // the page shows: the room's screen is not there to show it
     expect(reader().textContent).toContain("Captain's order, pinned above table four");
