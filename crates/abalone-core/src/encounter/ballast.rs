@@ -660,11 +660,7 @@ mod tests {
 
     /// The plies of `rim_fight` before the fire ply: the boss is to play the ply that fires the effect.
     fn play_rim(enc: &mut Encounter) {
-        for m in [
-            mv(&[(-4, 5)], E),
-            mv(&[(-5, 0)], E),
-            mv(&[(-3, 5)], W),
-        ] {
+        for m in [mv(&[(-4, 5)], E), mv(&[(-5, 0)], E), mv(&[(-3, 5)], W)] {
             enc.play(&m).unwrap();
         }
     }
