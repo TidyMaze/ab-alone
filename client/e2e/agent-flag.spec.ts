@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { openModes } from './modes';
+import { inviteLink, openModes } from './modes';
 
 // The opponent's Hello is signed here with Node's Ed25519, over the bytes helloPayload signs in the client.
 // The page receives it through the ?net=hook transport, so no peer and no public relay is involved (#255).
@@ -37,7 +37,7 @@ async function creatorRoom(page: Page): Promise<{ game: string; engine: number }
   await expect(page.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await openModes(page);
   await page.locator('#play-online').click();
-  const invite = await page.locator('#invite').inputValue();
+  const invite = await inviteLink(page);
   const game = /room=([\w-]+)/.exec(invite)?.[1];
   expect(game).toBeTruthy();
   await expect(page.locator('#hud')).toContainText('You are Black');

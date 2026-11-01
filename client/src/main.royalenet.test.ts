@@ -123,8 +123,8 @@ describe('Battle royale online (#504)', () => {
     button('royale-invite').click();
     await until(game, () => data().seat === 'player'); // once its keys are made, the page is in the room
     const room = game.room()!;
-    expect(location.hash).toBe(`#royale=${room}`);
-    expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(`#royale=${room}`);
+    expect(location.hash).toMatch(new RegExp(`^#royale=${room}&key=[\\w-]{8}$`)); // the creator key's fingerprint (#1323)
+    expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(location.hash);
     expect(byId('invite').hidden).toBe(false);
     expect(byId('invite-label').textContent).toBe('Invite link: send it to the other players');
     expect(byId('invite-copy').hidden).toBe(false); // Copy closes the link (#839)

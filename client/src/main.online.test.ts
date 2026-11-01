@@ -4,6 +4,7 @@ import { encodeMove, moveForClick, parseMoves, type Axial } from './board';
 import { generateKeys, signCoordinator, signHello, type Report, type Wire } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { OnlineSession } from './session';
+import { fingerprint } from './invite';
 import { boot, type Game } from './test/harness';
 import type { Transport } from './transport';
 
@@ -131,16 +132,16 @@ describe('Play online', () => {
     expect(byId('mode-menu').hidden).toBe(false);
     byId('play-online').click();
     expect(byId('mode-menu').hidden).toBe(true);
+    await until(game, () => data().seat === 'player'); // once its keys are made, the link carries their fingerprint (#1323)
     const room = game.room()!;
     expect(room).toMatch(/^[\w-]{22}$/);
-    expect(location.hash).toBe(`#room=${room}`);
+    expect(location.hash).toMatch(new RegExp(`^#room=${room}&key=[\\w-]{8}$`));
     const invite = byId<HTMLInputElement>('invite');
     expect(invite.hidden).toBe(false);
     expect(byId('invite-label').hidden).toBe(false);
-    expect(new URL(invite.value).hash).toBe(`#room=${room}`);
+    expect(new URL(invite.value).hash).toBe(location.hash);
     expect(byId('new-game').hidden).toBe(true);
     expect(byId('boss-retry').hidden).toBe(true);
-    await until(game, () => data().seat === 'player');
     expect(data().online).toBe('Black');
     expect(data().opponent).toBe('waiting');
     expect(data().coordinator).toBe('1');
@@ -153,8 +154,33 @@ describe('Play online', () => {
     game.openModes();
     byId('online').scrollTop = 40; // the player scrolled down to the mode menu
     byId('play-online').click();
+    await until(game, () => data().seat === 'player'); // the link shows once the keys are made
     expect(byId('online').scrollTop).toBe(0);
-    await until(game, () => data().seat === 'player'); // the room is open before the test ends
+  });
+
+  it('puts the fingerprint of the key that holds Black in the invite link (#1323)', async () => {
+    const { white } = await hosted();
+    expect(location.hash).toBe(`#room=${white.session.game}&key=${await fingerprint(white.session.seats.keyOf(1))}`);
+  });
+
+  it('as a joiner from a link with a fingerprint, takes Black only from a Hello of that key (#1323)', async () => {
+    const { engine_version } = await import('abalone-wasm');
+    const creator = await generateKeys();
+    const rival = await generateKeys();
+    const game = await boot(`?net=hook#room=the-room&key=${await fingerprint(creator.pub)}`);
+    await until(game, () => data().seat === 'pending');
+    const end = hookEnd();
+    let page = '';
+    end.onRecord((m) => (page ||= (m as { kind?: string; pub?: string }).kind === 'hello' ? (m as { pub: string }).pub : ''));
+    (window as unknown as Record<string, () => void>).__netOpen!();
+    await until(game, () => page !== '');
+    const say = async (keys: typeof creator, roster: string[]) =>
+      end.send(await signHello(keys, { game: 'the-room', seat: 1, roster, engine: engine_version() }));
+    await say(rival, [rival.pub, page]); // signed and first, but not the key of the link
+    await game.settle();
+    expect(data().seat).toBe('pending');
+    await say(creator, [creator.pub, page]);
+    await until(game, () => data().seat === 'player');
   });
 
   it('shows the opponent here once its Hello is verified, then disconnected once the room closes', async () => {

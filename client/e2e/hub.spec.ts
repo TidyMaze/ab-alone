@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
-import { openModes } from './modes';
+import { inviteLink, openModes } from './modes';
 
 // #521: the Ship entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
 // marble, which rolls one cell at a time by a click on a neighbour or an arrow key. body[data-hub] names its deck and
@@ -172,7 +172,7 @@ test('the online table opens a room with its invite link, as Play online does, #
   await hookClick(page, -2, 1);
   await page.getByRole('button', { name: 'Lobby' }).click(); // the invite link sits in the lobby sheet (#1044)
   await expect(page.locator('#invite')).toBeVisible();
-  expect(await page.locator('#invite').inputValue()).toMatch(/#room=[\w-]+$/);
+  expect(await inviteLink(page)).toMatch(/#room=[\w-]+&key=[\w-]{8}$/);
   await expect(page.locator('#hud')).toContainText('You are Black');
 });
 

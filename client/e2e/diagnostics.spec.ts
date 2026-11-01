@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openModes } from './modes';
+import { inviteLink, openModes } from './modes';
 
 // Copy diagnostics (#220): the last events, the counters and the game, in the clipboard or selected in a text box.
 const cell = async (page: Page, q: number, r: number) => {
@@ -87,7 +87,7 @@ test('an online game exports its connection counters, its refused moves and its 
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  const invite = await a.locator('#invite').inputValue();
+  const invite = await inviteLink(a);
   await b.goto(`./?net=hook${new URL(invite).hash}`);
   await b.locator('canvas').waitFor();
   await expect(b.locator('#hud')).toContainText('Joining as White...');
