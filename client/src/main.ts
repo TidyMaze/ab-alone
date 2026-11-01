@@ -5584,7 +5584,7 @@ const renderCost = (): RenderCost => {
   let pointLights = 0;
   sceneRenderer.scene.traverse((o) => void ((o as THREE.PointLight).isPointLight && pointLights++));
   const { render, memory } = renderer.info;
-  return { calls: render.calls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
+  return { calls: render.drawCalls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
 };
 Object.defineProperty(window, '__renderCost', { configurable: true, get: () => ({ ...renderCost(), text: renderCostText(renderCost()) }) });
 copyButton.addEventListener('click', async () => {

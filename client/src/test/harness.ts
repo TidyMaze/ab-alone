@@ -191,7 +191,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       domElement = document.createElement('canvas');
       backend = { isWebGPUBackend: options.webgpu ?? false };
       toneMapping = 0;
-      info = { render: { calls: 7, triangles: 300 }, memory: { geometries: 5, textures: 2 } };
+      info = { render: { calls: 9000, drawCalls: 7, triangles: 300 }, memory: { geometries: 5, textures: 2 } };
       toneMappingExposure = 1;
       initialized = false;
       init = async (): Promise<void> => {
