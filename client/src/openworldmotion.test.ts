@@ -10,6 +10,9 @@ import {
   RIPPLES,
   RipplePool,
   rippleAt,
+  SHIMMER_AMP,
+  SHIMMER_MS,
+  shimmerRise,
   SWAY_DEG,
   SWAY_MS,
   swayLean,
@@ -86,5 +89,23 @@ describe('the water and prop motion of the Open world (#1101, #1102, docs/specs/
     expect([u.time.value, u.foam.value, u.sway.value]).toEqual([0, 0, 0]);
     expect(u.span.value).toBe(RIPPLE_MS);
     expect(u.ripples[0]!.value).toBeInstanceOf(THREE.Vector4);
+  });
+});
+
+describe('the heat shimmer of the desert (#1104)', () => {
+  it('keeps the spec numbers: a period of 3000 ms and a wobble of about a pixel (0.02 cell)', () => {
+    expect([SHIMMER_MS, SHIMMER_AMP]).toEqual([3000, 0.02]);
+  });
+
+  it('rises and falls by the amplitude, loops every period, and each phase is its own', () => {
+    expect(shimmerRise(0, 0)).toBeCloseTo(0, 6);
+    expect(shimmerRise(SHIMMER_MS / 4, 0)).toBeCloseTo(SHIMMER_AMP, 6);
+    expect(shimmerRise((3 * SHIMMER_MS) / 4, 0)).toBeCloseTo(-SHIMMER_AMP, 6);
+    expect(shimmerRise(SHIMMER_MS + 700, 1)).toBeCloseTo(shimmerRise(700, 1), 6);
+    expect(shimmerRise(0, Math.PI / 2)).toBeCloseTo(SHIMMER_AMP, 6);
+  });
+
+  it('adds a shimmer uniform, off until a frame sets it', () => {
+    expect(motionUniforms().shimmer.value).toBe(0);
   });
 });

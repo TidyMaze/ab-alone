@@ -17,6 +17,10 @@ export const FOAM_GAIN = 0.25;
 export const SWAY_MS = 4000;
 export const SWAY_DEG = 2;
 const SWAY_TAN = Math.tan((SWAY_DEG * Math.PI) / 180);
+/** The heat shimmer of the desert (#1104, spec section 6): the top of a sand cell rises and falls `SHIMMER_AMP` cell (about a pixel at the
+ * usual zoom) in `SHIMMER_MS`. */
+export const SHIMMER_MS = 3000;
+export const SHIMMER_AMP = 0.02;
 /** The width of a ripple's ring in cells, and the colour of the foam and the ring: a pale cyan of the lake's own palette. */
 const RING_WIDTH = 0.12;
 const FOAM_COLOUR = [0.55, 0.8, 0.9] as const;
@@ -32,6 +36,9 @@ export function rippleAt(age: number, slow: number): { radius: number; alpha: nu
 
 /** The sideways lean of a tree's top, as a share of its height, at `ms` and a `phase` in radians. */
 export const swayLean = (ms: number, phase: number): number => SWAY_TAN * Math.sin((2 * Math.PI * ms) / SWAY_MS + phase);
+
+/** The rise of the top of a sand cell at `ms`, in cells, for a `phase` in radians. */
+export const shimmerRise = (ms: number, phase: number): number => SHIMMER_AMP * Math.sin((2 * Math.PI * ms) / SHIMMER_MS + phase);
 
 /** The ripples: a pool of fixed size, a free slot (or else the oldest) taken by the next, no allocation. `x`, `z` and `start` are read by
  * `writeRipples`. */
@@ -63,12 +70,13 @@ export class RipplePool {
   }
 }
 
-/** What the shaders read, set by the frame: `time` (ms), the amplitude of the foam and of the sway (0 off, 1 on), the span of a ripple
+/** What the shaders read, set by the frame: `time` (ms), the amplitude of the foam, of the sway and of the shimmer (0 off, 1 on), the span of a ripple
  * in ms (the slow check), and the four ripples as (x, z, start ms, unused). */
 export interface MotionUniforms {
   time: THREE.UniformNode<'float', number>;
   foam: THREE.UniformNode<'float', number>;
   sway: THREE.UniformNode<'float', number>;
+  shimmer: THREE.UniformNode<'float', number>;
   span: THREE.UniformNode<'float', number>;
   ripples: THREE.UniformNode<'vec4', THREE.Vector4>[];
 }
@@ -82,6 +90,7 @@ export function motionUniforms(): MotionUniforms {
     time: uniform(0),
     foam: uniform(0),
     sway: uniform(0),
+    shimmer: uniform(0),
     span: uniform(RIPPLE_MS),
     ripples: Array.from({ length: RIPPLES }, () => uniform(new THREE.Vector4(0, 0, NEVER, 0))),
   };
@@ -120,4 +129,12 @@ export function swayPosition(u: MotionUniforms): THREE.Node {
   const angle = u.time.mul((2 * Math.PI) / SWAY_MS).add(float(instanceIndex).mul(2.39996));
   const lean = u.sway.mul(SWAY_TAN).mul(clamp(positionGeometry.y.add(0.5), 0, 1));
   return positionLocal.add(vec3(sin(angle).mul(lean), 0, cos(angle).mul(lean).mul(0.6)));
+}
+
+/** The position of a sand vertex: the top face rises and falls a pixel, each cell in its own phase (the instance's index), the foot of the
+ * column stays. Nothing is written to an instance, and it is 0 unless the hero stands in the desert. */
+export function shimmerPosition(u: MotionUniforms): THREE.Node {
+  const angle = u.time.mul((2 * Math.PI) / SHIMMER_MS).add(float(instanceIndex).mul(2.39996));
+  const top = step(0, positionGeometry.y);
+  return positionLocal.add(vec3(0, sin(angle).mul(SHIMMER_AMP).mul(u.shimmer).mul(top), 0));
 }

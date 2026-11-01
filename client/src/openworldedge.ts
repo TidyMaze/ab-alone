@@ -20,7 +20,7 @@ export const edgeDistance = (x: number, z: number): number => HEX_APOTHEM - Math
 
 /** A ground material: white until an instance colours it (the colour comes per cell), with the edge band of `gain` on the top face and
  * the `emissiveNode` given in place of the plain emissive colour. */
-export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node }): THREE.MeshStandardNodeMaterial {
+export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node; positionNode?: THREE.Node }): THREE.MeshStandardNodeMaterial {
   const material = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, emissive: look.emissive, roughness: look.roughness });
   const position = attribute('position', 'vec3');
   const flat = vec2(position.x, position.z);
@@ -30,5 +30,6 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
   const top = step(0.5, attribute('normal', 'vec3').y); // the sides of the column keep their colour
   material.colorNode = materialColor.mul(float(1).add(band.mul(top).mul(look.gain)));
   if (look.emissiveNode) material.emissiveNode = look.emissiveNode; // the water's foam and ripples (#1101)
+  if (look.positionNode) material.positionNode = look.positionNode; // the desert's shimmer (#1104)
   return material;
 }

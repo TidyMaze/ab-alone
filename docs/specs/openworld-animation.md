@@ -131,6 +131,9 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 - **Budget**: one pool of 24 sprites, one draw, around the hero (radius 6 cells), reused when a particle leaves; none allocated
   after the first frame. Spawn chosen by the biome of the hero's cell (`openworld-terrain.md`). Shimmer is a shader term, no
   extra pass. Cut at `ROLL_ZOOM`. A loop keeps the page drawing, so it counts in the section 1 cost.
+- **Built (#1104)**: Forest 8 leaves (1.33 a second, 6000 ms), Tundra 16 flakes (3.2 a second, 5000 ms), from the #1110 pool (no new draw);
+  the Desert shimmer is a vertex term of the sand ground (`shimmerPosition`, 0.02 cell about a pixel, 3000 ms, per-cell phase, only when the
+  hero stands in the desert); the Meadow and the Badlands draw none. Off on the low tier, under reduced motion and past `ROLL_ZOOM`.
 - **Reduced**: nothing; no particle is spawned.
 - **Static**: the cell colours, the fog, Meadow.
 - **Acceptance**: the pool never exceeds 24; Meadow draws none; crossing from Forest to Meadow lets the leaves finish their fall

@@ -12,7 +12,7 @@ import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './o
 import { GLIDE_MS, NUDGE_MS } from './openworldglide';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1). The badlands have no particles (#1110), so a frame
-// with motion on is idle when nothing moves; `meadow` is the same world with pollen.
+// with motion on is idle when nothing moves; `forest` is the same world with leaves (#1104).
 function bytes(cx: number, cy: number, biome = 4): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
   const out = new Uint8Array(CHUNK * CHUNK * 3);
@@ -20,7 +20,7 @@ function bytes(cx: number, cy: number, biome = 4): Uint8Array {
   if (cx === 0 && cy === 0) out.set([1, 5, biome], CHUNK * 3); // (0, 1)
   return out;
 }
-const meadow = (_seed: number, cx: number, cy: number): Uint8Array => bytes(cx, cy, 0);
+const meadow = (_seed: number, cx: number, cy: number): Uint8Array => bytes(cx, cy, 1);
 // A lake everywhere in the square -3..3 of chunks.
 function sea(_seed: number, cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
@@ -1308,7 +1308,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
 describe('the particles in the mode frame (#1110)', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('keeps drawing while pollen drifts in a meadow, with motion on: the scene is live', () => {
+  it('keeps drawing while leaves drift in a forest, with motion on: the scene is live', () => {
     const m = mode(undefined, meadow, () => false);
     m.enter(1, 800, 600);
     const render = vi.fn();
@@ -1316,6 +1316,20 @@ describe('the particles in the mode frame (#1110)', () => {
     m.frame(render, 400);
     m.frame(render, 800);
     expect(render).toHaveBeenCalledTimes(3);
+  });
+
+  it('draws no leaves on the low tier: only the first frame is drawn (#1104)', () => {
+    document.body.dataset.tier = 'low';
+    try {
+      const m = mode(undefined, meadow, () => false);
+      m.enter(1, 800, 600);
+      const render = vi.fn();
+      m.frame(render, 0);
+      m.frame(render, 400);
+      expect(render).toHaveBeenCalledTimes(1);
+    } finally {
+      delete document.body.dataset.tier;
+    }
   });
 
   it('draws only the first frame under reduced motion, as before', () => {
