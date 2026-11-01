@@ -4595,10 +4595,14 @@ const hideInvite = (): void => {
   inviteBox.hidden = inviteLabel.hidden = inviteCopy.hidden = true;
   syncLobby();
 };
-// Copy (#839): the link goes to the clipboard and the link, its label and Copy close. When the browser refuses, the link
-// stays, selected, to copy by hand.
+// Copy (#839): the link goes to the clipboard and the link, its label and Copy close: the HUD says so, and the focus goes
+// to Game modes, not to the page (#1190). When the browser refuses, the link stays, selected, to copy by hand.
 inviteCopy.addEventListener('click', async () => {
-  if (await copyText(inviteBox.value, navigator.clipboard)) return hideInvite();
+  if (await copyText(inviteBox.value, navigator.clipboard)) {
+    document.getElementById('modes')!.focus();
+    hideInvite();
+    return hud(' · invite link copied');
+  }
   inviteBox.focus();
   inviteBox.select();
   hud(' · invite link selected: copy it by hand');
