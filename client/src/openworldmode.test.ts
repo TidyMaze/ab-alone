@@ -1388,8 +1388,36 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     expect(() => mode().remoteBreak([0, 1])).not.toThrow();
   });
 
+  it('a beaten enemy of another hero (#1305) is gone and counted, and a cell with no enemy does nothing', () => {
+    const m = beside();
+    m.fixture({ hero: [0, 2], troop: [[1, 2], [2, 2]], enemies: [[1, 0]] });
+    m.remoteBeaten([5, 5]); // no enemy there
+    expect(body().openworldBeaten).toBe('0');
+    m.remoteBeaten([1, 0]);
+    expect(body().openworldBeaten).toBe('1');
+    expect(body().openworldEnemies).toBe('0');
+    expect(m.enemies()).toEqual([]);
+    m.remoteBeaten([1, 0]); // twice: it is gone now
+    expect(body().openworldBeaten).toBe('1');
+  });
+
+  it('tells the peers host which enemy the hero ejected (#1305), and none when nothing was ejected', () => {
+    const [wq, wr] = shore(1);
+    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn() };
+    const m = mode(undefined, real, () => true, () => new Int32Array());
+    m.peers = peers;
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [wq - 3, wr], troop: [[wq - 4, wr], [wq - 5, wr]], enemies: [[wq - 1, wr]] });
+    tap(m, 'ArrowRight'); // the line pushes the enemy on to the water
+    expect(peers.beaten).toHaveBeenCalledWith([wq - 1, wr]);
+    peers.beaten.mockClear();
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    tap(m, 'ArrowLeft'); // a step with no enemy in line
+    expect(peers.beaten).not.toHaveBeenCalled();
+  });
+
   it('tells the peers host which cell the hero broke, and none when it broke nothing', () => {
-    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn() };
+    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn() };
     const quiet = beside();
     quiet.peers = peers;
     tap(quiet, 'ArrowRight');
@@ -1684,7 +1712,7 @@ describe('the Dungeon button walks to the nearest tower (#1291)', () => {
 });
 
 describe('the Open world mode and the online peers (#1305)', () => {
-  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn() });
+  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn() });
 
   it('hands the world entered to the peers host, and tells it when the world is left, by Escape or by another world', () => {
     const m = mode();

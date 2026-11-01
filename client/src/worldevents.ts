@@ -13,22 +13,29 @@ export const SYNC_MS = 200;
 
 const KEY = 'ab-alone.world-key';
 
-/** The bytes a break signs: version 1, kind 1 (break), seed (u32), q and r (int16). */
-const payload = (seed: number, q: number, r: number): Uint8Array<ArrayBuffer> => {
+/** The bytes an event signs: version 1, its kind (1 break, 2 beaten), seed (u32), q and r (int16). The kind is signed, so a break
+ * is never a beaten enemy of the same cell. */
+const payload = ({ kind, seed, q, r }: Pick<BreakEvent, 'kind' | 'seed' | 'q' | 'r'>): Uint8Array<ArrayBuffer> => {
   const out = new Uint8Array(10);
   const view = new DataView(out.buffer);
-  out.set([1, 1]);
+  out.set([1, kind === 'beaten' ? 2 : 1]);
   view.setUint32(2, seed);
   view.setInt16(6, q);
   view.setInt16(8, r);
   return out;
 };
 
-export async function signBreak(keys: Keys, seed: number, q: number, r: number): Promise<BreakEvent> {
-  return { seed, q, r, pub: keys.pub, sig: b64(await crypto.subtle.sign(ED, keys.priv, payload(seed, q, r))) };
+async function sign(keys: Keys, kind: BreakEvent['kind'], seed: number, q: number, r: number): Promise<BreakEvent> {
+  const e = { kind, seed, q, r };
+  return { ...e, pub: keys.pub, sig: b64(await crypto.subtle.sign(ED, keys.priv, payload(e))) };
 }
 
-export const verifyBreak = (e: BreakEvent): Promise<boolean> => signedBy(e.pub, e.sig, payload(e.seed, e.q, e.r));
+export const signBreak = (keys: Keys, seed: number, q: number, r: number): Promise<BreakEvent> => sign(keys, 'break', seed, q, r);
+
+/** A generated enemy marble of the world `seed` on `(q, r)` was ejected by a hero (#1305): the same signed event as a break. */
+export const signBeaten = (keys: Keys, seed: number, q: number, r: number): Promise<BreakEvent> => sign(keys, 'beaten', seed, q, r);
+
+export const verifyBreak = (e: BreakEvent): Promise<boolean> => signedBy(e.pub, e.sig, payload(e));
 
 /**
  * The player's key for the public world: read from the store, else made and kept there. The private part stays in this browser's
@@ -49,7 +56,7 @@ export async function worldKeys(store: Store): Promise<Keys> {
   return fresh;
 }
 
-/** The cells broken, keyed by cell, in the order they came. */
+/** The cells broken or beaten, keyed by cell, in the order they came. A break and a beaten enemy never share a cell: an enemy stands on open ground. */
 export class BreakSet {
   private readonly held = new Map<string, BreakEvent>();
 
