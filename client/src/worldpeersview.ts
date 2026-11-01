@@ -5,10 +5,19 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import type { World } from './openworld';
 import { GROUND, MARBLE, topOf } from './openworldview';
-import { hexDistance, MAX_PEERS } from './worldpeers';
+import { hexDistance, MAX_PEERS, TROOP_MAX } from './worldpeers';
 
-/** The marker marble of another hero: pink, to set it apart from the pale blue hero, the black enemies and the green ground. */
-export const PEER_LOOK = { color: 0xff7ad9, emissive: 0x9a2a7c };
+/** The marbles of every hero drawn: its own and a full troop each, one instanced mesh. */
+const CAPACITY = MAX_PEERS * (1 + TROOP_MAX);
+
+/** The colour of another hero and its troop, from its peer id: a hue of its own at a fixed lightness, set apart from the pale blue hero,
+ * the black enemies and the green ground. The same id gives the same colour on every screen. */
+export function peerColour(peer: string): THREE.Color {
+  let hash = 0;
+  for (const ch of peer) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  const hue = [300, 330, 20, 50, 190, 260, 0, 160][hash % 8]! / 360; // magenta, pink, orange, yellow, cyan, violet, red, mint: none a green ground or a black foe
+  return new THREE.Color().setHSL(hue, 0.85, 0.65);
+}
 /** How far in from the screen's edge the indicator sits, as a share of the half screen. */
 const MARGIN = 0.88;
 /** How far a marker standing on the hero's own cell is lifted above it, so both show. */
@@ -45,6 +54,7 @@ export class PeersLayer {
   private readonly edges: HTMLElement[] = [];
   private readonly tags: HTMLElement[] = [];
   private shown = '';
+  private heroes = 0;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -52,7 +62,7 @@ export class PeersLayer {
     private readonly world: Pick<World, 'tile'>,
     private readonly root: HTMLElement,
   ) {
-    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(MARBLE, 16, 12), new THREE.MeshStandardMaterial({ ...PEER_LOOK, roughness: 0.2 }), MAX_PEERS);
+    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(MARBLE, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x2a2a2a, roughness: 0.2 }), CAPACITY);
     this.mesh.name = 'peers';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -60,48 +70,59 @@ export class PeersLayer {
   }
 
   /**
-   * Draws `peers` for a hero standing on `hero`: a marker on each one in view on loaded ground, an edge indicator for the others.
-   * Returns whether the markers changed, so the page draws the scene again.
+   * Draws `peers` for a hero standing on `hero` with its troop on `own` (the hero's cell and its troop's: a marble of another hero on
+   * one of them is lifted above it): a marble for each hero and each troop marble in view on loaded ground, in the colour of its hero,
+   * and an edge indicator for each hero out of view. Returns whether anything drawn changed, so the page draws the scene again.
    */
-  update(peers: readonly { peer: string; cell: Axial; name: string }[], hero: Axial): boolean {
+  update(peers: readonly { peer: string; cell: Axial; name: string; troop: readonly Axial[] }[], hero: Axial, own: readonly Axial[] = [hero]): boolean {
     this.camera.updateMatrixWorld();
     const point = new THREE.Vector3();
     const matrix = new THREE.Matrix4();
-    const out: { cell: Axial; spot: Spot; name: string }[] = [];
-    const named: { spot: Spot; name: string }[] = [];
-    let markers = 0;
-    for (const { cell, name } of peers) {
-      const p = axialTo3D(cell[0], cell[1]);
-      const tile = this.world.tile(cell[0], cell[1]);
-      const lift = cell[0] === hero[0] && cell[1] === hero[1] ? LIFT : 0;
-      point.set(p.x, (tile ? topOf(GROUND[tile.terrain], tile.height) + MARBLE : MARBLE) + lift, p.z);
-      this.mesh.setMatrixAt(markers, matrix.setPosition(point));
-      const ndc = point.clone().project(this.camera);
-      const spot = edgeSpot(ndc.x, ndc.y, ndc.z, this.camera.aspect);
-      if (spot.inside && tile) {
-        markers++;
-        if (name) named.push({ spot, name });
-      } else out.push({ cell, spot, name });
+    const out: { peer: string; cell: Axial; spot: Spot; name: string }[] = [];
+    const named: { peer: string; spot: Spot; name: string }[] = [];
+    let marbles = 0;
+    let heroes = 0;
+    for (const { peer, cell, name, troop } of peers) {
+      const colour = peerColour(peer);
+      for (const [i, at] of [cell, ...troop].entries()) {
+        const p = axialTo3D(at[0], at[1]);
+        const tile = this.world.tile(at[0], at[1]);
+        const lift = own.some((o) => o[0] === at[0] && o[1] === at[1]) ? LIFT : 0;
+        point.set(p.x, (tile ? topOf(GROUND[tile.terrain], tile.height) + MARBLE : MARBLE) + lift, p.z);
+        this.mesh.setMatrixAt(marbles, matrix.setPosition(point));
+        this.mesh.setColorAt(marbles, colour);
+        const ndc = point.clone().project(this.camera);
+        const spot = edgeSpot(ndc.x, ndc.y, ndc.z, this.camera.aspect);
+        const drawn = spot.inside && tile;
+        if (drawn) marbles++; // a marble not drawn is overwritten by the next one
+        if (i > 0) continue; // the rest is for the hero: its tag and its indicator
+        if (drawn) {
+          heroes++;
+          if (name) named.push({ peer, spot, name });
+        } else out.push({ peer, cell, spot, name });
+      }
     }
-    // The markers were written in order of the list, the ones kept first: a skipped slot is overwritten by the next marker.
-    this.mesh.count = markers;
+    this.mesh.count = marbles;
     this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    this.heroes = heroes;
     this.indicate(out, named, hero);
-    const key = peers.map((p) => `${p.peer}:${p.cell}`).join(' ');
+    const key = peers.map((p) => `${p.peer}:${p.cell}:${p.troop.join(';')}`).join(' ');
     const changed = key !== this.shown;
     this.shown = key;
     return changed;
   }
 
-  private indicate(out: { cell: Axial; spot: Spot; name: string }[], named: { spot: Spot; name: string }[], hero: Axial): void {
+  private indicate(out: { peer: string; cell: Axial; spot: Spot; name: string }[], named: { peer: string; spot: Spot; name: string }[], hero: Axial): void {
     this.pool(this.tags, named.length, () => {
       const tag = document.createElement('div');
       tag.className = 'peer-tag';
       tag.setAttribute('aria-hidden', 'true');
       return tag;
     });
-    named.forEach(({ spot, name }, i) => {
+    named.forEach(({ peer, spot, name }, i) => {
       const tag = this.tags[i]!;
+      tag.style.color = `#${peerColour(peer).getHexString()}`;
       tag.style.left = `${spot.left.toFixed(1)}%`;
       tag.style.top = `${spot.top.toFixed(1)}%`;
       tag.textContent = name; // text, never markup: a name comes from another player
@@ -113,8 +134,9 @@ export class PeersLayer {
       edge.innerHTML = '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false"><path d="M4 4l16 8-16 8 3-8z" fill="currentColor" stroke="#0b0d0f" stroke-width="1.5" stroke-linejoin="round"/></svg><span></span>';
       return edge;
     });
-    out.forEach(({ cell, spot, name }, i) => {
+    out.forEach(({ peer, cell, spot, name }, i) => {
       const edge = this.edges[i]!;
+      edge.style.color = `#${peerColour(peer).getHexString()}`;
       const tiles = hexDistance(hero, cell);
       edge.style.left = `${spot.left.toFixed(1)}%`;
       edge.style.top = `${spot.top.toFixed(1)}%`;
@@ -123,7 +145,7 @@ export class PeersLayer {
       edge.lastElementChild!.textContent = name ? `${name} ${tiles}` : String(tiles);
     });
     this.root.hidden = out.length === 0 && named.length === 0;
-    this.root.dataset.peers = String(this.mesh.count + out.length); // for the browser checks
+    this.root.dataset.peers = String(this.heroes + out.length); // for the browser checks
     this.root.dataset.edges = out.map(({ cell }) => hexDistance(hero, cell)).join(',');
   }
 
