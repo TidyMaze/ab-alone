@@ -39,7 +39,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
-| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **3 of 20** (reading ladder player #834, 1 of 20 at 1x; the player has 16 marbles since #838; the Swarm's wave is the fifth borrowed effect since #1197, not tuned; below the target, no boss-only knob reaches it, see section 3) | 174 | P2 | rim ejection 10, draw 7 |
+| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **15 of 20** (#1209: an effect every 2 boss turns and the boss wins at 12 too, 7 of 20 at 1x; was 3 of 20 and 1 of 20 after #1197, see section 3) | 147.5 | P2 | rim ejection 3, draw 2 |
 | The Stalker | 3000 | 30000 (10x) | **9** (fogged pro player #1120, see section 3) | 185 | P2 | draw 1 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
@@ -438,7 +438,8 @@ to move with 2 or 4 ejections, a pulse due on the boss reply), same search befor
 
 So the change shows only above the 100 nodes the boss uses: the boss reply is identical at the
 shipped budget. The test `the_phase_reached_in_the_tree_changes_the_best_move` uses a built
-position at 1000 nodes (seed 5 since #1197, which moved the picks; it was 20709). Ladder,
+position at 1000 nodes (seed 119 after two plies since #1209, which moved the effect to ply 4; seed 5
+after four plies since #1197, which moved the picks; it was 20709). Ladder,
 `LADDER_X=<x> LADDER_SEEDS=20 cargo run --release --example ladder -- ballast`, run alone, main
 4c1477c before:
 
@@ -464,6 +465,82 @@ seeds 0 to 19, 300 plies at most), before (`origin/main` at the time) and after:
 Reading: the wave adds a marble or two to the boss on the rim, away from the player, and it hurts the
 player a little less than the pulse or the crack: 1 and 3 of 20 against 0 and 1, within the noise of 20
 seeds. The target of #833 (14 to 18 of 20 at 10x) is still out of reach, the owner's call.
+
+### The Ballast Mind: tuned to 15 of 20 at 10x (#1209)
+
+Target of #833: the pro player (10x) wins 14 to 18 of 20, the 1x player fewer. Same method as above,
+`LADDER_X=1` and `LADDER_X=10`, `LADDER_SEEDS=20 cargo run --release --example ladder -- ballast`,
+seeds 0 to 19, 300 plies at most, after #1197 (the Swarm's wave is the fifth effect). The owner left
+the choice of the effect knobs, or a rule change, to the agents (2026-11-01).
+
+**Adopted:** `BALLAST_EVERY` 3 to 2 (an effect every 2 boss turns) and the boss wins at 12 ejections
+too, as the player (6 before; `BALLAST_WIN_EJECTIONS` is now both sides' count). The player's 12
+(Decision #482), the phases (3, 5), the pulse forces (2, 3, infinite, shared with the Pulsar) and the
+boss budget (100) are unchanged. `engine_version` 19.
+
+| Player | Before (main at 2521db8, #1197) | After (#1209) |
+|---|---|---|
+| 1x | `100 \| 1/20 \| 120 \| 2 \| push 1, rim_ejection 14, draw 4` | `100 \| 7/20 \| 124 \| 2 \| rim_ejection 11, draw 2` |
+| 10x | `1000 \| 3/20 \| 174 \| 2 \| rim_ejection 10, draw 7` | `1000 \| 15/20 \| 147.5 \| 2 \| rim_ejection 3, draw 2` |
+
+Repeated on 40 seeds (0 to 39): 1x `14/40` (`rim_ejection 22, draw 3, push 1`), 10x `31/40`
+(`rim_ejection 5, draw 4`), the same rates.
+
+**Why the player lost.** A local probe replayed the 20 games at 10x and split every lost marble by
+its cause (the boss's push, the player's push, the effect of that ply). Before:
+
+| Cause | Player marbles lost | Boss marbles lost |
+|---|---|---|
+| the Pulsar's pulse (P1, P2, P3) | 16, 17, 34 (67) | 14, 18, 32 (64) |
+| the Hull tick (a cracked cell vanishes) | 3 | 25 |
+| the Magnetizer's polarity | 7 | 6 |
+| the Chaplain's conversion check | 0 (net) | 0 (net) |
+| the Swarm's wave | 0 | 114 marbles gained |
+| a push | 14 (the boss's) | 49 (the player's) |
+
+The "rim ejection" deaths are these effect losses: two thirds of the player's lost marbles are
+pulses, and a pulse ejects both sides alike (67 against 64), the infinite P3 pulse most of all. With
+the boss winning at 6 and the player at 12, an effect that hurts both sides the same is a win for the
+boss: it reaches 6 first. The other losses were draws (7 of 20, repetition or the 100-ply cap) in the
+games where few effects fired. After, the pulses still eject both sides alike (P3: 80 against 81)
+and the same count of 12 makes them fair.
+
+**Tries** (10x unless said, "win" is the player's count, "boss win" the boss's):
+
+| win | boss win | every | phases | pulse forces | Output line |
+|---|---|---|---|---|---|
+| 12 | 6 | 3 | 3, 5 | 2, 3, inf | `1000 \| 3/20 \| 174 \| 2 \| rim_ejection 10, draw 7` (before) |
+| 12 | 6 | 2 | 3, 5 | 2, 3, inf | `1000 \| 3/20 \| 114 \| 2 \| rim_ejection 15, draw 2` |
+| 12 | 6 | 3 | 3, 5 | 2, 3, 4 | `1000 \| 3/20 \| 177 \| 2 \| rim_ejection 10, draw 7` |
+| 9 | 6 | 3 | 3, 5 | 2, 3, inf | `1000 \| 6/20 \| 171 \| 2 \| rim_ejection 7, draw 7` |
+| 8 | 6 | 3 | 3, 5 | 2, 3, inf | `1000 \| 9/20 \| 167.5 \| 2 \| rim_ejection 5, draw 6` |
+| 8 | 6 | 3 | 3, 5 | 2, 3, 4 | `1000 \| 9/20 \| 167.5 \| 2 \| rim_ejection 5, draw 6` |
+| 8 | 6 | 2 | 3, 5 | 2, 3, inf | `1000 \| 8/20 \| 104.5 \| 2 \| rim_ejection 10, draw 2` |
+| 7 | 6 | 2 | 3, 5 | 2, 3, inf | `1000 \| 11/20 \| 102.5 \| 2 \| rim_ejection 7, draw 2` |
+| 6 | 6 | 2 | 3, 5 | 2, 3, inf | `1000 \| 13/20 \| 98 \| 2 \| rim_ejection 5, draw 2` |
+| 8 | 8 | 2 | 3, 5 | 2, 3, inf | `1000 \| 13/20 \| 104.5 \| 2 \| rim_ejection 5, draw 2` |
+| 9 | 8 | 2 | 3, 5 | 2, 3, inf | `1000 \| 13/20 \| 106.5 \| 2 \| rim_ejection 5, draw 2` |
+| 10 | 8 | 2 | 3, 5 | 2, 3, inf | `1000 \| 11/20 \| 109.5 \| 2 \| rim_ejection 7, draw 2` |
+| 12 | 8 | 3 | 3, 5 | 2, 3, inf | `1000 \| 5/20 \| 188.5 \| 2 \| rim_ejection 8, draw 7` |
+| 12 | 8 | 2 | 3, 5 | 2, 3, inf | `1000 \| 7/20 \| 125.5 \| 2 \| rim_ejection 11, draw 2` |
+| 12 | 10 | 3 | 3, 5 | 2, 3, inf | `1000 \| 11/20 \| 188 \| 2 \| rim_ejection 2, draw 7` |
+| 12 | 10 | 1 | 3, 5 | 2, 3, inf | `1000 \| 12/20 \| 84.5 \| 2 \| rim_ejection 8` |
+| 12 | 10 | 2 | 3, 5 | 2, 3, inf | `1000 \| 13/20 \| 143.5 \| 2 \| rim_ejection 5, draw 2` |
+| 12 | 10 | 2 | 3, 5 | 2, 3, 4 | `1000 \| 11/20 \| 144 \| 2 \| rim_ejection 5, draw 4` |
+| 12 | 10 | 2 | 4, 8 | 2, 3, inf | `1000 \| 14/20 \| 152 \| 2 \| rim_ejection 3, draw 3` |
+| 12 | 11 | 2 | 3, 5 | 2, 3, inf | `1000 \| 15/20 \| 147.5 \| 2 \| rim_ejection 3, draw 2` |
+| 12 | 12 | 3 | 3, 5 | 2, 3, inf | `1000 \| 11/20 \| 189 \| 2 \| rim_ejection 2, draw 7` |
+| **12** | **12** | **2** | **3, 5** | **2, 3, inf** | `1000 \| 15/20 \| 147.5 \| 2 \| rim_ejection 3, draw 2` (kept; 1x `100 \| 7/20`) |
+
+Reading: no effect knob alone moves the 10x result off 3 of 20 (`BALLAST_EVERY` 2 trades draws for
+rim ejections, a weaker P3 pulse changes nothing), because each effect hurts both sides and the boss
+needs half as many ejections. Lowering the player's count helps (9 of 20 at 8) but breaks Decision
+#482 and stalls at 13 of 20. Raising the boss's count is what moves it: 10 gives 13 of 20, 11 and 12
+give 15 of 20 (no game is decided between 11 and 12). With an effect every 3 turns, 7 of 20 games
+stay draws, so `BALLAST_EVERY` 2 is needed too (11 against 15 of 20). Kept: both at 12, the simplest
+rule (the same count for both sides, 4 marbles left of 16) and inside the target, with the 1x player
+at 7 of 20, fewer than the pro, as wanted. The tell is unchanged: an effect is still announced one turn
+ahead, now every other boss turn.
 
 #### Earlier: NOT measured at pro level, 0 of 10 at 1x
 

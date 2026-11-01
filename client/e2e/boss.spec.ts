@@ -469,7 +469,7 @@ test('start The Ballast Mind: its radius 5 board on the Bridge, its shells in th
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
   await expect(page.locator('#boss-bar .name')).toContainText('The Ballast Mind');
-  await expect(page.locator('#hud')).toContainText('White ejected 0/12 · Black ejected 0/6');
+  await expect(page.locator('#hud')).toContainText('White ejected 0/12 · Black ejected 0/12');
   await expect(body).toHaveAttribute('data-deck', 'bridge');
   await expect(body).toHaveAttribute('data-vanished', '6'); // the pillars
   expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 5, holes: 6 });
