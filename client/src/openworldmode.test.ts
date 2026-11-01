@@ -9,7 +9,7 @@ import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
-import { GLIDE_MS, NUDGE_MS } from './openworldglide';
+import { CRUISE_MS, GLIDE_MS, NUDGE_MS, stepMs } from './openworldglide';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1). The badlands have no particles (#1110), so a frame
 // with motion on is idle when nothing moves; `meadow` is the same world with pollen.
@@ -1029,6 +1029,28 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     tap(standing(), 'ArrowRight');
     expect(show.mock.calls.at(-1)![0]).toEqual([1, 0]);
     expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS, pace: 'start' }); // the first step of a held arrow (#1065)
+  });
+
+  it('a held walk speeds up to the cruise pace, each glide lasting until the next step (#1290)', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    const m = standing();
+    const span = (): number => (show.mock.calls.at(-1)![2] as { span: number }).span;
+    m.key('ArrowRight');
+    const spans = [span()];
+    for (let i = 1; i < 8; i++) {
+      clock += spans.at(-1)!;
+      m.frame(vi.fn(), clock);
+      spans.push(span());
+    }
+    expect(spans).toEqual([0, 1, 2, 3, 4, 5, 6, 7].map(stepMs));
+    expect(spans.at(-1)).toBe(CRUISE_MS);
+    m.release('ArrowRight');
+    clock += 1;
+    m.frame(vi.fn(), clock);
+    m.key('ArrowRight'); // a new press starts from the first pace again
+    expect(span()).toBe(GLIDE_MS);
   });
 
   it('stretches the glide by the slow factor of the page, read when the step starts (a webdriver check)', () => {

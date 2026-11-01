@@ -5,7 +5,7 @@ import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
 import { blocked, breakable, chunkOf, Hero, neighbours, same, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
-import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
+import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
 import { endingLine } from './tally';
@@ -83,6 +83,8 @@ export class OpenWorldMode {
   private nextStep = Infinity;
   /** Whether the last step was one of a held walk, so the next one takes over its speed instead of starting from rest (#1065). */
   private cruising = false;
+  /** The steps made in the walk under way: the cadence speeds up with them (#1290). */
+  private walked = 0;
   /** The cells of the walk to a far cell (#1137) still to take, the next first; empty when no such walk is on. */
   private route: Axial[] = [];
   /** The props are read once for the page: every entry reuses them. */
@@ -195,6 +197,7 @@ export class OpenWorldMode {
     this.route = [];
     this.nextStep = Infinity;
     this.cruising = false;
+    this.walked = 0;
     delete document.body.dataset.openworldRoute;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
@@ -441,6 +444,7 @@ export class OpenWorldMode {
   private stop(now: number): void {
     if (this.cruising && !this.reduced()) this.view!.panEnd(now); // the follow settles with the walk (#1103)
     this.cruising = false;
+    this.walked = 0;
     this.view!.brake(now);
   }
 
@@ -454,12 +458,16 @@ export class OpenWorldMode {
    * GLIDE_MS, whatever the refresh rate. More than a step behind (a hidden tab), it restarts from the frame. */
   private beat(now: number): void {
     if (now < this.nextStep) return;
-    const late = now - this.nextStep > GLIDE_MS;
+    const late = now - this.nextStep > stepMs(this.walked);
     // A step is made at its due time, not at the frame that makes it: the glides chain end to end whatever the frame rate (#1065).
     const due = late ? now : this.nextStep;
-    this.nextStep = due + GLIDE_MS;
-    if (late) this.cruising = false; // a hidden tab: the walk starts again from rest
+    if (late) {
+      this.cruising = false; // a hidden tab: the walk starts again from rest
+      this.walked = 0;
+    }
+    this.nextStep = due + stepMs(this.walked); // the next step is due when this one's glide ends (#1290)
     this.stepHeld(due);
+    if (this.walked === 0 && this.nextStep !== Infinity) this.nextStep = due + GLIDE_MS; // a blocked step restarts the walk: the retry is at the first pace
   }
 
   /** One step in the direction of the arrows held now (`heroStep`), made at `at` (ms): a blocked one slides round the obstacle, and leans
@@ -497,17 +505,19 @@ export class OpenWorldMode {
     if (!this.hero!.step(to)) return this.lean(to, at), false;
     if (pace === 'start' && !this.reduced()) this.view!.panFor(from, to, at); // the follow eases in at the first step of a walk (#1103)
     this.cruising = pace !== 'tap';
+    const span = pace === 'tap' ? GLIDE_MS : stepMs(this.walked);
+    this.walked = pace === 'tap' ? 0 : this.walked + 1;
     if (this.hero!.smashed) this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
     this.view!.snap(); // a step during a push's animation ends it first (#967)
     const now = this.reduced() ? null : at;
     if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)
     if (now !== null) this.view!.ripple(from, this.hero!.at, now, this.lowTier()); // a ring on the water next to it (#1101)
-    this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy(), pace }); // the step glides (#1040)
+    this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: span * slowBy(), pace }); // the step glides (#1040)
     const played = this.troopPush();
     this.view!.updateEnemies();
     if (played && now !== null) {
       this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
-      const landed = now + GLIDE_MS * slowBy();
+      const landed = now + span * slowBy();
       this.view!.punch(landed); // the camera feels the push (#1103)
       if (played.push.ejected.length > 0) this.view!.shake(landed); // and shakes when an enemy is ejected
     } else if (played) this.view!.show(this.hero!.at, this.hero!.troop); // reduced motion: the marbles jump

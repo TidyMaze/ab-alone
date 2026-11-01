@@ -7,6 +7,14 @@ import { EASE } from './motion';
 
 /** The glide of a step, in ms at normal speed: an ease-out that lands on the cell. */
 export const GLIDE_MS = 140;
+/** The cruise pace of a long walk (#1290), in ms a step: the pace a held key, a held stick or a far tap reaches after a few steps. */
+export const CRUISE_MS = 80;
+/** The steps of a walk made at `GLIDE_MS` before it speeds up, so a tap and a short walk keep their feel. */
+const SLOW_STEPS = 2;
+/** How much each step after them is shorter than the one before, in ms, down to `CRUISE_MS`. */
+const RAMP_MS = 15;
+/** The span in ms of the `n`th step of a walk (0 for the first): the glide lasts as long as the cadence, so the marble never pauses. */
+export const stepMs = (n: number): number => Math.max(CRUISE_MS, GLIDE_MS - RAMP_MS * Math.max(0, n - SLOW_STEPS + 1));
 /** The lean of a blocked step, in ms: out toward the obstacle and back on the same cell. */
 export const NUDGE_MS = 120;
 /** How far a blocked marble leans, in cells. */
