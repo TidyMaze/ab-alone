@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
 import { LOOK, PROPS, WATER } from './openworldview';
-import { COLOURS, drawMinimap, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
+import { COLOURS, drawMap, drawMinimap, groundOffset, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
 
 // The Open world's minimap (#1410, docs/specs/openworld.md section 8): a 2D canvas drawn from plain data.
 
@@ -78,6 +78,17 @@ describe('screenOffset', () => {
   });
 });
 
+describe('groundOffset (#1411)', () => {
+  it('undoes screenOffset: the cell offset, in q and r, of a point of the map, at any yaw', () => {
+    for (const yaw of [0, 0.7, -2.1]) {
+      const { x, y } = screenOffset([0, 0], [3, -5], yaw);
+      const [dq, dr] = groundOffset(x, y, yaw);
+      expect(dq).toBeCloseTo(3);
+      expect(dr).toBeCloseTo(-5);
+    }
+  });
+});
+
 describe('windowCells', () => {
   it('reads the hex disc of RADIUS cells round the hero, skipping cells off the world', () => {
     const all = windowCells(() => 'grass', [10, -4]);
@@ -86,6 +97,10 @@ describe('windowCells', () => {
     const cells = windowCells((q): Terrain | undefined => (q < 0 ? undefined : 'sand'), [0, 0]);
     expect(cells.length).toBeLessThan(all.length);
     expect(cells.every(([q]) => q >= 0)).toBe(true);
+  });
+
+  it('reads a disc of another radius when asked, for the map (#1411)', () => {
+    expect(windowCells(() => 'grass', [0, 0], 2)).toHaveLength(19);
   });
 });
 
@@ -153,5 +168,28 @@ describe('drawMinimap', () => {
     const top = at(fills, COLOURS.lair)[1]!;
     expect(top.at[1]).toBeLessThan(MIDDLE - SIZE / 4);
     expect(top.at[0]).toBeCloseTo(MIDDLE);
+  });
+});
+
+describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, centre and scale', () => {
+  const frame = { width: 400, height: 200, centre: [0, 0] as Axial, unit: 10, round: false };
+
+  it('fills the whole rectangle, with no circle, no edge and no arrow: every lair is a diamond where it is', () => {
+    const { ctx, log, fills } = fakeContext();
+    drawMap(ctx, frame, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [3, 0], beaten: true }] }));
+    expect(log).not.toContain('clip');
+    expect(log).not.toContain('stroke');
+    expect(at(fills, COLOURS.back)[0]!.at).toEqual([200, 100, 400, 200]);
+    const [far] = at(fills, COLOURS.lair);
+    expect(far!.at).toHaveLength(8); // a diamond: four points, off the canvas
+    expect(far!.at[0]).toBeCloseTo(200 + 200 * 10);
+    expect(at(fills, COLOURS.lairBeaten)).toHaveLength(1);
+  });
+
+  it('puts the centre in the middle, the cells `unit` px apart, and the hero where it stands', () => {
+    const { ctx, fills } = fakeContext();
+    drawMap(ctx, { ...frame, centre: [2, 0] }, data({ hero: [0, 0], cells: [[3, 0, 'sand']] }));
+    expect(at(fills, terrainColour('sand'))[0]!.at.slice(0, 2)).toEqual([210, 100]);
+    expect(at(fills, COLOURS.hero)[0]!.at.slice(0, 2)).toEqual([180, 100]);
   });
 });

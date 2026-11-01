@@ -7,6 +7,7 @@ import { CHUNK, World } from './openworld';
 import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_STEP, twistOf } from './openworldmode';
 import { FightState } from './openworldfight';
 import { COLOURS, terrainColour } from './openworldminimap';
+import { SIGHT } from './openworlddiscovered';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { world_chunk } from 'abalone-wasm';
@@ -681,7 +682,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     fight.apply([], [[3, 0]], [[9, 9]]);
     return fight.toJSON();
   };
-  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], lairs: [], savedAt: 1 });
+  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], lairs: [], discovered: [], savedAt: 1 });
   const withSaves = (store = memoryStore()) => {
     const saves = worldSaves(store, 1);
     return { store, saves, m: mode(undefined, undefined, undefined, undefined, saves) };
@@ -1850,7 +1851,7 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
   it('shows a beaten lair in its own colour', () => {
     const ctx = withCanvas();
     const m = lairer(Int32Array.of(8, 0));
-    m.enter(42, 800, 600, { version: 1, seed: 42, hero: [0, 0], troop: [[1, 0]], fight: { removed: [], added: [], beaten: 0 }, yaw: 0, broken: [], lairs: [0], savedAt: 1 });
+    m.enter(42, 800, 600, { version: 1, seed: 42, hero: [0, 0], troop: [[1, 0]], fight: { removed: [], added: [], beaten: 0 }, yaw: 0, broken: [], lairs: [0], discovered: [], savedAt: 1 });
     expect(ctx.fills).toContain(COLOURS.lairBeaten);
     expect(ctx.fills).not.toContain(COLOURS.lair);
   });
@@ -1881,5 +1882,138 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     document.body.innerHTML = '';
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     expect(() => mode().enter(42, 800, 600)).not.toThrow();
+  });
+});
+
+describe('the discovered cells and the map of the Open world (#1411, docs/specs/openworld.md section 9)', () => {
+  const DISC = 3 * SIGHT * (SIGHT + 1) + 1; // the cells of the hex disc of SIGHT
+  /** A 2D context in the page that records the colours it fills with. */
+  const withCanvas = (): string[] => {
+    const fills: string[] = [];
+    const ctx = { fillStyle: '' } as Record<string, unknown>;
+    for (const name of ['clearRect', 'save', 'restore', 'beginPath', 'arc', 'moveTo', 'lineTo', 'closePath', 'clip', 'stroke']) ctx[name] = () => {};
+    ctx.fill = ctx.fillRect = () => fills.push(ctx.fillStyle as string);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    return fills;
+  };
+  const grass = (fills: string[]): number => fills.filter((c) => c === terrainColour('grass')).length;
+  const savedAt = (hero: Axial, discovered: WorldSave['discovered'] = []): WorldSave => ({
+    version: 1, seed: 42, hero, troop: [], fight: { removed: [], added: [], beaten: 0 }, yaw: DEFAULT_YAW, broken: [], lairs: [], discovered, savedAt: 1,
+  });
+  afterEach(() => {
+    document.body.innerHTML = '';
+    delete body().openworldDiscovered;
+    vi.restoreAllMocks();
+  });
+
+  it('discovers the cells within 10 of the hero when a world opens, and more as it walks', () => {
+    const m = mode();
+    m.enter(42, 800, 600);
+    expect(body().openworldDiscovered).toBe(String(DISC));
+    tap(m, 'ArrowRight');
+    expect(Number(body().openworldDiscovered)).toBe(DISC + SIGHT + 1);
+    m.leave();
+    expect(body().openworldDiscovered).toBeUndefined();
+  });
+
+  it('saves the discovered cells with the world, and a resume brings them back with the cells round the hero', async () => {
+    const store = memoryStore();
+    const m = mode(undefined, undefined, undefined, undefined, worldSaves(store, 1));
+    m.enter(42, 800, 600);
+    tap(m, 'ArrowRight');
+    m.frame(vi.fn());
+    await new Promise((done) => setTimeout(done));
+    const saved = (await worldSaves(store, 1).load(42))!;
+    const back = mode();
+    back.enter(42, 800, 600, { ...saved, hero: [30, 0] }); // the hero stands far off: its disc is added to the saved cells
+    expect(Number(body().openworldDiscovered)).toBe(DISC + SIGHT + 1 + DISC);
+  });
+
+  it('migrates a save from before the discovery: the cells round the hero are discovered', () => {
+    mode().enter(42, 800, 600, savedAt([20, 0]));
+    expect(body().openworldDiscovered).toBe(String(DISC));
+  });
+
+  it('the minimap draws only the discovered cells, and the enemies on them; the rest of its window stays dark', () => {
+    const fills = withCanvas();
+    const foes = (_s: number, cx: number, cy: number) => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 15, 0) : new Int32Array());
+    mode(undefined, undefined, undefined, foes).enter(42, 800, 600);
+    expect(grass(fills)).toBe(DISC - 1); // the boulder on (0, 1) is the other one
+    expect(fills.filter((c) => c === COLOURS.enemy)).toHaveLength(1); // (5, 5) is 10 away, (15, 0) 15
+  });
+
+  it('opens no map outside a world', () => {
+    const m = mode();
+    m.toggleMap();
+    expect(m.mapShown).toBe(false);
+    expect(document.getElementById('openworld-map')).toBeNull();
+  });
+
+  it('M opens the map full screen on the discovered cells, M or Escape closes it, and the world stays open', () => {
+    const fills = withCanvas();
+    document.body.innerHTML = '<button id="openworld-map-button" aria-expanded="false">Map</button>';
+    const m = mode();
+    m.enter(42, 800, 600);
+    expect(m.mapShown).toBe(false);
+    fills.length = 0;
+    expect(m.key('m')).toBe(true);
+    expect(m.mapShown).toBe(true);
+    expect(document.getElementById('openworld-map')).not.toBeNull();
+    expect(document.getElementById('openworld-map-button')!.getAttribute('aria-expanded')).toBe('true');
+    expect(grass(fills)).toBe(DISC - 1);
+    expect(m.key('M')).toBe(true);
+    expect(m.mapShown).toBe(false);
+    expect(document.getElementById('openworld-map-button')!.getAttribute('aria-expanded')).toBe('false');
+    m.key('M');
+    expect(m.key('Escape')).toBe(true);
+    expect(m.mapShown).toBe(false);
+    expect(m.active).toBe(true);
+  });
+
+  it('while the map is open the hero stays: the arrows and the camera keys are not the mode\'s, a held arrow lets go', () => {
+    withCanvas();
+    const m = mode();
+    m.enter(42, 800, 600);
+    m.key('ArrowRight'); // held when the map opens
+    const at = body().openworldAt;
+    m.toggleMap();
+    m.frame(vi.fn(), 10_000);
+    expect(body().openworldAt).toBe(at);
+    expect(m.key('ArrowLeft')).toBe(false);
+    expect(m.key('q')).toBe(false);
+    expect(body().openworldAt).toBe(at);
+    expect(body().openworldYaw).toBe(String(Math.round((DEFAULT_YAW * 180) / Math.PI)));
+    m.toggleMap();
+    expect(m.mapShown).toBe(false);
+  });
+
+  it('the zoom and the pan go to the map while it is open, the camera keeps its zoom', () => {
+    withCanvas();
+    const m = mode();
+    m.enter(42, 800, 600);
+    m.toggleMap();
+    const zoom = body().openworldZoom;
+    m.zoom(1.5);
+    m.panMap(40, 0);
+    expect(body().openworldZoom).toBe(zoom);
+    m.toggleMap();
+    m.zoom(1.5);
+    expect(body().openworldZoom).not.toBe(zoom);
+  });
+
+  it('is redrawn when the world changes under it and follows the window size; leaving the world closes it', () => {
+    const fills = withCanvas();
+    const m = mode();
+    m.enter(42, 800, 600);
+    m.toggleMap();
+    fills.length = 0;
+    m.remoteBreak([0, 1]); // another hero breaks the boulder: the minimap and the map are drawn again
+    expect(grass(fills)).toBe(2 * (DISC - 1));
+    m.resize(400, 300);
+    const canvas = document.querySelector<HTMLCanvasElement>('#openworld-map canvas')!;
+    expect([canvas.width, canvas.height]).toEqual([400, 300]);
+    m.leave();
+    expect(document.getElementById('openworld-map')).toBeNull();
+    expect(m.mapShown).toBe(false);
   });
 });

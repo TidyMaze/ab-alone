@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { indexedDbStore } from './idb';
 import { FightState } from './openworldfight';
+import { Discovered, type DiscoveredSave } from './openworlddiscovered';
 import { worldSaves } from './openworldsave';
 import { memoryStore, type KeyStore } from './savegame';
 
@@ -46,7 +47,7 @@ describe('the save of the camera yaw (#1026)', () => {
 
   it('discards a record of a record version this build does not know, a later one', async () => {
     const store = memoryStore();
-    store.data.set('openworld:7', { ...record(7), record: 4, yaw: 0 });
+    store.data.set('openworld:7', { ...record(7), record: 5, yaw: 0 });
     expect(await worldSaves(store, 1).load(7)).toBeNull();
     expect(store.data.has('openworld:7')).toBe(false);
   });
@@ -133,6 +134,46 @@ describe('the save of the beaten lairs (#1170)', () => {
       throw new Error('full');
     };
     await expect(worldSaves(store, 1).beat(7, 1)).resolves.toBeUndefined();
+  });
+});
+
+describe('the save of the discovered cells (#1411)', () => {
+  const discovered = (): DiscoveredSave => {
+    const seen = new Discovered();
+    seen.reveal([0, 0]);
+    return seen.toJSON();
+  };
+
+  it('saves the discovered cells with the world and loads them back', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], discovered());
+    expect((await saves.load(7))!.discovered).toEqual(discovered());
+  });
+
+  it('loads a record of the record version 3 or before, saved before the discovery, as nothing discovered: old saves still load', async () => {
+    const olds: [object, number[]][] = [[{ ...record(7), record: 3, lairs: [1] }, [1]], [{ ...record(7), record: 2 }, []], [record(7), []]];
+    for (const [old, lairs] of olds) {
+      const store = memoryStore();
+      store.data.set('openworld:7', old);
+      const back = await worldSaves(store, 1).load(7);
+      expect(back!.discovered).toEqual([]);
+      expect(back!.lairs).toEqual(lairs);
+    }
+  });
+
+  it('discards a record of this record version whose discovered cells do not decode', async () => {
+    for (const bad of [undefined, 'x', [[0, 0, '!!']]]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...record(7), record: 4, yaw: 0, lairs: [], discovered: bad });
+      expect(await worldSaves(store, 1).load(7)).toBeNull();
+    }
+  });
+
+  it('beat keeps the discovered cells', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], discovered());
+    await saves.beat(7, 3);
+    expect((await saves.load(7))!.discovered).toEqual(discovered());
   });
 });
 
