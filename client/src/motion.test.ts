@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EASE, MOTION, reducedMotion, cue } from './motion';
+import { EASE, MOTION, reducedMotion, cue, ghostFade } from './motion';
 import { SLIDE_MS } from './slide';
 import css from './ui.css?raw';
 
@@ -130,5 +130,20 @@ describe('Open world UI motion (#1105)', () => {
     const folded = css.match(/#openworld-hud\[data-folded\] \{([^}]*)\}/)![1]!;
     expect(folded).toContain('transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out), visibility 0s var(--motion-fast)');
     expect(css.match(/#openworld-hud \{[^}]*transition: ([^;]*);/)![1]).not.toMatch(/\b(width|height|top|left|margin)\b/);
+  });
+});
+
+describe('the Hint ghost fades in (#1097, motion.md story 7)', () => {
+  it('rises from clear to whole over the base token, easing out', () => {
+    expect(ghostFade(0, false)).toBe(0);
+    const mid = ghostFade(MOTION.base / 2, false);
+    expect(mid).toBeGreaterThan(0.5); // ease out: past the linear half
+    expect(mid).toBeLessThan(1);
+    expect(ghostFade(MOTION.base, false)).toBe(1);
+    expect(ghostFade(MOTION.base * 5, false)).toBe(1);
+    expect(ghostFade(-10, false)).toBe(0);
+  });
+  it('reduced motion: whole at once', () => {
+    expect(ghostFade(0, true)).toBe(1);
   });
 });

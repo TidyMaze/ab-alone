@@ -186,6 +186,28 @@ describe('main.ts, the hint', () => {
     expect(game.hook('__plies')).toBe(0); // shown, never played
   });
 
+  it('fades the ghost in over the base token, whole at once under reduced motion (#1097)', async () => {
+    const game = await boot('?bot=off&nodes=50');
+    hintButton().click();
+    await game.settle();
+    expect(game.hook<number>('__ghostOpacity')).toBe(0); // just appeared
+    game.frame(100);
+    const mid = game.hook<number>('__ghostOpacity');
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(0.45);
+    game.frame(1000);
+    expect(game.hook<number>('__ghostOpacity')).toBeCloseTo(0.45);
+    hintButton().click(); // cleared: the next ghost, hovered, is whole
+    expect(game.hook<number>('__ghostOpacity')).toBeCloseTo(0.45);
+  });
+
+  it('shows the Hint ghost whole at once under reduced motion (#1097)', async () => {
+    const game = await boot('?bot=off&nodes=50', { reducedMotion: true });
+    hintButton().click();
+    await game.settle();
+    expect(game.hook<number>('__ghostOpacity')).toBeCloseTo(0.45);
+  });
+
   it('goes away with a new selection', async () => {
     const game = await boot('?bot=off&nodes=50');
     hintButton().click();

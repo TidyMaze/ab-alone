@@ -39,8 +39,8 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
-| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **1 of 20** (reading ladder player #834, 0 of 20 at 1x; the player has 16 marbles since #838; below the target, no boss-only knob reaches it, see section 3) | 133 | P2 | rim ejection 14, draw 5 |
-| The Ballast Mind (#1209: every 2 turns, win 8, lose 12) | 100 | 1000 (10x) | **15 of 20** (1x: 12 of 20) | 116 | P2 | rim ejection 3, draw 2 |
+| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **3 of 20** (reading ladder player #834, 1 of 20 at 1x; the player has 16 marbles since #838; the Swarm's wave is the fifth borrowed effect since #1197, not tuned; below the target, no boss-only knob reaches it, see section 3) | 174 | P2 | rim ejection 10, draw 7 |
+| The Ballast Mind (#1209: every 2 turns, win 8, lose 12) | 100 | 1000 (10x) | **17 of 20** (1x: 11 of 20; on main with the Swarm's wave and #1208) | 106.5 | P2 | rim ejection 1, draw 2 |
 | The Stalker | 3000 | 30000 (10x) | **9** (fogged pro player #1120, see section 3) | 185 | P2 | draw 1 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
@@ -397,10 +397,11 @@ makes the boss reply about 30 times cheaper than the 3000 nodes of the other bos
 needs a stronger or smarter ladder player (reading effects beyond the next one) or a change of the
 effects themselves (`BALLAST_EVERY`, forces, a rule change, the owner's call), not a boss knob.
 
-### The Ballast Mind: effects every 2 turns, win at 8, lose at 12 (#1209), 15 of 20 at 10x
+### The Ballast Mind: effects every 2 turns, win at 8, lose at 12 (#1209), 17 of 20 at 10x
 
-Before (main at 7374f49c, the same ladder player): `1000 | 1/20 | 127 | 2 | rim_ejection 13, draw 6`
-at 10x. Method as in #833: `LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder --
+Grids 1 and 2 below were measured on main at 7374f49c (four borrowed effects, before #1208 and the
+Swarm's wave #1197): `1000 | 1/20 | 127 | 2 | rim_ejection 13, draw 6` at 10x. On the merged main
+(five effects) the same row before is 3 of 20 at 10x (table of section 1). Method as in #833: `LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder --
 ballast`, seeds 0 to 19, 300 plies at most, each line run alone and the kept ones run twice (same
 line twice: the ladder is deterministic). Target 14 to 18 of 20 at 10x, fewer at 1x. The player has 16
 marbles; it won at 12 ejections and lost at 6 (`WIN_EJECTIONS`), now two constants of `ballast.rs`
@@ -439,15 +440,16 @@ fewer. Grid 2, win and lose thresholds (10x, `BALLAST_EVERY` 3 unless said):
 | 6 / 10 | `1000 \| 13/20 \| 90.5 \| 2 \| rim_ejection 2, draw 5` |
 | 6 / 12 | `1000 \| 13/20 \| 90.5 \| 2 \| rim_ejection 2, draw 5` |
 | **`BALLAST_EVERY` 2, 8 / 10** | `1000 \| 12/20 \| 116 \| 2 \| rim_ejection 6, draw 2` |
-| **`BALLAST_EVERY` 2, 8 / 12 (kept)** | `1000 \| 15/20 \| 116 \| 2 \| rim_ejection 3, draw 2` |
+| `BALLAST_EVERY` 2, 8 / 12 (old base) | `1000 \| 15/20 \| 116 \| 2 \| rim_ejection 3, draw 2` |
+| **`BALLAST_EVERY` 2, 8 / 12 (kept), merged main, run twice** | `1000 \| 17/20 \| 106.5 \| 2 \| rim_ejection 1, draw 2` |
 
 Reading: every row has 5 to 8 draws at `BALLAST_EVERY` 3 (a ceiling near 14 wins), and an effect every
 2 turns cuts the draws to 2 while the larger loss threshold keeps the deaths low. Kept:
 `BALLAST_EVERY` 2, `BALLAST_WIN_EJECTIONS` 8, `BALLAST_LOSE_EJECTIONS` 12. 1x with the kept values:
-`100 | 12/20 | 111 | 2 | rim_ejection 6, draw 2` (fewer than 15 at 10x, as wanted). The 10x line was
-run twice, the same. The win threshold 8 still lets P3 (5 ejections) be played for 3 more ejections.
+`100 | 11/20 | 108.5 | 2 | rim_ejection 7, draw 2` on the merged main (old base 12/20), fewer than
+17 at 10x, as wanted. The 10x line was run twice on the merged main, the same. The win threshold 8 still lets P3 (5 ejections) be played for 3 more ejections.
 Decision #482 (win at 12) is superseded by this one by the agents on the owner's delegation of 2026-11-01;
-`engine_version` 18. 20 seeds is a coarse rate (one game is 5 points).
+`engine_version` 19. 20 seeds is a coarse rate (one game is 5 points).
 
 ### The Ballast Mind: the player starts with 16 marbles (#838), not tuned
 
@@ -466,6 +468,57 @@ figures were 1 and 2 of 20): the differences are noise on 20 seeds, as in the kn
 the games still end on rim ejections by the borrowed effects the ladder player reads only one turn
 ahead. The target of #833 (14 to 18 of 20 at 10x) still needs a stronger or smarter ladder player or a
 change of the effects, the owner's call.
+
+### The Ballast Mind: the phase follows the ejections inside the tree (#1115), no change on the ladder
+
+Audit #930 row 5: the effects borrowed from the Hull, Pulsar, Magnetizer and Chaplain were read
+(`hook` runs their own code, the Chaplain conversion is a loss credit, the Magnetizer polarity is
+carried, each with a test), but the effect due this turn took the phase of the root. A move that
+ejects a third (fifth) marble reaches P2 (P3) before the effect answers it, so the pulse is force 3
+(infinite) and not 2. `ballast_search` now uses `search_phased` and takes the highest of the root
+phase and the one the player's credits reach (`tree_phase`, P2 at 3, P3 at 5). No rule, knob or
+`engine_version` change. Only the ply that fires the effect looks at it: the boss reply fires at its
+root ply (the boss's own moves credit nothing to the player), so the boss reply is unchanged, and
+the ladder player search (the effect answers its move) is the one that reads it. Deeper boss plies
+still fire no effect (the tree does not know which turn they are, out of scope).
+
+Best-move change, measured on 3000 random positions (4 to 9 marbles each, 4 random plies, player
+to move with 2 or 4 ejections, a pulse due on the boss reply), same search before and after:
+
+| Search budget | Positions where the best move changed |
+|---|---|
+| 100 (boss, and the 1x player) | 0 of 3000 |
+| 300 | 8 of 3000 |
+| 1000 (the 10x player) | 8 of 3000 |
+
+So the change shows only above the 100 nodes the boss uses: the boss reply is identical at the
+shipped budget. The test `the_phase_reached_in_the_tree_changes_the_best_move` uses a built
+position at 1000 nodes (seed 5 since #1197, which moved the picks; it was 20709). Ladder,
+`LADDER_X=<x> LADDER_SEEDS=20 cargo run --release --example ladder -- ballast`, run alone, main
+4c1477c before:
+
+| Player budget | Wins /20 before | Wins /20 after | Median plies before / after | Deaths after |
+|---|---|---|---|---|
+| 100 (1x) | 0 | 0 | 112 / 112 | rim ejection 18, draw 2 |
+| 1000 (10x) | 1 | 1 | 127 / 127 | rim ejection 13, draw 6 |
+
+Identical rows: the run is deterministic, not rerun. The #833 target (14 to 18 of 20 at 10x) is
+still not met, the owner's call.
+
+### The Ballast Mind: the Swarm's wave is its fifth effect (#1197), not tuned
+
+The pick went from 4 to 5 effects (`engine_version` 18), nothing else changed, no tuning. Same method
+(`LADDER_X=1` and `LADDER_X=10`, `LADDER_SEEDS=20 cargo run --release --example ladder -- ballast`,
+seeds 0 to 19, 300 plies at most), before (`origin/main` at the time) and after:
+
+| Player | Before | After |
+|---|---|---|
+| 1x | `100 \| 0/20 \| 112 \| 2 \| rim_ejection 18, draw 2` | `100 \| 1/20 \| 120 \| 2 \| push 1, rim_ejection 14, draw 4` |
+| 10x | `1000 \| 1/20 \| 127 \| 2 \| rim_ejection 13, draw 6` | `1000 \| 3/20 \| 174 \| 2 \| rim_ejection 10, draw 7` |
+
+Reading: the wave adds a marble or two to the boss on the rim, away from the player, and it hurts the
+player a little less than the pulse or the crack: 1 and 3 of 20 against 0 and 1, within the noise of 20
+seeds. The target of #833 (14 to 18 of 20 at 10x) is still out of reach, the owner's call.
 
 #### Earlier: NOT measured at pro level, 0 of 10 at 1x
 

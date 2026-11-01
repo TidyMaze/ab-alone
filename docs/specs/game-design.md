@@ -141,7 +141,7 @@ Room kinds:
 
 | Room | Enters |
 |---|---|
-| Boss | The deck's door boss, one of the five lore-slot bosses of section 7 (the other nine of the roster of 14 are in the boss menu; every boss has an Open world lair): the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
+| Boss | The deck's door boss, one of the five lore-slot bosses of section 7 (the other bosses of the roster are in the boss menu; every boss has an Open world lair): the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
 | Medal room | On the Mess only (0, 2), a gold ring and core glyph (#812). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
@@ -277,11 +277,11 @@ third player less than 1 time in 5. Compare against option A as a baseline.
 
 ## 7. Boss roster
 
-The roster of 14 bosses is canon (#1170, epic #1177). Five of them are mapped to the lore slots of `world.md` (PR #51) and stand behind the deck doors of the hub (section 3.5); the nine extras are in the boss menu; the Open world has a lair for every boss of the roster (`openworld.md` section 7). Numbers (marble counts, timers) are **starting values** to tune in playtest.
+The roster of bosses (`boss_ids()`, which grows) is canon (#1170, epic #1177). Five of them are mapped to the lore slots of `world.md` (PR #51) and stand behind the deck doors of the hub (section 3.5); the other bosses are in the boss menu; the Open world has a lair for every boss of the roster (`openworld.md` section 7). Numbers (marble counts, timers) are **starting values** to tune in playtest.
 Player always starts with 14 marbles on the standard layout unless stated.
 Every boss mechanic can be turned against the boss (owner rule, #645): a new boss's twist must
 also give the player a way to hurt the boss with it.
-Each new boss: add its mechanic to The Ballast Mind's borrowed effects when it fits as a one-shot hook (a crack, a pulse, a polarity, a conversion today).
+Each new boss: add its mechanic to The Ballast Mind's borrowed effects when it fits as a one-shot hook (a crack, a pulse, a polarity, a conversion, a wave today).
 
 | Lore slot (`world.md`) | Deck | Our boss | Issue | Play order |
 |---|---|---|---|---|
@@ -470,7 +470,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   have 16 too (#838): the point reflection of its start, two more marbles than the standard layout. It has no rule code of its own: every **2** turns, at the end of the boss turn (turns 2,
   4, 6...; it was every 3 before #1209), it **borrows one effect of another boss**, picked by the engine PRNG (splitmix64 of the
   fight seed and the ply, so a Retry, the daily, a replay and every co-op peer get the same
-  picks) among four one-shot effects that run that boss's own engine code (no copy):
+  picks) among five one-shot effects that run that boss's own engine code (no copy):
   - **the Hull's crack**: one cell cracks and vanishes 2 player turns later, with its marble (P1 a
     rim cell, P2 an inner cell, P3 any cell). The Hull's timers tick at the end of every player
     turn, as for the Hull.
@@ -481,22 +481,26 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
     the board settles: opposite neighbours repel, as for the Magnetizer.
   - **the Chaplain's conversion check**: every marble touching 4 or more marbles of the other
     side flips, both sides (threshold 4, no martyr), as for the Chaplain.
+  - **the Swarm's wave** (#1197): the arrivals of the phase (1, 1, 2) land at once on the empty rim
+    cells away from the player's start side (`r <= 0`), picked by the hook seed, as for the Swarm
+    (a taken cell sends its marble to the nearest empty allowed cell, none left and it does not
+    arrive). The Swarm's 2-ejection win is never borrowed, the fight keeps its 12.
   Left out, not simple on this board: the trains, belts, eggs, armies, the martyr, the cores and
-  the echo. The Swarm's wave (section 7.14) joins the pick with part 2 of #795. The old mix (Hull rim crack, Chaplain threshold 3, Echo of the previous move) is gone.
+  the echo. The old mix (Hull rim crack, Chaplain threshold 3, Echo of the previous move) is gone.
 - **Announce**: the HUD names the effect one turn ahead, during the turn before it lands
   ("Next turn: the Hull's crack"). The Hull's crack needs no longer lead, it is its own 2-turn
   warning once cracked. The pulse is also announced on the board (#838): the pulsar that will fire
   (the one off the corner the pulse comes from) shows its glowing core and its counter and ripples
-  while the player thinks, as in the Pulsar's fight, with no chevrons. The other three effects
+  while the player thinks, as in the Pulsar's fight, with no chevrons. The other four effects
   pick their marble or cell as they land, so only the HUD line leads.
 - **Fired**: once it has landed, the HUD names it until the next ply ("Fired: the Pulsar's pulse"),
   and an orange ring marks each cell it touched on the board (the cracked cell, the polarized marble
-  and the marbles it repelled, the marbles a pulse pushed, the marbles the check flipped; none for a
+  and the marbles it repelled, the marbles a pulse pushed, the marbles the check flipped, the cells the swarm marbles landed on; none for a
   check that flips nothing). The effect still shows with the tell of its boss: the crack decal and
   its timer, the pulse shockwave and the sliding marbles, the polarity sign on the marble and the
   repulsions, the converted marks.
-- **New bosses**: each new boss adds its mechanic to the borrowed effects when it fits as a one-shot hook (a crack, a pulse, a polarity, a conversion today).
-- **Counter**: those of the Hull, the Pulsar, the Magnetizer and the Chaplain, one at a time, with
+- **New bosses**: each new boss adds its mechanic to the borrowed effects when it fits as a one-shot hook (a crack, a pulse, a polarity, a conversion, a wave today).
+- **Counter**: those of the Hull, the Pulsar, the Magnetizer and the Chaplain, one at a time (the Swarm's wave has none), with
   the turn of warning.
 - **Phases**: by ejections, as the bosses it borrows from: P1 at 0, P2 after **3** ejections, P3
   after **5**, shown as notches and in the HUD. A phase changes the strength of the effects (the
@@ -963,11 +967,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   needs only 2 ejections, so its marbles on the rim are the danger as much as the prey: never
   leave a marble on the rim in front of a swarm line. The boss search sees the arrivals: every
   player ply of its tree lands the next wave where the announce would put it.
-- **The Ballast Mind** (owner rule, section 7.5): it fits as a one-shot hook (the wave of the
-  phase lands at once on the empty rim cells away from the player's start side), but it is not
-  borrowed yet: a fifth effect changes the pick from 4 effects to 5, so every Ballast fight, its
-  fixture and its balance change with it. Task #1197. The 2-ejection win is never borrowed: it is
-  the Swarm's own end line, and the Ballast fight keeps its 12.
+- **The Ballast Mind** (owner rule, section 7.5, #1197): it borrows the wave as its fifth effect,
+  a one-shot hook: the arrivals of its phase land at once on the empty rim cells of its radius 5
+  board away from the player's start side. The 2-ejection win is never borrowed: it is the Swarm's
+  own end line, and the Ballast fight keeps its 12.
 - **Calibrate**: knobs = the boss's ejections to win (2), the arrival counts (1, 1, 2), the turns
   (30), the start (11), AI budget. Adopted: 2 ejections and arrivals 1, 1, 2 meet the gate.
   Gate (#795): the ladder's pro player wins 7 to 9 of 10 seeds at 10x, and a scripted turtle (it

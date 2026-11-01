@@ -558,11 +558,14 @@ describe('roguelite', () => {
     ]);
     expect(doc.querySelector('.run-graph')).toBeNull();
     expect(doc.getElementById('run-new')!.textContent).toBe('New run');
+    expect(doc.querySelector('.run-tally')!.textContent).toBe('Run voided. Audit reopened.'); // Tally's audit (#1174)
     const none = parse(mapHtml(MAP, { ...at(newRun(1, 3), 0, 2, 3, 5), end: 'won' }));
     expect([...none.querySelectorAll('.run-help')].map((p) => p.textContent).slice(1)).toEqual([
       'Fights: 4 won, 0 lost',
       'Army at the end: 14 marbles',
       'No new unlock',
     ]);
+    expect(none.querySelector('.run-tally')!.textContent).toBe('Reconciled: 14.');
+    expect(parse(mapHtml(MAP, newRun(1, 3))).querySelector('.run-tally')).toBeNull(); // only a run over
   });
 });

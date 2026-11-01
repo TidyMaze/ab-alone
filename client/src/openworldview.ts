@@ -8,7 +8,8 @@ import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type 
 import { CameraLife } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
-import { Marble, type Pace, ROLL_ZOOM, TROOP_DELAY, type Vec } from './openworldglide';
+import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
+import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
@@ -203,6 +204,10 @@ export const BIOME_LOOK: Record<Biome, { ground: number; prop: number }> = {
  * comes from `waterColor`). */
 export const groundColour = (tile: Tile, ground: Ground): number =>
   ground === 'grass' && (tile.height === 3 || tile.height === 4) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color;
+/** The red of a lone water cell and of a cell in the middle of a lake, as the instance colour holds them: the shore foam reads where on
+ * that way a cell lies (#1101). */
+const SHORE_RED = new THREE.Color(WATER.shore).r;
+const DEEP_RED = new THREE.Color(WATER.deep).r;
 /** The colour of a water cell: the share of its six neighbours that are water sets how far it lies from the shore. */
 export function waterColor(world: World, q: number, r: number): THREE.Color {
   const wet = neighbours([q, r]).filter(([nq, nr]) => world.tile(nq, nr)?.terrain === 'water').length / 6;
@@ -222,17 +227,24 @@ const PROP_NAMES = Object.keys(PROPS) as Prop[];
 /** The props that have a model in Blender: the low-poly one in `client/models/openworld.glb` (`ow_<prop>`) and the detailed one
  * in `openworld-hi.glb` (`ow_<prop>_hi`), drawn near the hero (#989). */
 const MODELLED = ['mountain', 'tree', 'boulder', 'wall'] as const;
-export type PropGeometries = Partial<Record<Prop, THREE.BufferGeometry>>;
-/** The geometries of both sets of models: `low` the low-poly props, `high` the detailed ones. */
+/** The landmark of a boss lair (#1171), in `openworld-lair.glb`: the open one and the beaten one, painted by vertex colours. */
+const LAIR_MODELS = ['lair', 'lair_beaten'] as const;
+export type PropGeometries = Partial<Record<Prop | (typeof LAIR_MODELS)[number], THREE.BufferGeometry>>;
+/** The geometries of both sets of models: `low` the low-poly props (and the lair landmarks), `high` the detailed ones. */
 export type PropModels = { low: PropGeometries; high: PropGeometries };
-export type ModelUrls = { low: string; high: string };
+export type ModelUrls = { low: string; high: string; lair?: string };
 
-/** The geometries of the models named `ow_<prop><suffix>` in the glTF at `url`; a failed load gives none, the procedural shapes stay. */
-async function readModels(url: string, loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> }, suffix: string): Promise<PropGeometries> {
+/** The geometries of the models named `ow_<name><suffix>` in the glTF at `url`; a failed load gives none, the procedural shapes stay. */
+async function readModels(
+  url: string,
+  loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> },
+  suffix: string,
+  names: readonly (Prop | (typeof LAIR_MODELS)[number])[] = MODELLED,
+): Promise<PropGeometries> {
   try {
     const { scene } = await loader.loadAsync(url);
     const out: PropGeometries = {};
-    for (const prop of MODELLED) {
+    for (const prop of names) {
       const mesh = scene.getObjectByName(`ow_${prop}${suffix}`) as THREE.Mesh | undefined;
       if (mesh) out[prop] = mesh.geometry;
     }
@@ -244,8 +256,12 @@ async function readModels(url: string, loader: { loadAsync(url: string): Promise
 
 /** The models of both files: a failed file leaves its set empty, so the props it would give stay procedural or low-poly. */
 export async function loadModels(urls: ModelUrls, loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> }): Promise<PropModels> {
-  const [low, high] = await Promise.all([readModels(urls.low, loader, ''), readModels(urls.high, loader, '_hi')]);
-  return { low, high };
+  const [low, high, lair] = await Promise.all([
+    readModels(urls.low, loader, ''),
+    readModels(urls.high, loader, '_hi'),
+    urls.lair ? readModels(urls.lair, loader, '', LAIR_MODELS) : {},
+  ]);
+  return { low: { ...low, ...lair }, high };
 }
 
 /** A detailed mesh holds the cells within `HI_RADIUS` of the hero: 3r(r+1)+1 of them, the most a build puts in one. */
@@ -283,9 +299,13 @@ const SETTLED_YAW = 0.001;
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
 
 /** The material of a prop's mesh: its look, the same for its low-poly and its detailed mesh. */
-const propMaterial = (prop: Prop): THREE.MeshStandardMaterial => {
+const propMaterial = (prop: Prop, sway: THREE.Node): THREE.Material => {
   const { color, emissive, flat } = PROPS[prop];
-  return new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat });
+  const look = { color, emissive, roughness: 0.8, flatShading: flat };
+  if (prop !== 'tree') return new THREE.MeshStandardMaterial(look);
+  const material = new THREE.MeshStandardNodeMaterial(look); // the trees lean in the wind with a term of their vertex shader (#1102)
+  material.positionNode = sway;
+  return material;
 };
 /** The instance colours of a mesh of `capacity` instances, all white: the colour of an instance a build does not set. */
 const whiteColours = (capacity: number): THREE.InstancedBufferAttribute => new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3).fill(1), 3);
@@ -435,6 +455,14 @@ export class OpenWorldView {
   private readonly sparks: THREE.InstancedMesh;
   private readonly sparkPose = new THREE.Object3D();
   private readonly sparkLook = { x: 0, y: 0, z: 0, s: 0, colour: 0 };
+  /** What the water's and the trees' shaders read (#1101, #1102): the clock, the amplitudes and the ripples. No mesh or instance is written. */
+  readonly uniforms = motionUniforms();
+  private readonly sway = swayPosition(this.uniforms);
+  private readonly ripplePool = new RipplePool();
+  /** The time of the last `animate` (ms), whether a loop was drawn then, and what moved. */
+  private motionNow = 0;
+  private looping = false;
+  private motionKinds = '';
 
   /** `fight` holds the enemies as they are now: the generated ones, with the pushes of the troop on top (openworldfight.ts). */
   constructor(
@@ -455,15 +483,15 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land }));
+      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined }));
       this.managed.push(this.grounds[ground]);
     }
     for (const prop of PROP_NAMES) {
-      this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop));
+      this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.props[prop]);
     }
     for (const prop of MODELLED) {
-      this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop));
+      this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.detailed[prop]!);
     }
     this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player));
@@ -505,10 +533,19 @@ export class OpenWorldView {
       this.paint(this.detailed[prop]!, geometry);
       this.detailedReady.add(prop);
     }
+    if (low.lair && low.lair_beaten) {
+      this.lairModels = { open: low.lair, beaten: low.lair_beaten };
+      this.setLairs(this.lairCells, this.lairsBeaten); // the landmarks already stood are drawn again with the models
+    }
     this.drawnKey = '';
     this.laidHero = undefined; // the next frame lays every prop again: the meshes it replaced are empty
     this.frame();
   }
+
+  /** The lair cells and the beaten ones of the last `setLairs`, and the Blender landmarks once they are in (#1171). */
+  private lairCells: readonly Axial[] = [];
+  private lairsBeaten: readonly number[] = [];
+  private lairModels?: { open: THREE.BufferGeometry; beaten: THREE.BufferGeometry };
 
   /** Gives a prop's mesh a model's geometry. A model that paints itself (vertex colours from Blender) is drawn as painted: no tint
    * hides it. */
@@ -648,6 +685,48 @@ export class OpenWorldView {
     const p = axialTo3D(q, r);
     const tile = this.world.tile(q, r)!;
     this.particles.shatter(p.x, topOf(GROUND[tile.terrain], tile.height) + 0.2, p.z, now, PROPS[prop].color, reduced);
+  }
+
+  /** Moves what the shaders move to `now` (ms) (docs/specs/openworld-animation.md sections 3 and 4): the shore foam and the sway of the trees
+   * are loops of the materials, the ripples were born by `ripple`. Nothing under `calm` (reduced motion, the low tier) or past
+   * `ROLL_ZOOM`. Returns whether the frame must draw: a lake or trees are in view and it moves, or it moved on the last call and is
+   * stilled now. */
+  animate(now: number, calm: boolean): boolean {
+    const u = this.uniforms;
+    const on = !calm && this.drawnLevel <= ROLL_ZOOM;
+    const water = on && this.hasWater;
+    const trees = on && (this.props.tree.count > 0 || this.detailed.tree!.count > 0);
+    u.time.value = now;
+    u.foam.value = on ? FOAM_GAIN : 0;
+    u.sway.value = on ? 1 : 0;
+    u.span.value = RIPPLE_MS * slowBy();
+    this.motionNow = now;
+    if (!on) this.ripplePool.clear();
+    writeRipples(this.ripplePool, u);
+    this.motionKinds = water ? (trees ? 'water,trees' : 'water') : trees ? 'trees' : '';
+    const drawn = this.looping || this.motionKinds !== '';
+    this.looping = this.motionKinds !== '';
+    return drawn;
+  }
+
+  /** What moves now, for the browser checks: `water`, `trees`, both, or nothing. */
+  get alive(): string {
+    return this.motionKinds;
+  }
+
+  /** The ripples alive at the last `animate`. */
+  get ripples(): number {
+    return this.ripplePool.live(this.motionNow, slowBy());
+  }
+
+  /** The hero steps from `from` to `to` at `now` (ms): a ring spreads from its cell when either is next to water. None under `calm`, with no
+   * lake in view, or past `ROLL_ZOOM`. */
+  ripple(from: Axial, to: Axial, now: number, calm: boolean): void {
+    if (calm || this.drawnLevel > ROLL_ZOOM || !this.hasWater) return;
+    const wet = ([q, r]: Axial): boolean => this.world.tile(q, r)?.terrain === 'water';
+    if (!neighbours(from).some(wet) && !neighbours(to).some(wet)) return;
+    const p = axialTo3D(to[0], to[1]);
+    this.ripplePool.spawn(p.x, p.z, now);
   }
 
   /** The glow of the water breathes slowly: `ms` is the time, 0 holds it still (reduced motion). */
@@ -816,6 +895,10 @@ export class OpenWorldView {
     if (ejected) {
       const beyond: Axial = [ejected[0] + push.dir[0], ejected[1] + push.dir[1]];
       moves.push(this.move('ejected', 0, ejected, beyond, { start: begin + at(CONTACT), span: at(SLIDE_MS), fall: at(FALL_MS), lunge: false }));
+      if (this.drawnLevel <= ROLL_ZOOM) {
+        const p = axialTo3D(beyond[0], beyond[1]);
+        this.particles.splash(p.x, topOf('water', 0) + 0.05, p.z, begin + at(CONTACT) + at(SLIDE_MS)); // the droplets rise as the fall starts (#1101)
+      }
     }
     this.moves = moves;
     this.end = Math.max(...moves.map((m) => m.start + m.span + m.fall));
@@ -1162,6 +1245,8 @@ export class OpenWorldView {
   /** Stands the landmark of each boss lair on its cell (#1170): `cells` in lair order, `beaten` the numbers of the lairs beaten. The
    * landmarks of an earlier call are replaced, and freed with the next draw. */
   setLairs(cells: readonly Axial[], beaten: readonly number[]): void {
+    this.lairCells = cells;
+    this.lairsBeaten = beaten;
     for (const old of this.scene.children.filter((child) => child.name.startsWith('lair-'))) {
       this.scene.remove(old);
       old.traverse((part) => {
@@ -1170,15 +1255,22 @@ export class OpenWorldView {
       });
     }
     cells.forEach(([q, r], i) => {
-      const colour = beaten.includes(i) ? LAIR_LOOK.beaten : LAIR_LOOK.open;
-      const material = new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.6, roughness: 0.5 });
+      const isBeaten = beaten.includes(i);
       const group = new THREE.Group();
       group.name = `lair-${i}`;
-      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, LAIR_LOOK.height, 6), material);
-      pillar.position.y = LAIR_LOOK.height / 2;
-      const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.15, 6), material);
-      plinth.position.y = 0.075;
-      group.add(pillar, plinth);
+      const model = this.lairModels && (isBeaten ? this.lairModels.beaten : this.lairModels.open);
+      if (model) {
+        // The Blender landmark (#1171): painted by its vertex colours, gold gem while open, a green stump once beaten.
+        group.add(new THREE.Mesh(model.clone(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, flatShading: true })));
+      } else {
+        const colour = isBeaten ? LAIR_LOOK.beaten : LAIR_LOOK.open;
+        const material = new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.6, roughness: 0.5 });
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, LAIR_LOOK.height, 6), material);
+        pillar.position.y = LAIR_LOOK.height / 2;
+        const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.15, 6), material);
+        plinth.position.y = 0.075;
+        group.add(pillar, plinth);
+      }
       const p = axialTo3D(q, r);
       const tile = this.world.tile(q, r)!;
       group.position.set(p.x, topOf(GROUND[tile.terrain], tile.height), p.z);

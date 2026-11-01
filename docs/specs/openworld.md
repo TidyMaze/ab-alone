@@ -181,13 +181,16 @@ hero, the troop and the enemies of the loaded square (the generated ones are hid
 
 ## 7. Boss lairs (#1170, #1171, epic #1177)
 
-The Open world has a goal: one landmark lair per boss of the roster (14 today, the length of `boss_ids()`), each a normal boss fight.
+The Open world has a goal: one landmark lair per boss of the roster (15 today, the length of `boss_ids()`), each a normal boss fight.
 
 - **Placement** is seeded world generation in Rust (`world::lairs(seed, count)`, bridge `world_lairs(seed)` passes the roster size, `q, r` pairs, lair 0 first).
   Lair `k` is drawn in the `k`-th `count`-th of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
   six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). It reads the terrain, never
   changes it, so `WORLD_VERSION` does not move.
-- **Look.** A tall pillar on a plinth on the lair's cell, gold while the lair is unbeaten, green once beaten.
+- **Look.** A low-poly landmark made in Blender (`client/models/openworld-lair.glb`, vertex colours, under 72 triangles each) on
+  the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
+  while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).
+  Until the model is loaded, the plain gold or green pillar is drawn.
 - **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`),
   the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from).
 - **Win.** The medal is recorded in `ab-alone.medals` as for any boss win, and the lair is added to `lairs` of the world's save.
@@ -199,3 +202,6 @@ The Open world has a goal: one landmark lair per boss of the roster (14 today, t
   store, total the roster size. Read when a world opens, so it is right after "Back to the Open world".
 - **Tally's line.** The first time a player opens an Open world the HUD shows "Claim 0412: unworked." (`#openworld-tally`), once: the
   flag `ab-alone.tally0412` is kept next to the medals. Reduced motion changes nothing.
+- **Ending (#1175).** When every lair of the world is in `lairs` (beaten), the world counts as beaten: whenever it opens, `#openworld-tally`
+  shows "Variance noted. Clamp: open. Crew attached: 6." (the crew is the Trainer's `MARBLES`), in place of the claim line. One line, no
+  speech, nothing gated, no new save field (a save from before reads as not over). `__openworldFixture` takes `beaten: [n, ...]` to set the lairs beaten.

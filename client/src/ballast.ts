@@ -4,7 +4,7 @@
 import type { Axial } from './board';
 
 /** The bosses' effects `Encounter.ballast_next()` codes, in the order of the bridge. */
-const EFFECTS = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check"];
+const EFFECTS = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check", "the Swarm's wave"];
 
 /** HUD line of the effect borrowed next turn, '' when none is due (`ballast_next()` is -1). */
 export function ballastText(code: number): string {

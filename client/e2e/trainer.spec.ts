@@ -21,6 +21,7 @@ test('Trainer starts at wave 1, a won wave shows its card and Next wave adds a m
   await expect(card).toContainText('Waves survived: 1');
   await expect(card).toContainText('Marbles left: 6/6');
   await expect(card).toContainText('Best: 1');
+  await expect(card).toContainText('Wave 1 filed. Best on record: 1.');
   await page.getByRole('button', { name: 'Next wave' }).click();
   await expect(card).toBeHidden();
   await expect(page.locator('#hud')).toContainText('Trainer · wave 2 · best 1');
@@ -28,6 +29,7 @@ test('Trainer starts at wave 1, a won wave shows its card and Next wave adds a m
 
   await page.evaluate(() => (window as any).__trainer(5));
   await expect(page.locator('#hud')).toContainText('Trainer · wave 5 · best 1');
+  await expect(page.locator('#hud')).toContainText('Drill: wave 5. Opponents: five. Seated.');
   expect(await whites()).toBe(5);
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.locator('#hud')).toContainText('Trainer · wave 1 · best 1');

@@ -9,6 +9,8 @@ import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
+import { endingLine } from './tally';
+import { MARBLES } from './trainer';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
@@ -214,8 +216,7 @@ export class OpenWorldMode {
       const { have, total } = this.medals();
       medals.textContent = `Medals ${have} / ${total}`;
     }
-    const tally = document.getElementById('openworld-tally');
-    if (tally) tally.textContent = this.tally();
+    this.showTally(true);
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
@@ -254,6 +255,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldAnim;
     delete document.body.dataset.openworldGlide;
     delete document.body.dataset.openworldParticles;
+    delete document.body.dataset.openworldMotion;
   }
 
   /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
@@ -277,10 +279,25 @@ export class OpenWorldMode {
     return this.fight.enemiesAround(this.world!, this.hero!.at, PUSH_REACH);
   }
 
+  /** Tally's line in the HUD (#1171): the ending once every lair is beaten (#1175), else the page's line (`fresh`: asked for, which
+   * may use it up). */
+  private showTally(fresh: boolean): void {
+    const tally = document.getElementById('openworld-tally');
+    if (!tally) return;
+    const over = this.lairs.length > 0 && this.beaten.length >= this.lairs.length;
+    tally.textContent = over ? endingLine(MARBLES) : fresh ? this.tally() : '';
+  }
+
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
-   * enemies of the loaded square replaced by `enemies`, none pushed. */
-  fixture({ hero, troop, enemies }: { hero: Axial; troop: Axial[]; enemies: Axial[] }): void {
+   * enemies of the loaded square replaced by `enemies`, none pushed; `beaten` (#1175) sets the lairs beaten. */
+  fixture({ hero, troop, enemies, beaten }: { hero: Axial; troop: Axial[]; enemies: Axial[]; beaten?: number[] }): void {
     this.view!.snap();
+    if (beaten) {
+      this.beaten = [...beaten];
+      this.view!.setLairs(this.lairs, this.beaten);
+      this.showTally(false);
+      this.persist();
+    }
     this.hero!.at = hero;
     this.hero!.troop = troop;
     this.view!.show(hero, troop); // first: the loaded square may keep its centre, which the enemies are hidden around (#1046)
@@ -381,7 +398,9 @@ export class OpenWorldMode {
     const sparks = this.view!.sparkle(now, reduced); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
     const moving = !reduced && this.view!.hasWater;
-    if (!this.dirty && !moving && !sparks) return false;
+    const loops = this.view!.animate(now, reduced || this.lowTier()); // the foam, the ripples and the trees' sway (#1101, #1102)
+    this.countMotion();
+    if (!this.dirty && !moving && !sparks && !loops) return false;
     this.dirty = false;
     this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
@@ -455,6 +474,7 @@ export class OpenWorldMode {
     this.view!.snap(); // a step during a push's animation ends it first (#967)
     const now = this.reduced() ? null : at;
     if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)
+    if (now !== null) this.view!.ripple(from, this.hero!.at, now, this.lowTier()); // a ring on the water next to it (#1101)
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy(), pace }); // the step glides (#1040)
     const played = this.troopPush();
     this.view!.updateEnemies();
@@ -524,6 +544,17 @@ export class OpenWorldMode {
     if (!navigator.webdriver) return;
     if (this.view?.gliding) document.body.dataset.openworldGlide = `${this.view.focusPoint.x.toFixed(2)},${this.view.focusPoint.z.toFixed(2)},${this.view.heroY.toFixed(3)}`;
     else delete document.body.dataset.openworldGlide;
+  }
+
+  /** Whether the page is on the low quality tier, where the effects of the water and the trees are off (#1101). */
+  private lowTier(): boolean {
+    return document.body.dataset.tier === 'low';
+  }
+
+  /** What moves (`openworldMotion`: `water`, `trees`, both or empty), for the browser checks only. */
+  private countMotion(): void {
+    if (!navigator.webdriver) return;
+    if (document.body.dataset.openworldMotion !== this.view!.alive) document.body.dataset.openworldMotion = this.view!.alive;
   }
 
   /** The particles drawn (`openworldParticles`), for the browser checks only: written when the count changes. */

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
 // The Ballast Mind (#749, game-design.md section 7.5): every 2 turns it borrows an effect of another boss, named in the
-// HUD during the turn before. Fight seed 2 borrows the Pulsar's pulse at the end of turn 2 (#1209). ?bot=off plays both sides
+// HUD during the turn before. Fight seed 6 borrows the Pulsar's pulse at the end of turn 2 (#1209), seed 3 the Swarm's wave. ?bot=off plays both sides
 // through the click hook, one-marble moves, so no boss search runs. The screenshots are kept for the report.
 
 const freshDraw = async (page: Page) => {
@@ -25,7 +25,7 @@ async function plies(page: Page, n: number): Promise<void> {
 
 test('The Ballast Mind names its borrowed effect a turn ahead, then plays the Pulsar pulse, #749', async ({ page }, testInfo) => {
   await page.addInitScript(() => {
-    crypto.getRandomValues = ((a: Uint32Array) => a.fill(2)) as typeof crypto.getRandomValues; // the fight seed
+    crypto.getRandomValues = ((a: Uint32Array) => a.fill(6)) as typeof crypto.getRandomValues; // the fight seed
   });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./?bot=off');
@@ -49,4 +49,28 @@ test('The Ballast Mind names its borrowed effect a turn ahead, then plays the Pu
   await expect(page.locator('body')).toHaveAttribute('data-ripples', '0');
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('ballast-pulse.png') });
+});
+
+test('The Ballast Mind lands the Swarm wave on the rim and marks the cell, #1197', async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    crypto.getRandomValues = ((a: Uint32Array) => a.fill(3)) as typeof crypto.getRandomValues; // the fight seed
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
+  await expect(page.locator('#boss-bar .name')).toContainText('The Ballast Mind');
+  await page.mouse.move(2, 2); // no hover ghost
+  const tell = page.locator('#hud .boss .tell');
+  await plies(page, 2);
+  await expect(tell).toHaveText("Next turn: the Swarm's wave");
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('ballast-wave-announce.png') });
+  await plies(page, 2);
+  await expect(tell).toHaveText("Fired: the Swarm's wave");
+  await expect(page.locator('body')).toHaveAttribute('data-fired', '1');
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('ballast-wave-fired.png') });
 });

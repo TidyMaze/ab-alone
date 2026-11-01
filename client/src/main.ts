@@ -46,7 +46,7 @@ import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
-import { MOTION, cue } from './motion';
+import { MOTION, cue, ghostFade } from './motion';
 import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
@@ -159,7 +159,7 @@ import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
-import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, trainerBudget, waveLine, waveResult } from './trainer';
+import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
 import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { beatPeriod } from './coordinator';
@@ -3670,6 +3670,18 @@ function animatePasses(now: number): void {
 }
 
 
+const GHOST_OPACITY = 0.45;
+let hintShownKey = '';
+let ghostFadeStart = 0;
+/** The ghost materials at `now`: the Hint's ghost rises from clear (ghostFade), any other ghost is whole. */
+function fadeGhosts(now: number): void {
+  const k = hintShownKey ? ghostFade(now - ghostFadeStart, reducedMotion()) : 1;
+  for (const m of [...Object.values(ghostMaterials), ghostCore]) m.opacity = GHOST_OPACITY * k;
+}
+
+/** Whether the Hint's ghost is still rising, so the frame keeps drawing. */
+const ghostFading = (): boolean => hintShownKey !== '' && !reducedMotion() && performance.now() - ghostFadeStart < MOTION.base;
+
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   if (royale) return; // no ghost over the arena
   const mv = keyDir >= 0 ? moveFor(moves, selected, keyDir) : hover ? moveForClick(moves, selected, hover) : null;
@@ -3681,6 +3693,10 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
     if (reply.length) list.push(...ghostMarbles([...history, record], reply, makeGame));
   }
   ghosts.clear();
+  const hintKey = !mv && record ? record.join() : ''; // a hint that just appeared fades in, a hovered move shows at once
+  if (hintKey !== hintShownKey) ghostFadeStart = performance.now();
+  hintShownKey = hintKey;
+  fadeGhosts(performance.now());
   for (const { cell, side } of list) {
     const p = axialTo3D(cell[0], cell[1]);
     const marble = marbleMesh(side, ghostMaterials, ghostCore);
@@ -4199,6 +4215,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__view = () => view;
 
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
+(window as unknown as Record<string, unknown>).__ghostOpacity = () => ghostMaterials[1]!.opacity; // the Hint ghost's fade (#1097)
 (window as unknown as Record<string, unknown>).__hint = () => hint.shown(here());
 (window as unknown as Record<string, unknown>).__rings = () => ringed;
 // Used by the browser checks to read the opacity and scale of the last move's ring (#1092).
@@ -5046,7 +5063,7 @@ const trainerResultNow = (t: { wave: number; lost: number }): ReturnType<typeof 
 function trainerNote(t: { wave: number; lost: number }): string {
   const result = trainerResultNow(t);
   if (engine.status() !== 0) recordTrainerBest(store, result.survived);
-  return waveLine(t.wave, readTrainerBest(store), result.lost);
+  return `${waveLine(t.wave, readTrainerBest(store), result.lost)} · ${drillLine(t.wave)}`;
 }
 /** The result card of a wave that is over, hidden otherwise. */
 function showTrainerCard(): void {
@@ -5076,7 +5093,11 @@ const openWorld = new OpenWorldMode(
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
   () =>
     loadModels(
-      { low: `${import.meta.env.BASE_URL}assets/pbr/openworld.glb`, high: `${import.meta.env.BASE_URL}assets/pbr/openworld-hi.glb` },
+      {
+        low: `${import.meta.env.BASE_URL}assets/pbr/openworld.glb`,
+        high: `${import.meta.env.BASE_URL}assets/pbr/openworld-hi.glb`,
+        lair: `${import.meta.env.BASE_URL}assets/pbr/openworld-lair.glb`,
+      },
       meshoptLoader(),
     ),
   () => reducedMotion(),
@@ -5111,7 +5132,7 @@ async function enterOpenWorld(): Promise<void> {
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
   const hooks = window as unknown as Record<string, unknown>;
-  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][] }) => openWorld.fixture(fixture);
+  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldEnemies = () => openWorld.enemies();
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake and chunk centre the camera draws (#1103)
 }
@@ -5613,7 +5634,7 @@ function animateParticles(now: number): void {
 }
 // An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
 function moving(): boolean {
-  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop, evac && !evac.done];
+  const effects = [slide, reveal, shock, blast, sweep, blinking, ghostFading(), unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop, evac && !evac.done];
   const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
   return (
     effects.some(Boolean) ||
@@ -5649,6 +5670,7 @@ renderer.setAnimationLoop((now) => {
   }
   animateSlides(now);
   fadeGlyphs(now);
+  fadeGhosts(now);
   animateReveal(now);
   animateEjections(now);
   animatePasses(now);

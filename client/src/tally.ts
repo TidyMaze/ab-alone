@@ -18,7 +18,7 @@ const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
   hull: 'Rim on file. Six out to balance the books.',
   choir: 'Six out to balance the books.',
   chaplain: 'Conversions on file. Six out to balance.',
-  ballast: 'The ledger plays itself. Twelve out to balance.',
+  ballast: 'The ledger plays itself. Eight out to balance.',
   alien: 'Brood on file. Six out to balance the books.',
   railyard: 'Freight on schedule. Six out to balance the books.',
   magnetizer: 'Charges on file. Six out to balance the books.',
@@ -36,3 +36,6 @@ export function tallyLine({ mode, boss = '' }: { mode: TallyMode; boss?: string 
   if (mode === 'boss') return BOSS_LINES[boss as (typeof BOSS_IDS)[number]] ?? '';
   return MODE_LINES[mode];
 }
+
+/** Tally's line once the hero has entered every lair of the Open world (#1175): one line, no speech. `crew` is the crew attached. */
+export const endingLine = (crew: number): string => `Variance noted. Clamp: open. Crew attached: ${crew}.`;

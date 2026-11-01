@@ -5,7 +5,7 @@ import { boot, type Game } from './test/harness';
 
 // The Ballast Mind on the harness (#749, game-design.md section 7.5): every 2 turns it borrows an effect of another
 // boss, named in the HUD during the turn before. ?bot=off plays both sides, one-marble moves, so no boss search runs.
-// Fight seed 11 borrows the Magnetizer's polarity, 0 the Hull's crack, 2 the Pulsar's pulse, 9 the Chaplain's check (#1209).
+// Fight seed 0 borrows the Magnetizer's polarity, 4 the Hull's crack, 6 the Pulsar's pulse, 1 the Chaplain's check, 3 the Swarm's wave (#1209).
 
 type Move = { cells: Axial[]; dir: number };
 const DIRS: Axial[] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
@@ -35,10 +35,11 @@ function plies(game: Game, n: number): void {
 
 describe('main.ts The Ballast Mind announce (#749)', () => {
   it.each([
-    [11, "Next turn: the Magnetizer's polarity"],
-    [0, "Next turn: the Hull's crack"],
-    [2, "Next turn: the Pulsar's pulse"],
-    [9, "Next turn: the Chaplain's conversion check"],
+    [0, "Next turn: the Magnetizer's polarity"],
+    [4, "Next turn: the Hull's crack"],
+    [6, "Next turn: the Pulsar's pulse"],
+    [1, "Next turn: the Chaplain's conversion check"],
+    [3, "Next turn: the Swarm's wave"],
   ])('fight seed %i names its effect during turn 2 only', async (seed, text) => {
     const game = await boot('?bot=off');
     fightBallast(game, seed);
@@ -54,7 +55,7 @@ describe('main.ts The Ballast Mind announce (#749)', () => {
 
   it('plays the borrowed pulse with the Pulsar shockwave', async () => {
     const game = await boot('?bot=off');
-    fightBallast(game, 2);
+    fightBallast(game, 6);
     plies(game, 3);
     expect(document.body.dataset.pulses).toBeUndefined();
     plies(game, 1);
@@ -67,7 +68,7 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
 
   it('shows the announced pulse on its pulsar, rippling, one turn ahead', async () => {
     const game = await boot('?bot=off');
-    fightBallast(game, 2);
+    fightBallast(game, 6);
     plies(game, 1);
     expect(game.hook('__pulsar')).toBeNull();
     expect(document.body.dataset.ripples).toBe('0');
@@ -82,10 +83,11 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
   });
 
   it.each([
-    [2, 1, "Fired: the Pulsar's pulse"],
-    [0, 0, "Fired: the Hull's crack"],
-    [9, 3, "Fired: the Chaplain's conversion check"],
-    [11, 2, "Fired: the Magnetizer's polarity"],
+    [6, 1, "Fired: the Pulsar's pulse"],
+    [4, 0, "Fired: the Hull's crack"],
+    [1, 3, "Fired: the Chaplain's conversion check"],
+    [0, 2, "Fired: the Magnetizer's polarity"],
+    [3, 4, "Fired: the Swarm's wave"],
   ])('fight seed %i fires effect %i, named in the HUD with a mark on each cell it touched', async (seed, effect, text) => {
     const game = await boot('?bot=off');
     fightBallast(game, seed);
