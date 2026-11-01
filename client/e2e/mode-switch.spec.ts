@@ -34,7 +34,7 @@ test('a boss fight and a battle royale left for the Hub leave no control and no 
 
 test('an Open world lair fight lost, Back to the Open world: nothing of the fight shows over the world, #1275', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   const [q, r] = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ')[0]!.split(',').map(Number) as [number, number];
   await page.evaluate(
@@ -52,7 +52,7 @@ test('an Open world lair fight lost, Back to the Open world: nothing of the figh
   await expect(page.locator('#openworld-hud')).toBeVisible();
   for (const id of ['#boss-bar', '#auto-reason', '#hud']) await expect(page.locator(id)).toBeHidden();
   // The lost fight's end light dims no world (body[data-over]).
-  expect(await page.locator('canvas').evaluate((c) => getComputedStyle(c).filter)).toBe('none');
+  expect(await page.locator('canvas:not(#openworld-minimap)').evaluate((c) => getComputedStyle(c).filter)).toBe('none');
   expect(await page.evaluate(() => getComputedStyle(document.body, '::before').display)).toBe('none');
   await page.screenshot({ path: process.env.MODE_SWITCH_WORLD_SHOT ?? 'test-results/mode-switch-world.png' });
 });

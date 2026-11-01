@@ -457,8 +457,9 @@ const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBa
 renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 // The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
-// as soon as the scene is. mountBay takes them when the scene exists.
-const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, hasNormalMaps(tier));
+// as soon as the scene is. mountBay takes them when the scene exists. The terrace draws no bay, its walls, grates and deck maps
+// are the room's: they are asked for under `?scene=room` only (#1370).
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, keepRoom ? loader : null, hasNormalMaps(tier));
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   if (!loadsTexture(tonal ? 'tonal' : 'pbr', name, keepRoom)) return null; // the terrace draws no board or plate (#1370)
   if (/-normal\.ktx2$/.test(name) && !hasNormalMaps(tier)) return null; // the low tier fetches and draws no normal map (#849)

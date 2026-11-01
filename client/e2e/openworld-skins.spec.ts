@@ -7,7 +7,7 @@ import { openModes } from './modes';
 // 255, the default Marble skin is neutral (about 3).
 test('the hero of the Open world wears the ship skin, not the glossy blue marble, #1176', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0], [-1, 1]], enemies: [[2, 0], [2, -1]] }),

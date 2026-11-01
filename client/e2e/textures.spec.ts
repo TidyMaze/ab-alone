@@ -16,30 +16,16 @@ test('textures are requested and the board still renders', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   const { origin } = new URL(page.url());
   expect(transcoder.sort()).toEqual([`200 ${origin} basis_transcoder.js`, `200 ${origin} basis_transcoder.wasm`]);
-  // Every texture ships as KTX2 (#700). The room's board, plate and default skin maps are not asked for on the terrace (#1370).
+  // Every texture ships as KTX2 (#700). The room's board, plate, default skin, bay, bulkhead and grate maps are not asked for on the terrace (#1370).
   expect(loaded.sort()).toEqual([
     '200 arena.glb', // the terrace (#1314)
     '200 backdrop.ktx2',
-    '200 bulkhead-albedo.ktx2',
-    '200 bulkhead-ao.ktx2',
-    '200 bulkhead-displacement.ktx2',
-    '200 bulkhead-normal.ktx2',
-    '200 bulkhead-roughness.ktx2',
     '200 crack-decal.ktx2',
     '200 deck-albedo.ktx2',
     '200 deck-mess-normal.ktx2', // the cells' normal map of the Mess (#440)
     '200 deck-mess-roughness.ktx2',
-    '200 deck-mess.ktx2', // the cells' texture of the Mess, the deck a page opens on (#401)
-    '200 deck-pbr-albedo.ktx2', // the bay's deck, and the board's rim (#775), downloaded once
-    '200 deck-pbr-ao.ktx2',
-    '200 deck-pbr-normal.ktx2',
-    '200 deck-pbr-roughness.ktx2',
+    '200 deck-mess.ktx2', // the cells' texture of the Mess, the deck a page opens on (#401): the discs wear them when the arena fails (#1374)
     '200 deck-roughness.ktx2',
-    '200 grate-albedo.ktx2',
-    '200 grate-displacement.ktx2',
-    '200 grate-metalness.ktx2',
-    '200 grate-normal.ktx2',
-    '200 grate-roughness.ktx2',
     '200 kit-arena.glb', // the terrace's marks and pedestal (#1314)
     '200 kit-boss.glb', // the bosses' props (#1374)
     '200 kit-ring-hint.glb', // the terrace's hint ring (#1364)

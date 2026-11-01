@@ -7,7 +7,7 @@ import { openModes } from './modes';
 async function ready(page: Page, reduced = false): Promise<void> {
   if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./?bot=off&net=hook');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect(page.locator('#hud')).toContainText('to move');
 }
 
@@ -27,7 +27,7 @@ test('the canvas fades in on the base token on entering and leaving the Open wor
 
 test('the fade never blocks input: the canvas keeps its pointer events (#1099)', async ({ page }) => {
   await ready(page);
-  expect(await page.locator('canvas').evaluate((c) => getComputedStyle(c).pointerEvents)).not.toBe('none');
+  expect(await page.locator('canvas:not(#openworld-minimap)').evaluate((c) => getComputedStyle(c).pointerEvents)).not.toBe('none');
 });
 
 test('Reduced motion cuts the fade to a hard cut (#1099)', async ({ page }) => {
@@ -37,7 +37,7 @@ test('Reduced motion cuts the fade to a hard cut (#1099)', async ({ page }) => {
 
 test('the fade really plays when the Open world is entered by its button (#1099)', async ({ page }) => {
   await page.goto('./?bot=off');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await openModes(page);
   await page.evaluate(() => {
     (window as any).__started = [];

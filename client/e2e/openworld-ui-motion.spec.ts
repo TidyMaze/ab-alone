@@ -7,7 +7,7 @@ import { openModes } from './modes';
 const MOTION_WAIT = 400;
 const enter = async (page: import('@playwright/test').Page) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect(page.locator('#openworld-hud')).toBeVisible();
 };
 const anim = (page: import('@playwright/test').Page, sel: string) =>

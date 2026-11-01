@@ -18,8 +18,7 @@ async function filesLoaded(page: Page, search: string): Promise<{ files: string[
 
 test('the tonal look requests no skin, cell or plate map and draws the board (#1138)', async ({ page }) => {
   const { files } = await filesLoaded(page, 'look=tonal');
-  // The bay's deck-pbr maps belong to the room (a later piece of #1138), they still load.
-  expect(files.filter((f) => NOT_TONAL.test(f) && !f.startsWith('deck-pbr-'))).toEqual([]);
+  expect(files.filter((f) => NOT_TONAL.test(f))).toEqual([]);
   await expect(page.locator('#hud')).toContainText('White to move');
 });
 
