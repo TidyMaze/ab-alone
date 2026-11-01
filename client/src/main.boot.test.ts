@@ -245,6 +245,27 @@ describe('the renderer and its textures', () => {
       expect((await diagnostics(game)).environment.backend).toBe('WebGPU');
     });
 
+    it.each([
+      ['low', false],
+      ['high', true],
+    ])('asks for the normal maps on the %s tier: %s (#849)', async (tier, asked) => {
+      const requested: string[] = [];
+      const booting = boot(`?bot=off&quality=${tier}`);
+      renderer();
+      vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', () => ({
+        KTX2Loader: class {
+          detectSupport = (): this => this;
+          loadAsync = async (url: string): Promise<never> => {
+            requested.push(url);
+            return Promise.reject(new Error('404'));
+          };
+        },
+      }));
+      await booting;
+      expect(requested.some((u) => u.endsWith('-normal.ktx2'))).toBe(asked);
+      expect(requested.some((u) => u.endsWith('deck-albedo.ktx2'))).toBe(true);
+    });
+
     it('is asked for the WebGL2 backend by ?backend=webgl', async () => {
       const booting = boot('?bot=off&backend=webgl');
       const { options } = renderer();
