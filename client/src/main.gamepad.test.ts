@@ -7,7 +7,7 @@ import { boot, type Game } from './test/harness';
 // The gamepad on main.ts (#1252): it drives the keyboard's paths, the focus walk of the menus and the board's keys.
 
 type Move = { cells: Axial[]; dir: number };
-const A = 0, B = 1, RB = 5, RT = 7, START = 9, DOWN = 13, LEFT = 14, RIGHT = 15;
+const A = 0, B = 1, LB = 4, RB = 5, RT = 7, START = 9, DOWN = 13, LEFT = 14, RIGHT = 15;
 const canvas = (): HTMLCanvasElement => document.querySelector('canvas')!;
 const rings = (game: Game): Axial[] => game.hook<Axial[]>('__rings');
 const plies = (game: Game): number => game.hook<number>('__plies');
@@ -55,6 +55,10 @@ describe('the gamepad', () => {
     pad.tap(DOWN);
     expect(document.activeElement).not.toBe(byId('hud-fold'));
     pad.tap(LEFT); // back
+    expect(document.activeElement).toBe(byId('hud-fold'));
+    pad.tap(RB); // off the board, RB and LB walk the focus as Tab and Shift+Tab
+    expect(document.activeElement).not.toBe(byId('hud-fold'));
+    pad.tap(LB);
     expect(document.activeElement).toBe(byId('hud-fold'));
     pad.tap(A);
     expect(byId('hud-fold').getAttribute('aria-expanded')).toBe('false');

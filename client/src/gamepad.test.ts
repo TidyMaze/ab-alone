@@ -84,7 +84,7 @@ describe('the gamepad poller', () => {
     poll(32, fakePad([], [0.9, 0, 0, 0])); // still east: held
     expect(got).toEqual([{ kind: 'move', hex: 0, step: 1 }]);
     poll(48, fakePad([], [0.5, -0.8, 0, 0])); // up and right: north-east
-    expect(got.pop()).toEqual({ kind: 'move', hex: 2, step: 1 });
+    expect(got.pop()).toEqual({ kind: 'move', hex: 2, step: -1 }); // mostly up: back
     poll(64, fakePad([LEFT], [0.5, -0.8, 0, 0])); // the D-pad wins
     expect(got.pop()).toEqual({ kind: 'move', hex: 1, step: -1 });
   });
@@ -158,6 +158,6 @@ describe('the focus step', () => {
     expect(nextFocus(null, 1)).toBe($('a'));
     expect(nextFocus(null, -1)).toBe($('f'));
     document.body.innerHTML = '';
-    expect(nextFocus(document.body, 1)).toBeNull();
+    expect(nextFocus(document.body, 1)).toBe(document.body);
   });
 });

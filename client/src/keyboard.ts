@@ -29,13 +29,15 @@ export function moveFor(moves: readonly Move[], selection: readonly Axial[], dir
   return moves.find((mv) => mv.dir === dir && keyOf(mv.cells) === keyOf(selection)) ?? null;
 }
 
-/** What the aria-live HUD says after a key: the group, then the direction (-1 for none). */
-export function announce(moves: readonly Move[], selection: readonly Axial[], dir: number): string {
+/** What the aria-live HUD says after a key: the group, then the direction (-1 for none). With a gamepad in use (`pad`,
+ * #1252) the hints name its buttons. */
+export function announce(moves: readonly Move[], selection: readonly Axial[], dir: number, pad = false): string {
   const groups = legalGroups(moves);
   const at = groups.findIndex((g) => keyOf(g) === keyOf(selection));
-  if (at < 0) return 'no group selected';
+  if (at < 0) return pad ? 'no group selected, RB for a group' : 'no group selected';
   const n = selection.length;
   const group = `group ${at + 1} of ${groups.length}, ${n} marble${n > 1 ? 's' : ''}`;
-  if (dir < 0) return group;
-  return moveFor(moves, selection, dir) ? `${group}, ${DIR_NAMES[dir]}, Enter to play` : `${group}, no move ${DIR_NAMES[dir]}`;
+  if (dir < 0) return pad ? `${group}, stick to aim, LB RB to switch` : group;
+  if (!moveFor(moves, selection, dir)) return `${group}, no move ${DIR_NAMES[dir]}`;
+  return `${group}, ${DIR_NAMES[dir]}, ${pad ? 'A to play, B to back out' : 'Enter to play'}`;
 }
