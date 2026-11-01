@@ -2,13 +2,14 @@
 //! neurotoxin floods the chamber. The Overseer sits at the centre and nothing moves it; 6 passive
 //! cores sit around it and both sides push them like opponent marbles; a core on one of the 6
 //! incinerator cells of the rim burns at the end of the ply and counts for the player, whoever
-//! pushed it. The incinerators burn the boss's marbles too (P1 and P2) and the player's (P2 and
-//! P3). The player loses at the end of its turn 40 if it has not won. Nothing is random.
+//! pushed it; an empty incinerator pulls in a core next to it first (#1241). The incinerators burn
+//! the boss's marbles too, and the player's in P2. The player loses at the end of its turn 40 if
+//! it has not won. Nothing is random.
 
 use crate::board::{Board, Cell};
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
-use crate::moves::{Move, Player};
+use crate::moves::{Direction, Move, Player};
 use crate::search::{search_phased, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
@@ -19,16 +20,37 @@ pub const OVERSEER_CORES: [P; 6] = [(-1, -1), (2, -1), (-2, 0), (2, 0), (-2, 1),
 pub const OVERSEER_INCINERATORS: [P; 6] = [(-3, -1), (4, -1), (-4, 0), (4, 0), (-4, 1), (3, 1)];
 /// Player turns before the neurotoxin wins the fight for the boss. TUNE.
 pub const OVERSEER_TURNS: u32 = 40;
-/// P2 and P3 start after this many ejections credited to the player (cores burnt count). TUNE.
-pub const OVERSEER_PHASE_EJECTIONS: [u8; 2] = [2, 4];
+/// P2 starts after this many ejections credited to the player (cores burnt count). TUNE.
+pub const OVERSEER_PHASE_EJECTIONS: [u8; 1] = [2];
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
 pub const OVERSEER_NODE_BUDGET: u32 = 3000;
 /// What the incinerators burn in each phase, besides the cores: the boss's marbles, the player's.
-const BURNS: [[bool; 2]; 3] = [[true, false], [true, true], [false, true]];
+const BURNS: [[bool; 2]; 2] = [[true, false], [true, true]];
 
 /// Special id of every ply: the phase, which says what the incinerators burn.
 fn special(_ply: u32, phase: usize) -> Option<u8> {
     Some(phase as u8)
+}
+
+/// The board after every empty incinerator pulls in a core from a cell next to it, the first in
+/// direction order (#1241). A core already on an incinerator stays there.
+fn pull(board: &Board) -> Board {
+    let vents = board.incinerators();
+    let mut out = board.clone();
+    for &(q, r) in vents {
+        if out.get(q, r) != Some(Cell::Empty) {
+            continue;
+        }
+        let next = Direction::ALL
+            .map(|d| (q + d.vector().0, r + d.vector().1))
+            .into_iter()
+            .find(|c| out.get(c.0, c.1) == Some(Cell::Core) && !vents.contains(c));
+        if let Some((a, b)) = next {
+            out.set(a, b, Cell::Empty);
+            out.set(q, r, Cell::Core);
+        }
+    }
+    out
 }
 
 /// The board after the incinerators burn: every core on one, and the marbles phase `id` burns.
@@ -49,22 +71,25 @@ fn burn(board: &Board, id: u8) -> Board {
     out
 }
 
+/// The end of every ply: the incinerators pull in the cores next to them, then burn.
 fn hook(board: &Board, id: u8, _seed: u64) -> Board {
-    burn(board, id)
+    burn(&pull(board), id)
 }
 
-/// What a ply does in the search tree in `phase`: the burns, and the ejections they credit.
+/// What a ply does in the search tree in `phase`: the pulls and the burns, and the ejections they
+/// credit.
 pub fn overseer_step(board: Board, phase: usize) -> (Board, [u8; 2]) {
-    let after = burn(&board, phase as u8);
+    let pulled = pull(&board);
+    let after = burn(&pulled, phase as u8);
     let count = |b: &Board, cells: &[Cell]| {
         b.incinerators()
             .iter()
             .filter(|&&(q, r)| b.get(q, r).is_some_and(|c| cells.contains(&c)))
             .count() as u8
     };
-    let black = count(&board, &[Cell::Black]) - count(&after, &[Cell::Black]);
+    let black = count(&pulled, &[Cell::Black]) - count(&after, &[Cell::Black]);
     let other =
-        count(&board, &[Cell::White, Cell::Core]) - count(&after, &[Cell::White, Cell::Core]);
+        count(&pulled, &[Cell::White, Cell::Core]) - count(&after, &[Cell::White, Cell::Core]);
     (after, [other, black])
 }
 
@@ -134,13 +159,14 @@ pub(crate) fn overseer_search(
 }
 
 /// The e2e fixture (client/e2e/overseer.spec.ts), from the start of any seed: the player walks two
-/// marbles behind the core `(1, 1)` and burns it on `(3, 1)`, then the core `(-2, 1)` on `(-4, 1)`;
-/// the boss walks three marbles onto `(4, -1)`, where they burn in P1 and P2, then pushes the core
-/// `(2, -1)` onto it itself: the player's 6th ejection, at ply 24.
+/// marbles behind the core `(1, 1)` and pushes it next to `(3, 1)`, which pulls it in and burns it,
+/// then the core `(-2, 1)` next to `(-4, 1)`; the boss walks three marbles onto `(4, -1)`, where
+/// they burn, then pushes the core `(2, -1)` next to it itself: the player's 6th ejection, at ply
+/// 22.
 #[cfg(test)]
 pub(crate) fn fixture() -> Vec<Move> {
     use crate::moves::Direction::{E, NE, NW, SE, W};
-    let plies: [(&[P], _); 24] = [
+    let plies: [(&[P], _); 22] = [
         (&[(0, 2)], NW),
         (&[(4, -3)], SE),
         (&[(-1, 2)], NW),
@@ -163,8 +189,6 @@ pub(crate) fn fixture() -> Vec<Move> {
         (&[(1, -2)], SE),
         (&[(-3, 2)], E),
         (&[(0, -1), (1, -1)], E),
-        (&[(-2, 2)], E),
-        (&[(1, -1), (2, -1)], E),
     ];
     plies
         .iter()
@@ -229,10 +253,10 @@ mod tests {
         let b = overseer_boss();
         assert_eq!(b.name, "The Overseer");
         assert!(b.phase_marbles.is_empty());
-        assert_eq!(b.phase_ejections, vec![2, 4], "P2 after 2, P3 after 4");
+        assert_eq!(b.phase_ejections, vec![2], "P2 after 2");
         assert_eq!(b.node_budget, HULL_NODE_BUDGET, "the Hull's time budget");
         assert_eq!(OVERSEER_TURNS, 40);
-        assert_eq!((b.special)(1, 2), Some(2), "every ply burns, by phase");
+        assert_eq!((b.special)(1, 1), Some(1), "every ply burns, by phase");
     }
 
     /// The boss search as it was before #828: the phase fixed at the root, no clock.
@@ -260,7 +284,7 @@ mod tests {
     #[test]
     fn the_phase_follows_the_ejections_credited_to_the_player() {
         let phases: Vec<_> = [0, 1, 2, 3, 4, 9].map(overseer_phase).into();
-        assert_eq!(phases, [0, 0, 1, 1, 2, 2]);
+        assert_eq!(phases, [0, 0, 1, 1, 1, 1]);
         for credited in 0..6 {
             let enc = fight(&[(-4, 4)], &[(4, -4)], &[], Player::Black, [credited, 0]);
             assert_eq!(overseer_phase(credited), enc.phase(), "{credited}");
@@ -269,17 +293,18 @@ mod tests {
 
     #[test]
     fn the_boss_starts_the_phase_that_burns_the_marbles_the_player_cannot_all_save() {
-        // The player marbles stand on two incinerators, safe in P1. A core push onto a third
-        // credits the player's 2nd ejection: P2 starts, they burn at the end of the next ply and
-        // the player moves only one. The old search kept the root phase and never saw it.
+        // The player marbles stand on two incinerators, safe in P1. A core push next to a third,
+        // which pulls it in, credits the player's 2nd ejection: P2 starts, they burn at the end
+        // of the next ply and the player moves only one. The old search kept the root phase and
+        // never saw it.
         let enc = fight(
             &[(-3, -1), (4, 0), (-4, 4)],
-            &[(1, -1), (2, -1), (-3, 3)],
-            &[(3, -1)],
+            &[(0, -1), (1, -1), (-3, 3)],
+            &[(2, -1)],
             Player::White,
             [1, 0],
         );
-        let push = mv(&[(1, -1), (2, -1)], E);
+        let push = mv(&[(0, -1), (1, -1)], E);
         assert_eq!(overseer_move(&enc), Some(push.clone()));
         assert_ne!(old_move(&enc), Some(push.clone()));
         let next = replies(&enc, &push);
@@ -292,13 +317,13 @@ mod tests {
 
     #[test]
     fn the_boss_stalls_when_the_neurotoxin_wins_before_the_player_can_burn_the_6th_core() {
-        // 5 ejections, one turn left: the player needs 2 plies to burn the core on (3, 1), and
-        // has 1. Whatever the boss plays, the clock wins; it plays its best-looking move instead
-        // of the defence the old search needed.
+        // 5 ejections, one turn left: the player needs 2 plies to push the core next to (3, 1),
+        // and has 1. Whatever the boss plays, the clock wins; it plays its best-looking move
+        // instead of the defence the old search needed.
         let enc = fight(
-            &[(-1, 1), (0, 1)],
+            &[(-2, 1), (-1, 1)],
             &[(2, -1), (2, 0)],
-            &[(2, 1)],
+            &[(1, 1)],
             Player::White,
             [5, 0],
         );
@@ -450,8 +475,52 @@ mod tests {
     }
 
     #[test]
-    fn turn_it_against_the_boss_its_marbles_burn_in_p1_and_p2_not_in_p3() {
-        for (credited, burns) in [(0, true), (2, true), (4, false)] {
+    fn a_vent_pulls_in_a_core_next_to_it_and_burns_it_for_the_player() {
+        let mut enc = fight(&[(-4, 4)], &[(4, -4)], &[(2, 1)], Player::Black, [0, 0]);
+        enc.play(&mv(&[(-4, 4)], NE)).unwrap();
+        assert_eq!(at(&enc, 2, 1), Some(Cell::Empty), "pulled into (3, 1)");
+        assert_eq!(at(&enc, 3, 1), Some(Cell::Empty), "and burnt");
+        assert_eq!(enc.removed(), &[((2, 1), Cell::Core)]);
+        assert_eq!(ejected(&enc), [1, 0]);
+        let mut enc = fight(
+            &[(3, 1), (-4, 4)],
+            &[(4, -4)],
+            &[(2, 1)],
+            Player::Black,
+            [0, 0],
+        );
+        enc.play(&mv(&[(-4, 4)], NE)).unwrap();
+        assert_eq!(
+            at(&enc, 2, 1),
+            Some(Cell::Core),
+            "a marble on the vent: no pull"
+        );
+        assert_eq!(ejected(&enc), [0, 0]);
+        let mut board = Board::empty();
+        board.set_incinerators(OVERSEER_INCINERATORS.to_vec());
+        board.set(-3, -1, Cell::Core);
+        let (after, credits) = overseer_step(board, 0);
+        assert_eq!(credits, [1, 0], "a core on a vent burns where it is");
+        assert_eq!(marbles(&after, Cell::Core), 0);
+    }
+
+    #[test]
+    fn turn_it_against_the_boss_its_push_next_to_a_vent_burns_a_core_for_the_player() {
+        let mut enc = fight(
+            &[(-4, 4)],
+            &[(0, -1), (1, -1)],
+            &[(2, -1)],
+            Player::White,
+            [0, 0],
+        );
+        enc.play(&mv(&[(0, -1), (1, -1)], E)).unwrap();
+        assert_eq!(enc.removed(), &[((3, -1), Cell::Core)]);
+        assert_eq!(ejected(&enc), [1, 0], "pulled into (4, -1)");
+    }
+
+    #[test]
+    fn turn_it_against_the_boss_its_marbles_burn_in_every_phase() {
+        for (credited, burns) in [(0, true), (2, true), (4, true)] {
             let mut enc = fight(
                 &[(1, 0), (2, 0)],
                 &[(3, 0)],
@@ -470,7 +539,7 @@ mod tests {
     }
 
     #[test]
-    fn the_player_marbles_burn_in_p2_and_p3_not_in_p1() {
+    fn the_player_marbles_burn_in_p2_not_in_p1() {
         for (credited, burns) in [(0, false), (2, true), (4, true)] {
             let mut enc = fight(&[(3, 0)], &[(4, -4)], &[], Player::Black, [credited, 0]);
             enc.play(&mv(&[(3, 0)], E)).unwrap();
@@ -525,11 +594,15 @@ mod tests {
         board.set(3, 1, Cell::Core);
         board.set(4, 0, Cell::White);
         board.set(4, -1, Cell::Black);
+        board.set(-3, 0, Cell::Core);
         let (after, credits) = overseer_step(board.clone(), 0);
-        assert_eq!((marbles(&after, Cell::Core), credits), (0, [2, 0]));
+        assert_eq!(
+            (marbles(&after, Cell::Core), credits),
+            (0, [3, 0]),
+            "one pulled in"
+        );
         assert_eq!(after.get(4, -1), Some(Cell::Black));
-        assert_eq!(overseer_step(board.clone(), 1).1, [2, 1]);
-        assert_eq!(overseer_step(board, 2).1, [1, 1]);
+        assert_eq!(overseer_step(board, 1).1, [3, 1]);
     }
 
     #[test]
@@ -549,7 +622,7 @@ mod tests {
     }
 
     #[test]
-    fn the_fixture_burns_cores_and_boss_marbles_and_wins_at_ply_24() {
+    fn the_fixture_burns_cores_and_boss_marbles_and_wins_at_ply_22() {
         let mut enc = overseer_start(153);
         let mut credits = Vec::new();
         for m in fixture() {
@@ -558,14 +631,18 @@ mod tests {
             credits.push(enc.game().ejected(Player::Black));
         }
         assert_eq!(credits[3], 1, "a boss marble burns on (4, -1)");
-        assert_eq!(credits[6], 2, "the core (1, 1) burns on (3, 1): P2");
+        assert_eq!(
+            credits[4], 2,
+            "the core (1, 1) pushed to (2, 1), pulled: P2"
+        );
+        assert_eq!(credits[15], 5, "a boss marble burns in P2");
         assert_eq!(enc.result(), Some(PveResult::Won));
         assert_eq!(
             enc.removed(),
-            &[((4, -1), Cell::Core)],
-            "the boss's own push"
+            &[((3, -1), Cell::Core)],
+            "the boss's own push, pulled into (4, -1)"
         );
         assert_eq!(ejected(&enc), [6, 0]);
-        assert_eq!(enc.turns_left(), Some(28));
+        assert_eq!(enc.turns_left(), Some(29));
     }
 }
