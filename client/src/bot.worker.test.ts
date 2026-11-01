@@ -42,14 +42,14 @@ describe('bot.worker', () => {
 
   it('plays a Trainer wave on its own engine, #1159', async () => {
     const records = (flat: Int32Array): string[] => Array.from({ length: flat.length / 8 }, (_, i) => String(flat.slice(i * 8, i * 8 + 8)));
-    const black = Engine.trainer(1).legal_moves().slice(0, 8);
-    const wave = Engine.trainer(1);
+    const black = Engine.trainer(1, 6).legal_moves().slice(0, 8);
+    const wave = Engine.trainer(1, 6);
     const plain = new Engine();
     wave.play(black);
     plain.play(black);
     const standard = new Set(records(plain.legal_moves()));
     const only = records(wave.legal_moves()).find((mv) => !standard.has(mv))!; // White's move, legal against one marble only
-    const reply = await ask({ id: 15, history: [Array.from(black), only.split(',').map(Number)], nodes: 50, trainer: 1 });
+    const reply = await ask({ id: 15, history: [Array.from(black), only.split(',').map(Number)], nodes: 50, trainer: { wave: 1, left: 6 } });
     expect((reply as { move: number[] }).move).toHaveLength(8);
   });
 

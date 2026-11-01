@@ -189,12 +189,6 @@ impl Game {
         self
     }
 
-    /// The same game where no draw rule ends it, for a fight with no draw (The Swarm).
-    pub(crate) fn without_draws(mut self) -> Self {
-        self.draws = false;
-        self
-    }
-
     /// The same game where a draw by repetition or idle plies is a win for `side` (#1159); `draw_reason` still
     /// says it was one.
     pub(crate) fn with_draw_to(mut self, side: Player) -> Self {

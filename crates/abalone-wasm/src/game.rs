@@ -33,10 +33,11 @@ impl Engine {
     }
 
     /// A Trainer wave (#1159): the player's 14 marbles (Black) against the bot's `wave` marbles,
-    /// clamped to 1..=14. Black wins once all of them are out, or on a draw; White at 6 ejections.
-    pub fn trainer(wave: u8) -> Engine {
+    /// clamped to 1..=14. Black wins once all of them are out, or on a draw (`draw_reason` tells
+    /// it from a clear); White once the run's `left` marbles (1..=6) are lost.
+    pub fn trainer(wave: u8, left: u8) -> Engine {
         Engine {
-            game: trainer_game(wave),
+            game: trainer_game(wave, left),
         }
     }
 
@@ -161,11 +162,11 @@ mod tests {
 
     #[test]
     fn trainer_starts_a_wave_of_that_many_white_marbles() {
-        let engine = Engine::trainer(3);
+        let engine = Engine::trainer(3, 4);
         assert_eq!(count(&engine.board(), 1), 14);
         assert_eq!(count(&engine.board(), 2), 3);
         assert_eq!(engine.win_ejections(1), 3);
-        assert_eq!(engine.win_ejections(2), 6);
+        assert_eq!(engine.win_ejections(2), 4);
         assert_eq!(engine.status(), 0);
     }
 

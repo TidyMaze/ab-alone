@@ -15,13 +15,14 @@ async function start(url = '?bot=off'): Promise<Game> {
   byId('trainer').click();
   return game;
 }
-/** A game on `Engine.trainer(wave)` played out till it ends as `want`: Black moves at random, White as the bot or at random. */
-async function playOut(wave: number, want: number, white: 'bot' | 'random'): Promise<number[][]> {
+/** A game on `Engine.trainer(wave, left)` played out till it ends as `want`: Black moves at random, White as the bot or at
+ * random. A 'draw' ends in Black's win with a draw reason (idle plies or repetition). */
+async function playOut(wave: number, left: number, want: 'win' | 'loss' | 'draw', white: 'bot' | 'random'): Promise<number[][]> {
   const { Engine } = await import('abalone-wasm');
-  for (let seed = 1; seed < 200; seed++) {
+  for (let seed = 1; seed < 300; seed++) {
     let s = seed;
     const rnd = (): number => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 2 ** 32);
-    const engine = Engine.trainer(wave);
+    const engine = Engine.trainer(wave, left);
     const moves: number[][] = [];
     while (engine.status() === 0 && moves.length < 300) {
       const all = Array.from(engine.legal_moves());
@@ -30,7 +31,8 @@ async function playOut(wave: number, want: number, white: 'bot' | 'random'): Pro
       engine.play(Int32Array.from(mv));
       moves.push(mv);
     }
-    if (engine.status() === want) return moves;
+    const got = engine.status() === 2 ? 'loss' : engine.status() === 1 && engine.draw_reason() > 0 ? 'draw' : engine.status() === 1 ? 'win' : 'none';
+    if (got === want) return moves;
   }
   throw new Error('no such game');
 }
@@ -40,7 +42,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     const game = await start();
     expect(byId('mode-menu').hidden).toBe(true);
     expect(document.body.dataset.trainer).toBe('1');
-    expect(game.hud()).toContain('Trainer · wave 1 · best 0');
+    expect(game.hud()).toContain('Trainer · wave 1 · best 0 · Marbles left 6/6');
     expect(whites(game)).toBe(1);
     expect(game.hook<number[]>('__board').filter((c) => c === 1)).toHaveLength(14);
     expect(byId('new-game').hidden).toBe(true);
@@ -62,8 +64,8 @@ describe('main.ts, Trainer mode (#1159)', () => {
     const game = await start();
     game.hook('__playMoves', WAVE_1_WIN);
     expect(whites(game)).toBe(0);
-    expect(card()).toBe('Wave 1 clearedWaves survived: 1Best: 1');
-    expect(game.hud()).toContain('Trainer · wave 1 · best 1');
+    expect(card()).toBe('Wave 1 clearedWaves survived: 1Marbles left: 6/6Best: 1'); // a real clear costs no marble
+    expect(game.hud()).toContain('Trainer · wave 1 · best 1 · Marbles left 6/6');
     expect(byId('trainer-next').textContent).toBe('Next wave');
     byId('trainer-next').click();
     expect(card()).toBe('');
@@ -74,24 +76,39 @@ describe('main.ts, Trainer mode (#1159)', () => {
     expect(localStorage.getItem('ab-alone.trainer-best')).toBe('1'); // kept for the next visit
   });
 
-  it('a wave lost ends the run: the wave before is the score, and Retry starts again at wave 1', async () => {
+  it('a wave lost ends the run: the wave before is the score, and Retry starts again at wave 1 with all 6 marbles', async () => {
     const game = await start();
     game.hook('__trainer', 14);
-    game.hook('__playMoves', await playOut(14, 2, 'bot'));
-    expect(card()).toBe('Fell on wave 14Waves survived: 13Best: 13');
+    game.hook('__playMoves', await playOut(14, 6, 'loss', 'bot'));
+    expect(card()).toBe('Fell on wave 14Waves survived: 13Marbles left: 0/6Best: 13');
     expect(byId('trainer-next').hidden).toBe(true);
     byId('boss-retry').click();
     expect(card()).toBe('');
-    expect(game.hud()).toContain('Trainer · wave 1 · best 13');
+    expect(game.hud()).toContain('Trainer · wave 1 · best 13 · Marbles left 6/6');
     expect(whites(game)).toBe(1);
   });
 
-  it('a wave nobody can win is won by the player: a draw by idle plies or repetition counts for him', async () => {
+  it('a draw is a win that costs a marble of the run, and the marble stays lost on the next waves', async () => {
     const game = await start();
     game.hook('__trainer', 14);
-    game.hook('__playMoves', await playOut(14, 1, 'random'));
-    expect(card()).toBe('Wave 14 clearedWaves survived: 14Best: 14');
+    game.hook('__playMoves', await playOut(14, 6, 'draw', 'random'));
+    expect(card()).toBe('Wave 14 stalled: a draw costs a marbleWaves survived: 14Marbles left: 5/6Best: 14');
+    expect(game.hud()).toContain('Marbles left 5/6');
     expect(byId('trainer-next').hidden).toBe(false);
+    byId('trainer-next').click();
+    expect(document.body.dataset.trainer).toBe('15');
+    expect(game.hud()).toContain('Trainer · wave 15 · best 14 · Marbles left 5/6');
+    byId('boss-retry').click(); // only Retry fills the pool again
+    expect(game.hud()).toContain('Marbles left 6/6');
+  });
+
+  it('the 6th draw ends the run: the score is the wave before', async () => {
+    const game = await start();
+    game.hook('__trainer', 6, 5);
+    expect(game.hud()).toContain('Marbles left 1/6');
+    game.hook('__playMoves', await playOut(6, 1, 'draw', 'random'));
+    expect(card()).toBe('Fell on wave 6Waves survived: 5Marbles left: 0/6Best: 5');
+    expect(byId('trainer-next').hidden).toBe(true);
   });
 
   it('another mode leaves the Trainer', async () => {

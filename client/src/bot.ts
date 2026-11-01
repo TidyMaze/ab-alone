@@ -20,8 +20,13 @@ export interface BotRequest {
   placed?: number[][];
   /** With `army`: the marbles of the bot's army, 14 when unset (#1145). */
   foes?: number;
-  /** Set in a Trainer game (#1159): the worker replays the history on a game against this many white marbles. */
-  trainer?: number;
+  /** Set in a Trainer game (#1159): the worker replays the history on a wave of that many white marbles, with `left` marbles of the run's pool. */
+  trainer?: TrainerRef;
+}
+
+export interface TrainerRef {
+  wave: number;
+  left: number;
 }
 
 export interface BossRef {
@@ -83,13 +88,13 @@ export function botBudget(search: string, automated: boolean): number {
 /** The engine of a request: a plain game, or a rogue-lite fight of `army` marbles against `foes` with its special
  * marbles `placed` (#961, #1145), so the bot searches the board the page plays. */
 export function engineFor<E extends { place_special(q: number, r: number, kind: number): void }>(
-  make: { new (): E; with_army(army: number, foes: number): E; trainer(wave: number): E },
+  make: { new (): E; with_army(army: number, foes: number): E; trainer(wave: number, left: number): E },
   army?: number,
   placed: number[][] = [],
   foes = 14,
-  trainer?: number,
+  trainer?: TrainerRef,
 ): E {
-  if (trainer !== undefined) return make.trainer(trainer);
+  if (trainer) return make.trainer(trainer.wave, trainer.left);
   if (army === undefined) return new make();
   const engine = make.with_army(army, foes);
   for (const [q, r, kind] of placed) engine.place_special(q!, r!, kind!);
@@ -99,7 +104,7 @@ export function engineFor<E extends { place_special(q: number, r: number, kind: 
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
-  makeEngine: (army?: number, placed?: number[][], foes?: number, trainer?: number) => EngineLike,
+  makeEngine: (army?: number, placed?: number[][], foes?: number, trainer?: TrainerRef) => EngineLike,
   makeEncounter: (id: string, seed: number) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
@@ -162,7 +167,7 @@ export async function askBot(
   army?: number,
   placed?: number[][],
   foes?: number,
-  trainer?: number,
+  trainer?: TrainerRef,
 ): Promise<number[]> {
   return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army, placed, foes, trainer })).move;
 }

@@ -9,7 +9,7 @@ test('Trainer starts at wave 1, a won wave shows its card and Next wave adds a m
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.getByRole('button', { name: 'Trainer' }).click();
-  await expect(page.locator('#hud')).toContainText('Trainer · wave 1 · best 0');
+  await expect(page.locator('#hud')).toContainText('Trainer · wave 1 · best 0 · Marbles left 6/6');
   const whites = (): Promise<number> => page.evaluate(() => (window as any).__board().filter((c: number) => c === 2).length);
   expect(await whites()).toBe(1);
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
@@ -19,6 +19,7 @@ test('Trainer starts at wave 1, a won wave shows its card and Next wave adds a m
   const card = page.locator('#trainer-card');
   await expect(card).toContainText('Wave 1 cleared');
   await expect(card).toContainText('Waves survived: 1');
+  await expect(card).toContainText('Marbles left: 6/6');
   await expect(card).toContainText('Best: 1');
   await page.getByRole('button', { name: 'Next wave' }).click();
   await expect(card).toBeHidden();

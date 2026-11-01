@@ -30,17 +30,27 @@ describe('Trainer mode, #1159', () => {
     expect(trainerBudget(99, 1000)).toBe(3000);
   });
 
-  it('says the wave and the best in the HUD', () => {
-    expect(waveLine(5, 3)).toBe('Trainer · wave 5 · best 3');
+  it('says the wave, the best and the marbles left in the HUD', () => {
+    expect(waveLine(5, 3, 2)).toBe('Trainer · wave 5 · best 3 · Marbles left 4/6');
+    expect(waveLine(5, 3, 9)).toBe('Trainer · wave 5 · best 3 · Marbles left 0/6');
   });
 
-  it('turns the end of a wave into its result: won, or the wave before as the score when lost', () => {
-    expect(waveResult(5, 1)).toEqual({ kind: 'won', survived: 5 });
-    expect(waveResult(5, 2)).toEqual({ kind: 'lost', survived: 4 });
+  it('a real clear costs nothing, a draw costs one marble, and the marbles the bot pushed off cost one each', () => {
+    expect(waveResult(5, 0, 0, false)).toEqual({ kind: 'won', survived: 5, lost: 0 });
+    expect(waveResult(5, 0, 0, true)).toEqual({ kind: 'drawn', survived: 5, lost: 1 });
+    expect(waveResult(5, 2, 1, false)).toEqual({ kind: 'won', survived: 5, lost: 3 });
+    expect(waveResult(5, 2, 1, true)).toEqual({ kind: 'drawn', survived: 5, lost: 4 });
+  });
+
+  it('the run is over once the pool is empty, whether the last marble was pushed off or drawn away: the wave before is the score', () => {
+    expect(waveResult(6, 5, 0, true)).toEqual({ kind: 'lost', survived: 5, lost: 6 });
+    expect(waveResult(5, 2, 4, false)).toEqual({ kind: 'lost', survived: 4, lost: 6 });
+    expect(waveResult(1, 0, 6, false)).toEqual({ kind: 'lost', survived: 0, lost: 6 });
   });
 
   it('writes the result card', () => {
-    expect(resultText({ kind: 'lost', survived: 4 }, 5, 7)).toEqual(['Fell on wave 5', 'Waves survived: 4', 'Best: 7']);
-    expect(resultText({ kind: 'won', survived: 5 }, 5, 5)).toEqual(['Wave 5 cleared', 'Waves survived: 5', 'Best: 5']);
+    expect(resultText({ kind: 'lost', survived: 4, lost: 6 }, 5, 7)).toEqual(['Fell on wave 5', 'Waves survived: 4', 'Marbles left: 0/6', 'Best: 7']);
+    expect(resultText({ kind: 'won', survived: 5, lost: 0 }, 5, 5)).toEqual(['Wave 5 cleared', 'Waves survived: 5', 'Marbles left: 6/6', 'Best: 5']);
+    expect(resultText({ kind: 'drawn', survived: 5, lost: 1 }, 5, 5)[0]).toBe('Wave 5 stalled: a draw costs a marble');
   });
 });
