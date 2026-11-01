@@ -190,7 +190,7 @@ import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
-import { bindJoystick } from './openworldjoystick';
+import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
 import { bindNewWorld } from './openworldnew';
 import { worldSaves } from './openworldsave';
@@ -4062,11 +4062,13 @@ const keysBack = (): void => {
 };
 addEventListener('keydown', () => padKeys || keysBack(), { capture: true });
 addEventListener('mousemove', keysBack);
+const WALK_PX = 100; // a full push of the stick is this many px of the touch stick's drag
 const padKeyOf = (dir: number): string => Object.keys(KEY_DIRS).find((k) => KEY_DIRS[k] === dir)!;
 const pollPad = gamepad((action: PadAction) => {
   padInUse = true;
   document.body.dataset.pad = '';
   const focused = document.activeElement as HTMLElement;
+  const free = focused === canvas || focused === document.body; // the canvas has the focus: the Open world's hero is the pad's
   switch (action.kind) {
     case 'confirm':
       if (padKey('Enter') && focused !== canvas) focused.click(); // a button, a toggle
@@ -4078,15 +4080,25 @@ const pollPad = gamepad((action: PadAction) => {
       return cog.focus();
     case 'prev':
     case 'next':
+      if (openWorld.active && free) return void padKey(action.kind === 'prev' ? 'q' : 'e'); // the camera turns a step (#1251)
       if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1).focus();
       return;
+    case 'reset':
+      if (openWorld.active) padKey('r'); // the camera back to its default angle (#1026)
+      return;
+    case 'walk':
+      // The stick walks the hero as the touch stick does, in the yaw of the camera; a rest lets go (#1252).
+      return openWorld.hold(openWorld.active && free ? heldKeys(action.x * WALK_PX, action.y * WALK_PX, openWorld.yaw) : []);
     case 'move':
+      if (openWorld.active && free) return; // the stick walked the hero already
       if (focused === canvas) return void padKey(padKeyOf(action.hex));
       return nextFocus(focused, action.step).focus();
     case 'orbit':
+      if (openWorld.active) return; // LB and RB turn the Open world's camera
       view = orbit(view, action.dx, action.dy);
       return applyView();
     default:
+      if (openWorld.active) return openWorld.zoom(action.scale);
       view = zoom(view, action.scale);
       return applyView();
   }

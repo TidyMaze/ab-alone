@@ -2206,3 +2206,81 @@ describe('the light budget of the Open world (#849, #1234)', () => {
     expect(points).toBeLessThanOrEqual(OPEN_WORLD_POINT_LIGHTS);
   });
 });
+
+describe('the flat tops of the low tier (#1234)', () => {
+  const EDGE_RING = 444; // the edge cells of the 7 x 7 chunks of terrain: a neighbour is missing, their sides stay
+  // The triangles the ground meshes hold now: an indexed geometry draws its index count, a column 24 triangles, a top 6.
+  const triangles = (view: OpenWorldView): number => {
+    let sum = 0;
+    view.scene.traverse((o) => {
+      const m = o as THREE.InstancedMesh;
+      if (m.isInstancedMesh && m.name.startsWith('terrain-')) sum += m.count * (m.geometry.index!.count / 3);
+    });
+    return sum;
+  };
+  const flats = (view: OpenWorldView): number => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}-flat`).count, 0);
+  const lowView = (load: (cx: number, cy: number) => Uint8Array): OpenWorldView => {
+    const view = new OpenWorldView(new World(load));
+    view.resize(1600, 900);
+    view.useFlatTops(true);
+    return view;
+  };
+
+  it('draws a cell no neighbour lies below as its top alone, and the other cells as columns', () => {
+    const view = lowView(stepped(new Map([['0,0', 3]]), 1, 4));
+    view.show([0, 0]);
+    const cells = 49 * CHUNK * CHUNK;
+    expect(ground(view)).toBe(1); // the raised cell has six lower neighbours: its sides show
+    expect(flats(view)).toBe(cells - 1); // the ring round it is not above any neighbour, the rest is flat
+    expect(triangles(view)).toBe(24 + 6 * (cells - 1));
+  });
+
+  it('keeps the sides of a land cell next to water, water being lower than land', () => {
+    const view = lowView(terrain((q, r) => (q === 0 && r === 0 ? GRASS_CODE : WATER_CODE)));
+    view.show([0, 0]);
+    expect(mesh(view, 'terrain-grass').count).toBe(1);
+    expect(mesh(view, 'terrain-water-flat').count).toBeGreaterThan(0);
+    expect(mesh(view, 'terrain-water').count).toBe(EDGE_RING);
+  });
+
+  it('draws full columns on the high tier, as before', () => {
+    const view = new OpenWorldView(new World(stepped(new Map(), 1, 4)));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(flats(view)).toBe(0);
+    expect(ground(view)).toBe(49 * CHUNK * CHUNK);
+  });
+
+  it('draws the world again as columns when the flat tops are switched off', () => {
+    const view = lowView(stepped(new Map(), 1, 4));
+    view.show([0, 0]);
+    view.useFlatTops(false);
+    view.show([0, 0]);
+    expect(flats(view)).toBe(0);
+    expect(ground(view)).toBe(49 * CHUNK * CHUNK);
+  });
+
+  it('still knows the lake and the glow of the water when every cell is a flat top', () => {
+    const wet = lowView(terrain(() => WATER_CODE));
+    wet.show([0, 0]);
+    expect(mesh(wet, 'terrain-water').count).toBe(EDGE_RING);
+    expect(wet.hasWater).toBe(true);
+    wet.glow((1200 * Math.PI) / 2);
+    expect((mesh(wet, 'terrain-water-flat').material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(1.15);
+    expect((mesh(wet, 'terrain-water').material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(1.15);
+  });
+
+  it('draws sand as flat tops when no sand cell has a lower neighbour', () => {
+    const sand = lowView(terrain(() => 1));
+    sand.show([0, 0]);
+    expect(mesh(sand, 'terrain-sand').count).toBe(EDGE_RING);
+    expect(mesh(sand, 'terrain-sand-flat').count).toBeGreaterThan(0);
+  });
+
+  it('keeps the sides of a cell at the edge of the world, where the neighbour is missing', () => {
+    const view = lowView((cx, cy) => (cx === 0 && cy === 0 ? grass() : new Uint8Array()));
+    view.show([0, 0]);
+    expect(ground(view)).toBeGreaterThan(0);
+    expect(flats(view)).toBeGreaterThan(0);
+  });
+});

@@ -132,6 +132,9 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 /* The gamepad (#1252) moves the focus from script, which the browser may not ring: while the pad is in use, every focused
    control shows it. The board shows its selection instead. */
 body[data-pad] :focus:not(canvas) { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The Open world help names the keys, or the pad's buttons while the pad is in use (#1252). */
+.pad-hint, body[data-pad] .keys-hint { display: none; }
+body[data-pad] .pad-hint { display: inline; }
 #settings-box { position: relative; display: flex; flex-direction: column; align-items: flex-end; }
 #hud, #hud-fold, #settings-box, #eval { zoom: var(--ui-scale); } /* the HUD, its fold button, the menu and the score bar grow with the UI scale (#382, #927), the board does not */
 #settings-menu {
