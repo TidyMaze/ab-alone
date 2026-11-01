@@ -365,8 +365,9 @@ export class OpenWorldMode {
 
   /** An arrow key rolls the hero one cell, or on the diagonal while a vertical and a horizontal arrow are both held;
    * opposite arrows held together do nothing. The first arrow down steps at once, then the held arrows step on their own
-   * cadence (`beat`, #1059): the system's key repeat (`repeat`) is ignored. Escape leaves. M opens the map (#1411): while it is open,
-   * M and Escape close it, and the other keys are not the mode's. Reports whether the key was the mode's. */
+   * cadence (`beat`, #1059): the system's key repeat (`repeat`) is ignored. Escape leaves. M opens the map (#1411), T the choice of a
+   * teleporter (#1412): while the map is open, M, T and Escape close it, Enter picks the ringed teleporter in the choice, and the other
+   * keys are not the mode's. Reports whether the key was the mode's. */
   key(key: string, repeat = false): boolean {
     if (this.mapShown && key === 'Enter' && this.worldMap!.choosing) return this.choose(this.worldMap!.chosen), true; // the ringed teleporter (#1412)
     if (this.mapShown) return (key === 'Escape' || MAP_KEYS.has(key) || TELEPORT_KEYS.has(key)) && (this.toggleMap(), true);
