@@ -42,10 +42,10 @@ function bytes(cx: number, cy: number): Uint8Array {
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([i % 4, i % 8, 0], i * 3);
   return out;
 }
-// Grass everywhere, each cell at its level from `levels` (`base` for the others): a chunk of the square -3..3 (#988).
-function stepped(levels: Map<string, number>, base = 3): (cx: number, cy: number) => Uint8Array {
+// Grass everywhere, each cell at its level from `levels` (`base` for the others): a chunk of the square -half..half (#988).
+function stepped(levels: Map<string, number>, base = 3, half = 3): (cx: number, cy: number) => Uint8Array {
   return (cx, cy) => {
-    if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+    if (Math.abs(cx) > half || Math.abs(cy) > half) return new Uint8Array();
     const out = new Uint8Array(CHUNK * CHUNK * 3);
     for (let i = 0; i < CHUNK * CHUNK; i++) {
       const q = cx * CHUNK + (i % CHUNK);
@@ -67,6 +67,8 @@ const someYawReaches = (aspect: number, k: number): boolean => {
   return false;
 };
 const ground = (view: OpenWorldView) => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}`).count, 0);
+// `expect(a).not.toBe(b)` deep-compares two scene objects to word its hint (seconds on a mesh): identity is all that is asked.
+const isNot = (a: unknown, b: unknown): void => expect(Object.is(a, b)).toBe(false);
 const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
 const counts = (view: OpenWorldView, prefix: string, names: readonly string[]) =>
   Object.fromEntries(names.map((n) => [n, mesh(view, `${prefix}-${n}`).count]));
@@ -148,7 +150,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     view.useModels({ low: { mountain }, high: {} });
     // the mesh draws the model's shape, from its own copy of the geometry (#991)
     expect(mesh(view, 'prop-mountain').geometry.getAttribute('position').count).toBe(mountain.getAttribute('position').count);
-    expect(mesh(view, 'prop-mountain').geometry).not.toBe(mountain);
+    isNot(mesh(view, 'prop-mountain').geometry, mountain);
     expect(mesh(view, 'prop-tree').geometry).toBe(tree);
   });
 
@@ -308,7 +310,7 @@ describe('the chunks of the view stay cached after a far walk (#1034)', () => {
     const view = new OpenWorldView(new World(load));
     view.resize(1600, 900);
     view.zoomBy(MAX_ZOOM * 2);
-    for (let step = 0; step < 40; step++) view.show([step * CHUNK, 0]); // 40 chunk crossings: more chunks than the cache holds
+    for (let step = 0; step < 12; step++) view.show([step * 4 * CHUNK, 0]); // 12 jumps of 4 chunks: 441 + 11 * 84 chunks seen, more than the cache holds
     load.mockClear();
     view.show([0, 0]); // back to the spawn: a full rebuild around it
     const keys = load.mock.calls.map(([cx, cy]) => `${cx},${cy}`);
@@ -471,16 +473,17 @@ describe('a step moves only the props near the hero (#1054)', () => {
   it('keeps the instances of a walk the same as a fresh build at the last cell, as a set, on every mesh', () => {
     const models = { low: { mountain: box(), tree: box(), boulder: box(), wall: box() }, high: { mountain: box(), tree: box(), boulder: box(), wall: box() } };
     const path: Axial[] = [[0, 0], [1, 0], [2, 0], [3, 1], [4, 1], [5, 2], [6, 3], [7, 4], [8, 4], [9, 5], [10, 6], [11, 6], [12, 7], [12, 8], [11, 9], [10, 10], [9, 10], [8, 11], [7, 12], [6, 12]];
-    const walked = new OpenWorldView(new World(bytes));
+    const world = new World(bytes); // one world for every view: its chunks are parsed once
+    const walked = new OpenWorldView(world);
     walked.resize(1600, 900);
     walked.useModels(models);
     for (const cell of path) {
       walked.show(cell);
-      const fresh = new OpenWorldView(new World(bytes));
+      const fresh = new OpenWorldView(world);
       fresh.resize(1600, 900);
       fresh.useModels(models);
       fresh.show(cell);
-      for (const name of meshNames(fresh)) expect(setOf(mesh(walked, name)), `${name} at ${cell}`).toEqual(setOf(mesh(fresh, name)));
+      for (const name of meshNames(fresh)) expect(setOf(mesh(walked, name)).join('\n'), `${name} at ${cell}`).toBe(setOf(mesh(fresh, name)).join('\n')); // strings: toEqual walks thousands of entries
     }
   });
 
@@ -502,7 +505,7 @@ describe('a step moves only the props near the hero (#1054)', () => {
     expect(laid.count).toBe(laid.instanceMatrix.count); // the plain props of the square fill the mesh: no slack
     view.show([24, 0]); // the ball around (24, 0) holds one cell fewer than the origin's: one plain prop more than the mesh has room for
     const grown = mesh(view, 'prop-mountain');
-    expect(grown).not.toBe(laid);
+    isNot(grown, laid);
     expect(view.drawn['prop-mountain']).toBe(laid.count + 1);
     expect(view.drawn['prop-mountain-hi']).toBe(HI_CAPACITY - 1);
     expect(cellsOf(view, 'prop-mountain')).toContainEqual([-8, 0]); // a plain prop that the grown mesh keeps
@@ -622,7 +625,7 @@ describe('the zoom of the Open world camera (#976)', () => {
           // columns, so only the two cells in front (`d[1] === 1`, nearest the camera) are clicked below the ring's level.
           if (k < 0 && d[1] !== 1) continue;
           // The hero stands on level 3 and one neighbour on 3 + k: every other cell of the ring is level 3.
-          const view = new OpenWorldView(new World(stepped(new Map([[`${d[0]},${d[1]}`, 3 + k]]))));
+          const view = new OpenWorldView(new World(stepped(new Map([[`${d[0]},${d[1]}`, 3 + k]]), 3, 1)));
           view.resize(800, 600);
           view.show([0, 0]);
           view.zoomBy(zoom);
@@ -1077,7 +1080,7 @@ describe('the Open world view frees the instance buffers of each mesh (#991)', (
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
     view.zoomBy(MAX_ZOOM);
     expect(mesh(view, 'prop-mountain').count).toBe(MOST);
-    expect(mesh(view, 'prop-mountain').geometry).not.toBe(before);
+    isNot(mesh(view, 'prop-mountain').geometry, before);
     view.drain();
     expect(disposeGeometry.mock.contexts).toContain(before);
     expect(new Set(instanced(view).map((m) => m.geometry)).size).toBe(instanced(view).length);
@@ -1112,7 +1115,7 @@ describe('a replaced geometry is freed after the frame that may use it, not at o
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
     const disposeMesh = vi.spyOn(THREE.InstancedMesh.prototype, 'dispose');
     view.zoomBy(MAX_ZOOM);
-    expect(mesh(view, 'prop-mountain')).not.toBe(old);
+    isNot(mesh(view, 'prop-mountain'), old);
     expect(disposeGeometry.mock.contexts).not.toContain(old.geometry);
     expect(disposeMesh.mock.contexts).not.toContain(old);
     view.drain();
@@ -1126,8 +1129,8 @@ describe('a replaced geometry is freed after the frame that may use it, not at o
     view.show([0, 0]);
     const old = mesh(view, 'prop-mountain');
     view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
-    expect(mesh(view, 'prop-mountain')).not.toBe(old);
-    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+    isNot(mesh(view, 'prop-mountain'), old);
+    isNot(mesh(view, 'prop-mountain').material, old.material);
   });
 
   it('a growth replaces the mesh with a material of its own, and frees the replaced material after the draw (#1017)', () => {
@@ -1143,7 +1146,7 @@ describe('a replaced geometry is freed after the frame that may use it, not at o
     const old = mesh(view, 'prop-mountain');
     const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
     view.zoomBy(MAX_ZOOM);
-    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+    isNot(mesh(view, 'prop-mountain').material, old.material);
     expect(disposeMaterial.mock.contexts).not.toContain(old.material);
     view.drain();
     expect(disposeMaterial.mock.contexts).toContain(old.material);

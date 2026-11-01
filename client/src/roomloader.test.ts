@@ -251,8 +251,12 @@ describe('roomloader PBR pipeline', () => {
     const ray = new THREE.Raycaster();
     const between = new Set<string>();
     const hit = new THREE.Vector3();
-    for (let polar = POLAR_MIN; polar <= 1; polar += 0.05)
-      for (let distance = DIST_MIN; distance <= DIST_MAX; distance += 1)
+    // Every 0.1 of polar and every 2 of distance, both ends of each range included: the bay is made of large panels, and the sweep
+    // at the old steps (0.05 and 1) cost 2 s of CPU of the 3.6 s of this file, a timeout under load (#1218).
+    const polars = [...Array.from({ length: 9 }, (_, k) => POLAR_MIN + 0.1 * k), 1];
+    const distances = Array.from({ length: (DIST_MAX - DIST_MIN) / 2 + 1 }, (_, k) => DIST_MIN + 2 * k);
+    for (const polar of polars)
+      for (const distance of distances)
         for (let azimuth = 0; azimuth < 2 * Math.PI; azimuth += Math.PI / 12) {
           const { x, y, z } = viewPosition({ azimuth, polar, distance });
           const eye = new THREE.Vector3(x, y, z);
