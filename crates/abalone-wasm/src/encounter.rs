@@ -1095,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_18_since_the_ballast_mind_borrows_the_swarm_wave() {
-        assert_eq!(engine_version(), 18);
+    fn the_engine_version_is_19_since_the_ballast_mind_borrows_every_2_turns_and_wins_at_12() {
+        assert_eq!(engine_version(), 19);
     }
 
     #[test]
@@ -2095,7 +2095,7 @@ mod tests {
         let mut codes = Vec::new();
         for seed in 0..400 {
             let mut f = Encounter::new("ballast", seed).unwrap();
-            play_plies(&mut f, 3);
+            play_plies(&mut f, 1);
             assert_eq!(f.ballast_next(), -1, "seed {seed}");
             play_plies(&mut f, 1);
             let next = f.ballast_next();
@@ -2139,7 +2139,7 @@ mod tests {
         assert_eq!(f.name(), "The Ballast Mind");
         assert_eq!(f.to_move(), 1);
         assert_eq!((f.phase(), f.phases()), (0, 3));
-        assert_eq!((f.win_ejections(1), f.win_ejections(2)), (12, 6));
+        assert_eq!((f.win_ejections(1), f.win_ejections(2)), (12, 12));
         assert_eq!(f.tell(), 0, "the Hull tick");
         assert!(f.cracks().is_empty() && f.flips().is_empty());
         assert!(f.tell_move(&first_move(&f)).is_empty());

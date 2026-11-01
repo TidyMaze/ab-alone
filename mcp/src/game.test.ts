@@ -358,7 +358,7 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     expect(state.mode).toBe('boss');
     expect(state.board).toHaveLength(91);
     expect(state.ascii).toContain('0 1 2 3 4 5 6 7 8 9 A');
-    expect(state.win_ejections).toEqual({ black: 12, white: 6 });
+    expect(state.win_ejections).toEqual({ black: 12, white: 12 });
     expect(state.boss).toMatchObject({ id: 'ballast', name: 'The Ballast Mind', phase: 0, phases: 3, result: 'playing' });
   });
 

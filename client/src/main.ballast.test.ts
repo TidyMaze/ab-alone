@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
 
-// The Ballast Mind on the harness (#749, game-design.md section 7.5): every 3 turns it borrows an effect of another
+// The Ballast Mind on the harness (#749, game-design.md section 7.5): every 2 turns it borrows an effect of another
 // boss, named in the HUD during the turn before. ?bot=off plays both sides, one-marble moves, so no boss search runs.
-// Fight seed 0 borrows the Magnetizer's polarity, 2 the Hull's crack, 3 the Pulsar's pulse, 4 the Chaplain's check.
+// Fight seed 0 borrows the Magnetizer's polarity, 4 the Hull's crack, 6 the Pulsar's pulse, 2 the Chaplain's check,
+// 3 the Swarm's wave.
 
 type Move = { cells: Axial[]; dir: number };
 const DIRS: Axial[] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
@@ -36,14 +37,14 @@ function plies(game: Game, n: number): void {
 describe('main.ts The Ballast Mind announce (#749)', () => {
   it.each([
     [0, "Next turn: the Magnetizer's polarity"],
-    [3, "Next turn: the Hull's crack"],
-    [5, "Next turn: the Pulsar's pulse"],
+    [4, "Next turn: the Hull's crack"],
+    [6, "Next turn: the Pulsar's pulse"],
     [2, "Next turn: the Chaplain's conversion check"],
-    [6, "Next turn: the Swarm's wave"],
-  ])('fight seed %i names its effect during turn 3 only', async (seed, text) => {
+    [3, "Next turn: the Swarm's wave"],
+  ])('fight seed %i names its effect during turn 2 only', async (seed, text) => {
     const game = await boot('?bot=off');
     fightBallast(game, seed);
-    plies(game, 3);
+    plies(game, 1);
     expect(tell()).not.toContain('Next turn');
     plies(game, 1);
     expect(tell()).toContain(text);
@@ -55,8 +56,8 @@ describe('main.ts The Ballast Mind announce (#749)', () => {
 
   it('plays the borrowed pulse with the Pulsar shockwave', async () => {
     const game = await boot('?bot=off');
-    fightBallast(game, 5);
-    plies(game, 5);
+    fightBallast(game, 6);
+    plies(game, 3);
     expect(document.body.dataset.pulses).toBeUndefined();
     plies(game, 1);
     expect(document.body.dataset.pulses).toBe('1');
@@ -68,8 +69,8 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
 
   it('shows the announced pulse on its pulsar, rippling, one turn ahead', async () => {
     const game = await boot('?bot=off');
-    fightBallast(game, 5);
-    plies(game, 3);
+    fightBallast(game, 6);
+    plies(game, 1);
     expect(game.hook('__pulsar')).toBeNull();
     expect(document.body.dataset.ripples).toBe('0');
     plies(game, 1);
@@ -83,15 +84,15 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
   });
 
   it.each([
-    [5, 1, "Fired: the Pulsar's pulse"],
-    [3, 0, "Fired: the Hull's crack"],
+    [6, 1, "Fired: the Pulsar's pulse"],
+    [4, 0, "Fired: the Hull's crack"],
     [2, 3, "Fired: the Chaplain's conversion check"],
     [0, 2, "Fired: the Magnetizer's polarity"],
-    [6, 4, "Fired: the Swarm's wave"],
+    [3, 4, "Fired: the Swarm's wave"],
   ])('fight seed %i fires effect %i, named in the HUD with a mark on each cell it touched', async (seed, effect, text) => {
     const game = await boot('?bot=off');
     fightBallast(game, seed);
-    plies(game, 5);
+    plies(game, 3);
     expect(game.hook<Fired>('__fired')).toBeNull();
     expect(tell()).not.toContain('Fired');
     plies(game, 1);
@@ -100,8 +101,8 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
     expect(tell()).toContain(text);
     expect(document.body.dataset.fired).toBe(String(fired.cells.length));
     if (effect === 0) expect(fired.cells).toEqual(game.hook<{ cell: Axial }[]>('__cracks').map((c) => c.cell));
-    // A check that flipped nothing, a pulse on the packed opening lines that pushes nothing: no mark.
-    if (effect === 3 || effect === 1) expect(fired.cells).toEqual([]);
+    // A check that flipped nothing: no mark.
+    if (effect === 3) expect(fired.cells).toEqual([]);
     else expect(fired.cells.length).toBeGreaterThan(0);
     plies(game, 1);
     expect(game.hook<Fired>('__fired')).toBeNull();
