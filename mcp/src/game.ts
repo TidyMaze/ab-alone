@@ -83,7 +83,10 @@ export type ErrorCode =
   | 'room_full'
   | 'room_not_found'
   | 'transport_failed'
-  | 'not_supported';
+  | 'not_supported'
+  | 'no_world'
+  | 'blocked'
+  | 'no_path';
 
 export interface ToolError {
   code: ErrorCode;
