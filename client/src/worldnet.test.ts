@@ -10,7 +10,7 @@ const until = (check: () => boolean): Promise<void> =>
 import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
 import { generateKeys } from './moverecord';
-import { signBeaten, signBreak } from './worldevents';
+import { signBeaten, signBreak, signLair } from './worldevents';
 import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
 
@@ -48,6 +48,7 @@ function setup(allowed = true) {
   const reports: NetStatus[] = [];
   const applied: (readonly [number, number])[] = [];
   const beaten: (readonly [number, number])[] = [];
+  const lairs: (readonly [number, number])[] = [];
   const keysOnce = generateKeys();
   const me = { name: '' };
   const root = document.createElement('div');
@@ -67,11 +68,11 @@ function setup(allowed = true) {
     root,
     (status) => reports.push(status),
     () => me.name,
-    { keys: () => keysOnce, canBreak: (_seed, q) => q >= 0, apply: (cell) => applied.push(cell), canBeaten: (_seed, q) => q >= 0, beat: (cell) => beaten.push(cell) },
+    { keys: () => keysOnce, canBreak: (_seed, q) => q >= 0, apply: (cell) => applied.push(cell), canBeaten: (_seed, q) => q >= 0, beat: (cell) => beaten.push(cell), canLair: (_seed, q) => q >= 0, lair: (cell) => lairs.push(cell) },
     () => clock.now,
   );
   const enter = (seed = PUBLIC_SEED) => host.enter(seed, scene, camera, world as never);
-  return { host, nets, rooms, clock, root, scene, enter, reports, me, applied, beaten, keysOnce };
+  return { host, nets, rooms, clock, root, scene, enter, reports, me, applied, beaten, lairs, keysOnce };
 }
 
 describe('WorldPeersHost', () => {
@@ -178,7 +179,7 @@ describe('WorldPeersHost', () => {
 
   it('reads the page clock when none is given', () => {
     const net = new FakeNet();
-    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'), () => {}, () => '', { keys: () => generateKeys(), canBreak: () => true, apply: () => {}, canBeaten: () => true, beat: () => {} });
+    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'), () => {}, () => '', { keys: () => generateKeys(), canBreak: () => true, apply: () => {}, canBeaten: () => true, beat: () => {}, canLair: () => true, lair: () => {} });
     const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
     host.enter(PUBLIC_SEED, new THREE.Scene(), camera, { tile: () => undefined });
     net.data(encodeHello(), 'p');
@@ -270,6 +271,7 @@ describe('WorldPeersHost', () => {
   describe('the broken cells (#1305)', () => {
     const sentBreaks = (net: FakeNet) => net.sent.filter(([d]) => d[1] === 3);
     const sentBeaten = (net: FakeNet) => net.sent.filter(([d]) => d[1] === 5);
+    const sentLair = (net: FakeNet) => net.sent.filter(([d]) => d[1] === 6);
 
     it('signs the cell the hero broke and sends it to every peer', async () => {
       const { nets, host, enter, keysOnce } = setup();
@@ -361,6 +363,45 @@ describe('WorldPeersHost', () => {
       nets[0]!.data(encodeBreak(await signBeaten(keys, PUBLIC_SEED, 3, 5)), 'q'); // the same enemy from another peer
       await flush();
       expect(beaten).toEqual([[3, 5]]);
+    });
+
+    it('sends a lair taken signed as type 6 to every peer, only for the public world', async () => {
+      const { nets, host, enter, keysOnce } = setup();
+      enter();
+      host.lairWon(PUBLIC_SEED, [4, -2]);
+      host.lairWon(7, [4, -2]); // another seed: not this room's
+      await until(() => sentLair(nets[0]!).length === 1);
+      const [bytes, to] = sentLair(nets[0]!)[0]!;
+      expect(to).toBeUndefined();
+      expect(decode(bytes!)).toMatchObject({ t: 'break', event: { kind: 'lair', seed: PUBLIC_SEED, q: 4, r: -2, pub: (await keysOnce).pub } });
+    });
+
+    it('a lair taken while the room is closed (the fight leaves the world) is sent when the room opens, once', async () => {
+      const { nets, host, enter } = setup();
+      host.lairWon(PUBLIC_SEED, [4, -2]);
+      await flush();
+      expect(nets).toHaveLength(0);
+      enter();
+      await until(() => sentLair(nets[0]!).length === 1);
+      host.leave();
+      enter();
+      await flush();
+      expect(sentLair(nets[1]!)).toHaveLength(0);
+    });
+
+    it('applies a lair another hero took once, and refuses one that is no lair', async () => {
+      const { nets, lairs, enter, keysOnce, clock } = setup();
+      enter();
+      const keys = await keysOnce;
+      nets[0]!.data(encodeBreak(await signLair(keys, PUBLIC_SEED, -3, 5)), 'p'); // canLair says no
+      clock.now = 1000;
+      nets[0]!.data(encodeBreak(await signLair(keys, PUBLIC_SEED, 3, 5)), 'p');
+      await until(() => lairs.length === 1);
+      expect(lairs).toEqual([[3, 5]]);
+      clock.now = 2000;
+      nets[0]!.data(encodeBreak(await signLair(keys, PUBLIC_SEED, 3, 5)), 'q'); // the same lair from another peer
+      await flush();
+      expect(lairs).toEqual([[3, 5]]);
     });
 
     it('a break that arrives after the room closed is dropped', async () => {

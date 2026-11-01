@@ -232,6 +232,48 @@ test('an enemy beaten by another hero is gone here, once, and a forged one does 
   await expect(page.locator('body')).toHaveAttribute('data-openworld-beaten', '1');
 });
 
+// #1305: a boss lair another hero took. The lair is the world's own (`world_lairs`), read through the test hook.
+test('a boss lair another hero took is seen beaten here, once, and a forged one does nothing, #1305', async ({ page }) => {
+  await enter(page, PUBLIC);
+  const lair = await page.evaluate(
+    (seed) => (window as unknown as Hook & { __openworldLairs: (seed: number) => [number, number][] }).__openworldLairs(seed)[0],
+    PUBLIC,
+  );
+  const send = (forge: boolean) =>
+    page.evaluate(
+      async ([seed, q, r, forged]) => {
+        const w = window as unknown as Hook;
+        const pair = (await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+        const bytes = new Uint8Array(10);
+        const view = new DataView(bytes.buffer);
+        bytes.set([1, 3]); // kind 3: a lair taken
+        view.setUint32(2, seed as number);
+        view.setInt16(6, q as number);
+        view.setInt16(8, r as number);
+        const sig = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, pair.privateKey, bytes));
+        const pub = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+        const msg = new Uint8Array(106);
+        const mv = new DataView(msg.buffer);
+        msg.set([2, 6]); // type 6: lair
+        mv.setUint32(2, seed as number);
+        mv.setInt16(6, (q as number) + (forged ? 1 : 0)); // a signature for another cell
+        mv.setInt16(8, r as number);
+        msg.set(pub, 10);
+        msg.set(sig, 42);
+        w.__netPeerIn(Array.from(msg), 'p');
+      },
+      [PUBLIC, lair![0]!, lair![1]!, forge] as const,
+    );
+  await send(true);
+  await page.waitForTimeout(300);
+  await expect(page.locator('body')).not.toHaveAttribute('data-openworld-lairs-beaten', '0');
+  await send(false);
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-lairs-beaten', '0');
+  await send(false); // the same lair again
+  await page.waitForTimeout(300);
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-lairs-beaten', '0');
+});
+
 test('the obstacle the hero breaks goes out signed, 106 bytes, #1305', async ({ page }) => {
   await enter(page, PUBLIC);
   const { cell, free } = await obstacle(page);

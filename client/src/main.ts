@@ -3259,6 +3259,7 @@ function medalNote(boss: { id: string }): string {
     const result: MedalResult = recordMedal(store, boss.id, turns);
     medalSeen = { game: engine, note: medalLine(result, result === 'kept' ? bestTurns(store, boss.id)! : turns) };
     if (lairFrom) void openWorldSaves.beat(lairFrom.seed, lairFrom.lair); // the lair is beaten in the Open world too (#1170)
+    if (lairFrom) peersHost.lairWon(lairFrom.seed, lairCells(lairFrom.seed)[lairFrom.lair]!); // and seen beaten by the other heroes (#1305)
   }
   return medalSeen.note;
 }
@@ -5761,8 +5762,15 @@ const peersHost = new WorldPeersHost(
     apply: (cell) => openWorld.remoteBreak(cell),
     canBeaten: (seed, q, r) => world_is_enemy(seed, q, r),
     beat: (cell) => openWorld.remoteBeaten(cell),
+    canLair: (seed, q, r) => lairCells(seed).some(([a, b]) => a === q && b === r),
+    lair: (cell) => openWorld.remoteLair(cell),
   },
 );
+/** The boss lairs of the world `seed` (#1305), one cell per boss, the bridge's `world_lairs` read as cells. */
+function lairCells(seed: number): Axial[] {
+  const flat = Array.from(world_lairs(seed));
+  return Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
+}
 openWorld.peers = peersHost;
 netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
 netName.addEventListener('input', () => {
@@ -5795,6 +5803,7 @@ if (navigator.webdriver) {
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldTeleporters = (seed: number) => Array.from(world_teleporters(seed)); // every teleporter of a world, `q, r` pairs (#1412)
+  hooks.__openworldLairs = (seed: number) => lairCells(seed); // the boss lairs of a world as cells, for the peer tests (#1305)
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {

@@ -1405,7 +1405,7 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
 
   it('tells the peers host which enemy the hero ejected (#1305), and none when nothing was ejected', () => {
     const [wq, wr] = shore(1);
-    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn() };
+    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn() };
     const m = mode(undefined, real, () => true, () => new Int32Array());
     m.peers = peers;
     m.enter(1, 800, 600);
@@ -1419,7 +1419,7 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
   });
 
   it('tells the peers host which cell the hero broke, and none when it broke nothing', () => {
-    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn() };
+    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn() };
     const quiet = beside();
     quiet.peers = peers;
     tap(quiet, 'ArrowRight');
@@ -1714,7 +1714,7 @@ describe('the Dungeon button walks to the nearest tower (#1291)', () => {
 });
 
 describe('the Open world mode and the online peers (#1305)', () => {
-  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn() });
+  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn() });
 
   it('hands the world entered to the peers host, and tells it when the world is left, by Escape or by another world', () => {
     const m = mode();
@@ -1846,6 +1846,18 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     expect(ctx.clearRect).toHaveBeenCalledTimes(1);
     m.turn(TURN_STEP);
     expect(ctx.clearRect).toHaveBeenCalledTimes(2);
+  });
+
+  it('a lair another hero took (#1305) is shown beaten, once, and a cell with no lair does nothing', () => {
+    const m = lairer(Int32Array.of(8, 0, 40, 0));
+    m.enter(42, 800, 600);
+    expect(document.body.dataset.openworldLairsBeaten).toBe('');
+    m.remoteLair([5, 5]); // no lair there
+    expect(document.body.dataset.openworldLairsBeaten).toBe('');
+    m.remoteLair([8, 0]);
+    expect(document.body.dataset.openworldLairsBeaten).toBe('0');
+    m.remoteLair([8, 0]); // twice: it is beaten already
+    expect(document.body.dataset.openworldLairsBeaten).toBe('0');
   });
 
   it('shows a beaten lair in its own colour', () => {

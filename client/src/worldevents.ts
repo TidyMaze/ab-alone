@@ -13,12 +13,12 @@ export const SYNC_MS = 200;
 
 const KEY = 'ab-alone.world-key';
 
-/** The bytes an event signs: version 1, its kind (1 break, 2 beaten), seed (u32), q and r (int16). The kind is signed, so a break
- * is never a beaten enemy of the same cell. */
+/** The bytes an event signs: version 1, its kind (1 break, 2 beaten, 3 lair), seed (u32), q and r (int16). The kind is signed, so a
+ * break is never a beaten enemy of the same cell. */
 const payload = ({ kind, seed, q, r }: Pick<BreakEvent, 'kind' | 'seed' | 'q' | 'r'>): Uint8Array<ArrayBuffer> => {
   const out = new Uint8Array(10);
   const view = new DataView(out.buffer);
-  out.set([1, kind === 'beaten' ? 2 : 1]);
+  out.set([1, kind === 'beaten' ? 2 : kind === 'lair' ? 3 : 1]);
   view.setUint32(2, seed);
   view.setInt16(6, q);
   view.setInt16(8, r);
@@ -34,6 +34,9 @@ export const signBreak = (keys: Keys, seed: number, q: number, r: number): Promi
 
 /** A generated enemy marble of the world `seed` on `(q, r)` was ejected by a hero (#1305): the same signed event as a break. */
 export const signBeaten = (keys: Keys, seed: number, q: number, r: number): Promise<BreakEvent> => sign(keys, 'beaten', seed, q, r);
+
+/** A hero took the boss lair on `(q, r)` of the world `seed` (#1305): the same signed event, kind 3. No proof of the fight is sent. */
+export const signLair = (keys: Keys, seed: number, q: number, r: number): Promise<BreakEvent> => sign(keys, 'lair', seed, q, r);
 
 export const verifyBreak = (e: BreakEvent): Promise<boolean> => signedBy(e.pub, e.sig, payload(e));
 
