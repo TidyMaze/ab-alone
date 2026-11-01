@@ -80,9 +80,9 @@ async function runWorld(page: Page, seed: string): Promise<string[]> {
   await page.mouse.wheel(0, 5000); // as far out as the screen allows: MAX_ZOOM is 6 on a 16:9 screen
   await expect.poll(async () => Number(await data('openworldZoom'))).toBeGreaterThan(5);
   await page.keyboard.press('q');
-  await expect.poll(() => data('openworldYaw')).toBe('60');
+  await expect.poll(() => data('openworldYaw')).toBe('30'); // rests at -30 (#1254), a turn is 60 (#1253)
   await page.keyboard.press('e');
-  await expect.poll(() => data('openworldYaw')).toBe('0');
+  await expect.poll(() => data('openworldYaw')).toBe('-30');
   await page.keyboard.press('Escape');
   await expect(page.locator('#hud')).toBeVisible();
   await enter(page);
