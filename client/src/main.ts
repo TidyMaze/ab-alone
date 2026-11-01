@@ -228,6 +228,8 @@ import {
   writeSteering,
   readUiScale,
   hasReflections,
+  hasBloom,
+  hasNormalMaps,
   meshDetail,
   nextPixelRatio,
   read,
@@ -398,6 +400,23 @@ const store = (() => {
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
+// Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
+const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let savedMotion = readReducedMotion(store);
+let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
+let steering = readSteering(store); // the Open world steering (#1137), on by default
+let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
+const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
+let tier = readTier(store, {
+  cores: navigator.hardwareConcurrency,
+  memory: (navigator as { deviceMemory?: number }).deviceMemory,
+  reducedMotion: reducedMotion(),
+});
+const queryQuality = new URLSearchParams(location.search).get('quality');
+if (queryQuality === 'high' || queryQuality === 'low') {
+  tier = queryQuality;
+  writeTier(store, tier);
+}
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
@@ -417,9 +436,10 @@ renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 // The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
 // as soon as the scene is. mountBay takes them when the scene exists.
-const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, hasNormalMaps(tier));
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   if (!loadsTexture(tonal ? 'tonal' : 'pbr', name)) return null;
+  if (/-normal\.ktx2$/.test(name) && !hasNormalMaps(tier)) return null; // the low tier fetches and draws no normal map (#849)
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -524,6 +544,7 @@ const sceneRenderer = new SceneRenderer({
   rimRoughness,
   rimNormal,
   tonal,
+  bloom: hasBloom(tier),
 });
 await sceneRenderer.init().catch(bootFailed);
 const {
@@ -562,23 +583,6 @@ function prefilteredBay(): THREE.Texture {
   return texture;
 }
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
-// Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
-const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
-let savedMotion = readReducedMotion(store);
-let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
-let steering = readSteering(store); // the Open world steering (#1137), on by default
-let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
-const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
-let tier = readTier(store, {
-  cores: navigator.hardwareConcurrency,
-  memory: (navigator as { deviceMemory?: number }).deviceMemory,
-  reducedMotion: reducedMotion(),
-});
-const queryQuality = new URLSearchParams(location.search).get('quality');
-if (queryQuality === 'high' || queryQuality === 'low') {
-  tier = queryQuality;
-  writeTier(store, tier);
-}
 diag.log.log('info', 'start', { backend, tier });
 
 // Reflections (#376, #424): the bay, prefiltered once it has loaded (mountBay), for the marble materials on high tier only.
