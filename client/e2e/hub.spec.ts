@@ -12,6 +12,7 @@ import { openModes } from './modes';
 // #524: rolling onto a terminal opens its lore entry in the reader; Esc leaves it to the hub on the same cell.
 // #583: no game is on in the hub: the evaluation bar and Hint are hidden there.
 // #589: Export game and Import game are hidden there too.
+// #1249: every room wears a label plate, always shown; a lift-shaft rail lists the five decks and boss pips the progress.
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
@@ -240,6 +241,8 @@ test('a locked lift keeps the marble out with a Tally line, and a boss win opens
   await shipAt(page, './?bot=off', [1, -1]);
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-lifts', 'cargo locked');
+  await expect(page.locator('#hub-rail [data-deck="cargo"]')).toHaveAttribute('data-state', 'locked'); // #1249
+  await expect(page.locator('#hub-labels [data-cell="1,-2"]')).toHaveAttribute('data-mark', 'locked');
   await page.keyboard.press('ArrowUp');
   await expect(page.locator('#hud .tally')).toHaveText("Lift to Cargo: locked. This deck's boss is still on the books.");
   await expect(body).toHaveAttribute('data-hub', 'mess 1,-1');
@@ -253,12 +256,15 @@ test('a locked lift keeps the marble out with a Tally line, and a boss win opens
   });
   await ship(page);
   await expect(body).toHaveAttribute('data-lifts', 'cargo open');
+  await expect(page.locator('#hub-rail [data-deck="cargo"]')).toHaveAttribute('data-state', 'open'); // #1249
+  await expect(page.locator('#hub-rail [data-deck="mess"]')).toHaveAttribute('data-state', 'beaten');
   await expect(page.locator('#hud .tally')).toHaveCount(0);
   const open = await liftPixels(page, [1, -2], testInfo.outputPath('lift-open.png'));
   expect(contrastRatio(...open)).toBeGreaterThanOrEqual(3);
   await page.keyboard.press('ArrowUp');
   await expect(body).toHaveAttribute('data-hub', 'cargo -1,2');
   await expect(body).toHaveAttribute('data-lifts', 'furnace locked,mess open');
+  await expect(page.locator('#hub-rail [aria-current]')).toHaveAttribute('data-deck', 'cargo'); // #1249
   const cargo = await liftPixels(page, [1, -2], testInfo.outputPath('cargo-locked.png')); // in the Cargo's light
   expect(contrastRatio(...cargo)).toBeGreaterThanOrEqual(3);
 });
@@ -310,10 +316,18 @@ test('the tension drones calm to 0 over the hub, #586', async ({ page }) => {
   expect(await page.evaluate(() => (window as any).__tension().level)).toBe(0);
 });
 
-test('hovering over a hub cell previews the room name, mode descriptor and affordance, #628', async ({ page }, testInfo) => {
+test('every room wears its label plate without a hover, and a hover still names the target, #628, #1249', async ({ page }, testInfo) => {
   await page.goto('./');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
+
+  // The plates are always shown: the boss door, the lift and the marble's YOU, no hover needed (#1249).
+  await expect(page.locator('#hub-labels [data-cell="2,0"]')).toBeVisible();
+  await expect(page.locator('#hub-labels [data-cell="2,0"]')).toContainText('The Echo');
+  await expect(page.locator('#hub-labels [data-cell="1,-2"]')).toContainText('Lift ▲ Cargo');
+  await expect(page.locator('#hub-labels .you')).toHaveText(/you/i);
+  await expect(page.locator('#hub-pips')).toContainText('Bosses 0/5');
+  await page.screenshot({ path: testInfo.outputPath('1249-hub-plan.png') });
 
   // Hover over adjacent cell [1, 0]
   const p1 = await page.evaluate(() => (window as any).__cellToScreen(1, 0));
@@ -328,10 +342,25 @@ test('hovering over a hub cell previews the room name, mode descriptor and affor
   await expect(page.locator('body')).toHaveAttribute('data-hub-hover', '2,0');
   await expect(page.locator('#hud .hub-preview')).toContainText('Target: Boss door · The Echo (Mess boss)');
   await expect(page.locator('#hud .hub-preview')).toContainText('(Out of reach (roll closer))');
-
-  const shotPath = testInfo.outputPath('628-hub-hover-preview.png');
-  await page.screenshot({ path: shotPath });
 });
 
-
-
+test('on a phone every plate and the rail fit the window, short labels only, #1249', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  const boxes = await page.locator('#hub-labels .hub-label, #hub-rail, #hub-pips').evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().toJSON() as DOMRect),
+  );
+  expect(boxes.length).toBe(12); // the nine rooms of the Mess, YOU, the rail and the pips
+  for (const box of boxes) {
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(390);
+    expect(box.top).toBeGreaterThanOrEqual(0);
+    expect(box.bottom).toBeLessThanOrEqual(844);
+  }
+  await expect(page.locator('#hub-labels [data-cell="2,0"] .short')).toBeVisible();
+  await expect(page.locator('#hub-labels [data-cell="2,0"] b')).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('1249-hub-plan-phone.png') });
+});

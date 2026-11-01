@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CELLS, VANISHED, type Axial } from './board';
 import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, type Spot } from './hub';
-import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, reachabilityText } from './hubview';
+import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -173,5 +173,86 @@ describe('hub target inspection and reachability (#628)', () => {
 
   it('omits preview in hubHtml when hover is null', () => {
     expect(hubHtml(at, '', null)).not.toContain('class="hub-preview"');
+  });
+});
+
+// The deck plan (#1249): every room wears a label plate, always shown, with a short label for a phone; a lift-shaft rail
+// lists the five decks and boss pips show the progress.
+describe('the room labels (#1249)', () => {
+  it('name each room with a short state, and a short label for a phone', () => {
+    expect(roomLabel('mess', { kind: 'hotseat' }, [])).toEqual({ name: 'Hot-seat', state: '2 players', short: 'Hot-seat', mark: '' });
+    expect(roomLabel('mess', { kind: 'bot' }, [])).toEqual({ name: 'Bot table', state: 'vs the ship AI', short: 'Bot', mark: '' });
+    expect(roomLabel('mess', { kind: 'online' }, [])).toEqual({ name: 'Online', state: '1v1 peer room', short: 'Online', mark: '' });
+    expect(roomLabel('mess', { kind: 'royale' }, [])).toEqual({ name: 'Royale', state: 'battle royale', short: 'Royale', mark: '' });
+    expect(roomLabel('mess', { kind: 'terminal', lore: 'mess-house-rule' }, [])).toEqual({ name: 'Terminal', state: 'lore entry', short: 'Terminal', mark: '' });
+    expect(roomLabel('mess', { kind: 'medals' }, [])).toEqual({ name: 'Medal room', state: 'best turns', short: 'Medals', mark: '' });
+  });
+
+  it('name the boss behind the door, marked once beaten', () => {
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'hull' }, [])).toEqual({ name: 'Boss door', state: 'The Hull', short: 'The Hull', mark: '' });
+    expect(roomLabel('mess', { kind: 'boss', boss: 'echo' }, ['echo'])).toEqual({
+      name: 'Boss door',
+      state: 'The Echo · beaten',
+      short: 'The Echo',
+      mark: 'beaten',
+    });
+  });
+
+  it('point a lift up or down to its deck, marked while it is locked', () => {
+    expect(roomLabel('cargo', { kind: 'lift', to: 'furnace' }, ['echo'])).toEqual({
+      name: 'Lift ▲ Furnace',
+      state: 'locked',
+      short: '▲ Locked',
+      mark: 'locked',
+    });
+    expect(roomLabel('cargo', { kind: 'lift', to: 'mess' }, ['echo'])).toEqual({ name: 'Lift ▼ Mess', state: 'open', short: '▼ Mess', mark: '' });
+    expect(roomLabel('mess', { kind: 'lift', to: 'cargo' }, ['echo'])).toEqual({ name: 'Lift ▲ Cargo', state: 'open', short: '▲ Cargo', mark: '' });
+  });
+
+  it('put one plate on the cell of each room of the deck, and YOU on the marble', () => {
+    const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, []);
+    expect(html.match(/class="hub-label"/g)).toHaveLength(9); // the eight rooms and the lift up of the Mess
+    expect(html).toContain(
+      '<div class="hub-label" data-cell="2,0" data-kind="boss"><b>Boss door</b><small>The Echo</small><span class="short">The Echo</span></div>',
+    );
+    expect(html).toContain('<div class="hub-label" data-cell="1,-2" data-kind="lift" data-mark="locked"><b>Lift ▲ Cargo</b>');
+    expect(html).toContain('<div class="hub-label you" data-cell="0,0">You</div>');
+  });
+
+  it('marks the plate of the room the marble stands on, with no YOU plate of its own', () => {
+    const html = labelsHtml({ deck: 'cargo', cell: [2, 0] }, ['echo', 'hull']);
+    expect(html).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-mark="beaten" data-here>');
+    expect(html).not.toContain('hub-label you');
+  });
+});
+
+describe('the lift-shaft rail (#1249)', () => {
+  it('lists the five decks from the Bridge down, each beaten, open or locked, and where the marble is', () => {
+    const html = railHtml('cargo', ['echo']);
+    expect(html.match(/<li /g)).toHaveLength(5);
+    expect(html.indexOf('Bridge')).toBeLessThan(html.indexOf('Mess'));
+    expect(html).toContain('<li data-deck="mess" data-state="beaten"><span class="n">01</span><b>Mess</b><small>The Echo beaten</small></li>');
+    expect(html).toContain(
+      '<li data-deck="cargo" data-state="open" aria-current="location"><span class="n">02</span><b>Cargo</b><small>The Hull waits · you are here</small></li>',
+    );
+    expect(html).toContain('<li data-deck="furnace" data-state="locked"><span class="n">03</span><b>Furnace</b><small>Lift locked</small></li>');
+  });
+
+  it('says a deck is beaten once its boss is, from the boss menu too', () => {
+    expect(railHtml('mess', ['choir'])).toContain('<li data-deck="furnace" data-state="beaten"><span class="n">03</span><b>Furnace</b><small>The Choir beaten</small></li>');
+  });
+});
+
+describe('the boss pips (#1249)', () => {
+  it('count the bosses beaten, a pip each in deck order: beaten, open or locked', () => {
+    expect(pipsHtml(['echo'])).toBe(
+      '<span class="count">Bosses 1/5</span>' +
+        '<span class="pip" data-state="beaten" title="The Echo: beaten"></span>' +
+        '<span class="pip" data-state="open" title="The Hull: open"></span>' +
+        '<span class="pip" data-state="locked" title="The Choir: locked"></span>' +
+        '<span class="pip" data-state="locked" title="The Chaplain: locked"></span>' +
+        '<span class="pip" data-state="locked" title="The Ballast Mind: locked"></span>',
+    );
+    expect(pipsHtml([])).toContain('Bosses 0/5');
   });
 });

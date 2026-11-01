@@ -1013,6 +1013,79 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 @keyframes check-in { from { clip-path: inset(0 100% 0 0); } }
 #daily-copy.copied::before { content: '\2713'; display: inline-block; margin-right: 0.4em; animation: check-in var(--motion-fast) var(--ease-out); }
 
+/* The Ship hub's deck plan (#1249, docs/specs/ui.md section 4.5): a label plate over each room, always shown, the lift-shaft rail
+   and the boss pips. The plates sit on the 3D deck, dark in both themes, so they keep fixed dark colours, each room kind in its
+   prop's colour (hubart.ts). A phone shows the short label alone. Hidden while the terminal reader or the Open world has the screen. */
+#hub-plan[hidden], body[data-reading] #hub-plan, body[data-openworld] #hub-plan { display: none; }
+#hub-labels { position: fixed; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+.hub-label {
+  --k: #e9ecef;
+  position: absolute; transform: translate(-50%, -25%); padding: 2px 8px; white-space: nowrap; text-align: center;
+  color: #c9d1d6; background: rgba(14, 18, 20, 0.86); border: 1px solid var(--k); border-radius: 3px;
+  font: 0.6875rem/1.25 var(--ui);
+}
+.hub-label b, .hub-label .short { display: block; color: var(--k); font: 600 0.75rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.hub-label small { display: block; font-size: inherit; }
+.hub-label .short { display: none; }
+.hub-label[data-kind='boss'] { --k: #ff6b6b; }
+.hub-label[data-kind='bot'] { --k: #3bc9db; }
+.hub-label[data-kind='hotseat'] { --k: #fab005; }
+.hub-label[data-kind='online'] { --k: #51cf66; }
+.hub-label[data-kind='royale'] { --k: #fd7e14; }
+.hub-label[data-kind='terminal'] { --k: #20c997; }
+.hub-label[data-kind='medals'] { --k: #ffd43b; }
+.hub-label[data-mark='locked'] { border-style: dashed; }
+.hub-label[data-mark='locked'] small { color: #ff8787; }
+.hub-label[data-mark='beaten'] small { color: #ffd43b; }
+.hub-label[data-here] { box-shadow: 0 0 0 2px #ffb000; }
+.hub-label.you { --k: #ffb000; color: var(--k); border-color: transparent; font: 600 0.625rem/1.2 var(--display); letter-spacing: 0.12em; text-transform: uppercase; }
+#hub-rail, #hub-pips {
+  position: fixed; z-index: 1; box-sizing: border-box; color: var(--text); background: var(--panel); border: 1px solid var(--edge);
+  border-radius: var(--r-card); font: 0.8125rem/1.3 var(--ui); pointer-events: none;
+}
+#hub-rail { right: 16px; top: 50%; transform: translateY(-50%); width: 15rem; padding: var(--space); }
+#hub-rail h2 { margin: 0 0 var(--space); font: 600 0.75rem/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+#hub-rail ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+#hub-rail li {
+  display: grid; grid-template-columns: auto 1fr auto; column-gap: var(--space); align-items: center;
+  padding: 4px var(--space); border: 1px solid var(--edge); border-radius: 4px;
+}
+#hub-rail .n { grid-row: span 2; padding: 2px 4px; color: var(--muted); border: 1px solid var(--edge); border-radius: 2px; font: 600 0.6875rem/1 var(--display); }
+#hub-rail b { font: 600 0.9375rem/1.2 var(--display); }
+#hub-rail small { grid-column: 2; color: var(--muted); font-size: 0.75rem; }
+#hub-rail li::after { grid-column: 3; grid-row: 1 / span 2; font-weight: 600; }
+#hub-rail li[data-state='beaten']::after { content: '\2713'; color: var(--hazard); }
+#hub-rail li[data-state='locked'] { color: var(--muted); border-style: dashed; }
+#hub-rail li[aria-current] { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+#hub-rail li[aria-current]::after { content: '\25CF'; color: var(--accent); }
+#hub-pips { top: 16px; right: 72px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+#hub-pips .pip { width: 16px; height: 16px; box-sizing: border-box; border: 2px solid var(--edge); border-radius: 50%; }
+#hub-pips .pip[data-state='beaten'] { background: var(--hazard); border-color: var(--hazard); }
+#hub-pips .pip[data-state='open'] { border-color: var(--danger); }
+#hub-pips .pip[data-state='locked'] { border-style: dotted; }
+/* Held upright the deck sits low (camera.ts framing): the pips and the rail, a row of the five decks, take the band above it, under
+   the plate and the cog (with room for a Tally line), and the plates show their short label. */
+@media (orientation: portrait) {
+  #hub-pips { top: 200px; right: 16px; padding: 4px 8px; }
+  #hub-rail { top: 236px; left: 16px; right: 16px; width: auto; transform: none; padding: 4px; }
+  #hub-rail h2, #hub-rail .n, #hub-rail small { display: none; }
+  #hub-rail ul { flex-direction: row; }
+  #hub-rail li { flex: 1 1 0; min-width: 0; grid-template-columns: 1fr; justify-items: center; padding: 4px 2px; }
+  #hub-rail b { font-size: 0.75rem; }
+  #hub-rail li::after { grid-column: 1; grid-row: 2; content: '\2022'; color: var(--muted); }
+}
+/* Held sideways the dock is a column at the right edge (#1032): the rail sits left of it, and on a short window it is the deck names alone. */
+@media (orientation: landscape) and (max-height: 660px) { #hub-rail { right: 68px; } }
+@media (orientation: landscape) and (max-height: 500px) {
+  #hub-rail { width: 9rem; }
+  #hub-rail :is(h2, small) { display: none; }
+}
+@media (max-width: 600px), (max-height: 500px) {
+  .hub-label { padding: 1px 4px; }
+  .hub-label :is(b, small) { display: none; }
+  .hub-label .short { display: block; font-size: 0.6875rem; }
+}
+
 /* Screen transitions (#1099, docs/specs/motion.md story 9): entering or leaving the Open world cross-fades the canvas in on --motion-base. The
    rule that stops matching swaps the animation for the other keyframes (the same name would not restart), so each change replays the fade. Opacity only: nothing waits, the game takes input from the first frame.
    A game that is over (the loss dim, end-dim) keeps its own animation. Reduced motion: the tokens are 0ms, a hard cut. */

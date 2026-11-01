@@ -293,6 +293,16 @@ describe('check-layout-bounds', () => {
       expect(res.elements[4].name).toBe('the evaluation plate');
     });
 
+    it('reads only the 19 cells of the hub map on the Ship hub, the board cells around it being hidden there (#1249)', () => {
+      document.body.dataset.hub = 'mess 0,0';
+      (window as any).__cellToScreen = (q: number, r: number) => ({ x: 100 + q * 20, y: 100 + r * 20 });
+      const res = extractViewportInput({ name: 'test', width: 360, height: 780, isTouch: true });
+      delete document.body.dataset.hub;
+      expect(res.cells).toHaveLength(19);
+      expect(res.cells.map((c) => c.name)).toContain('cell 2,-2');
+      expect(res.cells.map((c) => c.name)).not.toContain('cell 3,0');
+    });
+
     it('falls back gracefully when __cellToScreen or hud is missing', () => {
       document.body.innerHTML = '';
       const preset: ViewportPreset = { name: 'test', width: 360, height: 780, isTouch: false };

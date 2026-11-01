@@ -80,6 +80,17 @@ export class HubController implements ModeController<HubSpot> {
     return { stepped: true, at: next };
   }
 
+  /** Puts each label plate of `root` (its `data-cell`) on the window just south of its cell centre, `toScreen` a cell's
+   * point on the window (#1249). */
+  placeLabels(root: HTMLElement, toScreen: (q: number, r: number) => { x: number; y: number }): void {
+    for (const plate of root.querySelectorAll<HTMLElement>('[data-cell]')) {
+      const [q, r] = plate.dataset.cell!.split(',').map(Number);
+      const { x, y } = toScreen(q! - 0.2, r! + 0.4); // the centre plus 0.4 of a row south: x stays
+      plate.style.left = `${x}px`;
+      plate.style.top = `${y}px`;
+    }
+  }
+
   hud(): string {
     return hubHtml(this.at, this.bumped, this.hover);
   }
@@ -108,7 +119,7 @@ export class HubController implements ModeController<HubSpot> {
     for (const { cell, door } of roomsOf(this.at.deck)) {
       const p = axialTo3D(cell[0], cell[1]);
       const open = door.kind === 'lift' && canEnter(door, beaten);
-      const glyph = createDoorGlyph(door, { open, cell });
+      const glyph = createDoorGlyph(door, { open, cell, beaten: door.kind === 'boss' && beaten.includes(door.boss) });
       glyph.position.set(p.x, 0.02, p.z);
       sceneRenderer.marbles.add(glyph);
       if (door.kind === 'lift') lifts.push(`${door.to} ${open ? 'open' : 'locked'}`);

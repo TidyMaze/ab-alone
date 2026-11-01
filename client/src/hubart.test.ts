@@ -127,4 +127,37 @@ describe('hub door 3D glyphs (#628)', () => {
     expect(glyph).toBeInstanceOf(THREE.Group);
     expect(glyph.getObjectByName('locked-bar')).toBeDefined();
   });
+
+  // The deck plan (#1249): each room is a small prop standing on its cell, no longer a flat glyph, so the kinds read
+  // apart at a glance.
+  it('stands every room up as a prop on its cell', () => {
+    const doors: Door[] = [
+      { kind: 'boss', boss: 'echo' },
+      { kind: 'bot' },
+      { kind: 'hotseat' },
+      { kind: 'online' },
+      { kind: 'royale' },
+      { kind: 'terminal', lore: 'mess-house-rule' },
+      { kind: 'medals' },
+      { kind: 'lift', to: 'cargo' },
+    ];
+    for (const door of doors) {
+      const top = new THREE.Box3().setFromObject(createDoorGlyph(door, { open: true })).max.y;
+      expect(top, door.kind).toBeGreaterThan(0.2);
+      expect(top, door.kind).toBeLessThan(0.6); // low enough to read the deck around it
+    }
+  });
+
+  it('opens a beaten boss door: no slab and no amber core, a gold seal instead', () => {
+    const shut = createDoorGlyph({ kind: 'boss', boss: 'echo' });
+    expect(shut.getObjectByName('door-slab')).toBeDefined();
+    expect(shut.getObjectByName('beaten-seal')).toBeUndefined();
+    const beaten = createDoorGlyph({ kind: 'boss', boss: 'echo' }, { beaten: true });
+    expect(beaten.getObjectByName('door-slab')).toBeUndefined();
+    expect(beaten.getObjectByName('beaten-seal')).toBeDefined();
+    const colors = beaten.children.map((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
+    expect(colors).toContain(GLYPH_COLORS.boss);
+    expect(colors).toContain(GLYPH_COLORS.medals);
+    expect(colors).not.toContain(GLYPH_COLORS.bossCore);
+  });
 });
