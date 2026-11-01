@@ -159,8 +159,8 @@ import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
-import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
-import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
+import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
+import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
 import { hookPeers, hookTransport, p2pPeers, p2pTransport } from './p2p';
 import { WorldPeersHost } from './worldnet';
 import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
@@ -172,7 +172,7 @@ import { generateKeys, type Report } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { beatPeriod } from './coordinator';
 import { OnlineSession } from './session';
-import { coopStatus, onlineStatus, type OnlineStatus } from './presence';
+import { coopStatus, duelStatus, onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
@@ -3249,7 +3249,7 @@ function drawHud(extra = ''): void {
     note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
-    turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
+    turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
     tally: shownPly() === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
@@ -3261,7 +3261,7 @@ function drawHud(extra = ''): void {
           : rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side), glassOf()),
   });
   hudEjected = ejected; // the next render moves only the pips that are new (#1095)
-  rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
+  rematchButton.hidden = online?.role !== 'player' || status === 0 || duel; // spectators never see it, nor a duel yet (#1316)
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null || trainer !== null; // local games only (#219)
   syncHint();
@@ -3316,7 +3316,7 @@ function drawHud(extra = ''): void {
         goal: showGoal ? boss.goal() : '',
         tell,
         // The daily line, or the attempt of a co-op room (#531).
-        daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : online ? attemptLine(online.attempt) : '',
+        daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : online ? (duel ? DUEL_LINE : attemptLine(online.attempt)) : '',
       }),
     );
   }
@@ -5077,6 +5077,7 @@ exportButton.disabled = importButton.disabled = false; // listeners ready (#146)
 // ?net=hook swaps the Trystero transport for the page hook the e2e test wires (no public relays).
 // Once the game is over, Rematch starts a new game in the same room with the colours swapped (#186).
 let online: OnlineSession | null = null;
+let duel = false; // a boss duel (#1316): the White seat plays the boss, its moves come from the room, not from the engine's search
 // The heartbeat of the room's session (#359), stopped when the room is left (#1275).
 const beats: ReturnType<typeof setInterval>[] = [];
 const beatEvery = (fn: () => void, ms: number): void => void beats.push(setInterval(fn, ms));
@@ -5165,11 +5166,12 @@ function roomTransport(room: string): Transport {
 }
 /** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. A joiner
  * from a link with the creator's fingerprint `creator` takes seat 1 only from that key (#1323). */
-async function goOnline(room: string, side: number, coop?: CoopFight, creator?: string): Promise<void> {
+async function goOnline(room: string, side: number, coop?: CoopFight, creator?: string, asDuel = false): Promise<void> {
   if (consentWanted() && !(await onlineAllowed())) return; // Stay solo (#1338): nothing was contacted, the game in progress goes on
   leaveMode();
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
+  duel = asDuel;
   // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
   const again = coop ? 'Retry' : 'Rematch';
   rematchButton.textContent = again;
@@ -5194,20 +5196,20 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     if (!session) return; // the room was left for the ship (#522)
     const role = session.role;
     const mine = session.side;
-    const other = coop ? 3 - side : 3 - mine; // co-op: the partner's seat, both seats play Black
+    const other = coop && !duel ? 3 - side : 3 - mine; // co-op: the partner's seat, both seats play Black
     const opponent = session.presenceOf(other);
     document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName(mine, glassOf());
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
     document.body.dataset.coordinator = String(session.coordinatorSeq); // join_seq of the coordinator, read by the e2e tests (#359)
     document.body.dataset.handover = session.handover;
-    onlineLine = coop ? coopStatus(role, opponent, session.isAgent(other)) : onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
+    onlineLine = duel ? duelStatus(mine, role, opponent, session.isAgent(other)) : coop ? coopStatus(role, opponent, session.isAgent(other)) : onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
     onlineNote = netState;
     hud();
   };
   const keys = await generateKeys();
   const key = await fingerprint(keys.pub); // the creator's invite link carries it
-  if (side === 1) showInvite(inviteUrl(location.href, room, coop, key), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
+  if (side === 1) showInvite(inviteUrl(location.href, room, coop, key, duel), `Invite link: send it to your ${duel ? 'boss player' : coop ? 'partner' : 'opponent'}`);
   online = new OnlineSession({
     game: room,
     side,
@@ -5217,7 +5219,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     transport: net,
     judge: {
       to_move: () => engine.to_move(),
-      play: coop
+      play: coop && !duel
         ? async (mv, live) => {
             await bossReply;
             replay(mv, live);
@@ -5231,7 +5233,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
         replaying = null;
       },
       // A seat's turn is its main move and the Echo's free moves before it (#958).
-      ...(coop && { mover: () => seatAfter(history.length - (engine as Encounter).free_taken(), 2) }),
+      ...(coop && !duel && { mover: () => seatAfter(history.length - (engine as Encounter).free_taken(), 2) }),
     },
     onMove: () => refresh(),
     onRefuse: (reason) => {
@@ -5266,11 +5268,11 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
   }
 }
 /** Opens a new room as its creator and shows its invite link: a co-op room with `coop` (#529), a versus room without. */
-function playOnline(coop?: CoopFight): void {
+function playOnline(coop?: CoopFight, asDuel = false): void {
   rankedMode = null;
   moveModes('pick');
   leaveMode(); // the room left first: its invite link goes, the new one shows once its keys are made
-  void goOnline(newRoomId((b) => crypto.getRandomValues(b)), 1, coop); // it shows the invite link
+  void goOnline(newRoomId((b) => crypto.getRandomValues(b)), 1, coop, undefined, asDuel); // it shows the invite link
 }
 document.getElementById('play-online')!.addEventListener('click', () => playOnline());
 const rankedButton = document.getElementById('ranked') as HTMLButtonElement;
@@ -5305,21 +5307,35 @@ for (const id of boss_ids()) {
   entry.textContent = boss_name(id)!;
   entry.addEventListener('click', () => {
     showCoopList(false);
-    playOnline({ boss: id, seed: crypto.getRandomValues(new Uint32Array(1))[0]! });
+    playOnline({ boss: id, seed: crypto.getRandomValues(new Uint32Array(1))[0]! }, listIsDuel);
   });
   coopList.appendChild(entry);
 }
+// Boss duel (#1316): the same boss list under its own button, a room where the creator is the hero (Black) and the joiner,
+// a person or an MCP agent, plays the boss (White). The room carries its moves, and both pages judge them with the encounter.
+const duelButton = document.getElementById('boss-duel') as HTMLButtonElement;
+let listIsDuel = false; // the shared list opened by Boss duel, not by Fight together
+duelButton.addEventListener('click', () => {
+  bossList.hidden = true;
+  bossButton.setAttribute('aria-expanded', 'false');
+  const open = !!coopList.hidden || !listIsDuel;
+  listIsDuel = true;
+  showCoopList(open);
+});
 coopButton.addEventListener('click', () => {
   if (coopList.hidden) {
     bossList.hidden = true; // one boss list open at a time (#615)
     bossButton.setAttribute('aria-expanded', 'false');
   }
-  showCoopList(!!coopList.hidden); // hidden: open it
+  const open = !!coopList.hidden || listIsDuel;
+  listIsDuel = false;
+  showCoopList(open); // hidden or opened by Boss duel: open it
 });
 // Back to the ship from an online table (#522): the room is closed and the page is a local one again.
 function leaveOnline(): void {
   if (!online) return;
   online = null;
+  duel = false;
   stopBeats();
   link!.close();
   onlineNote = '';
@@ -6033,7 +6049,7 @@ addEventListener('pointerdown', (e) => {
 });
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
-  playOnlineButton.disabled = coopButton.disabled = rankedButton.disabled = royaleInviteButton.disabled = state.disabled;
+  playOnlineButton.disabled = coopButton.disabled = duelButton.disabled = rankedButton.disabled = royaleInviteButton.disabled = state.disabled;
   offlineNotice = state.notice;
   hud();
 }
@@ -6043,10 +6059,12 @@ playReady = true; // engine and listener ready (#127)
 syncConnectivity();
 const invited = roomFromHash(location.hash);
 const coopInvite = coopFromHash(location.hash);
+const duelInvite = bossSeatFromHash(location.hash);
 const royaleInvite = royaleFromHash(location.hash);
 const creator = creatorFromHash(location.hash); // the fingerprint of the creator's key, none in an older link (#1323)
 if (invited) void goOnline(invited, 2, undefined, creator);
 else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
+else if (duelInvite && boss_ids().includes(duelInvite.boss)) void goOnline(duelInvite.room, 2, duelInvite, creator, true); // the joiner plays the boss (#1316)
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite, creator); // an unknown boss starts nothing
 else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
 else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Ship hub (#602)
