@@ -13,9 +13,12 @@ import {
   bridgeAt,
   dropAt,
   dualText,
+  otherRoom,
+  outOfTurn,
   parseDual,
   parseReturn,
   roomOf,
+  roomTurn,
 } from './dual';
 
 const distance = (a: Axial, b: Axial): number =>
@@ -51,9 +54,9 @@ describe('The Dual Room board (#947, #955, game-design.md section 7.15)', () => 
 describe('the bridge records', () => {
   it('reads the bridge and the announced return of Encounter.dual(), null for the other bosses', () => {
     expect(parseDual([])).toBeNull();
-    expect(parseDual([0, 0, 0, 0])).toEqual({ bridged: false, coming: null });
-    expect(parseDual([0, 2, 0, -2])).toEqual({ bridged: false, coming: { side: 2, cell: [0, -2] } });
-    expect(parseDual([1, 0, 0, 0])).toEqual({ bridged: true, coming: null });
+    expect(parseDual([0, 0, 0, 0, 0])).toEqual({ bridged: false, coming: null, room: 0 });
+    expect(parseDual([0, 2, 0, -2, 1])).toEqual({ bridged: false, coming: { side: 2, cell: [0, -2] }, room: 1 });
+    expect(parseDual([1, 0, 0, 0, -1])).toEqual({ bridged: true, coming: null, room: null });
   });
 
   it('reads the marble that landed at the end of the last ply, null when none did', () => {
@@ -68,17 +71,41 @@ describe('dualText', () => {
   });
 
   it('names whose marble comes back on the mark, and when the bridge comes', () => {
-    expect(dualText({ bridged: false, coming: null }, 1)).toBe('Ejected marbles come back in the other room · the bridge comes at 5');
-    expect(dualText({ bridged: false, coming: { side: 2, cell: [0, -1] } }, 1)).toBe(
+    expect(dualText({ bridged: false, coming: null, room: 0 }, 1)).toBe('Ejected marbles come back in the other room · the bridge comes at 5');
+    expect(dualText({ bridged: false, coming: { side: 2, cell: [0, -1] }, room: 0 }, 1)).toBe(
       'Its marble comes back on the mark next turn · the bridge comes at 5',
     );
-    expect(dualText({ bridged: false, coming: { side: 1, cell: [0, -1] } }, 1)).toBe(
+    expect(dualText({ bridged: false, coming: { side: 1, cell: [0, -1] }, room: 0 }, 1)).toBe(
       'Your marble comes back on the mark next turn · the bridge comes at 5',
     );
-    expect(dualText({ bridged: true, coming: { side: 1, cell: [0, -1] } }, 1)).toBe(
+    expect(dualText({ bridged: true, coming: { side: 1, cell: [0, -1] }, room: null }, 1)).toBe(
       'Your marble comes back on the mark next turn · the bridge is up, ejected marbles are gone',
     );
-    expect(dualText({ bridged: true, coming: null }, 1)).toBe('The bridge is up, ejected marbles are gone');
+    expect(dualText({ bridged: true, coming: null, room: null }, 1)).toBe('The bridge is up, ejected marbles are gone');
+  });
+});
+
+describe('the room in turn (#992)', () => {
+  it('dims the 37 cells of the other room, none once the bridge is up or outside the fight', () => {
+    const north = otherRoom({ bridged: false, coming: null, room: 0 });
+    expect(north).toHaveLength(37);
+    expect(north.every((c) => roomOf(c) === 1)).toBe(true);
+    expect(otherRoom({ bridged: false, coming: null, room: 1 }).every((c) => roomOf(c) === 0)).toBe(true);
+    expect(otherRoom({ bridged: true, coming: null, room: null })).toEqual([]);
+    expect(otherRoom(null)).toEqual([]);
+  });
+
+  it('refuses a cell of the other room, never once the bridge is up', () => {
+    const south = { bridged: false, coming: null, room: 0 };
+    expect(outOfTurn(south, [2, -7])).toBe(true);
+    expect(outOfTurn(south, [-2, 7])).toBe(false);
+    expect(outOfTurn({ bridged: true, coming: null, room: null }, [2, -7])).toBe(false);
+    expect(outOfTurn(null, [2, -7])).toBe(false);
+  });
+
+  it('names the room that plays', () => {
+    expect(roomTurn(0)).toBe('the south room plays this turn');
+    expect(roomTurn(1)).toBe('the north room plays this turn');
   });
 });
 
