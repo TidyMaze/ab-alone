@@ -309,7 +309,7 @@ describe('main.ts, the deck textures', () => {
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {
     const cells = catchCells();
-    const game = await boot('?bot=off&scene=room', {
+    const game = await boot('?bot=off', {
       missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-mess-roughness.ktx2', 'deck-cargo.ktx2'],
     });
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('steel'));
