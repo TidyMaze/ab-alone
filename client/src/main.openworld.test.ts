@@ -66,7 +66,7 @@ describe('the Open world mode', () => {
   });
 
   it('counts the point lights of the scene it draws: none in the Open world, within the budget (#1234)', async () => {
-    const game = await boot('?bot=off&openworld=7');
+    const game = await boot('?bot=off&openworld=7&scene=room');
     const cost = () => (window as unknown as { __renderCost: { pointLights: number } }).__renderCost;
     expect(cost().pointLights).toBeGreaterThan(OPEN_WORLD_POINT_LIGHTS);
     game.openModes();

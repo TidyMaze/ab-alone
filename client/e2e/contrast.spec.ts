@@ -4,15 +4,20 @@ import { DECK_NAMES } from '../src/deck';
 import { HEAT } from '../src/marbles';
 
 // Bug #339: a cell's edge must stay 3:1 against the surface next to it (docs/specs/world.md section 5, art.md section 1).
-// The start position, 1280x720. Around each listed cell, 8 points on its bevel ring (radius 0.44, 45 degrees apart),
-// each against the surface 0.52 further out along the same direction. A cell passes when at least 6 of the 8 points
-// reach 3:1: a seam point where the neighbouring cell occludes the bevel may fail. The empty rim cells of the far half
-// too, at the high tier with Clear board off: the fog stays off the cells (bug #399). The far row holds marbles, which
-// hide its bevels, so fog.spec.ts checks that row.
+// The start position, 1280x720. The dish is a hexagon (the terrace, #1314; owner's decision, option A): around each listed cell,
+// 2 points just inside its left and right flats (0.38 from the centre, the flats stand at 0.433), each against the point just
+// outside the same flat (0.50, the middle of the gap to the neighbour). The geometry changed from the round bevel's 8 points at 0.44
+// and 0.52; the 3:1 did not. Only the two flats seen edge-on are read: the camera looks down at 57 degrees, so the gap beyond a
+// flat that faces towards or away from it is hidden behind the neighbour's wall or this dish's own (measured: 1.0 to 2.3:1 there
+// against 3.3 to 4.3:1 on the two side flats). A cell passes when both points reach 3:1. The empty rim cells of the far half
+// too, at the high tier with Clear board off: the fog stays off the cells (bug #399). The far row holds marbles, which hide
+// its flats, so fog.spec.ts checks that row.
 const CELLS: [number, number][] = [[0, 0], [-2, 1], [2, -1], [1, 1], [-2, -2], [4, -2]];
-const EDGE = 0.44;
-const SURFACE = 0.52;
-const MIN_PASSING = 6;
+const EDGE = 0.38;
+const SURFACE = 0.5;
+const FLAT_ANGLES = [0, Math.PI]; // the flats that face the sides of the window
+const FLATS = FLAT_ANGLES.length;
+const MIN_PASSING = 2;
 const SQRT3_2 = Math.sqrt(3) / 2;
 
 // World offset (x, z) from a cell centre, in axial units: axialTo3D maps q to x = q + r / 2 and r to z = (sqrt 3 / 2) r.
@@ -54,7 +59,7 @@ const deckShot = async (page: Page, deck: string, path: string) => {
 };
 
 for (const deck of DECK_NAMES) {
-  test(`${deck}: each cell edge is 3:1 against the surface next to it on at least 6 of 8 ring points, bugs #339 and #400`, async ({ page }, testInfo) => {
+  test(`${deck}: each cell edge is 3:1 against the surface next to it on both side flats of its hexagon, bugs #339 and #400`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
       localStorage.setItem('ab-alone.tier', 'high');
@@ -69,8 +74,8 @@ for (const deck of DECK_NAMES) {
     // Per cell and ring point, the edge then the surface: two axial cells, mapped to the screen in one call.
     const axial: [number, number][] = [];
     for (const [q, r] of CELLS) {
-      for (let k = 0; k < 8; k++) {
-        const angle = (k * Math.PI) / 4;
+      for (let k = 0; k < FLATS; k++) {
+        const angle = FLAT_ANGLES[k]!;
         const edgeOff = axialOffset(EDGE * Math.cos(angle), EDGE * Math.sin(angle));
         const surfOff = axialOffset(SURFACE * Math.cos(angle), SURFACE * Math.sin(angle));
         axial.push([q + edgeOff.dq, r + edgeOff.dr], [q + surfOff.dq, r + surfOff.dr]);
@@ -84,16 +89,16 @@ for (const deck of DECK_NAMES) {
     const failures: string[] = [];
     CELLS.forEach(([q, r], cell) => {
       const ratios: number[] = [];
-      for (let k = 0; k < 8; k++) {
-        const i = (cell * 8 + k) * 2;
+      for (let k = 0; k < FLATS; k++) {
+        const i = (cell * FLATS + k) * 2;
         ratios.push(contrastRatio(colors[i]!, colors[i + 1]!));
       }
       const passing = ratios.filter((ratio) => ratio >= 3).length;
-      const line = `${deck} ring (${q},${r}): ${passing}/8 pass, ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
+      const line = `${deck} ring (${q},${r}): ${passing}/${FLATS} pass, ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
       console.log(line);
       if (passing < MIN_PASSING) failures.push(line);
     });
-    expect(failures, 'cells below 6 of 8 ring points at 3:1').toEqual([]);
+    expect(failures, 'cells below 3:1 on a side flat').toEqual([]);
   });
 }
 

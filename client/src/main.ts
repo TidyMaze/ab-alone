@@ -180,8 +180,9 @@ import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from '
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
-import { glassSkinById, nextGlassSkin } from './glassskins';
+import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
+import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -1919,7 +1920,7 @@ const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   scene.add(disc);
   return disc;
 });
-instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
+const boardDrawn = instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
 const placeBridge = (y: number): void => {
   bridgeY = y;
   for (const [q, r] of BRIDGE) discs[cellIndex(q, r)]!.position.y = -0.05 + y;
@@ -1946,6 +1947,7 @@ arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
 // The marbles, the board's and the arena's, drawn as one instanced mesh per look, placed before each draw (#885).
 const syncMarbles = [marbles, arenaMarbles].map((group) => instanceMarbles(group, marbleGeometry, scene));
+let syncPedestals: (() => void) | null = null; // made when the arena's kit has loaded (terraceKit)
 const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
 // Each seat's glyph (#558), flat in the ink on its marbles, never the tint alone: it touches the shell where the shell
 // faces the default view, turned to face it, so it stays inside the marble's outline.
@@ -3434,7 +3436,73 @@ function sightNote(): string {
 /** The cells the player sees: within the range of its marbles, the sight of the Stalker boss by its phase. */
 const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, (engine as Encounter).sight());
 
+// The terrace (#1314): the arena's glTF from Blender, in place of the room in a 1v1 game. A page whose file is missing or broken
+// keeps the room; the hub, the boss rooms, the royale and a run keep it too, until their own PRs; `?scene=room` asks for it.
+let terraceReady = false;
+const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
+const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last', THREE.Mesh> | null } = { pedestal: null, marks: null };
+/** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
+const terraceMarks = (): NonNullable<typeof terraceKit.marks> | null => (sceneRenderer.terraceOn ? terraceKit.marks : null);
+let hintMaterial: THREE.MeshStandardMaterial | null = null;
+/** The kit's selection ring in Glyph Cyan: the vertex colours are bone, the material colour multiplies them. */
+const terraceHintMaterial = (from: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial => {
+  hintMaterial ??= Object.assign(from.clone(), { name: 'terrace_hint_ring' });
+  hintMaterial.color.setRGB(0.3, 0.9, 1.3);
+  return hintMaterial;
+};
+/** A mark of the kit on the cell of a mesh the game made: the kit's geometry and vertex colours, flat on the dish, no rotation. */
+function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
+  mesh.geometry = kit.geometry;
+  mesh.material = kit.material;
+  mesh.rotation.set(0, 0, 0);
+  mesh.userData.terrace = true; // a mark, not a marble
+  mesh.position.y = y - TERRACE_LIFT; // the marbles' group stands 0.11 higher on the terrace
+}
+const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
+void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
+  .then(([arena, kit]) => {
+    const drawn = mergeByMaterial(arena.scene); // 5 draw calls, not 1,489 nodes
+    sceneRenderer.terrace.add(drawn);
+    // The black marbles reflect a sky with a window of light and a cool rim, not the room's lamps.
+    if (hasReflections(tier, navigator.webdriver)) {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      terraceShell.envMap = pmrem.fromScene(terraceEnvironment(), 0, 0.1, 300).texture;
+      pmrem.dispose();
+    }
+    terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
+    syncPedestals = instanceMarbles(marbles, terraceKit.pedestal.geometry, scene);
+    const named = (name: string): THREE.Mesh => kit.scene.getObjectByName(name) as THREE.Mesh;
+    terraceKit.marks = { target: named('kit_ring_target'), arrow: named('kit_arrow_target'), select: named('kit_ring_select'), last: named('kit_ring_lastmove') };
+    terraceReady = true;
+    refresh();
+  })
+  .catch(() => undefined);
+// The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
+// clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
+const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x0a0c0f, roughness: 0.3, metalness: 0, specularIntensity: 0.12, envMapIntensity: 6 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
+const terraceGlass = new THREE.MeshStandardMaterial({ color: 0xe8d9b4, emissive: 0x2a2012, roughness: 0.6, metalness: 0 }); // warm ivory: the emissive keeps the hemisphere's blue fill off it, no reflection: the whites take no blue fill
+function terraceMarbles(on: boolean): void {
+  marbleMaterials[1] = on && skin === DEFAULT_SKIN ? terraceShell : shellMaterial(skin);
+  marbleMaterials[2] = on && glass === DEFAULT_GLASS_SKIN ? terraceGlass : glassMaterial(glass);
+}
+const PHONE_POLAR = (46 * Math.PI) / 180; // pitch 44 on a phone: the horizon enters the top of the frame
+const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
+function syncTableZero(): void {
+  const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
+  document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
+  terraceMarbles(on);
+  if (on && isDefaultView(view, resetView(4))) {
+    view = innerWidth < innerHeight ? { ...TERRACE_VIEW, polar: PHONE_POLAR, distance: 18 } : { ...TERRACE_VIEW }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
+    applyView();
+  }
+  if (on === sceneRenderer.terraceOn) return;
+  sceneRenderer.setTerrace(on);
+  for (const cells of boardDrawn) cells.visible = !on; // the dishes of the glTF are drawn; the discs stay for picking only
+  marbles.position.y = on ? TERRACE_LIFT : 0; // the marbles stand on their pedestals, 0.11 over the board plane
+  updateFog();
+}
 function refresh(): void {
+  syncTableZero();
   dirty = CHANGE_DRAWS;
   syncSpace();
   syncAuto();
@@ -3466,7 +3534,8 @@ function refresh(): void {
   }
   const fog = fogged() ? sightOf(board) : null;
   const lit = replaying ? new Set<number>() : revealed; // a replayed position shows what was seen then
-  ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
+  const hinted = hint.marked(here());
+  ringed = [...selected, ...hinted]; // the selection, or the marbles the hint takes (#301)
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
   const converted = engine instanceof Encounter ? parseCells(engine.converted()) : [];
@@ -3519,6 +3588,12 @@ function refresh(): void {
       arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
       ring.position.set(p.x, 0.005, p.z);
       arrow.position.set(p.x, 0.005, p.z);
+      const kit = terraceMarks();
+      if (kit) {
+        wearKit(ring, kit.target, 0.078);
+        wearKit(arrow, kit.arrow, 0.08);
+        arrow.rotation.y = arrowYaw(target.dir);
+      }
       marbles.add(ring, arrow);
       if (freeTargets.some(({ cell: [fq, fr] }) => fq === q && fr === r)) {
         const diamond = Object.assign(new THREE.Mesh(freeGeometry, echoMaterial), { name: 'echo-free-target' });
@@ -3550,11 +3625,27 @@ function refresh(): void {
     marble.position.set(p.x, 0.36, p.z);
     turnMarble(marble, turnAt(i));
     marbles.add(marble);
+    if (sceneRenderer.terraceOn && terraceKit.pedestal && side !== CORE_CODE) {
+      // one flat disc under each marble, instanced with the others (the kit's pedestal, 0.04 high): the marble stands on it
+      const pedestal = new THREE.Mesh(terraceKit.pedestal.geometry, terraceKit.pedestal.material);
+      pedestal.position.set(p.x, -TERRACE_LIFT, p.z);
+      pedestal.userData.terrace = true;
+      marbles.add(pedestal);
+    }
     onMarble(i, marble);
     if (ringed.some(([sq, sr]) => sq === q && sr === r)) {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = Math.PI / 2;
       ring.position.set(p.x, 0.02, p.z);
+      const kit = terraceMarks();
+      if (kit) {
+        wearKit(ring, kit.select, 0.078);
+        // The hint (#301): the glTF has no hint ring, so the selection ring wears a cyan material, a colour apart from the selection's bone.
+        if (hinted.some(([hq, hr]) => hq === q && hr === r)) {
+          ring.material = terraceHintMaterial(kit.select.material as THREE.MeshStandardMaterial);
+          ring.name = 'hint-ring';
+        }
+      }
       marbles.add(ring);
       marble.position.y = 0.5;
     }
@@ -3613,6 +3704,12 @@ function refresh(): void {
     const ring = new THREE.Mesh(outlineGeometry, lastMoveMaterial);
     ring.rotation.x = Math.PI / 2;
     ring.position.set(p.x, 0.36, p.z);
+    const kit = terraceMarks();
+    if (kit) {
+      wearKit(ring, kit.last, 0.108); // Sodium, from the kit's vertex colours; the pulse still scales it
+      ring.position.x = p.x;
+      ring.position.z = p.z;
+    }
     marbles.add(ring);
     onMarble(cellIndex(q, r), ring);
     return ring;
@@ -4475,7 +4572,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
     const c = axialTo3D(q, r);
     return boxOf(ring(c.x, c.z, 0.46, 0.05));
   });
-  const boardMarbles = marbles.children.map((o) => {
+  const boardMarbles = marbles.children.filter((o) => !o.userData.terrace).map((o) => { // not the terrace's pedestals and rings (#1314)
     const bb = new THREE.Box3().setFromObject(o, true); // precise: a turned marble's box is not its turned bounding cube (#346)
     const corners = [bb.min.x, bb.max.x].flatMap((x) => [bb.min.y, bb.max.y].flatMap((y) => [bb.min.z, bb.max.z].map((z) => px(x, y, z))));
     return boxOf(corners);
@@ -4507,6 +4604,13 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.
 (window as unknown as Record<string, unknown>).__fight = () => fight;
 (window as unknown as Record<string, unknown>).__view = () => view;
+(window as unknown as Record<string, unknown>).__terrace = () => sceneRenderer.terrace; // the arena's meshes, for the browser checks of #1314
+// A browser check sets the camera exactly (the Blender views of the terrace, #1314): the view, then the camera and the fog follow.
+(window as unknown as Record<string, unknown>).__setView = (next: Partial<View>) => {
+  Object.assign(view, next);
+  applyView();
+  dirty = CHANGE_DRAWS;
+};
 
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
 (window as unknown as Record<string, unknown>).__ghostOpacity = () => ghostMaterials[1]!.opacity; // the Hint ghost's fade (#1097)
@@ -5981,7 +6085,7 @@ menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 const renderCost = (): RenderCost => {
   let pointLights = 0;
-  (openWorld.scene ?? sceneRenderer.scene).traverse((o) => void ((o as THREE.PointLight).isPointLight && pointLights++));
+  (openWorld.scene ?? sceneRenderer.scene).traverseVisible((o) => void ((o as THREE.PointLight).isPointLight && pointLights++)); // a hidden lamp lights nothing
   const { render, memory } = renderer.info;
   return { calls: render.drawCalls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
 };
@@ -6125,6 +6229,7 @@ renderer.setAnimationLoop((now) => {
   offerLowTier(!sliding() && !lastMovePlaying); // at a quiet moment: no move animation (the ambient dust and heat pulse always move)
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
+  syncPedestals?.();
   renderer.info.reset();
   sceneRenderer.render();
   draws++;

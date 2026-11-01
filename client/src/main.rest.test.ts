@@ -139,9 +139,9 @@ describe('main.ts, the lights of the room (#845)', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const named: string[] = [];
-    scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && !o.name.startsWith('ring-lamp') && named.push(o.name)));
+    scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && !o.name.startsWith('ring-lamp') && o.parent?.name !== 'terrace' && named.push(o.name)));
     expect(named.sort()).toEqual(['kioskGreenLight', 'viewportRimLight']);
   });
 });

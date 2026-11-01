@@ -1,6 +1,6 @@
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
-import { pass, renderOutput } from 'three/tsl';
+import { pass, renderOutput, saturation } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
@@ -12,10 +12,13 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
+import { TERRACE_EXPOSURE, addSun } from './tablezero';
 
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
+/** What AgX takes out of the palette is given back (art director: about 8 to 10 percent). */
+export const TERRACE_SATURATION = 1.35;
 /** The radius of the rounded edges of the board's plate and rim. */
 const FRAME_BEVEL = 0.03;
 
@@ -63,16 +66,19 @@ export function createBloomPipeline(
   smooth = false,
   blurEvery = 2,
   withBloom = true,
+  /** Colour saturation after the tone map: 1 leaves it (the room), the terrace asks more (AgX washes the palette). */
+  saturate = 1,
 ): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> | null }) | null {
   try {
     // The low tier (#849) draws no bloom: the scene goes straight to the screen, or through FXAA alone.
-    if (!withBloom && !smooth) return null;
+    if (!withBloom && !smooth && saturate === 1) return null;
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
     const colorNode = scenePass.getTextureNode('output');
     if (!withBloom) {
       pipeline.outputColorTransform = false;
-      pipeline.outputNode = fxaa(renderOutput(colorNode));
+      const graded = saturate === 1 ? renderOutput(colorNode) : saturation(renderOutput(colorNode), saturate);
+      pipeline.outputNode = smooth ? fxaa(graded) : graded;
       return Object.assign(pipeline, { bloom: null });
     }
     const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
@@ -116,6 +122,8 @@ export class SceneRenderer {
   readonly renderer: THREE.WebGPURenderer;
   readonly backend: 'WebGPU' | 'WebGL2';
   readonly pipeline: ReturnType<typeof createBloomPipeline> = null;
+  /** The terrace's: no bloom, FXAA when MSAA is off, and the saturation AgX takes out (#1314). */
+  readonly flatPipeline: ReturnType<typeof createBloomPipeline> = null;
 
   readonly fogObj: THREE.Fog;
   readonly particles: THREE.Points;
@@ -131,6 +139,10 @@ export class SceneRenderer {
   };
   readonly roomDeck: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   readonly propsGroup: THREE.Group;
+  /** The terrace (#1314): the arena's glTF and its sun, shown in place of the room and of the plate and rim in a 1v1 game. */
+  readonly terrace: THREE.Group;
+  terraceOn = false;
+  private roomBackground: THREE.Color | THREE.Texture | null = null;
 
   readonly notches: THREE.Group;
   readonly tallies: readonly [THREE.Group, THREE.Group];
@@ -248,6 +260,10 @@ export class SceneRenderer {
     this.roomDeck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_SURFACE.width, 0.4, ROOM_SURFACE.depth), roomMaterial);
     this.roomDeck.position.set(0, ROOM_SURFACE.y - 0.2, 0);
     this.propsGroup = new THREE.Group();
+    this.terrace = new THREE.Group();
+    this.terrace.name = 'terrace';
+    this.terrace.visible = false;
+    addSun(this.terrace);
 
     this.notches = new THREE.Group();
     this.tallies = [new THREE.Group(), new THREE.Group()] as const;
@@ -266,6 +282,7 @@ export class SceneRenderer {
       this.particles,
       this.roomDeck,
       this.propsGroup,
+      this.terrace,
       this.plate,
       this.rim.near,
       this.rim.far,
@@ -276,7 +293,9 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0), webdriver ? 1 : 2, options.bloom ?? true);
+    const smooth = smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0);
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, webdriver ? 1 : 2, options.bloom ?? true);
+    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, 1, false, TERRACE_SATURATION);
   }
 
   async init(): Promise<void> {
@@ -317,7 +336,7 @@ export class SceneRenderer {
 
   updateFog(tier: Tier, clear: boolean, view: View, fogRadius: number, deck: Deck): void {
     const fog = fogSettings(tier, clear, view, fogRadius, DECKS[deck].fog);
-    if (!fog) {
+    if (!fog || this.terraceOn) {
       this.scene.fog = null;
     } else {
       this.fogObj.near = fog.near;
@@ -404,6 +423,9 @@ export class SceneRenderer {
   lightRim(light: { end: 'near' | 'far'; color: number } | null): void {
     for (const end of ['near', 'far'] as const) {
       this.rim[end].material.emissive.set(light?.end === end ? light.color : 0);
+      // The terrace's turn bar (#1314): the bar at the side to move, lit in the arena's own colour; black is the near end.
+      const bar = this.terrace.getObjectByName(end === 'near' ? 'scene_turnbar_black' : 'scene_turnbar_white');
+      if (bar) bar.visible = light?.end === end;
     }
   }
 
@@ -455,6 +477,24 @@ export class SceneRenderer {
     }
   }
 
+  /** The terrace in place of the room, or the room back (#1314). The room and its lamps are hidden, not freed; so are the plate and the rim, the glTF carries the slab. */
+  setTerrace(on: boolean, background = 0x2c3438): void {
+    if (on === this.terraceOn) return;
+    this.terraceOn = on;
+    this.terrace.visible = on;
+    this.propsGroup.visible = !on;
+    this.roomDeck.visible = !on && !this.currentBay;
+    this.plate.visible = this.rim.near.visible = this.rim.far.visible = !on;
+    if (on) this.roomBackground = this.scene.background as THREE.Color | THREE.Texture | null;
+    this.scene.background = on ? new THREE.Color(background) : this.roomBackground;
+    // The Blender render keeps the palette's colours; ACES washes them toward grey, AgX is the Blender view transform (#1314).
+    this.renderer.toneMapping = on ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = on ? TERRACE_EXPOSURE : 1;
+    // The sky dome of the arena file is 95 away from the board and the camera 6 to 18 from it: the room's far plane at 100 cut its far wall.
+    this.camera.far = on ? 300 : 100;
+    this.camera.updateProjectionMatrix();
+  }
+
   /** Where the point `lift` above the cell is drawn: a mark on top of a marble is not under the cell's centre (#1259). */
   cellToScreen(q: number, r: number, width: number, height: number, scale = 1, lift = 0): { x: number; y: number } {
     const p = axialTo3D(q, r, scale);
@@ -467,9 +507,11 @@ export class SceneRenderer {
   }
 
   render(): void {
-    if (this.pipeline) {
+    // The terrace lights nothing from within: no bloom, only the graded and smoothed picture (#1314).
+    const pipeline = this.terraceOn ? this.flatPipeline : this.pipeline;
+    if (pipeline) {
       try {
-        this.pipeline.render();
+        pipeline.render();
         return;
       } catch {
         // Fall back to renderer if pipeline fails in mock or test environment

@@ -13,8 +13,9 @@ const clickAt = async (page: Page, q: number, r: number) => {
   await page.mouse.click(p.x, p.y);
 };
 
+// The steel frame and the rim are the room's: the terrace (#1314) draws its slab from the glTF, so these ask for the room.
 test('the cells sit on a steel frame that never takes a click meant for a cell, #292', async ({ page }) => {
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&scene=room');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('Black to move');
   expect(await frame(page)).toMatchObject({ radius: 4, holes: 0, drawn: true });
@@ -36,7 +37,7 @@ test('clear board and the low tier keep the frame, #292', async ({ page }) => {
     localStorage.setItem('ab-alone.tier', 'low');
     localStorage.setItem('ab-alone.clear-board', 'on');
   });
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&scene=room');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-tier', 'low');
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'on');
@@ -76,7 +77,7 @@ const pixel = (page: Page, png: Buffer, p: { x: number; y: number }) =>
 
 test('the rim half at the end of the side to move lights in its colour, then goes out at the end, #300', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('./?bot=off'); // hot-seat: Black, side 1, wears the shell and starts at the near end
+  await page.goto('./?bot=off&scene=room'); // hot-seat: Black, side 1, wears the shell and starts at the near end
   await page.locator('canvas').waitFor();
   await page.mouse.move(2, 2); // no hover ghost
   await expect(page.locator('#hud')).toContainText('Black to move'); // the flat copy stays

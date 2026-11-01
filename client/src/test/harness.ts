@@ -248,15 +248,24 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   });
   // The spaceship bay (#648): its maps load as above, its model as an empty scene, unless missing.
   vi.doMock('three/examples/jsm/loaders/GLTFLoader.js', async () => {
-    const { Group } = await vi.importActual<typeof import('three')>('three');
+    const { BoxGeometry, BufferAttribute, Group, Mesh, MeshStandardMaterial } = await vi.importActual<typeof import('three')>('three');
+    const piece = (name: string): InstanceType<typeof Mesh> => {
+      const box = new BoxGeometry(1, 0.1, 1);
+      box.setAttribute('color', new BufferAttribute(new Float32Array(box.attributes.position!.count * 3).fill(0.5), 3)); // the vertex colours of the file
+      return Object.assign(new Mesh(box, new MeshStandardMaterial()), { name });
+    };
     return {
       GLTFLoader: class {
         setMeshoptDecoder(): this {
-          return this; // the model is an empty scene: nothing to decode
+          return this; // the model is a few boxes: nothing to decode
         }
         loadAsync = async (url: string): Promise<{ scene: InstanceType<typeof Group> }> => {
           if (missing(url)) throw new Error(`404 ${url}`);
-          return { scene: new Group() };
+          // The terrace (#1314): the arena as one box, its kit as the pieces the game draws itself.
+          const scene = new Group();
+          if (url.endsWith('arena.glb') && !url.endsWith('kit-arena.glb')) scene.add(piece('scene_slab_arena'));
+          if (url.endsWith('kit-arena.glb')) scene.add(...['kit_pedestal_flat', 'kit_ring_target', 'kit_arrow_target', 'kit_ring_select', 'kit_ring_lastmove'].map(piece));
+          return { scene };
         };
       },
     };

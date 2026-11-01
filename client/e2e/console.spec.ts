@@ -5,7 +5,7 @@ import { TERMINAL } from '../src/terminal';
 // once the web fonts are in. body[data-console] names the entry and the page shown.
 
 test('the deck console shows the entry of the deck in play, #511', async ({ page }) => {
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&scene=room');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-console', /^mess-house-rule 1\/\d$/);
@@ -15,7 +15,7 @@ test('the deck console shows the entry of the deck in play, #511', async ({ page
 
 test('the deck console falls back to system fonts when web font files fail to load, bug #600', async ({ page }) => {
   await page.route(/fonts\.gstatic\.com/, (r) => r.abort());
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&scene=room');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-console', /^mess-house-rule 1\/\d$/);
@@ -33,7 +33,7 @@ for (const scale of [100, 200] as const) {
   test(`the reader shows the console readable at 1080p and a ${scale} % UI scale, #512`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.addInitScript((s) => localStorage.setItem('ab-alone.ui-scale', s), String(scale));
-    await page.goto('./?bot=off');
+    await page.goto('./?bot=off&scene=room');
     await page.locator('canvas').waitFor();
     const body = page.locator('body');
     await expect(body).toHaveAttribute('data-console', /^mess-house-rule 1\/\d$/);
@@ -65,7 +65,7 @@ for (const scale of [100, 200] as const) {
 }
 
 test('a click on the console screen opens the reader, a click off it leaves, and reading never blocks a move, #512', async ({ page }) => {
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&scene=room');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-console', /^mess-house-rule /);
   // The bay loads after the page and rebuilds the props, the console included: a click on the old one lands on nothing (#841).
@@ -100,7 +100,7 @@ test('a click on the console screen opens the reader, a click off it leaves, and
 
 // #513: the Log archive item of the settings menu lists the entries read and reopens one in the reader.
 test('the log archive rereads an entry read on another deck, #513', async ({ page }, testInfo) => {
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&scene=room');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
   await page.evaluate(() => (window as unknown as { __deck: (deck: string) => void }).__deck('cargo'));

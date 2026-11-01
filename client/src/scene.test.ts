@@ -87,7 +87,8 @@ describe('SceneRenderer (#632)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     const lights: THREE.Light[] = [];
     sr.scene.traverse((o) => void ((o as THREE.Light).isLight && lights.push(o as THREE.Light)));
-    expect(lights).toEqual([]);
+    expect(lights.every((l) => l.parent === sr.terrace)).toBe(true); // the terrace's sun and hemisphere only (#1314), hidden in the room
+    expect(lights.map((l) => l.type).sort()).toEqual(['DirectionalLight', 'HemisphereLight']);
   });
 
   it('draws the plate and the rim as flat tonal materials in the tonal look, whatever maps it is given (#1138)', () => {
@@ -468,6 +469,15 @@ describe('SceneRenderer (#632)', () => {
     expect(createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, false, 2, false)).toBeNull();
   });
 
+  it('gives the saturation back after the tone map when asked, with FXAA or without (#1314)', () => {
+    const camera = new THREE.PerspectiveCamera();
+    const [smooth, plain] = [true, false].map((fxaa) => createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, fxaa, 1, false, 1.12)!);
+    expect(smooth!.bloom).toBeNull();
+    expect((smooth!.outputNode as any).constructor.name).toBe('FXAANode');
+    expect((plain!.outputNode as any).constructor.name).not.toBe('FXAANode'); // the grade alone: no MSAA to replace, no FXAA to ask
+    expect(plain!.outputColorTransform).toBe(false);
+  });
+
   it('builds no bloom pass for a low tier renderer (#849)', () => {
     const low = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false, bloom: false });
     expect(low.pipeline!.bloom).toBeNull();
@@ -521,5 +531,41 @@ describe('SceneRenderer (#632)', () => {
     expect(runs(true)).toBe(4);
     expect(runs(false)).toBe(2);
     blur.mockRestore();
+  });
+
+  it('shows the terrace in place of the room, the plate and the rim, and gives them back (#1314)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const room = sr.scene.background;
+    expect([sr.terrace.visible, sr.plate.visible]).toEqual([false, true]);
+    sr.setTerrace(true);
+    expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible, sr.rim.near.visible, sr.rim.far.visible]).toEqual([true, false, false, false, false, false]);
+    expect(sr.camera.far).toBe(300); // the sky dome of the file is 95 away
+    sr.setTerrace(true); // nothing redone
+    sr.setTerrace(false);
+    expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible]).toEqual([false, true, true, true]);
+    expect([sr.scene.background, sr.camera.far]).toEqual([room, 100]);
+  });
+
+  it('draws the terrace through the graded pipeline, with no bloom, and the room through the bloom one (#1314)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
+    const [flat, room] = [vi.fn(), vi.fn()];
+    sr.flatPipeline!.render = flat;
+    sr.pipeline!.render = room;
+    sr.render();
+    sr.setTerrace(true);
+    sr.render();
+    expect([room.mock.calls.length, flat.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it('lights the turn bar of the side to move on the terrace, none at the end (#1314)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const [black, white] = ['scene_turnbar_black', 'scene_turnbar_white'].map((name) => Object.assign(new THREE.Mesh(), { name }));
+    sr.terrace.add(black!, white!);
+    sr.lightRim({ end: 'near', color: 0x7fd6e8 });
+    expect([black!.visible, white!.visible]).toEqual([true, false]);
+    sr.lightRim({ end: 'far', color: 0xd9822b });
+    expect([black!.visible, white!.visible]).toEqual([false, true]);
+    sr.lightRim(null);
+    expect([black!.visible, white!.visible]).toEqual([false, false]);
   });
 });

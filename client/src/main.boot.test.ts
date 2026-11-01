@@ -132,7 +132,7 @@ describe('the renderer and its textures', () => {
   });
 
   it('draws the generated textures, and frames the whole board in the window', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { scene, camera } = await drawn(game);
     const backdrop = scene.background as THREE.Texture;
     expect(backdrop.isTexture).toBe(true);
@@ -151,7 +151,7 @@ describe('the renderer and its textures', () => {
 
   it('gives the marbles no reflections under automation (#416), and the bay itself, once it is in, to a player (#864)', async () => {
     const reflection = async (webdriver: boolean): Promise<THREE.Texture | null> => {
-      const game = await boot('?bot=off', { webdriver });
+      const game = await boot('?bot=off&scene=room', { webdriver });
       await vi.waitFor(() => expect(document.body.dataset.bay).toBe('ready'));
       const { scene } = await drawn(game);
       const reflecting = materials(scene).filter((m) => m.envMap);
@@ -169,6 +169,19 @@ describe('the renderer and its textures', () => {
     expect([made.options.position.x, made.options.position.z]).toEqual([0, 0]);
   });
 
+  it('gives the black marbles of the terrace the reflection of its own sky, to a player and not under automation (#1314)', async () => {
+    const reflection = async (webdriver: boolean): Promise<THREE.Texture | null> => {
+      const game = await boot('?bot=off', { webdriver });
+      await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+      const { scene } = await drawn(game);
+      const shell = materials(scene).find((m) => m.color.getHex() === 0x0a0c0f)!;
+      return shell.envMap;
+    };
+    expect(await reflection(true)).toBeNull();
+    const env = await reflection(false);
+    expect((env!.userData as { scene: THREE.Scene }).scene.children).toHaveLength(3); // a sky ramp, a window, a cyan strip: no lamps
+  });
+
   it('reports the WebGL2 backend in the diagnostics', async () => {
     const game = await boot('?bot=off');
     const report = await diagnostics(game);
@@ -184,7 +197,68 @@ describe('the renderer and its textures', () => {
     expect(report.renderCost).toMatch(/^draw calls: \d+\ntriangles: \d+\ngeometries: \d+\ntextures: \d+\npoint lights: \d+\ntier: \w+\npixel ratio: [\d.]+$/);
     expect(cost.text).toBe(report.renderCost);
     expect(cost).toMatchObject({ calls: 7, triangles: 300, geometries: 5, textures: 2, tier: 'high' });
-    expect(cost.pointLights).toBeGreaterThan(0);
+    expect(cost.pointLights).toBe(0); // the terrace is lit by a sun alone, and a hidden lamp is not counted (#1314)
+  });
+
+  it('plays a 1v1 game on the terrace, and keeps the room for the hub, a fight or ?scene=room (#1314)', async () => {
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { scene } = await drawn(game);
+    expect(scene.getObjectByName('terrace')!.visible).toBe(true);
+    expect(game.hook('__terrace')).toBe(scene.getObjectByName('terrace')); // the hook of the browser checks
+    expect(document.body.dataset.scene).toBe('table-zero');
+  });
+
+  it('shows the hint on the terrace: the marbles it takes wear the kit\'s ring in cyan, a colour apart from the selection\'s, which clears the hint (#301, #1314)', async () => {
+    const game = await boot('?bot=off&nodes=50');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    byId('hint').click();
+    await game.settle();
+    expect(document.body.dataset.hint).toBe('shown');
+    const { scene } = await drawn(game);
+    const rings: THREE.Mesh[] = [];
+    scene.traverse((o) => void (o.name === 'hint-ring' && rings.push(o as THREE.Mesh)));
+    expect(rings.length).toBeGreaterThan(0);
+    expect((rings[0]!.material as THREE.MeshStandardMaterial).color.b).toBeGreaterThan(1); // cyan: more blue than the bone it multiplies
+  });
+
+  it('keeps the room in a 1v1 game when the arena file is missing: the page still plays (#1314)', async () => {
+    await boot('?bot=off', { missing: ['arena.glb'] });
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('room'));
+  });
+
+  it('keeps the room in a 1v1 game when ?scene=room asks for it (#1314)', async () => {
+    const game = await boot('?bot=off&scene=room');
+    const { scene } = await drawn(game);
+    expect([document.body.dataset.scene, scene.getObjectByName('terrace')!.visible]).toEqual(['room', false]);
+  });
+
+  it('sets the camera to an exact view for a browser check, and shows the terrace to a player at its own default (#1314)', async () => {
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { camera } = await drawn(game);
+    expect(camera.position.length()).toBeCloseTo(13.6); // the terrace's pitch 57 and distance 13.6
+    game.hook('__setView', { azimuth: Math.PI / 2, polar: 1, distance: 6 });
+    expect(camera.position.length()).toBeCloseTo(6);
+    expect(camera.position.x).toBeGreaterThan(5); // from the +x side at 90 degrees of yaw
+  });
+
+  it('draws the marks of a move with the kit on the terrace: selection ring, target ring and arrow, last-move ring (#1314)', async () => {
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { scene } = await drawn(game);
+    const rested = (y: number): number => {
+      let n = 0;
+      scene.traverse((o) => void ((o as THREE.Mesh).isMesh && Math.abs(o.position.y - (y - 0.11)) < 1e-6 && n++)); // on the lifted marbles' group
+      return n;
+    };
+    game.click(0, 2); // a black marble: selected, its targets shown
+    game.frame(1000);
+    expect([rested(0.078) >= 2, rested(0.08) >= 1]).toEqual([true, true]);
+    game.click(1, 2); // played: the last move's ring where it landed
+    game.frame(1000);
+    expect(rested(0.108)).toBeGreaterThanOrEqual(1);
+    expect(game.hook<{ marbles: unknown[] }>('__bloodAt', 0).marbles).toHaveLength(28); // the marbles alone: not a pedestal nor a ring
   });
 
   it('keeps the last drawn frame cost over the idle frames that follow it (the draw calls read 0 before)', async () => {
@@ -235,7 +309,7 @@ describe('the renderer and its textures', () => {
     }
 
     it('keeps the flat look and reports WebGPU', async () => {
-      const booting = boot('?bot=off');
+      const booting = boot('?bot=off&scene=room');
       const { options, draw } = renderer();
       const game = await booting;
       expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
@@ -250,7 +324,7 @@ describe('the renderer and its textures', () => {
       ['high', true],
     ])('asks for the normal maps on the %s tier: %s (#849)', async (tier, asked) => {
       const requested: string[] = [];
-      const booting = boot(`?bot=off&quality=${tier}`);
+      const booting = boot(`?bot=off&quality=${tier}&scene=room`);
       renderer();
       vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', () => ({
         KTX2Loader: class {
@@ -380,7 +454,7 @@ describe('the adaptive resolution (#843)', () => {
 
 describe('the view and the fog', () => {
   it('fogs the rim, and Clear board takes the fog off and saves it', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { scene } = await drawn(game);
     const fog = scene.fog as THREE.Fog;
     expect(fog.near).toBeGreaterThan(0);
@@ -396,7 +470,7 @@ describe('the view and the fog', () => {
   });
 
   it('tints the fog to match the active deck atmosphere (#665)', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { scene } = await drawn(game);
     const fog = scene.fog as THREE.Fog;
     expect(fog.color.getHex()).toBe(0x1c1612);
@@ -425,7 +499,7 @@ describe('the view and the fog', () => {
 
   it('thins the fog farther on the high tier', async () => {
     const far = async (tier: string): Promise<number> => {
-      const game = await bootWith({ 'ab-alone.tier': tier });
+      const game = await bootWith({ 'ab-alone.tier': tier }, '?bot=off&scene=room');
       const fog = (await drawn(game)).scene.fog as THREE.Fog;
       return fog.far - fog.near;
     };

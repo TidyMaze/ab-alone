@@ -138,7 +138,7 @@ describe('main.ts board and HUD', () => {
 
   it('dresses the cells, the frame and the enemy shells in the loaded textures, and the glass', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     await game.settle(); // the skins' maps load after the first frame
     const { discs, plate, near } = parts(scene());
     expect(discs).toHaveLength(169); // the 61, then ring 5 for The Ballast Mind (#564), rings 6 and 7 for The Dual Room (#947, #955)
@@ -170,7 +170,7 @@ describe('main.ts board and HUD', () => {
 
   it('wears every map its asset ships on each of the 20 skins, in its own colours, opaque', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     game.openSettings();
     // What each ambientCG zip ships besides colour, normal and roughness (displacement is skipped: the normal map carries the relief).
     const shipped: Record<string, string[]> = {
@@ -203,7 +203,7 @@ describe('main.ts board and HUD', () => {
 
   it('keeps the flat colour where a skin map is missing, the maps that loaded still on', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off', { missing: ['skin-Leather027-normal.ktx2'] });
+    const game = await boot('?bot=off&scene=room', { missing: ['skin-Leather027-normal.ktx2'] });
     await game.settle();
     const { material } = drawn(scene()).shells[0]!;
     expect(material.normalMap).toBeNull();
@@ -212,7 +212,7 @@ describe('main.ts board and HUD', () => {
 
   it('leaves the skins their own colours under a colour-blind palette', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     game.openSettings();
     setting('palette'); // Protan
     const { shells, glass } = drawn(scene());
@@ -296,7 +296,7 @@ describe('main.ts board and HUD', () => {
       },
     });
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { discs, plate, near } = parts(scene());
     expect(discs[0]!.material.map).toBeNull();
     expect(discs[0]!.material.normalMap).toBeNull();
@@ -309,7 +309,7 @@ describe('main.ts board and HUD', () => {
 
   it('dresses the Black shells in the next skin at each press, its maps loaded when worn, a lava lit, a seen skin reused', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const black = (): Mesh => drawn(scene()).shells[0]!;
     const scarab = black().material;
     game.openSettings();
@@ -357,7 +357,7 @@ describe('main.ts board and HUD', () => {
 
   it('draws the frame round the board and lights the rim at the end of the side to move', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     expect(game.hook('__frame')).toEqual({ radius: 4, holes: 0, drawn: true, lit: { near: RIM_LIGHT.shell, far: 0 } });
     expect(document.body.dataset.rim).toBe('near');
     const before = parts(scene()).plate.geometry;
@@ -564,7 +564,7 @@ describe('main.ts board and HUD', () => {
   });
 
   it('draws the target arrows dark on their luminous ring, so they read 3:1 on the lit cells (#787)', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const legal = game.hook<{ cells: Axial[] }[]>('__legal');
     game.click(...legal.find((m) => m.cells.length === 1)!.cells[0]!);
     const arrow = game.hook<THREE.Group>('__marbles').children.find(
