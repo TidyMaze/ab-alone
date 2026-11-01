@@ -113,6 +113,7 @@
         <div id="coop-list" hidden></div>
         <button id="battle-royale" type="button" disabled>Battle royale</button>
         <button id="ranked" type="button" disabled>Ranked</button>
+        <button id="leaderboard" type="button">Leaderboard</button>
         <button id="boss-fight" type="button" aria-expanded="false" disabled>Boss fight</button>
         <div id="boss-list" hidden></div>
         <button id="daily" type="button" disabled>Daily challenge</button>
@@ -178,6 +179,15 @@
           <button id="consent-stay" type="button">Stay solo</button>
           <button id="consent-accept" type="button">Accept</button>
         </div>
+      </div>
+    </div>
+    <!-- The ranked leaderboard (#1287): you among the opponents you met in settled 1v1 matches. -->
+    <div id="board" role="dialog" aria-modal="true" aria-labelledby="board-title" tabindex="-1" hidden>
+      <div class="card">
+        <h2 id="board-title">Ranked 1v1</h2>
+        <div id="board-body"></div>
+        <p id="board-note">Opponents you settled a ranked match with, at the rating they signed then.</p>
+        <div class="actions"><button id="board-close" type="button">Close</button></div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

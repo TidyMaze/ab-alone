@@ -13,6 +13,7 @@ import {
   type RankedProfile,
 } from './ranked';
 import { update1v1Elo } from './elo';
+import { loadRivals } from './leaderboard';
 import type { Report } from './moverecord';
 
 describe('ranked profile and badges (#687)', () => {
@@ -227,6 +228,13 @@ describe('ranked profile and badges (#687)', () => {
       }
       expect(settleRanked1v1(store, report(1, 1, 999), report(2, 1, 1200))).toBeNull();
       expect(loadRankedProfile(store)).toEqual(defaultRankedProfile());
+    });
+
+    it('remembers the opponent and the rating they signed, only for a settled match (#1287)', () => {
+      expect(settleRanked1v1(store, report(1, 1, 1200), report(2, 1, 1337, 'other'))).toBeNull();
+      expect(loadRivals(store)).toEqual([]);
+      settleRanked1v1(store, report(1, 1, 1200), report(2, 1, 1337));
+      expect(loadRivals(store)).toEqual([{ pub: 'key2', rating: 1337, timestamp: expect.any(Number) }]);
     });
 
     it('settles a Battle Royale ranked match from final standings', () => {

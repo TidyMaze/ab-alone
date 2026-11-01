@@ -1,5 +1,6 @@
 import { DEFAULT_RATING, formatRating, getRankTier, update1v1Elo, updateBattleRoyaleElo } from './elo';
 import { verifyMatchOutcome, type MatchReport, type MatchWinner } from './matchmaking';
+import { recordRival } from './leaderboard';
 import type { Report } from './moverecord';
 
 export const RANKED_STORAGE_KEY = 'ab-alone.ranked';
@@ -155,6 +156,7 @@ export function settleRanked1v1(
     newRating: elo.ratingA,
     opponentsCount: 1,
   });
+  recordRival(store, theirs.pub, theirs.rating, Date.now());
   return { profile, delta: elo.deltaA };
 }
 
