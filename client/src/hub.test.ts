@@ -90,9 +90,9 @@ describe('hub map (game-design.md section 3.5)', () => {
 
   it('every mode with no table has a room on its deck, after its bosses (#1249)', () => {
     const modes = DECK_NAMES.flatMap((deck) =>
-      roomsOf(deck).flatMap(({ cell, door }) => (['daily', 'run', 'together', 'ranked', 'world'].includes(door.kind) ? [`${deck} ${door.kind} ${cell}`] : [])),
+      roomsOf(deck).flatMap(({ cell, door }) => (['daily', 'run', 'together', 'ranked', 'world', 'trainer'].includes(door.kind) ? [`${deck} ${door.kind} ${cell}`] : [])),
     );
-    expect(modes).toEqual(['mess daily 3,-3', 'mess world 0,-3', 'cargo run 0,3', 'furnace together 0,-3', 'bridge ranked 3,-3']);
+    expect(modes).toEqual(['mess daily 3,-3', 'mess world 0,-3', 'cargo run 0,3', 'furnace together 0,-3', 'bridge ranked 3,-3', 'bridge trainer 0,-3']);
   });
 
   it('every deck has a hot-seat, a bot and an online table', () => {

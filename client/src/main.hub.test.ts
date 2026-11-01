@@ -637,6 +637,16 @@ const END_ROYALE = {
     expect(byId('hud').querySelector('.rank-badge')).not.toBeNull();
   });
 
+  it('the Trainer room starts the Trainer at wave 1, as its menu entry does', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    const beaten = ['echo', 'hull', 'choir', 'chaplain'];
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'bridge', cell: [1, -3], beaten }));
+    ship(game);
+    game.click(0, -3);
+    expect(hub()).toBeUndefined();
+    expect(data().trainer).toBe('1');
+  });
+
   it('Back to the ship never shows after a game no room started', async () => {
     const game = await boot('?nodes=100');
     await game.hook<Promise<number>>('__playTurns', 30, [4]);

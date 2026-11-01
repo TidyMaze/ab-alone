@@ -167,6 +167,7 @@ describe('hub target inspection and reachability (#628)', () => {
     expect(target('cargo', [0, 3])).toBe('Rogue-lite run · Three acts, one army of 14');
     expect(target('furnace', [0, -3])).toBe('Fight together · Two players, one army, a boss');
     expect(target('bridge', [3, -3])).toBe('Ranked · Online 1v1, Elo and tiers');
+    expect(target('bridge', [0, -3])).toBe('Trainer · Waves against the bot, one more each');
     expect(hubTargetText(at, [1, 0])).toEqual({
       name: 'Deck floor',
       desc: 'Open transit corridor',
@@ -205,6 +206,7 @@ describe('the room labels (#1249)', () => {
     expect(roomLabel('cargo', { kind: 'world' }, [])).toEqual({ name: 'Open world', state: 'walk Hollow', short: 'World', mark: '' });
     expect(roomLabel('furnace', { kind: 'together' }, [])).toEqual({ name: 'Together', state: 'co-op vs a boss', short: 'Co-op', mark: '' });
     expect(roomLabel('bridge', { kind: 'ranked' }, [])).toEqual({ name: 'Ranked', state: 'Elo ladder', short: 'Ranked', mark: '' });
+    expect(roomLabel('bridge', { kind: 'trainer' }, [])).toEqual({ name: 'Trainer', state: 'bot waves', short: 'Trainer', mark: '' });
   });
 
   it('name the boss behind the door, marked once beaten', () => {

@@ -13,7 +13,7 @@ describe('hub door 3D glyphs (#628)', () => {
     expect(GLYPH_COLORS.royale).toBe(0xfd7e14); // Industrial orange
     expect(GLYPH_COLORS.terminal).toBe(0x20c997); // Phosphor CRT green
     expect(GLYPH_COLORS.lift).toBe(0xe9ecef); // Bone white
-    const kinds = ['boss', 'bot', 'hotseat', 'online', 'royale', 'terminal', 'medals', 'lift', 'daily', 'run', 'together', 'ranked', 'world'] as const;
+    const kinds = ['boss', 'bot', 'hotseat', 'online', 'royale', 'terminal', 'medals', 'lift', 'daily', 'run', 'together', 'ranked', 'world', 'trainer'] as const;
     expect(new Set(kinds.map((k) => GLYPH_COLORS[k])).size).toBe(kinds.length); // one colour per room kind (#1249)
   });
 
@@ -25,6 +25,7 @@ describe('hub door 3D glyphs (#628)', () => {
       [{ kind: 'together' }, 'two marbles'],
       [{ kind: 'ranked' }, 'a podium'],
       [{ kind: 'world' }, 'a globe'],
+      [{ kind: 'trainer' }, 'a target dummy'],
     ];
     for (const [door, what] of props) {
       const glyph = createDoorGlyph(door);
@@ -165,6 +166,7 @@ describe('hub door 3D glyphs (#628)', () => {
       { kind: 'together' },
       { kind: 'ranked' },
       { kind: 'world' },
+      { kind: 'trainer' },
     ];
     for (const door of doors) {
       const top = new THREE.Box3().setFromObject(createDoorGlyph(door, { open: true })).max.y;
