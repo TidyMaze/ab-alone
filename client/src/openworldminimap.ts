@@ -3,9 +3,12 @@
 // push or a camera turn changed it, and the map is redrawn then, never every frame.
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
+import { LOOK, PROPS, WATER } from './openworldview';
 
 /** The cells from the hero to the edge of the map: a window of three chunks across. */
 export const RADIUS = 24;
+/** The lairs out of the window that get an arrow on the edge: the nearest unbeaten ones. */
+const ARROWS = 3;
 
 /** A cell of the window: `q, r` and its terrain. */
 export type MinimapCell = readonly [number, number, Terrain];
@@ -21,23 +24,25 @@ export interface MinimapData {
   yaw: number;
 }
 
+/** The colours of the map that are not terrain. */
 export const COLOURS = {
-  water: '#2b5d8a',
-  sand: '#d8c27a',
-  grass: '#5f9b4a',
-  rock: '#7d7f84',
-  peak: '#e8ecef',
-  boulder: '#5d5f64',
-  tree: '#2f6b35',
-  wall: '#3a3d44',
   hero: '#ffffff',
   troop: '#f2c14e',
-  enemy: '#d8453b',
-  lair: '#b565e0',
-  lairBeaten: '#6f6a78',
-  back: '#15181d',
-  edge: '#0b0d10',
+  enemy: '#e0453b',
+  lair: '#ffb020',
+  lairBeaten: '#6f7a72',
+  back: '#0b0d0f',
+  edge: '#0b0d0f',
 } as const;
+
+const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
+
+/** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`), so the map has no palette of its own. */
+export function terrainColour(terrain: Terrain): string {
+  if (terrain === 'water') return hex(WATER.shore);
+  if (terrain === 'tree' || terrain === 'boulder' || terrain === 'wall') return hex(PROPS[terrain].color);
+  return hex(LOOK[terrain].color);
+}
 
 /** Where `cell` is from the hero on the map, in cells and canvas axes (y down): the ground layout of the 3D view (`axialTo3D`) turned by
  * the camera, whose screen up is `(-sin yaw, -cos yaw)` on the ground (`lookAtHero`). */
@@ -97,26 +102,30 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
   const side = unit * 1.3; // a little over a cell, so the turned squares leave no gap
   for (const [q, r, terrain] of data.cells) {
     const { x, y } = put([q, r]);
-    ctx.fillStyle = COLOURS[terrain];
+    ctx.fillStyle = terrainColour(terrain);
     ctx.fillRect(x - side / 2, y - side / 2, side, side);
   }
+  const edge = half - 8;
+  const away = (cell: Axial): number => Math.hypot(put(cell).x - half, put(cell).y - half);
+  const out = data.lairs.filter(({ cell, beaten }) => !beaten && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
+  const arrows = new Set(out.slice(0, ARROWS).map((lair) => lair.cell));
   for (const { cell, beaten } of data.lairs) {
     const colour = beaten ? COLOURS.lairBeaten : COLOURS.lair;
     const { x, y } = put(cell);
     const [ox, oy] = [x - half, y - half];
-    const away = Math.hypot(ox, oy);
-    const edge = half - 8;
-    if (away <= edge) {
+    const dist = away(cell);
+    if (dist <= edge) {
       shape(ctx, [[x, y - 4], [x + 4, y], [x, y + 4], [x - 4, y]], colour);
       continue;
     }
-    const [ux, uy] = [ox / away, oy / away]; // the arrow sits on the edge, its tip toward the lair
+    if (!arrows.has(cell)) continue; // out of the window: an arrow for the nearest few only
+    const [ux, uy] = [ox / dist, oy / dist]; // the arrow sits on the edge, its tip toward the lair
     const [px, py] = [half + ux * edge, half + uy * edge];
     shape(ctx, [[px + ux * 5, py + uy * 5], [px - ux * 5 - uy * 4, py - uy * 5 + ux * 4], [px - ux * 5 + uy * 4, py - uy * 5 - ux * 4]], colour);
   }
   for (const cell of data.enemies) {
     const { x, y } = put(cell);
-    dot(ctx, x, y, 2, COLOURS.enemy);
+    dot(ctx, x, y, 2.5, COLOURS.enemy);
   }
   for (const cell of data.troop) {
     const { x, y } = put(cell);
