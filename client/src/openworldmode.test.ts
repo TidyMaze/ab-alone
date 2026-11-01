@@ -402,8 +402,8 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     expect(body().openworldAt).toBe('1,0');
     expect(tap(m, 'ArrowRight')).toBe(true); // onto (2,0), its old cell: free
     expect(body().openworldAt).toBe('2,0');
-    tap(m, 'ArrowRight'); // (3,0) holds the pushed enemy: the hero goes round it by (3,-1), never onto it (#1137)
-    expect(body().openworldAt).toBe('3,-1');
+    tap(m, 'ArrowRight'); // (3,0) holds the pushed enemy: the hero goes round it by (2,1), never onto it (#1137)
+    expect(body().openworldAt).toBe('2,1');
     expect(push).toHaveBeenCalledTimes(3);
   });
 
@@ -438,7 +438,7 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     m.enter(1, 800, 600);
     m.hold(['ArrowUp', 'ArrowRight']); // the stick's diagonal: one step, and the push after it
     expect(push).toHaveBeenCalledTimes(1);
-    expect(body().openworldAt).toBe('1,-1');
+    expect(body().openworldAt).toBe('1,0'); // the default camera (-30 degrees) shows the east cell nearest to up-right
   });
 
   it('starts a fresh fight on each entry: the pushed enemies and the counts are the generated ones again', () => {
@@ -1018,7 +1018,7 @@ describe('a held arrow slides round an obstacle instead of leaning (#1137)', () 
     m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[1, 0]] });
     m.key('ArrowRight');
     m.release('ArrowRight');
-    expect(m.hero!.at).toEqual([1, -1]);
+    expect(m.hero!.at).toEqual([0, 1]); // at the default camera the intent leans to the south-east side
     expect(nudge).not.toHaveBeenCalled();
     m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[1, 0], [1, -1], [0, 1]] });
     m.key('ArrowRight');
@@ -1074,12 +1074,12 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     const m = mode();
     m.enter(7, 800, 600);
     m.hold(['ArrowUp', 'ArrowRight']);
-    expect(body().openworldAt).toBe('1,-1'); // the diagonal of the spawn's even row, as the keyboard rolls it
+    expect(body().openworldAt).toBe('1,0'); // the diagonal at the default camera
     m.hold(['ArrowUp', 'ArrowRight']); // the same keys again: no step of their own
-    expect(body().openworldAt).toBe('1,-1');
+    expect(body().openworldAt).toBe('1,0');
     clock = GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(body().openworldAt).not.toBe('1,-1'); // the cadence steps the held stick
+    expect(body().openworldAt).not.toBe('1,0'); // the cadence steps the held stick
     m.hold([]);
     const stopped = body().openworldAt;
     clock = 3 * GLIDE_MS;
@@ -1335,7 +1335,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     m.key('ArrowUp');
     expect(at()).toBe('1,0');
     m.frame(vi.fn(), GLIDE_MS);
-    expect(at()).toBe(heldCell([1, 0], held('ArrowRight', 'ArrowUp'))!.join(','));
+    expect(at()).toBe(stepOf([1, 0], held('ArrowRight', 'ArrowUp'), DEFAULT_YAW)!.join(','));
   });
 
   it('a release stops the walk at the end of the step under way: no step after it', () => {
