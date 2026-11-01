@@ -519,6 +519,9 @@ the dev case of `offline`, they read `E2E_DEV_URL`): that server does not watch 
 run never reloads a page under test (bug #185). `E2E_SERVER=dev` runs every spec on the dev server, for a spec being written. It also serves the page without its Google Fonts links, so a
 network outage never holds a page load (bug #585). Start a new run to test a change.
 
+- The contrast checks (tag `@contrast`: `contrast.spec.ts` and the three ratio tests of `target-arrows.spec.ts`) are not in `bun run e2e`:
+  the art director owns the ratios. `bun run e2e:contrast` (from `client/`) runs them as a report. A test that passes on its one
+  retry shows as flaky, not red; waits on a state get 10 s, a test still fails at 15 s (#1383).
 - The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:
 
   ```

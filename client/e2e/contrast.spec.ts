@@ -59,7 +59,7 @@ const deckShot = async (page: Page, deck: string, path: string) => {
 };
 
 for (const deck of DECK_NAMES) {
-  test(`${deck}: each cell edge is 3:1 against the surface next to it on both side flats of its hexagon, bugs #339 and #400`, async ({ page }, testInfo) => {
+  test(`${deck}: each cell edge is 3:1 against the surface next to it on both side flats of its hexagon, bugs #339 and #400`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
       localStorage.setItem('ab-alone.tier', 'high');
@@ -136,7 +136,7 @@ const boxMeans = (page: Page, png: Buffer, cells: [number, number][]) =>
 
 for (const deckName of DECK_NAMES) {
   for (const [name, width, height] of [['desktop', 1280, 720], ['phone', 375, 812]] as const) {
-    test(`${deckName}: each marble reads 3:1 against the deck on ${name}, tasks #344 and #400`, async ({ page }, testInfo) => {
+    test(`${deckName}: each marble reads 3:1 against the deck on ${name}, tasks #344 and #400`, { tag: '@contrast' }, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height });
       await page.goto('./?bot=off');
       await page.locator('canvas').waitFor();
@@ -160,7 +160,7 @@ for (const deckName of DECK_NAMES) {
 // the high tier, the start position measured as for #344. The pulse is held at its peak, half a period in, through a page
 // hook, then a draw is asked for: the shot never depends on frame timing (bug #716).
 for (const deckName of DECK_NAMES) {
-  test(`${deckName}: the shell reads 3:1 against the deck at the heat pulse's brightest, task #509`, async ({ page }, testInfo) => {
+  test(`${deckName}: the shell reads 3:1 against the deck at the heat pulse's brightest, task #509`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
       localStorage.setItem('ab-alone.tier', 'high');
@@ -192,7 +192,7 @@ for (const deckName of DECK_NAMES) {
 // and the marbles are measured as for #344.
 const SKIN_IDS = ['scarab', 'obsidian', 'slag', 'hex', 'ash', 'riveted', 'tar', 'ember', 'copper', 'void'];
 for (const id of SKIN_IDS) {
-  test(`the ${id} shell reads 3:1 against the deck, task #377`, async ({ page }, testInfo) => {
+  test(`the ${id} shell reads 3:1 against the deck, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.addInitScript((skin) => localStorage.setItem('ab-alone.shell-skin', skin), id);
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('./?bot=off');
@@ -214,7 +214,7 @@ for (const id of SKIN_IDS) {
 // glass on the far rows) as for #344. The skin comes from the stored setting.
 const GLASS_IDS = ['smoked', 'frost', 'pearl', 'bone', 'moon', 'kintsugi', 'lantern', 'prism', 'nebula', 'visor'];
 for (const id of GLASS_IDS) {
-  test(`the ${id} glass reads 3:1 against the deck, task #377`, async ({ page }, testInfo) => {
+  test(`the ${id} glass reads 3:1 against the deck, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.addInitScript((skin) => localStorage.setItem('ab-alone.glass-skin', skin), id);
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('./?bot=off');
