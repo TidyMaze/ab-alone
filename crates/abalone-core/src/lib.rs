@@ -7,6 +7,7 @@ pub mod run;
 pub mod search;
 pub mod world;
 pub mod worldfight;
+pub mod worldoverlay;
 pub mod worldstep;
 
 pub fn version() -> &'static str {
