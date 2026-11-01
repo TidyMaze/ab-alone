@@ -219,3 +219,20 @@ test('on a phone the name field and Hide are 44 px high and the plate leaves the
   await page.screenshot({ path: 'test-results/peers-phone-hud.png' });
   expect(plate.y).toBeGreaterThanOrEqual(844 * 0.5); // the lower half only: the hero stands at the middle
 });
+
+// #1305: the army of another hero. Its troop goes over as offsets (15 bytes for six marbles) and is drawn in the colour of its hero.
+test('the army of another hero is drawn round it, and ours goes out as 15 bytes, #1305', async ({ page }) => {
+  await enter(page, PUBLIC);
+  await page.evaluate(() => {
+    const w = window as unknown as Hook;
+    w.__netPeerJoin('p');
+    w.__netPeerIn([2, 1, 66, 111, 98], 'p'); // Bob
+    w.__netPeerIn([2, 2, 0, 3, 0, 0, 0], 'p'); // three cells east of us
+    w.__netPeerIn([2, 4, 6, 1, 0, 255, 0, 0, 1, 0, 255, 1, 255, 255, 1], 'p'); // a full troop: offsets (1,0) (-1,0) (0,1) (0,-1) (1,-1) (-1,1)
+  });
+  await expect(page.locator('#openworld-peers')).toHaveAttribute('data-peers', '1');
+  await page.screenshot({ path: 'test-results/peers-army.png' });
+  const troops = () => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m[1] === 4));
+  await expect.poll(async () => (await troops()).length).toBeGreaterThanOrEqual(1);
+  expect((await troops())[0]).toHaveLength(15);
+});

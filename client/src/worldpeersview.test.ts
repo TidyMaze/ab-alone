@@ -162,6 +162,7 @@ describe('PeersLayer', () => {
     const { root, scene, layer } = setup();
     layer.update([{ peer: 'a', cell: [1, 0], name: '', troop: [[2, 0], [3, 0]] }], [0, 0], [[0, 0], [2, 0]]);
     expect(root.dataset.peers).toBe('1');
+    expect(root.dataset.marbles).toBe('3'); // the hero and its two marbles
     const m = new THREE.Matrix4();
     const y = (i: number) => {
       (scene.getObjectByName('peers') as THREE.InstancedMesh).getMatrixAt(i, m);
@@ -205,6 +206,7 @@ describe('PeersLayer', () => {
     expect(root.children).toHaveLength(0);
     expect(root.hidden).toBe(true);
     expect(root.dataset.peers).toBeUndefined();
+    expect(root.dataset.marbles).toBeUndefined();
   });
 
   it('reports a change of what it draws, and none when the same list comes again', () => {

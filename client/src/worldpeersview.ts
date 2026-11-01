@@ -63,6 +63,7 @@ export class PeersLayer {
     private readonly root: HTMLElement,
   ) {
     this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(MARBLE, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x2a2a2a, roughness: 0.2 }), CAPACITY);
+    this.mesh.setColorAt(0, new THREE.Color(0xffffff)); // the colour buffer exists before the first draw: a shader built without it never reads one
     this.mesh.name = 'peers';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -104,7 +105,7 @@ export class PeersLayer {
     }
     this.mesh.count = marbles;
     this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    this.mesh.instanceColor!.needsUpdate = true;
     this.heroes = heroes;
     this.indicate(out, named, hero);
     const key = peers.map((p) => `${p.peer}:${p.cell}:${p.troop.join(';')}`).join(' ');
@@ -146,6 +147,7 @@ export class PeersLayer {
     });
     this.root.hidden = out.length === 0 && named.length === 0;
     this.root.dataset.peers = String(this.heroes + out.length); // for the browser checks
+    this.root.dataset.marbles = String(this.mesh.count); // for the browser checks
     this.root.dataset.edges = out.map(({ cell }) => hexDistance(hero, cell)).join(',');
   }
 
@@ -171,5 +173,6 @@ export class PeersLayer {
     this.root.hidden = true;
     delete this.root.dataset.peers;
     delete this.root.dataset.edges;
+    delete this.root.dataset.marbles;
   }
 }
