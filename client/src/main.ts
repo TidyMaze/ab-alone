@@ -5076,7 +5076,11 @@ const openWorld = new OpenWorldMode(
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
   () =>
     loadModels(
-      { low: `${import.meta.env.BASE_URL}assets/pbr/openworld.glb`, high: `${import.meta.env.BASE_URL}assets/pbr/openworld-hi.glb` },
+      {
+        low: `${import.meta.env.BASE_URL}assets/pbr/openworld.glb`,
+        high: `${import.meta.env.BASE_URL}assets/pbr/openworld-hi.glb`,
+        lair: `${import.meta.env.BASE_URL}assets/pbr/openworld-lair.glb`,
+      },
       meshoptLoader(),
     ),
   () => reducedMotion(),

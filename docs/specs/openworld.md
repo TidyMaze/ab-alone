@@ -187,7 +187,10 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   Lair `k` is drawn in the `k`-th `count`-th of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
   six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). It reads the terrain, never
   changes it, so `WORLD_VERSION` does not move.
-- **Look.** A tall pillar on a plinth on the lair's cell, gold while the lair is unbeaten, green once beaten.
+- **Look.** A low-poly landmark made in Blender (`client/models/openworld-lair.glb`, vertex colours, under 72 triangles each) on
+  the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
+  while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).
+  Until the model is loaded, the plain gold or green pillar is drawn.
 - **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`),
   the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from).
 - **Win.** The medal is recorded in `ab-alone.medals` as for any boss win, and the lair is added to `lairs` of the world's save.
