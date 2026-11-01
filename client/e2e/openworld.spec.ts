@@ -6,7 +6,7 @@ import { openModes } from './modes';
 // Escape leaves to the board. The blocked cell comes from the test hook, not from the terrain constants (#1002, #1137).
 test('the hero rolls over the Open world, an obstacle stops it, and Escape leaves, #965', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await expect(page.locator('#openworld-hud')).toBeVisible(); // the plate shows at the load, before it folds (#1138)
@@ -41,7 +41,7 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
 // the world and the board is back as it was. The game (moves played) is loaded through the game file import.
 test('the arrows in the Open world do not open the board replay, and leaving the world returns the board, #1063', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const save = JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: false, moves: BLACK_WINS });
   await page.locator('#import-file').setInputFiles({ name: 'game.json', mimeType: 'application/json', buffer: Buffer.from(save) });
   await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
@@ -63,7 +63,7 @@ test('the hero steps up onto a higher cell of the Open world and the page keeps 
   const errors: Error[] = [];
   page.on('pageerror', (error) => errors.push(error));
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   for (let i = 1; i <= 4; i++) {
@@ -77,7 +77,7 @@ test('the hero steps up onto a higher cell of the Open world and the page keeps 
 // #966: enemy marbles stand on the map and the troop of 6 trails the hero, the first marble on the cell it just left.
 test('enemy marbles are on the map and the troop follows the hero, #966', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const data = (key: 'openworldAt' | 'openworldTroop' | 'openworldEnemies') => page.evaluate((k) => document.body.dataset[k], key);
   await expect.poll(() => data('openworldAt')).toBe('0,0');
   expect(Number(await data('openworldEnemies'))).toBeGreaterThan(0);
@@ -94,7 +94,7 @@ test('enemy marbles are on the map and the troop follows the hero, #966', async 
 // cell up-left of that is (1, -2), free on seed 7 (the path of the first test goes through it).
 test('two held arrows roll the hero on the diagonal, #977', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await page.keyboard.down('ArrowUp');
@@ -124,7 +124,7 @@ test('two held arrows roll the hero on the diagonal, #977', async ({ page }) => 
 // within 3 s with no obstacle in the way, and the walk stops once the arrow is let go.
 test('a held arrow walks the Open world on its own and stops on keyup, #1059', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await page.keyboard.down('ArrowRight');
@@ -139,10 +139,10 @@ test('a held arrow walks the Open world on its own and stops on keyup, #1059', a
 // #976: the wheel zooms the Open world camera out far and back, and the hero still rolls from the far zoom.
 test('the wheel zooms the Open world out far and back, and the hero still rolls, #976', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const zoom = async () => Number(await page.evaluate(() => document.body.dataset.openworldZoom));
   await expect.poll(zoom).toBe(1);
-  const box = (await page.locator('canvas').boundingBox())!;
+  const box = (await page.locator('canvas:not(#openworld-minimap)').boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, 2000);
   await expect.poll(zoom).toBeGreaterThan(2.5); // far out
@@ -165,8 +165,8 @@ test('the wheel zooms the Open world out far and back, and the hero still rolls,
 test('the widest zoom on a 32:9 screen shows no black background at its edges, #976', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 540 });
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
-  const box = (await page.locator('canvas').boundingBox())!;
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
+  const box = (await page.locator('canvas:not(#openworld-minimap)').boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, 5000); // as far out as the screen allows
   await expect.poll(async () => Number(await page.evaluate(() => document.body.dataset.openworldZoom))).toBeGreaterThan(2.5);
@@ -197,7 +197,7 @@ test('the widest zoom on a 32:9 screen shows no black background at its edges, #
 // #989: the props within 8 cells of the hero are drawn with their detailed models once those load, the low-poly ones beyond.
 test('the props near the hero are drawn detailed, the ones beyond low-poly, #989', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   const drawn = () => page.evaluate(() => JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>);
   const DETAILED = ['prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'];
@@ -212,7 +212,7 @@ test('the props near the hero are drawn detailed, the ones beyond low-poly, #989
 // #1000: the entry is in the mode menu for everyone, and a click enters a world with a random seed.
 test('the Open world is in the mode menu without the flag, and a click enters a random world, #1000', async ({ page }) => {
   await page.goto('./?bot=off');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await openModes(page);
   await expect(page.locator('#openworld')).toBeVisible();
   await page.locator('#openworld').click();
@@ -224,7 +224,7 @@ test('the Open world is in the mode menu without the flag, and a click enters a 
 // (3, 0) and the hero along with it, to (2, 0). The state is final at once; the push is drawn as an animation of 0.7 s.
 test('the troop pushes the enemy in front of it after a step, and the enemy moves on, #967', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
@@ -248,7 +248,7 @@ test('the troop pushes the enemy in front of it after a step, and the enemy move
 test('with reduced motion the troop pushes the enemy at once, with no animation, #967', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
@@ -267,7 +267,7 @@ test('with reduced motion the troop pushes the enemy at once, with no animation,
 // push moved are where they were left. The save is counted on the page (openworldSaved) once it is stored.
 test('the Open world is saved after a push and resumes after a reload, the troop and the enemy where they were, #968', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await page.evaluate(() =>
@@ -281,7 +281,7 @@ test('the Open world is saved after a push and resumes after a reload, the troop
   await expect.poll(at).toBe('2,0');
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBe('1');
   await page.reload();
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(at).toBe('2,0');
   expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0 -2,0');
   expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
@@ -291,7 +291,7 @@ test('the Open world is saved after a push and resumes after a reload, the troop
 // is written by hand in the page's IndexedDB (the game store of the ab-alone database) at the seed's key, as an old build left it.
 test('a save of another world version is ignored and deleted, the world starts on the spawn, #968', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const stale = { version: 0, seed: 7, hero: [2, 0], troop: [], fight: { removed: [], added: [], beaten: 0 }, savedAt: 1 };
   const store = () =>
     page.evaluate(
@@ -326,7 +326,7 @@ test('a save of another world version is ignored and deleted, the world starts o
   );
   expect(await store()).toEqual(stale);
   await page.reload();
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   await expect.poll(store).toBeNull();
 });
@@ -337,7 +337,7 @@ test.describe('the touch joystick', () => {
   test.use({ hasTouch: true });
   test('a drag on the left half walks the hero right until the thumb lifts, #1025', async ({ page }) => {
     await page.goto('./?bot=off&openworld=7');
-    await page.locator('canvas').waitFor();
+    await page.locator('canvas:not(#openworld-minimap)').waitFor();
     const at = () => page.evaluate(() => document.body.dataset.openworldAt);
     await expect.poll(at).toBe('0,0');
     const cdp = await page.context().newCDPSession(page);
@@ -359,7 +359,7 @@ test.describe('the touch joystick', () => {
 // the dock), so the menu hangs from its right edge and stays inside the window at every size.
 async function openSettingsInOpenWorld(page: Page): Promise<void> {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   await page.locator('#settings').click();
   await expect(page.locator('#settings-menu')).toBeVisible();
@@ -398,7 +398,7 @@ test.describe('the Open world settings menu on a touch phone, #1051', () => {
 // the world, so a reload resumes it (the turn itself is unit tested in openworldview.test.ts and openworldmode.test.ts).
 test('Q and E turn the Open world camera round the hero, R goes back, and the turn resumes after a reload, #1026', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
   await expect.poll(yaw).toBe('-30'); // the default faces a straight line of hexes (#1254)
   await page.keyboard.press('q');
@@ -428,14 +428,14 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
     );
   await expect.poll(stored).toBe(30);
   await page.reload();
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(yaw).toBe('30');
 });
 
 // #1251: a right-button drag turns the camera freely while held and settles on the nearest resting angle (30 plus a multiple of 60) when released.
 test('a right-button drag turns the Open world camera and settles on a step of 60 degrees on release, #1251', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
   await expect.poll(yaw).toBe('-30'); // the world is open: the drag is the Open world's
   await page.mouse.move(300, 300);
@@ -450,7 +450,7 @@ test('a right-button drag turns the Open world camera and settles on a step of 6
 // it); only the drawing glides. With the slow factor of 10 the glide lasts 1.4 s, so the browser sees the hero in between.
 test('a step glides the hero onto the next cell: exact at once, drawn in between, landed at the end, #1040', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   await page.evaluate(() => {
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [] });
@@ -484,7 +484,7 @@ test('a held arrow walks the hero at a steady speed from cell to cell, #1065', a
       });
   });
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   await page.keyboard.down('ArrowUp');
   await page.waitForTimeout(2200);
@@ -508,7 +508,7 @@ test('a held arrow walks the hero at a steady speed from cell to cell, #1065', a
 // screen: two frames of the same glide, 0.5 s apart, differ in its centre box (the stripe turns across the marble).
 test('a glide of the hero turns its stripe: two frames in between differ on the marble, #1043', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   await page.evaluate(() => {
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
@@ -544,7 +544,7 @@ test('a glide of the hero turns its stripe: two frames in between differ on the 
 // above the height it has on its cell and is back on it at the end. Reduced motion has no glide, hence no hop.
 test('a step hops the hero: it rises mid-step and lands on its cell, #1100', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   await page.evaluate(() => {
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
@@ -565,7 +565,7 @@ test('a step hops the hero: it rises mid-step and lands on its cell, #1100', asy
 // #1138: the plate shows at the load, folds to a chip after 3 steps, and the chip opens it again.
 test('the Open world HUD plate folds after 3 steps and the chip reopens it, #1138', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const plate = page.locator('#openworld-hud');
   const chip = page.locator('#openworld-chip');
   await expect(plate).toBeVisible();
@@ -591,7 +591,7 @@ test('the Open world HUD plate follows the theme with four rivets, #1138, #1172'
   await page.emulateMedia({ colorScheme: 'light' });
   await page.addInitScript(() => localStorage.setItem('ab-alone.theme', 'system')); // light really applies (#1184)
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const plate = page.locator('#openworld-hud');
   await expect(plate).toBeVisible();
   await expect(plate).toHaveCSS('background-color', 'rgb(243, 240, 230)');
@@ -606,7 +606,7 @@ test('the Open world HUD plate follows the theme with four rivets, #1138, #1172'
 // from the test hook): the Right key takes the free side cell instead of leaning, and it still stops where every side is shut.
 test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   const fixture = (enemies: number[][]) =>
@@ -627,7 +627,7 @@ test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ 
 // it off.
 test('a tap on a far cell walks the hero there, a key cancels, Steering off keeps it still, #1137', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   const route = () => page.evaluate(() => document.body.dataset.openworldRoute);
   await expect.poll(at).toBe('0,0');
@@ -659,7 +659,7 @@ test('a tap on a far cell walks the hero there, a key cancels, Steering off keep
 // move goes through, its prop leaves the scene, shards fly, the cell is counted broken, and the break is still there after a reload.
 test('the hero breaks the isolated boulder it rolls into, and it stays broken after a reload, #1147', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [3, 2], troop: [[2, 2], [1, 2]], enemies: [] }),
@@ -679,7 +679,7 @@ test('the hero breaks the isolated boulder it rolls into, and it stays broken af
   await page.waitForTimeout(800);
   await page.screenshot({ path: test.info().outputPath('break-after.png') });
   await page.reload();
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(at).toBe('4,2');
   expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
   expect(await boulders()).toBe(before - 1);
@@ -689,7 +689,7 @@ test('the hero breaks the isolated boulder it rolls into, and it stays broken af
 // the base one at the end. The page samples what the camera draws (`__openworldCamera`) on every frame for 700 ms after the press.
 test('a push punches the camera in and back, without moving the chunk centre, #1103', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   type Camera = { zoom: number; shake: number; centre: number[]; reach: number };
   const result = await page.evaluate(async () => {
@@ -730,7 +730,7 @@ test('a push punches the camera in and back, without moving the chunk centre, #1
 // frame to the next. The page samples where the camera is (`__openworldCamera`) on every animation frame, at the frame's own time.
 test('the camera follows a walk with no step in its speed, from its start to its stop, #1333', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   const samples = await page.evaluate(async () => {
     const w = window as unknown as { __openworldFixture: (f: object) => void; __openworldCamera: () => { eye: number[] } };
@@ -766,7 +766,7 @@ test('the camera follows a walk with no step in its speed, from its start to its
 // #1273: at the default view a Right press from an odd row walks forward (up-right), as Left does, not back down-right.
 test('Right from an odd row walks forward in the Open world, #1273', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await page.evaluate(() => {
