@@ -103,6 +103,9 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   or a two-finger twist turns freely while held, and on release it settles on the nearest resting angle. The yaw is saved with the
   world; a saved yaw that is not a resting angle (an older save) is read back at the nearest one. At every resting yaw each arrow
   and diagonal still steps to the neighbour the camera shows nearest to it.
+  A pure sideways intent (Left alone, Right alone, the stick near horizontal) sits exactly between two neighbours, up and down
+  on the screen; the tie goes to the one that leans forward (up on the screen), so at every resting angle Left steps up-left and
+  Right up-right (#1273). Up, Down and the diagonals keep their steps; Down with Left or Right still steps back.
 - **Steering** (#1137): a held direction (arrow, stick) is an *intent*, an angle on the ground. Each step takes the cell of
   that direction when the hero can enter it. When it cannot (a rock, a tree, water, a wall, a cliff, an enemy), the hero takes
   the free one of the two neighbours 60 degrees to the side that the intent follows best; if both follow it equally, the lower

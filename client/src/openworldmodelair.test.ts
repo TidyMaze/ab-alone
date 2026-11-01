@@ -63,7 +63,7 @@ describe('the boss lairs of the Open world mode (#1170)', () => {
   it('starts the second lair too, and a lair already beaten again', () => {
     const { m, onLair } = setup();
     m.enter(7, 800, 600);
-    m.fixture({ hero: [-3, 2], troop: [], enemies: [] });
+    m.fixture({ hero: [-4, 3], troop: [], enemies: [] });
     m.key('ArrowLeft');
     m.release('ArrowLeft');
     expect(onLair).toHaveBeenCalledWith(7, 1);
@@ -90,7 +90,7 @@ describe('the boss lairs of the Open world mode (#1170)', () => {
     const { m, saves } = setup();
     await saves.put(7, [0, 0], [], (await import('./openworldfight')).FightState.fromJSON({ removed: [], added: [], beaten: 0 }), 0, [], [0]);
     await m.open(7, 800, 600);
-    m.fixture({ hero: [1, 0], troop: [], enemies: [] });
+    m.fixture({ hero: [0, 1], troop: [], enemies: [] });
     m.key('ArrowLeft');
     m.release('ArrowLeft');
     m.leave();
