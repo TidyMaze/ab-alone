@@ -17,7 +17,7 @@ use crate::encounter::echo::{echo_boss, echo_free_moves, echo_move, echo_search,
 use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
-use crate::encounter::pulsar::{pulsar_move, pulsar_start, PULSAR_NODE_BUDGET};
+use crate::encounter::pulsar::{pulsar_move, pulsar_search, pulsar_start, PULSAR_NODE_BUDGET};
 use crate::encounter::railyard::{railyard_move, railyard_start, RAILYARD_NODE_BUDGET};
 use crate::encounter::stalker::{refuse, stalker_start, STALKER_NODE_BUDGET};
 use crate::encounter::swarm::{Swarm, SWARM_NODE_BUDGET};
@@ -260,8 +260,9 @@ fn mix(mut x: u64) -> u64 {
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
 /// takes the Echo's safe free moves that eject and never plays another free move, and plays the
-/// plain search when no move is left. Against the Chaplain, the Ballast Mind and the Assembly Line
-/// the search sees the hooks. `None` when the player has no move (every marble was converted).
+/// plain search when no move is left. Against the Chaplain, the Ballast Mind, the Assembly Line
+/// and the Pulsar the search sees the hooks. `None` when the player has no move (every marble was
+/// converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
     if index < opening {
@@ -304,6 +305,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
             }
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Assembly) => assembly_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Pulsar) => pulsar_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
             Arena::Swarm(swarm) => swarm.player_search(budget, allow).map(|r| r.mv),
             Arena::Plain(_, LadderBoss::Dual) => {
@@ -466,6 +468,7 @@ mod tests {
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::{echo_boss, echo_fight, mirror_move};
+    use crate::encounter::pulsar::pulsar_boss;
     use crate::encounter::stalker::stalker_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
     use crate::encounter::Encounter;
@@ -651,6 +654,32 @@ mod tests {
             after.game().ejected(Player::White),
             0,
             "{mv:?} keeps the marble on the belt"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_pulse_of_the_pulsar() {
+        // The E pulsar fires at the end of this turn, at force 2: the lone Black marble on the E
+        // rim goes off, and so does the lone boss marble on (4, -2), unless Black pushes it off
+        // first with the NE pair and leaves its own marble on that rim instead.
+        let mut board = Board::empty();
+        for (q, r) in [(4, 0), (2, 0), (3, -1)] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(4, -2), (-3, 2), (-2, 2)] {
+            board.set(q, r, Cell::White);
+        }
+        board.set_pulsar(Some((0, 2)));
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let enc = Encounter::new(game, pulsar_boss(), 0);
+        let a = Arena::Plain(enc.clone(), LadderBoss::Pulsar);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.game().ejected(Player::White),
+            0,
+            "{mv:?} loses no marble to the pulse"
         );
     }
 

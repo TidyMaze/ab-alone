@@ -171,17 +171,20 @@ pub fn pulsar_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
+    pulsar_search(enc, enc.boss.node_budget, &|_| true)
+}
+
+/// The node-limited search of `enc` with the pulses in its tree (`pulsar_step`), for the side to
+/// move: the boss reply of [`pulsar_move`], or the ladder player, who reads the tell.
+pub(crate) fn pulsar_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
     let step = |before: &Board, mover: Player, _: &Move, after: Board| {
         pulsar_step(enc, before, mover, after)
     };
-    search_hooked(
-        enc.game(),
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 #[cfg(test)]
