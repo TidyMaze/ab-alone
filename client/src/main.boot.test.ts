@@ -208,6 +208,11 @@ describe('the renderer and its textures', () => {
     expect(document.body.dataset.scene).toBe('table-zero');
   });
 
+  it('keeps the room in a 1v1 game when the arena file is missing: the page still plays (#1314)', async () => {
+    await boot('?bot=off', { missing: ['arena.glb'] });
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('room'));
+  });
+
   it('keeps the room in a 1v1 game when ?scene=room asks for it (#1314)', async () => {
     const game = await boot('?bot=off&scene=room');
     const { scene } = await drawn(game);
