@@ -789,26 +789,27 @@ mod special_marbles {
     }
 
     #[test]
-    fn a_side_left_with_no_legal_move_loses_the_fight() {
+    fn a_side_left_with_no_legal_move_passes_its_turn() {
         let fill = mv(&[(4, -2)], SE);
         let mut game = Game::from_position(locked(), Player::Black, [0, 0]);
         assert!(!legal_moves(game.board(), Player::White).is_empty());
         game.play(&fill).unwrap();
         assert!(legal_moves(game.board(), Player::White).is_empty());
-        assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
-        // With a plain marble on (4,0) White still has its push, and the fight goes on.
+        assert_eq!(game.outcome(), None, "no loss for a locked side (#1301)");
+        assert_eq!(game.to_move(), Player::Black, "White passed");
+        assert_eq!(game.passed(), Some(Player::White));
+        // With a plain marble on (4,0) White still has its push, and plays it.
         let plain = board(&LOCK, &[(2, 0), (3, 0)], &[]);
         let mut game = Game::from_position(plain, Player::Black, [0, 0]);
         game.play(&fill).unwrap();
-        assert_eq!(game.outcome(), None);
+        assert_eq!((game.outcome(), game.to_move()), (None, Player::White));
     }
 
     #[test]
-    fn the_bot_sees_that_locking_the_opponent_wins() {
+    fn the_bot_no_longer_scores_a_lock_as_a_win() {
         let game = Game::from_position(locked(), Player::Black, [0, 0]);
         let found = search(&game, 4000).unwrap();
-        assert_eq!(found.mv, mv(&[(4, -2)], SE));
-        assert_eq!(found.score, crate::search::WIN - 1);
+        assert!(found.score < crate::search::WIN / 2, "{}", found.score);
     }
 
     #[test]

@@ -25,6 +25,8 @@ interface Playable {
   board(): Uint8Array;
   status(): number;
   draw_reason(): number;
+  /** The side whose turn passed after the last ply, as it had no legal move: `0` none (#1301). */
+  passed(): number;
   free(): void;
 }
 
@@ -53,10 +55,10 @@ const RUNNING = 0;
 
 export type Side = 'black' | 'white';
 export type Status = 'running' | 'black_won' | 'white_won' | 'draw';
-export type DrawReason = null | 'repetition' | 'no_ejection_cap';
+export type DrawReason = null | 'repetition' | 'no_ejection_cap' | 'blocked';
 
 const STATUSES: Status[] = ['running', 'black_won', 'white_won', 'draw'];
-const DRAW_REASONS: DrawReason[] = [null, 'repetition', 'no_ejection_cap'];
+const DRAW_REASONS: DrawReason[] = [null, 'repetition', 'no_ejection_cap', 'blocked'];
 
 /** Side code of abalone-wasm: `1` Black, anything else White, as the engine reads it. */
 export function sideName(code: number): Side {
@@ -102,6 +104,8 @@ export interface State {
   to_move: Side;
   status: Status;
   draw_reason: DrawReason;
+  /** The side whose turn passed after the last ply, as it had marbles but no legal move (#1301), else null. */
+  passed: Side | null;
   resigned: boolean;
   ejected: Record<Side, number>;
   win_ejections: Record<Side, number>;
@@ -291,12 +295,15 @@ export class Session {
       const echoed = game.boss ? fromRecords(game.boss.encounter.last_bonuses()).map(formatMove) : [];
       let reply: string | null = null;
       if (game.room) void game.room.session.send(Array.from(mine));
-      // A free move of The Echo keeps the agent to move: no reply (#958).
-      else if (!over(game) && game.engine.to_move() !== BLACK) {
-        const record = game.reply!();
-        game.engine.play(record);
-        reply = formatMove(fromRecord(record));
-        game.plies.push(reply);
+      // A free move of The Echo keeps the agent to move: no reply (#958). A bot with no move passes: no reply, and an
+      // agent with no move passes too, so the bot replies again (#1301).
+      else {
+        while (!over(game) && game.engine.to_move() !== BLACK) {
+          const record = game.reply!();
+          game.engine.play(record);
+          reply = formatMove(fromRecord(record));
+          game.plies.push(reply);
+        }
       }
       return ok({ played, reply, bonuses: echoed, state: state(game) });
     });
@@ -388,6 +395,7 @@ function state(game: Game): State {
     // The agent is Black against the bot or a boss (section 4.1), so a resign is a White win. No resign online.
     status: game.resigned ? 'white_won' : statusName(engine.status()),
     draw_reason: drawReasonName(engine.draw_reason()),
+    passed: engine.passed() ? sideName(engine.passed()) : null,
     resigned: game.resigned,
     ejected: { black: engine.ejected(BLACK), white: engine.ejected(WHITE) },
     win_ejections: { black: engine.win_ejections(BLACK), white: engine.win_ejections(WHITE) },

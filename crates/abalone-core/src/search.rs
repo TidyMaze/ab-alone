@@ -341,12 +341,8 @@ impl Searcher<'_> {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
         let kids = children(node, &self.weights, self.step, self.turns);
-        if kids.is_empty() && node.board.rogue_lite() {
-            // No legal move loses a rogue-lite fight (docs/specs/roguelite.md).
-            return Some(ply - WIN);
-        }
         if kids.is_empty() {
-            return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
+            return self.pass(node, depth, ply, (alpha, beta));
         }
         let (mut best, mut alpha) = (-INF, alpha);
         for kid in &kids {
@@ -358,6 +354,30 @@ impl Searcher<'_> {
             }
         }
         Some(best)
+    }
+
+    /// Score of `node`, whose side to move has no legal move: with marbles it passes and the other
+    /// side moves on the same board, a draw when it is blocked too (rules.md section 7). With no
+    /// marble it keeps its static score.
+    fn pass(
+        &mut self,
+        node: &Node,
+        depth: u32,
+        ply: i32,
+        (alpha, beta): (i32, i32),
+    ) -> Option<i32> {
+        let mover = node.to_move;
+        if shape(&node.board, cell_of(mover)).0 == 0 {
+            return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
+        }
+        let passed = Node {
+            to_move: other(mover),
+            ..node.clone()
+        };
+        if children(&passed, &self.weights, self.step, self.turns).is_empty() {
+            return Some(0);
+        }
+        Some(-self.negamax(&passed, depth - 1, ply + 1, -beta, -alpha)?)
     }
 
     /// Index and score of the best child at `depth`, `None` when the budget ran out inside.
@@ -1147,6 +1167,73 @@ mod tests {
         }
         assert_eq!(game.outcome(), Some(Outcome::Draw));
         assert_eq!(position_score(&game, 500), 0);
+    }
+
+    fn searcher() -> Searcher<'static> {
+        Searcher {
+            weights: DEFAULT_WEIGHTS,
+            step: None,
+            budget: 1000,
+            nodes: 0,
+            win: [WIN_EJECTIONS; 2],
+            turns: None,
+            deadline: None,
+        }
+    }
+
+    #[test]
+    fn a_blocked_side_passes_in_the_tree() {
+        // White's corner marble is walled in: it passes, and Black's pair pushes it off for the
+        // sixth ejection on the ply after.
+        let board = game_from(
+            &[(2, -4), (3, -4), (3, -3), (4, -3)],
+            &[(4, -4)],
+            Player::White,
+            [0, 0],
+        );
+        let node = Node {
+            board: board.board().clone(),
+            to_move: Player::White,
+            ejected: [5, 0],
+        };
+        assert!(legal_moves(&node.board, Player::White).is_empty());
+        assert_eq!(searcher().negamax(&node, 2, 0, -INF, INF), Some(2 - WIN));
+    }
+
+    #[test]
+    fn both_sides_blocked_in_the_tree_score_a_draw() {
+        // A line of four cells, the rest void: Black, White, Black, White.
+        let mut board = game_from(&[(0, 0), (2, 0)], &[(1, 0), (3, 0)], Player::White, [0, 0])
+            .board()
+            .clone();
+        for q in -4..=4 {
+            for r in -4..=4 {
+                if r != 0 || !(0..=3).contains(&q) {
+                    board.void(q, r);
+                }
+            }
+        }
+        let node = Node {
+            board,
+            to_move: Player::White,
+            ejected: [0, 0],
+        };
+        assert_eq!(searcher().negamax(&node, 3, 0, -INF, INF), Some(0));
+    }
+
+    #[test]
+    fn a_side_with_no_marble_in_the_tree_keeps_its_static_score() {
+        let node = Node {
+            board: game_from(&[], &[(0, 0)], Player::Black, [0, 0])
+                .board()
+                .clone(),
+            to_move: Player::Black,
+            ejected: [0, 0],
+        };
+        assert_eq!(
+            searcher().negamax(&node, 2, 0, -INF, INF),
+            Some(-DEFAULT_WEIGHTS.marbles)
+        );
     }
 
     #[test]

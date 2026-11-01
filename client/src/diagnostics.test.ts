@@ -69,6 +69,12 @@ describe('Diagnostics events', () => {
       { level: 'info', event: 'bot-search', data: { ms: 40, boss: 'hull' } },
     ]);
   });
+
+  it('logs a pass in the move log: the side and the ply it came after (#1301)', () => {
+    const { diag } = diagnostics();
+    diag.passed(2, 21);
+    expect(events(diag)).toEqual([{ level: 'info', event: 'pass', data: { side: 2, ply: 21 } }]);
+  });
 });
 
 describe('gameInfo', () => {

@@ -4,6 +4,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use crate::board::{Board, Cell, PlaceError, Special};
+use crate::encounter::marbles;
 use crate::moves::{apply, legal_moves, Move, MoveError, Player};
 use crate::run::credits;
 
@@ -26,6 +27,8 @@ pub enum Outcome {
 pub enum DrawReason {
     Repetition,
     NoEjectionCap,
+    /// Neither side has a legal move (rules.md section 7).
+    Blocked,
 }
 
 /// Why `Game::play` refused a move.
@@ -63,6 +66,8 @@ pub struct Game {
     draws: bool,
     /// The side that wins in place of a draw by repetition or idle plies, if any (the Trainer).
     draw_to: Option<Player>,
+    /// The side whose turn passed after the last ply: it had marbles but no legal move.
+    passed: Option<Player>,
 }
 
 fn index(player: Player) -> usize {
@@ -157,6 +162,7 @@ impl Game {
             win: [WIN_EJECTIONS; 2],
             draws: true,
             draw_to: None,
+            passed: None,
         }
     }
 
@@ -175,6 +181,7 @@ impl Game {
             win,
             draws: true,
             draw_to: None,
+            passed: None,
         }
     }
 
@@ -296,6 +303,36 @@ impl Game {
             + usize::from(self.start_hash == hash)
     }
 
+    /// The side whose turn passed after the last ply, because it had marbles but no legal move.
+    pub fn passed(&self) -> Option<Player> {
+        self.passed
+    }
+
+    /// The side to move has marbles but no legal move: it passes, the other side moves on the
+    /// same board. When that side has no legal move either, the game ends in a draw, or the mode's
+    /// own draw rule (rules.md section 7). A side with no marble left keeps its own rule.
+    pub(crate) fn pass_when_blocked(&mut self) {
+        let side = self.to_move;
+        if self.outcome.is_some()
+            || marbles(&self.board, side.cell()) == 0
+            || !legal_moves(&self.board, side).is_empty()
+        {
+            return;
+        }
+        if legal_moves(&self.board, other(side)).is_empty() {
+            self.outcome = Some(self.draw_to.map_or(Outcome::Draw, Outcome::Win));
+            self.draw_reason = Some(DrawReason::Blocked);
+        } else {
+            self.pass_turn();
+        }
+    }
+
+    /// The side to move passes its turn, as it has no move.
+    pub(crate) fn pass_turn(&mut self) {
+        self.passed = Some(self.to_move);
+        self.pass();
+    }
+
     /// Gives the move back to the side that just played, for a rule that grants a free move.
     pub(crate) fn pass(&mut self) {
         self.to_move = other(self.to_move);
@@ -334,8 +371,16 @@ impl Game {
         self.outcome.get_or_insert(Outcome::Win(winner));
     }
 
-    /// Plays `mv` for the side to move.
+    /// Plays `mv` for the side to move. The next side passes when it has no legal move.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
+        self.play_ply(mv)?;
+        self.pass_when_blocked();
+        Ok(())
+    }
+
+    /// Plays `mv` for the side to move, for a mode that changes the board after the ply and checks
+    /// the pass itself.
+    pub(crate) fn play_ply(&mut self, mv: &Move) -> Result<(), GameError> {
         self.play_then(mv, other(self.to_move))
     }
 
@@ -354,6 +399,7 @@ impl Game {
         let [black, white] = credits(&self.board, mover, ejected, &board);
         self.board = board;
         self.to_move = next;
+        self.passed = None;
         if ejected {
             self.ejected[0] += black;
             self.ejected[1] += white;
@@ -376,9 +422,6 @@ impl Game {
         } else if rogue && self.ejected[index(foe)] >= self.win[index(foe)] {
             // A Spark's burst threw the pusher's own marbles off (docs/specs/roguelite.md).
             Some(Outcome::Win(foe))
-        } else if rogue && legal_moves(&self.board, next).is_empty() {
-            // The side to move has no legal move: it loses the fight.
-            Some(Outcome::Win(other(next)))
         } else if self.draws && (repeated || capped) {
             stalled = true;
             Some(self.draw_to.map_or(Outcome::Draw, Outcome::Win))
@@ -437,6 +480,7 @@ mod tests {
             win: [WIN_EJECTIONS; 2],
             draws: true,
             draw_to: None,
+            passed: None,
         }
     }
 
@@ -986,6 +1030,70 @@ mod tests {
         won.play_bonus(&push).unwrap();
         assert_eq!(won.outcome(), Some(Outcome::Win(Player::Black)));
         assert_eq!(won.play_bonus(&push), Err(GameError::GameOver));
+    }
+
+    /// White's lone marble in the corner: walled in once Black's (4,-2) steps to (4,-3).
+    fn corner() -> Game {
+        game_from(&[(3, -4), (3, -3), (4, -2)], &[(4, -4)], Player::Black)
+    }
+
+    #[test]
+    fn a_side_with_marbles_but_no_legal_move_passes_its_turn() {
+        let mut game = corner();
+        game.play(&mv(&[(4, -2)], NW)).unwrap();
+        assert!(legal_moves(game.board(), Player::White).is_empty());
+        assert_eq!(game.to_move(), Player::Black, "White passed");
+        assert_eq!(game.passed(), Some(Player::White));
+        assert_eq!(game.outcome(), None);
+        assert_eq!(game.history().len(), 1, "a pass is no ply");
+        assert_eq!(
+            game.history()[0].hash,
+            position_hash(game.board(), Player::Black)
+        );
+        game.play(&mv(&[(4, -3)], SE)).unwrap();
+        assert_eq!(game.to_move(), Player::White, "White can move again");
+        assert_eq!(game.passed(), None, "the next ply clears the pass");
+    }
+
+    #[test]
+    fn a_side_with_no_marble_left_does_not_pass() {
+        let mut game = game_from(&[(0, 0)], &[], Player::Black);
+        game.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(game.to_move(), Player::White);
+        assert_eq!(game.passed(), None);
+    }
+
+    /// A line of four cells, the rest void: Black, White, Black, White. No side can move.
+    fn jammed(draw_to: Option<Player>) -> Game {
+        let mut game = game_from(&[(0, 0), (2, 0)], &[(1, 0), (3, 0)], Player::Black);
+        for q in -4..=4 {
+            for r in -4..=4 {
+                if r != 0 || !(0..=3).contains(&q) {
+                    game.board.void(q, r);
+                }
+            }
+        }
+        game.draw_to = draw_to;
+        game
+    }
+
+    #[test]
+    fn both_sides_blocked_end_the_game_in_a_draw() {
+        let mut game = jammed(None);
+        assert!(legal_moves(game.board(), Player::Black).is_empty());
+        assert!(legal_moves(game.board(), Player::White).is_empty());
+        game.pass_when_blocked();
+        assert_eq!(game.outcome(), Some(Outcome::Draw));
+        assert_eq!(game.draw_reason(), Some(DrawReason::Blocked));
+        assert_eq!((game.to_move(), game.passed()), (Player::Black, None));
+        let mut trainer = jammed(Some(Player::Black));
+        trainer.pass_when_blocked();
+        assert_eq!(
+            trainer.outcome(),
+            Some(Outcome::Win(Player::Black)),
+            "the mode's own draw rule"
+        );
+        assert_eq!(trainer.draw_reason(), Some(DrawReason::Blocked));
     }
 
     #[test]

@@ -1090,7 +1090,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   its marbles, and a push stays inside it (the void is still an ejection). The engine lists only
   those moves and refuses a move in the other room (`GameError::OtherRoom`).
   - **No legal move in its room**: the side to move plays in the other room for that ply; the
-    order then goes on as if it had played in its room.
+    order then goes on as if it had played in its room. With no legal move in either room, its
+    turn passes (rules.md section 7, #1301).
   - **Returns**: a return landing in the other room does not change the order.
   - **After the bridge** (P3): both sides move freely on the joined board; the order stops at the
     end of the move that raises it.

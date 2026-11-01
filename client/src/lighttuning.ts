@@ -10,7 +10,7 @@ export const LIGHT_TUNING: Readonly<Record<string, number>> = {
   'neon-column': 110,
   'neon-gantry': 110,
   'neon-observation': 110,
-  'pedestal-neon': 110,
+  'pedestal-neon': 40, // the bars hug the rim: a brighter one blooms over the unlit half (#1311)
   'corner-neon light': 100,
   'neon-airlock light': 100,
   'neon-column light': 100,

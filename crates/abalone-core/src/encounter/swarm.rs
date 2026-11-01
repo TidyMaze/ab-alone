@@ -324,7 +324,7 @@ impl Swarm {
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         let boss = self.game.to_move() == Player::White;
         let ejected = self.game.ejected(Player::Black);
-        self.game.play(mv)?;
+        self.game.play_ply(mv)?;
         if boss {
             self.end_reply();
             return Ok(());
@@ -352,7 +352,7 @@ impl Swarm {
         self.passed = legal_moves(self.game.board(), Player::White).is_empty();
         if self.passed {
             // No swarm move: the boss passes (rules.md section 7), as the Choir's.
-            self.game.pass();
+            self.game.pass_turn();
             self.end_reply();
         }
     }
@@ -364,7 +364,7 @@ impl Swarm {
         self.evac_or(Self::announce_next);
         if self.game.outcome().is_none() && legal_moves(self.game.board(), Player::Black).is_empty()
         {
-            self.game.pass();
+            self.game.pass_turn();
             self.arrive();
         }
     }
@@ -625,6 +625,11 @@ mod tests {
         assert_eq!((s.turn(), s.result()), (1, None));
         assert!(s.landed().is_empty());
         assert!(s.passed(), "the reply was a pass");
+        assert_eq!(
+            s.game().passed(),
+            Some(Player::White),
+            "the shared pass (#1301)"
+        );
         assert_eq!(s.boss_move(), None);
     }
 
@@ -657,6 +662,11 @@ mod tests {
         s.play(&mv(&[(-3, -1)], SW)).unwrap();
         assert!(legal_moves(s.game().board(), Player::Black).is_empty());
         assert_eq!(s.game().to_move(), Player::White);
+        assert_eq!(
+            s.game().passed(),
+            Some(Player::Black),
+            "the shared pass (#1301)"
+        );
         assert_eq!(s.turn(), 6);
         assert_eq!(s.landed().len(), 3, "turn 7's wave landed");
         assert!(s.boss_move().is_some());
