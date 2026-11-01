@@ -959,6 +959,34 @@ describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026
     }
   });
 
+  it('left and right alone both lean forward (up on the screen), mirrored, at each of the 6 resting angles (#1273)', () => {
+    const angleOf = (from: Axial, to: Axial): number => {
+      const dr = to[1] - from[1];
+      return Math.atan2(-((Math.sqrt(3) / 2) * dr), to[0] - from[0] + dr / 2);
+    };
+    for (let k = 0; k < 6; k++) {
+      const yaw = restYaw(DEFAULT_YAW + k * TURN_STEP);
+      for (const at of ROWS) {
+        const left = stepOf(at, held('ArrowLeft'), yaw)!;
+        const right = stepOf(at, held('ArrowRight'), yaw)!;
+        expect(Math.sin(angleOf(at, left) - yaw)).toBeCloseTo(0.5);
+        expect(Math.sin(angleOf(at, right) - yaw)).toBeCloseTo(0.5);
+        expect(Math.cos(angleOf(at, left) - yaw)).toBeLessThan(0);
+        expect(Math.cos(angleOf(at, right) - yaw)).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('down with left or right still steps back at the resting angles (#1273)', () => {
+    for (let k = 0; k < 6; k++) {
+      const yaw = restYaw(DEFAULT_YAW + k * TURN_STEP);
+      for (const key of ['ArrowLeft', 'ArrowRight']) {
+        const to = stepOf([0, 0], held('ArrowDown', key), yaw)!;
+        expect(Math.sin(Math.atan2(-((Math.sqrt(3) / 2) * to[1]), to[0] + to[1] / 2) - yaw)).toBeLessThan(0);
+      }
+    }
+  });
+
   it('the rest offset is 30 degrees, the default is -30, and restYaw gives the nearest resting angle (#1254)', () => {
     expect(REST_OFFSET).toBeCloseTo(Math.PI / 6);
     expect(DEFAULT_YAW).toBeCloseTo(-Math.PI / 6);
