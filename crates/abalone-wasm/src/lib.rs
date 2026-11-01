@@ -90,6 +90,8 @@
 //!   `4` badlands (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
 //! - Open world lairs (`world_lairs(seed)`): one boss lair per boss of the roster, `q, r` pairs, lair 0 first, each at least 150 cells from the
 //!   spawn on open ground (docs/specs/openworld.md section 7).
+//! - Open world teleporters (`world_teleporters(seed)`): `q, r` pairs, the spawn's first, one a square of 4 x 4 chunks, kept off
+//!   the lairs (docs/specs/openworld.md section 10).
 //! - Open world push (`world_push(seed, troop, enemies, broken)`): `troop` is the hero's cell then the troop's,
 //!   `enemies` the enemy marbles near the hero, `q, r` pairs. Empty when no push is legal, else
 //!   `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies, ...enemies, dir_q, dir_r]`:
@@ -110,7 +112,7 @@ pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::Engine;
 pub use royale::Royale;
 pub use run::run_map;
-pub use world::{world_chunk, world_lairs, world_version};
+pub use world::{world_chunk, world_lairs, world_teleporters, world_version};
 
 #[cfg(test)]
 mod tests {

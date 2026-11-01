@@ -586,6 +586,61 @@ fn lair_try(seed: u64, count: usize, k: i32, n: i32) -> Option<(i32, i32)> {
     fit.then_some((q, r))
 }
 
+/// The teleporters (#1412, docs/specs/openworld.md section 10): one in each square of `TELEPORT_BLOCK` x `TELEPORT_BLOCK` chunks, the
+/// squares centred on the spawn's, whose own teleporter is `SPAWN_TELEPORTER`, in the clearing.
+pub const TELEPORT_BLOCK: i32 = 4;
+pub const SPAWN_TELEPORTER: (i32, i32) = (2, -1);
+/// The salts of the teleporter draws: the chunk of the square, then the `q` and the `r` of a try.
+const TELEPORT_SALT: u64 = 42;
+/// The cells a square tries in each of its chunks before the next one.
+const TELEPORT_TRIES: i32 = 24;
+/// A teleporter and its six neighbours, which are open ground.
+const TELEPORT_PAD: [(i32, i32); 7] = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)];
+
+/// The teleporters of the world `seed`, the spawn's first, then a square after the other, row by row: a square's teleporter is the
+/// first try of its middle 2 x 2 chunks (from a drawn one) whose cell and six neighbours are open ground, with no generated enemy
+/// within 2 cells and no cell of `avoid` (the lairs) within 3. A square with no fit try has none. From the seed alone: it reads the
+/// terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
+pub fn teleporters(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    let span = WORLD_CHUNKS / TELEPORT_BLOCK / 2;
+    let squares = (-span..=span).flat_map(|by| (-span..=span).map(move |bx| (bx, by)));
+    let drawn = squares
+        .filter(|&square| square != (0, 0))
+        .filter_map(|(bx, by)| {
+            let first = (unit(seed, TELEPORT_SALT, bx, by) * 4.0) as i32;
+            (first..first + 4).find_map(|k| {
+                let (dx, dy) = (k % 2, k / 2 % 2);
+                let (cx, cy) = (bx * TELEPORT_BLOCK - 1 + dx, by * TELEPORT_BLOCK - 1 + dy);
+                teleporter_in(seed, cx, cy, avoid)
+            })
+        });
+    std::iter::once(SPAWN_TELEPORTER).chain(drawn).collect()
+}
+
+/// The first fit try of a teleporter in chunk `(cx, cy)`, `None` off the world or when none fits. A try lies 2 cells or more inside
+/// the chunk, so its pad and the cells round it within 2 are the chunk's own.
+fn teleporter_in(seed: u64, cx: i32, cy: i32, avoid: &[(i32, i32)]) -> Option<(i32, i32)> {
+    if !in_world(cx) || !in_world(cy) {
+        return None;
+    }
+    let window = Window::new(seed, cx, cy);
+    let enemies = enemy_groups(seed, cx, cy).concat();
+    (0..TELEPORT_TRIES).find_map(|n| {
+        let draw =
+            |salt: u64| 2 + (unit(seed, salt, n, cx * 4096 + cy) * f64::from(CHUNK - 4)) as i32;
+        let at = (
+            cx * CHUNK + draw(TELEPORT_SALT + 1),
+            cy * CHUNK + draw(TELEPORT_SALT + 2),
+        );
+        let fit = TELEPORT_PAD
+            .iter()
+            .all(|&(dq, dr)| !window.cell(at.0 + dq, at.1 + dr).terrain.blocked())
+            && enemies.iter().all(|&enemy| hex_distance(enemy, at) > 2)
+            && avoid.iter().all(|&cell| hex_distance(cell, at) > 3);
+        fit.then_some(at)
+    })
+}
+
 /// The farthest a hero path reaches from its start, in cells (docs/specs/openworld.md section 4).
 pub const PATH_RADIUS: i32 = 40;
 /// The most cells one path search expands before it gives up.
@@ -1425,7 +1480,11 @@ mod tests {
             let found = teleporters(seed, &[]);
             assert_eq!(teleporters(seed, &[]), found);
             // 17 x 17 squares of 4 x 4 chunks, the edge ones half off the world: most of them hold one.
-            assert!(found.len() >= 200 && found.len() <= 289, "seed {seed}: {}", found.len());
+            assert!(
+                found.len() >= 200 && found.len() <= 289,
+                "seed {seed}: {}",
+                found.len()
+            );
             for (i, a) in found.iter().enumerate() {
                 for b in &found[i + 1..] {
                     assert!(hex_distance(*a, *b) >= 32, "seed {seed}: {a:?} {b:?}");
@@ -1447,7 +1506,10 @@ mod tests {
 
     #[test]
     fn the_teleporters_of_seed_7_are_pinned() {
-        assert_eq!(teleporters(7, &[])[..3], [(2, -1), (-501, -505), (-453, -507)]);
+        assert_eq!(
+            teleporters(7, &[])[..3],
+            [(2, -1), (-501, -505), (-453, -507)]
+        );
     }
 
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
