@@ -1,11 +1,14 @@
 // The cells of the Open world the hero has discovered (#1411, docs/specs/openworld.md section 9): every cell within SIGHT of a cell
-// the hero stood on. One bit a cell, a bitset of CHUNK x CHUNK bits per chunk, saved as base64 text (44 characters a chunk).
+// the hero stood on. One bit a cell, a bitset of CHUNK x CHUNK bits per chunk, saved as base64 text (44 characters a chunk). It imports
+// nothing that loads the engine: the MCP server (mcp/src/world.ts) keeps its world's discovered cells with it.
 import type { Axial } from './board';
-import { CHUNK, chunkOf } from './openworld';
 
 /** The hero discovers the hex disc of this radius round its cell. */
 export const SIGHT = 10;
+/** The side of a chunk, `CHUNK` of openworld.ts (which loads the engine). */
+const CHUNK = 16;
 const BYTES = (CHUNK * CHUNK) / 8;
+const chunkOf = ([q, r]: Axial): Axial => [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
 
 /** The discovered cells as saved: `[cx, cy, bits]` for each chunk with any, `bits` the base64 of its bitset (bit `i` is the cell `i`
  * of the chunk, row by row, as the chunk's tiles). */
