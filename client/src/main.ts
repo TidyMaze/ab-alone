@@ -4962,6 +4962,12 @@ const openWorld = new OpenWorldMode(
     const ids = boss_ids();
     startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair }); // a lair starts the normal boss fight (#1170)
   },
+  // The marbles of the Open world wear the skins of the ship (#1176): the worn glass for the hero and the troop, the worn shell
+  // for the enemies, once their maps are on.
+  async () => {
+    await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m)));
+    return { player: marbleMaterials[2]!, shell: marbleMaterials[1]! };
+  },
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {

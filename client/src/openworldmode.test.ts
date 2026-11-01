@@ -1369,10 +1369,10 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
 });
 
 describe('the marbles wear the skins of the ship (#1176)', () => {
-  const lookOf = (m: OpenWorldMode, name: string): THREE.MeshStandardMaterial => {
-    let found: THREE.MeshStandardMaterial | undefined;
-    m.frame((scene) => (found = (scene.getObjectByName(name) as THREE.Mesh).material as THREE.MeshStandardMaterial));
-    return found!;
+  const lookOf = (m: OpenWorldMode, ...names: string[]): THREE.MeshStandardMaterial[] => {
+    let found: THREE.MeshStandardMaterial[] = [];
+    m.frame((scene) => (found = names.map((name) => (scene.getObjectByName(name) as THREE.Mesh).material as THREE.MeshStandardMaterial)));
+    return found;
   };
   const worn = () => {
     const skin = () => Object.assign(new THREE.MeshStandardMaterial(), { map: new THREE.Texture() });
@@ -1388,13 +1388,14 @@ describe('the marbles wear the skins of the ship (#1176)', () => {
     );
     await m.open(1, 800, 600);
     expect(asked).toHaveBeenCalledTimes(1);
-    expect(lookOf(m, 'hero').map).toBe(skins.player.map);
-    expect(lookOf(m, 'enemies').map).toBe(skins.shell.map);
+    const [hero, enemies] = lookOf(m, 'hero', 'enemies');
+    expect(hero!.map).toBe(skins.player.map);
+    expect(enemies!.map).toBe(skins.shell.map);
   });
 
   it('keeps the plain looks when a world is entered with no skins', () => {
     const m = mode();
     m.enter(1, 800, 600);
-    expect(lookOf(m, 'hero').map).toBeNull();
+    expect(lookOf(m, 'hero')[0]!.map).toBeNull();
   });
 });
