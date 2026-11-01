@@ -6,7 +6,7 @@ test('a click before the first frame is played', async ({ page }) => {
   await page.addInitScript(() => {
     window.requestAnimationFrame = () => 0;
   });
-  await page.goto('./?bot=on&scene=room'); // the room: the terrace canvas stays hidden until a frame is drawn (#1389)
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
 

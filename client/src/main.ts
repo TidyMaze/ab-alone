@@ -6205,7 +6205,7 @@ refresh();
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 // Until the terrace is drawn the room would show (#1389): the canvas stays hidden on a plain dark page, and shows after a terrace frame.
 if (!keepRoom) {
-  renderer.domElement.style.visibility = 'hidden';
+  renderer.domElement.style.opacity = '0'; // not `visibility`: a hidden canvas takes no click, and a first tap would be lost
   document.body.dataset.veil = 'on';
 }
 document.body.appendChild(renderer.domElement);
@@ -6243,7 +6243,7 @@ function moving(): boolean {
 /** Shows the canvas once a frame was drawn that is not the room's (#1389): the terrace, its plain background, or the Open world. */
 function unveil(): void {
   if (!document.body.dataset.veil || !(sceneRenderer.terraceOn || openWorld.active)) return;
-  renderer.domElement.style.visibility = '';
+  renderer.domElement.style.opacity = '';
   delete document.body.dataset.veil;
 }
 renderer.setAnimationLoop((now) => {
