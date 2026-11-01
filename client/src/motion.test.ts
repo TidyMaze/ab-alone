@@ -93,7 +93,6 @@ describe('refusal, hint and copy motion (#1097, #1098)', () => {
   });
 });
 
-<<<<<<< HEAD
 describe('screen transitions (#1099)', () => {
   const block = css.match(/\/\* Screen transitions \(#1099[^]*$/)![0];
 
@@ -113,7 +112,9 @@ describe('screen transitions (#1099)', () => {
 
   it('moves opacity only, so the game stays live under the fade', () => {
     expect(block).not.toMatch(/pointer-events|visibility|display/);
-=======
+  });
+});
+
 describe('Open world UI motion (#1105)', () => {
   const block = css.match(/\/\* Open world UI motion \(#1105[^]*?(?=\n\/\*|$)/)![0];
 
@@ -129,6 +130,5 @@ describe('Open world UI motion (#1105)', () => {
     const folded = css.match(/#openworld-hud\[data-folded\] \{([^}]*)\}/)![1]!;
     expect(folded).toContain('transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out), visibility 0s var(--motion-fast)');
     expect(css.match(/#openworld-hud \{[^}]*transition: ([^;]*);/)![1]).not.toMatch(/\b(width|height|top|left|margin)\b/);
->>>>>>> d7e48289 (test: the Open world HUD and New world sheet move in on the motion tokens (#1105))
   });
 });
