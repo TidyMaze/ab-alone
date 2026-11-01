@@ -158,6 +158,16 @@ mod tests {
     }
 
     #[test]
+    fn a_cell_is_in_a_list_once_and_keeps_its_place() {
+        let mut overlay = Overlay::new();
+        overlay.apply(&[(1, 0), (1, 0)], &[(3, 0), (4, 0), (3, 0)], 0);
+        assert_eq!(overlay.removed(), [(1, 0)]);
+        assert_eq!(overlay.added(), [(3, 0), (4, 0)]);
+        overlay.apply(&[(1, 0)], &[], 0);
+        assert_eq!(overlay.removed(), [(1, 0)]);
+    }
+
+    #[test]
     fn hide_removes_generated_enemies_once() {
         let mut overlay = Overlay::new();
         overlay.hide(&[(1, 0), (2, 0), (1, 0)]);
