@@ -289,3 +289,39 @@ test('no Hint during a boss fight, a daily fight or an online game, for the room
   await expect(page.locator('#hud')).toContainText('Waiting for an opponent');
   await expect(hint).toBeHidden();
 });
+
+// The Hint ghost fades in (#1097, motion.md story 7): the ghost opacity read in the page the moment the hint shows, then once
+// the base token (200 ms) has passed. Recorded in the page, so a slow runner cannot miss the rise.
+async function ghostRise(page: Page): Promise<{ first: number; later: number }> {
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__rise = new Promise((done) => {
+      new MutationObserver((_, ob) => {
+        if (document.body.dataset.hint !== 'shown') return;
+        ob.disconnect();
+        const first = w.__ghostOpacity();
+        setTimeout(() => done({ first, later: w.__ghostOpacity() }), 450);
+      }).observe(document.body, { attributes: true, attributeFilter: ['data-hint'] });
+    });
+  });
+  await page.locator('#hint').click();
+  return page.evaluate(() => (window as any).__rise);
+}
+
+test('the Hint ghost rises from clear to whole in the base token, #1097', async ({ page }) => {
+  await page.goto('./?bot=off&nodes=200');
+  await ready(page);
+  const { first, later } = await ghostRise(page);
+  expect(first).toBeLessThan(0.1);
+  expect(later).toBeCloseTo(0.45);
+  expect(await ghosts(page)).toBeGreaterThan(0);
+});
+
+test('reduced motion: the Hint ghost appears whole, #1097', async ({ browser }) => {
+  const page = await (await browser.newContext({ reducedMotion: 'reduce' })).newPage();
+  await page.goto('./?bot=off&nodes=200');
+  await ready(page);
+  const { first, later } = await ghostRise(page);
+  expect(first).toBeCloseTo(0.45);
+  expect(later).toBeCloseTo(0.45);
+});
