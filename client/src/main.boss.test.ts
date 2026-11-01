@@ -105,6 +105,7 @@ describe('main.ts boss fights', () => {
       'The Unstable Core',
       'The Dual Room',
       'The Stalker',
+      'The Swarm',
     ]);
     expect(list.hidden).toBe(true);
     button.click();

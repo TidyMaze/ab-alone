@@ -147,6 +147,7 @@ import {
   parseReturn,
   type DualState,
 } from './dual';
+import { SWARM_TURNS, evacAt, parseSwarm, swarmText, type SwarmState } from './swarm';
 import { ballastText, firedText, parseFired, type Fired } from './ballast';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
@@ -1361,6 +1362,13 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 const fogMaterial = new THREE.MeshBasicMaterial({ color: tonal ? TONAL.veiled : 0x000000, transparent: true, opacity: tonal ? 1 : 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
+// The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the 30th
+// reply is done the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
+const arrivalMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
+const evacMaterial = new THREE.MeshBasicMaterial({ color: 0xfff1c1, transparent: true, opacity: 0, depthWrite: false });
+const evacGlow = Object.assign(new THREE.InstancedMesh(crackGeometry, evacMaterial, 61), { name: 'swarm-evac' }); // one, reused
+let evac: { game: unknown; start: number; reduced: boolean; light: number; lift: number; done: boolean } | null = null;
+let swarmShown: SwarmState | null = null; // read by the tests
 let lastLanding: Axial[] = []; // where the bot's last move landed
 let stalkerShown: { visible: Axial[]; drawn: Axial[]; revealed: Axial[]; last: Axial[] } | null = null; // read by the tests
 // The Chaplain's martyr tell (#748): a steady ember ring and a tall glyph on the marble that explodes next boss turn.
@@ -3061,6 +3069,7 @@ function drawHud(extra = ''): void {
         firedText(parseFired(boss.ballast_fired())),
         coreText(parseCore(boss.unstable())),
         dualText(parseDual(boss.dual()), 1),
+        swarmText(parseSwarm(boss.swarm()), boss.win_ejections(2)),
         toxinText(boss.turns_left()),
         ventNote(phaseSeen.since, shownPly()),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), shownPly()) : '',
@@ -3087,10 +3096,10 @@ function drawHud(extra = ''): void {
       }),
     );
   }
-  drawBossBar(
-    document.getElementById('boss-bar')!,
-    boss ? { name: boss.name(), ejected: engine.ejected(1), win: engine.win_ejections(1), steps: Array.from(boss.phase_ejections()), phase: boss.phase() } : null,
-  );
+  // The Swarm's bar holds its 30 turns, one fragment breaks per boss reply (#1008).
+  const turns = boss && parseSwarm(boss.swarm());
+  const health = turns ? { ejected: SWARM_TURNS - turns.left, win: SWARM_TURNS } : { ejected: engine.ejected(1), win: engine.win_ejections(1) };
+  drawBossBar(document.getElementById('boss-bar')!, boss ? { name: boss.name(), ...health, steps: Array.from(boss.phase_ejections()), phase: boss.phase() } : null);
   drawChoirChips(document.getElementById('boss-bar')!, boss ? choirChips(parseArmies(boss.armies()), boss.next_army()) : null);
   if (flatHud) {
     const flat = { phase: boss?.phase() ?? 0, phases: boss?.phases() ?? 0, tell };
@@ -3108,6 +3117,44 @@ function drawHud(extra = ''): void {
     document.getElementById('hud')!.insertAdjacentHTML('beforeend', rankedHudHtml(loadRankedProfile(store).rating1v1, { queueWindow, delta: rankedDelta }));
   }
   showResultCard();
+}
+
+/** The Swarm's rings on the cells of the next wave, and the evac's light over the whole board once it is won. */
+function drawSwarm(board: ArrayLike<number>, swarm: SwarmState | null): void {
+  swarmShown = swarm;
+  for (const [q, r] of swarm?.cells ?? []) {
+    const p = axialTo3D(q, r);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, arrivalMaterial), { name: 'swarm-mark' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.02, p.z);
+    marbles.add(ring);
+  }
+  document.body.dataset.swarmMarks = (swarm?.cells ?? []).map((c) => c.join(',')).join(' '); // read by the e2e tests
+  const won = swarm !== null && (engine as Encounter).result() === 1;
+  if (!won) evac = null;
+  else if (evac?.game !== engine) evac = { game: engine, start: performance.now(), reduced: reducedMotion(), light: 0, lift: 0, done: false };
+  if (!evac) return;
+  BOARD_CELLS.forEach(([q, r], k) => {
+    const p = axialTo3D(q, r);
+    evacGlow.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, 0.005, p.z)); // on the disc's top face, as the veil
+  });
+  evacGlow.count = board.length;
+  evacGlow.instanceMatrix.needsUpdate = true;
+  marbles.add(evacGlow);
+  liftEvac(board, evac);
+}
+
+/** The evac as it is now: the light over the board, the player's marbles lifted. */
+function liftEvac(board: ArrayLike<number>, at: NonNullable<typeof evac>): void {
+  Object.assign(at, evacAt(performance.now() - at.start, at.reduced));
+  evacMaterial.opacity = 0.55 * at.light;
+  for (const [i, objects] of marbleAt) {
+    if (board[i] !== PLAYER) continue;
+    for (const obj of objects) {
+      obj.userData.evacBase ??= obj.position.y;
+      obj.position.y = (obj.userData.evacBase as number) + at.lift;
+    }
+  }
 }
 
 /** Stalker's veil over the cells out of range and the rings of the bot's last move in range (#998). */
@@ -3398,6 +3445,7 @@ function refresh(): void {
     return { cell: [q, r], left, glow: left === 1 };
   });
   for (const train of trainsShown) drawTrack(train);
+  drawSwarm(board, engine instanceof Encounter && !showing() ? parseSwarm(engine.swarm()) : null);
   beltsShown = engine instanceof Encounter ? parseBelts(engine.belts()) : null;
   beltRibs = beltsShown ? drawBelts(beltsShown) : [];
   pulsarShown = engine instanceof Encounter ? parsePulsar(engine.pulsar()) : null;
@@ -4184,6 +4232,10 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to read Stalker's fog as drawn (#998): the visible cells, the enemy marbles drawn, the
 // revealed ones and the rings of the bot's last move; null outside Stalker.
 (window as unknown as Record<string, unknown>).__stalker = () => stalkerShown;
+// Used by the browser checks to read The Swarm as drawn (#1008): the turns left, the pass, the marked cells, and the evac's
+// light and lift now; null outside The Swarm.
+(window as unknown as Record<string, unknown>).__swarm = () =>
+  swarmShown && { ...swarmShown, evac: evac !== null, glow: evacMaterial.opacity, lift: evac?.lift ?? 0 };
 // Used by the browser checks to find The Dual Room's marks as drawn (#947, #955): the bridge and the announced return, the
 // bridge cells' heights now (null while they are the void), the mark's cell and the falling marble.
 (window as unknown as Record<string, unknown>).__dual = () => ({
@@ -5481,7 +5533,7 @@ function animateParticles(now: number): void {
 }
 // An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
 function moving(): boolean {
-  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop];
+  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop, evac && !evac.done];
   const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
   return (
     effects.some(Boolean) ||
@@ -5525,6 +5577,7 @@ renderer.setAnimationLoop((now) => {
   if (shock) drawShock(now - shock.start);
   animateUnstable(now);
   animateDual(now);
+  if (evac && !evac.done) liftEvac(engine.board(), evac);
   if (blast) drawBlast(now - blast.start);
   animateSpeech(now);
   animateHaze(now);

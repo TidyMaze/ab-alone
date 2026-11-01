@@ -42,6 +42,7 @@ const BOSS_DECK: Record<string, Deck> = {
   assembly: 'cargo',
   core: 'furnace',
   dual: 'mess',
+  swarm: 'cargo', // the Cargo hold's vermin (game-design.md section 7.14)
   stalker: 'chapel', // the Chapel's night watch (stalker.md section 2)
 };
 

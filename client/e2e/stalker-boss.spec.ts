@@ -8,10 +8,10 @@ test('The Stalker is a boss: pick it in the Boss fight list, the veil and the si
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#boss-fight').click();
-  const entries = page.locator('#boss-list button');
-  await expect(entries.last()).toHaveText('The Stalker');
+  const stalker = page.locator('#boss-list').getByRole('button', { name: 'The Stalker' }); // before The Swarm (#1008)
+  await expect(stalker).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('stalker-boss-list.png') });
-  await entries.last().click();
+  await stalker.click();
   await expect(page.locator('#hud')).toContainText('Sight 3 · narrows to 2 after 3 more ejections');
   const fog = await page.evaluate(() => (window as any).__stalker() as { visible: unknown[]; drawn: unknown[] });
   expect(fog.visible).toHaveLength(41);
@@ -32,7 +32,7 @@ test('A Stalker fight comes back under its fog after a reload, and the menu has 
   await expect(page.locator('#stalker')).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('modes-no-stalker.png') });
   await page.locator('#boss-fight').click();
-  await page.locator('#boss-list button').last().click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Stalker' }).click();
   const move = await page.evaluate(() => (window as any).__legal()[0] as { cells: [number, number][]; dir: number });
   await page.evaluate((m) => (window as any).__click(...m.cells[0]!), move);
   await page.evaluate((m) => (window as any).__click(...(window as any).__targets().find((t: any) => t.dir === m.dir).cell), move);

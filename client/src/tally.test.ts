@@ -9,7 +9,7 @@ describe('tallyLine', () => {
   });
 
   it('has a non-empty line for every boss id of the roster', () => {
-    expect(BOSS_IDS).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker']);
+    expect(BOSS_IDS).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker', 'swarm']);
     for (const id of BOSS_IDS) {
       expect(tallyLine({ mode: 'boss', boss: id })).not.toBe('');
     }

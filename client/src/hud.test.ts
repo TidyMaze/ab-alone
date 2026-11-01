@@ -163,6 +163,13 @@ describe('hudHtml', () => {
     expect(rows(1)).toEqual(['pale', 'dark']); // against the bot, side 1 wears the glass and is White
   });
 
+  it('draws one scratched pip per ejection of a side that does not win by ejections (The Swarm, #1008)', () => {
+    const html = hudHtml({ ...base, win: [0, 2], ejected: [3, 0] });
+    expect(html.match(/class="pip out"/g)).toHaveLength(3);
+    expect(html.match(/class="pip"/g)).toHaveLength(2);
+    expect(flatHudHtml({ ...base, win: [0, 2], ejected: [3, 1] })).toContain('Black 3, White 1/2');
+  });
+
   it('draws one pip per ejection a side needs: 10 for Black against the Choir, Decision #131', () => {
     const html = hudHtml({ ...base, win: [10, 6], ejected: [3, 1] });
     const [black, white] = html.match(/<span class="(?:dark|pale)">(<span class="pip[^"]*"><\/span>)+<\/span>/g)!; // the rows carry their marble colour (#1038)

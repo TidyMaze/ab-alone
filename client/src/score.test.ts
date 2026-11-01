@@ -20,6 +20,10 @@ describe('formatScore', () => {
     expect(formatScore([10, 2], [10, 6], 1, 0, 2)).toBe('Black ejected 10/10 · White ejected 2/6');
   });
 
+  it('shows only the count of a side that does not win by ejections: the player against The Swarm, #1008', () => {
+    expect(formatScore([3, 1], [0, 2], 0, 0, 2)).toBe('Black ejected 3 · White ejected 1/2');
+  });
+
   it('drops redundant draw reason since end banner and turn already show it (#425)', () => {
     expect(formatScore([3, 3], [6, 6], 3, 1, 2)).toBe('Black ejected 3/6 · White ejected 3/6');
     expect(formatScore([3, 3], [6, 6], 3, 2, 2)).toBe('Black ejected 3/6 · White ejected 3/6');

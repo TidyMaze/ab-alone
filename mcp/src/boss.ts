@@ -28,6 +28,8 @@ export interface BossLike {
   pulsar(): Int32Array;
   /** `[sight, ejections before it narrows]` of The Stalker, the second `-1` in its last phase; empty otherwise. */
   stalker(): Int32Array;
+  /** `[turns_left, passed, q, r, ...]` of The Swarm: boss turns before the evac, `1` after a pass, the next wave's cells; empty otherwise. */
+  swarm(): Int32Array;
   /** `[turns_left, ...]` then `[row, q0, len, dir, shift, strike]` per belt of The Assembly Line; empty otherwise. */
   belts(): Int32Array;
   /** `[q, r]` pairs. */
@@ -129,6 +131,7 @@ export function bossState(id: string, boss: BossLike): BossState {
     ...records(boss.converted(), 2).map((record) => ({ kind: 'converted', cell: cell(record) })),
     ...armies.map((record) => ({ kind: 'army', cell: cell(record), value: record[2]! })),
     ...returnMark(boss.dual()),
+    ...records(boss.swarm().subarray(2), 2).map((record) => ({ kind: 'arrival', cell: cell(record) })),
   ];
   return {
     id,
@@ -198,6 +201,20 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
     const range = `you see the boss marbles only within ${sight} ${sight === 1 ? 'cell' : 'cells'} of your own`;
     return { kind: 'sight', cells: [], text: narrows! < 0 ? range : `${range}; the sight narrows after ${narrows} more ejections` };
   }
+  const swarm = boss.swarm();
+  if (swarm.length > 0) return arrivalTell(swarm);
   const special = boss.tell();
   return special < 0 ? null : { kind: 'special', cells: [], text: `board special ${special} fires after the next ply` };
+}
+
+/** The Swarm's tell: where its next wave lands, the boss turns before the evac, and its last pass. */
+function arrivalTell(swarm: Int32Array): Tell {
+  const [left, passed] = swarm;
+  const cells = records(swarm.subarray(2), 2).map(cell);
+  if (left === 0) return { kind: 'arrival', cells, text: 'the evac has come' };
+  const lands = cells.length === 1 ? `a swarm marble lands on ${cells[0]} after your move` : `swarm marbles land on ${cells.join(', ')} after your move`;
+  const text = [cells.length > 0 ? lands : '', `the evac comes in ${left} boss ${left === 1 ? 'turn' : 'turns'}`, passed ? 'the swarm passed its last turn' : '']
+    .filter((part) => part !== '')
+    .join('; ');
+  return { kind: 'arrival', cells, text };
 }
