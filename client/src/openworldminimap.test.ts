@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
-import { COLOURS, drawMinimap, RADIUS, screenOffset, windowCells, type MinimapData } from './openworldminimap';
+import { LOOK, PROPS, WATER } from './openworldview';
+import { COLOURS, drawMinimap, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
 
 // The Open world's minimap (#1410, docs/specs/openworld.md section 8): a 2D canvas drawn from plain data.
 
@@ -47,6 +48,20 @@ const data = (over: Partial<MinimapData> = {}): MinimapData => ({
 });
 const at = (fills: { colour: string; at: number[] }[], colour: string) => fills.filter((f) => f.colour === colour);
 
+describe('terrainColour', () => {
+  const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
+  it('is the colour of the 3D view: the ground of LOOK, the lake shore, the props', () => {
+    expect(terrainColour('grass')).toBe(hex(LOOK.grass.color));
+    expect(terrainColour('sand')).toBe(hex(LOOK.sand.color));
+    expect(terrainColour('rock')).toBe(hex(LOOK.rock.color));
+    expect(terrainColour('peak')).toBe(hex(LOOK.peak.color));
+    expect(terrainColour('water')).toBe(hex(WATER.shore));
+    expect(terrainColour('tree')).toBe(hex(PROPS.tree.color));
+    expect(terrainColour('boulder')).toBe(hex(PROPS.boulder.color));
+    expect(terrainColour('wall')).toBe(hex(PROPS.wall.color));
+  });
+});
+
 describe('screenOffset', () => {
   it('puts a cell where the 3D view puts it, relative to the hero: the board layout at yaw 0, up is -r', () => {
     expect(screenOffset([0, 0], [1, 0], 0)).toEqual({ x: 1, y: expect.closeTo(0) });
@@ -75,21 +90,36 @@ describe('windowCells', () => {
 });
 
 describe('drawMinimap', () => {
+  it('draws an arrow only for the 3 nearest unbeaten lairs out of the window; the others and the beaten ones have none', () => {
+    const { ctx, fills } = fakeContext();
+    const far = (q: number, beaten = false) => ({ cell: [q, 0] as Axial, beaten });
+    drawMinimap(ctx, SIZE, data({ lairs: [far(500), far(60), far(300), far(100), far(40, true), far(200)] }));
+    expect(at(fills, COLOURS.lair)).toHaveLength(3);
+    expect(at(fills, COLOURS.lairBeaten)).toHaveLength(0);
+  });
+
+  it('still draws every lair in the window, whatever the arrows', () => {
+    const { ctx, fills } = fakeContext();
+    const near = [3, 4, 5, 6].map((q) => ({ cell: [q, 0] as Axial, beaten: false }));
+    drawMinimap(ctx, SIZE, data({ lairs: [...near, { cell: [100, 0], beaten: false }] }));
+    expect(at(fills, COLOURS.lair)).toHaveLength(5);
+  });
+
   it('clears, clips to a circle and paints each cell in the colour of its terrain', () => {
     const { ctx, log, fills } = fakeContext();
     drawMinimap(ctx, SIZE, data({ cells: [[3, 0, 'water'], [-3, 0, 'peak']] }));
     expect(log.slice(0, 3)).toEqual(['clear', 'save', 'clip']);
     expect(log).toContain('restore');
-    const water = at(fills, COLOURS.water);
+    const water = at(fills, terrainColour('water'));
     expect(water).toHaveLength(1);
     expect(water[0]!.at[0]).toBeGreaterThan(MIDDLE);
-    expect(at(fills, COLOURS.peak)[0]!.at[0]).toBeLessThan(MIDDLE);
+    expect(at(fills, terrainColour('peak'))[0]!.at[0]).toBeLessThan(MIDDLE);
   });
 
   it('draws the cells turned with the yaw, so up is up on screen', () => {
     const { ctx, fills } = fakeContext();
     drawMinimap(ctx, SIZE, data({ cells: [[-3, 0, 'rock']], yaw: Math.PI / 2 }));
-    const [x, y] = at(fills, COLOURS.rock)[0]!.at;
+    const [x, y] = at(fills, terrainColour('rock'))[0]!.at;
     expect(x).toBeCloseTo(MIDDLE);
     expect(y).toBeLessThan(MIDDLE);
   });
@@ -113,15 +143,15 @@ describe('drawMinimap', () => {
 
   it('draws a lair out of the window as an arrow on the edge pointing to it', () => {
     const { ctx, fills } = fakeContext();
-    drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [100, -200], beaten: true }] }));
+    drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [100, -200], beaten: false }] }));
     const [right] = at(fills, COLOURS.lair);
     const [x, y] = right!.at;
     expect(x).toBeGreaterThan(MIDDLE + SIZE / 4);
     expect(x).toBeLessThan(SIZE);
     expect(y).toBeCloseTo(MIDDLE);
     expect(right!.at).toHaveLength(6); // a triangle: three points
-    const [top] = at(fills, COLOURS.lairBeaten);
-    expect(top!.at[1]).toBeLessThan(MIDDLE - SIZE / 4);
-    expect(top!.at[0]).toBeCloseTo(MIDDLE);
+    const top = at(fills, COLOURS.lair)[1]!;
+    expect(top.at[1]).toBeLessThan(MIDDLE - SIZE / 4);
+    expect(top.at[0]).toBeCloseTo(MIDDLE);
   });
 });

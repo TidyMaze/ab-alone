@@ -6,7 +6,7 @@ import type { Axial } from './board';
 import { CHUNK, World } from './openworld';
 import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_STEP, twistOf } from './openworldmode';
 import { FightState } from './openworldfight';
-import { COLOURS } from './openworldminimap';
+import { COLOURS, terrainColour } from './openworldminimap';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { world_chunk } from 'abalone-wasm';
@@ -1829,7 +1829,7 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     const ctx = withCanvas();
     lairer(Int32Array.of(8, 0, 40, 0)).enter(42, 800, 600);
     expect(ctx.clearRect).toHaveBeenCalledTimes(1);
-    for (const colour of [COLOURS.grass, COLOURS.hero, COLOURS.troop, COLOURS.enemy, COLOURS.lair]) expect(ctx.fills, colour).toContain(colour);
+    for (const colour of [terrainColour('grass'), COLOURS.hero, COLOURS.troop, COLOURS.enemy, COLOURS.lair]) expect(ctx.fills, colour).toContain(colour);
   });
 
   it('is redrawn on a step and on a camera turn, never on a frame', () => {
@@ -1867,7 +1867,7 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
   it('leaves out the cells off the world', () => {
     const ctx = withCanvas();
     new OpenWorldMode((_s, cx, cy) => (cx > 0 ? new Uint8Array() : bytes(cx, cy)), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1)).enter(42, 800, 600);
-    expect(ctx.fills).toContain(COLOURS.grass);
+    expect(ctx.fills).toContain(terrainColour('grass'));
   });
 
   it('makes its canvas at the end of the body, once, and draws nothing when it has no 2D context', () => {
