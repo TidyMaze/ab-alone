@@ -26,7 +26,7 @@ export const PALETTE = {
 export const TERRACE_EXPOSURE = 1.5;
 
 /** One sun, elevation 28 (the Blender render's, lights_camera.json), 25 degrees left of the camera axis at yaw 0, fixed in the world; a hemisphere; no point light. */
-export const SUN = { colour: 0xffd9a8, intensity: 4.6, elevation: 28, azimuth: 25, sky: 0x9db8d8, ground: 0x8a7a66, hemisphere: 1.9 } as const;
+export const SUN = { colour: 0xffd9a8, intensity: 5.0, elevation: 28, azimuth: 25, sky: 0x9db8d8, ground: 0x8a7a66, hemisphere: 1.6 } as const;
 
 /** The sun's position on a sphere of `distance` round the board: x is left of the axis, the camera looks from +z at yaw 0. */
 export function sunPosition(distance = 30): [number, number, number] {
@@ -38,7 +38,7 @@ export function sunPosition(distance = 30): [number, number, number] {
  * The sun's soft shadow (#1364), the render's: a 2048 map over the board and two rings round it (7 cells each way: the far ring and the ridges stay unshaded), very soft and light (the art director's values).
  * The posts, the walls, the plinth and its steps cast it, not the marbles (their pedestal is their contact); the baked ambient occlusion of the vertex colours stays under it.
  */
-export const SUN_SHADOW = { size: 1024, extent: 7, near: 1, far: 90, bias: -0.0005, normalBias: 0.04, radius: 9, blurSamples: 8, intensity: 0.3 } as const;
+export const SUN_SHADOW = { size: 1024, extent: 7, near: 1, far: 90, bias: -0.0005, normalBias: 0.04, radius: 9, blurSamples: 8, intensity: 0.85 } as const;
 
 /** Sets the sun's shadow camera and map, on or off (the low tier draws none). */
 export function aimSunShadow(sun: THREE.DirectionalLight, on: boolean, reach: number = SUN_SHADOW.extent): void {

@@ -8,7 +8,7 @@ import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
-import { createBloomPipeline, FRAME_LOOK, SceneRenderer, type NotchRow } from './scene';
+import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
   const canvas = document.createElement('canvas');
@@ -469,6 +469,16 @@ describe('SceneRenderer (#632)', () => {
     expect((smooth!.outputNode as any).constructor.name).toBe('FXAANode');
     expect((plain!.outputNode as any).constructor.name).not.toBe('FXAANode'); // the grade alone: no MSAA to replace, no FXAA to ask
     expect(plain!.outputColorTransform).toBe(false);
+  });
+
+  it('raises the contrast after the tone map when asked, on its own or with the saturation (#1398)', () => {
+    const camera = new THREE.PerspectiveCamera();
+    expect(TERRACE_CONTRAST).toBeGreaterThan(1);
+    expect(createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, false, 1, false, 1, 1)).toBeNull(); // neither: no pass
+    const [alone, both] = [1, 1.35].map((s) => createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, false, 1, false, s, TERRACE_CONTRAST)!) as [any, any];
+    expect(alone.bloom).toBeNull();
+    expect(alone.outputColorTransform).toBe(false);
+    expect(both.outputNode).not.toBe(alone.outputNode);
   });
 
   it('builds no bloom pass for a low tier renderer (#849)', () => {

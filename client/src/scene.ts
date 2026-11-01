@@ -1,6 +1,6 @@
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
-import { pass, renderOutput, saturation } from 'three/tsl';
+import { max, pass, renderOutput, saturation, vec4 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
@@ -19,6 +19,9 @@ export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as con
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
 /** What AgX takes out of the palette is given back (art director: about 8 to 10 percent). */
 export const TERRACE_SATURATION = 1.35;
+/** Contrast after the tone map, round the picture's mean luminance (about 0.44, measured): 1 leaves it; the terrace asks a little more, both tiers (#1398). */
+export const TERRACE_CONTRAST = 1.12;
+const CONTRAST_PIVOT = 0.44;
 /** The radius of the rounded edges of the board's plate and rim. */
 const FRAME_BEVEL = 0.03;
 
@@ -68,16 +71,19 @@ export function createBloomPipeline(
   withBloom = true,
   /** Colour saturation after the tone map: 1 leaves it (the room), the terrace asks more (AgX washes the palette). */
   saturate = 1,
+  /** Contrast after the tone map and the saturation: 1 leaves it. */
+  contrast = 1,
 ): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> | null }) | null {
   try {
     // The low tier (#849) draws no bloom: the scene goes straight to the screen, or through FXAA alone.
-    if (!withBloom && !smooth && saturate === 1) return null;
+    if (!withBloom && !smooth && saturate === 1 && contrast === 1) return null;
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
     const colorNode = scenePass.getTextureNode('output');
     if (!withBloom) {
       pipeline.outputColorTransform = false;
-      const graded = saturate === 1 ? renderOutput(colorNode) : saturation(renderOutput(colorNode), saturate);
+      const toned = saturate === 1 ? renderOutput(colorNode) : saturation(renderOutput(colorNode), saturate);
+      const graded = contrast === 1 ? toned : vec4(max(toned.rgb.sub(CONTRAST_PIVOT).mul(contrast).add(CONTRAST_PIVOT), 0), 1);
       pipeline.outputNode = smooth ? fxaa(graded) : graded;
       return Object.assign(pipeline, { bloom: null });
     }
@@ -297,7 +303,7 @@ export class SceneRenderer {
 
     const smooth = smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0);
     this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, webdriver ? 1 : 2, options.bloom ?? true);
-    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, 1, false, TERRACE_SATURATION);
+    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, 1, false, TERRACE_SATURATION, TERRACE_CONTRAST);
   }
 
   async init(): Promise<void> {
