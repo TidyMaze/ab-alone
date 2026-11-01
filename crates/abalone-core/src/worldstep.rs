@@ -133,12 +133,24 @@ pub fn entry(
     occupied: bool,
     trees_near: bool,
 ) -> Entry {
-    todo!()
+    let delta = (to.0 - at.0, to.1 - at.1);
+    let Some(terrain) = terrain.filter(|_| DIRECTIONS.contains(&delta) && !occupied) else {
+        return Entry::Refused;
+    };
+    match terrain {
+        Terrain::Boulder => Entry::Breaks,
+        Terrain::Tree if !trees_near => Entry::Breaks,
+        _ if terrain.blocked() => Entry::Refused,
+        _ => Entry::Rolls,
+    }
 }
 
 /// The troop after the hero steps from `at` to `to`: the cell the hero left first, then the marbles before, none on `to`, at most `TROOP`.
 pub fn trail(troop: &[(i32, i32)], at: (i32, i32), to: (i32, i32)) -> Vec<(i32, i32)> {
-    todo!()
+    let mut out = vec![at];
+    out.extend(troop.iter().copied().filter(|&cell| cell != to));
+    out.truncate(TROOP);
+    out
 }
 
 #[cfg(test)]
