@@ -51,7 +51,12 @@ export function buildBoard(myRating: number, rivals: readonly Rival[]): BoardRow
   return rows.map((r, i) => ({ rank: i + 1, ...r }));
 }
 
-export function boardHtml(rows: readonly BoardRow[]): string {
+/** The ratings after your last 1v1 matches (royale is not in it), oldest first, ten at most (#1287). */
+export function ratingHistory(matches: readonly { readonly mode: string; readonly newRating: number }[], max = 10): number[] {
+  return matches.filter((m) => m.mode === '1v1').slice(-max).map((m) => m.newRating);
+}
+
+export function boardHtml(rows: readonly BoardRow[], history: readonly number[] = []): string {
   const mine = rows.find((r) => r.me)!;
   const body = rows
     .map(
@@ -60,5 +65,8 @@ export function boardHtml(rows: readonly BoardRow[]): string {
     )
     .join('');
   const empty = rows.length === 1 ? '<p>Play a ranked match to meet opponents.</p>' : '';
-  return `<p id="board-position">Your position: ${mine.rank} of ${rows.length}</p><table><thead><tr><th>#</th><th>Player</th><th>Rating</th></tr></thead><tbody>${body}</tbody></table>${empty}`;
+  const trail = history.length
+    ? `<ol id="board-history" aria-label="Your rating over your last matches">${history.map((r) => `<li>${r}</li>`).join('')}</ol>`
+    : '';
+  return `<p id="board-position">Your position: ${mine.rank} of ${rows.length}</p><table><thead><tr><th>#</th><th>Player</th><th>Rating</th></tr></thead><tbody>${body}</tbody></table>${empty}${trail}`;
 }
