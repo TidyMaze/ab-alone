@@ -642,6 +642,8 @@ it.
 ### Closed bugs
 
 - #1226 (three sound e2e specs red, bus gains read 0): environmental, the headless AudioContext clock of one Mac stalled; no code change, `e2e/sound.spec.ts` 11 passed on main 836fc723 and the full run of PR #1256 had no sound failure (512 passed).
+- #842 (10 to 15 FPS at DPR 2): closed, the causes are fixed (#843 to #846, #848) and the Mac reads 60 FPS on the high tier. The first frame stays in #847, the weak GPU in #849.
+- #885 (2x frame rate on a phone): closed unmet. #886, #887 and #895 took draw calls from 224 to 65, 1.3 to 1.4x. The rest is GPU-bound and needs a real Pixel 7 bench.
 - #925 (texture download time): closed as measured, the 5 to 6 s target is withdrawn. Textures alone cannot reach it: JS, wasm and GLB are 41 % of the wire, textures 2.57 MB of 4.37 MB. Lower ETC1S quality rejected (the room looks softer). Lazy normal maps rejected (at most 20 % at 1 Mbps, still about 30 s; a visible pop of about 10 s; a pipeline recompile on WebGPU that conflicts with #847). Transcode already runs in workers.
 
 ## 11. Trending tech considered
