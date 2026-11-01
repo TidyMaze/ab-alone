@@ -98,3 +98,29 @@ describe('the boss lairs of the Open world mode (#1170)', () => {
     expect((await saves.load(7))!.lairs).toEqual([0]);
   });
 });
+
+describe('the medal count of the Open world HUD (#1171)', () => {
+  const withMedals = (medals: () => { have: number; total: number }) =>
+    new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, medals);
+
+  it('writes "Medals N / total" in the HUD when a world opens, and leaves the page alone without a HUD', () => {
+    const out = document.createElement('output');
+    out.id = 'openworld-medals';
+    document.body.append(out);
+    const m = withMedals(() => ({ have: 3, total: 14 }));
+    m.enter(7, 800, 600);
+    expect(out.textContent).toBe('Medals 3 / 14');
+    out.remove();
+    m.enter(7, 800, 600); // no element: nothing to write to
+    expect(body().openworld).toBe('7');
+  });
+
+  it('counts no medal by default', () => {
+    const out = document.createElement('output');
+    out.id = 'openworld-medals';
+    document.body.append(out);
+    setup().m.enter(7, 800, 600);
+    expect(out.textContent).toBe('Medals 0 / 0');
+    out.remove();
+  });
+});
