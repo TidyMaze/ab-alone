@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EASE, MOTION, reducedMotion, cue } from './motion';
+import { EASE, MOTION, reducedMotion, cue, crossFade } from './motion';
 import { SLIDE_MS } from './slide';
 import css from './ui.css?raw';
 
@@ -90,5 +90,26 @@ describe('refusal, hint and copy motion (#1097, #1098)', () => {
   it('draws a check mark on Copied on the fast token', () => {
     expect(block).toMatch(/#daily-copy\.copied::before \{[^}]*content: '\\2713'[^}]*animation: check-in var\(--motion-fast\) var\(--ease-out\)/);
     expect(block).toMatch(/@keyframes check-in \{[^}]*clip-path/);
+  });
+});
+
+describe('screen cross-fade (#1099)', () => {
+  afterEach(() => delete document.documentElement.dataset.motion);
+
+  it('fades the new screen in on the base token, opacity only', () => {
+    const animate = vi.fn();
+    crossFade({ animate } as unknown as Element);
+    expect(animate).toHaveBeenCalledWith([{ opacity: 0 }, { opacity: 1 }], { duration: MOTION.base, easing: EASE.out });
+  });
+
+  it('is a hard cut under reduced motion', () => {
+    document.documentElement.dataset.motion = 'reduced';
+    const animate = vi.fn();
+    crossFade({ animate } as unknown as Element);
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  it('does nothing where animations do not exist', () => {
+    expect(() => crossFade(document.createElement('div'))).not.toThrow();
   });
 });
