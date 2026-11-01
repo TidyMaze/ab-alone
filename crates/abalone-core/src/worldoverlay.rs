@@ -3,7 +3,8 @@
 //! (`added`). The generated enemies of a chunk come in as an argument, so the rule stays pure and testable. Both lists keep the
 //! order in which cells were put in: the order of the enemies is the order the push rule sees them in.
 
-use crate::world::CHUNK;
+use crate::world::{Terrain, CHUNK};
+use crate::worldfight;
 
 /// A cell, `q, r`.
 pub type Cell = (i32, i32);
@@ -11,6 +12,24 @@ pub type Cell = (i32, i32);
 /// The chunk a cell is in.
 fn chunk_of((q, r): Cell) -> Cell {
     (q.div_euclid(CHUNK), r.div_euclid(CHUNK))
+}
+
+/// The enemies within this many cells of the hero are the ones a push can reach.
+pub const PUSH_REACH: i32 = 10;
+
+/// A push as it was played, from the cells before it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Played {
+    /// The troop after the push, the hero first.
+    pub troop: Vec<Cell>,
+    /// The enemies near the hero before the push.
+    pub foes: Vec<Cell>,
+    /// The same enemies after it.
+    pub enemies: Vec<Cell>,
+    /// The enemy ejected, none or one.
+    pub ejected: Vec<Cell>,
+    /// The direction of the push.
+    pub dir: Cell,
 }
 
 /// What the pushes of the troop changed on the generated enemies, and how many enemies were ejected.
@@ -93,6 +112,18 @@ impl Overlay {
             .flat_map(|(chunk, generated)| self.chunk_enemies(generated, *chunk))
             .filter(|&enemy| distance(enemy) <= radius)
             .collect()
+    }
+
+    /// The troop's attack: the best legal push of `troop` (the hero first) against the enemies within `PUSH_REACH` of the hero, on the
+    /// `terrain` given. `chunks` are the chunks that reach them with their generated enemies (`around`). The push is played on the
+    /// overlay; `None`, and the overlay as it was, when no push is legal.
+    pub fn troop_push(
+        &mut self,
+        chunks: &[(Cell, Vec<Cell>)],
+        troop: &[Cell],
+        terrain: impl Fn(i32, i32) -> Option<Terrain>,
+    ) -> Option<Played> {
+        todo!()
     }
 
     /// Plays a push: the enemies `old` leave their cells, the enemies `new` stand on theirs, and the `ejected` ones count as beaten.
@@ -205,6 +236,61 @@ mod tests {
         // (2,-1) is 2 away, (2,2) is 4, (-1,-1) is 2, (3,0) is 3.
         assert_eq!(overlay.around(&chunks, (0, 0), 2), [(2, -1), (-1, -1)]);
         assert_eq!(overlay.around(&chunks, (0, 0), 3).len(), 3);
+    }
+
+    fn grass(_q: i32, _r: i32) -> Option<Terrain> {
+        Some(Terrain::Grass)
+    }
+
+    #[test]
+    fn the_troop_pushes_an_enemy_in_line_and_the_overlay_follows() {
+        let mut overlay = Overlay::new();
+        let chunks = [((0, 0), vec![(1, 0), (9, 9)])];
+        let played = overlay
+            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], grass)
+            .unwrap();
+        assert_eq!(played.troop, [(1, 0), (0, 0), (-1, 0)]);
+        assert_eq!(played.foes, [(1, 0), (9, 9)]);
+        assert_eq!(played.enemies, [(2, 0), (9, 9)]);
+        assert!(played.ejected.is_empty());
+        assert_eq!(played.dir, (1, 0));
+        assert_eq!(overlay.removed(), [(1, 0)]);
+        assert_eq!(overlay.added(), [(2, 0)]);
+        assert_eq!(overlay.beaten(), 0);
+    }
+
+    #[test]
+    fn an_enemy_pushed_into_water_is_ejected_and_counted() {
+        let mut overlay = Overlay::new();
+        let chunks = [((0, 0), vec![(1, 0)])];
+        let water = |q: i32, _r: i32| Some(if q >= 2 { Terrain::Water } else { Terrain::Grass });
+        let played = overlay
+            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], water)
+            .unwrap();
+        assert_eq!(played.ejected, [(1, 0)]);
+        assert!(played.enemies.is_empty());
+        assert_eq!(overlay.beaten(), 1);
+        assert_eq!(overlay.removed(), [(1, 0)]);
+    }
+
+    #[test]
+    fn no_legal_push_changes_nothing() {
+        let mut overlay = Overlay::new();
+        let chunks = [((0, 0), vec![(5, 5)])];
+        assert_eq!(overlay.troop_push(&chunks, &[(0, 0), (-1, 0)], grass), None);
+        assert_eq!(overlay, Overlay::new());
+        assert_eq!(overlay.troop_push(&[], &[(0, 0), (-1, 0), (-2, 0)], grass), None);
+    }
+
+    #[test]
+    fn only_the_enemies_within_the_reach_of_the_hero_are_in_the_push() {
+        let mut overlay = Overlay::new();
+        let chunks = [((0, 0), vec![(1, 0)]), ((1, 0), vec![(16, 0)])];
+        let played = overlay
+            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], grass)
+            .unwrap();
+        assert_eq!(played.foes, [(1, 0)]);
+        assert_eq!(PUSH_REACH, 10);
     }
 
     #[test]
