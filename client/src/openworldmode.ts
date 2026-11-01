@@ -22,6 +22,10 @@ export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array, b
  * is the cells to walk, the start left out, empty when there is no way. */
 export type WalkPath = (seed: number, from: Axial, to: Axial, blocked: Int32Array, broken: Int32Array) => Int32Array;
 
+/** The walk to the nearest tower, the bridge's `world_dungeon` (#1291): the seed, the hero's cell, the lairs beaten, the cells it cannot
+ * enter (enemies, lairs) and the broken cells; its answer is the lair's number then the cells to walk, empty when no tower has a way. */
+export type DungeonPath = (seed: number, from: Axial, beaten: Int32Array, blocked: Int32Array, broken: Int32Array) => Int32Array;
+
 /** The enemies near the hero that a walk goes round: the radius of the path search. */
 const PATH_REACH = 40;
 
@@ -108,6 +112,8 @@ export class OpenWorldMode {
     private readonly steering: () => boolean = () => true,
     /** Called with the scene of a world left, after its view is freed: the renderer frees what it keeps per scene, the lights node's textures (#1258). */
     private readonly releaseScene: (scene: THREE.Scene) => void = () => {},
+    /** The walk to the nearest tower, for the HUD's Dungeon button (#1291). */
+    private readonly dungeonPath: DungeonPath = () => new Int32Array(),
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -362,6 +368,20 @@ export class OpenWorldMode {
     const cells = this.path(this.seed, hero.at, to, blocked, flat(this.world!.broken));
     const route = Array.from({ length: cells.length / 2 }, (_, i): Axial => [cells[2 * i]!, cells[2 * i + 1]!]);
     if (route.length > 0) this.arrows(() => (this.route = route));
+  }
+
+  /** The HUD's Dungeon button (#1291): walks the hero to the nearest tower with a way, the unbeaten first, by the route of a tap to
+   * walk; the HUD's note says when there is none. Returns whether a walk began. */
+  dungeon(): boolean {
+    const hero = this.hero!;
+    const blocked = Int32Array.from([...this.fight.enemiesAround(this.world!, hero.at, PATH_REACH).flat(), ...this.lairs.flat()]);
+    const cells = this.dungeonPath(this.seed, hero.at, Int32Array.from(this.beaten), blocked, flat(this.world!.broken));
+    const note = document.getElementById('openworld-dungeon-note');
+    if (note) note.textContent = cells.length > 0 ? '' : 'No tower in reach: walk on and try again.';
+    if (cells.length === 0) return false;
+    const route = Array.from({ length: (cells.length - 1) / 2 }, (_, i): Axial => [cells[2 * i + 1]!, cells[2 * i + 2]!]);
+    this.arrows(() => (this.route = route));
+    return true;
   }
 
   /** Zooms the Open world camera by `scale`: more than 1 further out, less than 1 closer (#976). */

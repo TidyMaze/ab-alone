@@ -119,3 +119,17 @@ describe("Tally's line in the Open world (#1171)", () => {
     expect(byId('openworld-tally').textContent).toBe('');
   });
 });
+
+describe('the Dungeon button of the HUD (#1291)', () => {
+  it('walks the hero toward the nearest tower through the wasm bridge', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
+    hooks().__openworldFixture({ hero: [q - 3, r], troop: [], enemies: [] });
+    byId('openworld-dungeon').click();
+    expect(byId('openworld-dungeon-note').textContent).toBe('');
+    expect(data().openworldAt).not.toBe(`${q - 3},${r}`); // the first cell of the walk is taken at once
+  });
+});

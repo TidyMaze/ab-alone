@@ -610,7 +610,18 @@ pub fn find_path(
     max_expanded: usize,
     enter: &mut dyn FnMut(i32, i32) -> bool,
 ) -> Vec<(i32, i32)> {
-    if from == to || hex_distance(from, to) > PATH_RADIUS || !enter(to.0, to.1) {
+    find_path_within(from, to, PATH_RADIUS, max_expanded, enter)
+}
+
+/// `find_path` with its own reach: the cells farther than `radius` from `from` are left out of the search.
+pub fn find_path_within(
+    from: (i32, i32),
+    to: (i32, i32),
+    radius: i32,
+    max_expanded: usize,
+    enter: &mut dyn FnMut(i32, i32) -> bool,
+) -> Vec<(i32, i32)> {
+    if from == to || hex_distance(from, to) > radius || !enter(to.0, to.1) {
         return Vec::new();
     }
     let mut open = BinaryHeap::from([Reverse((
@@ -638,7 +649,7 @@ pub fn find_path(
         let g = cost[&at] + 1;
         for (dq, dr) in STEPS {
             let next = (at.0 + dq, at.1 + dr);
-            if hex_distance(from, next) > PATH_RADIUS
+            if hex_distance(from, next) > radius
                 || cost.get(&next).is_some_and(|&c| c <= g)
                 || !enter(next.0, next.1)
             {
@@ -663,7 +674,57 @@ pub fn walk_path(
     broken: &[(i32, i32)],
     blocked: &[(i32, i32)],
 ) -> Vec<(i32, i32)> {
-    let mut chunks: HashMap<(i32, i32), Option<Vec<Cell>>> = HashMap::new();
+    let chunks = HashMap::new();
+    let reach = (PATH_RADIUS, PATH_EXPANSIONS);
+    path_over(&mut (chunks, 0), seed, from, to, reach, broken, blocked)
+}
+
+/// The reach of the walk to a tower (the Dungeon button): a lair stands 150 to 420 cells from the spawn.
+pub const DUNGEON_RADIUS: i32 = 520;
+/// The most cells the search of one tower expands.
+pub const DUNGEON_EXPANSIONS: usize = 20000;
+/// The towers are tried, nearest first, until the cells looked at by the searches pass this: one press never takes more than a
+/// few tens of ms.
+pub const DUNGEON_LOOKS: usize = 100_000;
+
+/// The walk to the nearest tower (the Dungeon button, #1291): the lairs not in `beaten` come first, each group from the nearest in a
+/// straight line, and the first tower with a way is the one. Returns its number and its path (the start left out, the tower's
+/// cell last), `None` when no tower can be reached. `blocked` holds the enemies and the lairs: the tower asked for is let in.
+pub fn dungeon_walk(
+    seed: u64,
+    from: (i32, i32),
+    lairs: &[(i32, i32)],
+    beaten: &[usize],
+    broken: &[(i32, i32)],
+    blocked: &[(i32, i32)],
+) -> Option<(usize, Vec<(i32, i32)>)> {
+    let mut order: Vec<usize> = (0..lairs.len()).collect();
+    order.sort_by_key(|&k| (beaten.contains(&k), hex_distance(from, lairs[k]), k));
+    let mut seen = (HashMap::new(), 0); // the world made and the cells looked at, shared by the searches
+    order.into_iter().find_map(|k| {
+        if seen.1 >= DUNGEON_LOOKS {
+            return None;
+        }
+        let open: Vec<(i32, i32)> = blocked.iter().copied().filter(|&c| c != lairs[k]).collect();
+        let reach = (DUNGEON_RADIUS, DUNGEON_EXPANSIONS);
+        let path = path_over(&mut seen, seed, from, lairs[k], reach, broken, &open);
+        (!path.is_empty()).then_some((k, path))
+    })
+}
+
+/// The chunks made and the cells looked at, shared by the searches of one press.
+type Seen = (HashMap<(i32, i32), Option<Vec<Cell>>>, usize);
+
+/// `walk_path` with its reach `(radius, expansions)`.
+fn path_over(
+    (chunks, looks): &mut Seen,
+    seed: u64,
+    from: (i32, i32),
+    to: (i32, i32),
+    (radius, expansions): (i32, usize),
+    broken: &[(i32, i32)],
+    blocked: &[(i32, i32)],
+) -> Vec<(i32, i32)> {
     let mut terrain = |q: i32, r: i32| -> Option<Terrain> {
         let (cq, cr) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
         let cells = chunks
@@ -677,6 +738,7 @@ pub fn walk_path(
         })
     };
     let mut enter = |q: i32, r: i32| {
+        *looks += 1;
         if blocked.contains(&(q, r)) {
             return false;
         }
@@ -689,7 +751,7 @@ pub fn walk_path(
             None => false,
         }
     };
-    find_path(from, to, PATH_EXPANSIONS, &mut enter)
+    find_path_within(from, to, radius, expansions, &mut enter)
 }
 
 #[cfg(test)]
@@ -1368,5 +1430,38 @@ mod tests {
             .find(|&(q, r)| cell(9, q, r).map(|c| c.terrain) == Some(Terrain::Water))
             .unwrap();
         assert!(walk_path(9, (water.0 - 1, water.1), water, &[], &[]).is_empty());
+    }
+
+    #[test]
+    fn the_dungeon_walk_goes_to_the_nearest_unbeaten_tower_round_its_neighbours() {
+        let seed = 3;
+        let lairs = lairs(seed, 15);
+        let (k, path) = dungeon_walk(seed, (0, 0), &lairs, &[], &[], &lairs).expect("a way");
+        let nearest = (0..15)
+            .min_by_key(|&k| hex_distance((0, 0), lairs[k]))
+            .unwrap();
+        assert_eq!(k, nearest);
+        assert_eq!(path.last(), Some(&lairs[k]), "the tower's cell is last");
+        assert!(path.len() as i32 >= LAIR_MIN);
+        assert!(!path.iter().any(|c| lairs.contains(c) && *c != lairs[k]));
+        let beaten = dungeon_walk(seed, (0, 0), &lairs, &[nearest], &[], &lairs).unwrap();
+        assert_ne!(beaten.0, nearest, "a beaten tower comes last");
+        let all: Vec<usize> = (0..15).collect();
+        let again = dungeon_walk(seed, (0, 0), &lairs, &all, &[], &lairs).unwrap();
+        assert_eq!(again.0, nearest, "all beaten: the nearest again");
+    }
+
+    #[test]
+    fn the_dungeon_walk_gives_none_without_a_tower_a_way_or_the_time() {
+        assert!(dungeon_walk(9, (0, 0), &[], &[], &[], &[]).is_none());
+        let lairs = lairs(9, 15);
+        let walled: Vec<(i32, i32)> = lairs
+            .iter()
+            .flat_map(|&l| STEPS.map(|(a, b)| (l.0 + a, l.1 + b)))
+            .collect();
+        assert!(dungeon_walk(9, (0, 0), &lairs, &[], &[], &walled).is_none());
+        // Seed 54: the towers' searches pass the budget before one finds a way.
+        let far = super::lairs(54, 15);
+        assert!(dungeon_walk(54, (0, 0), &far, &[], &[], &far).is_none());
     }
 }
