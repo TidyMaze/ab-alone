@@ -1942,6 +1942,7 @@ drawProps = (): void => {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
   }
+  placeBay();
   refreshLights();
 };
 // The Pulsar's fight is drawn in space (#1146): the bay's meshes leave the camera's layer (the lamps stay lit), a field of
@@ -1977,7 +1978,11 @@ function syncSpace(): void {
   inSpace = wanted;
   space.visible = wanted;
   sceneRenderer.scene.background = wanted ? spaceBackdrop : bayBackdrop;
-  const layer = wanted ? BAY_LAYER : 0;
+  placeBay();
+}
+// The bay's meshes on their layer for the current state: also after every rebuild of the props (drawProps, #1189).
+function placeBay(): void {
+  const layer = inSpace ? BAY_LAYER : 0;
   sceneRenderer.roomDeck.layers.set(layer);
   propsGroup.traverse((o) => void ((o as THREE.Mesh).isMesh && o.layers.set(layer)));
 }
