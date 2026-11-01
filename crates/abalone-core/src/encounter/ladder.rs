@@ -652,13 +652,13 @@ mod tests {
             ids,
             [
                 "echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual",
-                "railyard", "stalker", "swarm"
+                "railyard", "stalker", "swarm", "magnetizer", "pulsar", "assembly", "unstable"
             ]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
         assert_eq!(
             budgets,
-            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000, 1500]
+            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000, 1500, 3000, 3000, 3000, 3000]
         );
     }
 
@@ -770,6 +770,25 @@ mod tests {
         enc.play(&mv).unwrap();
         assert_eq!(a.boss_move(), railyard_move(&enc));
         assert!(a.boss_move().is_some());
+    }
+
+    #[test]
+    fn the_hooked_bosses_answer_through_their_own_move_and_finish_an_attempt() {
+        for boss in [
+            LadderBoss::Magnetizer,
+            LadderBoss::Pulsar,
+            LadderBoss::Assembly,
+            LadderBoss::Unstable,
+        ] {
+            let mut a = Arena::new(boss, 0);
+            assert_eq!(a.kind(), boss);
+            let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
+            a.play(&mv).unwrap();
+            let reply = a.boss_move().unwrap_or_else(|| panic!("{boss:?} has a reply"));
+            a.play(&reply).unwrap();
+            let r = play_attempt(boss, 0, 1, 30, 6);
+            assert_eq!((r.boss, r.plies), (boss.id(), 6), "{boss:?}");
+        }
     }
 
     #[test]
