@@ -263,20 +263,24 @@ pub fn magnetizer_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
+    magnetizer_search(enc, enc.boss.node_budget, &|_| true)
+}
+
+/// The node-limited search of `enc` for the side to move, every ply of its tree through
+/// `magnetizer_step`: the boss reply of [`magnetizer_move`], or the ladder player, who reads the
+/// polarities and the announce on the board.
+pub(crate) fn magnetizer_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
     let mut board = enc.game().board().clone();
     board.set_magnetizer_ply(Some(enc.game().history().len() as u32));
     let game = enc.game().clone().with_board(board);
     let step = |before: &Board, _: Player, mv: &Move, after: Board| {
         magnetizer_step(enc, before, mv, after)
     };
-    search_hooked(
-        &game,
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    search_hooked(&game, budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 #[cfg(test)]

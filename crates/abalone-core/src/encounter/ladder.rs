@@ -15,10 +15,14 @@ use crate::encounter::choir::Choir;
 use crate::encounter::dual::{dual_move, dual_start, dual_step, DUAL_NODE_BUDGET};
 use crate::encounter::echo::{echo_boss, echo_free_moves, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
-use crate::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
-use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
+use crate::encounter::magnetizer::{magnetizer_boss, magnetizer_move, magnetizer_search};
+use crate::encounter::overseer::{
+    overseer_move, overseer_search, overseer_start, OVERSEER_NODE_BUDGET,
+};
 use crate::encounter::pulsar::{pulsar_move, pulsar_search, pulsar_start, PULSAR_NODE_BUDGET};
-use crate::encounter::railyard::{railyard_move, railyard_start, RAILYARD_NODE_BUDGET};
+use crate::encounter::railyard::{
+    railyard_move, railyard_search, railyard_start, RAILYARD_NODE_BUDGET,
+};
 use crate::encounter::stalker::{refuse, stalker_start, STALKER_NODE_BUDGET};
 use crate::encounter::swarm::{Swarm, SWARM_NODE_BUDGET};
 use crate::encounter::telemetry::{
@@ -260,9 +264,9 @@ fn mix(mut x: u64) -> u64 {
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
 /// takes the Echo's safe free moves that eject and never plays another free move, and plays the
-/// plain search when no move is left. Against the Chaplain, the Ballast Mind, the Assembly Line
-/// and the Pulsar the search sees the hooks. `None` when the player has no move (every marble was
-/// converted).
+/// plain search when no move is left. Against the Chaplain, the Ballast Mind, the Assembly Line,
+/// the Pulsar, the Overseer, the Rail Yard and the Magnetizer the search sees the hooks. `None`
+/// when the player has no move (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
     if index < opening {
@@ -307,6 +311,9 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
             Arena::Plain(enc, LadderBoss::Assembly) => assembly_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Pulsar) => pulsar_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Overseer) => overseer_search(enc, budget, allow, None),
+            Arena::Plain(enc, LadderBoss::RailYard) => railyard_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Magnetizer) => magnetizer_search(enc, budget, allow),
             Arena::Swarm(swarm) => swarm.player_search(budget, allow).map(|r| r.mv),
             Arena::Plain(_, LadderBoss::Dual) => {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &dual_step).map(|r| r.mv)
@@ -469,8 +476,8 @@ mod tests {
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::{echo_boss, echo_fight, mirror_move};
     use crate::encounter::overseer::{overseer_boss, OVERSEER_INCINERATORS};
-    use crate::encounter::railyard::railyard_boss;
     use crate::encounter::pulsar::pulsar_boss;
+    use crate::encounter::railyard::railyard_boss;
     use crate::encounter::stalker::stalker_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
     use crate::encounter::Encounter;

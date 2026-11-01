@@ -115,18 +115,22 @@ pub fn overseer_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
+    overseer_search(enc, enc.boss.node_budget, &|_| true, enc.turns_left())
+}
+
+/// The node-limited search of `enc` for the side to move, every ply of its tree burning in the
+/// phase its credits give: the boss reply of [`overseer_move`], with the neurotoxin `clock`, or
+/// the ladder player, who reads the incinerators with no clock.
+pub(crate) fn overseer_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+    clock: Option<u32>,
+) -> Option<Move> {
     let step = |_: &Board, _: Player, _: &Move, after: Board, ejected: [u8; 2]| {
         overseer_step(after, overseer_phase(ejected[0]))
     };
-    search_phased(
-        enc.game(),
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-        enc.turns_left(),
-    )
-    .map(|r| r.mv)
+    search_phased(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step, clock).map(|r| r.mv)
 }
 
 /// The e2e fixture (client/e2e/overseer.spec.ts), from the start of any seed: the player walks two
