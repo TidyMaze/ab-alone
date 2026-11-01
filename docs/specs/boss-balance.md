@@ -1133,3 +1133,43 @@ Reply time through wasm (nodejs release build, 6 seeds of 80 plies, the player p
 only, ms, average / 95th percentile / max), the old build timed on the same positions in the same run: the Assembly Line
 143 / 245 / 375 after, 136 / 229 / 402 before (240 replies each, about 5 % more: `phase_after` counts the boss marbles
 of two boards on each player ply of the tree).
+
+### The Magnetizer's search plays its assignment turns in the tree (#916), not tuned
+
+Until #916 the tree of `magnetizer_move` carried the polarities and settled every ply, but it never ran the
+assignment hook: the boss did not see the announced marble take its sign. The hook's id (`special(ply, phase)`) needs
+the ply, and the board holds no turn clock (an announce on the board says the next hook assigns, not whether it
+announces the next one). So `magnetizer_move` puts the root ply on a board field that only the tree uses
+(`Board::magnetizer_ply`, as the Choir's turn order, #825), and `magnetizer_step` adds 1 per ply: no `search.rs`
+change. After a boss ply the step runs the hook with the special of that ply, in the phase from
+`Encounter::phase_after` of the board at the **start** of the ply (the encounter takes the tell before the move,
+as for the Pulsar, #913), with seed 0 for the picks, then settles again (seed 0). It also carries the announce with
+the moves. A hook with nothing to assign or announce is skipped (same board). Not changed: rules, knobs,
+`MAGNETIZER_NODE_BUDGET` (3000), `engine_version`.
+
+Unit tests: `the_tree_sees_the_assignment_at_the_start_of_turn_3_and_avoids_its_repulsion` (turn 2 of P1, the
+announced marble next to an opposite boss pole on the rim: the old search moves another marble and loses the pole to
+the repulsion, the new one moves the pole off the rim; 1 of 600 random positions of that kind gave two moves) and
+`a_third_ejection_in_the_tree_switches_the_cadence_from_3_to_2` (root at 2 ejections, boss ply 4 of the tree
+announces turn 4 only once a third boss marble is gone).
+
+Ladder, `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- magnetizer`, seeds 0 to 19, 300
+plies at most, before (#912 rows above) and after. Output lines after:
+`magnetizer | 3000 | 2/20 | 165 | 2 | push 3, rim_ejection 13, draw 2` and
+`magnetizer | 30000 | 7/20 | 173 | 2 | rim_ejection 10, draw 2, ply_cap 1`.
+
+| Player | Wins /20 before | Wins /20 after | Median plies before / after | Deaths after |
+|---|---|---|---|---|
+| 1x (3000) | 7 | **2** | 176 / 165 | push 3, rim_ejection 13, draw 2 |
+| 10x (30000) | 16 | **7** | 141 / 173 | rim_ejection 10, draw 2, ply_cap 1 |
+
+Reading: the boss gets much stronger. It now sees the announced marble take its sign one ply ahead, as in the unit
+test above; the games were not traced one by one. Most of the player's losses are rim ejections (13 at 1x, 10 at
+10x). The 10x player drops from 16 of 20 (inside the owner target of 14 to 18) to 7, outside it. Nothing was tuned;
+the knobs (rhythm, phase ejections, node budget) are the owner's.
+
+Reply time through wasm (nodejs release build, 6 seeds of 80 plies, the player plays its auto-play move, boss
+replies only, ms, average / 95th percentile / max), the old build timed on the same positions in the same run, on a
+machine shared with other builds: 187 / 485 / 652 after, 140 / 341 / 448 before; a second run 293 / 987 / 1499
+after, 220 / 734 / 1177 before. About a third more in both runs: the step carries the announce, computes
+`phase_after` after each boss ply and runs the hook with a second settle.
