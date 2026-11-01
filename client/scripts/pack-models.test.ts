@@ -14,14 +14,14 @@ const models = (dir: URL): string[] =>
 
 describe('pack-models', () => {
   it('ships every glTF model of the page meshopt-compressed (#61)', () => {
-    expect(models(PUBLIC)).toEqual(['assets/pbr/openworld-hi.glb', 'assets/pbr/openworld-lair.glb', 'assets/pbr/openworld.glb', 'assets/pbr/spaceship-bay.glb']);
+    expect(models(PUBLIC)).toEqual(['assets/pbr/arena.glb', 'assets/pbr/kit-arena.glb', 'assets/pbr/openworld-hi.glb', 'assets/pbr/openworld-lair.glb', 'assets/pbr/openworld.glb', 'assets/pbr/spaceship-bay.glb']);
     for (const file of models(PUBLIC)) {
       expect(json(readFileSync(new URL(file, PUBLIC))).extensionsRequired).toContain('EXT_meshopt_compression');
     }
   });
 
   it('keeps the committed models identical to the packed sources, which stay out of public/', async () => {
-    expect(models(SOURCE)).toEqual(['openworld-hi.glb', 'openworld-lair.glb', 'openworld.glb', 'spaceship-bay.glb']);
+    expect(models(SOURCE)).toEqual(['arena.glb', 'kit-arena.glb', 'openworld-hi.glb', 'openworld-lair.glb', 'openworld.glb', 'spaceship-bay.glb']);
     for (const name of models(SOURCE)) {
       expect(readFileSync(new URL(name, OUTPUT))).toEqual(await packModel(readFileSync(new URL(name, SOURCE))));
     }
@@ -45,9 +45,9 @@ describe('pack-models', () => {
       vi.doUnmock('node:fs');
       spy.mockRestore();
     }
-    const files = ['openworld-hi.glb', 'openworld-lair.glb', 'openworld.glb', 'spaceship-bay.glb'].map((name) => fileURLToPath(new URL(name, OUTPUT)));
+    const files = ['arena.glb', 'kit-arena.glb', 'openworld-hi.glb', 'openworld-lair.glb', 'openworld.glb', 'spaceship-bay.glb'].map((name) => fileURLToPath(new URL(name, OUTPUT)));
     expect([...written.keys()]).toEqual(files);
     for (const file of files) expect(written.get(file)).toEqual(readFileSync(file));
-    expect(log).toEqual([['public/assets/pbr/openworld-hi.glb'], ['public/assets/pbr/openworld-lair.glb'], ['public/assets/pbr/openworld.glb'], ['public/assets/pbr/spaceship-bay.glb']]);
+    expect(log).toEqual([['public/assets/pbr/arena.glb'], ['public/assets/pbr/kit-arena.glb'], ['public/assets/pbr/openworld-hi.glb'], ['public/assets/pbr/openworld-lair.glb'], ['public/assets/pbr/openworld.glb'], ['public/assets/pbr/spaceship-bay.glb']]);
   });
 });

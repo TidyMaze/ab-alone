@@ -296,7 +296,7 @@ describe('main.ts board and HUD', () => {
       },
     });
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { discs, plate, near } = parts(scene());
     expect(discs[0]!.material.map).toBeNull();
     expect(discs[0]!.material.normalMap).toBeNull();
@@ -357,7 +357,7 @@ describe('main.ts board and HUD', () => {
 
   it('draws the frame round the board and lights the rim at the end of the side to move', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     expect(game.hook('__frame')).toEqual({ radius: 4, holes: 0, drawn: true, lit: { near: RIM_LIGHT.shell, far: 0 } });
     expect(document.body.dataset.rim).toBe('near');
     const before = parts(scene()).plate.geometry;

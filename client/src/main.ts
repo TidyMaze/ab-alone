@@ -179,7 +179,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { tableZeroActive } from './tablezero';
+import { mergeByMaterial, tableZeroActive } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -3381,7 +3381,7 @@ const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
 void meshoptLoader()
   .loadAsync(`${import.meta.env.BASE_URL}assets/pbr/arena.glb`)
   .then((model) => {
-    sceneRenderer.terrace.add(model.scene);
+    sceneRenderer.terrace.add(mergeByMaterial(model.scene)); // 5 draw calls, not 1,489 nodes
     terraceReady = true;
     refresh();
   })

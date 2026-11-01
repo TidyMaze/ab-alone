@@ -132,7 +132,7 @@ describe('the renderer and its textures', () => {
   });
 
   it('draws the generated textures, and frames the whole board in the window', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { scene, camera } = await drawn(game);
     const backdrop = scene.background as THREE.Texture;
     expect(backdrop.isTexture).toBe(true);
@@ -235,7 +235,7 @@ describe('the renderer and its textures', () => {
     }
 
     it('keeps the flat look and reports WebGPU', async () => {
-      const booting = boot('?bot=off');
+      const booting = boot('?bot=off&scene=room');
       const { options, draw } = renderer();
       const game = await booting;
       expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
@@ -250,7 +250,7 @@ describe('the renderer and its textures', () => {
       ['high', true],
     ])('asks for the normal maps on the %s tier: %s (#849)', async (tier, asked) => {
       const requested: string[] = [];
-      const booting = boot(`?bot=off&quality=${tier}`);
+      const booting = boot(`?bot=off&quality=${tier}&scene=room`);
       renderer();
       vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', () => ({
         KTX2Loader: class {
@@ -380,7 +380,7 @@ describe('the adaptive resolution (#843)', () => {
 
 describe('the view and the fog', () => {
   it('fogs the rim, and Clear board takes the fog off and saves it', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { scene } = await drawn(game);
     const fog = scene.fog as THREE.Fog;
     expect(fog.near).toBeGreaterThan(0);
@@ -396,7 +396,7 @@ describe('the view and the fog', () => {
   });
 
   it('tints the fog to match the active deck atmosphere (#665)', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { scene } = await drawn(game);
     const fog = scene.fog as THREE.Fog;
     expect(fog.color.getHex()).toBe(0x1c1612);
@@ -425,7 +425,7 @@ describe('the view and the fog', () => {
 
   it('thins the fog farther on the high tier', async () => {
     const far = async (tier: string): Promise<number> => {
-      const game = await bootWith({ 'ab-alone.tier': tier });
+      const game = await bootWith({ 'ab-alone.tier': tier }, '?bot=off&scene=room');
       const fog = (await drawn(game)).scene.fog as THREE.Fog;
       return fog.far - fog.near;
     };
