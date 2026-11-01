@@ -130,7 +130,7 @@ describe('a held arrow in the Open world, #1065', () => {
     m.key('ArrowLeft');
     clock = 6 * GLIDE_MS + 5;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([1, 0]);
+    expect(m.hero!.at).toEqual([2, -1]); // Left leans forward, up-left (#1273)
     expect(focusX(m)).toBeGreaterThan(axialTo3D(2, 0).x - 0.03 * CELL); // a start from rest: it has hardly moved
   });
 

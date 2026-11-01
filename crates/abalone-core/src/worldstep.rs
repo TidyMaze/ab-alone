@@ -74,11 +74,16 @@ fn straight(at_r: i32, keys: u8, yaw: f64) -> Option<(usize, f64)> {
     let (x, y) = screen(keys)?;
     let want = f64::from(y).atan2(f64::from(x)) + yaw;
     let fallback = ground_angle(DIRECTIONS[keyboard_dir(at_r, keys)]);
+    // Left or Right alone breaks a tie toward the neighbour that leans up on the screen (#1273).
+    let sideways = keys == LEFT || keys == RIGHT;
     let score = |i: usize| {
-        (
-            nano(gap_of(ground_angle(DIRECTIONS[i]), want)),
-            nano(gap_of(ground_angle(DIRECTIONS[i]), fallback)),
-        )
+        let angle = ground_angle(DIRECTIONS[i]);
+        let tie = if sideways {
+            -(angle - yaw).sin()
+        } else {
+            gap_of(angle, fallback)
+        };
+        (nano(gap_of(angle, want)), nano(tie))
     };
     let best = (1..6).fold(0, |best, i| if score(i) < score(best) { i } else { best });
     Some((best, want))
@@ -185,5 +190,36 @@ mod tests {
     fn steering_never_steps_back() {
         // Only the cells behind and the NW side are free: the hero stays on its straight, blocked cell.
         assert_eq!(hero_dir(0, RIGHT, 0.0, true, 1 << NW | 1 << 1), Some(E));
+    }
+
+    /// The ground angle of a direction index, for the tests of the lean.
+    fn angle(i: usize) -> f64 {
+        ground_angle(DIRECTIONS[i])
+    }
+
+    #[test]
+    fn left_and_right_alone_both_lean_forward_up_on_the_screen_at_each_resting_angle() {
+        for k in 0..6 {
+            let yaw = -PI / 6.0 + f64::from(k) * PI / 3.0;
+            for r in [0, 1, -3, 2] {
+                let left = hero_dir(r, LEFT, yaw, false, ALL).unwrap();
+                let right = hero_dir(r, RIGHT, yaw, false, ALL).unwrap();
+                assert!((angle(left) - yaw).sin() > 0.49, "left {k} {r}");
+                assert!((angle(right) - yaw).sin() > 0.49, "right {k} {r}");
+                assert!((angle(left) - yaw).cos() < 0.0);
+                assert!((angle(right) - yaw).cos() > 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn down_with_left_or_right_still_steps_back_at_the_resting_angles() {
+        for k in 0..6 {
+            let yaw = -PI / 6.0 + f64::from(k) * PI / 3.0;
+            for key in [LEFT, RIGHT] {
+                let to = hero_dir(0, DOWN | key, yaw, false, ALL).unwrap();
+                assert!((angle(to) - yaw).sin() < 0.0);
+            }
+        }
     }
 }
