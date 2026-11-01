@@ -802,6 +802,7 @@ function applyLook(): void {
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
   drawProps();
+  sceneRenderer.setShadows(sceneRenderer.terraceOn && tier === 'high'); // a tier change moves the sun's shadow (#1364)
   updateParticles();
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
   else delete document.documentElement.dataset.motion;
@@ -3496,7 +3497,7 @@ function syncTableZero(): void {
     applyView();
   }
   if (on === sceneRenderer.terraceOn) return;
-  sceneRenderer.setTerrace(on);
+  sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364)
   for (const cells of boardDrawn) cells.visible = !on; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = on ? TERRACE_LIFT : 0; // the marbles stand on their pedestals, 0.11 over the board plane
   updateFog();
@@ -6168,6 +6169,7 @@ renderer.setAnimationLoop((now) => {
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {
       renderer.info.reset();
+      sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
       renderer.render(scene, camera);
     }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
     if (fpsOn) {

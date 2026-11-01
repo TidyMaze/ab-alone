@@ -220,6 +220,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
         },
       };
       toneMappingExposure = 1;
+      shadowMap = { enabled: false, type: 0 }; // the sun's soft shadow on the terrace (#1364)
       initialized = false;
       init = async (): Promise<void> => {
         if (options.fails === 'renderer') throw new Error('no GPU');

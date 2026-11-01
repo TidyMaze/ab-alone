@@ -281,6 +281,7 @@ describe('the renderer and its textures', () => {
         WebGPURenderer: class {
           domElement = document.createElement('canvas');
           backend = { isWebGPUBackend: true };
+          shadowMap = { enabled: false, type: 0 };
           samples: number;
           info = { autoReset: true, reset(): void {}, render: { calls: 7, triangles: 300 }, memory: { geometries: 5, textures: 2 } };
           constructor(o: unknown) {

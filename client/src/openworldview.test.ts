@@ -6,6 +6,7 @@ import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terra
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
+import { SUN, sunPosition } from './tablezero';
 import {
   BIOME_LOOK,
   CAPACITY,
@@ -148,6 +149,36 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     expect(draws.size).toBeGreaterThan(2);
     for (const d of draws) expect(d).toBeGreaterThanOrEqual(0), expect(d).toBeLessThan(1);
     expect(Object.keys(LOOK)).toEqual([...GROUNDS]);
+  });
+
+  it('is lit by the sun of the arena, which follows the hero and casts its soft shadow on the high tier only (#1364)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([2, 1]);
+    let sun!: THREE.DirectionalLight;
+    view.scene.traverse((o) => void ((o as THREE.DirectionalLight).isDirectionalLight && (sun = o as THREE.DirectionalLight)));
+    expect(sun.color.getHex()).toBe(SUN.colour);
+    expect(sun.target.position.toArray()).toEqual(view.focusPoint.toArray());
+    expect(sun.position.clone().sub(view.focusPoint).toArray().map((v) => +v.toFixed(3))).toEqual(sunPosition().map((v) => +v.toFixed(3)));
+    expect(sun.castShadow).toBe(false); // off until the tier is known
+    view.setShadows(true);
+    expect([sun.castShadow, sun.shadow.camera.right]).toEqual([true, 14]);
+    view.setShadows(false);
+    expect(sun.castShadow).toBe(false);
+  });
+
+  it('casts the shadows of the hero, the props, the marbles and the towers, on the ground, and not the ground nor the sparks (#1364)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([2, 1]);
+    view.setLairs([[0, 0]], []);
+    const flags = (name: string): [boolean, boolean] => [mesh(view, name).castShadow, mesh(view, name).receiveShadow];
+    expect(flags('prop-tree')).toEqual([true, true]);
+    expect(flags('troop')).toEqual([true, true]);
+    expect(flags('terrain-grass')).toEqual([false, true]);
+    expect(flags('particles')).toEqual([false, false]);
+    expect(view.scene.getObjectByName('hero')!.castShadow).toBe(true);
+    expect(view.scene.getObjectByName('lair-0')!.children.every((o) => o.castShadow)).toBe(true);
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} }); // a replaced mesh keeps its flags
+    expect(flags('prop-mountain')).toEqual([true, true]);
   });
 
   it('swaps the procedural shapes for the models it is given, and keeps the others', () => {

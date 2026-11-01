@@ -69,6 +69,7 @@ export function instanceMarbles(root: THREE.Object3D, geometry: THREE.BufferGeom
         }
         mesh = new THREE.InstancedMesh(geometry, look, Math.max(32, marbles.length * 2));
         mesh.frustumCulled = false; // the marbles move: their bounds would need recomputing every frame
+        mesh.castShadow = mesh.receiveShadow = true; // under the terrace's sun (#1364); no light casts one in the room
         into.add(mesh);
         drawn.set(look, mesh);
       }
