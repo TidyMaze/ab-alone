@@ -1192,7 +1192,7 @@ mod tests {
     #[test]
     fn every_group_stays_in_its_chunk_and_no_cell_holds_two_marbles() {
         for seed in 0..12 {
-            let mut seen = Vec::new();
+            let mut seen = std::collections::HashSet::new();
             for cx in -8..8 {
                 for cy in -8..8 {
                     for group in enemy_groups(seed, cx, cy) {
