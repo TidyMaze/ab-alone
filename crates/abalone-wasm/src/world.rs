@@ -103,6 +103,35 @@ pub fn world_path(
     .collect()
 }
 
+/// The walk to the nearest tower of the world `seed` (the Dungeon button, #1291) from `(from_q, from_r)`: `beaten` holds the numbers of
+/// the lairs beaten (tried last), `blocked` the enemy cells and the lairs, `broken` the broken obstacles (`q, r` pairs). Empty when no
+/// tower has a way within the search budget; else `[lair, ...q, r pairs]`: the tower's number, then the cells to walk, the tower's last.
+#[wasm_bindgen]
+pub fn world_dungeon(
+    seed: u32,
+    from_q: i32,
+    from_r: i32,
+    beaten: Vec<i32>,
+    blocked: Vec<i32>,
+    broken: Vec<i32>,
+) -> Vec<i32> {
+    let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
+    let beaten: Vec<usize> = beaten.iter().map(|&k| k as usize).collect();
+    let Some((lair, path)) = world::dungeon_walk(
+        u64::from(seed),
+        (from_q, from_r),
+        &lairs,
+        &beaten,
+        &pairs(&broken),
+        &pairs(&blocked),
+    ) else {
+        return Vec::new();
+    };
+    std::iter::once(lair as i32)
+        .chain(path.into_iter().flat_map(|(q, r)| [q, r]))
+        .collect()
+}
+
 /// The terrain of a cell of the world `seed`, `None` off the world.
 fn terrain_at(seed: u64, q: i32, r: i32) -> Option<Terrain> {
     let cell = world::cell(seed, q, r)?;
@@ -197,6 +226,33 @@ mod tests {
         assert_eq!(
             flat,
             lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn the_dungeon_walk_is_a_lair_number_then_q_r_pairs_that_match_the_core() {
+        let lairs = world_lairs(3);
+        let blocked = lairs.clone();
+        let flat = world_dungeon(3, 0, 0, vec![], blocked.clone(), vec![]);
+        let pairs: Vec<(i32, i32)> = lairs.chunks(2).map(|c| (c[0], c[1])).collect();
+        let (lair, path) = world::dungeon_walk(3, (0, 0), &pairs, &[], &[], &pairs).unwrap();
+        assert_eq!(flat[0], lair as i32);
+        assert_eq!(
+            flat[1..],
+            path.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
+        );
+        let walled: Vec<i32> = pairs
+            .iter()
+            .flat_map(|&(q, r)| {
+                [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)]
+                    .into_iter()
+                    .flat_map(move |(a, b)| [q + a, r + b])
+            })
+            .collect();
+        assert!(world_dungeon(3, 0, 0, vec![], walled, vec![]).is_empty());
+        assert_eq!(
+            world_dungeon(3, 0, 0, vec![lair as i32], blocked, vec![])[0] != lair as i32,
+            true
         );
     }
 

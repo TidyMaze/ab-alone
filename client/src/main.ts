@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_lairs, world_path, world_push, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_dungeon, world_lairs, world_path, world_push, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -5257,7 +5257,9 @@ const openWorld = new OpenWorldMode(
   // The lights node the renderer keeps per scene holds GPU textures (clustered lighting: 2 per scene) that nothing else frees, so
   // each world entered leaked them (#1258).
   (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
+  (seed, from, beaten, blocked, broken) => Int32Array.from(world_dungeon(seed, from[0], from[1], beaten, blocked, broken)), // the Dungeon button (#1291)
 );
+document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {
   if (Number.isFinite(openWorldFixedSeed)) return openWorld.open(openWorldFixedSeed, innerWidth, innerHeight);

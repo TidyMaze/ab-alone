@@ -1796,3 +1796,41 @@ describe('the scene of a world is released to the renderer (#1258)', () => {
     expect(released).toEqual([first, second]);
   });
 });
+
+describe('the Dungeon button walks to the nearest tower (#1291)', () => {
+  type Bridge = (seed: number, from: Axial, beaten: Int32Array, blocked: Int32Array, broken: Int32Array) => Int32Array;
+  const dungeoner = (dungeon: Bridge, foes = new Int32Array(), lairs = new Int32Array()) =>
+    new OpenWorldMode(
+      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true, noPush,
+      worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, undefined, undefined, undefined, dungeon,
+    );
+  beforeEach(() => {
+    document.body.innerHTML = '<output id="openworld-mode"></output><p id="openworld-dungeon-note"></p>';
+  });
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('asks for the tower with the beaten lairs, the enemies and lairs as blocked, and walks the cells after the lair number', () => {
+    const dungeon = vi.fn<Bridge>(() => Int32Array.of(2, 1, 0, 2, 0, 3, 0));
+    const m = dungeoner(dungeon, Int32Array.of(0, 4), Int32Array.of(9, 9));
+    m.enter(5, 800, 600);
+    expect(m.dungeon()).toBe(true);
+    expect(dungeon).toHaveBeenCalledWith(5, [0, 0], new Int32Array(), Int32Array.of(0, 4, 9, 9), new Int32Array());
+    expect(m.hero!.at).toEqual([1, 0]);
+    expect(body().openworldRoute).toBe('2');
+    expect(document.getElementById('openworld-dungeon-note')!.textContent).toBe('');
+    m.key('Shift'); // a key cancels it, as for tap to walk
+    expect(body().openworldRoute).toBe('0');
+  });
+
+  it('says so when no tower is in reach, and does not move', () => {
+    const m = dungeoner(() => new Int32Array());
+    m.enter(5, 800, 600);
+    expect(m.dungeon()).toBe(false);
+    expect(document.getElementById('openworld-dungeon-note')!.textContent).toBe('No tower in reach: walk on and try again.');
+    expect(m.hero!.at).toEqual([0, 0]);
+    document.getElementById('openworld-dungeon-note')!.remove();
+    expect(m.dungeon()).toBe(false); // no note in the page: nothing to write to
+  });
+});
