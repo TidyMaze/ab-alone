@@ -1095,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_20_since_the_magnetizer_assigns_every_3rd_turn_in_p2() {
-        assert_eq!(engine_version(), 20);
+    fn the_engine_version_is_21_since_the_overseer_vents_pull_in_cores() {
+        assert_eq!(engine_version(), 21);
     }
 
     #[test]
@@ -1722,7 +1722,7 @@ mod tests {
     }
 
     /// The fixture of the core tests and client/e2e/overseer.spec.ts: `[n, dir, q0, r0, q1, r1]`.
-    const OVERSEER_FIXTURE: [[i32; 6]; 24] = [
+    const OVERSEER_FIXTURE: [[i32; 6]; 22] = [
         [1, 4, 0, 2, 0, 0],
         [1, 5, 4, -3, 0, 0],
         [1, 4, -1, 2, 0, 0],
@@ -1745,15 +1745,14 @@ mod tests {
         [1, 5, 1, -2, 0, 0],
         [1, 0, -3, 2, 0, 0],
         [2, 0, 0, -1, 1, -1],
-        [1, 0, -2, 2, 0, 0],
-        [2, 0, 1, -1, 2, -1],
     ];
 
     #[test]
     fn the_overseer_exposes_its_cores_vents_clock_and_burns() {
         let mut f = Encounter::new("overseer", 153).unwrap();
         assert_eq!(f.name(), "The Overseer");
-        assert_eq!((f.phase(), f.phases(), f.turns_left()), (0, 3, 40));
+        assert!(f.goal().contains("next to the vents"), "the pull (#1241)");
+        assert_eq!((f.phase(), f.phases(), f.turns_left()), (0, 2, 40));
         let board = f.board();
         assert_eq!(
             (at(&board, 0, 0), at(&board, 2, -1)),
@@ -1773,9 +1772,9 @@ mod tests {
             burns.push(f.removed());
         }
         assert_eq!(burns[3], vec![4, -1, 2], "a boss marble burns in P1");
-        assert_eq!(burns[6], vec![3, 1, 8], "the core (1, 1)");
-        assert_eq!(burns[23], vec![4, -1, 8], "the boss's own push");
-        assert_eq!((f.ejected(1), f.result(), f.turns_left()), (6, 1, 28));
+        assert_eq!(burns[4], vec![2, 1, 8], "the core (1, 1), pulled into (3, 1)");
+        assert_eq!(burns[21], vec![3, -1, 8], "the boss's own push");
+        assert_eq!((f.ejected(1), f.result(), f.turns_left()), (6, 1, 29));
         assert_eq!(Encounter::new("echo", 1).unwrap().turns_left(), -1);
         assert!(Encounter::new("echo", 1).unwrap().incinerators().is_empty());
         assert_eq!(Encounter::new("choir", 1).unwrap().turns_left(), -1);

@@ -7,11 +7,11 @@ import { CHAR_MS, FAREWELL, angryLine } from './speech';
 import { boot, type Game } from './test/harness';
 
 // The Overseer on the harness (#635, game-design.md section 7.11): the Overseer, its 6 cores and 6 vents drawn, the
-// neurotoxin line, a core pushed onto a vent that slides there then sinks into it, and the win. ?bot=off plays both
-// sides from the fixture of the core tests (crates/abalone-core/src/encounter/overseer.rs): the player burns the core
-// (1, 1) on (3, 1) at ply 7, then (-2, 1) on (-4, 1); the boss walks 3 marbles onto (4, -1), where they burn, then
-// pushes the core (2, -1) onto it itself at ply 24: the player's 6th ejection. Each ply: the cells to click, the
-// moved marbles then the target.
+// neurotoxin line, a core pushed next to a vent that slides there then rolls into it and sinks (#1241), and the win.
+// ?bot=off plays both sides from the fixture of the core tests (crates/abalone-core/src/encounter/overseer.rs): the
+// player pushes the core (1, 1) next to (3, 1) at ply 5, which pulls it in, then (-2, 1) next to (-4, 1); the boss walks
+// 3 marbles onto (4, -1), where they burn, then pushes the core (2, -1) next to it itself at ply 22: the player's 6th
+// ejection. Each ply: the cells to click, the moved marbles then the target.
 
 type Drawn = { overseer: Axial | null; cores: Axial[]; vents: Axial[] };
 const FIXTURE: Axial[][] = [
@@ -20,7 +20,7 @@ const FIXTURE: Axial[][] = [
   [[-2, 2], [-1, 1]], [[4, -2], [4, -1]], [[-1, 3], [0, 2]], [[3, -3], [3, -2]],
   [[0, 2], [0, 1]], [[3, -2], [4, -2]], [[-1, 1], [0, 1], [-2, 1]], [[4, -2], [4, -1]],
   [[-2, 1], [-1, 1], [-3, 1]], [[0, -2], [0, -1]], [[-4, 3], [-3, 2]], [[1, -2], [1, -1]],
-  [[-3, 2], [-2, 2]], [[0, -1], [1, -1], [2, -1]], [[-2, 2], [-1, 2]], [[1, -1], [2, -1], [3, -1]],
+  [[-3, 2], [-2, 2]], [[0, -1], [1, -1], [2, -1]],
 ];
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const body = (): DOMStringMap => document.body.dataset;
@@ -99,15 +99,15 @@ describe('main.ts The Overseer speaks (#741)', () => {
   it('a core burnt on a vent makes it angry, red and shaking, with the line of the seed and the ply, held 1 s; P2 starts the haze and the vents note', async () => {
     const game = await boot('?bot=off');
     fightOverseer(game);
-    plies(game, 0, 6);
+    plies(game, 0, 4);
     expect(body().haze).toBe('0'); // P1: the vents burn the boss's marbles only
     expect(tell()).not.toContain(VENT_NOTE);
-    for (const [q, r] of FIXTURE[6]!) game.click(q, r);
+    for (const [q, r] of FIXTURE[4]!) game.click(q, r);
     game.frame(1000); // the slide ends: the core sinks into its vent
     expect(body().burns).toBe('1');
     expect(bubble().classList.contains('angry')).toBe(true);
     expect(bubble().classList.contains('still')).toBe(false); // it shakes
-    const line = angryLine(153, 7);
+    const line = angryLine(153, 5);
     game.frame(line.length * CHAR_MS + 10);
     expect(bubbleText()).toBe(line);
     game.frame(900);
@@ -123,7 +123,7 @@ describe('main.ts The Overseer speaks (#741)', () => {
     const before = body().hazeY;
     game.frame(700);
     expect(body().hazeY).not.toBe(before); // the haze rises
-    plies(game, 7, 9);
+    plies(game, 5, 7);
     expect(tell()).not.toContain(VENT_NOTE); // the note lasts 2 plies
     expect(body().haze).toBe('18');
   });
@@ -131,10 +131,10 @@ describe('main.ts The Overseer speaks (#741)', () => {
   it('under reduced motion the angry bubble holds still and shows its whole line, and the haze holds still', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightOverseer(game);
-    plies(game, 0, 7);
+    plies(game, 0, 5);
     expect(bubble().classList.contains('angry')).toBe(true);
     expect(bubble().classList.contains('still')).toBe(true);
-    expect(bubbleText()).toBe(angryLine(153, 7));
+    expect(bubbleText()).toBe(angryLine(153, 5));
     expect(body().haze).toBe('18');
     const before = body().hazeY;
     game.frame(700);
@@ -160,29 +160,29 @@ describe('main.ts The Overseer (#635)', () => {
     expect(tell()).toBe(toxinText(39));
   });
 
-  it('a core pushed onto a vent slides there, then sinks into it: an ejection for the player', async () => {
+  it('a core pushed next to a vent slides there, then the vent pulls it in: an ejection for the player (#1241)', async () => {
     const game = await boot('?bot=off');
     fightOverseer(game);
-    plies(game, 0, 6);
+    plies(game, 0, 4);
     expect(game.hud()).toContain('1/6'); // the boss marble that walked onto (4, -1) burnt
-    for (const [q, r] of FIXTURE[6]!) game.click(q, r);
+    for (const [q, r] of FIXTURE[4]!) game.click(q, r);
     expect(body().sliding).toBe('1');
     expect(body().burns).toBeUndefined(); // the push slides first
-    expect(drawn(game).cores).not.toContainEqual([2, 1]);
-    game.frame(1000); // the slide ends: the core sinks into its vent
+    expect(drawn(game).cores).not.toContainEqual([1, 1]);
+    game.frame(1000); // the slide ends: the core rolls into its vent and sinks
     expect(body().burns).toBe('1');
     expect(body().ejecting).toBe('tumble');
     expect(drawn(game).cores).toHaveLength(5);
     expect(game.hud()).toContain('2/6');
-    plies(game, 7, 8);
+    plies(game, 5, 6);
     expect(body().burns).toBeUndefined(); // a ply that burns nothing
   });
 
   it('reduced motion fades the burns, and the boss pushing the 6th core in wins the fight for the player', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightOverseer(game);
-    plies(game, 0, 23);
-    for (const [q, r] of FIXTURE[23]!) game.click(q, r); // the boss pushes the core (2, -1) onto (4, -1)
+    plies(game, 0, 21);
+    for (const [q, r] of FIXTURE[21]!) game.click(q, r); // the boss pushes the core (2, -1) next to (4, -1)
     expect(body().burns).toBe('1');
     expect(body().ejecting).toBe('fade');
     expect(game.hud()).toContain('Victory');
@@ -192,9 +192,9 @@ describe('main.ts The Overseer (#635)', () => {
   it('on victory the central marble explodes, then the bubble types the farewell, with no angry line (#789)', async () => {
     const game = await boot('?bot=off');
     fightOverseer(game);
-    plies(game, 0, 23);
+    plies(game, 0, 21);
     expect(drawn(game).overseer).toEqual([0, 0]);
-    for (const [q, r] of FIXTURE[23]!) game.click(q, r);
+    for (const [q, r] of FIXTURE[21]!) game.click(q, r);
     expect(body().explosions).toBeUndefined(); // the push slides first
     game.frame(1000); // the slide ends: the 6th core burns and the Overseer blows
     expect(body().burns).toBe('1');
@@ -220,8 +220,8 @@ describe('main.ts The Overseer (#635)', () => {
   it('under reduced motion the farewell shows whole once the static flash is over', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightOverseer(game);
-    plies(game, 0, 23);
-    for (const [q, r] of FIXTURE[23]!) game.click(q, r);
+    plies(game, 0, 21);
+    for (const [q, r] of FIXTURE[21]!) game.click(q, r);
     expect(body().explosions).toBe('1');
     game.frame(FLASH_MS);
     game.frame(0);
