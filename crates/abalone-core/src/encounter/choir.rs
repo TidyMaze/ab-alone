@@ -509,7 +509,7 @@ mod tests {
     use super::*;
     use crate::board::MAX_RADIUS;
     use crate::game::Outcome;
-    use crate::moves::Direction::{E, W};
+    use crate::moves::Direction::{E, NW, W};
     use crate::moves::{legal_moves, Direction, MoveError};
     use Army::{Alto, Bass, Tenor};
 
@@ -843,6 +843,24 @@ mod tests {
         assert!(!legal_moves(c.game().board(), Player::White).is_empty());
         assert_eq!(c.game().to_move(), Player::Black, "the boss passed");
         assert_eq!(c.game().passed(), Some(Player::White));
+    }
+
+    #[test]
+    fn a_player_walled_in_by_the_first_of_two_moves_passes_once() {
+        // P3: Alto walls the lone Black marble in on the corner, Black passes and Alto plays its
+        // second move.
+        let mut c = choir_from(
+            &[(4, -4)],
+            &[(Alto, &[(3, -4), (3, -3), (4, -2)])],
+            Player::White,
+            [5, 0],
+            0,
+        );
+        assert_eq!(c.phase(), LAST_PHASE);
+        c.play(&mv(&[(4, -2)], NW)).unwrap();
+        assert_eq!(c.game().to_move(), Player::White, "the boss moves again");
+        assert_eq!(c.game().passed(), Some(Player::Black));
+        assert!(c.boss_move().is_some());
     }
 
     #[test]
