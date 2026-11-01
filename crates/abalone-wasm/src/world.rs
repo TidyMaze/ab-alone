@@ -252,6 +252,19 @@ impl WorldFight {
         )
     }
 
+    /// The enemies within `radius` cells of `(q, r)`. `chunks` lists the chunks to look in, in order: `cx, cy, n` then the `n` generated
+    /// enemies of that chunk as `q, r` pairs, chunk after chunk.
+    pub fn around(&self, chunks: Vec<i32>, q: i32, r: i32, radius: i32) -> Vec<i32> {
+        let mut blocks = Vec::new();
+        let mut rest = chunks.as_slice();
+        while let [cx, cy, n, tail @ ..] = rest {
+            let (cells, tail) = tail.split_at(2 * *n as usize);
+            blocks.push(((*cx, *cy), cells_of_flat(cells)));
+            rest = tail;
+        }
+        flat_of(&self.overlay.around(&blocks, (q, r), radius))
+    }
+
     /// Plays a push: the enemies `old` leave, the enemies `new` stand, `ejected` of them are beaten.
     pub fn apply(&mut self, old: Vec<i32>, new: Vec<i32>, ejected: u32) {
         self.overlay
@@ -548,5 +561,18 @@ mod tests {
         assert_eq!(saved.removed(), vec![4, 4, 1, 1]);
         assert_eq!(saved.added(), vec![2, 2]);
         assert_eq!(saved.beaten(), 7);
+    }
+
+    #[test]
+    fn a_fight_lists_the_enemies_around_a_cell_over_the_chunks_given() {
+        let mut fight = WorldFight::new();
+        fight.apply(vec![2, 0], vec![0, 3], 0);
+        let chunks = vec![0, 0, 3, 1, 0, 2, 0, 9, 0, 1, 0, 2, 16, 0, 30, 0];
+        assert_eq!(fight.around(chunks.clone(), 0, 0, 3), vec![1, 0, 0, 3]);
+        assert_eq!(
+            fight.around(chunks, 0, 0, 20),
+            vec![1, 0, 9, 0, 0, 3, 16, 0]
+        );
+        assert!(fight.around(vec![], 0, 0, 5).is_empty());
     }
 }

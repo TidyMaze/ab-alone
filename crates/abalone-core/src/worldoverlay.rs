@@ -84,7 +84,15 @@ impl Overlay {
     /// The enemies within `radius` cells (hex distance) of `cell`, chunk by chunk in the order given: `chunks` pairs a chunk with the
     /// generated enemies that start in it (`chunk_enemies` of each).
     pub fn around(&self, chunks: &[(Cell, Vec<Cell>)], cell: Cell, radius: i32) -> Vec<Cell> {
-        todo!()
+        let distance = |(q, r): Cell| {
+            let (dq, dr) = (q - cell.0, r - cell.1);
+            (dq.abs() + dr.abs() + (dq + dr).abs()) / 2
+        };
+        chunks
+            .iter()
+            .flat_map(|(chunk, generated)| self.chunk_enemies(generated, *chunk))
+            .filter(|&enemy| distance(enemy) <= radius)
+            .collect()
     }
 
     /// Plays a push: the enemies `old` leave their cells, the enemies `new` stand on theirs, and the `ejected` ones count as beaten.
