@@ -102,10 +102,10 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   off, and the other side with each of the pusher's own. When both sides reach their count on the
   same ply, the pusher wins.
 - **No legal move**: a side to move with no legal move (every move of it would push an Anchor off,
-  or it is locked in) loses the fight. The engine has no pass. Only with the flag: plain modes keep
-  their rule.
+  or it is locked in) passes its turn, as in every mode (rules.md section 7, #1301): it no longer
+  loses the fight.
 - **The bot** plays these rules in its search: Heavy weights and Anchors in its legal moves, a
-  burst's ejections in its score, and a side with no legal move as a loss.
+  burst's ejections in its score, and a side with no legal move as a pass.
 - **Bridge**: `Engine::place_special(q, r, kind)` and `Engine::specials()` (records `[q, r, kind]`,
   `1` Heavy, `2` Anchor, `3` Spark).
 

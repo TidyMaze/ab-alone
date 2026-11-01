@@ -21,6 +21,9 @@ export interface HudState {
   turn?: string; // co-op, a human ply: Your turn or Partner's turn (coopTurn) in place of "Black to move" (#530)
 }
 
+/** The HUD note after a pass (#1301, rules.md section 7): `passed` is the side whose turn passed, 0 for none. */
+export const passNote = (passed: number, glass: number): string => (passed ? ` · ${sideName(passed, glass)} has no move: turn passed` : '');
+
 /** A side's marble colour, for its row of pips (#1038): the side wearing the pale glass is White, the others Black. */
 const marble = (side: number, glass: number): string => (side === glass ? 'pale' : 'dark');
 

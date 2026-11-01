@@ -8,7 +8,7 @@ export type EndAnim = 'win' | 'loss' | 'draw';
 
 export interface EndInput {
   status: number; // 0 running, 1 Black wins, 2 White wins, 3 draw
-  reason: number; // draw reason: 1 threefold repetition, 2 anti-stalling (engine draw_reason)
+  reason: number; // draw reason: 1 threefold repetition, 2 anti-stalling, 3 neither side can move (engine draw_reason)
   mode: EndMode;
   side: number; // the viewer's side: 1 Black, 2 White, 0 both or none (hot-seat, spectator)
   glass: number; // the side wearing the pale glass, named White (sideName)
@@ -25,8 +25,13 @@ export function endBanner({ status, reason, mode, side, glass }: EndInput): EndB
   const boss = mode === 'boss';
   if (status === 3) {
     // The plate may not grow over the board (phone-layout e2e): the boss line fits one line of the plate.
-    if (boss) return { title: 'Defeat', line: reason === 2 ? '100 plies idle: a defeat.' : 'Repeated 3 times: a defeat.', anim: 'loss' };
-    const what = reason === 2 ? '100 plies, nothing ejected. Tally calls it even.' : 'Same position three times. Tally closes the page.';
+    const [lost, what] =
+      reason === 2
+        ? ['100 plies idle: a defeat.', '100 plies, nothing ejected. Tally calls it even.']
+        : reason === 3
+          ? ['No move left: a defeat.', 'Neither side can move. Tally calls it even.']
+          : ['Repeated 3 times: a defeat.', 'Same position three times. Tally closes the page.'];
+    if (boss) return { title: 'Defeat', line: lost, anim: 'loss' };
     return { title: 'Draw', line: what, anim: 'draw' };
   }
   if (side === 0) return { title: `${sideName(status, glass)} wins`, line: 'The books balance.', anim: 'win' };

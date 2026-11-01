@@ -20,9 +20,13 @@ describe('main.ts, a blocked side passes (#1301)', () => {
     expect(game.hook<number>('__plies')).toBe(WALLED_IN.length);
     expect(info).toHaveBeenCalledWith('[ab-alone] pass', expect.objectContaining({ data: { side: 2, ply: WALLED_IN.length } }));
     // (4,-1) steps back to (4,-2): the bot's marble can move again, and the bot answers.
+    game.frame(1000); // the last ply's slide ends
     game.click(4, -1);
     game.click(4, -2);
-    for (let i = 0; i < 20 && game.hook<number>('__plies') < WALLED_IN.length + 2; i++) await game.settle();
+    for (let i = 0; i < 20 && game.hook<number>('__plies') < WALLED_IN.length + 2; i++) {
+      game.frame(1000); // the player's slide ends, then the bot's reply is played
+      await game.settle();
+    }
     expect(game.hook<number>('__plies')).toBe(WALLED_IN.length + 2);
     expect(game.hud()).not.toContain('has no move');
     info.mockRestore();
