@@ -226,7 +226,7 @@ Errors: `no_game`, `game_over`, `not_your_turn`, `bad_move`, `illegal_move`.
 
 Online. Opens a room and takes a seat. Drops any game in progress. See section 7.
 
-Input: none. The `Hello` has no name field, so a room shows no display name: the seat shows as an agent (section 8).
+Input: `{ "boss": "optional, one of boss_ids()", "seed": "optional, default 0" }`. The `Hello` has no name field, so a room shows no display name: the seat shows as an agent (section 8). With `boss` the room is a boss duel (section 7.1).
 
 Output:
 
@@ -239,7 +239,7 @@ Output:
 }
 ```
 
-The game starts when a second peer joins and both `Hello` are verified. `room` is `newRoomId` and `invite` is `inviteUrl` of `client/src/invite.ts`, on the live site, ending with `&key=<fingerprint>`: the `fingerprint` of the agent's public key (#1323), so a human who joins binds seat 1 only to this agent. Errors: `already_in_room`, `transport_failed`.
+The game starts when a second peer joins and both `Hello` are verified. `room` is `newRoomId` and `invite` is `inviteUrl` of `client/src/invite.ts`, on the live site, ending with `&key=<fingerprint>`: the `fingerprint` of the agent's public key (#1323), so a human who joins binds seat 1 only to this agent. Errors: `already_in_room`, `unknown_boss`, `transport_failed`.
 
 ### `join_room`
 
@@ -253,7 +253,7 @@ Input:
 
 An invite link that ends with `&key=<fingerprint>` (`creatorFromHash`) is passed to the session as `creator`: the agent binds seat 1 only to the creator whose public key has this fingerprint, and ignores any other first `Hello` (#1323). A link without `&key=` (an older one) and a bare room code bind seat 1 to the first `Hello`, as before; `invite` in the output keeps the link's own `&key=`.
 
-Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). The call returns once the creator's `Hello` gave the agent its seat. A failed join keeps the game in progress. Errors: `already_in_room`, `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout, `SIGNALING_TIMEOUT_MS` of `client/src/netcounters.ts`, 30 s, the only creator runs another engine version (tech.md section 9), or the input holds no room code), `transport_failed`.
+Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). The call returns once the creator's `Hello` gave the agent its seat. A failed join keeps the game in progress. Errors: `already_in_room`, `unknown_boss` (a boss-seat link, section 7.1), `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout, `SIGNALING_TIMEOUT_MS` of `client/src/netcounters.ts`, 30 s, the only creator runs another engine version (tech.md section 9), or the input holds no room code), `transport_failed`.
 
 ### `wait_for_opponent_move`
 
@@ -340,6 +340,16 @@ An error is `{ "code": "...", "message": "..." }`. `message` is the engine's rea
 - Rooms have two seats. A third peer is refused as a player (bug #117).
 - Rematch (tech.md section 6) is not exposed in v1. The agent starts a new room.
 - No TURN in v1 (multiplayer.md section 4). A pair behind a symmetric NAT cannot connect, and `join_room` returns `room_not_found` or `transport_failed`.
+
+### 7.1 The boss seat (#1316)
+
+A room can be a duel on a boss: seat 1 plays Black, seat 2 plays the boss as White, a mind instead of the boss search. It is the same room and the same signed `MoveRecord`s, no new message and no new protocol version.
+
+- The invite is `<page>#room=<room>&boss=<id>&seed=<seed>&seat=boss&key=<fingerprint>` (`inviteUrl` with `bossSeat`, `bossSeatFromHash` of `client/src/invite.ts`). A co-op invite has no `seat=boss`: there both seats play Black and the engine plays the boss (coop-boss.md). A client that does not know `seat=boss` opens no room from this link.
+- Both peers hold an `Encounter(boss, seed)` as the room's judge. `Encounter.play` is called for the White move too: it checks it against the boss's legal moves (the Choir's army in turn, the Dual Room's room) and runs the same hooks, tells and phases as after a boss reply. Each peer is the judge of the other's moves; an illegal boss move is refused and is a `desync`.
+- `get_state` shows the `boss` block to both seats. `legal_moves` lists `announces` and `free` only on a Black turn.
+- The boss's moves are not searched by the server: the agent chooses them, `engine.boss_move()` is not used.
+- Not in this first version: a human creating the boss-seat room from the client (the client opens no such room yet), a Retry, and a boss seat for a human.
 
 ## 8. Agent flag in `Hello`
 

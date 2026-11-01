@@ -11,6 +11,7 @@ import type { MarbleSkins } from './openworldstripe';
 import { endingLine } from './tally';
 import { MARBLES } from './trainer';
 import { enter, heroStep } from './openworldstep';
+import type { PeerHost } from './worldnet';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The walk of the hero to a far cell, the bridge's `world_path` (docs/specs/openworld.md section 4): the seed, the cell the hero
@@ -53,6 +54,8 @@ export const twistOf = (prev: number, next: number): number => wrapPi(next - pre
 export class OpenWorldMode {
   active = false;
   hero: Hero | null = null;
+  /** The online layer of the public world (#1305): told of each world entered and left, and of each frame. None draws solo. */
+  peers: PeerHost | null = null;
   private view: OpenWorldView | null = null;
   private world: World | null = null;
   /** The seed of the world entered, the enemies as the pushes left them, and the pushes played so far. */
@@ -121,6 +124,7 @@ export class OpenWorldMode {
   /** Enters the world of `seed` with the hero, the troop and the fight of `saved` (a save of this seed), or on the spawn. */
   enter(seed: number, width: number, height: number, saved: WorldSave | null = null, skins?: MarbleSkins): void {
     this.flush(); // the world left (another seed entered over it) is saved first
+    this.peers?.leave();
     this.freeView();
     this.seed = seed;
     const world = new World(
@@ -146,6 +150,7 @@ export class OpenWorldMode {
     view.turnTo(saved ? restYaw(saved.yaw) : DEFAULT_YAW); // the camera opens at the angle the world was left at, or the default (#1026, #1254)
     view.show(this.hero.at, this.hero.troop);
     view.setLairs(this.lairs, this.beaten);
+    this.peers?.enter(seed, view.scene, view.camera, world);
     const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
     if (medals) {
       const { have, total } = this.medals();
@@ -179,6 +184,7 @@ export class OpenWorldMode {
 
   leave(): void {
     this.flush();
+    this.peers?.leave();
     this.active = false;
     this.held.clear();
     this.freeView();
@@ -402,6 +408,7 @@ export class OpenWorldMode {
     if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
+    if (this.peers?.frame(now, this.hero!.at)) this.dirty = true; // the other heroes: sent, received, drawn (#1305)
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();

@@ -9,6 +9,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { onTestFinished, vi } from 'vitest';
 import page from '../../index.html?raw';
 import type { BotRequest, BotResponse } from '../bot';
+import type { PeerNet } from '../p2p';
 import type { Transport } from '../transport';
 import { FakeContext } from './audio';
 
@@ -58,6 +59,19 @@ export interface Game {
   peer(): Transport | null;
   /** The room the page went online in, else null. */
   room(): string | null;
+  /** The public Open world's room (#1305), once the page joined it over Trystero (not under ?net=hook), else null. */
+  world(): WorldRoom | null;
+}
+
+/** The test end of the public world's room: what the page sent, and the calls Trystero would make. */
+export interface WorldRoom {
+  room: string;
+  sent: [Uint8Array, string | undefined][];
+  closed: boolean;
+  data(bytes: Uint8Array, peer: string): void;
+  join(peer: string): void;
+  leave(peer: string): void;
+  error(message: string): void;
 }
 
 // The engine's answers are deterministic (a fixed node budget, bot.ts): the evaluation bar asks the same opening position
@@ -278,6 +292,8 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     };
   });
 
+  // The public Open world's room (#1305): a recorder in place of Trystero.
+  let world: WorldRoom | null = null;
   // The online room: main.ts gets one end of a local pair, the test holds the other.
   let peer: Transport | null = null;
   let room: string | null = null;
@@ -289,6 +305,30 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
         const [mine, theirs] = localPair();
         [peer, room] = [theirs, id];
         return mine;
+      },
+      p2pPeers: (id: string): PeerNet => {
+        let onData: (d: Uint8Array, peer: string) => void = () => {};
+        let onJoin: (peer: string) => void = () => {};
+        let onLeave: (peer: string) => void = () => {};
+        let onError: (message: string) => void = () => {};
+        const mine: WorldRoom = {
+          room: id,
+          sent: [],
+          closed: false,
+          data: (d, peer) => onData(d, peer),
+          join: (peer) => onJoin(peer),
+          leave: (peer) => onLeave(peer),
+          error: (message) => onError(message),
+        };
+        world = mine;
+        return {
+          send: (d, to) => void mine.sent.push([d, to]),
+          onData: (cb) => void (onData = cb),
+          onJoin: (cb) => void (onJoin = cb),
+          onLeave: (cb) => void (onLeave = cb),
+          onError: (cb) => void (onError = cb),
+          close: () => void (mine.closed = true),
+        };
       },
     };
   });
@@ -345,6 +385,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     draws: () => draws,
     peer: () => peer,
     room: () => room,
+    world: () => world,
   };
   return game;
 }

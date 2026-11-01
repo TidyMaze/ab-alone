@@ -10,7 +10,11 @@ const room = vi.hoisted(() => {
     action,
     onPeerJoin: null as ((peer: string) => void) | null,
     onPeerLeave: null as ((peer: string) => void) | null,
-    makeAction: () => action,
+    actions: [] as string[],
+    makeAction: (name: string) => {
+      room.actions.push(name);
+      return action;
+    },
     leave: vi.fn(async () => {}),
   };
 });
@@ -24,7 +28,7 @@ vi.mock('trystero/nostr', () => ({
   },
 }));
 
-const { RELAY_URLS, hookTransport, p2pTransport } = await import('./p2p');
+const { RELAY_URLS, hookPeers, hookTransport, p2pPeers, p2pTransport } = await import('./p2p');
 
 describe('p2pTransport', () => {
   it('joins on the relay shortlist, never the 29 defaults (#1338)', () => {
@@ -164,5 +168,111 @@ describe('hookTransport', () => {
     expect(got).toEqual([[rec, 'white']]);
     expect(left).toEqual(['white']);
     expect(t.state).toBe('connecting');
+  });
+});
+
+describe('p2pPeers (the public world, #1305)', () => {
+  it('joins on the shortlist, one action for the world messages, and hands bytes and peers over', () => {
+    const net = p2pPeers('ow:1305:0');
+    expect(joined.config?.relayConfig?.urls).toEqual(RELAY_URLS);
+    expect(room.actions).toContain('world');
+    const got: [Uint8Array, string][] = [];
+    const joins: string[] = [];
+    const leaves: string[] = [];
+    net.onData((d, peer) => got.push([d, peer]));
+    net.onJoin((peer) => joins.push(peer));
+    net.onLeave((peer) => leaves.push(peer));
+    room.onPeerJoin!('p');
+    room.onPeerLeave!('p');
+    room.action.onMessage!(Uint8Array.of(1, 1), { peerId: 'p' });
+    expect(joins).toEqual(['p']);
+    expect(leaves).toEqual(['p']);
+    expect(got).toEqual([[Uint8Array.of(1, 1), 'p']]);
+  });
+
+  it('sends to one peer or to all, and leaves the room on close', () => {
+    const net = p2pPeers('r');
+    room.send.mockClear();
+    net.send(Uint8Array.of(1, 1));
+    net.send(Uint8Array.of(1, 1), 'p');
+    expect(room.send.mock.calls).toEqual([
+      [Uint8Array.of(1, 1), { target: undefined }],
+      [Uint8Array.of(1, 1), { target: 'p' }],
+    ]);
+    room.leave.mockClear();
+    net.close();
+    expect(room.leave).toHaveBeenCalledOnce();
+  });
+
+  it('hands a Trystero join error to onError, and drops it when nobody listens', () => {
+    const net = p2pPeers('r');
+    expect(() => joined.callbacks!.onJoinError!({ error: 'nobody listens' })).not.toThrow();
+    const errors: string[] = [];
+    const listening = p2pPeers('r');
+    listening.onError((m) => errors.push(m));
+    joined.callbacks!.onJoinError!({ error: 'could not connect to peer p after exchanging SDP' });
+    expect(errors).toEqual(['could not connect to peer p after exchanging SDP']);
+    expect(net).toBeDefined();
+  });
+
+  it('ignores a peer event nobody listens to', () => {
+    p2pPeers('r');
+    expect(() => {
+      room.onPeerJoin!('p');
+      room.onPeerLeave!('p');
+      room.action.onMessage!(Uint8Array.of(1, 1), { peerId: 'p' });
+    }).not.toThrow();
+  });
+});
+
+describe('hookPeers', () => {
+  interface Hook {
+    __netPeerOut?: (data: Uint8Array, to?: string) => void;
+    __netPeerIn?: (data: number[] | Uint8Array, peer: string) => void;
+    __netPeerJoin?: (peer: string) => void;
+    __netPeerLeave?: (peer: string) => void;
+    __netPeerError?: (message: string) => void;
+  }
+  afterEach(() => void vi.unstubAllGlobals());
+  const page = (): Hook => {
+    const w: Hook = {};
+    vi.stubGlobal('window', w);
+    return w;
+  };
+
+  it('hands sent bytes to __netPeerOut with their one peer, and drops them while the test listens to none', () => {
+    const w = page();
+    const net = hookPeers();
+    net.send(Uint8Array.of(1, 1)); // no __netPeerOut yet
+    const out: [Uint8Array, string | undefined][] = [];
+    w.__netPeerOut = (d, to) => out.push([d, to]);
+    net.send(Uint8Array.of(1, 1));
+    net.send(Uint8Array.of(1, 2), 'p');
+    expect(out).toEqual([
+      [Uint8Array.of(1, 1), undefined],
+      [Uint8Array.of(1, 2), 'p'],
+    ]);
+  });
+
+  it('receives bytes (a plain array from the test too), joins and leaves; close does nothing', () => {
+    const w = page();
+    const net = hookPeers();
+    const got: [Uint8Array, string][] = [];
+    const events: string[] = [];
+    net.onData((d, peer) => got.push([d, peer]));
+    net.onJoin((peer) => events.push(`join ${peer}`));
+    net.onLeave((peer) => events.push(`leave ${peer}`));
+    w.__netPeerIn!([1, 1], 'p');
+    w.__netPeerIn!(Uint8Array.of(1, 1), 'q');
+    w.__netPeerJoin!('p');
+    w.__netPeerLeave!('p');
+    net.onError((m) => events.push(`error ${m}`));
+    w.__netPeerError!('boom');
+    net.close();
+    expect(got).toEqual([
+      [Uint8Array.of(1, 1), 'p'],
+      [Uint8Array.of(1, 1), 'q'],
+    ]);
+    expect(events).toEqual(['join p', 'leave p', 'error boom']);
   });
 });

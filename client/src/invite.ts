@@ -27,10 +27,12 @@ export interface CoopFight {
   seed: number;
 }
 
-/** The invite link of a room; a co-op room also carries its boss and seed, and `key` is the creator's fingerprint. */
-export function inviteUrl(page: string, room: string, fight?: CoopFight, key?: string): string {
+/** The invite link of a room; a co-op room also carries its boss and seed, and `key` is the creator's fingerprint.
+ * With `bossSeat` the fight is a duel and the joiner plays the boss as White (#1316), not a second Black. */
+export function inviteUrl(page: string, room: string, fight?: CoopFight, key?: string, bossSeat = false): string {
   const url = new URL(page);
-  url.hash = `room=${room}` + (fight ? `&boss=${fight.boss}&seed=${fight.seed}` : '') + (key ? `&key=${key}` : '');
+  url.hash =
+    `room=${room}` + (fight ? `&boss=${fight.boss}&seed=${fight.seed}` : '') + (fight && bossSeat ? '&seat=boss' : '') + (key ? `&key=${key}` : '');
   return url.toString();
 }
 
@@ -43,6 +45,13 @@ export function roomFromHash(hash: string): string | null {
 /** The room, boss and seed of a co-op invite, null for anything else. The seed is an unsigned 32-bit number. */
 export function coopFromHash(hash: string): ({ room: string } & CoopFight) | null {
   const m = /^#room=([\w-]+)&boss=([\w-]+)&seed=(0|[1-9]\d{0,9})(?:&key=[\w-]{8})?$/.exec(hash);
+  const seed = Number(m?.[3]);
+  return m && seed <= 0xffffffff ? { room: m[1]!, boss: m[2]!, seed } : null;
+}
+
+/** The room, boss and seed of a boss-seat invite (#1316), null for anything else: the joiner plays the boss. */
+export function bossSeatFromHash(hash: string): ({ room: string } & CoopFight) | null {
+  const m = /^#room=([\w-]+)&boss=([\w-]+)&seed=(0|[1-9]\d{0,9})&seat=boss(?:&key=[\w-]{8})?$/.exec(hash);
   const seed = Number(m?.[3]);
   return m && seed <= 0xffffffff ? { room: m[1]!, boss: m[2]!, seed } : null;
 }

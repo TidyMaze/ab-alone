@@ -1645,3 +1645,45 @@ describe('the Dungeon button walks to the nearest tower (#1291)', () => {
     expect(m.dungeon()).toBe(false); // no note in the page: nothing to write to
   });
 });
+
+describe('the Open world mode and the online peers (#1305)', () => {
+  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn() });
+
+  it('hands the world entered to the peers host, and tells it when the world is left, by Escape or by another world', () => {
+    const m = mode();
+    const peers = host();
+    m.peers = peers;
+    m.enter(42, 800, 600);
+    expect(peers.leave).toHaveBeenCalledTimes(1); // the world left, if any, before the new one
+    expect(peers.enter).toHaveBeenCalledWith(42, expect.any(THREE.Scene), expect.any(THREE.PerspectiveCamera), expect.any(World));
+    m.enter(43, 800, 600);
+    expect(peers.enter).toHaveBeenCalledTimes(2);
+    peers.leave.mockClear();
+    m.key('Escape');
+    expect(peers.leave).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the host the hero and the frame time every frame, and draws again when it says the markers changed', () => {
+    const m = mode();
+    const peers = host();
+    m.peers = peers;
+    m.enter(42, 800, 600);
+    const render = vi.fn();
+    m.frame(render, 1000);
+    expect(peers.frame).toHaveBeenLastCalledWith(1000, [0, 0]);
+    m.frame(render, 1016);
+    expect(render).toHaveBeenCalledTimes(1); // nothing changed
+    peers.frame.mockReturnValueOnce(true);
+    m.frame(render, 1032);
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it('works with no host, as solo and the tests of old do', () => {
+    const m = mode();
+    m.enter(42, 800, 600);
+    m.frame(vi.fn(), 1000);
+    m.key('Escape');
+    expect(m.active).toBe(false);
+  });
+});
+

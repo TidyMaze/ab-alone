@@ -93,9 +93,15 @@ export function createServer(session: Session, world: OpenWorld = new OpenWorld(
       description:
         'Open an online room and take its first seat: you are Black. Send the invite link to a human, who opens ' +
         'it in a browser, or the room code to another agent (join_room). Then call wait_for_opponent_move: it ' +
-        'returns once the opponent is seated and it is your turn. Drops any game in progress.',
+        'returns once the opponent is seated and it is your turn. With boss, the room is a boss fight and the ' +
+        'opponent plays the boss as White: the invite link names the boss, and join_room seats the other agent as ' +
+        'the boss. Drops any game in progress.',
+      inputSchema: z.strictObject({
+        boss: z.string().optional().describe(`Fight this boss, played by the opponent: ${bossIds().join(', ')}.`),
+        seed: z.int().min(0).max(4294967295).optional().describe('Seed of the boss fight, default 0.'),
+      }),
     },
-    async () => toolResult(await session.createRoom()),
+    async (input) => toolResult(await session.createRoom(input)),
   );
 
   server.registerTool(
@@ -103,7 +109,8 @@ export function createServer(session: Session, world: OpenWorld = new OpenWorld(
     {
       description:
         'Join an online room a human or another agent opened, from its invite link or its room code. You are ' +
-        'White: call wait_for_opponent_move for Black\'s first move. Drops any game in progress.',
+        'White: call wait_for_opponent_move for Black\'s first move. If the link is a boss fight, you play the boss: ' +
+        'get_state shows the boss, legal_moves lists your moves, and the boss rules judge them. Drops any game in progress.',
       inputSchema: z.strictObject({ room: z.string().describe('The invite link or the room code.') }),
     },
     async (input) => toolResult(await session.joinRoom(input)),

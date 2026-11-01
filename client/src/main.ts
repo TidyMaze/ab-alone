@@ -161,7 +161,9 @@ import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './ma
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
-import { hookTransport, p2pTransport } from './p2p';
+import { hookPeers, hookTransport, p2pPeers, p2pTransport } from './p2p';
+import { WorldPeersHost } from './worldnet';
+import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
@@ -184,6 +186,7 @@ import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from '.
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { toleranceWindow } from './matchmaking';
+import { boardHtml, buildBoard, loadRivals } from './leaderboard';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
@@ -235,6 +238,10 @@ import {
   hasNormalMaps,
   meshDetail,
   nextPixelRatio,
+  offersLowTier,
+  readLowOffer,
+  slowRun,
+  writeLowOffer,
   read,
   write,
   renderPixelRatio,
@@ -740,14 +747,43 @@ function setPixelRatio(ratio: number): void {
   renderer.setPixelRatio(ratio);
   document.body.dataset.ratio = String(ratio);
 }
-function adaptResolution(now: number): void {
-  frameTimes.push(now - lastFrame);
-  lastFrame = now;
-  if (frameTimes.length < RATIO_FRAMES) return;
+// The low tier offer (#849): a sustained slow rate (quality.ts slowRun) offers the low tier once per page view, as a quiet
+// note with Accept and Dismiss, shown at a quiet moment only: no move animation, no online game or Battle royale.
+let lowRun = 0;
+let lowOfferShown = false;
+const lowOffer = document.getElementById('low-offer') as HTMLDivElement;
+function endWindow(): void {
+  lowRun = slowRun(lowRun, frameTimes);
   const next = nextPixelRatio(pixelRatio, frameTimes, Math.min(devicePixelRatio, 1));
   if (next !== pixelRatio) setPixelRatio(next);
   else frameTimes = [];
 }
+function adaptResolution(now: number): void {
+  frameTimes.push(now - lastFrame);
+  lastFrame = now;
+  if (frameTimes.length >= RATIO_FRAMES) endWindow();
+}
+function offerLowTier(quiet: boolean): void {
+  if (!quiet || online || royaleNet || !offersLowTier(tier, lowRun, readLowOffer(store), lowOfferShown)) return;
+  lowOfferShown = true;
+  lowOffer.hidden = false;
+}
+function answerLowOffer(accepted: boolean): void {
+  lowOffer.hidden = true;
+  writeLowOffer(store, accepted ? 'accepted' : 'dismissed');
+  if (accepted) {
+    tier = 'low';
+    writeTier(store, tier);
+    applyLook();
+  }
+}
+(document.getElementById('low-offer-accept') as HTMLButtonElement).addEventListener('click', () => answerLowOffer(true));
+(document.getElementById('low-offer-dismiss') as HTMLButtonElement).addEventListener('click', () => answerLowOffer(false));
+// For the tests (adaptation is skipped under automation): one window of frames of `ms` each.
+(window as unknown as Record<string, unknown>).__slowWindow = (ms: number) => {
+  frameTimes = Array.from({ length: RATIO_FRAMES }, () => ms);
+  endWindow();
+};
 
 // How many times the look was rebuilt: an orbit never rebuilds it (bug #475, e2e/camera.spec.ts).
 let looks = 0;
@@ -1123,6 +1159,30 @@ async function onlineAllowed(): Promise<boolean> {
   if (location.hash) window.history.replaceState(null, '', location.pathname + location.search);
   return false;
 }
+// The ranked leaderboard (#1287): you among the opponents of your settled 1v1 matches, from what is saved here.
+const boardBox = document.getElementById('board')!;
+const boardButton = document.getElementById('leaderboard')!;
+const closeBoard = (): void => {
+  boardBox.hidden = true;
+  boardButton.focus();
+};
+boardButton.addEventListener('click', () => {
+  moveModes('outside');
+  document.getElementById('board-body')!.innerHTML = boardHtml(buildBoard(loadRankedProfile(store).rating1v1, loadRivals(store)));
+  boardBox.hidden = false;
+  document.getElementById('board-close')!.focus();
+});
+document.getElementById('board-close')!.addEventListener('click', closeBoard);
+boardBox.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // the board and the menus never see it
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeBoard();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    document.getElementById('board-close')!.focus(); // the close button is the only stop
+  }
+});
 // Where the pad walks the focus: in the guide or the opt-in while one is open.
 const padScope = (): ParentNode => (!consentBox.hidden ? consentBox : guideBox.hidden ? document : guideBox);
 if (guideDue(store, location.search, navigator.webdriver)) openGuide(null);
@@ -5493,12 +5553,51 @@ const openWorld = new OpenWorldMode(
   (seed, from, beaten, blocked, broken) => Int32Array.from(world_dungeon(seed, from[0], from[1], beaten, blocked, broken)), // the Dungeon button (#1291)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
-/** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
+// The public world (#1305): one fixed seed where everybody lands by default, the only world with other heroes. It joins its room only
+// after the opt-in (consent.ts); Stay solo opens the same world offline. New world and any other seed stay private and offline. An
+// automated page stays offline too unless it asks for the hook transport (?net=hook) or the opt-in dialog (?consent).
+let worldOnline = false;
+const netBox = document.getElementById('openworld-online')!;
+const netHide = document.getElementById('openworld-hide') as HTMLButtonElement;
+const netName = document.getElementById('openworld-name') as HTMLInputElement;
+const peersHost = new WorldPeersHost(
+  (room) => (new URLSearchParams(location.search).get('net') === 'hook' ? hookPeers() : p2pPeers(room)),
+  () => worldOnline,
+  document.getElementById('openworld-peers')!,
+  (status) => {
+    // The HUD's online controls: the status line, and Hide or Show. They exist in the public world only.
+    if (netBox.hidden && status.available) netName.value = readName(store); // the field shows the stored name when the controls appear
+    netBox.hidden = !status.available;
+    document.getElementById('openworld-net')!.textContent = status.text;
+    netHide.textContent = status.hidden ? 'Show' : 'Hide';
+    netHide.setAttribute('aria-pressed', String(status.hidden));
+  },
+  () => readName(store),
+);
+openWorld.peers = peersHost;
+netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
+netName.addEventListener('input', () => {
+  writeName(store, cleanName(netName.value)); // the field keeps what was typed, the store and the peers get the clean name
+  peersHost.setName();
+});
+/** Whether this page may take the public world online, asking first when the opt-in is due. */
+async function publicWorldOnline(): Promise<boolean> {
+  const query = new URLSearchParams(location.search);
+  if (query.get('net') === 'hook') return true;
+  if (navigator.webdriver && !query.has('consent')) return false;
+  return !consentWanted() || (await onlineAllowed());
+}
+/** Opens the world of `seed`, online first when it is the public one and the page may (the opt-in is asked before anything is contacted). */
+async function enterWorld(seed: number, resume = true): Promise<void> {
+  worldOnline = seed === PUBLIC_SEED && (await publicWorldOnline());
+  return openWorld.open(seed, innerWidth, innerHeight, resume);
+}
+/** The world the menu opens: the seed of the URL, else the last world played when it has a save, else the public world. */
 async function enterOpenWorld(): Promise<void> {
-  if (Number.isFinite(openWorldFixedSeed)) return openWorld.open(openWorldFixedSeed, innerWidth, innerHeight);
-  const last = openWorldFresh ? null : await openWorldSaves.last();
-  if (last !== null && (await openWorldSaves.load(last))) return openWorld.open(last, innerWidth, innerHeight);
-  return openWorld.open(crypto.getRandomValues(new Uint32Array(1))[0]!, innerWidth, innerHeight, false);
+  if (openWorldFresh) return enterWorld(crypto.getRandomValues(new Uint32Array(1))[0]!, false);
+  if (Number.isFinite(openWorldFixedSeed)) return enterWorld(openWorldFixedSeed);
+  const last = await openWorldSaves.last();
+  return enterWorld(last !== null && (await openWorldSaves.load(last)) ? last : PUBLIC_SEED);
 }
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
@@ -5519,7 +5618,7 @@ bindNewWorld(document, openWorld.newWorld.bind(openWorld)); // the HUD's New wor
 bindHudFold(document); // the HUD plate folds to its chip after a few steps (#1138)
 bindJoystick(document, openWorld); // the touch stick of the Open world, on the left half of the canvas (#1025)
 addEventListener('keydown', (e) => {
-  if (!openWorld.active || !openWorld.key(e.key, e.repeat)) return; // a key repeat steps nothing: the held arrows walk (#1059)
+  if (!openWorld.active || e.target instanceof HTMLInputElement || !openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
   if (openWorld.active) return;
   dirty = CHANGE_DRAWS; // left: the board draws again
@@ -6088,6 +6187,7 @@ renderer.setAnimationLoop((now) => {
     }
   }
   if (!navigator.webdriver) adaptResolution(now);
+  offerLowTier(!sliding() && !lastMovePlaying); // at a quiet moment: no move animation (the ambient dust and heat pulse always move)
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
   syncPedestals?.();
