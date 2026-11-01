@@ -12,6 +12,7 @@ import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
 import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
+import { SUN, aimSunShadow, sunPosition } from './tablezero';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
@@ -401,6 +402,9 @@ interface Move {
 }
 type Timing = Pick<Move, 'start' | 'span' | 'fall' | 'lunge'>;
 
+/** How far round the hero the sun's shadow reaches, in cells: the camera's near footprint at the closest zooms (#1364). */
+const SHADOW_REACH = 14;
+
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
@@ -448,6 +452,9 @@ export class OpenWorldView {
   private screen = { width: 800, height: 600 };
   private placed = false;
   private troop: THREE.InstancedMesh;
+  /** The sun of the arena: it follows the focus so its shadow map covers what the camera sees round the hero (#1364). */
+  private readonly sun: THREE.DirectionalLight;
+  private readonly sunAway = new THREE.Vector3();
   private foes: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
   private readonly dummy = new THREE.Object3D();
@@ -508,9 +515,9 @@ export class OpenWorldView {
     this.scene.background = new THREE.Color(SHIP_BLACK);
     this.scene.fog = this.fog;
     this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 1.6));
-    const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
-    sun.position.set(-6, 12, 4);
-    this.scene.add(sun);
+    // The arena's sun (tablezero.ts, #1364): its colour and its direction, the hero's cell at its target; the shadow is the high tier's.
+    this.sun = new THREE.DirectionalLight(SUN.colour, 2.2);
+    this.scene.add(this.sun, this.sun.target);
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     const top = topOnly(prism);
     for (const ground of GROUNDS) {
@@ -534,12 +541,14 @@ export class OpenWorldView {
     }
     this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player));
     this.hero.name = 'hero';
+    this.hero.castShadow = this.hero.receiveShadow = true;
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
     this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player));
     this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
     this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
     this.ejected.name = 'ejected';
+    this.ejected.castShadow = true;
     this.ejected.visible = false;
     this.scene.add(this.ejected);
     this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
@@ -554,6 +563,8 @@ export class OpenWorldView {
     mesh.count = 0;
     mesh.frustumCulled = false; // its bounds come from the first instances, the fog hides the rest
     mesh.name = name;
+    mesh.receiveShadow = name !== 'particles'; // the sun's shadow falls on the ground, the props and the marbles (#1364)
+    mesh.castShadow = !name.startsWith('terrain') && name !== 'particles'; // the props and the marbles cast it, the ground does not
     this.scene.add(mesh);
     return mesh;
   }
@@ -1093,6 +1104,11 @@ export class OpenWorldView {
     return this.stripe.value;
   }
 
+  /** The sun's soft shadow round the hero, on the high tier (#1364). */
+  setShadows(on: boolean): void {
+    aimSunShadow(this.sun, on, SHADOW_REACH);
+  }
+
   /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the planes of the camera with
    * the zoom. The chunks loaded follow the ground the camera sees: rebuilt when the hero's chunk or the reach changes. */
   private frame(): void {
@@ -1102,6 +1118,8 @@ export class OpenWorldView {
     this.stripe.value = stripeStrength(k);
     this.widen.value = gapFill(k);
     lookAtHero(this.camera, at, k, this.yawNow);
+    this.sun.target.position.copy(at);
+    this.sun.position.copy(at).add(this.sunAway.set(...sunPosition()));
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
     const view = new THREE.Vector3();
@@ -1164,6 +1182,8 @@ export class OpenWorldView {
     const material = (mesh.material as THREE.Material).clone();
     const grown = new THREE.InstancedMesh(geometry, material, capacity);
     grown.name = mesh.name;
+    grown.castShadow = mesh.castShadow;
+    grown.receiveShadow = mesh.receiveShadow;
     grown.count = 0;
     grown.frustumCulled = false;
     grown.instanceColor = whiteColours(capacity); // the build writes every colour it places (#984)
@@ -1312,6 +1332,7 @@ export class OpenWorldView {
       const p = axialTo3D(q, r);
       const tile = this.world.tile(q, r)!;
       group.position.set(p.x, topOf(GROUND[tile.terrain], tile.height), p.z);
+      group.traverse((o) => void ((o as THREE.Mesh).isMesh && (o.castShadow = o.receiveShadow = true))); // the tower shades its cell (#1364)
       this.scene.add(group);
     });
   }
