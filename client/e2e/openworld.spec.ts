@@ -465,38 +465,38 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
   await openModes(page);
   await page.locator('#openworld').click();
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
-  await expect.poll(yaw).toBe('0');
+  await expect.poll(yaw).toBe('-30'); // the default faces a straight line of hexes (#1254)
   await page.keyboard.press('q');
-  await expect.poll(yaw).toBe('60');
+  await expect.poll(yaw).toBe('30');
   await page.keyboard.press('e');
   await page.keyboard.press('e');
-  await expect.poll(yaw).toBe('-60');
+  await expect.poll(yaw).toBe('-90');
   await page.keyboard.press('r');
-  await expect.poll(yaw).toBe('0');
+  await expect.poll(yaw).toBe('-30');
   await page.keyboard.press('q');
-  await expect.poll(yaw).toBe('60');
+  await expect.poll(yaw).toBe('30');
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBeDefined(); // written after the frame
   await page.reload();
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
-  await expect.poll(yaw).toBe('60');
+  await expect.poll(yaw).toBe('30');
 });
 
-// #1251: a right-button drag turns the camera freely while held and settles on the nearest multiple of 60 degrees when released.
+// #1251: a right-button drag turns the camera freely while held and settles on the nearest resting angle (30 plus a multiple of 60) when released.
 test('a right-button drag turns the Open world camera and settles on a step of 60 degrees on release, #1251', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
-  await expect.poll(yaw).toBe('0'); // the world is open: the drag is the Open world's
+  await expect.poll(yaw).toBe('-30'); // the world is open: the drag is the Open world's
   await page.mouse.move(300, 300);
   await page.mouse.down({ button: 'right' });
-  await page.mouse.move(400, 300, { steps: 5 }); // 100 px: 50 degrees
-  await expect.poll(yaw).toBe('50');
+  await page.mouse.move(400, 300, { steps: 5 }); // 100 px: 50 degrees, from -30 to 20
+  await expect.poll(yaw).toBe('20');
   await page.mouse.up({ button: 'right' });
-  await expect.poll(yaw).toBe('60');
+  await expect.poll(yaw).toBe('30');
 });
 
 // #1040: a step glides the hero from its cell to the next one. The cell is exact at once (`openworldAt`, the save and the push use
@@ -680,7 +680,7 @@ test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ 
     }, enemies);
   await fixture([[1, 0]]);
   await page.keyboard.press('ArrowRight');
-  await expect.poll(at).toBe('1,-1'); // round the rock by its north-east side, no lean
+  await expect.poll(at).toBe('0,1'); // round the rock by its south-east side at the default camera, no lean
   await page.screenshot({ path: test.info().outputPath('steer.png') });
   await fixture([[1, 0], [1, -1], [0, 1]]);
   await page.keyboard.press('ArrowRight');

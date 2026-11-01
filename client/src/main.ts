@@ -265,6 +265,7 @@ import { bestTurns, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, 
 import { loadProgress, recordWin, saveProgress } from './progress';
 import { roomAt, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
+import { labelsHtml, pipsHtml, railHtml } from './hubview';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
@@ -348,12 +349,14 @@ const closeGoal = (): void => {
   hud();
 };
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
+let hub: HubController | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
 // its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {
+  if (hub) return resetView(innerWidth < innerHeight ? 2.4 : 3); // the hub's deck plan (#1249): its 19 cells and their plates, closer than a board, closer still upright
   if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
   return resetView(activeRadius());
@@ -604,6 +607,14 @@ function applyView(): void {
   }
   sceneRenderer.fogRadius = fogRadius;
   sceneRenderer.applyView(view, reading, { tier, clear, deck, consoleDef });
+  placeHubLabels();
+}
+// The hub's deck plan (#1249): the label plates over the rooms, the lift-shaft rail and the boss pips, shown in the hub only.
+const hubPlan = document.getElementById('hub-plan')!;
+const hubLabels = document.getElementById('hub-labels')!;
+/** Puts the plates back on their cells: the camera moved, or they were drawn again. */
+function placeHubLabels(): void {
+  hub?.placeLabels(hubLabels, (q, r) => sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight));
 }
 
 const freeCam = new FreeCameraController();
@@ -2118,7 +2129,6 @@ function applyPalette(): void {
 applyPalette();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPalette); // System theme follows the OS (#923)
 let hover: Axial | null = null;
-let hub: HubController | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
 let lairFrom: { seed: number; lair: number } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170)
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
@@ -3251,7 +3261,12 @@ function refresh(): void {
   syncAuto();
   if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {
-    hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    const { beaten } = loadProgress(store);
+    hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    hubLabels.innerHTML = labelsHtml(hub.at, beaten);
+    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
+    document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
+    placeHubLabels();
     hud();
     return;
   }
@@ -4578,6 +4593,9 @@ function enterHub(at: HubSpot): void {
   roomOf = null;
   hub = new HubController(at);
   hub.enter(at);
+  hubPlan.hidden = false;
+  view = fitted = fightView(); // the deck plan, framed closer (#1249)
+  applyView();
   evalBar.hidden = hintButton.hidden = exportButton.hidden = importButton.hidden = true; // no game on in the hub: a new game shows them again (#583, #589)
   analyst.stop();
   applyDeck(at.deck);
@@ -4627,8 +4645,12 @@ backButton.addEventListener('click', () => {
   enterHub(roomOf!);
 });
 function leaveHub(): void {
-  hub?.exit();
+  if (!hub) return;
+  hub.exit();
   hub = null;
+  hubPlan.hidden = true;
+  view = fitted = resetView(4); // a board again, as at the start: the game started from the hub frames its own (#1249)
+  applyView();
 }
 addEventListener('keydown', (e) => {
   // An open terminal reader pages by them, a text field moves its caret.

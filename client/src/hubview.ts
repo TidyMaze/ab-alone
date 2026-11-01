@@ -1,7 +1,8 @@
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board main.ts draws the map with, the cell an
 // arrow key rolls the marble to, and the HUD plate. Pure: no DOM, no three.js.
 import { CELLS, VANISHED, type Axial } from './board';
-import { canEnter, HUB_CELLS, neighbours, roomAt, type Door, type Spot } from './hub';
+import { DECK_NAMES, type Deck } from './deck';
+import { canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, type Door, type Spot } from './hub';
 
 /** The bridge board with a hole on every cell off the hub map: the frame shrinks to the map, the other discs hide. */
 export const HUB_BOARD: readonly number[] = CELLS.map(([q, r]) =>
@@ -102,4 +103,75 @@ export function bumpLine(at: Spot, to: Axial, beaten: readonly string[]): string
   const next = neighbours(at.cell).some(([q, r]) => q === to[0] && r === to[1]);
   if (door?.kind !== 'lift' || !next || canEnter(door, beaten)) return '';
   return `Lift to ${title(door.to)}: locked. This deck's boss is still on the books.`;
+}
+
+// The deck plan (#1249): every room wears a label plate, always shown: its name and a short state, or a short label alone
+// on a phone. A lift-shaft rail lists the five decks and the boss pips count the bosses beaten.
+export interface RoomLabel {
+  name: string;
+  state: string;
+  short: string;
+  mark: '' | 'locked' | 'beaten';
+}
+
+const LABELS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, [name: string, state: string, short: string]> = {
+  hotseat: ['Hot-seat', '2 players', 'Hot-seat'],
+  bot: ['Bot table', 'vs the ship AI', 'Bot'],
+  online: ['Online', '1v1 peer room', 'Online'],
+  royale: ['Royale', 'battle royale', 'Royale'],
+  terminal: ['Terminal', 'lore entry', 'Terminal'],
+  medals: ['Medal room', 'best turns', 'Medals'],
+};
+
+/** The plate of a room of `deck`: a lift points up or down to its deck, a boss door names its boss. */
+export function roomLabel(deck: Deck, door: Door, beaten: readonly string[]): RoomLabel {
+  if (door.kind === 'boss') {
+    const boss = bossTitle(door.boss);
+    const won = beaten.includes(door.boss);
+    return { name: 'Boss door', state: won ? `${boss} · beaten` : boss, short: boss, mark: won ? 'beaten' : '' };
+  }
+  if (door.kind === 'lift') {
+    const open = canEnter(door, beaten);
+    const arrow = DECK_NAMES.indexOf(door.to) > DECK_NAMES.indexOf(deck) ? '▲' : '▼';
+    const to = title(door.to);
+    return { name: `Lift ${arrow} ${to}`, state: open ? 'open' : 'locked', short: `${arrow} ${open ? to : 'Locked'}`, mark: open ? '' : 'locked' };
+  }
+  const [name, state, short] = LABELS[door.kind];
+  return { name, state, short, mark: '' };
+}
+
+/** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked. */
+export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[]): string {
+  const plates = roomsOf(deck).map(({ cell: [q, r], door }) => {
+    const { name, state, short, mark } = roomLabel(deck, door, beaten);
+    const attrs = `${mark ? ` data-mark="${mark}"` : ''}${q === mq && r === mr ? ' data-here' : ''}`;
+    return `<div class="hub-label" data-cell="${q},${r}" data-kind="${door.kind}"${attrs}><b>${name}</b><small>${state}</small><span class="short">${short}</span></div>`;
+  });
+  if (!roomAt(deck, [mq, mr])) plates.push(`<div class="hub-label you" data-cell="${mq},${mr}">You</div>`);
+  return plates.join('');
+}
+
+const bossOf = (deck: Deck): string => roomsOf(deck).flatMap(({ door }) => (door.kind === 'boss' ? [door.boss] : []))[0]!;
+/** A deck by its boss: beaten (from the boss menu too), else open once its lift is, else locked. */
+const deckState = (deck: Deck, beaten: readonly string[]): 'beaten' | 'open' | 'locked' =>
+  beaten.includes(bossOf(deck)) ? 'beaten' : canEnter({ kind: 'lift', to: deck }, beaten) ? 'open' : 'locked';
+
+/** The lift-shaft rail: the five decks from the Bridge down, each with its state, and where the marble is. */
+export function railHtml(at: Deck, beaten: readonly string[]): string {
+  const rows = DECK_NAMES.map((deck, i) => {
+    const state = deckState(deck, beaten);
+    const boss = bossTitle(bossOf(deck));
+    const line = state === 'locked' ? 'Lift locked' : `${boss} ${state === 'beaten' ? 'beaten' : 'waits'}`;
+    const here = deck === at;
+    return `<li data-deck="${deck}" data-state="${state}"${here ? ' aria-current="location"' : ''}><span class="n">0${i + 1}</span><b>${title(deck)}</b><small>${line}${here ? ' · you are here' : ''}</small></li>`;
+  });
+  return `<h2>Lift shaft</h2><ul>${rows.reverse().join('')}</ul>`;
+}
+
+/** The boss pips: the count of bosses beaten, then a pip per deck boss in deck order. */
+export function pipsHtml(beaten: readonly string[]): string {
+  const states = DECK_NAMES.map((deck) => [bossTitle(bossOf(deck)), deckState(deck, beaten)] as const);
+  const count = states.filter(([, state]) => state === 'beaten').length;
+  const pips = states.map(([boss, state]) => `<span class="pip" data-state="${state}" title="${boss}: ${state}"></span>`);
+  return `<span class="count">Bosses ${count}/5</span>${pips.join('')}`;
 }

@@ -54,6 +54,12 @@ const opposed = (held: ReadonlySet<string>): boolean =>
 
 /** The camera turns by a step of Q or E, and by a px of a right-button drag, in radians (#1026). */
 export const TURN_STEP = Math.PI / 3;
+/** The camera rests at this angle plus a multiple of TURN_STEP, so screen up runs along a straight line of hexes, not the zigzag between
+ * two (#1254). The default is the one that rolls up to the north-east, as the keyboard always did on an even row. */
+export const REST_OFFSET = Math.PI / 6;
+export const DEFAULT_YAW = -REST_OFFSET;
+/** The resting angle nearest to `yaw`. */
+export const restYaw = (yaw: number): number => Math.round((yaw - REST_OFFSET) / TURN_STEP) * TURN_STEP + REST_OFFSET;
 export const ORBIT_PER_PX = Math.PI / 360;
 const TURNS = new Map<string, number>([
   ['q', TURN_STEP],
@@ -217,6 +223,7 @@ export class OpenWorldMode {
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
     this.beaten = saved ? [...saved.lairs] : [];
     const view = new OpenWorldView(world, this.fight, skins);
+    view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
     this.hero = new Hero(world, this.fight);
     if (saved) {
       this.hero.at = saved.hero;
@@ -224,7 +231,7 @@ export class OpenWorldMode {
     }
     this.view = view;
     view.resize(width, height);
-    if (saved) view.turnTo(Math.round(saved.yaw / TURN_STEP) * TURN_STEP); // the camera opens at the angle the world was left at (#1026)
+    view.turnTo(saved ? restYaw(saved.yaw) : DEFAULT_YAW); // the camera opens at the angle the world was left at, or the default (#1026, #1254)
     view.show(this.hero.at, this.hero.troop);
     view.setLairs(this.lairs, this.beaten);
     const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
@@ -365,7 +372,7 @@ export class OpenWorldMode {
   key(key: string, repeat = false): boolean {
     if (key === 'Escape') return this.leave(), true;
     this.cancelWalk(); // any key ends a walk to a far cell (#1137)
-    if (key === 'r' || key === 'R') return this.turn(-this.view!.yaw), true; // back to the default angle (#1026)
+    if (key === 'r' || key === 'R') return this.turn(DEFAULT_YAW - this.view!.yaw), true; // back to the default angle (#1026)
     const turn = TURNS.get(key);
     if (turn !== undefined) return this.turn(turn), true;
     if (!SCREEN.has(key)) return false;
@@ -402,9 +409,9 @@ export class OpenWorldMode {
     this.mark(document.body.dataset.openworld!);
   }
 
-  /** Settles the camera on the nearest multiple of TURN_STEP (60 degrees): a drag or a twist turns freely while held, and ends here (#1251). */
+  /** Settles the camera on the nearest resting angle (30 degrees plus a multiple of 60): a drag or a twist turns freely while held, and ends here (#1251, #1254). */
   settle(): void {
-    this.turn(Math.round(this.view!.yaw / TURN_STEP) * TURN_STEP - this.view!.yaw);
+    this.turn(restYaw(this.view!.yaw) - this.view!.yaw);
   }
 
   /** A drag of the right button by `px` pixels to the right turns the camera by ORBIT_PER_PX a px (#1026). */

@@ -3,6 +3,7 @@ import * as THREE from 'three/webgpu';
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, encodeMove, moveForClick, parseMoves, type Axial } from './board';
+import { resetView, type View } from './camera';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { boot, slowKeys, type Game } from './test/harness';
@@ -706,3 +707,64 @@ describe('main.ts, the Medal room (#812)', () => {
     expect(document.body.dataset.console).toBe('mess-house-rule 1/2');
   });
 });
+
+// The deck plan (#1249): a label plate on every room, always shown and kept on its cell as the camera moves, the
+// marble labelled YOU, a lift-shaft rail of the five decks and the boss pips. The deck is framed closer than a board.
+describe('main.ts, the deck plan (#1249)', () => {
+  const plan = (): HTMLElement => byId<HTMLElement>('hub-plan');
+  const plate = (cell: string): HTMLElement => document.querySelector<HTMLElement>(`#hub-labels [data-cell="${cell}"]`)!;
+  /** The plate of `cell` sits on the window point just south of the cell centre. */
+  function placed(game: Game, [q, r]: [number, number]): void {
+    const at = game.hook<{ x: number; y: number }>('__cellToScreen', q - 0.2, r + 0.4);
+    expect([plate(`${q},${r}`).style.left, plate(`${q},${r}`).style.top]).toEqual([`${at.x}px`, `${at.y}px`]);
+  }
+
+  it('Ship shows a plate on every room and YOU on the marble, the rail and the pips; a new game hides them', async () => {
+    const game = await boot('?bot=off');
+    expect(plan().hidden).toBe(true);
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'cargo', cell: [0, 0], beaten: ['echo'] }));
+    ship(game);
+    expect(plan().hidden).toBe(false);
+    expect(document.querySelectorAll('#hub-labels .hub-label')).toHaveLength(10); // the nine rooms of the Cargo and YOU
+    expect(plate('2,0').textContent).toContain('The Hull');
+    expect(plate('0,0').textContent).toBe('You');
+    placed(game, [2, 0]);
+    placed(game, [0, 0]);
+    expect(byId('hub-rail').querySelector('[aria-current]')!.textContent).toContain('Cargo');
+    expect(byId('hub-pips').textContent).toBe('Bosses 1/5');
+
+    game.click(1, 0); // the marble rolls: YOU follows it
+    expect(plate('1,0').textContent).toBe('You');
+    placed(game, [1, 0]);
+    expect(plate('0,0')).toBeNull();
+
+    byId('new-game').click();
+    expect(plan().hidden).toBe(true);
+  });
+
+  it('keeps every plate on its cell when the camera zooms', async () => {
+    const game = await boot('?bot=off');
+    ship(game);
+    const before = plate('2,0').style.left;
+    document.querySelector('body > canvas')!.dispatchEvent(new WheelEvent('wheel', { deltaY: 300, cancelable: true }));
+    expect(plate('2,0').style.left).not.toBe(before);
+    placed(game, [2, 0]);
+  });
+
+  it('frames the deck closer than a board, and a game started from it frames its whole board again', async () => {
+    const game = await boot('?bot=off');
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
+    shipAt(game, [-1, 1]);
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3).distance);
+    byId('reset-view').click(); // Reset view in the hub frames the deck
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3).distance);
+    vi.stubGlobal('innerWidth', 390); // a phone held upright: closer still, so the plates read
+    vi.stubGlobal('innerHeight', 844);
+    window.dispatchEvent(new Event('resize'));
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(2.4).distance);
+    vi.unstubAllGlobals();
+    game.click(-2, 2); // the battle royale lobby
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
+  });
+});
+

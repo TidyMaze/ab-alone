@@ -165,6 +165,15 @@ export function maxZoomFor(aspect: number): number {
   return limit;
 }
 
+/** A copy of the hexagonal prism `prism` with its top face only (#1234): the 6 triangles of the top cap of a `CylinderGeometry`. */
+function topOnly(prism: THREE.CylinderGeometry): THREE.BufferGeometry {
+  const top = prism.groups[1]!; // the groups of a cylinder: the sides, the top cap, the bottom cap
+  const flat = prism.clone();
+  flat.clearGroups();
+  flat.setIndex(Array.from(prism.index!.array.slice(top.start, top.start + top.count)));
+  return flat;
+}
+
 /** The ground columns: one instanced mesh each. A blocked terrain stands on the ground of its `GROUND` entry. */
 export const GROUNDS = ['water', 'sand', 'grass', 'rock', 'peak'] as const;
 type Ground = (typeof GROUNDS)[number];
@@ -395,6 +404,10 @@ export class OpenWorldView {
   private drawnKey = '';
   private loadedReach = 0;
   private readonly grounds = {} as Record<Ground, THREE.InstancedMesh>;
+  /** The low tier's flat tops (#1234): a ground cell no neighbour lies below shows no side, so it is drawn as its top alone (6 triangles
+   * in place of 24). One mesh per ground, empty on the high tier. */
+  private readonly flats = {} as Record<Ground, THREE.InstancedMesh>;
+  private flatTops = false;
   private readonly props = {} as Record<Prop, THREE.InstancedMesh>;
   /** The detailed meshes of the modelled props, and the props whose detailed model has arrived: only those draw near the hero. */
   private readonly detailed: Partial<Record<Prop, THREE.InstancedMesh>> = {};
@@ -478,13 +491,17 @@ export class OpenWorldView {
     sun.position.set(-6, 12, 4);
     this.scene.add(sun);
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
+    const top = topOnly(prism);
     for (const ground of GROUNDS) {
       const { emissive } = LOOK[ground];
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined }));
+      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined });
+      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, material());
       this.managed.push(this.grounds[ground]);
+      this.flats[ground] = this.instances(`terrain-${ground}-flat`, 1, top, material()); // grows on the first low build (`fit`)
+      this.managed.push(this.flats[ground]);
     }
     for (const prop of PROP_NAMES) {
       this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop, this.sway));
@@ -634,7 +651,7 @@ export class OpenWorldView {
 
   /** Whether a lake is drawn, so its glow moves. */
   get hasWater(): boolean {
-    return this.grounds.water.count > 0;
+    return this.grounds.water.count + this.flats.water.count > 0;
   }
 
   /** Moves the particles to `now` (ms) and writes them to the mesh: the ambient ones of the hero's biome (docs/specs/openworld-animation.md
@@ -699,7 +716,7 @@ export class OpenWorldView {
     u.time.value = now;
     u.foam.value = on ? FOAM_GAIN : 0;
     u.sway.value = on ? 1 : 0;
-    const shimmer = on && this.world.tile(this.heroCell[0], this.heroCell[1])!.biome === 'desert' && this.grounds.sand.count > 0;
+    const shimmer = on && this.world.tile(this.heroCell[0], this.heroCell[1])!.biome === 'desert' && this.grounds.sand.count + this.flats.sand.count > 0;
     u.shimmer.value = shimmer ? 1 : 0;
     u.span.value = RIPPLE_MS * slowBy();
     this.motionNow = now;
@@ -733,7 +750,7 @@ export class OpenWorldView {
 
   /** The glow of the water breathes slowly: `ms` is the time, 0 holds it still (reduced motion). */
   glow(ms: number): void {
-    (this.grounds.water.material as THREE.MeshStandardMaterial).emissiveIntensity = 1 + 0.15 * Math.sin(ms / 1200);
+    for (const mesh of [this.grounds.water, this.flats.water]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 1 + 0.15 * Math.sin(ms / 1200);
   }
 
   /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero's ball leaves the loaded square (`frame`),
@@ -1160,7 +1177,10 @@ export class OpenWorldView {
 
   /** Points every reference to `old` at `grown`: the grounds, the props, the troop, the enemies and the managed meshes. */
   private swap(old: THREE.InstancedMesh, grown: THREE.InstancedMesh): void {
-    for (const ground of GROUNDS) if (this.grounds[ground] === old) this.grounds[ground] = grown;
+    for (const ground of GROUNDS) {
+      if (this.grounds[ground] === old) this.grounds[ground] = grown;
+      if (this.flats[ground] === old) this.flats[ground] = grown;
+    }
     for (const prop of PROP_NAMES) if (this.props[prop] === old) this.props[prop] = grown;
     if (this.troop === old) this.troop = grown;
     if (this.foes === old) this.foes = grown;
@@ -1185,7 +1205,7 @@ export class OpenWorldView {
         this.world.chunk(kx, ky).forEach((tile, i) => {
           const q = kx * CHUNK + (i % CHUNK);
           const r = ky * CHUNK + Math.floor(i / CHUNK);
-          add(this.grounds[GROUND[tile.terrain]]);
+          add(this.groundMesh(tile, q, r));
           this.stand(tile, q, r, NOWHERE, 0, lay, hexDistance([q, r], hero) <= HI_RADIUS);
         });
       }
@@ -1316,7 +1336,7 @@ export class OpenWorldView {
   /** The meshes a build lays: every managed mesh, or with `terrain` false the props only. The ground columns do not depend on the
    * hero, and neither do the enemies, so a step keeps their instances as they are (#1034). */
   private laid(terrain: boolean): THREE.InstancedMesh[] {
-    return this.managed.filter((mesh) => terrain || !GROUNDS.some((ground) => this.grounds[ground] === mesh));
+    return this.managed.filter((mesh) => terrain || !GROUNDS.some((ground) => this.grounds[ground] === mesh || this.flats[ground] === mesh));
   }
 
   /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props (the detailed ones within `HI_RADIUS` of `hero`) and
@@ -1356,8 +1376,9 @@ export class OpenWorldView {
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height);
           if (terrain) {
-            put(this.grounds[ground], p.x, top / 2, p.z, top, groundColour(tile, ground));
-            if (ground === 'water') this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
+            const column = this.groundMesh(tile, q, r);
+            put(column, p.x, top / 2, p.z, top, groundColour(tile, ground));
+            if (ground === 'water') column.setColorAt(counts.get(column)! - 1, waterColor(this.world, q, r));
           }
           cell = cellKey(q, r);
           this.stand(tile, q, r, p, top, lay, hexDistance([q, r], hero) <= HI_RADIUS);
@@ -1371,6 +1392,26 @@ export class OpenWorldView {
       mesh.instanceColor!.needsUpdate = true;
     }
     this.laidHero = hero;
+  }
+
+  /** Draws the ground as flat tops where a column shows no side (`useFlatTops`), at the next frame. */
+  useFlatTops(on: boolean): void {
+    if (on === this.flatTops) return;
+    this.flatTops = on;
+    this.drawnChunks = ''; // the ground is laid again
+  }
+
+  /** The mesh of a ground cell: its column, or, on the low tier, its flat top when no neighbour lies below it. A neighbour off the
+   * world counts as below: the edge of the world keeps its sides. */
+  private groundMesh(tile: Tile, q: number, r: number): THREE.InstancedMesh {
+    const ground = GROUND[tile.terrain];
+    if (!this.flatTops) return this.grounds[ground];
+    const top = topOf(ground, tile.height);
+    const hidden = neighbours([q, r]).every(([nq, nr]) => {
+      const next = this.world.tile(nq, nr);
+      return next !== undefined && topOf(GROUND[next.terrain], next.height) >= top;
+    });
+    return hidden ? this.flats[ground] : this.grounds[ground];
   }
 
   /** The props' meshes: the low-poly mesh of each prop, and the detailed mesh of each modelled prop. */

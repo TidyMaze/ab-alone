@@ -149,4 +149,23 @@ describe('ModeController & HubController (#633)', () => {
     hub.draw(sr, discs, sfxMock, ['echo'], playerMarble);
     expect(document.body.dataset.lifts).toContain('open');
   });
+
+  it('draws the boss door open with its seal once the deck boss is beaten (#1249)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const discs = HUB_BOARD.map(() => new THREE.Mesh(new THREE.BufferGeometry()));
+    hub.enter(initialSpot);
+    hub.draw(sr, discs, { setTension: vi.fn() }, [], new THREE.Mesh());
+    expect(sr.marbles.getObjectByName('beaten-seal')).toBeUndefined();
+    hub.draw(sr, discs, { setTension: vi.fn() }, ['echo'], new THREE.Mesh());
+    expect(sr.marbles.getObjectByName('beaten-seal')).toBeDefined();
+  });
+
+  it('puts each label plate on the window just south of its cell centre (#1249)', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div data-cell="2,0"></div><div data-cell="-1,2"></div>';
+    hub.placeLabels(root, (q, r) => ({ x: q * 100, y: r * 10 }));
+    const [boss, lift] = [...root.children] as HTMLElement[];
+    expect([boss!.style.left, boss!.style.top]).toEqual(['180px', '4px']);
+    expect([lift!.style.left, lift!.style.top]).toEqual(['-120px', '24px']);
+  });
 });

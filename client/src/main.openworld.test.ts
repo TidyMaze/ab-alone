@@ -140,11 +140,11 @@ describe('the Open world mode', () => {
     game.frame(GLIDE_MS);
     expect(data().openworldAt).toBe('-1,-1');
     release('ArrowLeft');
-    game.frame(GLIDE_MS); // Left let go: a single Up, (-1, -2)
-    expect(data().openworldAt).toBe('-1,-2');
-    window.dispatchEvent(new Event('blur')); // the window loses focus: nothing is held any more
-    press('ArrowRight'); // single, not up-right with the Up still held: (0, -2)
+    game.frame(GLIDE_MS); // Left let go: a single Up, north-east at the default camera, (0, -2)
     expect(data().openworldAt).toBe('0,-2');
+    window.dispatchEvent(new Event('blur')); // the window loses focus: nothing is held any more
+    press('ArrowRight'); // single, not up-right with the Up still held: (1, -2)
+    expect(data().openworldAt).toBe('1,-2');
   });
 
   it('steps an arrow at its keydown, ignores the key repeat, and walks on the frames while it is held, #1059', async () => {
@@ -184,22 +184,22 @@ describe('the Open world mode', () => {
     at('pointerdown', 5, 300, 300, 2); // the right button turns the camera, it does not roll the hero
     expect(data().openworldAt).toBe('0,0');
     at('pointermove', 5, 340, 300, 2); // 40 px to the right: 20 degrees
-    expect(yawOf()).toBe(20);
-    at('pointerup', 5, 340, 300, 2); // released: it settles on the nearest multiple of 60 degrees (#1251)
-    expect(yawOf()).toBe(0);
+    expect(yawOf()).toBe(-10); // from the default, -30
+    at('pointerup', 5, 340, 300, 2); // released: it settles on the nearest resting angle (#1251, #1254)
+    expect(yawOf()).toBe(-30);
     at('pointermove', 5, 360, 300, 2); // no turn after the release
-    expect(yawOf()).toBe(0);
+    expect(yawOf()).toBe(-30);
     const shown = new MouseEvent('contextmenu', { cancelable: true, bubbles: true });
     canvas.dispatchEvent(shown);
     expect(shown.defaultPrevented).toBe(true);
     at('pointerdown', 6, 600, 300);
     at('pointerdown', 7, 700, 300); // two fingers, a quarter turn of the pair
-    at('pointermove', 7, 700, 400); // from 0 to 45 degrees
-    expect(yawOf()).toBe(45);
-    at('pointerup', 6, 600, 300); // a finger up: it settles on 60 degrees
-    expect(yawOf()).toBe(60);
+    at('pointermove', 7, 700, 400); // 45 degrees on, from -30 to 15
+    expect(yawOf()).toBe(15);
+    at('pointerup', 6, 600, 300); // a finger up: it settles on 30 degrees
+    expect(yawOf()).toBe(30);
     at('pointerup', 7, 700, 400);
-    expect(yawOf()).toBe(60);
+    expect(yawOf()).toBe(30);
   });
 
   it('zooms the Open world out with the wheel and with a pinch, #976', async () => {

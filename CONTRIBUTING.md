@@ -528,7 +528,14 @@ network outage never holds a page load (bug #585). Start a new run to test a cha
 **WebGPU check (#1023):** `bun run e2e:webgpu`, from `client/`. It runs the Open world on a real WebGPU adapter
 (`client/e2e-webgpu/`, config `client/playwright.webgpu.config.ts`): Chromium's new headless mode with
 `--enable-unsafe-webgpu` (on a Mac, the Metal adapter). It enters the world, walks, zooms to the widest view, turns the
-camera and leaves twice, and fails on any console error or uncaught exception. The default suite cannot see the
+camera and leaves twice, then walks and zooms 30 times, waiting for a submitted frame each time, and fails on any console
+error, uncaught exception or failed request, any device `uncapturederror` or `lost`, and any validation error: every queue
+submit (one drawn frame) runs in `pushErrorScope("validation")`, which turns "used in submit while destroyed" into an error
+the test reads. Over 25 entries and exits the geometries three holds stay flat (slack 4); the textures check is an expected
+failure until bug #1258 is fixed. Proof run (2026-11-01): the check goes red when a retired buffer is freed at once and the
+meshes share a geometry (mutation of `retire` and `replace`); it stays green when only the geometry is shared, or only the
+free is early (three recreates the buffers at the next draw), so a headless run does not catch everything. Before merging an
+Open world mesh or buffer change, run the game once in headed Chrome and check the console is empty. The default suite cannot see the
 WebGPU errors of #1015 and #1017: it runs the WebGL2 fallback. The check is not in the default run (`bun run e2e`, the
 CI e2e shards) and not in CI: CI runners have no GPU, so it would skip there, and a manual dispatch would not change that.
 Run it by hand before a change to the Open world's buffers, geometries or materials. Without a real adapter (no GPU, or

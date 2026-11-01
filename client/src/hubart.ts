@@ -1,5 +1,5 @@
-// 3D procedural glyph meshes and contrast-safe materials for hub room cells (#628).
-// Distinguishes boss doors, game tables, terminals and lifts on the ship decks.
+// 3D props for the hub room cells (#628, #1249): each room kind is a small prop standing on its cell (a blast door, a
+// CRT, a table with chairs, a robot, an antenna, an arena, a lift cage), ringed in its own contrast-safe colour.
 import * as THREE from 'three';
 import type { Axial } from './board';
 import type { Door } from './hub';
@@ -19,33 +19,40 @@ export const GLYPH_COLORS = {
 export interface GlyphOptions {
   open?: boolean;
   cell?: Axial;
+  beaten?: boolean; // a boss door whose boss is beaten stands open, with a gold seal (#1249)
 }
 
 // Cached basic materials for efficiency
-const materials = {
-  boss: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.boss }),
-  bossCore: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.bossCore }),
-  bot: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.bot }),
-  hotseat: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.hotseat }),
-  online: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.online }),
-  royale: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.royale }),
-  terminal: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.terminal }),
-  medals: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.medals }),
-  lift: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.lift }),
-};
+const materials = Object.fromEntries(
+  Object.entries(GLYPH_COLORS).map(([kind, color]) => [kind, new THREE.MeshBasicMaterial({ color })]),
+) as Record<keyof typeof GLYPH_COLORS, THREE.MeshBasicMaterial>;
+// The bodies of the props: rusted deck plate, lit by the deck's lamps.
+const plate = new THREE.MeshStandardMaterial({ color: 0x5a4a3c, roughness: 0.75, metalness: 0.5 });
+const lockedBarMaterial = new THREE.MeshBasicMaterial({ color: 0x0b0d0f });
 
 // Procedural geometries
 const outerRingGeo = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
-const innerRingGeo = new THREE.TorusGeometry(0.20, 0.02, 8, 24);
-const hornGeo = new THREE.ConeGeometry(0.06, 0.16, 4);
 const coreOctaGeo = new THREE.OctahedronGeometry(0.09);
-const crescentGeo = new THREE.TorusGeometry(0.38, 0.025, 8, 24, Math.PI * 0.75);
-const antennaArcGeo1 = new THREE.TorusGeometry(0.25, 0.02, 8, 24, Math.PI * 0.9);
-const antennaArcGeo2 = new THREE.TorusGeometry(0.42, 0.02, 8, 24, Math.PI * 0.9);
-const antennaCoreGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.02, 8);
-const triangleGeo = new THREE.RingGeometry(0.30, 0.42, 3);
-const crtScreenGeo = new THREE.BoxGeometry(0.55, 0.02, 0.42);
-const crtInnerGeo = new THREE.BoxGeometry(0.45, 0.025, 0.32);
+const postGeo = new THREE.BoxGeometry(0.06, 0.34, 0.06);
+const lintelGeo = new THREE.BoxGeometry(0.5, 0.06, 0.06);
+const slabGeo = new THREE.BoxGeometry(0.4, 0.3, 0.04);
+const sealGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.03, 20);
+const crtBodyGeo = new THREE.BoxGeometry(0.4, 0.28, 0.24);
+const crtScreenGeo = new THREE.BoxGeometry(0.32, 0.2, 0.01);
+const tableTopGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.04, 20);
+const tableLegGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.16, 8);
+const chairGeo = new THREE.BoxGeometry(0.12, 0.22, 0.12);
+const botBodyGeo = new THREE.BoxGeometry(0.22, 0.18, 0.16);
+const botHeadGeo = new THREE.BoxGeometry(0.16, 0.12, 0.14);
+const botEyeGeo = new THREE.SphereGeometry(0.035, 10, 8);
+const mastGeo = new THREE.CylinderGeometry(0.025, 0.04, 0.3, 8);
+const antennaArcGeo1 = new THREE.TorusGeometry(0.1, 0.018, 6, 16, Math.PI * 0.6);
+const antennaArcGeo2 = new THREE.TorusGeometry(0.18, 0.018, 6, 20, Math.PI * 0.6);
+const arenaRingGeo = new THREE.TorusGeometry(0.28, 0.035, 8, 32);
+const seatGeo = new THREE.BoxGeometry(0.06, 0.22, 0.06);
+const plinthGeo = new THREE.CylinderGeometry(0.13, 0.16, 0.14, 12);
+const medalGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.03, 20);
+const cagePostGeo = new THREE.BoxGeometry(0.04, 0.34, 0.04);
 const arrowShape = new THREE.Shape(
   [[0.26, 0], [0.04, 0.18], [0.04, 0.07], [-0.2, 0.07], [-0.2, -0.07], [0.04, -0.07], [0.04, -0.18]].map(
     ([x, y]) => new THREE.Vector2(x, y),
@@ -54,112 +61,103 @@ const arrowShape = new THREE.Shape(
 const arrowGeo = new THREE.ShapeGeometry(arrowShape);
 const lockedBarGeo = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 
-const lockedBarMaterial = new THREE.MeshBasicMaterial({ color: 0x0b0d0f });
+/** A mesh of the prop at (x, y, z), its rotation about x and z. */
+function part(geometry: THREE.BufferGeometry, material: THREE.Material, [x, y, z]: [number, number, number], rx = 0, rz = 0): THREE.Mesh {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y, z);
+  mesh.rotation.set(rx, 0, rz);
+  return mesh;
+}
 
 /**
- * Creates a category-specific 3D glyph group for a hub door kind (#628).
- * Lying flat on the deck floor at y = 0.02.
+ * Creates the prop of a hub door kind (#628, #1249): a ring in the kind's colour flat on the floor at y = 0, and the
+ * prop standing on it, facing the camera (+z).
  */
 export function createDoorGlyph(door: Door, options: GlyphOptions = {}): THREE.Group {
   const group = new THREE.Group();
   group.name = `door-${door.kind}`;
+  const accent = materials[door.kind];
+  group.add(part(outerRingGeo, accent, [0, 0, 0], Math.PI / 2));
 
   switch (door.kind) {
     case 'boss': {
-      // Angular horned ring in crimson + glowing amber core
-      const ring = new THREE.Mesh(outerRingGeo, materials.boss);
-      ring.rotation.x = Math.PI / 2;
-      group.add(ring);
-
-      // Horns on outer ring
-      for (const angle of [-Math.PI / 3, Math.PI / 3]) {
-        const horn = new THREE.Mesh(hornGeo, materials.boss);
-        horn.position.set(Math.cos(angle) * 0.44, 0, Math.sin(angle) * 0.44);
-        horn.rotation.z = -angle;
-        group.add(horn);
+      // A blast door in a crimson frame: shut, a slab with the amber core; beaten, open with a gold seal.
+      group.add(part(postGeo, accent, [-0.25, 0.17, 0]), part(postGeo, accent, [0.25, 0.17, 0]), part(lintelGeo, accent, [0, 0.34, 0]));
+      if (options.beaten) {
+        const seal = part(sealGeo, materials.medals, [0, 0.16, 0.02], Math.PI / 2);
+        seal.name = 'beaten-seal';
+        group.add(seal);
+      } else {
+        const slab = part(slabGeo, plate, [0, 0.15, 0]);
+        slab.name = 'door-slab';
+        group.add(slab, part(coreOctaGeo, materials.bossCore, [0, 0.16, 0.05]));
       }
-
-      // Amber core
-      const core = new THREE.Mesh(coreOctaGeo, materials.bossCore);
-      core.position.set(0, 0.04, 0);
-      group.add(core);
-      break;
-    }
-
-    case 'bot': {
-      // Concentric target rings (cold cyan)
-      const outer = new THREE.Mesh(outerRingGeo, materials.bot);
-      outer.rotation.x = Math.PI / 2;
-      const inner = new THREE.Mesh(innerRingGeo, materials.bot);
-      inner.rotation.x = Math.PI / 2;
-      group.add(outer, inner);
-      break;
-    }
-
-    case 'hotseat': {
-      // Dual opposing crescents (warm amber)
-      const crescent1 = new THREE.Mesh(crescentGeo, materials.hotseat);
-      crescent1.rotation.x = Math.PI / 2;
-      crescent1.rotation.z = -Math.PI * 0.375;
-
-      const crescent2 = new THREE.Mesh(crescentGeo, materials.hotseat);
-      crescent2.rotation.x = Math.PI / 2;
-      crescent2.rotation.z = Math.PI * 0.625;
-
-      group.add(crescent1, crescent2);
-      break;
-    }
-
-    case 'online': {
-      // Concentric antenna & signal arcs (signal green)
-      const core = new THREE.Mesh(antennaCoreGeo, materials.online);
-      core.position.set(0, 0.02, 0);
-
-      const arc1 = new THREE.Mesh(antennaArcGeo1, materials.online);
-      arc1.rotation.x = Math.PI / 2;
-      arc1.rotation.z = -Math.PI * 0.45;
-
-      const arc2 = new THREE.Mesh(antennaArcGeo2, materials.online);
-      arc2.rotation.x = Math.PI / 2;
-      arc2.rotation.z = -Math.PI * 0.45;
-
-      group.add(core, arc1, arc2);
-      break;
-    }
-
-    case 'royale': {
-      // Triangular industrial hazard frame (orange)
-      const tri = new THREE.Mesh(triangleGeo, materials.royale);
-      tri.rotation.x = -Math.PI / 2;
-      group.add(tri);
       break;
     }
 
     case 'terminal': {
-      // Rectangular retro CRT monitor frame (phosphor green)
-      const frame = new THREE.Mesh(crtScreenGeo, materials.terminal);
-      const inner = new THREE.Mesh(crtInnerGeo, materials.terminal);
-      inner.position.y = 0.01;
-      group.add(frame, inner);
+      // A CRT on the floor, its phosphor screen toward the camera.
+      group.add(part(crtBodyGeo, plate, [0, 0.14, 0]), part(crtScreenGeo, accent, [0, 0.16, 0.125]));
+      break;
+    }
+
+    case 'hotseat': {
+      // A table for two: one leg, a top, and an amber chair on each side.
+      group.add(
+        part(tableLegGeo, plate, [0, 0.08, 0]),
+        part(tableTopGeo, plate, [0, 0.18, 0]),
+        part(chairGeo, accent, [-0.3, 0.11, 0]),
+        part(chairGeo, accent, [0.3, 0.11, 0]),
+      );
+      break;
+    }
+
+    case 'bot': {
+      // The ship AI's robot: a cyan body and head, an amber eye.
+      group.add(
+        part(botBodyGeo, accent, [0, 0.09, 0]),
+        part(botHeadGeo, accent, [0, 0.25, 0]),
+        part(botEyeGeo, materials.bossCore, [0, 0.26, 0.075]),
+      );
+      break;
+    }
+
+    case 'online': {
+      // An antenna: a mast and two signal arcs opening up.
+      group.add(
+        part(mastGeo, plate, [0, 0.15, 0]),
+        part(antennaArcGeo1, accent, [0, 0.3, 0], 0, Math.PI * 0.2),
+        part(antennaArcGeo2, accent, [0, 0.3, 0], 0, Math.PI * 0.2),
+      );
+      break;
+    }
+
+    case 'royale': {
+      // An arena: a raised orange ring and six seats around it.
+      group.add(part(arenaRingGeo, accent, [0, 0.06, 0], Math.PI / 2));
+      for (let k = 0; k < 6; k++) {
+        const a = (k * Math.PI) / 3;
+        group.add(part(seatGeo, plate, [Math.cos(a) * 0.3, 0.11, Math.sin(a) * 0.3]));
+      }
       break;
     }
 
     case 'medals': {
-      // A gold ring around a gold core: a medal (#812)
-      const ring = new THREE.Mesh(outerRingGeo, materials.medals);
-      ring.rotation.x = Math.PI / 2;
-      const core = new THREE.Mesh(coreOctaGeo, materials.medals);
-      core.position.set(0, 0.04, 0);
-      group.add(ring, core);
+      // A gold medal standing on a plinth, a gold core under it (#812).
+      group.add(
+        part(plinthGeo, plate, [0, 0.07, 0]),
+        part(medalGeo, accent, [0, 0.27, 0], Math.PI / 2),
+        part(coreOctaGeo, accent, [0, 0.27, 0.03]),
+      );
       break;
     }
 
     case 'lift': {
-      // Directional arrow in dark target steel + outer ring in bone-white + locked bar if closed (#523)
-      const ring = new THREE.Mesh(outerRingGeo, materials.lift);
-      ring.rotation.x = Math.PI / 2;
-      group.add(ring);
-
+      // A lift cage: four bone-white posts, a near-black arrow on the floor toward its deck, and a bar across it while it
+      // is locked (#523).
+      for (const [x, z] of [[-0.28, -0.28], [0.28, -0.28], [-0.28, 0.28], [0.28, 0.28]] as const) {
+        group.add(part(cagePostGeo, accent, [x, 0.17, z]));
+      }
       const arrow = new THREE.Mesh(arrowGeo, lockedBarMaterial);
       const cellY = options.cell?.[1] ?? 0;
       arrow.rotation.set(-Math.PI / 2, ((cellY < 0 ? 1 : -1) * Math.PI) / 2, 0, 'YXZ');
