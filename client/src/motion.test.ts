@@ -97,12 +97,17 @@ describe('screen transitions (#1099)', () => {
   const block = css.match(/\/\* Screen transitions \(#1099[^]*$/)![0];
 
   it('fades the canvas in on the base token when the Open world is entered', () => {
-    expect(block).toMatch(/body\[data-openworld\] canvas \{[^}]*animation: screen-in var\(--motion-base\) var\(--ease-out\)/);
-    expect(block).toMatch(/@keyframes screen-in \{ from \{ opacity: 0; \} \}/);
+    expect(block).toMatch(/body\[data-openworld\] canvas \{[^}]*animation: screen-in-world var\(--motion-base\) var\(--ease-out\)/);
+    expect(block).toMatch(/@keyframes screen-in-world \{ from \{ opacity: 0; \} \}/);
   });
 
   it('fades the canvas in the same way when the Open world is left', () => {
     expect(block).toMatch(/body:not\(\[data-openworld\], \[data-over\]\) canvas \{[^}]*animation: screen-in var\(--motion-base\) var\(--ease-out\)/);
+  });
+
+  it('uses two keyframe names, since a rule swap with the same name would not restart the fade', () => {
+    expect(block).toMatch(/@keyframes screen-in \{/);
+    expect(block).not.toMatch(/canvas \{ animation: screen-in-world[^}]*\}\s*body:not[^}]*screen-in-world/);
   });
 
   it('moves opacity only, so the game stays live under the fade', () => {
