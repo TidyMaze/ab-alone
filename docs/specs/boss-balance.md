@@ -1562,11 +1562,11 @@ test (done in each task's PR), and the ladder rows (taken from the sections belo
 
 | Boss | Unit test (file:line) | Ladder before / after (section) | Budget | Reply time (where) |
 |---|---|---|---|---|
-| Echo | `echo.rs:832` `the_boss_search_sees_the_bonus_it_gives_away` | 14 / 16 of 20 at 1x / 10x, no AI change (#1116) | 100 | wasm 61 / 108 / 125 ms at 400 nodes (#859, line 97); native 2.9 / 4.7 / 13.9 ms at 100 (#951); native today 1.3 / 1.6 / 2.0 |
+| Echo | `echo.rs:832` `the_boss_search_sees_the_bonus_it_gives_away` | 14 / 16 of 20 at 1x / 10x, no AI change (#1116) | 100 | wasm 61 / 108 / 125 ms at 400 nodes (#859, line 97); native 2.9 / 4.7 / 13.9 ms at 100 (#951); native today 1.3 / 1.6 / 2.0; **wasm at 100 today 1.5 / 2.0 / 2.1 (two runs, #930 measure)** |
 | Hull | `hull.rs:522`, `hull.rs:553` | 6 / 12 of 20 (#823, #1116, same rows) | 3000 | wasm 157 / 232 / 442 (#823, line 124) |
 | Choir | `choir.rs:998` `the_tree_plays_the_army_cycle_not_any_marble` | 1x 0 to 2, 10x 20 to 8 (#825) | 1500 | wasm 53 / 74 / 104 (#825) |
-| Chaplain | `chaplain.rs:996` `the_phase_reached_in_the_tree_changes_the_best_move` | 5 / 5 at 1x, 17 / 17 at 10x (#1112) | 300 | wasm 196 / 404 / 458 at 2000 nodes (line 304); native at 300, loaded machine, 6 seeds of 80 plies: 60 / 118 / 181 and 50 / 100 / 223 ms (this PR) |
-| Ballast Mind | `ballast.rs:1009` (phase), `ballast.rs:726` (pulse due this turn, plain search does not see it), `ballast.rs:764`, `:783`, `:805` (conversion, Hull tick, Swarm wave) | 0 / 0 at 1x, 1 / 1 at 10x (#1115), then 15 of 20 at 10x (#1209) | 100 | wasm 128 / 219 / 408 (#833, line 325); native today 3.1 / 5.7 / 40 ms (this PR) |
+| Chaplain | `chaplain.rs:996` `the_phase_reached_in_the_tree_changes_the_best_move` | 5 / 5 at 1x, 17 / 17 at 10x (#1112) | 300 | wasm 196 / 404 / 458 at 2000 nodes (line 304); native at 300, loaded machine, 6 seeds of 80 plies: 60 / 118 / 181 and 50 / 100 / 223 ms (this PR); **wasm at 300 today 46.6 / 68.6 / 86.5 and 46.2 / 68.2 / 70.1 (#930 measure)** |
+| Ballast Mind | `ballast.rs:1009` (phase), `ballast.rs:726` (pulse due this turn, plain search does not see it), `ballast.rs:764`, `:783`, `:805` (conversion, Hull tick, Swarm wave) | 0 / 0 at 1x, 1 / 1 at 10x (#1115), then 15 of 20 at 10x (#1209) | 100 | wasm 128 / 219 / 408 (#833, line 325); native today 3.1 / 5.7 / 40 ms (this PR); **wasm at 100 today 2.3 / 3.8 / 5.5 and 2.3 / 3.8 / 5.6 (#930 measure)** |
 | Alien | `alien.rs:624` `the_alien_crushes_its_own_egg_to_save_a_marble_the_old_filter_left_to_die` | `alien_sim` 20 / 20 before and after at 1x, 20 / 20 at 10x; outside the gate by owner decision #667 | 3000 | wasm 218 / 455 / 890 and 230 / 588 / 2516 (#826, line 660) |
 | Rail Yard | `railyard.rs:601` `a_train_five_turns_out_does_not_stop_the_boss_from_winning_but_one_about_to_pass_does` | 2 / 4 at 1x, 1 / 4 at 10x (#827) | 3000 | wasm 111 / 142 / 253 (#827) |
 | Magnetizer | `magnetizer.rs:965` `the_tree_sees_the_assignment_at_the_start_of_turn_3_and_avoids_its_repulsion` | 7 / 2 at 1x, 16 / 7 at 10x (#916); later rows in #1237 | 3000 | wasm 187 / 485 / 652 (#916) |
@@ -1578,6 +1578,16 @@ test (done in each task's PR), and the ladder rows (taken from the sections belo
 Reply times are ms, average / 95th percentile / max, wasm = nodejs release build; the Chaplain, Ballast and Echo
 native rows were run on a machine with a load average of 15 to 50, so they are upper bounds on an idle one. No
 Overseer or Chaplain figure above is a pass/fail gate: the repo sets none.
+
+Wasm reply time at today's budgets (#930, last open measure; `main` at 8d4f4988, 2026-11-01): `wasm-pack build --target nodejs
+--release`, `Encounter(boss, seed)` for seeds 1 to 6, up to 80 plies, the player plays `player_move()`, only `boss_move()` timed
+(`process.hrtime`), ms average / 95th percentile / maximum, two runs each, one run at a time through `heavy.sh`, load average
+2 to 3 (one minute) at the start, so close to idle. The fights end before 80 plies, hence
+the reply counts. The Chaplain (300 nodes): 102 replies, 46.6 / 68.6 / 86.5 and 46.2 / 68.2 / 70.1. The Ballast Mind (100):
+406 replies, 2.3 / 3.8 / 5.5 and 2.3 / 3.8 / 5.6. The Echo (100): 396 replies, 1.5 / 2.0 / 2.1 twice. All under 100 ms
+at the 95th percentile; the Chaplain's older 196 / 404 / 458 was at 2000 nodes (line 304), and the Ballast's 128 / 219 / 408
+is from before today's budget of 100, so those rows are not today's. Not measured: a mobile CPU (wasm in Node on an Apple laptop; a phone is
+slower by a factor nobody here measured), and the 10x difficulty (3x to 10x the nodes, not asked).
 
 ## Closed umbrellas
 
