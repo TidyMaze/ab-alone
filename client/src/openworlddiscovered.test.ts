@@ -34,6 +34,13 @@ describe('Discovered', () => {
     expect(seen.has(-CHUNK + 1 + SIGHT, -CHUNK)).toBe(true);
   });
 
+  it('keeps a bitset per chunk of the world (CHUNK of openworld.ts): the cells of chunk (5, 0) are saved under it', () => {
+    const seen = new Discovered();
+    seen.reveal([CHUNK * 5 + CHUNK / 2, CHUNK / 2]);
+    expect(seen.toJSON().map(([cx, cy]) => `${cx},${cy}`)).toContain('5,0');
+    expect(seen.toJSON()).toHaveLength(7); // the disc of 10 reaches 7 of the chunks 4 to 6 by -1 to 1, not two opposite corners
+  });
+
   it('saves as one entry a chunk, its bits in base64, and comes back the same', () => {
     const seen = new Discovered();
     seen.reveal([3, 3]);

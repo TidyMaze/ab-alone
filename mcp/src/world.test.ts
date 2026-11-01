@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { Discovered, SIGHT } from '../../client/src/openworlddiscovered';
 import { FightState } from '../../client/src/openworldfight';
 import { decodeWorld, RECORD, worldSaves } from '../../client/src/openworldsave';
 import { memoryStore } from '../../client/src/savegame';
@@ -318,8 +319,13 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
       yaw: 0,
       broken: [],
       lairs: [],
+      discovered: save.discovered,
       savedAt: save.savedAt,
     });
+    const seen = Discovered.from(save.discovered!);
+    expect(seen.has(6 + SIGHT, 6)).toBe(true); // round the hero, as the client discovers it (#1411)
+    expect(seen.has(0 - SIGHT, 0)).toBe(true); // and round the spawn it walked from
+    expect(seen.has(6 + SIGHT + 1, 6)).toBe(false);
     expect(FightState.fromJSON(save.fight).toJSON()).toEqual(save.fight);
   });
 
@@ -334,7 +340,10 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
   test('a save the client wrote resumes as it was, and saves back to the same record', async () => {
     const store = memoryStore();
     const fight = FightState.fromJSON({ removed: ['6,6'], added: [[7, 6]], beaten: 1 });
-    await worldSaves(store, VERSION).put(1, [6, 6], [[5, 6], [4, 6]], fight, 0.75, [[2, 3]], [0, 2]);
+    const seen = new Discovered();
+    seen.reveal([30, 30]);
+    seen.reveal([6, 6]);
+    await worldSaves(store, VERSION).put(1, [6, 6], [[5, 6], [4, 6]], fight, 0.75, [[2, 3]], [0, 2], seen.toJSON());
     const record = store.data.get('openworld:1') as WorldSave;
     const open = world();
     const state = value(open.newWorld({ save: record }));
@@ -343,6 +352,19 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
     expect(state.enemies).not.toContain('(6,6)');
     expect(state.lairs.map((lair) => lair.beaten)).toEqual(state.lairs.map((_, k) => k === 0 || k === 2));
     expect({ ...value(open.save()), savedAt: 0 }).toEqual({ ...record, savedAt: 0 });
+  });
+
+  test('a save from before the discovered cells (record 3) resumes with the cells round the hero discovered (#1411)', () => {
+    const { discovered: _discovered, ...old } = value(pushed().save());
+    const state = value(world().newWorld({ save: { ...old, record: 3 } }));
+    expect(state.discovered).toBe(3 * SIGHT * (SIGHT + 1) + 1);
+  });
+
+  test('a save whose discovered cells do not decode is refused and the world in progress is kept', () => {
+    const open = pushed();
+    const error = failure(open.newWorld({ save: { ...value(open.save()), discovered: [[0, 0, '!!']] } }));
+    expect(error.code).toBe('bad_save');
+    expect(value(open.state({})).hero).toBe('(6,6)');
   });
 
   test('a save of another world version is refused and the world in progress is kept', () => {
@@ -417,5 +439,18 @@ describe('a lair fight won, back in the world', () => {
 
   test('a world with no lair has no ending', () => {
     expect(value(world([]).newWorld({ seed: 0 })).ending).toBeUndefined();
+  });
+});
+
+// The cells discovered (#1411): within 10 cells of the hero, as the client's mode discovers them, counted in the state.
+describe('the cells discovered', () => {
+  const DISC = 3 * SIGHT * (SIGHT + 1) + 1;
+
+  test('a new world has the disc round the spawn discovered; the steps and a walk discover more, a refused step none', () => {
+    const open = world();
+    expect(value(open.newWorld({ seed: 1 })).discovered).toBe(DISC);
+    const walked = value(open.walk({ q: 5, r: 6 })).state.discovered;
+    expect(walked).toBeGreaterThan(DISC);
+    expect(value(open.state({})).discovered).toBe(walked);
   });
 });
