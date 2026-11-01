@@ -909,3 +909,33 @@ plies at most, run alone on `main` at 2a0f7cb. Nothing tuned.
 | The Hull (boss 3000) | 30000 (10x) | 12 | 99.5 | P2 | push 4, rim_ejection 4 |
 
 The Hull rows equal those of #823. The Echo at 10x (16 of 20) is above the 7 to 9 of 10 target; the owner decides.
+
+### The ladder plays the Magnetizer, Pulsar, Assembly Line, Unstable Core (#912) and the Overseer (#1117): "before" rows, not tuned
+
+`LadderBoss` gains `Magnetizer`, `Pulsar`, `Assembly` and `Unstable` (the Overseer was already in it), so
+`LadderBoss::ALL` plays 15 bosses. Each boss replies through its own move (`magnetizer_move`,
+`pulsar_move`, `assembly_move`, `unstable_move`) at its node budget 3000. The other rows are unchanged. The
+rows below are the "before" numbers for the boss AI tasks (#913 to #916): the phase is frozen at the root
+of the tree for the Pulsar, Assembly Line and Unstable Core, and the Magnetizer assigns no polarity ahead.
+Command: `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- <boss>`, seeds 0 to 19,
+300 plies at most, one run at a time, main at the commit of #912.
+
+| Boss | Player | Wins /20 | Median plies | Highest phase | Deaths |
+|---|---|---|---|---|---|
+| Magnetizer | 1x (3000) | 7 | 176 | P2 | push 4, rim_ejection 3, draw 6 |
+| Magnetizer | 10x (30000) | 16 | 141 | P2 | draw 4 |
+| Pulsar | 1x | 2 | 137 | P2 | push 10, rim_ejection 7, draw 1 |
+| Pulsar | 10x | 4 | 123.5 | P2 | push 5, rim_ejection 10, draw 1 |
+| Assembly Line | 1x | 0 | 111.5 | P1 | push 3, rim_ejection 17 |
+| Assembly Line | 10x | 0 | 88 | P2 | rim_ejection 20 |
+| Unstable Core | 1x | 0 | 27 | P2 | rim_ejection 17, draw 3 |
+| Unstable Core | 10x | 0 | 27 | P1 | rim_ejection 20 |
+| Overseer (#1117) | 1x | 0 | 79 | P2 | push 16, rim_ejection 4 |
+| Overseer (#1117) | 10x | 2 | 79 | P2 | push 13, rim_ejection 4, draw 1 |
+
+Reading: against the owner target of 14 to 18 of 20 at 10x only the Magnetizer is inside (16). The Pulsar
+is far below (4), the Assembly Line and the Unstable Core win nothing (the Unstable Core ends in 27 plies by
+rim ejection). The Overseer is the plain-search player's row: it does not see the incinerators or the clock,
+so the neurotoxin ends the fight at ply 79 (the 40th turn) as in the 10 seed row of #828; 20 seeds give 0 and
+2 wins. The Rail Yard rows are in its own section above. Nothing was tuned, the knobs are the owner's.
+Run times, one machine: 25 s to 66 s at 1x, 104 s to 578 s at 10x.
