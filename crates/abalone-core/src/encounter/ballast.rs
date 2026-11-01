@@ -1,13 +1,15 @@
 //! The Ballast Mind (#47, docs/specs/game-design.md section 7.5): the final exam. A radius 5
 //! board with six void pillars, 16 marbles each, and no rule code of its own. Every
 //! [`BALLAST_EVERY`] turns it borrows one effect of another boss, picked by the engine PRNG among
-//! four one-shot hooks that run that boss's own code:
+//! five one-shot hooks that run that boss's own code:
 //!
 //! - the Hull's crack (P1 rim, P2 inner, P3 any cell), whose timer the Hull ticks on every
 //!   player turn (special id [`BALLAST_TICK`]);
 //! - the Pulsar's pulse from a random direction, at force 2, 3 and infinite;
 //! - the Magnetizer's polarity: one marble polarized, then the settle;
-//! - the Chaplain's conversion check, at threshold 4.
+//! - the Chaplain's conversion check, at threshold 4;
+//! - the Swarm's wave: the arrivals of the phase land at once on the empty rim cells away from the
+//!   player's start side.
 //!
 //! The phases come from the ejections (P2 after 3, P3 after 5), as in the bosses it borrows from.
 //! The effect fires at the end of a boss turn, so the player reads it one turn ahead in the HUD.
@@ -17,6 +19,7 @@ use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
 use crate::encounter::hull::{hull_boss, hull_step, mix, HULL_CRACKS, HULL_PLAYER_END};
 use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETIZER_TURN};
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
+use crate::encounter::swarm::wave;
 use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
 use crate::moves::{apply, legal_moves, Move, Player};
@@ -94,16 +97,18 @@ pub enum Borrowed {
     PulsarPulse(u8),
     MagnetizerPolarity,
     ChaplainConversion,
+    SwarmWave,
 }
 
 /// The effect the hook seed `seed` picks (the PRNG of the fight seed and the ply).
 pub fn borrowed(seed: u64) -> Borrowed {
     let state = mix(!seed);
-    match state % 4 {
+    match state % 5 {
         0 => Borrowed::HullCrack,
-        1 => Borrowed::PulsarPulse(((state / 4) % 6) as u8),
+        1 => Borrowed::PulsarPulse(((state / 5) % 6) as u8),
         2 => Borrowed::MagnetizerPolarity,
-        _ => Borrowed::ChaplainConversion,
+        3 => Borrowed::ChaplainConversion,
+        _ => Borrowed::SwarmWave,
     }
 }
 
@@ -213,6 +218,7 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
             run(magnetizer_boss(), MAGNETIZER_TURN, &announced)
         }
         Borrowed::ChaplainConversion => run(chaplain_boss(), CHAPLAIN_BOSS_END, board),
+        Borrowed::SwarmWave => wave(board, seed, phase),
     }
 }
 

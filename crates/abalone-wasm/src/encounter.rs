@@ -357,6 +357,7 @@ fn effect_code(effect: Borrowed) -> i32 {
         Borrowed::PulsarPulse(_) => 1,
         Borrowed::MagnetizerPolarity => 2,
         Borrowed::ChaplainConversion => 3,
+        Borrowed::SwarmWave => 4,
     }
 }
 
@@ -369,7 +370,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    17 // 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    18 // 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -732,7 +733,7 @@ impl Encounter {
     }
 
     /// The effect The Ballast Mind announces for its next borrowing turn: `0` the Hull's crack, `1`
-    /// the Pulsar's pulse, `2` the Magnetizer's polarity, `3` the Chaplain's conversion; `-1`
+    /// the Pulsar's pulse, `2` the Magnetizer's polarity, `3` the Chaplain's conversion, `4` the Swarm's wave; `-1`
     /// when none is due next turn, for the other bosses too.
     pub fn ballast_next(&self) -> i32 {
         let Fight::Plain(e) = &self.fight else {
@@ -1094,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_17_since_the_swarm_joins_the_roster() {
-        assert_eq!(engine_version(), 17);
+    fn the_engine_version_is_18_since_the_ballast_mind_borrows_the_swarm_wave() {
+        assert_eq!(engine_version(), 18);
     }
 
     #[test]
@@ -2118,7 +2119,7 @@ mod tests {
             assert_eq!(fired.len() % 2, 1, "seed {seed}");
             assert!(f.pulsar().is_empty(), "seed {seed}");
         }
-        for code in 0..4 {
+        for code in 0..5 {
             assert!(codes.contains(&code), "code {code}");
         }
         for id in ["hull", "choir"] {
