@@ -623,7 +623,7 @@ function applyView(): void {
     return;
   }
   sceneRenderer.fogRadius = fogRadius;
-  sceneRenderer.applyView(view, reading, { tier, clear, deck, consoleDef });
+  sceneRenderer.applyView(view, sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
   placeHubLabels();
 }
 // The hub's deck plan (#1249): the label plates over the rooms, the lift-shaft rail and the boss pips, shown in the hub only.
@@ -1272,11 +1272,14 @@ const reader = document.getElementById('reader')!;
 reader.classList.toggle('flat', flatHud);
 let consoleScreen!: THREE.Mesh; // set by drawProps
 let recorder!: THREE.Mesh; // set by drawProps
+// The terrace has no console screen (#1369): its Console button opens the same reader, the page as a plate, the camera stays.
+document.getElementById('console-entry')!.addEventListener('click', () => openReader());
 function openReader(id?: string): void {
   if (id) layoutConsole(id); // an entry of the log archive (#513)
   if (!consolePages.length) return; // the fonts are not in yet
   reading = view;
   reader.hidden = false;
+  reader.classList.toggle('flat', flatHud || sceneRenderer.terraceOn);
   document.body.dataset.reading = consoleEntry; // read by the e2e tests
   if (consoleEntry !== MEDAL_ROOM) markRead(store, consoleEntry);
   showConsole(0);
@@ -3541,6 +3544,7 @@ const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
   const on = tableZeroActive({ room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
+  document.getElementById('console-entry')!.hidden = !on; // the terrace's console is the dock's button, the room's is its screen (#1369)
   terraceMarbles(on);
   showBoard();
   if (on && isDefaultView(view, resetView(4))) {
