@@ -213,11 +213,12 @@ pub(crate) fn carried_announce(before: &Board, mv: &Move, after: &Board) -> Opti
 }
 
 /// What a ply does in the boss search, as in `Encounter::play`: the polarities and the announce
-/// follow the move and the board settles; then the hook fires when the special of that ply says
-/// so, in the phase the tree's credits reach at the start of the ply (`Encounter::phase_after`,
-/// as the encounter takes the tell before the move), and the board settles again. The ply comes
-/// from the clock `magnetizer_move` puts on the root board. Seed 0 for the picks and the pairs:
-/// the search cannot know the ply's seed deeper in the tree.
+/// follow the move and the board settles. After a boss ply the hook then fires with the special
+/// of that ply, in the phase the tree's credits reach at the start of the ply
+/// (`Encounter::phase_after`, as the encounter takes the tell before the move), and the board
+/// settles again; it is skipped when it has nothing to assign or announce. The ply comes from the
+/// clock `magnetizer_move` puts on the root board. Seed 0 for the picks and the pairs: the search
+/// cannot know the ply's seed deeper in the tree.
 fn magnetizer_step(
     enc: &Encounter,
     before: &Board,
@@ -229,11 +230,17 @@ fn magnetizer_step(
     after.set_announce(carried_announce(before, mv, &after));
     after.set_magnetizer_ply(Some(ply));
     let (board, credits) = settle(&after, 0, &mut |_, _| {});
-    let Some(id) = special(ply, enc.phase_after(before)) else {
-        return (board, credits);
-    };
-    let (out, more) = settle(&hook(&board, id, 0), 0, &mut |_, _| {});
-    (out, [credits[0] + more[0], credits[1] + more[1]])
+    let id = ply
+        .is_multiple_of(2)
+        .then(|| special(ply, enc.phase_after(before)))
+        .flatten();
+    match id {
+        Some(id) if board.announce().is_some() || id == MAGNETIZER_ANNOUNCE => {
+            let (out, more) = settle(&hook(&board, id, 0), 0, &mut |_, _| {});
+            (out, [credits[0] + more[0], credits[1] + more[1]])
+        }
+        _ => (board, credits),
+    }
 }
 
 /// The Magnetizer boss definition.
