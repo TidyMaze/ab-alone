@@ -647,6 +647,42 @@ mod tests {
         assert_eq!(enc.phase(), 1);
     }
 
+    /// A fight on `white` boss marbles with `ejected` credited to the player, P2 at 3, P3 at 5.
+    fn by_ejections(white: &[P], ejected: u8) -> Encounter {
+        let mut b = trivial_boss();
+        b.phase_marbles = Vec::new();
+        b.phase_ejections = vec![3, 5];
+        let game = position(&[(0, 0)], white, Player::White, [ejected, 0]);
+        Encounter::new(game, b, 0)
+    }
+
+    #[test]
+    fn the_phase_after_a_board_credits_the_boss_marbles_gone_since_the_root() {
+        let three = [(4, 0), (-4, 4), (0, -4)];
+        let one_gone = position(&[(0, 0)], &three[..2], Player::White, [0, 0]);
+        let root = by_ejections(&three, 0);
+        assert_eq!(root.phase_after(root.game().board()), 0, "nothing gone");
+        assert_eq!(root.phase_after(one_gone.board()), 0, "1 of 3");
+        let root = by_ejections(&three, 2);
+        assert_eq!(root.phase(), 0);
+        assert_eq!(root.phase_after(one_gone.board()), 1, "2 + 1: P2 at 3");
+        let root = by_ejections(&three, 4);
+        assert_eq!(root.phase_after(one_gone.board()), 2, "4 + 1: P3 at 5");
+    }
+
+    #[test]
+    fn the_phase_after_a_board_is_never_below_the_root_phase() {
+        let root = by_ejections(&[(4, 0)], 3);
+        assert_eq!(root.phase(), 1);
+        assert_eq!(root.phase_after(root.game().board()), 1);
+        let more = position(&[(0, 0)], &[(4, 0), (-4, 4)], Player::White, [0, 0]);
+        assert_eq!(
+            root.phase_after(more.board()),
+            1,
+            "more boss marbles than the root: no underflow"
+        );
+    }
+
     #[test]
     fn phase_stays_zero_above_the_threshold() {
         let enc = Encounter::new(Game::new(), trivial_boss(), 0);

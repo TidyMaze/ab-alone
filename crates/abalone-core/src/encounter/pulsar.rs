@@ -626,6 +626,34 @@ mod tests {
     }
 
     #[test]
+    fn the_tree_step_fires_the_p2_force_once_a_third_ejection_is_credited() {
+        // The root: boss to move, 2 ejections for the player (P1), 4 boss marbles, pulsar E due
+        // at the end of the next player turn. The pair on row r = -2 resists force 2, not force 3.
+        let pair = [(3, -2), (4, -2)];
+        let root = board(
+            &[(0, 0)],
+            &[pair[0], pair[1], (-3, 3), (0, -4)],
+            Some((E, 2)),
+        );
+        let enc = fight(root.clone(), Player::White, [2, 0]);
+        assert_eq!(enc.phase(), 0);
+        // The ply that ejects the third marble still pulses at the phase of its start, P1.
+        let mut third = root.clone();
+        third.set(0, -4, Cell::Empty);
+        let (out, credits) = pulsar_step(&enc, &root, Player::Black, third.clone());
+        assert_eq!(out.get(3, -2), Some(Cell::White), "P1: the pair resists");
+        assert_eq!(credits, [0, 0]);
+        // A player ply that starts with the third marble gone pulses at P2: force 3.
+        let (out, credits) = pulsar_step(&enc, &third, Player::Black, third.clone());
+        assert_eq!(out.get(3, -2), Some(Cell::Empty), "P2: the pair is pushed");
+        assert_eq!(out.get(4, -2), Some(Cell::White), "and its head is off");
+        assert_eq!(credits, [1, 0], "an ejection for the player");
+        // A boss ply runs no hook.
+        let (out, credits) = pulsar_step(&enc, &third, Player::White, third.clone());
+        assert_eq!((out, credits), (third, [0, 0]));
+    }
+
+    #[test]
     fn the_boss_replies_only_on_its_turn() {
         let mut enc = pulsar_start(0);
         assert_eq!(pulsar_move(&enc), None);
