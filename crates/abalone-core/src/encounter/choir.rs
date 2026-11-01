@@ -508,7 +508,7 @@ fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
 mod tests {
     use super::*;
     use crate::board::MAX_RADIUS;
-    use crate::game::Outcome;
+    use crate::game::{DrawReason, Outcome};
     use crate::moves::Direction::{E, NW, W};
     use crate::moves::{legal_moves, Direction, MoveError};
     use Army::{Alto, Bass, Tenor};
@@ -1088,5 +1088,31 @@ mod tests {
         assert!(marks.armies.iter().all(|a| a.1 != 0), "Alto is removed");
         assert_eq!(after.get(0, 3), Some(Cell::Empty));
         assert_eq!(marks.armies.len(), 4);
+    }
+
+    #[test]
+    fn both_blocked_in_turn_ends_the_fight_as_a_blocked_draw_a_loss_for_the_player() {
+        // A line of four cells, the rest void: Black, Alto, Tenor, Black. Only the pair can push, no
+        // army may, and Black is walled in.
+        let mut board = Board::empty();
+        for q in -4..=4 {
+            for r in -4..=4 {
+                if r != 0 || !(0..=3).contains(&q) {
+                    board.void(q, r);
+                }
+            }
+        }
+        board.set(0, 0, Cell::Black);
+        board.set(3, 0, Cell::Black);
+        board.set(1, 0, Cell::White);
+        board.set(2, 0, Cell::White);
+        let members = vec![((1, 0), Alto), ((2, 0), Tenor)];
+        let game = Game::from_position(board, Player::White, [0, 0]);
+        assert!(!legal_moves(game.board(), Player::White).is_empty());
+        assert!(legal_moves(game.board(), Player::Black).is_empty());
+        let c = Choir::from_position(game, members, 0);
+        assert_eq!(c.game().outcome(), Some(Outcome::Draw));
+        assert_eq!(c.game().draw_reason(), Some(DrawReason::Blocked));
+        assert_eq!(c.result(), Some(PveResult::Lost));
     }
 }
