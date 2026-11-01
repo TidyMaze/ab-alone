@@ -22,6 +22,7 @@ import {
 import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
+import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
@@ -842,6 +843,10 @@ const toggles: Record<string, () => void> = {
     writeSteering(store, steering);
     openWorld.refreshMode(); // the HUD names the mode, and a walk under way ends (#1137)
   },
+  guide: () => {
+    moveMenu('pick');
+    openGuide(cog);
+  },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
@@ -900,6 +905,12 @@ const soundGroup = document.createElement('div');
 soundGroup.className = 'setting-group skin-pair';
 soundRow.replaceWith(soundGroup);
 soundGroup.append(soundRow, document.getElementById('setting-transcript')!);
+// The guide (#1293) is a second button in the Steering item, as Transcript is in the Sound item.
+const steeringRow = document.getElementById('setting-steering')!;
+const steeringGroup = document.createElement('div');
+steeringGroup.className = 'setting-group skin-pair';
+steeringRow.replaceWith(steeringGroup);
+steeringGroup.append(steeringRow, document.getElementById('setting-guide')!);
 fpsBox.hidden = !fpsOn;
 // The four volume sliders (#438), the page Sound opens: 0 to 100 %, each saved on its own.
 for (const bus of BUSES) {
@@ -1020,6 +1031,55 @@ addEventListener('pointerdown', (e) => {
   if (menuIsOpen && !within(menu, e.target) && !within(cog, e.target)) moveMenu('outside');
 });
 cog.disabled = false; // listener ready (#146)
+// The first-launch guide (#1293, guide.ts): a dialog of five pages over the game. Skip, Escape (B on the pad) or Play on
+// the last page close it and store it as seen; the settings menu opens it again. A key pressed in it stays in it: Tab and
+// the pad's focus walk keep to its buttons.
+const guideBox = document.getElementById('guide')!;
+const guideNext = document.getElementById('guide-next') as HTMLButtonElement;
+const guideBack = document.getElementById('guide-back') as HTMLButtonElement;
+let guidePage = 0;
+let guideReturn: HTMLElement | null = null; // the focus goes back there when it closes
+function showGuidePage(at: number | null): void {
+  if (at === null) {
+    guideBox.hidden = true;
+    writeGuideSeen(store);
+    return void guideReturn?.focus();
+  }
+  guidePage = at;
+  const page = GUIDE[at]!;
+  document.getElementById('guide-count')!.textContent = `${at + 1} / ${GUIDE.length}`;
+  document.getElementById('guide-art')!.innerHTML = page.art;
+  document.getElementById('guide-title')!.textContent = page.title;
+  document.getElementById('guide-text')!.innerHTML = page.text;
+  guideBack.disabled = at === 0;
+  guideNext.textContent = at === GUIDE.length - 1 ? 'Play' : 'Next';
+}
+function openGuide(from: HTMLElement | null): void {
+  guideReturn = from;
+  showGuidePage(0);
+  guideBox.hidden = false;
+  guideNext.focus();
+}
+const moveGuide = (event: GuideEvent): void => showGuidePage(guideStep(guidePage, event));
+guideNext.addEventListener('click', () => moveGuide('next'));
+guideBack.addEventListener('click', () => {
+  moveGuide('back');
+  if (guideBack.disabled) guideNext.focus(); // a disabled button would drop the focus out of the guide
+});
+document.getElementById('guide-skip')!.addEventListener('click', () => moveGuide('skip'));
+guideBox.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // the board and the menus never see it
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    moveGuide('skip');
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    nextFocus(document.activeElement, e.shiftKey ? -1 : 1, guideBox).focus();
+  }
+});
+// Where the pad walks the focus: in the guide while it is open.
+const padScope = (): ParentNode => (guideBox.hidden ? document : guideBox);
+if (guideDue(store, location.search, navigator.webdriver)) openGuide(null);
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
 // closed like the settings menu. Starting a mode closes it (startBoss, Play online).
 const modeButton = document.getElementById('modes') as HTMLButtonElement;
@@ -4082,12 +4142,13 @@ const pollPad = gamepad((action: PadAction) => {
     case 'back':
       return void padKey('Escape');
     case 'menu':
+      if (!guideBox.hidden) return; // the settings stay shut under the guide
       cog.click();
       return cog.focus();
     case 'prev':
     case 'next':
       if (openWorld.active && free) return void padKey(action.kind === 'prev' ? 'q' : 'e'); // the camera turns a step (#1251)
-      if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1).focus();
+      if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1, padScope()).focus();
       return;
     case 'reset':
       if (openWorld.active) padKey('r'); // the camera back to its default angle (#1026)
@@ -4098,7 +4159,7 @@ const pollPad = gamepad((action: PadAction) => {
     case 'move':
       if (openWorld.active && free) return; // the stick walked the hero already
       if (focused === canvas) return void padKey(padKeyOf(action.hex));
-      return nextFocus(focused, action.step).focus();
+      return nextFocus(focused, action.step, padScope()).focus();
     case 'orbit':
       if (openWorld.active) return; // LB and RB turn the Open world's camera
       view = orbit(view, action.dx, action.dy);

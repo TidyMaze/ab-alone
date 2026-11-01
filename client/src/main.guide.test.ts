@@ -57,6 +57,10 @@ describe('the first-launch guide', () => {
     back().click();
     expect(title()).toBe('Move');
     expect(next().textContent).toBe('Next');
+    back().focus();
+    back().click(); // the first page: Back is disabled and gives the focus to Next
+    expect(back().disabled).toBe(true);
+    expect(document.activeElement).toBe(next());
     byId('guide-skip').click();
     expect(guide().hidden).toBe(true);
     expect(localStorage.getItem('ab-alone.guide')).toBe('seen');
@@ -106,6 +110,8 @@ describe('the first-launch guide', () => {
     expect(document.activeElement).toBe(next());
     tap(0); // A
     expect(title()).toBe('Move');
+    tap(9); // Start: the settings stay shut under the guide
+    expect(byId('settings-menu').hidden).toBe(true);
     tap(1); // B
     expect(guide().hidden).toBe(true);
     Reflect.deleteProperty(navigator, 'getGamepads');

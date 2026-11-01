@@ -151,6 +151,20 @@
     <div id="run-map" role="region" aria-label="Rogue-lite map" hidden></div>
     <div id="bubble" hidden><span id="bubble-text" aria-hidden="true"></span><span id="bubble-line" role="status"></span></div>
     <div id="reader" role="region" aria-label="Terminal" aria-live="polite" hidden></div>
+    <!-- The first-launch guide (#1293): a page at a time, over the game, opened again from the settings menu. -->
+    <div id="guide" role="dialog" aria-modal="true" aria-labelledby="guide-title" aria-describedby="guide-text" tabindex="-1" hidden>
+      <div class="card">
+        <p id="guide-count"></p>
+        <div id="guide-art"></div>
+        <h2 id="guide-title"></h2>
+        <div id="guide-text" aria-live="polite"></div>
+        <div class="actions">
+          <button id="guide-skip" type="button">Skip</button>
+          <button id="guide-back" type="button">Back</button>
+          <button id="guide-next" type="button">Next</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
