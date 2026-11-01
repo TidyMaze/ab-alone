@@ -999,3 +999,10 @@ body.refused #hud .turn { animation: refuse var(--motion-fast) var(--ease-out); 
 body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease-out); }
 @keyframes check-in { from { clip-path: inset(0 100% 0 0); } }
 #daily-copy.copied::before { content: '\2713'; display: inline-block; margin-right: 0.4em; animation: check-in var(--motion-fast) var(--ease-out); }
+
+/* Screen transitions (#1099, docs/specs/motion.md story 9): entering or leaving the Open world cross-fades the canvas in on --motion-base. The
+   rule that stops matching restarts the animation on the other one. Opacity only: nothing waits, the game takes input from the first frame.
+   A game that is over (the loss dim, end-dim) keeps its own animation. Reduced motion: the tokens are 0ms, a hard cut. */
+@keyframes screen-in { from { opacity: 0; } }
+body[data-openworld] canvas { animation: screen-in var(--motion-base) var(--ease-out); }
+body:not([data-openworld], [data-over]) canvas { animation: screen-in var(--motion-base) var(--ease-out); }
