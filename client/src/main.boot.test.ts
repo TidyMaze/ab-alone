@@ -205,6 +205,7 @@ describe('the renderer and its textures', () => {
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
     const { scene } = await drawn(game);
     expect(scene.getObjectByName('terrace')!.visible).toBe(true);
+    expect(game.hook('__terrace')).toBe(scene.getObjectByName('terrace')); // the hook of the browser checks
     expect(document.body.dataset.scene).toBe('table-zero');
   });
 
