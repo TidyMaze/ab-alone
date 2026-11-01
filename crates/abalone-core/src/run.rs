@@ -417,7 +417,10 @@ mod tests {
                 .clone();
             game.play(&seen).unwrap();
         }
-        assert_eq!(game.outcome(), Some(crate::game::Outcome::Win(Player::Black)));
+        assert_eq!(
+            game.outcome(),
+            Some(crate::game::Outcome::Win(Player::Black))
+        );
     }
 
     #[test]
