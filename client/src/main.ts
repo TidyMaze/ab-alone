@@ -4968,6 +4968,7 @@ const openWorld = new OpenWorldMode(
     await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m)));
     return { player: marbleMaterials[2]!, shell: marbleMaterials[1]! };
   },
+  () => ({ have: boss_ids().filter((id) => hasMedal(store, id)).length, total: boss_ids().length }), // one medal per boss, from the shared store (#1171)
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {

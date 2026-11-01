@@ -168,6 +168,8 @@ export class OpenWorldMode {
     private readonly onLair: (seed: number, lair: number) => void = () => {},
     /** The skins of the ship the marbles wear, read when a world opens (#1176): none draws the plain looks. */
     private readonly skins?: () => Promise<MarbleSkins>,
+    /** The medals the player holds and the bosses there are, read from the shared medal store when a world opens (#1171). */
+    private readonly medals: () => { have: number; total: number } = () => ({ have: 0, total: 0 }),
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -205,6 +207,11 @@ export class OpenWorldMode {
     if (saved) view.turnTo(saved.yaw); // the camera opens at the angle the world was left at (#1026)
     view.show(this.hero.at, this.hero.troop);
     view.setLairs(this.lairs, this.beaten);
+    const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
+    if (medals) {
+      const { have, total } = this.medals();
+      medals.textContent = `Medals ${have} / ${total}`;
+    }
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
