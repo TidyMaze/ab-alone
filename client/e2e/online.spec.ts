@@ -748,3 +748,50 @@ test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on 
   await a.context().close();
   await b.context().close();
 });
+
+// Boss duel (#1316): page A opens the room with Boss duel in the mode menu and is the hero, page B opens the invite and
+// plays the boss as White. The boss move comes from page B through the room, not from the engine's search, and both
+// pages judge it with the same encounter and end on the same board. An MCP agent joins the same link (mcp/e2e).
+test('a boss duel from Boss duel: the joiner plays the boss, both pages judge the same moves and end alike, #1316', async ({ browser }) => {
+  const [a, b] = await Promise.all([0, 1].map(async () => (await browser.newContext()).newPage()));
+  await calm(a, b);
+  await room({ a, b });
+  const turn = (page: Page) => page.locator('#hud .turn');
+
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
+  await a.getByRole('button', { name: 'Boss duel' }).click();
+  await a.locator('#coop-list').getByRole('button', { name: 'The Hull' }).click();
+  const hash = new URL(await inviteLink(a)).hash;
+  expect(hash).toMatch(/^#room=[\w-]+&boss=hull&seed=\d+&seat=boss&key=[\w-]{8}$/);
+  await b.goto(`./?bot=off&net=hook${hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(status(a)).toHaveText('You fight the boss. The boss seat is here.');
+  await expect(status(b)).toHaveText('You are the boss. The hero is here.');
+  await expect(turn(a)).toHaveText('Your turn');
+  await expect(turn(b)).toHaveText("Hero's turn");
+
+  await play(a, 1, 3); // the hero, Black
+  await play(a, 2, 2);
+  await expect.poll(() => plies(b)).toBe(1);
+  expect(await plies(a)).toBe(1); // no boss reply is computed by either page: the boss seat answers
+  await expect(turn(b)).toHaveText('Your turn');
+  await play(b, 2, -2); // the boss, White, chosen by its player
+  await play(b, 2, -1);
+  await expect.poll(() => plies(a)).toBe(2);
+  await expect(turn(a)).toHaveText('Your turn');
+  const history = (page: Page) => page.evaluate(() => (window as any).__history());
+  expect(await history(a)).toEqual(await history(b));
+  await expect(a.locator('#hud .boss')).toContainText('Boss duel');
+  await expect(a.locator('#hud')).not.toContainText('refused');
+  await expect(b.locator('#hud')).not.toContainText('refused');
+  await a.screenshot({ path: test.info().outputPath('duel-hero.png') });
+  await b.screenshot({ path: test.info().outputPath('duel-boss.png') });
+  await a.context().close();
+  await b.context().close();
+});

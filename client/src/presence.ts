@@ -59,3 +59,14 @@ export function coopStatus(role: Role, partner: Seen, agent: boolean): OnlineSta
   if (partner === 'gone') return { text: `${them} is disconnected.`, tone: 'gone' };
   return { text: 'Waiting for a partner...', tone: 'waiting' };
 }
+
+/** The HUD status line of a boss duel (#1316): Black is the hero, White plays the boss. It names the roles, not the colours. */
+export function duelStatus(side: number, role: Role, opponent: Seen, agent: boolean): OnlineStatus {
+  if (role === 'spectator') return { text: 'Room is full, watching', tone: 'watching' };
+  if (role === 'pending') return { text: 'Joining the duel...', tone: 'waiting' };
+  const [me, other] = side === 1 ? ['You fight the boss.', 'The boss seat'] : ['You are the boss.', 'The hero'];
+  const them = other + (agent ? ' (agent)' : '');
+  if (opponent === 'here') return { text: `${me} ${them} is here.`, tone: 'here' };
+  if (opponent === 'gone') return { text: `${me} ${them} is disconnected.`, tone: 'gone' };
+  return { text: `${me} Waiting for ${other === 'The hero' ? 'the hero' : 'the boss seat'}...`, tone: 'waiting' };
+}

@@ -197,3 +197,25 @@ test('the obstacle the hero breaks goes out signed, 106 bytes, #1305', async ({ 
   await expect(page.locator('body')).toHaveAttribute('data-openworld-broken', '1');
   await expect.poll(() => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m.length === 106 && m[1] === 3).length)).toBe(1);
 });
+
+// The HUD of the public world on a phone (390x844): the name field and Hide are touch targets of 44 px, and the plate leaves the hero
+// and the troop (the centre of the screen) free. A hero on our own cell is lifted above ours.
+test('on a phone the name field and Hide are 44 px high and the plate leaves the play area free, #1305', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await enter(page, PUBLIC);
+  await page.evaluate(() => {
+    const w = window as unknown as Hook;
+    w.__netPeerJoin('p');
+    w.__netPeerIn([2, 1, 66, 111, 98], 'p');
+    w.__netPeerIn([2, 2, 0, 0, 0, 0, 0], 'p'); // on our own cell
+  });
+  await expect(page.locator('.peer-tag')).toHaveText('Bob');
+  const field = (await page.locator('#openworld-name').boundingBox())!;
+  const hide = (await page.locator('#openworld-hide').boundingBox())!;
+  expect(field.height).toBeGreaterThanOrEqual(44);
+  expect(hide.height).toBeGreaterThanOrEqual(44);
+  const plate = (await page.locator('#openworld-hud').boundingBox())!;
+  console.log('plate', JSON.stringify(plate), 'field', JSON.stringify(field), 'hide', JSON.stringify(hide));
+  await page.screenshot({ path: 'test-results/peers-phone-hud.png' });
+  expect(plate.y).toBeGreaterThanOrEqual(844 * 0.5); // the lower half only: the hero stands at the middle
+});
