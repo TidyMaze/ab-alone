@@ -471,7 +471,9 @@ mod tests {
 
     #[test]
     fn is_enemy_matches_the_generated_enemies() {
-        let enemies: Vec<i32> = (-6..6).flat_map(|cx| (-6..6).flat_map(move |cy| world_enemies(5, cx, cy))).collect();
+        let enemies: Vec<i32> = (-6..6)
+            .flat_map(|cx| (-6..6).flat_map(move |cy| world_enemies(5, cx, cy)))
+            .collect();
         assert!(!enemies.is_empty());
         for pair in enemies.chunks(2) {
             assert!(world_is_enemy(5, pair[0], pair[1]));

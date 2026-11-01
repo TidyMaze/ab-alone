@@ -605,7 +605,10 @@ pub fn can_break(seed: u64, q: i32, r: i32) -> bool {
 /// a generated enemy starts on that cell. The fight that beat it is not checked (no proof of the push for now), only the place.
 pub fn is_enemy(seed: u64, q: i32, r: i32) -> bool {
     let (cx, cy) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
-    enemy_groups(seed, cx, cy).iter().flatten().any(|&cell| cell == (q, r))
+    enemy_groups(seed, cx, cy)
+        .iter()
+        .flatten()
+        .any(|&cell| cell == (q, r))
 }
 
 /// The axial distance between two cells.
@@ -1283,7 +1286,9 @@ mod tests {
             .into_iter()
             .flatten()
             .next()
-            .or_else(|| (0..WORLD_CHUNKS).find_map(|cx| enemy_groups(5, cx, 0).into_iter().flatten().next()))
+            .or_else(|| {
+                (0..WORLD_CHUNKS).find_map(|cx| enemy_groups(5, cx, 0).into_iter().flatten().next())
+            })
             .expect("seed 5 holds an enemy");
         assert!(is_enemy(5, first.0, first.1));
         assert!(!is_enemy(5, 0, 0)); // the spawn clearing

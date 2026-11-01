@@ -7,9 +7,9 @@ import { GLIDE_MS } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import { SLIDE_MS } from './slide';
 import './test/openworldwasm';
-import { world_can_break } from 'abalone-wasm';
+import { world_can_break, world_is_enemy } from 'abalone-wasm';
 import { boot, type Game } from './test/harness';
-import { signBreak } from './worldevents';
+import { signBeaten, signBreak } from './worldevents';
 import { generateKeys } from './moverecord';
 import { BREAK_BYTES, encodeBreak, encodeTroop } from './worldpeers';
 import { decode, encodeHello, encodePos, PUBLIC_SEED } from './worldpeers';
@@ -665,5 +665,16 @@ describe('the public Open world online', () => {
     room.data(encodeBreak(event), 'p');
     for (let i = 0; i < 40 && data().openworldBroken === '1'; i++) await new Promise((done) => setTimeout(done, 10));
     expect(data().openworldBroken).toBe('2');
+  });
+
+  it('a peer beats an enemy of the world: it is gone here, once (#1305)', async () => {
+    const game = await joined();
+    const room = game.world()!;
+    let cell: [number, number] | undefined;
+    for (let q = -40; q <= 40 && !cell; q++) for (let r = -40; r <= 40 && !cell; r++) if (world_is_enemy(PUBLIC_SEED, q, r)) cell = [q, r];
+    const event = await signBeaten(await generateKeys(), PUBLIC_SEED, cell![0], cell![1]);
+    room.data(encodeBreak(event), 'p');
+    for (let i = 0; i < 40 && data().openworldBeaten !== '1'; i++) await new Promise((done) => setTimeout(done, 10));
+    expect(data().openworldBeaten).toBe('1');
   });
 });
