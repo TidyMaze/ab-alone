@@ -47,9 +47,13 @@ test('a scripted client plays a full game against the bot over stdio', async () 
     'join_room',
     'legal_moves',
     'new_game',
+    'new_world',
     'play_move',
     'resign',
     'wait_for_opponent_move',
+    'world_state',
+    'world_step',
+    'world_walk',
   ]);
 
   // A small bot budget keeps the run short. The default budget is the client's (unit tests).

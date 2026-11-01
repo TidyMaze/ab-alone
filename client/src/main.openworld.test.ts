@@ -7,6 +7,7 @@ import { GLIDE_MS } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
+import { decode, encodeHello, encodePos, PUBLIC_SEED } from './worldpeers';
 
 // The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu for everyone (#1000), ?openworld=<seed>
 // fixes the seed, it draws its own scene in place of the board's, and body[data-openworld] and [data-openworld-at] name
@@ -75,14 +76,14 @@ describe('the Open world mode', () => {
     expect(hooks().__openworldFixture).toBeUndefined();
   });
 
-  it('is in the mode menu without any parameter, and a click enters a world with a random seed', async () => {
+  it('is in the mode menu without any parameter, and a click enters the public world, #1305', async () => {
     const game = await boot('?bot=off');
     expect(byId('openworld').hidden).toBe(false);
     expect(press('Escape').defaultPrevented).toBe(false); // not on: the keys are the page's
     game.openModes();
     byId('openworld').click();
     await settle();
-    expect(data().openworld).toMatch(/^\d+$/);
+    expect(data().openworld).toBe(String(PUBLIC_SEED));
     expect(data().openworldAt).toBe('0,0');
   });
 
@@ -254,7 +255,7 @@ describe('the Open world mode', () => {
     expect(data().openworldAt).toBe('1,0');
   });
 
-  it('the menu entry opens a new random world when the last one has no save of its own', async () => {
+  it('the menu entry opens the public world when the last one has no save of its own', async () => {
     const idb = new IDBFactory();
     const game = await openFrom('?bot=off&openworld=7', idb);
     press('ArrowRight');
@@ -262,7 +263,7 @@ describe('the Open world mode', () => {
     await settle();
     await indexedDbStore().delete('openworld:7');
     await openFrom('?bot=off', idb);
-    expect(data().openworld).not.toBe('7');
+    expect(data().openworld).toBe(String(PUBLIC_SEED));
     expect(data().openworldAt).toBe('0,0');
   });
 
@@ -435,5 +436,197 @@ describe('the board keys in the Open world, #1063', () => {
     at('pointermove', 5, 340, 300, 2);
     expect(data().openworldRoute).toBe('0');
     at('pointerup', 5, 340, 300, 2);
+  });
+});
+
+// The public world online (#1305): one fixed seed, one room, the other heroes' markers and edge indicators. New world and any other
+// seed stay private and offline. An automated page stays offline unless it asks for the hook transport or the opt-in.
+describe('the public Open world online', () => {
+  const peersRoot = () => byId<HTMLElement>('openworld-peers');
+  const enter = async (url: string, options?: Parameters<typeof boot>[1]) => {
+    const game = await boot(url, options);
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    return game;
+  };
+
+  it('joins its room after Accept, greets a peer, sends the step, and shows a far hero at the screen edge', async () => {
+    const game = await boot('?bot=off&consent');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(byId('consent').hidden).toBe(false); // asked first
+    expect(game.world()).toBeNull(); // nothing contacted before Accept
+    byId('consent-accept').click();
+    await settle();
+    const room = game.world()!;
+    expect(room.room).toBe(`ow:${PUBLIC_SEED}:0`);
+    expect(data().openworld).toBe(String(PUBLIC_SEED));
+    game.frame(16); // the hero's place goes out
+    room.join('p');
+    expect(room.sent.map(([d, to]) => [decode(d), to])).toEqual([
+      [{ t: 'pos', q: 0, r: 0, seq: 0 }, undefined],
+      [{ t: 'hello', name: '' }, 'p'],
+      [{ t: 'pos', q: 0, r: 0, seq: 0 }, 'p'],
+    ]);
+    room.data(encodeHello(), 'p');
+    room.data(encodePos(200, 0, 0), 'p');
+    game.frame(16);
+    expect(peersRoot().hidden).toBe(false);
+    expect(peersRoot().dataset.edges).toBe('200');
+    expect(peersRoot().children[0]!.getAttribute('aria-label')).toBe('Another hero, 200 tiles away');
+    press('ArrowRight');
+    game.frame(300);
+    const [q, r] = data().openworldAt!.split(',').map(Number) as [number, number]; // the step, maybe carried on by the troop's push
+    expect(q).toBeGreaterThan(0);
+    expect(decode(room.sent.at(-1)![0])).toEqual({ t: 'pos', q, r, seq: 1 });
+    expect(peersRoot().dataset.edges).toBe(String(Math.max(Math.abs(200 - q), Math.abs(r), Math.abs(200 - q + r))));
+    press('Escape'); // leaving the world leaves the room and clears the screen
+    expect(room.closed).toBe(true);
+    expect(peersRoot().hidden).toBe(true);
+  });
+
+  it('Stay solo opens the same world with no room', async () => {
+    const game = await boot('?bot=off&consent');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    byId('consent-stay').click();
+    await settle();
+    expect(data().openworld).toBe(String(PUBLIC_SEED));
+    expect(game.world()).toBeNull();
+    expect(peersRoot().hidden).toBe(true);
+    expect(localStorage.getItem('ab-alone.online-consent')).toBeNull();
+  });
+
+  it('an automated page stays offline in the public world unless it asks for the opt-in or the hook', async () => {
+    const game = await enter('?bot=off');
+    expect(data().openworld).toBe(String(PUBLIC_SEED));
+    expect(game.world()).toBeNull();
+  });
+
+  it('asks a real browser too, and a private seed never asks nor connects', async () => {
+    const real = await boot('?bot=off', { webdriver: false });
+    real.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(byId('consent').hidden).toBe(false);
+    byId('consent-stay').click();
+    await settle();
+    const private7 = await enter('?bot=off&consent&openworld=7');
+    expect(byId('consent').hidden).toBe(true);
+    expect(private7.world()).toBeNull();
+  });
+
+  it('New world leaves the room: the new seed is private', async () => {
+    const game = await boot('?bot=off&consent');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    byId('consent-accept').click();
+    await settle();
+    const room = game.world()!;
+    byId('openworld-new').click();
+    byId('openworld-discard').click();
+    await settle();
+    expect(room.closed).toBe(true);
+    expect(data().openworld).not.toBe(String(PUBLIC_SEED));
+  });
+
+  it('under ?net=hook the test page drives the room: Hello out on a join, a far hero in, no network', async () => {
+    const w = window as unknown as Record<string, unknown>;
+    const out: [number[], string | undefined][] = [];
+    const game = await boot(`?bot=off&net=hook&openworld=${PUBLIC_SEED}`);
+    game.openModes();
+    w.__netPeerOut = (d: Uint8Array, to?: string) => out.push([Array.from(d), to]);
+    byId('openworld').click();
+    await settle();
+    (w.__netPeerJoin as (p: string) => void)('p');
+    expect(out).toContainEqual([[2, 1], 'p']);
+    (w.__netPeerIn as (d: number[], p: string) => void)([2, 1], 'p');
+    (w.__netPeerIn as (d: number[], p: string) => void)(Array.from(encodePos(0, 60, 0)), 'p');
+    expect(peersRoot().dataset.edges).toBeUndefined(); // drawn by the next frame
+    game.frame(16);
+    expect(peersRoot().dataset.edges).toBe('60');
+  });
+
+  // The player's controls (#1305): a public name, Hide, and the connection status, in the HUD of the public world only.
+  const joined = async (): Promise<Game> => {
+    const game = await boot('?bot=off&consent');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    byId('consent-accept').click();
+    await settle();
+    return game;
+  };
+  const netText = () => byId<HTMLElement>('openworld-net').textContent;
+
+  it('shows the connection status and the controls in the public world, and none in a private one', async () => {
+    await joined();
+    expect(byId('openworld-online').hidden).toBe(false);
+    expect(netText()).toBe('Online: nobody else here yet.');
+    expect(byId('openworld-hide').textContent).toBe('Hide');
+    await enter('?bot=off&openworld=7');
+    expect(byId('openworld-online').hidden).toBe(true);
+  });
+
+  it('sends a typed public name in a new Hello, keeps it for the next visit, and cuts it at 16 characters', async () => {
+    const game = await joined();
+    const room = game.world()!;
+    const input = byId<HTMLInputElement>('openworld-name');
+    input.value = '  Ana\u0000  ';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(decode(room.sent.at(-1)![0])).toEqual({ t: 'hello', name: 'Ana' });
+    expect(localStorage.getItem('ab-alone.public-name')).toBe('Ana');
+    input.value = 'x'.repeat(30);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(localStorage.getItem('ab-alone.public-name')).toBe('x'.repeat(16));
+    expect(input.maxLength).toBe(16);
+  });
+
+  it('greets with the stored name and fills the field from it', async () => {
+    const game = await boot('?bot=off&consent');
+    localStorage.setItem('ab-alone.public-name', 'Zed'); // the boot clears the storage
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    byId('consent-accept').click();
+    await settle();
+    expect(byId<HTMLInputElement>('openworld-name').value).toBe('Zed');
+    game.world()!.join('p');
+    expect(decode(game.world()!.sent[0]![0])).toEqual({ t: 'hello', name: 'Zed' });
+    localStorage.removeItem('ab-alone.public-name');
+  });
+
+  it('keys typed in the name field are the field\'s: the hero does not walk, the camera does not turn, Escape does not leave', async () => {
+    await joined();
+    const at = data().openworldAt;
+    const input = byId<HTMLInputElement>('openworld-name');
+    for (const key of ['ArrowRight', 'q', 'Escape']) input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    expect(data().openworldAt).toBe(at);
+    expect(data().openworld).toBe(String(PUBLIC_SEED));
+  });
+
+  it('Hide leaves the room and Show joins a new one', async () => {
+    const game = await joined();
+    const first = game.world()!;
+    byId('openworld-hide').click();
+    expect(first.closed).toBe(true);
+    expect(netText()).toBe('Hidden: nobody sees you and you see nobody.');
+    expect(byId('openworld-hide').textContent).toBe('Show');
+    expect(byId('openworld-hide').getAttribute('aria-pressed')).toBe('true');
+    byId('openworld-hide').click();
+    expect(game.world()).not.toBe(first);
+    expect(game.world()!.closed).toBe(false);
+    expect(byId('openworld-hide').textContent).toBe('Hide');
+    expect(byId('openworld-hide').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('tells the player when the connection to another hero fails', async () => {
+    const game = await joined();
+    game.world()!.error('could not connect to peer p after exchanging SDP');
+    expect(netText()).toContain('the direct connection failed');
   });
 });

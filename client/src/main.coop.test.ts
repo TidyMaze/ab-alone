@@ -412,7 +412,7 @@ describe('boss duel: the joiner plays the boss (#1316)', () => {
     expect(presence()).toBe('You are the boss. The hero is here.');
     expect(game.turn()).toBe("Hero's turn");
     await hero.send(encodeMove(forward(hero.legal())));
-    await until(game, () => game.hook('__plies') >= 1);
+    await until(game, () => game.hook<number>('__plies') >= 1);
     expect(game.hook('__plies')).toBe(1); // the boss seat answers: no reply was computed for it (the helper's own engine did, its page does not)
     expect(game.turn()).toBe('Your turn');
     expect(byId('rematch').hidden).toBe(true);
