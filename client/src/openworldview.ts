@@ -224,11 +224,21 @@ export function waterColor(world: World, q: number, r: number): THREE.Color {
   return new THREE.Color(WATER.shore).lerp(new THREE.Color(WATER.deep), wet);
 }
 
+/** The frozen crew's shell: a 20-triangle sphere whose top faces are 15 % lighter than the rest (vertex colours, a ratio of the material colour). */
+function shell(): THREE.BufferGeometry {
+  const geometry = new THREE.IcosahedronGeometry(0.34);
+  const normal = geometry.getAttribute('normal');
+  const shade = new Float32Array(normal.count * 3);
+  for (let i = 0; i < normal.count; i++) shade.fill(normal.getY(i) > 0.5 ? 1.15 : 1, i * 3, i * 3 + 3);
+  geometry.setAttribute('color', new THREE.BufferAttribute(shade, 3));
+  return geometry;
+}
+
 /** The props on top of the ground: its height, its look and its geometry. */
 const PROPS = {
   mountain: { geometry: new THREE.ConeGeometry(0.62, 1, 6), color: 0x5d6978, emissive: 0x2a1f0c, flat: true },
   tree: { geometry: new THREE.ConeGeometry(0.34, 1, 5), color: 0x2fb5a0, emissive: 0x0b3d36, flat: true },
-  boulder: { geometry: new THREE.IcosahedronGeometry(0.34), color: 0x23282e, emissive: 0x000000, flat: true }, // a frozen crew's shell: 20 triangles, black (#1315)
+  boulder: { geometry: shell(), color: 0x3a3631, emissive: 0x000000, flat: true }, // a frozen crew's shell: 20 triangles, warm charcoal, matte (#1315)
   wall: { geometry: new THREE.CylinderGeometry(0.5, 0.5, 1, 6), color: 0x14171b, emissive: 0x000000, flat: false },
   cap: { geometry: new THREE.CylinderGeometry(0.52, 0.52, 1, 6), color: SODIUM, emissive: 0x6c4115, flat: false },
 } as const;
@@ -314,7 +324,7 @@ export const variety = (q: number, r: number): number => (((Math.imul(q, 7385609
 /** The material of a prop's mesh: its look, the same for its low-poly and its detailed mesh. */
 const propMaterial = (prop: Prop, sway: THREE.Node): THREE.Material => {
   const { color, emissive, flat } = PROPS[prop];
-  const look = { color, emissive, roughness: 0.8, flatShading: flat };
+  const look = { color, emissive, roughness: prop === 'boulder' ? 1 : 0.8, flatShading: flat, vertexColors: prop === 'boulder' };
   if (prop !== 'tree') return new THREE.MeshStandardMaterial(look);
   const material = new THREE.MeshStandardNodeMaterial(look); // the trees lean in the wind with a term of their vertex shader (#1102)
   material.positionNode = sway;

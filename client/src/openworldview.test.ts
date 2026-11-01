@@ -1052,7 +1052,14 @@ describe('the water (docs/specs/openworld.md section 2): depth, a glossy surface
     expect((boulder.geometry.index?.count ?? position.count) / 3).toBe(20);
     const material = boulder.material as THREE.MeshStandardMaterial;
     expect(material.emissive.getHex()).toBe(0x000000);
-    expect(material.color.getHex()).toBeLessThan(0x404040); // a dark shell
+    expect(material.color.getHex()).toBe(0x3a3631); // warm charcoal: shows on slate, never a black marble
+    expect(material.roughness).toBe(1); // matte
+    expect(material.vertexColors).toBe(true);
+    const shade = boulder.geometry.getAttribute('color');
+    const normal = boulder.geometry.getAttribute('normal');
+    const ups = Array.from({ length: shade.count }, (_, i) => [normal.getY(i) > 0.5, shade.getX(i)] as const);
+    expect(ups.some(([up]) => up)).toBe(true);
+    for (const [up, value] of ups) expect(value).toBeCloseTo(up ? 1.15 : 1); // the top faces are 15 % lighter
     expect(mesh(view, 'prop-boulder-hi').geometry.getAttribute('position').count).toBe(position.count); // near the hero it is the same shell
   });
 });
