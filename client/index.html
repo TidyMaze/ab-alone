@@ -50,7 +50,7 @@
       </div>
       <div id="openworld-hud" role="group" aria-label="Open world">
         <p id="openworld-live" role="status" class="sr-only"></p>
-        <p>Open world: <span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, Esc to leave.</span><span class="tap-hint">drag the stick or tap a next cell to walk, twist two fingers to turn the camera, the Hub button to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, B to leave.</span></p>
+        <p>Open world: <span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, M for the map, Esc to leave.</span><span class="tap-hint">drag the stick or tap a next cell to walk, twist two fingers to turn the camera, the Map button for the map, the Hub button to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, View for the map, B to leave.</span></p>
         <p id="openworld-mode"></p>
         <p><output id="openworld-medals"></output></p>
         <p id="openworld-tally"></p>
@@ -89,6 +89,8 @@
         <button id="log-button" type="button" hidden>Play log</button>
       </div>
     </div>
+    <!-- The Open world's Map button (#1411): out of #chrome, so it stays over the full screen map it opens and closes. -->
+    <button id="openworld-map-button" type="button" aria-expanded="false">Map</button>
     <!-- The thumb dock (#1032): the main controls at the bottom of the window, the sheets above it. The buttons are the
          page's own elements, moved here; their handlers do not change. -->
     <div id="dock-wrap">

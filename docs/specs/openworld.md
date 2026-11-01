@@ -182,7 +182,7 @@ The world (seed), the hero and troop cells, and the enemy groups beaten are save
 `ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
 
 **What is saved.** One record per seed, under the key `openworld:<seed>`:
-`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], yaw, savedAt }`, where `fight` is the
+`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], yaw, savedAt }`, where `fight` is the
 `FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
 The last world played is kept apart under `openworld:last` (`{ seed }`).
 
@@ -204,7 +204,8 @@ either (a bad `fight` makes a bad record). Both are deleted, and the world start
 
 **Record versions.** `record` 3 adds `lairs`, the numbers of the boss lairs beaten (section 7). A record of version 1 (no `record`
 field) or 2 loads with no lair beaten, so an old save is kept; an unknown later version, or a `lairs` that is not a list of
-whole numbers, is deleted like any garbage.
+whole numbers, is deleted like any garbage. `record` 4 adds `discovered`, the cells discovered (section 9): a record before it loads
+with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is garbage.
 
 ## 6. Tests
 
@@ -252,7 +253,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   shows only while `body[data-openworld]` is set, so every other mode (and a world left) has none (#1275).
 - **Window.** The hex disc of 24 cells round the hero (three chunks across), each cell a square in the colour the 3D view draws its terrain in (`terrainColour`: `LOOK`, `WATER`, `PROPS`, no palette of its own), read
   with `World.tile`: the same chunks as the 3D view, no second copy of the rules. The hero is in the middle (white), the troop (gold) and
-  the enemies near the hero (red) are dots.
+  the enemies near the hero (red) are dots. Only the discovered cells (section 9) and the enemies on them are drawn; the rest stays dark.
 - **Turn.** The map is turned by the camera's yaw (`screenOffset`: the ground layout of `axialTo3D`, screen up `(-sin yaw, -cos yaw)`), so up
   on the map is up on screen, and Q, E, R and a drag turn it.
 - **Lairs.** A lair in the window is a purple diamond, a beaten one grey. A lair out of the window gets an arrow on the map's edge pointing to it only
@@ -260,3 +261,23 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 - **Cost.** `openworldminimap.ts` draws from plain data (`drawMinimap`) and is redrawn by `mark`: when a world opens and on a step, a push, a
   broken obstacle or a camera turn, never on a frame.
 
+## 9. Map (#1411)
+
+- **Discovery.** Every cell within 10 cells (hex distance, `SIGHT`) of the hero is discovered: when a world opens and after each step
+  or push (`mark`), so the world shows little by little as the hero travels. `openworlddiscovered.ts` keeps one bit a cell, a bitset of
+  16 x 16 bits per chunk, saved with the world as `discovered: [[cx, cy, bits], ...]`, `bits` the base64 of the chunk's 32 bytes (bit `i`
+  is cell `i` of the chunk, row by row), 44 characters a chunk (section 5). A save from before has none: the cells round the hero are
+  discovered when it opens. `body[data-openworld-discovered]` counts the cells discovered, for the browser checks.
+- **Open and close.** The Map button (`#openworld-map-button`, under the minimap, out of `#chrome` so it stays over the map), the M key
+  and the pad's View button open it; the same button, M, Escape and the pad's B close it, and the world stays open. While it is open the
+  hero stays: the walk under way ends, the arrows held let go, and the arrows and camera keys do nothing.
+- **Look.** `#openworld-map`, full screen over the world, its HUD and the minimap, drawn by the minimap's drawing (`drawMap` of
+  `openworldminimap.ts`, a frame of any size, centre and scale) on a canvas of the window's size: the discovered cells in their terrain
+  colour, the rest dark, the hero, the troop, the enemies near the hero on discovered cells, and every boss lair (a landmark seen from
+  afar: a diamond, a beaten one grey, as on the minimap). It is turned with the camera, as the minimap. It opens on the hero, 8 px a cell.
+- **Pan and zoom.** A drag pans it (the ground follows the pointer), the wheel and a pinch zoom it between 3 and 32 px a cell, the pad's
+  left stick pans it and the triggers zoom it. The box takes the pointer and its canvas does not, so the touch stick leaves it alone.
+- **Click.** A click on the map (a press that moves less than 6 px) hands the cell under it to `WorldMap.pick`, which does nothing yet:
+  the teleporters (#1412) will use it.
+- **Cost.** It is drawn when it opens, on a pan or a zoom, and on a `mark` while it is open, never on a frame; it reads the discovered
+  cells of the disc that holds the screen's corners.

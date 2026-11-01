@@ -4456,6 +4456,7 @@ const keysBack = (): void => {
 addEventListener('keydown', () => padKeys || keysBack(), { capture: true });
 addEventListener('mousemove', keysBack);
 const WALK_PX = 100; // a full push of the stick is this many px of the touch stick's drag
+const MAP_PAN_PX = 12; // a full push of the stick pans the Open world's map this many px a frame (#1411)
 const padKeyOf = (dir: number): string => Object.keys(KEY_DIRS).find((k) => KEY_DIRS[k] === dir)!;
 const pollPad = gamepad((action: PadAction) => {
   padInUse = true;
@@ -4480,7 +4481,10 @@ const pollPad = gamepad((action: PadAction) => {
     case 'reset':
       if (openWorld.active) padKey('r'); // the camera back to its default angle (#1026)
       return;
+    case 'map':
+      return openWorld.toggleMap(); // the Open world's map (#1411)
     case 'walk':
+      if (openWorld.mapShown) return openWorld.panMap(-action.x * MAP_PAN_PX, -action.y * MAP_PAN_PX); // the stick looks round the map (#1411)
       // The stick walks the hero as the touch stick does, in the yaw of the camera; a rest lets go (#1252).
       return openWorld.hold(openWorld.active && free ? heldKeys(action.x * WALK_PX, action.y * WALK_PX, openWorld.yaw) : []);
     case 'move':
@@ -5716,6 +5720,11 @@ const openWorld = new OpenWorldMode(
   (seed, from, beaten, blocked, broken) => Int32Array.from(world_dungeon(seed, from[0], from[1], beaten, blocked, broken)), // the Dungeon button (#1291)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
+const mapButton = document.getElementById('openworld-map-button')!;
+mapButton.addEventListener('click', () => {
+  openWorld.toggleMap(); // the map of the cells discovered (#1411)
+  mapButton.blur(); // the keys and the pad go back to the world
+});
 // The public world (#1305): one fixed seed where everybody lands by default, the only world with other heroes. It joins its room only
 // after the opt-in (consent.ts); Stay solo opens the same world offline. New world and any other seed stay private and offline. An
 // automated page stays offline too unless it asks for the hook transport (?net=hook) or the opt-in dialog (?consent).

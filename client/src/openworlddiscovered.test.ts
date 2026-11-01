@@ -29,7 +29,7 @@ describe('Discovered', () => {
     seen.reveal([-CHUNK, -CHUNK]);
     expect(seen.count).toBe(once);
     seen.reveal([-CHUNK + 1, -CHUNK]);
-    expect(seen.count).toBe(once + SIGHT + 1);
+    expect(seen.count).toBe(once + 2 * SIGHT + 1);
     expect(seen.has(-CHUNK - SIGHT, -CHUNK)).toBe(true);
     expect(seen.has(-CHUNK + 1 + SIGHT, -CHUNK)).toBe(true);
   });

@@ -38,6 +38,7 @@ for (const { name, viewport, touch } of sizes) {
       await expect(map).toBeVisible();
       expect(await map.boundingBox()).toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
       await expect(button).toBeVisible(); // over the map: it closes it
+      await map.evaluate((el) => Promise.all(el.querySelector('canvas')!.getAnimations().map((a) => a.finished))); // the canvas fades in
       await page.screenshot({ path: `test-results/map-${name.replaceAll(' ', '-')}.png` });
       await button.click();
       await expect(map).toBeHidden();

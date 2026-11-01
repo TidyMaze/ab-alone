@@ -1,6 +1,7 @@
 // The Open world's minimap (#1410, docs/specs/openworld.md section 8): the cells round the hero, drawn on a 2D canvas from plain data,
 // turned with the camera so up on the map is up on screen. No DOM and no three.js here: the mode hands over the data when a step, a
-// push or a camera turn changed it, and the map is redrawn then, never every frame.
+// push or a camera turn changed it, and the map is redrawn then, never every frame. The full screen map (#1411, openworldmap.ts) is the
+// same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
 import { LOOK, PROPS, WATER } from './openworldview';
@@ -54,11 +55,20 @@ export function screenOffset(hero: Axial, cell: Axial, yaw: number): { x: number
   return { x: dx * Math.cos(yaw) - dz * Math.sin(yaw), y: dx * Math.sin(yaw) + dz * Math.cos(yaw) };
 }
 
-/** The cells of the hex disc of RADIUS round `hero`, read with `tile`; the cells off the world are left out. */
-export function windowCells(tile: (q: number, r: number) => Terrain | undefined, hero: Axial): MinimapCell[] {
+/** The offset in cells (`dq, dr`) of the point `x, y` cells from the middle of the map, in canvas axes: `screenOffset` undone. */
+export function groundOffset(x: number, y: number, yaw: number): Axial {
+  const dx = x * Math.cos(yaw) + y * Math.sin(yaw);
+  const dz = -x * Math.sin(yaw) + y * Math.cos(yaw);
+  const dr = dz / (Math.sqrt(3) / 2);
+  return [dx - dr / 2, dr];
+}
+
+/** The cells of the hex disc of `radius` (RADIUS: the minimap's window) round `hero`, read with `tile`; the cells off the world, or
+ * hidden (not discovered, #1411), are left out. */
+export function windowCells(tile: (q: number, r: number) => Terrain | undefined, hero: Axial, radius = RADIUS): MinimapCell[] {
   const cells: MinimapCell[] = [];
-  for (let dq = -RADIUS; dq <= RADIUS; dq++) {
-    for (let dr = Math.max(-RADIUS, -dq - RADIUS); dr <= Math.min(RADIUS, -dq + RADIUS); dr++) {
+  for (let dq = -radius; dq <= radius; dq++) {
+    for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr++) {
       const [q, r] = [hero[0] + dq, hero[1] + dr];
       const terrain = tile(q, r);
       if (terrain) cells.push([q, r, terrain]);
@@ -83,36 +93,52 @@ const shape = (ctx: CanvasRenderingContext2D, points: readonly (readonly [number
   ctx.fill();
 };
 
-/** Draws the map on a square canvas of `size` px: the hero in the middle, `data.yaw` up. A lair out of the window is an arrow on the
- * edge, pointing to it. */
+/** Where a map is drawn: a canvas of `width` x `height` px with the cell `centre` (fractions allowed) in the middle, `unit` px a cell.
+ * `round` is the minimap: a disc, its edge drawn, and an arrow on the edge for the lairs out of it. */
+export interface MapFrame {
+  width: number;
+  height: number;
+  centre: Axial;
+  unit: number;
+  round: boolean;
+}
+
+/** Draws the minimap on a square canvas of `size` px: the hero in the middle, `data.yaw` up. A lair out of the window is an arrow on
+ * the edge, pointing to it. */
 export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: MinimapData): void {
-  const half = size / 2;
-  const unit = half / (RADIUS + 1); // px a cell
+  drawMap(ctx, { width: size, height: size, centre: data.hero, unit: size / 2 / (RADIUS + 1), round: true }, data);
+}
+
+/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs, the enemies, the troop and the hero. */
+export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, unit, round }: MapFrame, data: MinimapData): void {
+  const [midX, midY] = [width / 2, height / 2];
   const put = (cell: Axial): { x: number; y: number } => {
-    const { x, y } = screenOffset(data.hero, cell, data.yaw);
-    return { x: half + x * unit, y: half + y * unit };
+    const { x, y } = screenOffset(centre, cell, data.yaw);
+    return { x: midX + x * unit, y: midY + y * unit };
   };
-  ctx.clearRect(0, 0, size, size);
+  ctx.clearRect(0, 0, width, height);
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(half, half, half - 1, 0, 2 * Math.PI);
-  ctx.clip();
+  if (round) {
+    ctx.beginPath();
+    ctx.arc(midX, midY, midX - 1, 0, 2 * Math.PI);
+    ctx.clip();
+  }
   ctx.fillStyle = COLOURS.back;
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, width, height);
   const side = unit * 1.3; // a little over a cell, so the turned squares leave no gap
   for (const [q, r, terrain] of data.cells) {
     const { x, y } = put([q, r]);
     ctx.fillStyle = terrainColour(terrain);
     ctx.fillRect(x - side / 2, y - side / 2, side, side);
   }
-  const edge = half - 8;
-  const away = (cell: Axial): number => Math.hypot(put(cell).x - half, put(cell).y - half);
+  const edge = round ? midX - 8 : Infinity; // the full map has no edge: every lair is drawn where it is
+  const away = (cell: Axial): number => Math.hypot(put(cell).x - midX, put(cell).y - midY);
   const out = data.lairs.filter(({ cell, beaten }) => !beaten && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
   const arrows = new Set(out.slice(0, ARROWS).map((lair) => lair.cell));
   for (const { cell, beaten } of data.lairs) {
     const colour = beaten ? COLOURS.lairBeaten : COLOURS.lair;
     const { x, y } = put(cell);
-    const [ox, oy] = [x - half, y - half];
+    const [ox, oy] = [x - midX, y - midY];
     const dist = away(cell);
     if (dist <= edge) {
       shape(ctx, [[x, y - 4], [x + 4, y], [x, y + 4], [x - 4, y]], colour);
@@ -120,7 +146,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
     }
     if (!arrows.has(cell)) continue; // out of the window: an arrow for the nearest few only
     const [ux, uy] = [ox / dist, oy / dist]; // the arrow sits on the edge, its tip toward the lair
-    const [px, py] = [half + ux * edge, half + uy * edge];
+    const [px, py] = [midX + ux * edge, midY + uy * edge];
     shape(ctx, [[px + ux * 5, py + uy * 5], [px - ux * 5 - uy * 4, py - uy * 5 + ux * 4], [px - ux * 5 + uy * 4, py - uy * 5 - ux * 4]], colour);
   }
   for (const cell of data.enemies) {
@@ -131,11 +157,13 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
     const { x, y } = put(cell);
     dot(ctx, x, y, 2, COLOURS.troop);
   }
-  dot(ctx, half, half, 3, COLOURS.hero);
+  const hero = put(data.hero);
+  dot(ctx, hero.x, hero.y, 3, COLOURS.hero);
   ctx.restore();
+  if (!round) return;
   ctx.strokeStyle = COLOURS.edge;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(half, half, half - 1, 0, 2 * Math.PI);
+  ctx.arc(midX, midY, midX - 1, 0, 2 * Math.PI);
   ctx.stroke();
 }

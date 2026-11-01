@@ -1911,7 +1911,7 @@ describe('the discovered cells and the map of the Open world (#1411, docs/specs/
     m.enter(42, 800, 600);
     expect(body().openworldDiscovered).toBe(String(DISC));
     tap(m, 'ArrowRight');
-    expect(Number(body().openworldDiscovered)).toBe(DISC + SIGHT + 1);
+    expect(Number(body().openworldDiscovered)).toBe(DISC + 2 * SIGHT + 1);
     m.leave();
     expect(body().openworldDiscovered).toBeUndefined();
   });
@@ -1926,7 +1926,7 @@ describe('the discovered cells and the map of the Open world (#1411, docs/specs/
     const saved = (await worldSaves(store, 1).load(42))!;
     const back = mode();
     back.enter(42, 800, 600, { ...saved, hero: [30, 0] }); // the hero stands far off: its disc is added to the saved cells
-    expect(Number(body().openworldDiscovered)).toBe(DISC + SIGHT + 1 + DISC);
+    expect(Number(body().openworldDiscovered)).toBe(DISC + 2 * SIGHT + 1 + DISC);
   });
 
   it('migrates a save from before the discovery: the cells round the hero are discovered', () => {
