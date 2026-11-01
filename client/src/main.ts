@@ -161,7 +161,9 @@ import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './ma
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
-import { hookTransport, p2pTransport } from './p2p';
+import { hookPeers, hookTransport, p2pPeers, p2pTransport } from './p2p';
+import { WorldPeersHost } from './worldnet';
+import { PUBLIC_SEED } from './worldpeers';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
@@ -5406,12 +5408,33 @@ const openWorld = new OpenWorldMode(
   (seed, from, beaten, blocked, broken) => Int32Array.from(world_dungeon(seed, from[0], from[1], beaten, blocked, broken)), // the Dungeon button (#1291)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
-/** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
+// The public world (#1305): one fixed seed where everybody lands by default, the only world with other heroes. It joins its room only
+// after the opt-in (consent.ts); Stay solo opens the same world offline. New world and any other seed stay private and offline. An
+// automated page stays offline too unless it asks for the hook transport (?net=hook) or the opt-in dialog (?consent).
+let worldOnline = false;
+openWorld.peers = new WorldPeersHost(
+  (room) => (new URLSearchParams(location.search).get('net') === 'hook' ? hookPeers() : p2pPeers(room)),
+  () => worldOnline,
+  document.getElementById('openworld-peers')!,
+);
+/** Whether this page may take the public world online, asking first when the opt-in is due. */
+async function publicWorldOnline(): Promise<boolean> {
+  const query = new URLSearchParams(location.search);
+  if (query.get('net') === 'hook') return true;
+  if (navigator.webdriver && !query.has('consent')) return false;
+  return !consentWanted() || (await onlineAllowed());
+}
+/** Opens the world of `seed`, online first when it is the public one and the page may (the opt-in is asked before anything is contacted). */
+async function enterWorld(seed: number, resume = true): Promise<void> {
+  worldOnline = seed === PUBLIC_SEED && (await publicWorldOnline());
+  return openWorld.open(seed, innerWidth, innerHeight, resume);
+}
+/** The world the menu opens: the seed of the URL, else the last world played when it has a save, else the public world. */
 async function enterOpenWorld(): Promise<void> {
-  if (Number.isFinite(openWorldFixedSeed)) return openWorld.open(openWorldFixedSeed, innerWidth, innerHeight);
-  const last = openWorldFresh ? null : await openWorldSaves.last();
-  if (last !== null && (await openWorldSaves.load(last))) return openWorld.open(last, innerWidth, innerHeight);
-  return openWorld.open(crypto.getRandomValues(new Uint32Array(1))[0]!, innerWidth, innerHeight, false);
+  if (openWorldFresh) return enterWorld(crypto.getRandomValues(new Uint32Array(1))[0]!, false);
+  if (Number.isFinite(openWorldFixedSeed)) return enterWorld(openWorldFixedSeed);
+  const last = await openWorldSaves.last();
+  return enterWorld(last !== null && (await openWorldSaves.load(last)) ? last : PUBLIC_SEED);
 }
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.

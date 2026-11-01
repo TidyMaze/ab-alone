@@ -1,0 +1,98 @@
+import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
+
+// #1305: the public Open world shows the other heroes. The page runs on the hook transport (?net=hook): the test plays the other
+// end of the room through window.__netPeer*, so nothing touches a relay. A far hero gets an arrow at the screen edge with its
+// distance in tiles, a near one a marker in the scene; a private seed has no room.
+const PUBLIC = 1305;
+
+type Hook = {
+  __netPeerOut: (data: Uint8Array, to?: string) => void;
+  __netPeerIn: (data: number[], peer: string) => void;
+  __netPeerJoin: (peer: string) => void;
+  __netPeerLeave: (peer: string) => void;
+  __out: number[][];
+};
+
+async function enter(page: Page, seed: number): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as Hook;
+    w.__out = [];
+    w.__netPeerOut = (data) => void w.__out.push(Array.from(data));
+  });
+  await page.goto(`./?bot=off&net=hook&openworld=${seed}`);
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe(String(seed));
+}
+
+const pos = (q: number, r: number, seq: number): number[] => [1, 2, (q >> 8) & 255, q & 255, (r >> 8) & 255, r & 255, seq];
+
+test('a far hero shows as an arrow at the screen edge with its distance, a near one as a marker, #1305', async ({ page }) => {
+  await enter(page, PUBLIC);
+  await page.evaluate(() => (window as unknown as Hook).__netPeerJoin('p'));
+  expect(await page.evaluate(() => (window as unknown as Hook).__out)).toContainEqual([1, 1]); // Hello to the peer that joined
+  await page.evaluate(
+    ([hello, far]) => {
+      const w = window as unknown as Hook;
+      w.__netPeerIn(hello!, 'p');
+      w.__netPeerIn(far!, 'p');
+    },
+    [[1, 1], pos(0, 60, 0)],
+  );
+  const edge = page.locator('#openworld-peers .peer-edge');
+  await expect(edge).toHaveCount(1);
+  await expect(edge).toContainText('60');
+  await expect(edge).toHaveAttribute('aria-label', 'Another hero, 60 tiles away');
+  const box = (await edge.boundingBox())!;
+  const view = page.viewportSize()!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(view.height); // inside the screen
+  await page.screenshot({ path: 'test-results/peers-far.png' });
+
+  // The same hero walks next to ours: it is in view, so a marker in the scene and no arrow.
+  await page.evaluate((near) => (window as unknown as Hook).__netPeerIn(near, 'p'), pos(1, 0, 1));
+  await expect(edge).toHaveCount(0);
+  await expect(page.locator('#openworld-peers')).toHaveAttribute('data-peers', '1');
+  await page.screenshot({ path: 'test-results/peers-near.png' });
+
+  // It leaves: gone from the screen.
+  await page.evaluate(() => (window as unknown as Hook).__netPeerLeave('p'));
+  await expect(page.locator('#openworld-peers')).toHaveAttribute('data-peers', '0');
+});
+
+test('on a phone screen the arrow stays inside the screen, whichever way the hero is, #1305', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await enter(page, PUBLIC);
+  await page.evaluate(() => {
+    const w = window as unknown as Hook;
+    w.__netPeerJoin('p');
+    w.__netPeerIn([1, 1], 'p');
+    w.__netPeerIn([1, 2, 0xff, 0xce, 0, 40, 0], 'p'); // q = -50, r = 40
+  });
+  const edge = page.locator('#openworld-peers .peer-edge');
+  await expect(edge).toContainText('50');
+  const box = (await edge.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(780);
+  await page.screenshot({ path: 'test-results/peers-phone.png' });
+});
+
+test('the hero sends its position when it steps, and Escape leaves the room, #1305', async ({ page }) => {
+  await enter(page, PUBLIC);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m[1] === 2).length)).toBeGreaterThanOrEqual(2);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#openworld-peers')).toBeHidden();
+});
+
+test('a private seed has no room: no position leaves the page, #1305', async ({ page }) => {
+  await enter(page, 7);
+  await page.evaluate(() => (window as unknown as Hook).__netPeerJoin?.('p'));
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => (window as unknown as Hook).__out)).toEqual([]);
+});

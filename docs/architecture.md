@@ -106,7 +106,7 @@ Clearing site data loses everything. There are no accounts and no sync between d
 | GitHub Pages | The files of the game | GitHub |
 | Nostr relays | Announces: hashed room name, random peer id, nonce. WebRTC offers and answers | The relay operators |
 | STUN | A request for the public address | Google, Cloudflare |
-| WebRTC, direct | Hello, moves, reports, sync, royale rounds, co-op | The players in the room, who also see your IP address |
+| WebRTC, direct | Hello, moves, reports, sync, royale rounds, co-op; in the public Open world a Hello and the hero's cell (7 bytes, at most 4 a second) | The players in the room, who also see your IP address |
 
 No move, name or position goes through a relay. Announces are ephemeral Nostr events, which relays are not expected to store. See [`docs/privacy.md`](privacy.md).
 
@@ -126,4 +126,4 @@ Without a server there is no way to stop a player from colluding with themselves
 
 ## 6. Planned
 
-The shared Open world ([#1305](https://github.com/TidyMaze/ab-alone/issues/1305)) and the ranked leaderboard ([#1287](https://github.com/TidyMaze/ab-alone/issues/1287)) add shared state without a server. Live positions go directly over WebRTC in small rooms, and lasting changes are signed events, replayed by the Rust rules, that exist while one player still holds them. Neither is built yet.
+The shared Open world ([#1305](https://github.com/TidyMaze/ab-alone/issues/1305)) and the ranked leaderboard ([#1287](https://github.com/TidyMaze/ab-alone/issues/1287)) add shared state without a server. Live positions go directly over WebRTC in small rooms, and lasting changes are signed events, replayed by the Rust rules, that exist while one player still holds them. Of the Open world, only the first slice is built: on the public world (seed 1305, after the opt-in) one room `ow:1305:0` shows the other heroes' markers and edge arrows, unsigned and cosmetic (`client/src/worldpeers.ts`). Shards, a beacon and shared changes are not built; the ranked leaderboard is not.
