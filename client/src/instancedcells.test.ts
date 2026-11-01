@@ -43,7 +43,7 @@ describe('instanceCells (#885)', () => {
     }
   });
 
-  it('copies each disc and bevel where it stands just before drawing, a hidden disc at scale 0', () => {
+  it('copies each disc and bevel where it stands just before drawing, a hidden disc left out and not counted', () => {
     const parent = new THREE.Group();
     const discs = cells(2);
     parent.add(...discs);
@@ -54,8 +54,11 @@ describe('instanceCells (#885)', () => {
     discs[0]!.updateMatrix();
     same(at(drawnDiscs!, 0), discs[0]!.matrix);
     same(at(drawnBevels!, 0), discs[0]!.matrix.clone().multiply(discs[0]!.children[0]!.matrix));
-    expect(new THREE.Vector3().setFromMatrixScale(at(drawnDiscs!, 1)).length()).toBe(0);
-    expect(new THREE.Vector3().setFromMatrixScale(at(drawnBevels!, 1)).length()).toBe(0);
+    expect([drawnDiscs!.count, drawnBevels!.count]).toEqual([1, 1]); // the GPU is not asked to draw 121 vanished cells (#1314)
+    discs[1]!.visible = true; // it comes back: the next draw counts it again
+    drawnDiscs!.onBeforeRender(null as never, null as never, null as never, null as never, null as never, null as never);
+    expect([drawnDiscs!.count, drawnBevels!.count]).toEqual([2, 2]);
+    same(at(drawnDiscs!, 1), discs[1]!.matrix);
     expect(drawnDiscs!.instanceMatrix.version).toBeGreaterThan(0);
     expect(drawnBevels!.instanceMatrix.version).toBeGreaterThan(0);
   });
