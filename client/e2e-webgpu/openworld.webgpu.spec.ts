@@ -6,24 +6,39 @@ import { openModes } from '../e2e/modes';
 // and fails on any console error, WebGPU warning, device uncaptured error or uncaught exception. Run it by hand:
 // `bun run e2e:webgpu` (CONTRIBUTING 13). Without a GPU adapter it skips.
 
+type Memory = { geometries: number; textures: number };
+const SLACK = 4; // geometries or textures more than at the start tolerated
 const DETAILED = ['prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'];
 const WARNING = /WebGPU|destroyed|Invalid/;
 
 /** Listens to the GPU device of the page before any script runs: three's own handler reports to console.error, this one
  * keeps every uncaptured error in `window.__gpuErrors` too, whatever the console shows. */
 const listenToDevice = (): void => {
-  const hooks = window as unknown as { __gpuErrors: string[]; __gpuDevices: number };
+  const hooks = window as unknown as { __gpuErrors: string[]; __gpuDevices: number; __gpuSubmits: number };
   hooks.__gpuErrors = [];
   hooks.__gpuDevices = 0; // the devices listened to: zero means the listener is not attached, and the check would pass blind
+  hooks.__gpuSubmits = 0; // the frames submitted inside an error scope: zero means no frame was checked
   const requestDevice = GPUAdapter.prototype.requestDevice;
   GPUAdapter.prototype.requestDevice = function (this: GPUAdapter, ...args: Parameters<GPUAdapter['requestDevice']>) {
     return requestDevice.apply(this, args).then((device: GPUDevice) => {
       hooks.__gpuDevices++;
-      device.addEventListener('uncapturederror', (event) => hooks.__gpuErrors.push(event.error.message));
+      device.addEventListener('uncapturederror', (event) => hooks.__gpuErrors.push(`uncaptured: ${event.error.message}`));
+      void device.lost.then((info) => hooks.__gpuErrors.push(`lost: ${info.reason} ${info.message}`));
+      // Every submit (one drawn frame) runs in a validation scope: "used in submit while destroyed" (#1015) becomes an error the
+      // test reads, with no headed Chrome and no timing.
+      const submit = device.queue.submit.bind(device.queue);
+      device.queue.submit = (buffers) => {
+        device.pushErrorScope('validation');
+        submit(buffers);
+        hooks.__gpuSubmits++;
+        void device.popErrorScope().then((error) => error && hooks.__gpuErrors.push(`validation: ${error.message}`));
+      };
       return device;
     });
   };
 };
+
+const submitted = (page: Page): Promise<number> => page.evaluate(() => (window as unknown as { __gpuSubmits: number }).__gpuSubmits);
 
 async function enter(page: Page): Promise<void> {
   await openModes(page);
@@ -40,6 +55,7 @@ async function detailedDrawn(page: Page): Promise<number> {
  * retires), walk fast, zoom to the widest view, turn, leave and enter again. Returns what the page reported. */
 async function runWorld(page: Page, seed: string): Promise<string[]> {
   const reported: string[] = [];
+  page.on('requestfailed', (request) => reported.push(`requestfailed: ${request.url()}`));
   page.on('console', (message) => {
     if (message.type() === 'error' || (message.type() === 'warning' && WARNING.test(message.text()))) reported.push(`${message.type()}: ${message.text()}`);
   });
@@ -64,7 +80,7 @@ async function runWorld(page: Page, seed: string): Promise<string[]> {
   await page.mouse.wheel(0, 5000); // as far out as the screen allows: MAX_ZOOM is 6 on a 16:9 screen
   await expect.poll(async () => Number(await data('openworldZoom'))).toBeGreaterThan(5);
   await page.keyboard.press('q');
-  await expect.poll(() => data('openworldYaw')).toBe('30');
+  await expect.poll(() => data('openworldYaw')).toBe('60');
   await page.keyboard.press('e');
   await expect.poll(() => data('openworldYaw')).toBe('0');
   await page.keyboard.press('Escape');
@@ -73,12 +89,21 @@ async function runWorld(page: Page, seed: string): Promise<string[]> {
   await page.mouse.wheel(0, -5000); // back to the closest view, then out again
   await page.mouse.wheel(0, 5000);
   await expect.poll(async () => Number(await data('openworldZoom'))).toBeGreaterThan(5);
+  // Replace then draw (#1015): each turn walks a cell and zooms, so the build replaces meshes (grown, or given a model), then
+  // waits for the next submitted frame (the Open world's own loop counts no `__drawNext` draw): a buffer freed while the last frame still used it is a validation error at that submit.
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press(i % 2 === 0 ? 'ArrowDown' : 'ArrowUp');
+    await page.mouse.wheel(0, i % 3 === 0 ? -400 : 400);
+    const before = await submitted(page);
+    await page.waitForFunction((n) => (window as unknown as { __gpuSubmits: number }).__gpuSubmits > n, before);
+  }
   await page.keyboard.press('Escape');
   await expect(page.locator('#hud')).toBeVisible();
   // a frame drawn after the last change: the replaced meshes are drawn once more before the errors are read
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const hooked = await page.evaluate(() => (window as unknown as { __gpuDevices: number }).__gpuDevices);
   expect(hooked, 'the device listener is attached before the renderer asks for its device').toBeGreaterThan(0);
+  expect(await submitted(page), 'frames were submitted inside an error scope').toBeGreaterThan(30);
   const gpuErrors = await page.evaluate(() => (window as unknown as { __gpuErrors: string[] }).__gpuErrors);
   return [...reported, ...gpuErrors.map((message) => `device: ${message}`)];
 }
@@ -93,4 +118,58 @@ test('the Open world on WebGPU, seed 1234: no console error or device error when
 
 test('the Open world on WebGPU, a fresh random seed: no console error or device error, #1023', async ({ page }) => {
   expect(await runWorld(page, 'new')).toEqual([]);
+});
+
+/** Enters and leaves the world 25 times after two warm-up entries; returns what three holds before and after, and the device errors. */
+async function enterAndLeave(page: Page): Promise<{ start: Memory; end: Memory; errors: string[] }> {
+  await page.addInitScript(listenToDevice);
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  const gpu = await page.evaluate(async () => {
+    const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
+    return adapter ? { software: (adapter.info as { isFallbackAdapter?: boolean }).isFallbackAdapter === true } : null;
+  });
+  test.skip(gpu === null || gpu.software, 'no GPU adapter on this machine (headless Linux CI): the WebGPU check needs one');
+  const memory = () =>
+    page.evaluate(() => {
+      const cost = (window as unknown as { __renderCost: { geometries: number; textures: number } }).__renderCost;
+      return { geometries: cost.geometries, textures: cost.textures };
+    });
+  // The 25 entries run inside the page: a round trip per click would cost more than the entries themselves.
+  const rounds = (count: number) =>
+    page.evaluate(async (n) => {
+      const wait = (done: () => boolean) => new Promise<void>((resolve) => { const tick = () => (done() ? resolve() : setTimeout(tick, 5)); tick(); });
+      const submits = () => (window as unknown as { __gpuSubmits: number }).__gpuSubmits;
+      for (let i = 0; i < n; i++) {
+        const modes = document.querySelector<HTMLElement>('button[aria-label="Game modes"]')!;
+        if (modes.getAttribute('aria-expanded') !== 'true') modes.click();
+        document.querySelector<HTMLElement>('#openworld')!.click();
+        await wait(() => /^\d+$/.test(document.body.dataset.openworld ?? ''));
+        const before = submits();
+        await wait(() => submits() > before);
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+        await wait(() => document.body.dataset.openworld === undefined || !/^\d+$/.test(document.body.dataset.openworld));
+      }
+    }, count);
+  await rounds(2); // the first entries load the models and shaders once
+  const start = await memory();
+  await rounds(25);
+  const end = await memory();
+  const errors = await page.evaluate(() => (window as unknown as { __gpuErrors: string[] }).__gpuErrors);
+  return { start, end, errors };
+}
+
+// #1015 leaked 226 MB over 20 entries: the geometries three holds stay flat (a small slack) once the world is entered and left again.
+test('the Open world on WebGPU, entered and left 25 times: the geometries stay flat and no device error, #1023', async ({ page }) => {
+  const { start, end, errors } = await enterAndLeave(page);
+  expect(end.geometries, `geometries ${start.geometries} -> ${end.geometries}`).toBeLessThanOrEqual(start.geometries + SLACK);
+  expect(errors).toEqual([]);
+});
+
+// Measured on main (2026-11-01): the textures grow by 2 per entry (56 -> 106 over 25). A bug, tracked in #1258: this test is
+// expected to fail until it is fixed (test.fail), and then reports as unexpectedly passing, so the annotation goes with the fix.
+test('the Open world on WebGPU, entered and left 25 times: the textures stay flat, #1023', async ({ page }) => {
+  test.fail(true, '#1258: the textures grow by 2 per Open world entry');
+  const { start, end } = await enterAndLeave(page);
+  expect(end.textures, `textures ${start.textures} -> ${end.textures}`).toBeLessThanOrEqual(start.textures + SLACK);
 });
