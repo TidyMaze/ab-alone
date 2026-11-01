@@ -80,7 +80,7 @@ export class CameraLife {
     const lag = panning ? this.sign * PAN * (1 - animT(0, pan, PAN_MS, 'in-out')) : 0;
     this.panX = this.dirX * lag;
     this.panZ = this.dirZ * lag;
-    const s = shake / SHAKE_MS;
+    const s = Math.max(0, shake) / SHAKE_MS; // rests before it starts, a push that lands later
     this.shakeX = shaking ? SHAKE_PX * (1 - s) * Math.sin(2 * Math.PI * WAVES * s) : 0;
     return punching || panning || shaking;
   }

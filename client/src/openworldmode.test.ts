@@ -569,6 +569,62 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     expect(play).not.toHaveBeenCalled();
   });
 
+  it('punches the camera when the push lands, and shakes it only if an enemy is ejected (#1103)', () => {
+    const punch = vi.spyOn(OpenWorldView.prototype, 'punch');
+    const shake = vi.spyOn(OpenWorldView.prototype, 'shake');
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    tap(pushing(), 'ArrowRight');
+    expect(punch).toHaveBeenCalledWith(1000 + GLIDE_MS);
+    expect(shake).not.toHaveBeenCalled();
+    const eject: PushBridge = (_seed, troop) => Int32Array.of(2, 0, 1, troop.length / 2, ...troop, 0, 1, 0);
+    const m = mode(undefined, undefined, () => false, undefined, eject);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[2, 0]] });
+    tap(m, 'ArrowRight');
+    expect(shake).toHaveBeenCalledWith(1000 + GLIDE_MS);
+  });
+
+  it('keeps the camera still under reduced motion: no punch, no shake, no pan (#1103)', () => {
+    const calls = [
+      vi.spyOn(OpenWorldView.prototype, 'punch'),
+      vi.spyOn(OpenWorldView.prototype, 'shake'),
+      vi.spyOn(OpenWorldView.prototype, 'panFor'),
+      vi.spyOn(OpenWorldView.prototype, 'panEnd'),
+    ];
+    tap(pushing(true), 'ArrowRight');
+    for (const call of calls) expect(call).not.toHaveBeenCalled();
+  });
+
+  it('eases the follow in at the first step of a walk and out at its end, not on a tap of the screen (#1103)', () => {
+    const panFor = vi.spyOn(OpenWorldView.prototype, 'panFor');
+    const panEnd = vi.spyOn(OpenWorldView.prototype, 'panEnd');
+    vi.spyOn(performance, 'now').mockReturnValue(500);
+    const m = pushing();
+    m.key('ArrowRight');
+    expect(panFor).toHaveBeenCalledWith([0, 0], [1, 0], 500);
+    m.release('ArrowRight');
+    expect(panEnd).toHaveBeenCalledWith(500);
+    panFor.mockClear();
+    panEnd.mockClear();
+    const tapped = pushing();
+    tapped.press(400, 300, 800, 600); // a press on the screen: a tap, not a walk
+    tapped.release();
+    expect(panFor).not.toHaveBeenCalled();
+    expect(panEnd).not.toHaveBeenCalled();
+  });
+
+  it('draws the frames of the camera offsets, then stops drawing (#1103)', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const m = pushing();
+    const render = vi.fn();
+    m.frame(render, 0);
+    tap(m, 'ArrowRight');
+    for (const now of [200, 300, 400, 500, 600]) m.frame(render, now);
+    render.mockClear();
+    m.frame(render, 700);
+    expect(render).not.toHaveBeenCalled();
+  });
+
   it('marks the animation while it runs, draws every frame of it, and unmarks it at its end', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0); // the push starts at the press
     const m = pushing();

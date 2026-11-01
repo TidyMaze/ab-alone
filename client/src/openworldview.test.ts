@@ -1944,6 +1944,70 @@ describe('the particles of the Open world (#1110)', () => {
     expect(view.sparkle(2016, false)).toBe(false);
   });
 
+  describe('the camera offsets (#1103)', () => {
+    const lit = (): OpenWorldView => {
+      const view = new OpenWorldView(new World(bytes));
+      view.resize(800, 600);
+      view.show([0, 0]);
+      return view;
+    };
+    const centreOf = (view: OpenWorldView): Axial => (view as unknown as { centre: Axial }).centre;
+    const pos = (view: OpenWorldView): number[] => view.camera.position.toArray();
+
+    it('punches the zoom in, then back exactly, and never moves the chunk centre or the reach', () => {
+      const view = lit();
+      const base = pos(view);
+      const reach = view.camera.projectionMatrix.toArray();
+      const zoom = view.zoom;
+      const centre = centreOf(view);
+      view.punch(1000);
+      expect(view.offsets(1100)).toBe(true);
+      const dist = (p: number[]): number => Math.hypot(p[0]! - view.focusPoint.x, p[1]! - view.focusPoint.y, p[2]! - view.focusPoint.z);
+      expect(dist(pos(view))).toBeLessThan(dist(base) * 0.98);
+      expect(view.zoom).toBe(zoom);
+      expect(centreOf(view)).toEqual(centre);
+      expect(view.offsets(1250)).toBe(true); // the frame that puts the base back
+      expect(pos(view)).toEqual(base);
+      expect(view.camera.projectionMatrix.toArray()).toEqual(reach);
+      expect(view.camera.view?.enabled ?? false).toBe(false);
+      expect(view.offsets(1266)).toBe(false);
+      expect(centreOf(view)).toEqual(centre);
+    });
+
+    it('shakes the image by pixels and clears the view offset at the end', () => {
+      const view = lit();
+      view.shake(0);
+      view.offsets(17);
+      expect(view.camera.view?.enabled).toBe(true);
+      expect(Math.abs(view.camera.view!.offsetX)).toBeGreaterThan(0);
+      expect(Math.abs(view.camera.view!.offsetX)).toBeLessThanOrEqual(2);
+      view.offsets(300);
+      expect(view.camera.view?.enabled).toBe(false);
+    });
+
+    it('lags the follow behind the walk and settles on the hero', () => {
+      const view = lit();
+      const base = pos(view);
+      view.panFor([0, 0], [1, 0], 0);
+      view.offsets(0);
+      expect(pos(view)[0]).toBeLessThan(base[0]!); // behind the hero, which goes toward +x
+      view.panEnd(1000);
+      view.offsets(1000);
+      expect(pos(view)[0]).toBeGreaterThan(base[0]!); // a little ahead of it
+      view.offsets(1300);
+      expect(pos(view)).toEqual(base);
+    });
+
+    it('snaps to the base on a resize', () => {
+      const view = lit();
+      view.shake(0);
+      view.offsets(50);
+      view.resize(400, 300);
+      expect(view.camera.view?.enabled).toBe(false);
+      expect(view.offsets(60)).toBe(false);
+    });
+  });
+
   // #1147: a boulder on (1, 0) and an isolated tree on (0, 2) of the badlands; the cell is broken in the world first, as the hero does.
   describe('breaking an obstacle', () => {
     const withProps = (cx: number, cy: number) => {
