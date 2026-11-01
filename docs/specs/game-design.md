@@ -467,8 +467,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 
 - **Concept**: the ship's mind, the thing that kept the game running.
 - **Twist**: a radius 5 board with 6 fixed void pillars (symmetric). Boss has 16 marbles, you
-  have 16 too (#838): the point reflection of its start, two more marbles than the standard layout. It has no rule code of its own: every **3** turns, at the end of the boss turn (turns 3,
-  6, 9...), it **borrows one effect of another boss**, picked by the engine PRNG (splitmix64 of the
+  have 16 too (#838): the point reflection of its start, two more marbles than the standard layout. It has no rule code of its own: every **2** turns, at the end of the boss turn (turns 2,
+  4, 6..., every 3 before #1209), it **borrows one effect of another boss**, picked by the engine PRNG (splitmix64 of the
   fight seed and the ply, so a Retry, the daily, a replay and every co-op peer get the same
   picks) among five one-shot effects that run that boss's own engine code (no copy):
   - **the Hull's crack**: one cell cracks and vanishes 2 player turns later, with its marble (P1 a
@@ -505,7 +505,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Phases**: by ejections, as the bosses it borrows from: P1 at 0, P2 after **3** ejections, P3
   after **5**, shown as notches and in the HUD. A phase changes the strength of the effects (the
   crack, the force of the pulse), never the list. Win at **12** ejections (4 boss marbles left,
-  Decision #482), so all three phases are experienced.
+  Decision #482), so all three phases are experienced. The boss wins at **12** too (4 player marbles left, #1209,
+  6 before): the borrowed effects eject both sides alike, so the same count keeps them fair (boss-balance.md section 3).
 - **Calibrate**: last. It must be harder than any previous boss, with first win between
   attempt 5 and 10, never a wall.
 

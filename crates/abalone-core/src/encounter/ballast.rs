@@ -21,14 +21,15 @@ use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETI
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
 use crate::encounter::swarm::wave;
 use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
-use crate::game::{Game, WIN_EJECTIONS};
+use crate::game::Game;
 use crate::moves::{apply, legal_moves, Move, Player};
 use crate::search::{search_phased, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
 /// Ejections the player needs to win against The Ballast Mind (Decision #482). The boss starts
-/// with 16 marbles: win at 12 ejections (4 boss marbles left).
+/// with 16 marbles: win at 12 ejections (4 boss marbles left). The boss needs as many since #1209
+/// (6 before): the borrowed effects eject both sides alike (docs/specs/boss-balance.md section 3).
 pub const BALLAST_WIN_EJECTIONS: u8 = 12;
 
 /// Radius of the Ballast board: 91 cells before the pillars.
@@ -83,8 +84,9 @@ pub const BALLAST_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// played the borrowed effects, 3000 with them (#824), and 100 since #833, the best of the ladder
 /// (docs/specs/boss-balance.md section 3). TUNE.
 pub const BALLAST_NODE_BUDGET: u32 = 100;
-/// Boss turns between two borrowed effects. TUNE.
-pub const BALLAST_EVERY: u32 = 3;
+/// Boss turns between two borrowed effects: 2 since #1209, 3 before (docs/specs/boss-balance.md
+/// section 3). TUNE.
+pub const BALLAST_EVERY: u32 = 2;
 /// Special id at the end of a player turn: the Hull's cracks count down.
 pub const BALLAST_TICK: u8 = 0;
 /// Special id at the end of the boss turn of a borrowed effect is this plus the phase.
@@ -180,8 +182,8 @@ pub fn ballast_last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
     }
 }
 
-/// The Hull tick at the end of a player turn, a borrowed effect at the end of every third boss
-/// turn (the id carries the phase).
+/// The Hull tick at the end of a player turn, a borrowed effect at the end of every
+/// [`BALLAST_EVERY`]th boss turn (the id carries the phase).
 fn special(ply: u32, phase: usize) -> Option<u8> {
     if ply % 2 == 1 {
         Some(BALLAST_TICK)
@@ -325,8 +327,8 @@ pub fn ballast_start(seed: u64) -> Encounter {
     for (q, r) in BALLAST_BOSS_START {
         board.set(q, r, Cell::White);
     }
-    let game = Game::from_position(board, Player::Black, [0, 0])
-        .with_win([BALLAST_WIN_EJECTIONS, WIN_EJECTIONS]);
+    let game =
+        Game::from_position(board, Player::Black, [0, 0]).with_win([BALLAST_WIN_EJECTIONS; 2]);
     Encounter::new(game, ballast_boss(), seed).counting_by_colour()
 }
 

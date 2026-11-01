@@ -60,7 +60,7 @@ Die, read the tell, retry with the same seed.
 | Cargo | **The Hull** | one announced cell at a time cracks, then falls away under both sides |
 | Furnace | **The Choir** | three armies of six in triangles, one sings (moves) per turn; the weakest army is removed after 3 and 5 ejections, and the last one sings twice |
 | Chapel | **The Chaplain** | a marble touching four foes changes side, a boss marble won costs it health and one lost heals it, and at four ejections a martyr explodes and converts its neighbours, who wear its glyph and a cracked shell |
-| Bridge | **The Ballast Mind** | the final exam: a bigger board, void pillars, 16 marbles each, and every 3 turns an effect borrowed from the Hull, the Pulsar, the Magnetizer or the Chaplain, which its search plays, announced a turn ahead and ringed on the board when it fires |
+| Bridge | **The Ballast Mind** | the final exam: a bigger board, void pillars, 16 marbles each, 12 ejections to win or to lose, and every 2 turns an effect borrowed from the Hull, the Pulsar, the Magnetizer, the Chaplain or the Swarm, which its search plays, announced a turn ahead and ringed on the board when it fires |
 | Cargo | **The Alien** | lays eggs near your marbles that hatch into new marbles unless you crush them |
 | Cargo | **The Rail Yard** | freight trains, the first on turn 2, sweep a whole line, edge to edge, either side |
 | Furnace | **The Magnetizer** | charges marbles of both sides, + then − in turn, and opposite charges side by side throw each other apart |
