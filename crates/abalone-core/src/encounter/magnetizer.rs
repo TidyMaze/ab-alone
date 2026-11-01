@@ -16,9 +16,9 @@ type P = (i32, i32);
 
 /// P2 and P3 start after this many ejections credited to the player. TUNE.
 pub const MAGNETIZER_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Player turns between two assignments, per phase: turns 3, 6, 9... in P1, the even turns in
-/// P2, every turn in P3. TUNE.
-pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [3, 2, 1];
+/// Player turns between two assignments, per phase: turns 3, 6, 9... in P1 and P2, the even
+/// turns in P3 (#1237: the ladder's pro won 12 of 20 with [3, 2, 1], 15 with these). TUNE.
+pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [3, 3, 2];
 /// Repulsions per settle at most, a safety bound the fights never reach.
 pub const MAGNETIZER_SETTLE_CAP: usize = 64;
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
@@ -212,11 +212,35 @@ pub(crate) fn carried_announce(before: &Board, mv: &Move, after: &Board) -> Opti
     })
 }
 
-/// What a ply does in the boss search: the polarities follow the move, then the board settles.
-/// The search draws the pairs with the seed 0: it cannot know the ply's seed deeper in the tree.
-fn search_step(before: &Board, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {
+/// What a ply does in the boss search, as in `Encounter::play`: the polarities and the announce
+/// follow the move and the board settles. After a boss ply the hook then fires with the special
+/// of that ply, in the phase the tree's credits reach at the start of the ply
+/// (`Encounter::phase_after`, as the encounter takes the tell before the move), and the board
+/// settles again; it is skipped when it has nothing to assign or announce. The ply comes from the
+/// clock `magnetizer_move` puts on the root board. Seed 0 for the picks and the pairs: the search
+/// cannot know the ply's seed deeper in the tree.
+fn magnetizer_step(
+    enc: &Encounter,
+    before: &Board,
+    mv: &Move,
+    mut after: Board,
+) -> (Board, [u8; 2]) {
+    let ply = before.magnetizer_ply().expect("the tree's clock") + 1;
     after.set_polarities(carried_poles(before, mv, &after));
-    settle(&after, 0, &mut |_, _| {})
+    after.set_announce(carried_announce(before, mv, &after));
+    after.set_magnetizer_ply(Some(ply));
+    let (board, credits) = settle(&after, 0, &mut |_, _| {});
+    let id = ply
+        .is_multiple_of(2)
+        .then(|| special(ply, enc.phase_after(before)))
+        .flatten();
+    match id {
+        Some(id) if board.announce().is_some() || id == MAGNETIZER_ANNOUNCE => {
+            let (out, more) = settle(&hook(&board, id, 0), 0, &mut |_, _| {});
+            (out, [credits[0] + more[0], credits[1] + more[1]])
+        }
+        _ => (board, credits),
+    }
 }
 
 /// The Magnetizer boss definition.
@@ -232,21 +256,31 @@ pub fn magnetizer_boss() -> BossDef {
     }
 }
 
-/// The boss reply: its node-limited search, where every ply of the tree settles, so it sees the
-/// repulsions. `None` on the player's turn or when the game is over.
+/// The boss reply: its node-limited search, where every ply of the tree settles and runs the
+/// assignments (`magnetizer_step`), so it sees the repulsions. `None` on the player's turn or when
+/// the game is over.
 pub fn magnetizer_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
-    let step = |before: &Board, _: Player, mv: &Move, after: Board| search_step(before, mv, after);
-    search_hooked(
-        enc.game(),
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    magnetizer_search(enc, enc.boss.node_budget, &|_| true)
+}
+
+/// The node-limited search of `enc` for the side to move, every ply of its tree through
+/// `magnetizer_step`: the boss reply of [`magnetizer_move`], or the ladder player, who reads the
+/// polarities and the announce on the board.
+pub(crate) fn magnetizer_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
+    let mut board = enc.game().board().clone();
+    board.set_magnetizer_ply(Some(enc.game().history().len() as u32));
+    let game = enc.game().clone().with_board(board);
+    let step = |before: &Board, _: Player, mv: &Move, after: Board| {
+        magnetizer_step(enc, before, mv, after)
+    };
+    search_hooked(&game, budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 #[cfg(test)]
@@ -326,10 +360,11 @@ mod tests {
             ((6, 0), t),
             ((8, 0), a), // turn 5 announces turn 6
             ((3, 1), None),
-            ((2, 1), t),
-            ((4, 1), a), // turn 3 announces turn 4
-            ((2, 2), a),
-            ((4, 2), a),
+            ((2, 1), a), // P2 assigns on turns 3, 6... as P1 (#1237)
+            ((4, 1), t),
+            ((2, 2), t),
+            ((4, 2), a), // P3: turn 3 announces turn 4
+            ((6, 2), t),
         ];
         for ((ply, phase), id) in table {
             assert_eq!(special(ply, phase), id, "ply {ply}, phase {phase}");
@@ -370,14 +405,14 @@ mod tests {
     }
 
     #[test]
-    fn a_polarity_comes_at_the_start_of_turns_3_and_6_in_p1_every_2nd_in_p2_every_one_in_p3() {
+    fn a_polarity_comes_at_the_start_of_turns_3_and_6_in_p1_and_p2_every_2nd_in_p3() {
         assert_eq!(assignment_turns(0, 10), vec![3, 6, 9]);
+        assert_eq!(assignment_turns(3, 10), vec![3, 6, 9], "P2 as P1 (#1237)");
         assert_eq!(
-            assignment_turns(3, 8),
+            assignment_turns(5, 8),
             vec![4, 6, 8],
             "nothing announces turn 2 before turn 1"
         );
-        assert_eq!(assignment_turns(5, 6), vec![3, 4, 5, 6]);
     }
 
     #[test]
@@ -908,5 +943,117 @@ mod tests {
         enc.play(&m).unwrap();
         assert_eq!(enc.game().ejected(Player::White), 1);
         assert_eq!(magnetizer_move(&enc), None, "the player's turn");
+    }
+
+    /// A fight at `ejected` with the first `plies` quiet plies played (the boss to move at turn 1
+    /// after 1, at turn 2 after 3), then on board `b`.
+    fn played(b: Board, ejected: u8, plies: usize) -> Encounter {
+        let quiet = [
+            mv(&[(0, 0)], E),
+            mv(&[(0, -3)], E),
+            mv(&[(1, 0)], Direction::W),
+        ];
+        let mut enc = quiet_fight(ejected, 1);
+        for m in &quiet[..plies] {
+            enc.play(m).unwrap();
+        }
+        enc.game.replace_board(b);
+        enc
+    }
+
+    #[test]
+    fn the_tree_sees_the_assignment_at_the_start_of_turn_3_and_avoids_its_repulsion() {
+        // Turn 2 of P1, boss to move: the start of turn 3 gives the announced (0, -3) its −, next
+        // to the + boss marble (-1, -3) on the rim, which the repulsion throws off. 1 of 600 random
+        // positions of this kind (the announced marble next to an opposite pole) gave two moves.
+        let mut b = board(
+            &[(-2, 2), (0, -3), (1, 0), (2, -3), (-1, -2), (3, 1)],
+            &[(1, 1), (-1, 0), (-1, 3), (2, -1), (-1, -3)],
+            &[((-1, -3), 1)],
+        );
+        b.set_announce(Some((Some((0, -3)), -1)));
+        b.set_last_sign(1);
+        let enc = played(b, 0, 3);
+        assert_eq!((enc.phase(), enc.tell()), (0, Some(MAGNETIZER_TURN)));
+        // The search before #916: the polarities follow the moves and settle, no assignment.
+        let blind = |before: &Board, _: Player, mv: &Move, mut after: Board| {
+            after.set_polarities(carried_poles(before, mv, &after));
+            let (out, credits, _) = settled(&after, 0);
+            (out, credits)
+        };
+        let old = search_hooked(
+            enc.game(),
+            MAGNETIZER_NODE_BUDGET,
+            DEFAULT_WEIGHTS,
+            &|_| true,
+            &blind,
+        )
+        .unwrap()
+        .mv;
+        assert_eq!(old, mv(&[(-1, 3)], NE));
+        let new = magnetizer_move(&enc).unwrap();
+        assert_eq!(new, mv(&[(-1, -3)], Direction::SW), "the + leaves the rim");
+        let lost = |m: &Move| {
+            let mut e = enc.clone();
+            e.play(m).unwrap();
+            (e.repulsions().len(), e.game().ejected(Player::Black))
+        };
+        assert_eq!(
+            lost(&old),
+            (1, 1),
+            "the old move loses (-1, -3) to the repulsion"
+        );
+        assert_eq!(lost(&new), (0, 0));
+    }
+
+    #[test]
+    fn a_fifth_ejection_in_the_tree_switches_the_cadence_from_3_to_2() {
+        // The root: turn 1, boss to move, 4 ejections for the player (P2), 3 boss marbles.
+        let root = board(&[(0, 0), (-4, 4)], &[(0, -4), (4, -4), (-4, 0)], &[]);
+        let enc = played(root.clone(), 4, 1);
+        assert_eq!((enc.phase(), enc.game().history().len()), (1, 1));
+        // Boss ply 4 of the tree ends just before turn 3. Its hook announces turn 4, an assignment
+        // turn in P3 and not in P2: the phase at the start of the ply decides.
+        let boss = mv(&[(0, -4)], E);
+        let step = |gone: bool| {
+            let mut before = root.clone();
+            if gone {
+                before.set(4, -4, Cell::Empty);
+            }
+            before.set_magnetizer_ply(Some(3));
+            let mut after = before.clone();
+            after.set(0, -4, Cell::Empty);
+            after.set(1, -4, Cell::White);
+            magnetizer_step(&enc, &before, &boss, after)
+        };
+        let (p1, credits) = step(false);
+        assert_eq!(p1.announce(), None, "P2: turn 4 assigns nothing");
+        assert_eq!(p1.magnetizer_ply(), Some(4), "the clock moves on");
+        assert_eq!(credits, [0, 0]);
+        let (p3, _) = step(true);
+        let (cell, sign) = p3
+            .announce()
+            .expect("P3 after a fifth ejection in the tree: turn 4 is announced");
+        assert!(cell.is_some());
+        assert_eq!(sign, 1, "the first sign, +");
+    }
+
+    #[test]
+    fn a_player_ply_of_the_tree_carries_the_announce_and_runs_no_hook() {
+        let mut before = board(&[(0, 0), (-4, 4)], &[(0, -4)], &[]);
+        before.set_announce(Some((Some((0, 0)), 1)));
+        before.set_magnetizer_ply(Some(2));
+        let enc = played(before.clone(), 0, 1);
+        let mut after = before.clone();
+        after.set(0, 0, Cell::Empty);
+        after.set(1, 0, Cell::Black);
+        let (out, _) = magnetizer_step(&enc, &before, &mv(&[(0, 0)], E), after);
+        assert_eq!(
+            out.announce(),
+            Some((Some((1, 0)), 1)),
+            "it follows its marble"
+        );
+        assert!(out.polarities().is_empty(), "ply 3 assigns nothing");
+        assert_eq!(out.magnetizer_ply(), Some(3));
     }
 }

@@ -130,10 +130,20 @@ pub fn railyard_start(seed: u64) -> Encounter {
 /// The boss reply: its node-limited search, among the moves that leave the fewest of its marbles
 /// on the announced lines. `None` on the player's turn or when the game is over.
 pub fn railyard_move(enc: &Encounter) -> Option<Move> {
-    let game = enc.game();
-    if game.to_move() != Player::White {
+    if enc.game().to_move() != Player::White {
         return None;
     }
+    railyard_search(enc, enc.boss.node_budget, &|_| true)
+}
+
+/// The node-limited search of `enc` for the side to move, every player ply of its tree counting
+/// the trains down: the boss reply of [`railyard_move`], or the ladder player, who reads the
+/// announced trains on the board.
+pub(crate) fn railyard_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
     // Every player ply of the tree counts the trains down, and a pass ejects its line.
     let step = |_: &Board, mover: Player, _: &Move, after: Board| {
         if mover == Player::White {
@@ -144,14 +154,7 @@ pub fn railyard_move(enc: &Encounter) -> Option<Move> {
         let credits = [lost(Cell::White), lost(Cell::Black)];
         (out, credits)
     };
-    search_hooked(
-        game,
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 #[cfg(test)]

@@ -169,7 +169,7 @@ describe('main.ts The Magnetizer (#645, #671)', () => {
     expect(poles(game)).toEqual([]);
     plies(game, 11, 23);
     expect(game.hud()).toContain('3/6');
-    expect(tell()).toBe('Polarity in 2 turns'); // turn 12 of P2: the next one is turn 14
+    expect(tell()).toBe('Polarity in 3 turns'); // turn 12 of P2: the next one is turn 15 (#1237)
   });
 
   it('a new fight during the repulsions draws its own board', async () => {

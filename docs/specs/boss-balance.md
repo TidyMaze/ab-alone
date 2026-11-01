@@ -1100,6 +1100,46 @@ replies only, ms, average / 95th percentile / max), the old build timed on the s
 the Pulsar 143 / 191 / 423 after, 128 / 173 / 362 before (about 12 % more: `phase_after` counts the boss marbles of
 two boards on each player ply of the tree); measured alone in the same session, the Hull 118 / 161 / 322.
 
+### The Pulsar: the ladder player reads the pulses (#1231), 18 of 20 at 10x, not tuned
+
+Target (#753, #833): the pro player (10x) wins 14 to 18 of 20, the 1x player fewer. Method of #1209: a local
+probe (not committed) replays the 20 ladder games at 10x and splits every lost marble by cause, then the ladder
+reruns, `LADDER_X=<1|10> LADDER_SEEDS=<20|40> cargo run --release --example ladder -- pulsar`, seeds from 0, 300
+plies at most, one run at a time.
+
+**Why the player lost.** The boss search sees the pulses (#675, #913), the ladder player did not: it searched the
+standard rules only, as the Ballast Mind's player before #834. Before, at 10x, 20 games, 497 pulses fired:
+
+| Cause | Player marbles lost | Boss marbles lost |
+|---|---|---|
+| a pulse (P1, P2, P3) | 41, 10, 2 (53) | 1, 2, 4 (7) |
+| a push (the other side's) | 52 | 54 |
+
+The pushes are even. The pulses decide the fight: the boss keeps its marbles out of them and the player walks
+into them. The "rim ejection" deaths are those pulses.
+
+**Change, ladder only:** `player_move` plays `pulsar_search` against the Pulsar, the boss reply's own search
+(`pulsar.rs`) with the player's budget: every player ply of its tree goes through the hook, at the phase it reaches,
+with seed 0 for the next pulsar, so it reads the tell as the HUD shows it (the pulsar, the turns left, the force). Unit
+test `the_player_reads_the_pulse_of_the_pulsar`: with a pulse due at the end of the turn, the plain search pushes a
+lone boss marble off the rim and loses 2 of its own to the pulse; the reading player loses none. No rule or knob
+changed, `PULSAR_NODE_BUDGET` stays 3000, `engine_version` unchanged, no text changed.
+
+After, at 10x, 20 games, 478 pulses fired: the pulses eject 10 player marbles (3, 7, 0) against 47 boss ones
+(15, 26, 6), the pushes 45 against 71. The pulses now eject mostly boss marbles, the counter of game-design.md 7.10.
+
+| Player | Before (main at adb99ad) | After (#1231) | After, 40 seeds |
+|---|---|---|---|
+| 1x | `3000 \| 2/20 \| 137 \| 2 \| push 10, rim_ejection 7, draw 1` | `3000 \| 10/20 \| 171.5 \| 2 \| push 5, draw 5` | `3000 \| 14/40 \| 159.5 \| 2 \| push 14, draw 12` |
+| 10x | `30000 \| 4/20 \| 123.5 \| 2 \| push 5, rim_ejection 10, draw 1` | `30000 \| 18/20 \| 112 \| 2 \| push 1, draw 1` | `30000 \| 29/40 \| 115 \| 2 \| push 5, rim_ejection 1, draw 5` |
+
+**Tries:** none on the boss's knobs (budget, weights, `PULSAR_FORCE`, the cadence, the phase thresholds). The
+reading player alone lands inside the target: 18 of 20 at 10x on seeds 0 to 19, the top of the range, and 29 of 40
+(14.5 of 20) on seeds 0 to 39, the middle of it; the 1x player wins fewer, 10 of 20 and 14 of 40. A knob that weakens
+the boss further would push the 20-seed row past 18, one that strengthens it would change play and `engine_version`
+for a rate already on target, so nothing was tuned. `PULSAR_FORCE` is also shared with the Ballast Mind's borrowed
+pulse (#1209), a reason more to leave it.
+
 ### The Assembly Line's search follows its phase in the tree (#914), not tuned
 
 Until #914 `assembly_move` ran the belts on every player ply of the tree at the phase of the root. Now
@@ -1133,6 +1173,167 @@ Reply time through wasm (nodejs release build, 6 seeds of 80 plies, the player p
 only, ms, average / 95th percentile / max), the old build timed on the same positions in the same run: the Assembly Line
 143 / 245 / 375 after, 136 / 229 / 402 before (240 replies each, about 5 % more: `phase_after` counts the boss marbles
 of two boards on each player ply of the tree).
+
+### The Magnetizer's search plays its assignment turns in the tree (#916), not tuned
+
+Until #916 the tree of `magnetizer_move` carried the polarities and settled every ply, but it never ran the
+assignment hook: the boss did not see the announced marble take its sign. The hook's id (`special(ply, phase)`) needs
+the ply, and the board holds no turn clock (an announce on the board says the next hook assigns, not whether it
+announces the next one). So `magnetizer_move` puts the root ply on a board field that only the tree uses
+(`Board::magnetizer_ply`, as the Choir's turn order, #825), and `magnetizer_step` adds 1 per ply: no `search.rs`
+change. After a boss ply the step runs the hook with the special of that ply, in the phase from
+`Encounter::phase_after` of the board at the **start** of the ply (the encounter takes the tell before the move,
+as for the Pulsar, #913), with seed 0 for the picks, then settles again (seed 0). It also carries the announce with
+the moves. A hook with nothing to assign or announce is skipped (same board). Not changed: rules, knobs,
+`MAGNETIZER_NODE_BUDGET` (3000), `engine_version`.
+
+Unit tests: `the_tree_sees_the_assignment_at_the_start_of_turn_3_and_avoids_its_repulsion` (turn 2 of P1, the
+announced marble next to an opposite boss pole on the rim: the old search moves another marble and loses the pole to
+the repulsion, the new one moves the pole off the rim; 1 of 600 random positions of that kind gave two moves) and
+`a_third_ejection_in_the_tree_switches_the_cadence_from_3_to_2` (root at 2 ejections, boss ply 4 of the tree
+announces turn 4 only once a third boss marble is gone).
+
+Ladder, `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- magnetizer`, seeds 0 to 19, 300
+plies at most, before (#912 rows above) and after. Output lines after:
+`magnetizer | 3000 | 2/20 | 165 | 2 | push 3, rim_ejection 13, draw 2` and
+`magnetizer | 30000 | 7/20 | 173 | 2 | rim_ejection 10, draw 2, ply_cap 1`.
+
+| Player | Wins /20 before | Wins /20 after | Median plies before / after | Deaths after |
+|---|---|---|---|---|
+| 1x (3000) | 7 | **2** | 176 / 165 | push 3, rim_ejection 13, draw 2 |
+| 10x (30000) | 16 | **7** | 141 / 173 | rim_ejection 10, draw 2, ply_cap 1 |
+
+Reading: the boss gets much stronger. It now sees the announced marble take its sign one ply ahead, as in the unit
+test above; the games were not traced one by one. Most of the player's losses are rim ejections (13 at 1x, 10 at
+10x). The 10x player drops from 16 of 20 (inside the owner target of 14 to 18) to 7, outside it. Nothing was tuned;
+the knobs (rhythm, phase ejections, node budget) are the owner's.
+
+Reply time through wasm (nodejs release build, 6 seeds of 80 plies, the player plays its auto-play move, boss
+replies only, ms, average / 95th percentile / max), the old build timed on the same positions in the same run, on a
+machine shared with other builds: 187 / 485 / 652 after, 140 / 341 / 448 before; a second run 293 / 987 / 1499
+after, 220 / 734 / 1177 before. About a third more in both runs: the step carries the announce, computes
+`phase_after` after each boss ply and runs the hook with a second settle.
+
+### The Assembly Line: the ladder player reads the belts (#1228), 18 of 20 at 10x, not tuned
+
+Target of #753 and #833: the pro player (10x) wins 14 to 18 of 20, the 1x player fewer. Method:
+`LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- assembly`, seeds 0 to 19,
+300 plies at most, one run at a time, main after #914 (the boss's phase inside its tree).
+
+**Why the player lost.** A local probe replayed the ladder games and split every lost marble by its
+cause: a push of the other side, a belt that carries it off its end, a press. Before, 10x (20 games,
+all lost):
+
+| Cause | Player marbles lost | Boss marbles lost |
+|---|---|---|
+| a belt carries it off | 85 | 4 |
+| a press strikes it | 0 | 0 |
+| a push | 35 (the boss's) | 31 (the player's) |
+
+At 1x: belts 78 and 1, pushes 43 and 25, no strike. The "rim ejection" deaths are these belt falls.
+The boss search runs the belts on every player ply of its tree, the ladder player did not: it played
+the plain search, as the Ballast Mind's player before #834, and walked onto the belts' ends.
+
+**Adopted: the ladder player reads the belts.** `player_move` plays `assembly_search` against the
+Assembly Line, the boss's own hooked search (`assembly_step` on every player ply of the tree, the
+belts and the announced strikes stored on the board, seed 0 for the strikes still to come), as it
+does for the Ballast Mind. The player in the game sees the same: the chevrons, the reversal counter
+and the blinking slot. Unit test `the_player_reads_the_belts_of_the_assembly_line`: a marble on the
+falling end of the centre belt, which the plain search leaves there. No rule, knob or boss change,
+`engine_version` unchanged.
+
+| Player | Before (main at ba8a292, #914) | After (#1228) |
+|---|---|---|
+| 1x (3000) | `3000 \| 0/20 \| 111.5 \| 1 \| push 3, rim_ejection 17` | `3000 \| 10/20 \| 158 \| 2 \| push 4, rim_ejection 1, draw 5` |
+| 10x (30000) | `30000 \| 0/20 \| 88 \| 2 \| rim_ejection 20` | `30000 \| 18/20 \| 91 \| 2 \| push 1, rim_ejection 1` |
+
+Repeated on 40 seeds (0 to 39): 10x `30000 \| 36/40 \| 95 \| 2 \| push 1, rim_ejection 2, draw 1`, 1x
+`3000 \| 19/40 \| 157 \| 2 \| push 8, rim_ejection 3, draw 10`, the same rates. After, 10x on 40 seeds,
+the player lost 69 marbles to pushes, 23 to belts and 6 to presses, the boss 161, 75 and 7: the
+belts now work for the side that reads them, as the "Turn it against the boss" line says.
+
+Reading: one change, in the measuring player only, takes the 10x row from 0 to 18 of 20, the top of
+the target, and 1x to 10 of 20, fewer as wanted. No knob was tried: none is needed to reach the
+target, and each one (the reversal, the strike rhythm, the phases, the budget) changes play, the
+fixture and its e2e test. If the owner wants the 10x row nearer the middle of the target, a boss
+knob is the next step.
+
+### The Overseer, the Rail Yard and the Magnetizer: the ladder player reads their hooks (#1230, #1232, #1237)
+
+Target of #753 and #833: the pro player (10x) wins 14 to 18 of 20, the 1x player fewer. Method:
+`LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- <boss>`, seeds 0 to 19, 300 plies at
+most, one ladder run at a time, main after #1228.
+
+**The fix, for all three.** As #1228 found for the Assembly Line, `player_move` ran the plain search against these
+three bosses: it never saw a core burn, a train pass or a repulsion. It now plays the boss's own hooked search, as
+it does for the Ballast Mind: `overseer_search` (every ply of the tree burns in the phase its credits give; no clock
+for the player, the boss keeps its neurotoxin clock), `railyard_search` (every player ply counts the trains down, a
+pass ejects its line) and `magnetizer_search` (every ply settles, the assignments run after the boss plies). The
+player in the game sees the same: the vents, the train ghosts and countdowns, the glyphs and the announce diamond.
+Unit tests, each a position where the plain search loses or misses what the hook does:
+`the_player_reads_the_incinerators_of_the_overseer` (the 6th ejection is a core one push from a vent),
+`the_player_reads_the_trains_of_the_rail_yard` (a marble on the row a train passes at the end of the turn) and
+`the_player_reads_the_polarities_of_the_magnetizer` (the announced boss marble takes its − next to the player's +,
+whose repulsion throws the marble behind it off the rim).
+
+| Boss | Player | Before | After the fix |
+|---|---|---|---|
+| Overseer | 1x (3000) | `3000 \| 0/20 \| 79 \| 2 \| push 16, rim_ejection 4` (#1117) | `3000 \| 1/20 \| 79 \| 2 \| push 13, rim_ejection 6` |
+| Overseer | 10x (30000) | `30000 \| 2/20 \| 79 \| 2 \| push 13, rim_ejection 4, draw 1` (#1117) | `30000 \| 9/20 \| 77 \| 2 \| push 9, rim_ejection 1, draw 1` |
+| Rail Yard | 1x (3000) | `3000 \| 4/20 \| 79 \| rim_ejection 16` (#827) | `3000 \| 10/20 \| 104 \| 2 \| push 1, rim_ejection 8, draw 1` |
+| Rail Yard | 10x (30000) | `30000 \| 4/20 \| 69 \| rim_ejection 16` (#827) | `30000 \| 16/20 \| 84 \| 2 \| rim_ejection 3, draw 1` |
+| Magnetizer | 1x (3000) | `3000 \| 2/20 \| 165 \| 2 \| push 3, rim_ejection 13, draw 2` (#916) | `3000 \| 5/20 \| 226.5 \| 2 \| push 12, draw 3` |
+| Magnetizer | 10x (30000) | `30000 \| 7/20 \| 173 \| 2 \| rim_ejection 10, draw 2, ply_cap 1` (#916) | `30000 \| 12/20 \| 169 \| 2 \| push 2, rim_ejection 2, draw 3, ply_cap 1` |
+
+**The Rail Yard: on target, not tuned.** 16 of 20 at 10x, 10 of 20 at 1x, fewer as wanted. Repeated on 40 seeds
+(0 to 39) at 10x: `30000 | 36/40 | 77 | 2 | rim_ejection 3, draw 1`, the top of the target (seeds 20 to 39 won all
+20). No knob was tried; if the owner wants the 10x row nearer the middle, the train lead (5) is the next step.
+
+**The Overseer: 9 of 20 at 10x, no knob reaches the target, not tuned.** A local probe replayed the 20 ladder games
+at 10x and split the credits by cause. After the fix, 10 of the 11 losses end at ply 79, the neurotoxin, with 4 or 5
+of the 6 ejections made (seed 7 is a draw at ply 38). Over the 20 games the player burnt 67 cores, the boss 2; boss
+marbles burnt 9, pushed off 18; player marbles burnt 6, pushed off 11. So the player now learns the counter (the spec
+gate "fewer than 2 cores burnt" is far away), but the last one or two cores end jammed: two cores side by side on
+the line of a vent with a boss marble behind them (seed 4, ply 79: cores on `(-2, -1)` and `(-1, -1)`, the vent on
+`(-3, -1)`, the player's marble on `(0, -1)` and boss marbles beyond), which only a 3-marble push frees, too deep for
+a 4-ply tree whose weights do not value a core near a vent. The three knobs of section 7.11, each tried alone at 10x
+on the same 20 seeds (the probe prints the ladder's own games):
+
+| Knob | Wins /20 at 10x | What the probe shows |
+|---|---|---|
+| shipped (40 turns, P2 at 2, P3 at 4, 3000 nodes) | 9 | 10 losses at the clock with 3 to 5 credits |
+| clock 45 turns | 9 | the same 9 games won, the 11 others stall the same way to ply 89 |
+| phases at 2 and 5 (P3 later) | 9 | the same stall at 4 or 5 credits, in P2 too: not the P3 plug |
+| node budget 1500 (player 15000) | 9 | 11 losses at the clock with 3 to 5 credits |
+| node budget 6000 (player 60000) | 8 | 12 losses at the clock with 3 to 5 credits |
+
+Reading: the fix takes the 10x row from 2 to 9 of 20 and leaves 1x at 1, but no knob moves it further: more turns do
+not unjam a core, and a weaker or stronger boss comes with a weaker or stronger player. No Overseer knob was
+changed. Reaching 14 of 20 needs a rule or a layout change (for example a core that a vent pulls
+in from one cell away, or cores starting one cell nearer their vents), which is the owner's call: a separate issue.
+
+**The Magnetizer: tuned to 15 of 20 at 10x, rhythm 3, 3, 2, `engine_version` 20.** The probe split every marble
+lost after the fix, 10x, 20 games (12 won): the player lost 37 to boss pushes, 0 to repulsions on its own plies and
+22 to repulsions on boss plies (the assignment at the start of its turn, or a boss move); the boss lost 87 to pushes,
+10 to repulsions set off by the player, 1 on its own plies. Two losses (seeds 5 and 19) came from repulsions, two
+from pushes, four were long games (3 draws, 1 at the ply cap). The assignment rhythm is the knob that acts on those
+repulsions; the phase ejections (3, 5) and the budget (3000) were left. Tries at 10x, 20 seeds:
+
+| `MAGNETIZER_ASSIGN_EVERY` | Wins /20 at 10x | Player marbles lost: push / repulsion on boss plies | Losses |
+|---|---|---|---|
+| 3, 2, 1 (shipped) | 12 | 37 / 22 | push 2, rim_ejection 2, draw 3, ply_cap 1 |
+| 3, 2, 2 | 12 | 37 / 16 | push 2, draw 4, ply_cap 2 |
+| **3, 3, 2 (adopted)** | **15** | 36 / 14 | draw 2, ply_cap 3 |
+
+Adopted rows: 10x `30000 | 15/20 | 168 | 2 | draw 2, ply_cap 3` (probe, median computed from its plies), 1x
+`3000 | 8/20 | 219.5 | 2 | push 8, draw 4` (ladder), fewer as wanted. P1 is unchanged (turns 3, 6, 9), so the e2e
+fixture, which ends on entering P2, is unchanged; P2 now keeps the P1 rhythm and P3 assigns on the even turns. The
+P3 change alone (3, 2, 2) does not move the row: the P2 cadence is what costs the player. The 5 losses left are long
+games and none is lost to a repulsion. The HUD never reads "Polarity every turn" any more (the client's
+`polarityText` follows the same table). The unit test of #916 `a_third_ejection_in_the_tree_switches_the_cadence_from_3_to_2`
+is now `a_fifth_ejection_in_the_tree_switches_the_cadence_from_3_to_2`, at the P2 to P3 switch, since P1 and P2 share
+their cadence. Not repeated on 40 seeds: 15 is inside the target and a 10x run of this boss
+takes about 30 minutes.
 
 ### The Unstable Core: the pro reads the charges, P2 after 1 ejection, P3 after 2, a shockwave every 4 turns (#1229)
 

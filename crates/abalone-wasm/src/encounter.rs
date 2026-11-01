@@ -370,7 +370,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    20 // 20: The Unstable Core enters P2 after 1 ejection and P3 after 2, a shockwave every 4 turns (#1229); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    21 // 21: The Unstable Core enters P2 after 1 ejection and P3 after 2, a shockwave every 4 turns (#1229); 20: The Magnetizer assigns a polarity every 3rd turn in P2 and every 2nd in P3 (#1237); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -1095,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_20_since_the_unstable_core_enters_p2_and_p3_after_1_and_2_ejections() {
-        assert_eq!(engine_version(), 20);
+    fn the_engine_version_is_21_since_the_unstable_core_enters_p2_and_p3_after_1_and_2_ejections() {
+        assert_eq!(engine_version(), 21);
     }
 
     #[test]

@@ -6,17 +6,23 @@
 
 use crate::board::{Board, Cell};
 use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
-use crate::encounter::assembly::{assembly_move, assembly_start, ASSEMBLY_NODE_BUDGET};
+use crate::encounter::assembly::{
+    assembly_move, assembly_search, assembly_start, ASSEMBLY_NODE_BUDGET,
+};
 use crate::encounter::ballast::{ballast_move, ballast_search, ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
 use crate::encounter::dual::{dual_move, dual_start, dual_step, DUAL_NODE_BUDGET};
 use crate::encounter::echo::{echo_boss, echo_free_moves, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
-use crate::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
-use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
-use crate::encounter::pulsar::{pulsar_move, pulsar_start, PULSAR_NODE_BUDGET};
-use crate::encounter::railyard::{railyard_move, railyard_start, RAILYARD_NODE_BUDGET};
+use crate::encounter::magnetizer::{magnetizer_boss, magnetizer_move, magnetizer_search};
+use crate::encounter::overseer::{
+    overseer_move, overseer_search, overseer_start, OVERSEER_NODE_BUDGET,
+};
+use crate::encounter::pulsar::{pulsar_move, pulsar_search, pulsar_start, PULSAR_NODE_BUDGET};
+use crate::encounter::railyard::{
+    railyard_move, railyard_search, railyard_start, RAILYARD_NODE_BUDGET,
+};
 use crate::encounter::stalker::{refuse, stalker_start, STALKER_NODE_BUDGET};
 use crate::encounter::swarm::{Swarm, SWARM_NODE_BUDGET};
 use crate::encounter::telemetry::{
@@ -260,8 +266,9 @@ fn mix(mut x: u64) -> u64 {
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
 /// takes the Echo's safe free moves that eject and never plays another free move, and plays the
-/// plain search when no move is left. Against the Chaplain and the Ballast Mind the search sees
-/// the hooks. `None` when the player has no move (every marble was converted).
+/// plain search when no move is left. Against the Chaplain, the Ballast Mind, the Assembly Line,
+/// the Pulsar, the Overseer, the Rail Yard and the Magnetizer the search sees the hooks. `None`
+/// when the player has no move (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
     if index < opening {
@@ -303,8 +310,13 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
                 search_with(seen.as_ref().unwrap(), budget, DEFAULT_WEIGHTS, allow).map(|r| r.mv)
             }
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Assembly) => assembly_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Pulsar) => pulsar_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Unstable) => unstable_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Overseer) => overseer_search(enc, budget, allow, None),
+            Arena::Plain(enc, LadderBoss::RailYard) => railyard_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Magnetizer) => magnetizer_search(enc, budget, allow),
             Arena::Swarm(swarm) => swarm.player_search(budget, allow).map(|r| r.mv),
             Arena::Plain(_, LadderBoss::Dual) => {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &dual_step).map(|r| r.mv)
@@ -461,10 +473,14 @@ pub fn run_ladder(boss: LadderBoss, player_budget: u32, seeds: u32, ply_cap: u32
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::{Board, Cell};
+    use crate::board::{Belts, Board, Cell};
+    use crate::encounter::assembly::assembly_boss;
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::{echo_boss, echo_fight, mirror_move};
+    use crate::encounter::overseer::{overseer_boss, OVERSEER_INCINERATORS};
+    use crate::encounter::pulsar::pulsar_boss;
+    use crate::encounter::railyard::railyard_boss;
     use crate::encounter::stalker::stalker_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
     use crate::encounter::Encounter;
@@ -616,6 +632,153 @@ mod tests {
             after.game().ejected(Player::White),
             0,
             "{mv:?} leaves the cracked cell"
+        );
+    }
+
+    /// A fight of `boss` on a hand-made position, the player to move with `ejected` credited.
+    fn hand_made(boss: LadderBoss, board: Board, ejected: [u8; 2]) -> (Encounter, Arena) {
+        let game = Game::from_position(board, Player::Black, ejected);
+        let def = match boss {
+            LadderBoss::Overseer => overseer_boss(),
+            LadderBoss::RailYard => railyard_boss(),
+            _ => magnetizer_boss(),
+        };
+        let enc = Encounter::new(game, def, 0);
+        (enc.clone(), Arena::Plain(enc, boss))
+    }
+
+    fn put(board: &mut Board, cells: &[P], cell: Cell) {
+        for &(q, r) in cells {
+            board.set(q, r, cell);
+        }
+    }
+
+    #[test]
+    fn the_player_reads_the_incinerators_of_the_overseer() {
+        // 5 ejections credited: the pair behind the core (2, 1) pushes it onto the incinerator
+        // (3, 1), the 6th. The plain search sees no ejection there and plays elsewhere.
+        let mut board = Board::empty();
+        board.set(0, 0, Cell::Overseer);
+        board.set_incinerators(OVERSEER_INCINERATORS.to_vec());
+        put(&mut board, &[(0, 1), (1, 1), (-1, 2), (-2, 3)], Cell::Black);
+        put(&mut board, &[(1, -3), (2, -3), (0, -2)], Cell::White);
+        board.set(2, 1, Cell::Core);
+        let (enc, a) = hand_made(LadderBoss::Overseer, board, [5, 0]);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.result(),
+            Some(PveResult::Won),
+            "{mv:?} burns the core"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_trains_of_the_rail_yard() {
+        // A train passes on the row r = 0 at the end of this turn: the marble (0, 0) on it goes.
+        let mut board = Board::empty();
+        put(&mut board, &[(0, 0), (-1, 1), (0, 1), (1, 1)], Cell::Black);
+        put(&mut board, &[(-1, -2), (0, -2), (1, -2)], Cell::White);
+        board.set_trains(vec![(8, 1)]);
+        let (enc, a) = hand_made(LadderBoss::RailYard, board, [0, 0]);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.game().ejected(Player::White),
+            0,
+            "{mv:?} leaves the row"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_polarities_of_the_magnetizer() {
+        // The boss marble (-2, 0) takes its announced - at the start of the next turn, next to
+        // the + of the player marble (-3, 0), whose repulsion throws (-4, 0) off the rim.
+        let mut board = Board::empty();
+        put(
+            &mut board,
+            &[(-4, 0), (-3, 0), (0, 1), (1, 1), (0, 2)],
+            Cell::Black,
+        );
+        put(
+            &mut board,
+            &[(-2, 0), (1, -2), (2, -2), (1, -3)],
+            Cell::White,
+        );
+        board.set_polarities(vec![((-3, 0), 1)]);
+        board.set_last_sign(1);
+        board.set_announce(Some((Some((-2, 0)), -1)));
+        let (_, mut a) = hand_made(LadderBoss::Magnetizer, board, [0, 0]);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        a.play(&mv).unwrap();
+        let reply = a.boss_move().unwrap();
+        a.play(&reply).unwrap();
+        assert_eq!(
+            a.game().ejected(Player::White),
+            0,
+            "{mv:?} keeps the + off the repulsion"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_belts_of_the_assembly_line() {
+        // The centre belt runs toward -q: the Black marble on its west end falls after this turn.
+        // The plain search plays (-3, 4) NE there and loses it.
+        let mut board = Board::empty();
+        for (q, r, cell) in [
+            (-4, 0, Cell::Black),
+            (-2, 2, Cell::Black),
+            (-3, 4, Cell::Black),
+            (1, -3, Cell::Black),
+            (-2, 4, Cell::White),
+            (2, -4, Cell::White),
+        ] {
+            board.set(q, r, cell);
+        }
+        board.set_belts(Some(Belts {
+            first: false,
+            turns: 0,
+            shift: [0; 3],
+            strike: [None; 3],
+        }));
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let enc = Encounter::new(game, assembly_boss(), 0);
+        let a = Arena::Plain(enc.clone(), LadderBoss::Assembly);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.game().ejected(Player::White),
+            0,
+            "{mv:?} keeps the marble on the belt"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_pulse_of_the_pulsar() {
+        // The E pulsar fires at the end of this turn, at force 2: the lone Black marble on the E
+        // rim goes off, and so does the lone boss marble on (4, -2), unless Black pushes it off
+        // first with the NE pair and leaves its own marble on that rim instead.
+        let mut board = Board::empty();
+        for (q, r) in [(4, 0), (2, 0), (3, -1)] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(4, -2), (-3, 2), (-2, 2)] {
+            board.set(q, r, Cell::White);
+        }
+        board.set_pulsar(Some((0, 2)));
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let enc = Encounter::new(game, pulsar_boss(), 0);
+        let a = Arena::Plain(enc.clone(), LadderBoss::Pulsar);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.game().ejected(Player::White),
+            0,
+            "{mv:?} loses no marble to the pulse"
         );
     }
 
