@@ -5582,7 +5582,7 @@ menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 const renderCost = (): RenderCost => {
   let pointLights = 0;
-  sceneRenderer.scene.traverse((o) => void ((o as THREE.PointLight).isPointLight && pointLights++));
+  (openWorld.scene ?? sceneRenderer.scene).traverse((o) => void ((o as THREE.PointLight).isPointLight && pointLights++));
   const { render, memory } = renderer.info;
   return { calls: render.drawCalls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
 };

@@ -137,6 +137,23 @@ describe('the Open world mode', () => {
     expect(drawn['prop-boulder']).toBe(0);
   });
 
+  it('draws the low-poly props everywhere on the low tier, even near the hero (#1234)', async () => {
+    document.body.dataset.tier = 'low';
+    try {
+      let arrive!: (g: PropModels) => void;
+      const m = mode(() => new Promise((resolve) => (arrive = resolve)));
+      m.enter(1, 800, 600);
+      arrive({ low: { boulder: new THREE.BoxGeometry() }, high: { boulder: new THREE.BoxGeometry() } });
+      await Promise.resolve();
+      await Promise.resolve();
+      const drawn = JSON.parse(body().openworldDrawn!);
+      expect(drawn['prop-boulder-hi']).toBe(0);
+      expect(drawn['prop-boulder']).toBe(1);
+    } finally {
+      delete document.body.dataset.tier;
+    }
+  });
+
   it('rolls the hero on an arrow key, and keeps it before a boulder', () => {
     const m = mode();
     m.enter(1, 800, 600);
@@ -299,6 +316,21 @@ describe('the Open world mode', () => {
     expect(glow[0]).toBeCloseTo(1);
     expect(glow[1]).toBeCloseTo(1.15);
     now.mockRestore();
+  });
+
+  it('holds the lake still on the low tier: a lake alone draws no frame after the first (#1234)', () => {
+    document.body.dataset.tier = 'low';
+    try {
+      const m = mode(undefined, sea, () => false);
+      m.enter(1, 800, 600);
+      const render = vi.fn();
+      m.frame(render, 0);
+      m.frame(render, 400);
+      m.frame(render, 800);
+      expect(render).toHaveBeenCalledTimes(1);
+    } finally {
+      delete document.body.dataset.tier;
+    }
   });
 
   it('holds the lake still with reduced motion: drawn only when something changed', () => {

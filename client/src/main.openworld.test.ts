@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import { indexedDbStore } from './idb';
 import { GLIDE_MS } from './openworldglide';
+import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 
@@ -56,6 +57,16 @@ describe('the Open world mode', () => {
     expect(camera.shake).toBe(0);
     expect(camera.zoom).toBeGreaterThan(0);
     expect(camera.centre).toHaveLength(2);
+  });
+
+  it('counts the point lights of the scene it draws: none in the Open world, within the budget (#1234)', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const cost = () => (window as unknown as { __renderCost: { pointLights: number } }).__renderCost;
+    expect(cost().pointLights).toBeGreaterThan(OPEN_WORLD_POINT_LIGHTS);
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(cost().pointLights).toBeLessThanOrEqual(OPEN_WORLD_POINT_LIGHTS);
   });
 
   it('exposes no test hook on a page that is not a webdriver one', async () => {

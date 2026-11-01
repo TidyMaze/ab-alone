@@ -51,7 +51,7 @@ describe('the water and the trees move in the Open world (#1101, #1102)', () => 
     expect(render).toHaveBeenCalledTimes(1);
   });
 
-  it('is calm on the low tier: the trees draw nothing at rest, the lake keeps its glow only', () => {
+  it('is calm on the low tier: the trees and the lake draw nothing at rest, the glow is held (#1234)', () => {
     document.body.dataset.tier = 'low';
     const animate = vi.spyOn(OpenWorldView.prototype, 'animate');
     const trees = mode(forest, false);
@@ -65,7 +65,7 @@ describe('the water and the trees move in the Open world (#1101, #1102)', () => 
     water.enter(1, 800, 600);
     water.frame(render, 2000);
     water.frame(render, 2016);
-    expect(render).toHaveBeenCalledTimes(3);
+    expect(render).toHaveBeenCalledTimes(2); // one first frame each, none after (the lake's glow used to draw every frame on low)
   });
 
   it('draws once more when the loop is stilled, then rests', () => {
