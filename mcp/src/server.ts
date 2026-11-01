@@ -20,7 +20,9 @@ export function toolResult(result: Result<unknown>): CallToolResult {
 const WINDOW =
   'The window is a hex of cells round the hero, one row per r, each row from the cell q0 along q. H hero, T troop, E enemy, L lair, ' +
   '? off the world, else the terrain: ~ water, s sand, g grass, r rock, P peak, o boulder, t tree, W wall. Water, peaks, walls, ' +
-  'enemies and lairs cannot be entered; a boulder, or a tree with no tree beside it, is broken by rolling into it.';
+  'enemies and lairs cannot be entered; a boulder, or a tree with no tree beside it, is broken by rolling into it. After each step ' +
+  'the troop attacks on its own, as in the client: it plays the best legal push against the enemies near the hero, and an enemy ' +
+  'pushed into water or off the world is ejected (beaten).';
 
 export function createServer(
   session: Session,
@@ -140,8 +142,8 @@ export function createServer(
     {
       description:
         'Start the Open world of a seed and drop the world in progress: the hero on the spawn (0,0), the troop round it. Same seed, ' +
-        'same world as the client. Returns the world state (see world_state). Walk to a lair and step onto it, then fight its boss ' +
-        `with new_game. ${WINDOW}`,
+        'same world and the same moves give the same result as the client. Returns the world state (see world_state). Walk to a lair ' +
+        `and step onto it, then fight its boss with new_game. ${WINDOW}`,
       inputSchema: z.strictObject({ seed: z.int().min(0).max(4294967295).optional().describe('Seed of the world, default 0.') }),
     },
     (input) => toolResult(world.newWorld(input)),
@@ -151,7 +153,8 @@ export function createServer(
     'world_state',
     {
       description:
-        'The Open world state: seed, hero, troop, obstacles broken, the enemies in the window, every boss lair with its distance ' +
+        'The Open world state: seed, hero, troop, obstacles broken, enemies beaten (ejected), the enemies in the window as the pushes ' +
+        'left them, every boss lair with its distance ' +
         `from the hero, and a short window of cells round the hero (never the whole map). ${WINDOW}`,
       inputSchema: z.strictObject({ radius: z.int().min(1).max(8).optional().describe('Cells of the window out from the hero, default 3.') }),
     },
@@ -162,8 +165,10 @@ export function createServer(
     'world_step',
     {
       description:
-        'Roll the hero one cell. Refused (blocked) by water, a peak, a wall, an enemy or an unbreakable tree, and nothing changes. ' +
-        'Onto a lair the hero stays, moved is false and lair names the boss: start that fight with new_game.',
+        'Roll the hero one cell, then the troop pushes on its own: push is its direction and the enemy ejected, null when no push ' +
+        'was legal (the push can move the hero). Refused (blocked) by water, a peak, a wall, an enemy or an unbreakable tree, and ' +
+        'nothing changes. Onto a lair the hero stays, moved is false and lair names the boss and the call that starts its fight ' +
+        '(new_game with that boss).',
       inputSchema: z.strictObject({ direction: z.enum(['E', 'W', 'NE', 'SW', 'NW', 'SE']).describe('Direction of the step.') }),
     },
     (input) => toolResult(world.step(input)),
@@ -173,8 +178,10 @@ export function createServer(
     'world_walk',
     {
       description:
-        'Walk the hero to a cell, round the obstacles and the enemies, by the shortest path of the engine, up to 40 cells away. ' +
-        'no_path when there is none (the hero cell, a lair, an enemy, off the world, too far, walled in).',
+        'Walk the hero to a cell, round the obstacles and the enemies, by the shortest path of the engine, up to 40 cells away, ' +
+        'one step at a time as world_step: pushes lists the pushes of the troop on the way, and a step a push made impossible ends ' +
+        'the walk there (compare the hero with the cell). no_path when there is no path (the hero cell, a lair, an enemy, off the ' +
+        'world, too far, walled in).',
       inputSchema: z.strictObject({ q: z.int().describe('Column of the cell.'), r: z.int().describe('Row of the cell.') }),
     },
     (input) => toolResult(world.walk(input)),
