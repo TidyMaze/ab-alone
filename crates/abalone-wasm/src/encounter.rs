@@ -1095,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_22_since_the_unstable_core_enters_p2_and_p3_after_1_and_2_ejections() {
-        assert_eq!(engine_version(), 22);
+    fn the_engine_version_is_23_since_the_dual_rooms_are_played_in_turn() {
+        assert_eq!(engine_version(), 23);
     }
 
     #[test]
@@ -2593,8 +2593,33 @@ mod tests {
             "the boss near the void in the north room"
         );
         assert_eq!(cells[dual_slot(0, 0)], 3, "the void");
-        assert_eq!(f.dual(), vec![0, 0, 0, 0], "no bridge, nothing comes back");
+        assert_eq!(
+            f.dual(),
+            vec![0, 0, 0, 0, 0],
+            "no bridge, nothing comes back, the south room plays"
+        );
         assert!(f.last_return().is_empty());
+    }
+
+    #[test]
+    fn the_dual_room_says_which_room_plays_and_lists_only_its_moves() {
+        let mut f = Encounter::new("dual", 1).unwrap();
+        for room in [0, 0, 1, 1, 0] {
+            assert_eq!(f.dual()[4], room);
+            let moves = f.legal_moves();
+            assert!(moves
+                .chunks(MOVE_STRIDE)
+                .all(|m| i32::from(m[3] < 0) == room));
+            assert!(f.seen_moves() == moves);
+            f.play(&moves[..MOVE_STRIDE]).unwrap();
+        }
+        let mut south = Encounter::new("dual", 1).unwrap();
+        south.play(&first_move(&south)).unwrap();
+        assert_eq!(
+            south.play(&[1, 5, 2, -2, 0, 0, 0, 0]),
+            Err("OtherRoom".to_string()),
+            "a boss move in the north room"
+        );
     }
 
     #[test]

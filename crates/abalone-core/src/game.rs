@@ -840,6 +840,16 @@ mod tests {
             position_hash(&coming, Player::Black),
             position_hash(&walled, Player::Black)
         );
+        let mut north = walled.clone();
+        north.set_dual(Some(Dual {
+            turn: 2,
+            ..Dual::default()
+        }));
+        assert_ne!(
+            position_hash(&north, Player::Black),
+            position_hash(&walled, Player::Black),
+            "the room in turn"
+        );
     }
 
     #[test]
