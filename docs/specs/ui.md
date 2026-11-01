@@ -487,6 +487,31 @@ timer.
   Ship hub, which must show what it showed after the boot. A new mode, a HUD element or a `body` data key that stays
   fails it: remove it in the mode's leave, or add it to the lists of `modeswitch.ts`.
 
+### 4.7 First-launch guide (#1293)
+
+A new player meets a short guide before anything else: five pages over the dimmed game, one at a time
+(`client/src/guide.ts`).
+
+- **Pages.** The goal (push six of their black shells off, lose six of yours and you lose), a move (one to three
+  marbles in a line, one cell, six directions), a push, the 3:2 rule (a line pushes only a shorter line, equal lines never
+  push) and the controls. Each page has an inline SVG of the game's marbles, pale glass and black shell, on deck cells,
+  with amber arrows and dashed ghosts where the marbles go; it sits on the dark deck colour in both themes, as the 3D deck
+  does. No external asset.
+- **Controls of the input in use.** The controls page holds one paragraph per input and `ui.css` shows one: the mouse and
+  keys by default, touch on a coarse pointer, the pad's buttons once the pad is in use (`body[data-pad]`, #1252).
+- **Plate.** The card is a plate of the ship chrome (panel, edge, rivets, the amber accent stripe), at most 26 rem wide
+  and 16 px from the window's edges, its buttons 48 px high: Skip at the left, Back and Next at the right; Next reads Play
+  on the last page. Each page's art fades in on `--motion-base`, a hard cut under Reduced motion.
+- **Shown once.** It opens at the first launch. Skip, Escape (B on the pad) or Play close it and store
+  `ab-alone.guide = seen` (localStorage, as the other settings), so it never opens by itself again. The settings menu's
+  Guide, the second button of the Steering item, opens it again on its first page.
+- **A modal.** A dialog (`role="dialog"`, `aria-modal`): its Next button takes the focus, Tab and the pad's focus walk
+  keep to its buttons, a key pressed in it never reaches the board or the menus, and Start leaves the settings shut. The
+  focus goes back where it was (the cog when the menu opened it).
+- **Tests.** An automated browser (`navigator.webdriver`) does not open it, so the e2e specs boot on a fresh profile as
+  before; `?guide` makes it a first launch (`client/e2e/guide.spec.ts`).
+- **Language.** English, as the rest of the UI, which has no translations.
+
 ## 5. Board framing
 
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
