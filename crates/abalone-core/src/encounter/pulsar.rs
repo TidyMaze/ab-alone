@@ -151,21 +151,28 @@ pub fn last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
     })
 }
 
+/// What the boss search sees after `mover` played from `before` to `after`: on a player ply, the
+/// hook in the phase the tree's credits reach at the start of that ply (`Encounter::phase_after`,
+/// as the encounter takes the phase at the start of the turn) and the ejections the pulse credits,
+/// `[player, boss]`; nothing on a boss ply. Seed 0 for the next pulsar: the true one is unknown.
+fn pulsar_step(enc: &Encounter, before: &Board, mover: Player, after: Board) -> (Board, [u8; 2]) {
+    if mover == Player::White {
+        return (after, [0, 0]);
+    }
+    let out = hook(&after, enc.phase_after(before) as u8, 0);
+    let [black, white] = losses(&after, &out);
+    (out, [white, black])
+}
+
 /// The boss reply: its node-limited search, where every player ply of the tree goes through the
-/// hook (seed 0 for the next pulsar), so it sees the pulses. `None` on the player's turn or when
-/// the game is over.
+/// hook (`pulsar_step`), so it sees the pulses. `None` on the player's turn or when the game is
+/// over.
 pub fn pulsar_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
-    let phase = enc.phase() as u8;
-    let step = |_: &Board, mover: Player, _: &Move, after: Board| {
-        if mover == Player::White {
-            return (after, [0, 0]);
-        }
-        let out = hook(&after, phase, 0);
-        let [black, white] = losses(&after, &out);
-        (out, [white, black])
+    let step = |before: &Board, mover: Player, _: &Move, after: Board| {
+        pulsar_step(enc, before, mover, after)
     };
     search_hooked(
         enc.game(),

@@ -290,7 +290,22 @@ impl Encounter {
     /// Current phase, 0 at the start.
     pub fn phase(&self) -> usize {
         let left = marbles(self.game.board(), Cell::White);
-        let ejected = self.game.ejected(Player::Black);
+        self.phase_of(left, self.game.ejected(Player::Black))
+    }
+
+    /// The phase once the fight reaches `board` from now, for a ply of the boss search tree: the
+    /// player is credited its ejections now plus the boss marbles missing from `board`, and the
+    /// phase never goes below the current one. Pure. It holds only for a boss whose marbles leave
+    /// the board by ejection alone: no conversion (The Chaplain) and no brood (The Alien).
+    pub fn phase_after(&self, board: &Board) -> usize {
+        let root = marbles(self.game.board(), Cell::White);
+        let left = marbles(board, Cell::White);
+        let ejected = self.game.ejected(Player::Black) + root.saturating_sub(left);
+        self.phase_of(left, ejected).max(self.phase())
+    }
+
+    /// The phase with `left` boss marbles on the board and `ejected` credited to the player.
+    fn phase_of(&self, left: u8, ejected: u8) -> usize {
         let by_marbles = self.boss.phase_marbles.iter().filter(|&&t| left <= t);
         let by_ejections = self.boss.phase_ejections.iter().filter(|&&t| ejected >= t);
         (by_marbles.count() + by_ejections.count()).max(self.phase_reached)
