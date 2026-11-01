@@ -1,28 +1,47 @@
-//! The Swarm (#795, docs/specs/game-design.md section 7.14): survive 30 turns of arriving waves.
-//! The player starts with the standard layout minus its 3 marbles nearest the centre, the boss
-//! with no marble. Each boss reply, the swarm marbles announced the turn before land on the
-//! allowed rim cells (the rim with `r <= 0`), then the swarm plays one standard move, or passes
-//! when it has none. The 6-ejection win is off for both sides: the player wins once the 30th boss
-//! reply is done, the boss once it has ejected `SWARM_EJECTIONS` player marbles. No draw rule
-//! runs. Every pick is splitmix64 of the fight seed and the ply.
+//! The Swarm (#795, #1266, docs/specs/game-design.md section 7.14): hold out until the evac. The
+//! player starts with 11 marbles around the centre, the boss with no marble. Each boss reply, the
+//! swarm marbles announced the turn before land on empty rim cells, on all 6 edges, then the swarm
+//! plays one standard move, or passes when it has none. The 6-ejection win is off for both sides:
+//! the player wins once the boss replies done plus 2 per swarm marble it ejected reach 40, the
+//! boss once it has ejected `SWARM_EJECTIONS` player marbles. The phases go by the swarm marbles
+//! landed. No draw rule runs. Every pick is splitmix64 of the fight seed and the ply.
 
-use crate::board::{Board, Cell, STANDARD_BLACK};
+use crate::board::{Board, Cell};
 use crate::encounter::hull::mix;
 use crate::encounter::{marbles, ply_seed, PveResult};
 use crate::game::{Game, GameError, Outcome};
 use crate::moves::{legal_moves, Move, Player};
-use crate::search::{search_phased, SearchResult, Weights, DEFAULT_WEIGHTS};
+use crate::search::{search_clocked, Clock, SearchResult, Weights, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
-/// Boss replies the player must outlast: the evac comes after the last one. TUNE.
-pub const SWARM_TURNS: u32 = 30;
-/// The first turn of P2 and of P3. TUNE.
-pub const SWARM_PHASE_TURNS: [u32; 2] = [15, 25];
-/// Swarm marbles that arrive each turn in P1, P2 and P3. TUNE.
-pub const SWARM_ARRIVALS: [u8; 3] = [1, 1, 2];
-/// Player marbles of the standard layout left out at the start, the nearest the centre. TUNE.
-pub const SWARM_LEFT_OUT: usize = 3;
+/// The evac clock: the player wins once the boss replies done plus `SWARM_EVAC_PER_EJECTION` per
+/// swarm marble it ejected reach this (#1266). TUNE.
+pub const SWARM_TURNS: u32 = 40;
+/// Turns each swarm marble the player ejects takes off the evac clock (#1266). TUNE.
+pub const SWARM_EVAC_PER_EJECTION: u32 = 2;
+/// The swarm marbles landed that begin P2 and P3 (#1266). TUNE.
+pub const SWARM_PHASE_ARRIVALS: [u32; 2] = [15, 30];
+/// Swarm marbles that arrive each turn in P1, P2 and P3 (#1266: 1, 1, 2 before). TUNE.
+pub const SWARM_ARRIVALS: [u8; 3] = [3, 3, 4];
+/// The marbles of The Ballast Mind's borrowed wave in its P1, P2 and P3: the Swarm's arrivals
+/// before #1266, kept for the Ballast.
+pub const BALLAST_WAVE: [u8; 3] = [1, 1, 2];
+/// The player's start (#1266): one compact group, the centre, its ring, and 4 cells of the ring
+/// around it, mirrored about the column of the centre. TUNE.
+pub const SWARM_START: [P; 11] = [
+    (0, 0),
+    (1, 0),
+    (1, -1),
+    (0, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, 1),
+    (1, -2),
+    (-2, 2),
+    (-1, 2),
+    (0, 2),
+];
 /// Player marbles the swarm must eject to win (#795, the lead's decision of 2026-10-30). TUNE.
 pub const SWARM_EJECTIONS: u8 = 2;
 /// Positions the boss search may visit per move (the Choir's budget). TUNE.
@@ -45,45 +64,46 @@ fn distance(a: P, b: P) -> i32 {
     dq.abs().max(dr.abs()).max((dq + dr).abs())
 }
 
-/// Phase of turn `turn` (1 based), 0 for P1.
-fn phase(turn: u32) -> usize {
-    SWARM_PHASE_TURNS.iter().filter(|&&t| turn >= t).count()
+/// Phase once `arrived` swarm marbles have landed, 0 for P1.
+fn phase_of(arrived: u32) -> usize {
+    SWARM_PHASE_ARRIVALS
+        .iter()
+        .filter(|&&n| arrived >= n)
+        .count()
 }
 
-/// Swarm marbles that arrive on turn `turn` (1 based): none outside turns 1 to 30.
-pub fn arrivals(turn: u32) -> u8 {
-    if turn == 0 || turn > SWARM_TURNS {
-        return 0;
-    }
-    SWARM_ARRIVALS[phase(turn)]
-}
-
-/// The rim cells a swarm marble may land on, in `q` then `r` order: the rim of the radius 4 board
-/// with `r <= 0`, away from the player's start side.
-pub fn allowed_rim() -> Vec<P> {
-    allowed_rim_of(4)
-}
-
-/// The allowed rim of a board of radius `radius` (The Ballast Mind borrows the wave on its radius 5).
-pub fn allowed_rim_of(radius: i32) -> Vec<P> {
+/// The rim cells of a board of radius `radius` with `r` in `rows`, in `q` then `r` order.
+fn rim_rows(radius: i32, rows: std::ops::RangeInclusive<i32>) -> Vec<P> {
     (-radius..=radius)
-        .flat_map(|q| (-radius..=0).map(move |r| (q, r)))
+        .flat_map(|q| rows.clone().map(move |r| (q, r)))
         .filter(|&c| distance(c, (0, 0)) == radius)
         .collect()
 }
 
-/// The empty allowed rim cells of `board`, in `q` then `r` order.
-fn free_rim(board: &Board) -> Vec<P> {
-    allowed_rim_of(board.radius())
-        .into_iter()
+/// The rim cells a swarm marble may land on: the 24 of the radius 4 board, on all 6 edges, in `q`
+/// then `r` order.
+pub fn rim() -> Vec<P> {
+    rim_rows(4, -4..=4)
+}
+
+/// The rim of a board of radius `radius` with `r <= 0`, away from the player's start side: where
+/// The Ballast Mind's borrowed wave lands on its radius 5.
+pub fn allowed_rim_of(radius: i32) -> Vec<P> {
+    rim_rows(radius, -radius..=0)
+}
+
+/// The empty cells of `rim` on `board`, in its order.
+fn free(board: &Board, rim: &[P]) -> Vec<P> {
+    rim.iter()
+        .copied()
         .filter(|&(q, r)| board.get(q, r) == Some(Cell::Empty))
         .collect()
 }
 
-/// The cells announced for `count` arrivals: distinct empty allowed rim cells picked by `seed`,
+/// The cells announced for `count` arrivals: distinct empty cells of `rim` picked by `seed`,
 /// fewer when fewer are empty.
-pub fn announce(board: &Board, seed: u64, count: u8) -> Vec<P> {
-    let mut free = free_rim(board);
+pub fn announce(board: &Board, rim: &[P], seed: u64, count: u8) -> Vec<P> {
+    let mut free = free(board, rim);
     let mut state = seed;
     let mut out = Vec::new();
     for _ in 0..count.min(free.len() as u8) {
@@ -94,13 +114,13 @@ pub fn announce(board: &Board, seed: u64, count: u8) -> Vec<P> {
 }
 
 /// `board` after the marbles announced on `cells` land, in order, and the cells they landed on: a
-/// taken cell sends its marble to the nearest empty allowed rim cell (the lowest `q`, then `r`, on a
+/// taken cell sends its marble to the nearest empty cell of `rim` (the lowest `q`, then `r`, on a
 /// tie), none left and it does not arrive.
-pub fn land(board: &Board, cells: &[P]) -> (Board, Vec<P>) {
+pub fn land(board: &Board, rim: &[P], cells: &[P]) -> (Board, Vec<P>) {
     let mut out = board.clone();
     let mut landed = Vec::new();
     for &cell in cells {
-        let nearest = free_rim(&out)
+        let nearest = free(&out, rim)
             .into_iter()
             .min_by_key(|&c| (distance(c, cell), c));
         if let Some((q, r)) = nearest {
@@ -111,18 +131,22 @@ pub fn land(board: &Board, cells: &[P]) -> (Board, Vec<P>) {
     (out, landed)
 }
 
-/// The wave of phase `phase` landing at once on `board`, its cells picked by `seed` (The Ballast
-/// Mind's borrowed effect).
+/// The wave of phase `phase` landing at once on `board`, its cells picked by `seed` on the rim
+/// away from the player's start side (The Ballast Mind's borrowed effect).
 pub fn wave(board: &Board, seed: u64, phase: usize) -> Board {
-    land(board, &announce(board, seed, SWARM_ARRIVALS[phase])).0
+    let rim = allowed_rim_of(board.radius());
+    land(
+        board,
+        &rim,
+        &announce(board, &rim, seed, BALLAST_WAVE[phase]),
+    )
+    .0
 }
 
-/// The start board: the player's standard layout minus its marbles nearest the centre, no swarm.
+/// The start board: the player's 11 marbles around the centre, no swarm.
 pub fn swarm_board() -> Board {
-    let mut cells = STANDARD_BLACK.to_vec();
-    cells.sort_by_key(|&c| distance(c, (0, 0)));
     let mut board = Board::empty();
-    for &(q, r) in &cells[SWARM_LEFT_OUT..] {
+    for &(q, r) in &SWARM_START {
         board.set(q, r, Cell::Black);
     }
     board
@@ -135,8 +159,12 @@ pub fn swarm_step(
     seed: u64,
     count: u8,
 ) -> impl Fn(&Board, Player, &Move, Board, [u8; 2]) -> (Board, [u8; 2]) {
+    let rim = rim();
     move |before, mover, _mv, after, _credited| match mover {
-        Player::Black => (land(&after, &announce(before, seed, count)).0, [0, 0]),
+        Player::Black => (
+            land(&after, &rim, &announce(before, &rim, seed, count)).0,
+            [0, 0],
+        ),
         Player::White => (after, [0, 0]),
     }
 }
@@ -185,6 +213,8 @@ pub struct Swarm {
     landed: Vec<P>,
     /// The last boss reply was a pass.
     passed: bool,
+    /// Turns the player's last move took off the evac clock.
+    jump: u32,
     /// Positions the boss search may visit per move.
     budget: u32,
 }
@@ -215,6 +245,7 @@ impl Swarm {
             announced: Vec::new(),
             landed: Vec::new(),
             passed: false,
+            jump: 0,
             budget: SWARM_NODE_BUDGET,
         };
         swarm.announce_next();
@@ -230,14 +261,28 @@ impl Swarm {
         self.turn
     }
 
-    /// Boss replies left before the evac.
-    pub fn turns_left(&self) -> u32 {
-        SWARM_TURNS.saturating_sub(self.turn)
+    /// The evac clock: boss replies done plus `SWARM_EVAC_PER_EJECTION` per swarm marble the
+    /// player ejected.
+    fn clock(&self) -> u32 {
+        self.turn + SWARM_EVAC_PER_EJECTION * u32::from(self.game.ejected(Player::Black))
     }
 
-    /// Phase of the turn being played, 0 for P1.
+    /// Turns left on the evac clock.
+    pub fn turns_left(&self) -> u32 {
+        SWARM_TURNS.saturating_sub(self.clock())
+    }
+
+    /// Turns the player's last move took off the evac clock: `SWARM_EVAC_PER_EJECTION` per swarm
+    /// marble it ejected.
+    pub fn jump(&self) -> u32 {
+        self.jump
+    }
+
+    /// Phase of the turn being played, 0 for P1: read from the swarm marbles landed so far, the
+    /// ones on the board and the ones the player ejected.
     pub fn phase(&self) -> usize {
-        phase(self.turn + 1)
+        let on_board = marbles(self.game.board(), Cell::White);
+        phase_of(u32::from(on_board + self.game.ejected(Player::Black)))
     }
 
     /// The cells where the next boss reply's marbles arrive, empty once the fight is over.
@@ -273,21 +318,34 @@ impl Swarm {
         })
     }
 
-    /// Plays `mv` for the side to move. After a player move the boss reply starts: the announced
-    /// marbles land, and a swarm with no move passes. After a boss move the reply ends.
+    /// Plays `mv` for the side to move. After a player move the evac comes when it brought the
+    /// clock to its end, else the boss reply starts: the announced marbles land, and a swarm with
+    /// no move passes. After a boss move the reply ends.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         let boss = self.game.to_move() == Player::White;
+        let ejected = self.game.ejected(Player::Black);
         self.game.play(mv)?;
         if boss {
             self.end_reply();
-        } else {
-            self.arrive();
+            return Ok(());
         }
+        self.jump = SWARM_EVAC_PER_EJECTION * u32::from(self.game.ejected(Player::Black) - ejected);
+        self.evac_or(Self::arrive);
         Ok(())
     }
 
+    /// The evac once the clock has run out, else `next`.
+    fn evac_or(&mut self, next: fn(&mut Self)) {
+        if self.clock() >= SWARM_TURNS {
+            self.game.end(Player::Black);
+            self.announced.clear();
+        } else {
+            next(self);
+        }
+    }
+
     fn arrive(&mut self) {
-        let (board, landed) = land(self.game.board(), &self.announced);
+        let (board, landed) = land(self.game.board(), &rim(), &self.announced);
         self.landed = landed;
         self.announced.clear();
         self.game.replace_board(board);
@@ -299,14 +357,11 @@ impl Swarm {
         }
     }
 
-    /// The reply is done: the evac after the last one, else the next wave is announced. A player
-    /// boxed in by a full board passes (rules.md section 7) and the next reply starts.
+    /// The reply is done: the evac once the clock has run out, else the next wave is announced. A
+    /// player boxed in by a full board passes (rules.md section 7) and the next reply starts.
     fn end_reply(&mut self) {
         self.turn += 1;
-        if self.turn >= SWARM_TURNS {
-            self.game.end(Player::Black);
-        }
-        self.announce_next();
+        self.evac_or(Self::announce_next);
         if self.game.outcome().is_none() && legal_moves(self.game.board(), Player::Black).is_empty()
         {
             self.game.pass();
@@ -317,28 +372,43 @@ impl Swarm {
     fn announce_next(&mut self) {
         let count = match self.game.outcome() {
             Some(_) => 0,
-            None => arrivals(self.turn + 1),
+            None => SWARM_ARRIVALS[self.phase()],
         };
         let ply = self.game.history().len() as u64;
-        self.announced = announce(self.game.board(), ply_seed(self.seed, ply), count);
+        self.announced = announce(self.game.board(), &rim(), ply_seed(self.seed, ply), count);
     }
 
-    /// The boss move for its reply: its own weights, node-limited, and its tree lands the next
-    /// wave where the announce after its move will put it. `None` on the player's turn or when the
-    /// fight is over.
-    pub fn boss_move(&self) -> Option<Move> {
+    /// The evac clock of a search: the player wins on it, and its ejections count.
+    fn search_clock(&self) -> Clock {
+        Clock {
+            winner: Player::Black,
+            turns: self.turns_left(),
+            per_ejection: SWARM_EVAC_PER_EJECTION,
+        }
+    }
+
+    /// The boss search for its reply: its own weights, node-limited, its tree lands the next wave
+    /// where the announce after its move will put it and sees the evac clock. `None` on the
+    /// player's turn or when the fight is over.
+    pub fn boss_search(&self) -> Option<SearchResult> {
         if self.game.to_move() != Player::White {
             return None;
         }
         let ply = self.game.history().len() as u64 + 1;
-        let step = swarm_step(ply_seed(self.seed, ply), arrivals(self.turn + 2));
+        let step = swarm_step(ply_seed(self.seed, ply), SWARM_ARRIVALS[self.phase()]);
         let allow = |_: &Move| true;
-        search_phased(&self.game, self.budget, SWARM_WEIGHTS, &allow, &step, None).map(|r| r.mv)
+        let clock = self.search_clock();
+        search_clocked(&self.game, self.budget, SWARM_WEIGHTS, &allow, &step, clock)
+    }
+
+    /// The boss move for its reply, from [`Swarm::boss_search`].
+    pub fn boss_move(&self) -> Option<Move> {
+        self.boss_search().map(|r| r.mv)
     }
 
     /// The player search with `budget` nodes (the ladder, auto-play): its tree lands the announced
-    /// wave and sees the evac after the last boss reply. `None` on the boss's turn or when the
-    /// fight is over.
+    /// wave and sees the evac clock, a swarm marble it ejects worth `SWARM_EVAC_PER_EJECTION`
+    /// turns. `None` on the boss's turn or when the fight is over.
     pub fn player_search(
         &self,
         budget: u32,
@@ -348,15 +418,9 @@ impl Swarm {
             return None;
         }
         let ply = self.game.history().len() as u64;
-        let step = swarm_step(ply_seed(self.seed, ply), arrivals(self.turn + 1));
-        search_phased(
-            &self.game,
-            budget,
-            DEFAULT_WEIGHTS,
-            allow,
-            &step,
-            Some(self.turns_left()),
-        )
+        let step = swarm_step(ply_seed(self.seed, ply), SWARM_ARRIVALS[self.phase()]);
+        let clock = self.search_clock();
+        search_clocked(&self.game, budget, DEFAULT_WEIGHTS, allow, &step, clock)
     }
 }
 
@@ -426,10 +490,10 @@ mod tests {
             let s = swarm(&[(0, 4)], &inner(white), [ejected, 0], 3);
             (s.phase(), s.announced().len())
         };
-        assert_eq!(at(14, 0), (0, 1), "14 landed: P1");
-        assert_eq!(at(14, 1), (1, 1), "an ejected swarm marble landed too");
-        assert_eq!(at(29, 0), (1, 1));
-        assert_eq!(at(30, 0), (2, 2), "P3 lands 2 a turn");
+        assert_eq!(at(14, 0), (0, 3), "14 landed: P1");
+        assert_eq!(at(14, 1), (1, 3), "an ejected swarm marble landed too");
+        assert_eq!(at(29, 0), (1, 3));
+        assert_eq!(at(30, 0), (2, 4), "P3 lands 4 a turn");
     }
 
     #[test]
@@ -468,10 +532,16 @@ mod tests {
         assert_eq!(black.len(), 11);
         assert!(black.iter().all(|&c| distance(c, (0, 0)) <= 2), "{black:?}");
         let core = [(0, 0), (1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
-        assert!(core.iter().all(|c| black.contains(c)), "the centre and its ring");
+        assert!(
+            core.iter().all(|c| black.contains(c)),
+            "the centre and its ring"
+        );
         assert!(cells_of(s.game().board(), Cell::White).is_empty());
-        assert_eq!((s.turn(), s.turns_left(), s.phase(), s.jump()), (0, 40, 0, 0));
-        assert_eq!(s.announced().len(), 1, "turn 1 is announced at the start");
+        assert_eq!(
+            (s.turn(), s.turns_left(), s.phase(), s.jump()),
+            (0, 40, 0, 0)
+        );
+        assert_eq!(s.announced().len(), 3, "turn 1 is announced at the start");
         assert!(rim().contains(&s.announced()[0]));
         assert!(s.landed().is_empty());
         assert_eq!(s.result(), None);
@@ -588,7 +658,7 @@ mod tests {
         assert!(legal_moves(s.game().board(), Player::Black).is_empty());
         assert_eq!(s.game().to_move(), Player::White);
         assert_eq!(s.turn(), 6);
-        assert_eq!(s.landed().len(), 1, "turn 7's wave landed");
+        assert_eq!(s.landed().len(), 3, "turn 7's wave landed");
         assert!(s.boss_move().is_some());
     }
 
@@ -614,7 +684,7 @@ mod tests {
         assert_eq!((SWARM_TURNS, SWARM_EVAC_PER_EJECTION), (40, 2));
         let mut s = swarm(&[(0, 2)], &[], [0, 0], 39);
         s.play(&mv(&[(0, 2)], E)).unwrap();
-        assert_eq!(s.landed().len(), 1);
+        assert_eq!(s.landed().len(), 3);
         assert_eq!(s.result(), None, "not before the 40th reply");
         reply(&mut s);
         assert_eq!((s.turn(), s.turns_left()), (40, 0));
@@ -652,7 +722,10 @@ mod tests {
         assert_eq!(s.turns_left(), 1);
         s.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
         assert_eq!((s.turns_left(), s.result()), (0, Some(PveResult::Won)));
-        assert!(s.announced().is_empty() && s.landed().is_empty(), "no reply");
+        assert!(
+            s.announced().is_empty() && s.landed().is_empty(),
+            "no reply"
+        );
         assert_eq!(s.boss_move(), None);
     }
 

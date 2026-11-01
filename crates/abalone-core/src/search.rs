@@ -246,9 +246,53 @@ struct Searcher<'a> {
     nodes: u32,
     /// Ejections each side needs to win, from the game: Black then White.
     win: [u8; 2],
-    /// The ply from the root at which the root mover wins on the clock (a fight with a turn
-    /// limit), `None` for no clock.
-    last_ply: Option<i32>,
+    /// The clock of a fight with a turn limit, in plies, `None` for no clock.
+    deadline: Option<Deadline>,
+}
+
+/// A turn limit in the tree: the ply (from the root) plus `per_ejection` plies per marble
+/// `winner` has ejected reaching `plies` wins for `winner`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Deadline {
+    winner: Player,
+    plies: i32,
+    per_ejection: i32,
+}
+
+impl Deadline {
+    /// `clock` in plies for a search whose root mover is `root` and whose root ejections are
+    /// `ejected`: a reply of the winner's opponent is done at each of its plies, and the
+    /// ejections before the root are already on the clock.
+    fn of(clock: Clock, root: Player, ejected: [u8; 2]) -> Self {
+        let per_ejection = 2 * clock.per_ejection as i32;
+        let before = per_ejection * i32::from(ejected[index(clock.winner)]);
+        Self {
+            winner: clock.winner,
+            plies: 2 * clock.turns as i32 + before - i32::from(root != clock.winner),
+            per_ejection,
+        }
+    }
+
+    /// The score of `node` at `ply` for its side to move once the clock has run out there.
+    fn score(&self, node: &Node, ply: i32) -> Option<i32> {
+        let spent = ply + self.per_ejection * i32::from(node.ejected[index(self.winner)]);
+        (spent >= self.plies).then(|| {
+            if node.to_move == self.winner {
+                WIN - ply
+            } else {
+                ply - WIN
+            }
+        })
+    }
+}
+
+/// A turn limit (The Swarm's evac, #1266): `winner` wins once the replies its opponent played
+/// plus `per_ejection` turns per marble `winner` ejected reach `turns`, counted from the root.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Clock {
+    pub winner: Player,
+    pub turns: u32,
+    pub per_ejection: u32,
 }
 
 impl Searcher<'_> {
@@ -290,8 +334,8 @@ impl Searcher<'_> {
         if node.ejected[index(mover)] >= self.win[index(mover)] {
             return Some(WIN - ply);
         }
-        if self.last_ply == Some(ply) {
-            return Some(WIN - ply);
+        if let Some(score) = self.deadline.and_then(|d| d.score(node, ply)) {
+            return Some(score);
         }
         if depth == 0 {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
@@ -357,7 +401,7 @@ fn run(
     allow: &dyn Fn(&Move) -> bool,
     step: Option<Hook>,
     turns: Option<&Turns>,
-    last_ply: Option<i32>,
+    clock: Option<Clock>,
 ) -> Option<SearchResult> {
     if game.outcome().is_some() {
         return None;
@@ -382,7 +426,7 @@ fn run(
             game.win_ejections(Player::Black),
             game.win_ejections(Player::White),
         ],
-        last_ply,
+        deadline: clock.map(|c| Deadline::of(c, root.to_move, root.ejected)),
     };
     let (mut depth, mut score) = (0, kids[0].score);
     for d in 1..=MAX_DEPTH {
@@ -454,7 +498,36 @@ pub fn search_phased(
         allow,
         Some(&signed),
         None,
-        turns.map(|n| 2 * n as i32),
+        turns.map(|turns| Clock {
+            winner: game.to_move(),
+            turns,
+            per_ejection: 0,
+        }),
+    )
+}
+
+/// [`search_phased`] with a `clock` that may belong to either side and count ejections.
+pub fn search_clocked(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    allow: &dyn Fn(&Move) -> bool,
+    step: PhasedStep,
+    clock: Clock,
+) -> Option<SearchResult> {
+    let signed = |board: &Board, mover: Player, mv: &Move, after: Board, ejected: [u8; 2]| {
+        let (after, [black, white]) = step(board, mover, mv, after, ejected);
+        (after, [black as i8, white as i8])
+    };
+    let clock = Some(clock);
+    run(
+        game,
+        node_budget,
+        weights,
+        allow,
+        Some(&signed),
+        None,
+        clock,
     )
 }
 
@@ -552,7 +625,7 @@ mod tests {
             nodes: 0,
             win,
             turns: None,
-            last_ply: None,
+            deadline: None,
         };
         assert_eq!(
             searcher([WIN_EJECTIONS; 2]).negamax(&node, 0, 0, -INF, INF),
@@ -582,7 +655,7 @@ mod tests {
             nodes: 0,
             win: [WIN_EJECTIONS; 2],
             turns: None,
-            last_ply: None,
+            deadline: None,
         };
         assert_eq!(searcher.negamax(&node, 0, 3, -INF, INF), Some(WIN - 3));
         let gift = |_: &Board, mover: Player, _: &Move, after: Board| {
@@ -645,7 +718,11 @@ mod tests {
             nodes: 0,
             win: [WIN_EJECTIONS; 2],
             turns: None,
-            last_ply: Some(2),
+            deadline: Some(Deadline {
+                winner: Player::White,
+                plies: 2,
+                per_ejection: 0,
+            }),
         };
         let mut searcher = searcher;
         assert_eq!(
@@ -677,7 +754,11 @@ mod tests {
                 .unwrap()
                 .score
         };
-        assert_eq!(run(Player::Black, [0, 0], 2, 2), WIN - 1, "the ejection ends it");
+        assert_eq!(
+            run(Player::Black, [0, 0], 2, 2),
+            WIN - 1,
+            "the ejection ends it"
+        );
         assert_eq!(run(Player::Black, [0, 0], 2, 0), WIN - 4, "two replies");
         assert_eq!(
             run(Player::Black, [3, 0], 3, 2),
@@ -1020,7 +1101,7 @@ mod tests {
                 nodes: 0,
                 win: [WIN_EJECTIONS; 2],
                 turns: None,
-                last_ply: None,
+                deadline: None,
             };
             let value = exact.negamax(&root_of(&g), found.depth, 0, -INF, INF);
             assert_eq!(Some(found.score), value);
