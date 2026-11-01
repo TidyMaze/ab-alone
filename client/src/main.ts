@@ -3034,6 +3034,7 @@ function medalNote(boss: { id: string }): string {
 
 // The HUD, and the lobby controls after it: their state (shown, a lobby waiting) is set while the HUD is drawn (#1044).
 let hudEjected: readonly [number, number] | undefined; // ejected counts of the last HUD render (#1095)
+let copiedNote: { game: unknown } | undefined; // Copy of the daily result card was pressed on this game: every HUD redraw keeps the note (#1295)
 function hud(extra = ''): void {
   drawHud(extra);
   syncLobby();
@@ -3073,7 +3074,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -4745,7 +4746,8 @@ dailyCopy.addEventListener('click', async () => {
   if (await copyText(resultText.value, navigator.clipboard)) {
     dailyCopy.textContent = 'Copied';
     dailyCopy.classList.add('copied'); // the check mark draws in (#1098)
-    return hud(' · result copied');
+    copiedNote = { game: engine };
+    return hud();
   }
   resultText.focus();
   resultText.select();
