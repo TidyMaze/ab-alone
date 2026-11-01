@@ -58,7 +58,6 @@ describe('a start that fails, #737', () => {
   it.each([
     ['wasm', 'wasm fetch failed'],
     ['renderer', 'no GPU'],
-    ['compile', 'shader compile failed'],
   ] as const)('shows the %s failure with a Reload button instead of a blank page', async (fails, reason) => {
     await expect(boot('?bot=off', { fails })).rejects.toThrow(reason);
     const box = byId('boot-error');

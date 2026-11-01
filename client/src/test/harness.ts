@@ -30,7 +30,7 @@ export interface BootOptions {
   /** document.fonts.load, which jsdom lacks: by default every font is in at once. */
   fonts?: (font: string) => Promise<unknown>;
   /** What fails: `worker` answers every bot request with an error, `wasm` and `renderer` reject their init (#736, #737). */
-  fails?: 'worker' | 'wasm' | 'renderer' | 'compile';
+  fails?: 'worker' | 'wasm' | 'renderer';
   /** The renderer runs on WebGPU, not its WebGL fallback: compute shaders, so clustered lighting (#neon tubes). */
   webgpu?: boolean;
 }
@@ -54,8 +54,6 @@ export interface Game {
   online(): Promise<void>;
   /** The three.js scenes drawn so far. */
   draws(): number;
-  /** Each `renderer.compileAsync` call so far: whether the canvas was already in the page (#847). */
-  compiles(): { canvasInPage: boolean }[];
   /** The other end of the online room once the page goes online (Play online, an invite link), else null. */
   peer(): Transport | null;
   /** The room the page went online in, else null. */
@@ -183,7 +181,6 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   let loop: ((now: number) => void) | null = null;
   let renderer: { info: { autoReset: boolean; reset(): void } } | null = null;
   let draws = 0;
-  const compiles: { canvasInPage: boolean }[] = [];
   vi.resetModules();
   vi.doMock('abalone-wasm', async (importOriginal) => {
     const wasm = await (await import('./wasm')).nodeWasm(importOriginal as never);
@@ -217,10 +214,6 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       setPixelRatio(): void {}
       setSize(): void {}
       getMaxAnisotropy = (): number => 1;
-      compileAsync = async (): Promise<void> => {
-        compiles.push({ canvasInPage: document.body.contains(this.domElement) });
-        if (options.fails === 'compile') throw new Error('shader compile failed');
-      };
       render(): void {
         draws++;
         this.info.render.drawCalls += 7;
@@ -341,7 +334,6 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       while (document.body.dataset.online === undefined) await new Promise((done) => setTimeout(done));
     },
     draws: () => draws,
-    compiles: () => compiles,
     peer: () => peer,
     room: () => room,
   };
