@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { gamepad, nextFocus, REPEAT_DELAY, REPEAT_EVERY, type PadAction } from './gamepad';
 
 // The gamepad poller (#1252) on a fake pad of the standard layout: 17 buttons, 4 axes.
-const A = 0, B = 1, LB = 4, RB = 5, LT = 6, RT = 7, START = 9, UP = 12, DOWN = 13, LEFT = 14, RIGHT = 15;
+const A = 0, B = 1, LB = 4, RB = 5, LT = 6, RT = 7, START = 9, R3 = 11, UP = 12, DOWN = 13, LEFT = 14, RIGHT = 15;
 
 function fakePad(pressed: number[] = [], axes = [0, 0, 0, 0], values: Record<number, number> = {}, extra: Partial<Gamepad> = {}): Gamepad {
   const buttons = Array.from({ length: 17 }, (_, i) => ({ pressed: pressed.includes(i), touched: false, value: values[i] ?? (pressed.includes(i) ? 1 : 0) }));
@@ -20,12 +20,14 @@ afterEach(() => {
 });
 
 /** A poller and the actions it gave, one call per frame at `now`. */
-function poller(): { poll: (now: number, pad?: Gamepad | null) => void; got: PadAction[] } {
+function poller(): { poll: (now: number, pad?: Gamepad | null) => void; got: PadAction[]; walks: PadAction[] } {
   plugIn();
   const got: PadAction[] = [];
-  const poll = gamepad((a) => got.push(a));
+  const walks: PadAction[] = []; // the walk of the stick, every frame: kept apart
+  const poll = gamepad((a) => (a.kind === 'walk' ? walks : got).push(a));
   return {
     got,
+    walks,
     poll: (now, pad) => {
       if (pad !== undefined) pads = [pad];
       poll(now);
@@ -87,6 +89,38 @@ describe('the gamepad poller', () => {
     expect(got.pop()).toEqual({ kind: 'move', hex: 2, step: -1 }); // mostly up: back
     poll(64, fakePad([LEFT], [0.5, -0.8, 0, 0])); // the D-pad wins
     expect(got.pop()).toEqual({ kind: 'move', hex: 1, step: -1 });
+  });
+
+  it('R3 gives a reset once, on the press', () => {
+    const { poll, got } = poller();
+    poll(0, fakePad([R3]));
+    poll(16, fakePad([R3]));
+    poll(32, fakePad());
+    expect(got).toEqual([{ kind: 'reset' }]);
+  });
+
+  it('the aim walks every frame it is held, with its stick vector, and gives a rest when it lets go (#1252)', () => {
+    const { poll, walks } = poller();
+    poll(0, fakePad([], [0.3, 0, 0, 0])); // in the dead zone: nothing, no rest either
+    poll(16, fakePad([], [0.8, -0.2, 0, 0]));
+    poll(32, fakePad([], [0.9, 0, 0, 0]));
+    poll(48, fakePad());
+    poll(64, fakePad());
+    poll(80, fakePad([DOWN]));
+    expect(walks).toEqual([
+      { kind: 'walk', x: 0.8, y: -0.2 },
+      { kind: 'walk', x: 0.9, y: 0 },
+      { kind: 'walk', x: 0, y: 0 },
+      { kind: 'walk', x: 0, y: 1 },
+    ]);
+  });
+
+  it('a pad that disconnects while the aim is held lets the walk go', () => {
+    const { poll, walks } = poller();
+    poll(0, fakePad([], [1, 0, 0, 0]));
+    poll(16, null);
+    poll(32, null);
+    expect(walks).toEqual([{ kind: 'walk', x: 1, y: 0 }, { kind: 'walk', x: 0, y: 0 }]);
   });
 
   it('a held aim repeats like LB and RB', () => {
