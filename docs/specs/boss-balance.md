@@ -990,3 +990,35 @@ rim ejection). The Overseer is the plain-search player's row: it does not see th
 so the neurotoxin ends the fight at ply 79 (the 40th turn) as in the 10 seed row of #828; 20 seeds give 0 and
 2 wins. The Rail Yard rows are in its own section above. Nothing was tuned, the knobs are the owner's.
 Run times, one machine: 25 s to 66 s at 1x, 104 s to 578 s at 10x.
+
+### The Pulsar's search follows its phase in the tree (#913), not tuned
+
+Until #913 `pulsar_move` pulsed every player ply of the tree at the phase of the root. Now `pulsar_step` takes the
+phase from `Encounter::phase_after` (shared by #914 to #916): the player's ejections at the root plus the boss marbles
+missing from the tree board, never below the root phase. It holds for a boss whose marbles leave the board only by
+ejection (no conversion, no brood). The step reads the board at the **start** of the player ply, as `Encounter::play`
+takes the tell (so the force) at the start of the turn: a push that ejects the 3rd boss marble still gets a P1 pulse
+that turn, the next pulse is P2 (unit test `the_tree_step_fires_the_p2_force_once_a_third_ejection_is_credited`).
+Seed 0 for the next pulsar stays. Not changed: rules, knobs, `PULSAR_NODE_BUDGET` (3000), `engine_version`.
+
+Where the phase changes the best move: unit test `the_phase_reached_in_the_tree_changes_the_best_move`, a built
+position at 2 ejections where a Black pair can push a lone boss marble off the rim before a pulse, at the shipped
+3000 nodes. The old search (root phase) moves a pair E, the new one moves the lone marble off the rim. 5 of 101
+random positions of that kind gave two different moves. A pulse two player plies deep needs a tree of 4 plies.
+
+Ladder, `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- pulsar`, seeds 0 to 19, 300 plies
+at most, one run at a time, before (#912 rows above) and after:
+
+| Player | Wins /20 before | Wins /20 after | Median plies before / after | Highest phase | Deaths after |
+|---|---|---|---|---|---|
+| 1x (3000) | 2 | **2** | 137 / 137 | P2 | push 10, rim_ejection 7, draw 1 |
+| 10x (30000) | 4 | **4** | 123.5 / 123.5 | P2 | push 5, rim_ejection 10, draw 1 |
+
+Reading: no change on the ladder. In these games a 3rd or 5th ejection rarely falls inside a 4-ply tree with a pulse
+due after it, and no boss reply of the 6 timed games below changed. Nothing was tuned, the Pulsar stays far below the
+14 to 18 of 20 target at 10x; the knobs are the owner's.
+
+Reply time through wasm (nodejs release build, 6 seeds of 80 plies, the player plays its auto-play move, boss
+replies only, ms, average / 95th percentile / max), the old build timed on the same positions in the same run:
+the Pulsar 143 / 191 / 423 after, 128 / 173 / 362 before (about 12 % more: `phase_after` counts the boss marbles of
+two boards on each player ply of the tree); measured alone in the same session, the Hull 118 / 161 / 322.
