@@ -24,6 +24,7 @@ import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
+import { claimOnce, medalCount } from './openworldledger';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { drawBossBar } from './bossbar';
@@ -4951,7 +4952,11 @@ const openWorld = new OpenWorldMode(
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
   () =>
     loadModels(
-      { low: `${import.meta.env.BASE_URL}assets/pbr/openworld.glb`, high: `${import.meta.env.BASE_URL}assets/pbr/openworld-hi.glb` },
+      {
+        low: `${import.meta.env.BASE_URL}assets/pbr/openworld.glb`,
+        high: `${import.meta.env.BASE_URL}assets/pbr/openworld-hi.glb`,
+        lair: `${import.meta.env.BASE_URL}assets/pbr/openworld-lair.glb`,
+      },
       meshoptLoader(),
     ),
   () => reducedMotion(),
@@ -4968,6 +4973,8 @@ const openWorld = new OpenWorldMode(
     await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m)));
     return { player: marbleMaterials[2]!, shell: marbleMaterials[1]! };
   },
+  () => medalCount(store, boss_ids()), // the HUD's medals out of the 14 lairs, the shared read (#1171)
+  () => claimOnce(store), // Tally's relayed line, once
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {

@@ -33,7 +33,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     game.openModes();
     byId('openworld').click();
     await settle();
-    expect(data().openworldLairs!.split(' ')).toHaveLength(3);
+    expect(data().openworldLairs!.split(' ')).toHaveLength(14);
     expect(data().openworldLairsBeaten).toBe('');
     await walkOnto(game, 0);
     expect(data().openworld).toBeUndefined();

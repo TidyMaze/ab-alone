@@ -546,34 +546,59 @@ pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
     placed
 }
 
-/// The boss lairs of the world: this many, one in each third of the map round the spawn.
-pub const LAIRS: usize = 3;
+/// The boss lairs of the world: this many, one per boss of the roster, each in its own fourteenth of the map round the spawn.
+pub const LAIRS: usize = 14;
 /// A lair stands at least this many cells from the spawn.
 pub const LAIR_MIN: i32 = 150;
 /// The salt of the lair draws (the terrain uses 30 to 39, the enemies 12 to 21).
 const LAIR_SALT: u64 = 40;
-/// The distance of a lair from the spawn is drawn in ground units between these two (the corners of the map are about 512 away).
-const LAIR_NEAR: f64 = 160.0;
-const LAIR_FAR: f64 = 420.0;
+/// The distance of a lair from the spawn is drawn in ground units in one of two rings, the even lairs in the inner one and the odd
+/// in the outer one, so two lairs side by side are never close (the corners of the map are about 512 away).
+const LAIR_RINGS: [(f64, f64); 2] = [(160.0, 260.0), (320.0, 420.0)];
+/// Two lairs stand at least this many cells apart.
+pub const LAIR_APART: i32 = 60;
+/// The tries a lair makes in its own slice and ring before it may stand anywhere.
+const LAIR_TRIES: i32 = 64;
 
-/// The cells of the boss lairs of the world `seed` (docs/specs/openworld.md section 7): lair `k` is drawn in the `k`-th third of
+/// The cells of the boss lairs of the world `seed` (docs/specs/openworld.md section 7): lair `k` is drawn in the `k`-th fourteenth of
 /// the circle round the spawn, the first draw whose cell and six neighbours are open ground on the world, and at least `LAIR_MIN`
 /// cells from the spawn. From the seed alone, so the order of visit of the chunks does not matter.
 pub fn lairs(seed: u64) -> Vec<(i32, i32)> {
-    (0..LAIRS as i32)
-        .map(|k| {
-            (0..)
-                .find_map(|n| lair_try(seed, k, n))
-                .expect("an endless search")
-        })
-        .collect()
+    let mut placed: Vec<(i32, i32)> = Vec::with_capacity(LAIRS);
+    for k in 0..LAIRS as i32 {
+        let apart = |(q, r): (i32, i32)| {
+            placed
+                .iter()
+                .all(|&(pq, pr)| distance(q - pq, r - pr) >= LAIR_APART)
+        };
+        let cell = (0..)
+            .filter_map(|n| lair_try(seed, k, n))
+            .find(|&c| apart(c))
+            .expect("an endless search");
+        placed.push(cell);
+    }
+    placed
 }
 
-/// The `n`-th try of lair `k`: its cell when it is a fit one.
+/// The `n`-th try of lair `k`: its cell when it is a fit one. The first `LAIR_TRIES` tries stay in the lair's slice and ring; a slice
+/// that is sea or mountains all through (seed 29, lair 12) then opens to the whole circle and the whole reach.
 fn lair_try(seed: u64, k: i32, n: i32) -> Option<(i32, i32)> {
-    let third = std::f64::consts::TAU / LAIRS as f64;
-    let angle = (f64::from(k) + 0.1 + 0.8 * unit(seed, LAIR_SALT, k, n)) * third;
-    let reach = LAIR_NEAR + (LAIR_FAR - LAIR_NEAR) * unit(seed, LAIR_SALT + 1, k, n);
+    let slice = std::f64::consts::TAU / LAIRS as f64;
+    let (angle, near, far) = if n < LAIR_TRIES {
+        let (near, far) = LAIR_RINGS[k as usize % 2];
+        (
+            (f64::from(k) + 0.2 + 0.6 * unit(seed, LAIR_SALT, k, n)) * slice,
+            near,
+            far,
+        )
+    } else {
+        (
+            std::f64::consts::TAU * unit(seed, LAIR_SALT, k, n),
+            LAIR_RINGS[0].0,
+            LAIR_RINGS[1].1,
+        )
+    };
+    let reach = near + (far - near) * unit(seed, LAIR_SALT + 1, k, n);
     // The pointy-top layout of the client's `cellAtPoint`: x runs along q, z along the rows.
     let r = (reach * angle.sin() / (3f64.sqrt() / 2.0)).round() as i32;
     let q = (reach * angle.cos() - f64::from(r) / 2.0).round() as i32;
@@ -1107,10 +1132,11 @@ mod tests {
     }
 
     #[test]
-    fn three_lairs_stand_at_least_150_cells_from_the_spawn_on_every_seed() {
+    fn fourteen_lairs_stand_at_least_150_cells_from_the_spawn_on_every_seed() {
         for seed in 0..60 {
             let found = lairs(seed);
-            assert_eq!(found.len(), LAIRS, "seed {seed}");
+            assert_eq!(found.len(), 14, "seed {seed}");
+            assert_eq!(LAIRS, 14);
             for &(q, r) in &found {
                 assert!(distance(q, r) >= LAIR_MIN, "seed {seed}: ({q}, {r})");
             }
@@ -1140,7 +1166,7 @@ mod tests {
             for (i, a) in found.iter().enumerate() {
                 for b in &found[i + 1..] {
                     assert!(
-                        distance(a.0 - b.0, a.1 - b.1) >= 100,
+                        distance(a.0 - b.0, a.1 - b.1) >= LAIR_APART,
                         "seed {seed}: {a:?} {b:?}"
                     );
                 }
@@ -1151,6 +1177,32 @@ mod tests {
 
     #[test]
     fn the_lairs_of_seed_7_are_pinned() {
-        assert_eq!(lairs(7), vec![(139, 58), (-327, 233), (286, -172)]);
+        assert_eq!(
+            lairs(7),
+            vec![
+                (155, 20),
+                (139, 317),
+                (-31, 208),
+                (-207, 455),
+                (-169, 176),
+                (-447, 313),
+                (-251, 84),
+                (-337, -61),
+                (-93, -162),
+                (49, -423),
+                (134, -275),
+                (408, -407),
+                (273, -148),
+                (409, -145)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_slice_that_is_all_sea_or_mountains_opens_to_the_whole_circle() {
+        // Seed 29: nothing in lair 12's own slice and ring is open ground (`LAIR_TRIES` tries all fail).
+        let found = lairs(29);
+        assert_eq!(found.len(), LAIRS);
+        assert!((0..LAIR_TRIES).all(|n| lair_try(29, 12, n).is_none()));
     }
 }

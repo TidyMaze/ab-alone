@@ -125,6 +125,9 @@ export function steerStep(at: Axial, held: ReadonlySet<string>, yaw: number, fre
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
 export const twistOf = (prev: number, next: number): number => wrapPi(next - prev);
 
+/** Tally's line, relayed once in the Open world's HUD (#1171): the survey grid is a claim nobody has worked yet. */
+export const TALLY_CLAIM = 'Claim 0412: unworked.';
+
 export class OpenWorldMode {
   active = false;
   hero: Hero | null = null;
@@ -168,6 +171,10 @@ export class OpenWorldMode {
     private readonly onLair: (seed: number, lair: number) => void = () => {},
     /** The skins of the ship the marbles wear, read when a world opens (#1176): none draws the plain looks. */
     private readonly skins?: () => Promise<MarbleSkins>,
+    /** The bosses with a medal in the shared `ab-alone.medals` read (#1171), shown out of the lairs. */
+    private readonly medals: () => number = () => 0,
+    /** Whether Tally's relayed line is still to be said: true once ever, the page remembers it (#1171). */
+    private readonly claim: () => boolean = () => false,
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -208,6 +215,7 @@ export class OpenWorldMode {
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
+    this.showLedger();
     this.modelsOnce ??= this.models();
     void this.modelsOnce.then((models) => {
       if (this.view !== view) return; // left before the models arrived
@@ -217,8 +225,24 @@ export class OpenWorldMode {
     });
   }
 
+  /** The HUD's medal count out of the lairs, read from the shared store, and Tally's relayed line the first time (#1171). */
+  private showLedger(): void {
+    const count = `${this.medals()} / ${this.lairs.length}`;
+    const shown = document.getElementById('openworld-medals');
+    if (shown) shown.textContent = count;
+    document.body.dataset.openworldMedals = count.replace(' / ', '/');
+    const line = document.getElementById('openworld-tally');
+    if (!line) return;
+    const said = this.claim();
+    line.hidden = !said;
+    line.textContent = said ? `Tally: ${TALLY_CLAIM}` : '';
+    const live = document.getElementById('openworld-live');
+    if (live && said) live.textContent = `Tally: ${TALLY_CLAIM}`;
+  }
+
   leave(): void {
     this.flush();
+    delete document.body.dataset.openworldMedals;
     this.active = false;
     this.held.clear();
     this.view?.dispose();

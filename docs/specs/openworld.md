@@ -181,13 +181,21 @@ hero, the troop and the enemies of the loaded square (the generated ones are hid
 
 ## 7. Boss lairs (#1170, epic #1177)
 
-The Open world has a goal: three landmark lairs, each a normal boss fight.
+The Open world has a goal: fourteen landmark lairs, one per boss of the roster, each a normal boss fight (#1171).
 
 - **Placement** is seeded world generation in Rust (`world::lairs(seed)`, bridge `world_lairs(seed)`, `q, r` pairs, lair 0 first).
-  Lair `k` is drawn in the `k`-th third of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
+  Lair `k` is drawn in the `k`-th fourteenth of the circle round the spawn, 160 to 260 ground units out for an even `k` and
+  320 to 420 for an odd one (so two lairs side by side stand at least 60 cells apart), and kept when its cell and its
   six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). It reads the terrain, never
   changes it, so `WORLD_VERSION` does not move.
-- **Look.** A tall pillar on a plinth on the lair's cell, gold while the lair is unbeaten, green once beaten.
+- **Look.** A low-poly landmark made in Blender (`client/models/openworld-lair.glb`, vertex colours, under 72 triangles each) on
+  the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
+  while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).
+  Until the model is loaded, the plain gold or green pillar is drawn.
+- **HUD.** The Open world HUD reads `Medals n / 14` from the shared `ab-alone.medals` (a medal won in any mode counts), read again
+  each time the world is entered, published as `body[data-openworld-medals]` (`n/14`). The first time the Open world is entered,
+  Tally's relayed line "Claim 0412: unworked." shows once in the HUD (`#openworld-tally`) and in its live region; the page keeps
+  `ab-alone.openworld-claim` so it never shows again.
 - **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`),
   the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from).
 - **Win.** The medal is recorded in `ab-alone.medals` as for any boss win, and the lair is added to `lairs` of the world's save.

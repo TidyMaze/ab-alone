@@ -167,7 +167,7 @@ mod tests {
     fn the_lairs_are_q_r_pairs_that_match_the_core() {
         let flat = world_lairs(7);
         let lairs: Vec<(i32, i32)> = world::lairs(7);
-        assert_eq!(flat.len(), 6);
+        assert_eq!(flat.len(), 28);
         assert_eq!(
             flat,
             lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
