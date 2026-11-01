@@ -1081,15 +1081,15 @@ mod tests {
         swarm.play(&mv).unwrap();
         assert_eq!(a.boss_move(), swarm.boss_move());
         assert_eq!((a.phase(), a.result()), (0, None));
-        let (record, moves) = play_attempt_moves(LadderBoss::Swarm, 1, 1, 30, 300);
-        assert!(record.plies <= 60, "30 turns at most");
+        let (record, moves) = play_attempt_moves(LadderBoss::Swarm, 7, 1, 300, 300);
+        assert!(record.plies <= 80, "40 turns at most");
         assert!(
-            replay(LadderBoss::Swarm, 1, &moves[1..2]).is_err(),
+            replay(LadderBoss::Swarm, 7, &moves[1..2]).is_err(),
             "a boss move first"
         );
         assert_eq!(record.result, AttemptResult::Won);
         assert_eq!(
-            replay(LadderBoss::Swarm, 1, &moves),
+            replay(LadderBoss::Swarm, 7, &moves),
             Ok(Some(PveResult::Won))
         );
     }

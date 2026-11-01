@@ -80,7 +80,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(game.hook<{ cell: Axial }[]>('__targets').map((t) => t.cell)).toContainEqual([-2, 5]);
     const { x, y } = game.hook<{ x: number; y: number }>('__cellToScreen', -2, 5);
     canvas().dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, pointerId: 2, bubbles: true }));
-    expect(document.body.dataset.ghosts).toBe('0'); // no ghost over the arena
+    expect(document.body.dataset.ghosts).toBeUndefined(); // no ghost over the arena: the board's ghosts are not drawn (#1275)
     game.click(-2, 5); // (-2, 6) NW: the round resolves at once
     game.frame(10_000); // its reveal plays out (#612)
     expect(document.body.dataset.royale).toBe('2');

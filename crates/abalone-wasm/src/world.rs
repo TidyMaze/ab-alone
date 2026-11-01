@@ -3,6 +3,7 @@
 
 use abalone_core::world::{self, Terrain};
 use abalone_core::worldfight::{self, Fall, Outcome};
+use abalone_core::worldstep;
 use wasm_bindgen::prelude::*;
 
 /// Bytes per cell: `[height, terrain, biome]`.
@@ -101,6 +102,14 @@ pub fn world_path(
     .into_iter()
     .flat_map(|(q, r)| [q, r])
     .collect()
+}
+
+/// The direction of the hero's step (docs/specs/openworld.md section 4), the index of `DIRECTIONS` (E, W, NE, SW, NW, SE), `-1` for no
+/// step: `row` is the row of the hero, `keys` the held arrows (bit 0 up, 1 down, 2 left, 3 right), `yaw` the camera's in radians,
+/// `steering` whether the step slides round obstacles (#1137), `free` the bits of the directions whose cell the hero can enter.
+#[wasm_bindgen]
+pub fn world_step(row: i32, keys: u32, yaw: f64, steering: bool, free: u32) -> i32 {
+    worldstep::hero_dir(row, keys as u8, yaw, steering, free as u8).map_or(-1, |dir| dir as i32)
 }
 
 /// The terrain of a cell of the world `seed`, `None` off the world.
@@ -210,6 +219,13 @@ mod tests {
         assert_eq!(round.len(), 8);
         assert_eq!(round[6..], [3, 0]);
         assert!(world_path(9, 0, 0, 0, 0, vec![], vec![]).is_empty());
+    }
+
+    #[test]
+    fn a_step_is_a_direction_index_or_minus_one() {
+        assert_eq!(world_step(0, 8, 0.0, true, 0b11_1111), 0);
+        assert_eq!(world_step(0, 8, 0.0, true, 0b11_1110), 2);
+        assert_eq!(world_step(0, 0, 0.0, true, 0b11_1111), -1);
     }
 
     #[test]

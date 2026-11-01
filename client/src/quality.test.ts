@@ -11,6 +11,8 @@ import {
   readFps,
   writeFps,
   hasReflections,
+  hasBloom,
+  hasNormalMaps,
   meshDetail,
   renderPixelRatio,
   smoothEdges,
@@ -652,5 +654,17 @@ describe('steering storage (#1137): on unless the player turned it off', () => {
     expect(readSteering(throwing)).toBe(true);
     expect(readSteering(null)).toBe(true);
     expect(() => writeSteering(throwing, false)).not.toThrow();
+  });
+});
+
+describe('the low tier drops the costly passes of the board room (#849)', () => {
+  it('draws no bloom pass on low, one on high', () => {
+    expect(hasBloom('low')).toBe(false);
+    expect(hasBloom('high')).toBe(true);
+  });
+
+  it('loads and draws no normal map on low, the maps on high', () => {
+    expect(hasNormalMaps('low')).toBe(false);
+    expect(hasNormalMaps('high')).toBe(true);
   });
 });

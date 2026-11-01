@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BASE_RADIUS, bindJoystick, DEAD_ZONE, heldKeys } from './openworldjoystick';
-import { heldCell } from './openworldmode';
+import './test/openworldwasm';
+import { heroStep } from './openworldstep';
 import { GLIDE_MS } from './openworldglide';
 
 // The virtual joystick of the Open world on a touch screen (#1025, #1026): a touch on the left half of the canvas holds the arrow
@@ -56,9 +57,9 @@ describe('heldKeys: the drag direction as the arrow keys of a hex step (#1025)',
     expect(heldKeys(25, 43)).toEqual(['ArrowDown', 'ArrowRight']); // 300 degrees, down-right
   });
 
-  it('the two-key directions are the diagonals heldCell rolls to, the same as the keyboard', () => {
+  it('the two-key directions are the diagonals heroStep rolls to, the same as the keyboard', () => {
     for (const keys of [heldKeys(25, -43), heldKeys(-25, -43), heldKeys(-25, 43), heldKeys(25, 43)]) {
-      expect(heldCell([0, 0], new Set(keys))).not.toBeNull();
+      expect(heroStep([0, 0], keys, 0, false, () => true)).not.toBeNull();
     }
   });
 

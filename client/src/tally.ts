@@ -28,7 +28,7 @@ const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
   core: 'Charges on file. Four and a marble is written off.',
   dual: 'Returns on file. Six out to balance the books.',
   stalker: 'Sightings on file. Six out to balance the books.',
-  swarm: 'Waves on file. Thirty turns to the evac.',
+  swarm: 'Waves on file. Forty turns to the evac.',
 };
 
 /** The line Tally says at the start of a match: a boss fight takes its boss, other modes their mode. */

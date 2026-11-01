@@ -22,6 +22,7 @@ import {
 import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
+import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
@@ -228,6 +229,8 @@ import {
   writeSteering,
   readUiScale,
   hasReflections,
+  hasBloom,
+  hasNormalMaps,
   meshDetail,
   nextPixelRatio,
   read,
@@ -266,6 +269,7 @@ import { loadProgress, recordWin, saveProgress } from './progress';
 import { roomAt, type Door, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
 import { labelsHtml, pipsHtml, railHtml } from './hubview';
+import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
@@ -355,10 +359,12 @@ const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
+// The left HUD panel is folded (#957, #1269): upright, the board then sits at the middle of the window.
+let hudIsFolded = false;
 const fightView = (): View => {
   if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
-  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
-  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
+  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, hudIsFolded);
+  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, hudIsFolded);
   return resetView(activeRadius());
 };
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
@@ -397,6 +403,23 @@ const store = (() => {
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
+// Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
+const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let savedMotion = readReducedMotion(store);
+let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
+let steering = readSteering(store); // the Open world steering (#1137), on by default
+let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
+const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
+let tier = readTier(store, {
+  cores: navigator.hardwareConcurrency,
+  memory: (navigator as { deviceMemory?: number }).deviceMemory,
+  reducedMotion: reducedMotion(),
+});
+const queryQuality = new URLSearchParams(location.search).get('quality');
+if (queryQuality === 'high' || queryQuality === 'low') {
+  tier = queryQuality;
+  writeTier(store, tier);
+}
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
@@ -416,9 +439,10 @@ renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 // The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
 // as soon as the scene is. mountBay takes them when the scene exists.
-const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, hasNormalMaps(tier));
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   if (!loadsTexture(tonal ? 'tonal' : 'pbr', name)) return null;
+  if (/-normal\.ktx2$/.test(name) && !hasNormalMaps(tier)) return null; // the low tier fetches and draws no normal map (#849)
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -523,6 +547,7 @@ const sceneRenderer = new SceneRenderer({
   rimRoughness,
   rimNormal,
   tonal,
+  bloom: hasBloom(tier),
 });
 await sceneRenderer.init().catch(bootFailed);
 const {
@@ -561,23 +586,6 @@ function prefilteredBay(): THREE.Texture {
   return texture;
 }
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
-// Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
-const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
-let savedMotion = readReducedMotion(store);
-let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
-let steering = readSteering(store); // the Open world steering (#1137), on by default
-let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
-const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
-let tier = readTier(store, {
-  cores: navigator.hardwareConcurrency,
-  memory: (navigator as { deviceMemory?: number }).deviceMemory,
-  reducedMotion: reducedMotion(),
-});
-const queryQuality = new URLSearchParams(location.search).get('quality');
-if (queryQuality === 'high' || queryQuality === 'low') {
-  tier = queryQuality;
-  writeTier(store, tier);
-}
 diag.log.log('info', 'start', { backend, tier });
 
 // Reflections (#376, #424): the bay, prefiltered once it has loaded (mountBay), for the marble materials on high tier only.
@@ -586,7 +594,7 @@ let reflections: THREE.Texture | null = null;
 
 // The whole board fits the window, held upright too, below the HUD and the buttons (#227).
 function frameCamera(): void {
-  sceneRenderer.frameCamera(innerWidth, innerHeight);
+  sceneRenderer.frameCamera(innerWidth, innerHeight, hudIsFolded);
 }
 frameCamera();
 let view = resetView();
@@ -837,6 +845,10 @@ const toggles: Record<string, () => void> = {
     writeSteering(store, steering);
     openWorld.refreshMode(); // the HUD names the mode, and a walk under way ends (#1137)
   },
+  guide: () => {
+    moveMenu('pick');
+    openGuide(cog);
+  },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
@@ -895,6 +907,12 @@ const soundGroup = document.createElement('div');
 soundGroup.className = 'setting-group skin-pair';
 soundRow.replaceWith(soundGroup);
 soundGroup.append(soundRow, document.getElementById('setting-transcript')!);
+// The guide (#1293) is a second button in the Steering item, as Transcript is in the Sound item.
+const steeringRow = document.getElementById('setting-steering')!;
+const steeringGroup = document.createElement('div');
+steeringGroup.className = 'setting-group skin-pair';
+steeringRow.replaceWith(steeringGroup);
+steeringGroup.append(steeringRow, document.getElementById('setting-guide')!);
 fpsBox.hidden = !fpsOn;
 // The four volume sliders (#438), the page Sound opens: 0 to 100 %, each saved on its own.
 for (const bus of BUSES) {
@@ -1015,6 +1033,55 @@ addEventListener('pointerdown', (e) => {
   if (menuIsOpen && !within(menu, e.target) && !within(cog, e.target)) moveMenu('outside');
 });
 cog.disabled = false; // listener ready (#146)
+// The first-launch guide (#1293, guide.ts): a dialog of five pages over the game. Skip, Escape (B on the pad) or Play on
+// the last page close it and store it as seen; the settings menu opens it again. A key pressed in it stays in it: Tab and
+// the pad's focus walk keep to its buttons.
+const guideBox = document.getElementById('guide')!;
+const guideNext = document.getElementById('guide-next') as HTMLButtonElement;
+const guideBack = document.getElementById('guide-back') as HTMLButtonElement;
+let guidePage = 0;
+let guideReturn: HTMLElement | null = null; // the focus goes back there when it closes
+function showGuidePage(at: number | null): void {
+  if (at === null) {
+    guideBox.hidden = true;
+    writeGuideSeen(store);
+    return void guideReturn?.focus();
+  }
+  guidePage = at;
+  const page = GUIDE[at]!;
+  document.getElementById('guide-count')!.textContent = `${at + 1} / ${GUIDE.length}`;
+  document.getElementById('guide-art')!.innerHTML = page.art;
+  document.getElementById('guide-title')!.textContent = page.title;
+  document.getElementById('guide-text')!.innerHTML = page.text;
+  guideBack.disabled = at === 0;
+  guideNext.textContent = at === GUIDE.length - 1 ? 'Play' : 'Next';
+}
+function openGuide(from: HTMLElement | null): void {
+  guideReturn = from;
+  showGuidePage(0);
+  guideBox.hidden = false;
+  guideNext.focus();
+}
+const moveGuide = (event: GuideEvent): void => showGuidePage(guideStep(guidePage, event));
+guideNext.addEventListener('click', () => moveGuide('next'));
+guideBack.addEventListener('click', () => {
+  moveGuide('back');
+  if (guideBack.disabled) guideNext.focus(); // a disabled button would drop the focus out of the guide
+});
+document.getElementById('guide-skip')!.addEventListener('click', () => moveGuide('skip'));
+guideBox.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // the board and the menus never see it
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    moveGuide('skip');
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    nextFocus(document.activeElement, e.shiftKey ? -1 : 1, guideBox).focus();
+  }
+});
+// Where the pad walks the focus: in the guide while it is open.
+const padScope = (): ParentNode => (guideBox.hidden ? document : guideBox);
+if (guideDue(store, location.search, navigator.webdriver)) openGuide(null);
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
 // closed like the settings menu. Starting a mode closes it (startBoss, Play online).
 const modeButton = document.getElementById('modes') as HTMLButtonElement;
@@ -1396,8 +1463,8 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 const fogMaterial = new THREE.MeshBasicMaterial({ color: tonal ? TONAL.veiled : 0x000000, transparent: true, opacity: tonal ? 1 : 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
-// The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the 30th
-// reply is done the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
+// The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the evac
+// clock runs out the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
 const arrivalMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
 const evacMaterial = new THREE.MeshBasicMaterial({ color: 0xfff1c1, transparent: true, opacity: 0, depthWrite: false });
 const evacGlow = Object.assign(new THREE.InstancedMesh(crackGeometry, evacMaterial, 61), { name: 'swarm-evac' }); // one, reused
@@ -3033,6 +3100,7 @@ function medalNote(boss: { id: string }): string {
 
 // The HUD, and the lobby controls after it: their state (shown, a lobby waiting) is set while the HUD is drawn (#1044).
 let hudEjected: readonly [number, number] | undefined; // ejected counts of the last HUD render (#1095)
+let copiedNote: { game: unknown } | undefined; // Copy of the daily result card was pressed on this game: every HUD redraw keeps the note (#1295)
 function hud(extra = ''): void {
   drawHud(extra);
   syncLobby();
@@ -3072,7 +3140,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3146,7 +3214,7 @@ function drawHud(extra = ''): void {
       }),
     );
   }
-  // The Swarm's bar holds its 30 turns, one fragment breaks per boss reply (#1008).
+  // The Swarm's bar holds the 40 turns of its evac clock, one fragment breaks per boss reply, two per swarm ejection (#1266).
   const turns = boss && parseSwarm(boss.swarm());
   const health = turns ? { ejected: SWARM_TURNS - turns.left, win: SWARM_TURNS } : { ejected: engine.ejected(1), win: engine.win_ejections(1) };
   drawBossBar(document.getElementById('boss-bar')!, boss ? { name: boss.name(), ...health, steps: Array.from(boss.phase_ejections()), phase: boss.phase() } : null);
@@ -4076,12 +4144,13 @@ const pollPad = gamepad((action: PadAction) => {
     case 'back':
       return void padKey('Escape');
     case 'menu':
+      if (!guideBox.hidden) return; // the settings stay shut under the guide
       cog.click();
       return cog.focus();
     case 'prev':
     case 'next':
       if (openWorld.active && free) return void padKey(action.kind === 'prev' ? 'q' : 'e'); // the camera turns a step (#1251)
-      if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1).focus();
+      if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1, padScope()).focus();
       return;
     case 'reset':
       if (openWorld.active) padKey('r'); // the camera back to its default angle (#1026)
@@ -4092,7 +4161,7 @@ const pollPad = gamepad((action: PadAction) => {
     case 'move':
       if (openWorld.active && free) return; // the stick walked the hero already
       if (focused === canvas) return void padKey(padKeyOf(action.hex));
-      return nextFocus(focused, action.step).focus();
+      return nextFocus(focused, action.step, padScope()).focus();
     case 'orbit':
       if (openWorld.active) return; // LB and RB turn the Open world's camera
       view = orbit(view, action.dx, action.dy);
@@ -4129,6 +4198,9 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
 // The left HUD panel folds to a tab with its button alone (#957), saved. Folded, it stays in the page for screen readers.
 const hudFold = document.getElementById('hud-fold') as HTMLButtonElement;
 function foldHud(folded: boolean): void {
+  hudIsFolded = folded;
+  if (view === fitted) view = fitted = fightView(); // a Pulsar or Dual fit follows the board's new place
+  frameCamera();
   document.getElementById('hud-dock')!.toggleAttribute('data-folded', folded);
   hudFold.setAttribute('aria-expanded', String(!folded));
   hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
@@ -4138,6 +4210,7 @@ hudFold.addEventListener('click', () => {
   const folded = hudFold.getAttribute('aria-expanded') === 'true';
   writeHudFolded(store, folded);
   foldHud(folded);
+  applyView();
 });
 hudFold.disabled = false;
 
@@ -4497,8 +4570,8 @@ const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null): void {
+  leaveMode();
   lairFrom = lair; // a fight picked in a menu, a door or the daily is no lair's (#1170)
-  leaveHub();
   worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
   fight = { id, seed, daily };
@@ -4509,7 +4582,6 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   replaying = null;
   selected = [];
   thinking = false;
-  leaveRoyale();
   if (!resumeFrom && stalkerSaved()) void saves.save(savedGame(), false); // a new Stalker fight replaces the saved one (#1122)
   bossList.hidden = true;
   bossButton.setAttribute('aria-expanded', 'false');
@@ -4596,12 +4668,11 @@ retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.
 const shipButton = document.getElementById('ship') as HTMLButtonElement;
 shipButton.addEventListener('click', () => {
   moveModes('pick');
-  leaveOnline();
-  leaveRoyale();
   enterHub(loadProgress(store).at);
 });
 shipButton.disabled = false; // listener ready (#146)
 function enterHub(at: HubSpot): void {
+  leaveMode();
   roomOf = null;
   hub = new HubController(at);
   hub.enter(at);
@@ -4652,16 +4723,12 @@ function enterModeRoom(door: Door | undefined): void {
   }
 }
 function startLocal(bot: boolean): void {
+  leaveMode();
+  applyDeck(deckOf('local'));
   worker = bot ? botWorker : null;
-  fight = null; // a boss fight the hub was opened from
-  delete document.body.dataset.boss;
-  retryButton.hidden = true;
-  newGameButton.hidden = false;
   newGame();
 }
 backButton.addEventListener('click', () => {
-  leaveOnline();
-  leaveRoyale();
   if (lairFrom) {
     const { seed } = lairFrom;
     lairFrom = null;
@@ -4670,6 +4737,24 @@ backButton.addEventListener('click', () => {
   }
   enterHub(roomOf!);
 });
+// One mode at a time (#1275, docs/specs/ui.md): every mode's start leaves the mode on first, the hub by its controller's
+// exit(), each other mode by its leave, then clears what no mode owns (modeswitch.ts). Nothing of a mode stays in the next.
+// The Open world opens over the page instead (#1063): Esc gives the game beneath back as it was, and the next mode leaves it.
+function leaveMode(): void {
+  if (openWorld.active) openWorld.leave();
+  leaveRun();
+  leaveTrainer();
+  leaveRoyale(); // first: its room is the page's online session too
+  leaveOnline();
+  leaveHub();
+  fight = null;
+  lairFrom = null;
+  goalOpen = false;
+  speech = null;
+  skipEjections(); // the effects of the mode's last move end with it
+  clearStray(document);
+  newGameButton.hidden = false;
+}
 function leaveHub(): void {
   if (!hub) return;
   hub.exit();
@@ -4732,7 +4817,8 @@ dailyCopy.addEventListener('click', async () => {
   if (await copyText(resultText.value, navigator.clipboard)) {
     dailyCopy.textContent = 'Copied';
     dailyCopy.classList.add('copied'); // the check mark draws in (#1098)
-    return hud(' · result copied');
+    copiedNote = { game: engine };
+    return hud();
   }
   resultText.focus();
   resultText.select();
@@ -4779,6 +4865,10 @@ exportButton.disabled = importButton.disabled = false; // listeners ready (#146)
 // ?net=hook swaps the Trystero transport for the page hook the e2e test wires (no public relays).
 // Once the game is over, Rematch starts a new game in the same room with the colours swapped (#186).
 let online: OnlineSession | null = null;
+// The heartbeat of the room's session (#359), stopped when the room is left (#1275).
+const beats: ReturnType<typeof setInterval>[] = [];
+const beatEvery = (fn: () => void, ms: number): void => void beats.push(setInterval(fn, ms));
+const stopBeats = (): void => beats.splice(0).forEach((id) => clearInterval(id));
 let onlineNote = '';
 let offlineNotice = ''; // no connection: Play online is disabled, a game in progress keeps its own status (#194)
 let playReady = false;
@@ -4851,7 +4941,7 @@ function roomTransport(room: string): Transport {
 }
 /** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. */
 async function goOnline(room: string, side: number, coop?: CoopFight): Promise<void> {
-  leaveHub();
+  leaveMode();
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
   // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
@@ -4859,15 +4949,12 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   rematchButton.textContent = again;
   rematchButton.setAttribute('aria-label', again);
   rematchButton.dataset.label = again;
-  delete document.body.dataset.boss;
   applyDeck(deckOf('online'));
-  retryButton.hidden = true;
   newGameButton.hidden = true;
   engine = makeGame();
   history.length = 0;
   replaying = null;
   selected = [];
-  leaveRoyale();
   diag.connecting();
   const net = roomTransport(room);
   link = net;
@@ -4929,7 +5016,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
     onRole: note,
     onPresence: note,
     onCoordinator: note,
-    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: (fn, ms) => void setInterval(fn, ms) },
+    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: beatEvery },
     onRematchAsk: note,
     onRematch: () => {
       selected = [];
@@ -4948,6 +5035,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
 function playOnline(coop?: CoopFight): void {
   rankedMode = null;
   moveModes('pick');
+  leaveMode(); // the room left first: its invite link goes, the new one shows below
   const room = newRoomId((b) => crypto.getRandomValues(b));
   showInvite(inviteUrl(location.href, room, coop), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
   void goOnline(room, 1, coop);
@@ -5004,6 +5092,7 @@ coopButton.addEventListener('click', () => {
 function leaveOnline(): void {
   if (!online) return;
   online = null;
+  stopBeats();
   link!.close();
   onlineNote = '';
   onlineLine = undefined;
@@ -5030,14 +5119,9 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
   run = null; // its save is overwritten below, not deleted by leaveRun
   armed = 0;
   moveModes('pick');
-  leaveOnline();
-  leaveRoyale();
-  leaveHub();
+  leaveMode();
   applyDeck(deckOf('local'));
   worker = botWorker;
-  fight = null; // a boss fight the run was started from
-  delete document.body.dataset.boss;
-  retryButton.hidden = true;
   engine = new Engine(); // the board under the map: the saved local game is left alone, as by a boss fight
   history.length = 0;
   replaying = null;
@@ -5158,13 +5242,9 @@ const trainerNext = document.getElementById('trainer-next') as HTMLButtonElement
 function startTrainer(wave: number, lost = 0): void {
   trainer = null; // moveModes('pick') below leaves the old one
   moveModes('pick');
-  leaveOnline();
-  leaveRoyale();
-  leaveHub();
+  leaveMode();
   applyDeck(deckOf('local'));
   worker = botWorker;
-  fight = null;
-  delete document.body.dataset.boss;
   trainer = { wave, lost };
   engine = Engine.trainer(wave, MARBLES - lost);
   history.length = 0;
@@ -5184,6 +5264,7 @@ function leaveTrainer(): void {
   if (!trainer) return;
   trainer = null;
   delete document.body.dataset.trainer;
+  trainerCard.hidden = true;
   retryButton.hidden = true;
   newGameButton.hidden = false;
 }
@@ -5274,8 +5355,8 @@ if (navigator.webdriver) {
 }
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
+  leaveRoyale(); // first: its room is the page's online session too (#1275)
   leaveOnline();
-  leaveRoyale();
   void enterOpenWorld();
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
@@ -5310,12 +5391,9 @@ const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
 const startButton = document.getElementById('royale-start') as HTMLButtonElement; // the creator's, online (#504)
 const royaleInviteButton = document.getElementById('royale-invite') as HTMLButtonElement; // offline: opens a room (#504)
 function startRoyale(file: RoyaleFile): void {
+  leaveMode();
   stopAuto();
-  leaveHub();
   stopAnalysis();
-  fight = null;
-  delete document.body.dataset.boss;
-  delete document.body.dataset.over;
   engine = new Engine(); // a bot reply to the old game is dropped (botTurn)
   history.length = 0;
   replaying = null;
@@ -5335,14 +5413,18 @@ function leaveRoyale(): void {
   if (royaleNet) {
     royaleNet = null;
     clearInterval(ticking);
+    stopBeats();
     online = null;
     link!.close();
+    hideInvite();
+    window.history.replaceState(null, '', location.pathname + location.search); // no room in the address
   }
   startButton.hidden = royaleInviteButton.hidden = true;
   for (const key of ['net', 'desync', 'online', 'seat']) delete document.body.dataset[key];
   royale = null;
   reveal = null;
   arena.visible = false;
+  arenaMarbles.clear(); // its marbles' instances are drawn from the group, the hidden arena or not (instancedcells.ts)
   fogRadius = frame?.radius ?? RADIUS;
   for (const mesh of [plate, rim.near, rim.far]) mesh.visible = true;
   holdButton.hidden = true;
@@ -5592,7 +5674,7 @@ async function goRoyale(room: string, side: number): Promise<void> {
     },
     onRole: refresh,
     onPresence: refresh,
-    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: (fn, ms) => void setInterval(fn, ms) },
+    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: beatEvery },
     onOther: (m, key, peer) => {
       const message = parseRoyale(m);
       if (message) return ours.receive(message, key, peer);

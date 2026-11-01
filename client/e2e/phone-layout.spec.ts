@@ -173,6 +173,23 @@ const sizes = [
   { name: 'a window 1024 by 600', viewport: { width: 1024, height: 600 }, mobile: false },
 ];
 
+// #1269: with the HUD panel folded, a phone held upright shows the board at the middle of the window, clear of the thumb dock.
+test.describe('a phone 390 by 844 held upright, HUD folded', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  test('the board is vertically centred above the dock, #1269', async ({ page }) => {
+    await page.goto('./?bot=off&net=hook');
+    await page.locator('canvas').waitFor();
+    await page.locator('#hud-fold[aria-expanded="true"]').click();
+    await expect(page.locator('#hud-fold')).toHaveAttribute('aria-expanded', 'false');
+    const seen = await page.evaluate(() => {
+      const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { y: number };
+      return { centre: toScreen(0, 0).y, bottom: toScreen(0, 4).y, dock: document.getElementById('dock')!.getBoundingClientRect().top, height: innerHeight };
+    });
+    expect(Math.abs(seen.centre - seen.height / 2)).toBeLessThan(0.05 * seen.height);
+    expect(seen.bottom).toBeLessThan(seen.dock);
+  });
+});
+
 for (const { name, viewport, mobile } of sizes) {
   test.describe(name, () => {
     test.skip(({ browserName }) => mobile && browserName === 'firefox', 'Firefox has no mobile emulation');
@@ -395,7 +412,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(19); // Steering (#1137), Copy diagnostics (#1032, the last row), Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
+    await expect(page.locator('#settings-menu button')).toHaveCount(20); // Guide shares Steering (#1293), Steering (#1137), Copy diagnostics (#1032, the last row), Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
         el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // the menu scrolls where it is shorter than its rows (#382, #904)

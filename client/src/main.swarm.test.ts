@@ -6,11 +6,11 @@ import { EVAC_MS } from './swarm';
 import { parseRecorded } from './test/chaplain-game';
 import { boot, type Game } from './test/harness';
 
-// The Swarm (#1008, game-design.md section 7.14) from the recorded win of the core tests (fight seed 0, ?bot=off): its
-// wave is announced on a ring, the HUD counts the turns to the evac and states its loss line, the boss bar drains turn by
-// turn, and the evac lights the whole board once the 30th reply is done.
+// The Swarm (#1008, #1266, game-design.md section 7.14) from the recorded win of the core tests (fight seed 0, ?bot=off):
+// the player starts in the centre, its wave is announced on a ring on any edge, the HUD counts the turns to the evac, a
+// swarm ejection jumps the clock by 2, the boss bar drains with the clock, and the evac lights the whole board.
 
-type Shown = { left: number; passed: boolean; cells: [number, number][]; evac: boolean; glow: number; lift: number } | null;
+type Shown = { left: number; passed: boolean; jump: number; cells: [number, number][]; evac: boolean; glow: number; lift: number } | null;
 const PLIES = parseRecorded(text);
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const tell = (): string | null | undefined => byId('hud').querySelector('.boss .tell')?.textContent;
@@ -50,15 +50,16 @@ describe('main.ts The Swarm (#1008)', () => {
     expect(shown(game)).toBeNull();
     fightSwarm(game);
     expect(document.body.dataset.deck).toBe('cargo');
-    expect(tell()).toBe('30 turns to the evac · 1 marble lands on its mark next turn · the swarm wins after it ejects 2 of your marbles');
+    expect(tell()).toBe('40 turns to the evac · 3 marbles land on their marks next turn · the swarm wins after it ejects 2 of your marbles');
     const s = shown(game)!;
-    expect(s).toMatchObject({ left: 30, passed: false, evac: false });
-    expect(named(scene(), 'swarm-mark')).toHaveLength(1);
+    expect(s).toMatchObject({ left: 40, passed: false, jump: 0, evac: false });
+    expect(game.hook('__marbleTurn', 0, 0)).not.toBeNull(); // the player starts in the centre
+    expect(named(scene(), 'swarm-mark')).toHaveLength(3);
     expect(document.body.dataset.swarmMarks).toBe(s.cells.map((c) => c.join(',')).join(' '));
     expect(game.hud()).toContain('ejected 0 · ');
     expect(game.hud()).toContain('ejected 0/2');
-    expect([frags(), frags('.empty'), frags('.step')]).toEqual([30, 0, 2]); // the bar holds the 30 turns, its steps the phases
-    expect(game.hud()).toContain('Waves on file. Thirty turns to the evac.');
+    expect([frags(), frags('.empty'), frags('.step')]).toEqual([40, 0, 0]); // the bar holds the 40 turns of the clock, no step
+    expect(game.hud()).toContain('Waves on file. Forty turns to the evac.');
   });
 
   it('lands the wave on its mark, counts a turn down and drains the bar by one', async () => {
@@ -68,8 +69,28 @@ describe('main.ts The Swarm (#1008)', () => {
     game.hook('__playMoves', PLIES.slice(0, 1));
     expect(game.hook('__marbleTurn', ...cell!)).not.toBeNull(); // the swarm marble landed on its mark
     game.hook('__playMoves', PLIES.slice(1, 2));
-    expect(tell()).toMatch(/^29 turns to the evac · 1 marble lands on its mark next turn/);
+    expect(tell()).toMatch(/^39 turns to the evac · 3 marbles land on their marks next turn/);
     expect(frags('.empty')).toBe(1);
+  });
+
+  it('marks arrivals on every edge, the player side too, and a swarm ejection jumps the clock by 2', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightSwarm(game);
+    const marks: [number, number][] = [];
+    let jumped = '';
+    for (let ply = 0; ply < PLIES.length - 1; ply++) {
+      const before = shown(game)!.left;
+      game.hook('__playMoves', PLIES.slice(ply, ply + 1));
+      const now = shown(game)!;
+      marks.push(...now.cells);
+      if (ply % 2 === 0 && now.jump > 0 && !jumped) {
+        expect(now.left).toBe(before - now.jump); // the player's ejection, before the boss reply
+        jumped = tell()!;
+      }
+    }
+    expect(marks.some(([, r]) => r > 0)).toBe(true); // the player's start side
+    expect(marks.some(([, r]) => r < 0)).toBe(true);
+    expect(jumped).toMatch(/^\d+ turns to the evac \(-2\) · /);
   });
 
   it('the evac lights the whole board after the 30th reply and lifts the marbles', async () => {
@@ -94,7 +115,7 @@ describe('main.ts The Swarm (#1008)', () => {
     game.hook('__playMoves', []); // a redraw keeps the evac where it is
     expect(shown(game)).toEqual(done);
     byId('boss-retry').click();
-    expect(shown(game)).toMatchObject({ left: 30, evac: false });
+    expect(shown(game)).toMatchObject({ left: 40, evac: false });
     expect(named(scene(), 'swarm-evac')).toHaveLength(0);
   });
 
