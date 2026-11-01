@@ -135,11 +135,13 @@ describe('main.ts The Pulsar in space (#1146)', () => {
     expect((scene().background as THREE.Color).getHex()).toBe(0x000000);
   });
 });
-
 describe('main.ts The Pulsar (#675)', () => {
-  it('plays on the Bridge with its Tally line, six pulsars, the one 2 turns from its pulse charging', async () => {
+  it.each([
+    ['&scene=room', ['pulsar-base', 'pulsar-core', 'pulsar-beam-in', 'pulsar-beam-out']],
+    ['', ['pulsar-base', 'pulsar-core']], // the terrace's pylon and its core (#1374)
+  ])('plays on the Bridge with its Tally line, six pulsars, the one 2 turns from its pulse charging %s', async (look, parts) => {
     const scene = catchScene();
-    const game = await boot('?bot=off', { reducedMotion: true });
+    const game = await boot(`?bot=off${look}`, { reducedMotion: true });
     fightPulsar(game);
     expect(body().boss).toBe('pulsar');
     expect(body().deck).toBe('bridge');
@@ -150,7 +152,7 @@ describe('main.ts The Pulsar (#675)', () => {
     expect(named(scene(), 'pulse-chevron')).toHaveLength(0); // no charge yet
     expect(body().pulseCounter).toBe('');
     const [model] = named(scene(), 'pulsar');
-    expect(model!.children.map((c) => c.name)).toEqual(['pulsar-base', 'pulsar-core', 'pulsar-beam-in', 'pulsar-beam-out']);
+    expect(model!.children.map((c) => c.name)).toEqual(parts);
     plies(game, 0, 1);
     expect(tell()).toBe('Pulse in 2 turns, force 2');
     expect(named(scene(), 'pulsar')).toHaveLength(5);
@@ -289,7 +291,7 @@ describe('main.ts The Pulsar (#675)', () => {
   // his view stays, and Reset view fits it to the window.
   it('a new window size fits the view again, until the player moves the camera', async () => {
     windowOf(812, 375);
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room'); // the fit logic of the room: the terrace fits its pylons further out (#1374)
     fightPulsar(game);
     plies(game, 0, 1);
     windowOf(375, 812);

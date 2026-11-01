@@ -183,7 +183,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment } from './tablezero';
+import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -364,7 +364,8 @@ const closeGoal = (): void => {
 };
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 let hub: HubController | null = null;
-const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
+const PULSAR_DOCK = 1.2; // the near pylons are fitted 20 % further out on the terrace, so the dock does not cover them (#1374)
+const activeRadius =(): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
 // its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
@@ -373,7 +374,7 @@ const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axi
 let hudIsFolded = false;
 const fightView = (): View => {
   if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
-  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, hudIsFolded);
+  if (fight?.id === 'pulsar') return fitView(resetView(), sceneRenderer.terraceOn ? PULSAR_BOUNDS.map((p) => (p.z > 0 ? { ...p, z: p.z * PULSAR_DOCK } : p)) : PULSAR_BOUNDS, innerWidth, innerHeight, hudIsFolded);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, hudIsFolded);
   return resetView(activeRadius());
 };
@@ -1507,7 +1508,7 @@ function marbleMesh(side: number, looks = marbleMaterials, core?: THREE.Material
   const glass = side === glassOf();
   const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
   if (glass && core) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
-  const accent = !glass && looks === marbleMaterials ? accents.get(fight?.id ?? '') : undefined; // the boss side (#507)
+  const accent = !glass && looks === marbleMaterials && !(sceneRenderer.terraceOn && fight?.id === 'hull') ? accents.get(fight?.id ?? '') : undefined; // the boss side (#507); the Hull's crown is left off on the terrace: the cracking cell is its tell (#1374)
   if (accent) mesh.add(accent.clone());
   return mesh;
 }
@@ -1608,6 +1609,8 @@ const unseen = new THREE.MeshBasicMaterial({ visible: false });
 // Hull), both 3:1 on every shell and glass skin, whatever the deck's light.
 const convertedGlyph = new THREE.MeshBasicMaterial({ color: BONE });
 const convertedGlyphGeometry = glyphGeometry.clone().translate(0, 0.6, 0); // over the wax, and so turned upright with the marble's parts
+const terraceGlyph = new THREE.MeshBasicMaterial({ color: 0x15191c, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+const terraceGlyphOutline = glyphGeometry.clone().scale(1.3, 1.3, 1.3).translate(0, 0.6, 0); // the outline: the same shape a third larger, in Bone behind it
 const convertedCracks = new THREE.MeshBasicMaterial({ color: BONE, alphaMap: crackDecal, transparent: true, depthWrite: false });
 function convert(marble: THREE.Mesh): void {
   marble.material = unseen;
@@ -1617,6 +1620,11 @@ function convert(marble: THREE.Mesh): void {
   cracks.scale.setScalar(1.01); // just outside the shell
   const glyph = Object.assign(new THREE.Mesh(convertedGlyphGeometry, convertedGlyph), { name: 'glyph' });
   marble.add(shell, glass, cracks, glyph);
+  if (sceneRenderer.terraceOn) {
+    // On the terrace the glyph is near-black with a thin Bone outline (art direction, #1374): it reads on the pale glass and the dark shell.
+    glyph.material = terraceGlyph;
+    marble.add(Object.assign(new THREE.Mesh(terraceGlyphOutline, convertedGlyph), { name: 'glyph-outline' }));
+  }
 }
 let exposed = 0; // marbles the hovered move would expose, for the HUD
 // The Choir: each army wears its own glyph in the pale tell colour on top of its marbles, Alto a spike,
@@ -1846,6 +1854,7 @@ const pulsarMaterials = PULSAR_PARTS.map(
     new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: type === 'base' ? 0.6 : 0, emissive: type === 'base' ? 0 : color, emissiveIntensity: 0.15 }),
 );
 const chargeMaterial = new THREE.MeshStandardMaterial({ color: PULSAR_PARTS[1]!.color, emissive: PULSAR_PARTS[1]!.color, emissiveIntensity: 1.6 });
+const pylonCharge = new THREE.MeshBasicMaterial({ color: 0xffc468, fog: false }); // the terrace's charging core: amber at full strength
 const shockGeometry = new THREE.RingGeometry(0.96, 1, 96).rotateX(-Math.PI / 2);
 const shockMaterial = new THREE.MeshBasicMaterial({ color: SHOCK_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 let pulsarShown: Pulsar | null = null; // the next pulse of the last refresh
@@ -3057,11 +3066,19 @@ function fireBelts(carries: Carry[], before: number[], reduced: boolean): void {
   document.body.dataset.beltTurns = String(Number(document.body.dataset.beltTurns ?? 0) + 1); // read by the e2e tests
 }
 
+/** A press: the box of the room, or the gantry of the boss kit on the terrace, whose base is the mesh's origin (`userData.base` below the box's centre). */
+function pressMesh(name: string): THREE.Mesh {
+  const gantry = terraceProp('press');
+  const mesh = Object.assign(new THREE.Mesh(gantry ? gantry.geometry : pressGeometry, gantry ? gantry.material : pressMaterial), { name });
+  mesh.userData.base = gantry ? 0.14 : 0;
+  return mesh;
+}
+
 /** The press comes down on `cell`. */
 function pressOn(cell: Axial): void {
   const p = axialTo3D(...cell);
-  const mesh = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-slam' });
-  mesh.position.set(p.x, slamAt(0, false).y, p.z);
+  const mesh = pressMesh('belt-slam');
+  mesh.position.set(p.x, slamAt(0, false).y - mesh.userData.base, p.z);
   scene.add(mesh);
   slams.push({ mesh, start: performance.now(), skipped: false });
   document.body.dataset.slams = String(Number(document.body.dataset.slams ?? 0) + 1); // read by the e2e tests
@@ -3070,7 +3087,7 @@ function pressOn(cell: Axial): void {
 function animateSlams(now: number): void {
   for (const s of slams.slice()) {
     const at = slamAt(s.skipped ? Infinity : now - s.start, false);
-    s.mesh.position.y = at.y;
+    s.mesh.position.y = at.y - s.mesh.userData.base;
     if (!at.done) continue;
     scene.remove(s.mesh);
     slams.splice(slams.indexOf(s), 1);
@@ -3443,8 +3460,24 @@ function sightNote(): string {
 const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, (engine as Encounter).sight());
 
 // The terrace (#1314): the arena's glTF from Blender, in place of the room in a 1v1 game. A page whose file is missing or broken
-// keeps the room; the hub, the boss rooms, the royale and a run keep it too, until their own PRs; `?scene=room` asks for it.
+// keeps the room; so do the hub, Ballast Mind, the Dual Room, the royale and a run, until their own PRs (#1374); `?scene=room` asks for it.
 let terraceReady = false;
+/** The boards of the terrace (#1374): the arena's own radius 4 slab, and the slabs of the two bosses whose board is another one. */
+const terraceBoards: Record<'arena' | 'ballast' | 'dual', THREE.Group | null> = { arena: null, ballast: null, dual: null };
+const boardOf = (): 'arena' | 'ballast' | 'dual' => (fight?.id === 'ballast' || fight?.id === 'dual' ? fight.id : 'arena');
+const dishesOf = (board: THREE.Group | null): THREE.InstancedMesh | undefined => board?.getObjectByName('terrace_dishes') as THREE.InstancedMesh | undefined;
+/** The dishes of the terrace follow the discs: a vanished cell (Hull's void, a swept Rail Yard line) shows the gap (#1374). */
+const syncDishes = (): void => {
+  const shown = new Set(discs.filter((d) => d.visible).map((d) => `${d.position.x.toFixed(2)},${d.position.z.toFixed(2)}`));
+  dishesOf(terraceBoards[boardOf()])?.userData.show((x: number, z: number) => shown.has(`${x.toFixed(2)},${z.toFixed(2)}`));
+};
+/** Shows the board of the fight, hides the others. */
+const showBoard = (): void => {
+  for (const [name, board] of Object.entries(terraceBoards)) if (board) board.visible = name === boardOf();
+};
+/** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
+let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;
+const terraceProp = (name: keyof NonNullable<typeof bossKit>): THREE.Mesh | null => (sceneRenderer.terraceOn && bossKit ? bossKit[name] : null);
 const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
@@ -3458,10 +3491,23 @@ function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
   mesh.position.y = y - TERRACE_LIFT; // the marbles' group stands 0.11 higher on the terrace
 }
 const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
-void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint')])
-  .then(([arena, kit, hint]) => {
-    const drawn = mergeByMaterial(arena.scene); // 5 draw calls, not 1,489 nodes
+void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual')])
+  .then(([arena, kit, hint, props, ballast, dual]) => {
+    const drawn = mergeByMaterial(arena.scene, true); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
+    terraceBoards.arena = drawn.getObjectByName('terrace_board') as THREE.Group;
+    for (const [name, file] of [['ballast', ballast], ['dual', dual]] as const) {
+      const board = mergeByMaterial(file.scene);
+      board.visible = false;
+      sceneRenderer.terrace.add(board);
+      terraceBoards[name] = board;
+    }
+    const prop = (name: string): THREE.Mesh => {
+      const mesh = props.scene.getObjectByName(name) as THREE.Mesh;
+      mesh.material = terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
+      return mesh;
+    };
+    bossKit = { pylon: prop('kit_prop_pylon'), core: prop('kit_prop_pylon_core'), press: prop('kit_prop_press_gantry'), buffer: prop('kit_prop_buffer_stop') };
     // The black marbles reflect a sky with a window of light and a cool rim, not the room's lamps.
     if (hasReflections(tier, navigator.webdriver)) {
       const pmrem = new THREE.PMREMGenerator(renderer);
@@ -3487,9 +3533,10 @@ function terraceMarbles(on: boolean): void {
 const PHONE_POLAR = (46 * Math.PI) / 180; // pitch 44 on a phone: the horizon enters the top of the frame
 const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
-  const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
+  const on = tableZeroActive({ hub: hub !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
   terraceMarbles(on);
+  showBoard();
   if (on && isDefaultView(view, resetView(4))) {
     view = innerWidth < innerHeight ? { ...TERRACE_VIEW, polar: PHONE_POLAR, distance: 18 } : { ...TERRACE_VIEW }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
     applyView();
@@ -3569,6 +3616,7 @@ function refresh(): void {
     const [q, r] = BOARD_CELLS[i]!;
     const side = board[i] ?? VANISHED; // ring 5 is off a board of 61 cells (#564)
     disc.visible = side !== VANISHED; // a vanished cell is a hole: no disc, no marble
+    if (i === discs.length - 1) syncDishes();
     if (side === VANISHED) return;
     const p = axialTo3D(q, r);
     const plies = left.get(i) ?? 0;
@@ -3848,6 +3896,16 @@ function railsOf(train: Train): THREE.Group {
     sleeper.position.set(span.x + Math.cos(span.yaw) * d, 0.008, span.z - Math.sin(span.yaw) * d);
     rails.add(sleeper);
   }
+  const stop = terraceProp('buffer');
+  if (stop) {
+    for (const end of [-1, 1]) {
+      // the terrace's buffer stop (kit_boss.glb) at each end of the line, its face towards the track
+      const post = new THREE.Mesh(stop.geometry, stop.material);
+      post.rotation.y = span.yaw + (end > 0 ? 0 : Math.PI);
+      post.position.set(span.x + Math.cos(span.yaw) * end * (span.length / 2), 0, span.z - Math.sin(span.yaw) * end * (span.length / 2));
+      rails.add(post);
+    }
+  }
   return rails;
 }
 
@@ -3873,7 +3931,7 @@ function drawTrack(train: Train): void {
 function drawBelts(b: Belts): { belt: Belt; ribs: THREE.Mesh[] }[] {
   const counter = Object.assign(new THREE.Sprite(counterMaterials[b.left - 1]), { renderOrder: 2, name: 'belt-counter' });
   const at = beltCounterSpot(b.belts[0]!);
-  counter.position.set(at.x, at.y, at.z);
+  counter.position.set(at.x - (sceneRenderer.terraceOn ? 0.8 : 0), at.y, at.z); // on the terrace the plate stands over the roller, inside the rim (#1374)
   counter.scale.setScalar(0.5);
   marbles.add(counter);
   return b.belts.map((belt) => {
@@ -3894,8 +3952,8 @@ function drawBelts(b: Belts): { belt: Belt; ribs: THREE.Mesh[] }[] {
       plate.position.set(x, 0.06, z);
       marbles.add(plate);
       if (!strike) continue;
-      const press = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-press' });
-      press.position.set(x, slamAt(0, false).y, z);
+      const press = pressMesh('belt-press');
+      press.position.set(x, slamAt(0, false).y - press.userData.base, z);
       marbles.add(press);
     }
     for (const { x, z, dir } of beltChevrons(belt)) {
@@ -3926,12 +3984,19 @@ function drawPulsars(next: Pulsar): THREE.Mesh[] {
     const spot = pulsarSpot(id);
     const lit = id === next.id && charging(next);
     const model = Object.assign(new THREE.Group(), { name: lit ? 'pulsar-charging' : 'pulsar' });
-    PULSAR_PARTS.forEach((part, i) => {
-      const material = lit && part.type === 'core' ? chargeMaterial : pulsarMaterials[i];
-      const mesh = Object.assign(new THREE.Mesh(pulsarGeometries[i], material), { name: part.id });
-      mesh.position.set(...part.position);
-      model.add(mesh);
-    });
+    const [pylon, pylonCore] = [terraceProp('pylon'), terraceProp('core')];
+    if (pylon && pylonCore) {
+      // The terrace's beacon post (kit_boss.glb): amber, its core spins and glows steady while it charges (#1374).
+      model.add(Object.assign(new THREE.Mesh(pylon.geometry, pylon.material), { name: 'pulsar-base' }));
+      model.add(Object.assign(new THREE.Mesh(pylonCore.geometry, lit ? pylonCharge : pylonCore.material), { name: 'pulsar-core' }));
+    } else {
+      PULSAR_PARTS.forEach((part, i) => {
+        const material = lit && part.type === 'core' ? chargeMaterial : pulsarMaterials[i];
+        const mesh = Object.assign(new THREE.Mesh(pulsarGeometries[i], material), { name: part.id });
+        mesh.position.set(...part.position);
+        model.add(mesh);
+      });
+    }
     model.position.set(spot.x, 0, spot.z);
     model.rotation.y = spot.yaw;
     marbles.add(model);
@@ -4513,7 +4578,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__frame = () => ({
   radius: frame?.radius,
   holes: frame?.holes.length,
-  drawn: [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
+  dishes: sceneRenderer.terraceOn ? dishesOf(terraceBoards[boardOf()])!.count : undefined, // the terrace draws one dish per cell in play: a hole is one dish fewer (#1374)
+  drawn: sceneRenderer.terraceOn ? dishesOf(terraceBoards[boardOf()])!.count > 0 : [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
   lit: { near: rim.near.material.emissive.getHex(), far: rim.far.material.emissive.getHex() }, // #300
 });
 // Used by the browser checks and tests to mount the high-fidelity PBR spaceship bay (#648).

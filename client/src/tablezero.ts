@@ -61,17 +61,22 @@ export function addSun(group: THREE.Object3D): [THREE.HemisphereLight, THREE.Dir
 }
 
 /**
- * The 1v1 default scene. The hub, the boss rooms, the battle royale and a roguelite run keep the room until their own PRs, and
+ * The 1v1 and boss scene (every boss has its slab). The hub, the battle royale and a roguelite run keep the room until their own PRs, and
  * so does `?scene=room` (the fallback), and so does a page whose arena file has not loaded (`ready`).
  */
-export function tableZeroActive(s: { hub: boolean; fight: boolean; royale: boolean; run: boolean; room: boolean; ready: boolean }): boolean {
-  return s.ready && !(s.hub || s.fight || s.royale || s.run || s.room);
+export function tableZeroActive(s: { hub: boolean; royale: boolean; run: boolean; room: boolean; ready: boolean }): boolean {
+  return s.ready && !(s.hub || s.royale || s.run || s.room);
 }
 
 /** What the game draws itself, from its own state: marbles, pedestals, rings and arrows are left out of the arena file. */
 const GAME_DRAWN = /^scene_(marble|pedestal|ring|arrow|shadow)/;
 /** The turn bars stay meshes of their own: the game lights the one of the side to move. */
 const TURN_BAR = /^scene_turnbar/;
+/** The dishes: drawn as one instanced mesh, so a cell that vanishes (Hull, Rail Yard) is a hole to the gap and not a dish floating in the air. */
+const DISH = /^scene_(cell|ballast_cell|dual_cell|dual_cell_n)_?\d+$/;
+/** What a bigger board replaces in the arena file (#1374): the slab, its plinth shadow, the posts. They are drawn apart so a variant board can hide them. */
+const BOARD_PART = /^scene_(slab_arena|ao_plinth|post_\d+)$/;
+const SLAB = /^scene_(slab_arena|ballast_slab|dual_slab_[ns])$/;
 
 const unlit = new Map<boolean, THREE.MeshBasicMaterial>();
 /**
@@ -93,39 +98,72 @@ export function terraceMaterial(material: THREE.Material, geometry: THREE.Buffer
  * The arena file has 1,489 nodes: drawn as they are, that is 1,000 calls. This bakes every static node into the world, then
  * draws one mesh per material (5 calls), the turn bars apart. Blended materials draw last and write no depth.
  */
-export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
+export function mergeByMaterial(root: THREE.Object3D, split = false): THREE.Group {
   root.updateMatrixWorld(true);
   const byMaterial = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  const ofBoard = new Map<THREE.Material, THREE.BufferGeometry[]>();
   const bars: THREE.Mesh[] = [];
+  const dishes: THREE.Mesh[] = [];
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || GAME_DRAWN.test(o.name)) return;
     if (TURN_BAR.test(o.name)) return void bars.push(mesh);
+    if (DISH.test(o.name)) return void dishes.push(mesh);
     const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
     g.deleteAttribute('uv');
     if (o.name === 'scene_sky_dome') {
       saturateColours(g, SKY_SATURATION, -Infinity, ZENITH_FROM); // the horizon band
       saturateColours(g, ZENITH_SATURATION, ZENITH_FROM, Infinity); // the zenith
     }
-    if (o.name === 'scene_slab_arena') saturateColours(g, RIM_SATURATION); // the rim and the plinth read brown against Blender's grey-taupe
+    if (SLAB.test(o.name)) saturateColours(g, RIM_SATURATION); // the rim and the plinth read brown against Blender's grey-taupe
     const material = terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
-    byMaterial.set(material, [...(byMaterial.get(material) ?? []), g]);
+    const into = split && BOARD_PART.test(o.name) ? ofBoard : byMaterial;
+    into.set(material, [...(into.get(material) ?? []), g]);
   });
+  const tinted = new Set<THREE.Material>();
+  const bake = (into: THREE.Group, groups: Map<THREE.Material, THREE.BufferGeometry[]>): void => {
+    for (const [material, geometries] of groups) {
+      const blended = material.transparent;
+      if (blended) material.depthWrite = false;
+      else if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial && !tinted.has(material)) (material as THREE.MeshStandardMaterial).color.multiply(TERRACE_TINT);
+      tinted.add(material);
+      const merged = new THREE.Mesh(mergeGeometries(geometries, false), material);
+      merged.frustumCulled = false; // the arena is always in view
+      merged.castShadow = merged.receiveShadow = (material as THREE.MeshStandardMaterial).isMeshStandardMaterial === true; // the lit board: posts, plinth and plateau shade each other (#1364)
+      merged.renderOrder = blended ? 1 : 0;
+      into.add(merged);
+    }
+  };
   const out = new THREE.Group();
-  for (const [material, geometries] of byMaterial) {
-    const blended = material.transparent;
-    if (blended) material.depthWrite = false;
-    else if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) (material as THREE.MeshStandardMaterial).color.multiply(TERRACE_TINT);
-    const merged = new THREE.Mesh(mergeGeometries(geometries, false), material);
-    merged.frustumCulled = false; // the arena is always in view
-    merged.castShadow = merged.receiveShadow = (material as THREE.MeshStandardMaterial).isMeshStandardMaterial === true; // the lit board: posts, plinth and plateau shade each other (#1364)
-    merged.renderOrder = blended ? 1 : 0;
-    out.add(merged);
+  bake(out, byMaterial);
+  // With `split`, what a bigger board replaces (slab, plinth shadow, posts, dishes, turn bars) is a group of its own.
+  const board = split ? Object.assign(new THREE.Group(), { name: 'terrace_board' }) : out;
+  if (split) {
+    bake(board, ofBoard);
+    out.add(board);
+  }
+  if (dishes.length) {
+    const first = dishes[0]!;
+    const material = terraceMaterial(first.material as THREE.Material, first.geometry);
+    const matrices = dishes.map((d) => d.matrixWorld.clone());
+    const mesh = new THREE.InstancedMesh(first.geometry, material, dishes.length);
+    mesh.frustumCulled = false;
+    mesh.name = 'terrace_dishes';
+    mesh.castShadow = mesh.receiveShadow = true; // the lit board (#1364)
+    const spot = new THREE.Vector3();
+    mesh.userData.show = (shown: (x: number, z: number) => boolean): void => {
+      let n = 0;
+      for (const m of matrices) if (shown(...(spot.setFromMatrixPosition(m).toArray().filter((_, i) => i !== 1) as [number, number]))) mesh.setMatrixAt(n++, m);
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = true;
+    };
+    mesh.userData.show(() => true);
+    board.add(mesh);
   }
   for (const bar of bars) {
     bar.material = terraceMaterial(bar.material as THREE.Material, bar.geometry);
     bar.matrix.copy(bar.matrixWorld).decompose(bar.position, bar.quaternion, bar.scale);
-    out.add(bar);
+    board.add(bar);
   }
   return out;
 }

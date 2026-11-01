@@ -87,7 +87,7 @@ describe('main.ts tonal look (#1138)', () => {
 
   it('veils the Stalker cells in the veiled tone, rings the selection and the last move in sky blue', async () => {
     const scene = catchScene();
-    const game = await boot('/?look=tonal');
+    const game = await boot('/?look=tonal&scene=room');
     byId('boss-fight').click();
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Stalker')!.click();
     const veil = scene().getObjectByName('stalker-fog') as THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;

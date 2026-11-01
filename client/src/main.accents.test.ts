@@ -49,7 +49,7 @@ describe('main.ts boss accents (#507)', () => {
     ['The Ballast Mind', 'ballast', 'wire', 16], // #564
   ])('against %s every shell of the boss side wears its accent, the glass none', async (name, id, accent, shells) => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     fightBoss(game, name);
     const worn = game.hook<Worn[]>('__accents');
     expect(worn).toHaveLength(shells);
@@ -61,6 +61,12 @@ describe('main.ts boss accents (#507)', () => {
       expect((mesh.parent as Mesh).material).not.toBeInstanceOf(THREE.MeshPhysicalMaterial); // a shell, not the glass
       expect(mesh.material.color.getHex()).toBe(ACCENTS[id]!.color);
     }
+  });
+
+  it('against The Hull on the terrace the boss side keeps the plain shell: the cracking cell is the tell (#1374)', async () => {
+    const game = await boot('?bot=off');
+    fightBoss(game, 'The Hull');
+    expect(game.hook('__accents')).toEqual([]);
   });
 
   it('The Echo, The Choir and a game outside boss mode keep the plain shell', async () => {
@@ -76,7 +82,7 @@ describe('main.ts boss accents (#507)', () => {
 
   it('stays upright on its shell whatever the shell turn, at rest and while the shell rolls', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     fightBoss(game, 'The Hull');
     const drawn = accents(scene());
     expect(drawn.every(upright)).toBe(true);

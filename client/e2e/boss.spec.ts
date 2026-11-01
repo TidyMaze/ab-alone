@@ -241,7 +241,7 @@ for (const tier of ['high', 'low']) {
     await expect.poll(plies, { timeout: 30_000 }).toBe(12);
     expect(await tellCues(page)).toEqual(['crack', 'crack']); // then vanished on ply 11: no cue for a gone tell
     await expect(body).toHaveAttribute('data-vanished', '1');
-    expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
+    expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true, dishes: 60 }); // a hole in the frame (#292), one dish fewer on the terrace (#1374)
     await expect(body).toHaveAttribute('data-cracks', '0');
     await expect(hud).not.toContainText('Cracks:');
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual([]);
@@ -329,7 +329,7 @@ test('start The Chaplain: a hovered move shows the marbles it flips, #150', asyn
 
 // The same fight, a converted marble keeps its own look (#326): half ridged shell, half glass (no hidden core since #886), under
 // the wax (#508), its glass half 3:1 against its shell. The recorded game converts its first marble at ply 24.
-test('start The Chaplain: a converted marble keeps its look, #150', async ({ page }, testInfo) => {
+test('start The Chaplain: a converted marble keeps its look, #150', { tag: '@contrast' }, async ({ page }, testInfo) => {
   await startChaplain(page);
   await playRecorded(page, 0, CONVERTED_AT - 1);
   await expect(page.locator('body')).toHaveAttribute('data-converted', '0');
@@ -339,7 +339,7 @@ test('start The Chaplain: a converted marble keeps its look, #150', async ({ pag
   const cells = await page.evaluate(() => (window as any).__converted());
   const looks = await page.evaluate(() => (window as any).__convertedLooks());
   expect(looks).toHaveLength(cells.length);
-  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'cracks', 'glyph'] }))));
+  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'cracks', 'glyph', 'glyph-outline'] }))));
   const contrasts = await topContrasts(page, cells, testInfo.outputPath('chaplain-converted.png'));
   for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3); // its glass half reads (#326, #508)
 });
@@ -431,7 +431,7 @@ for (const skin of ['hex', 'riveted']) {
     for (const c of await topContrasts(page, armies.map((m) => m.cell), undefined, CHOIR_GLYPH_LIFT)) expect(c).toBeGreaterThanOrEqual(3);
   });
 
-  test(`The Chaplain's converted marble reads 3:1 on the ${skin} shell, task #377`, async ({ page }, testInfo) => {
+  test(`The Chaplain's converted marble reads 3:1 on the ${skin} shell, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
     await startChaplain(page);
     await playRecorded(page, 0, CONVERTED_AT); // the recorded game converts its first marble at ply 24
@@ -453,7 +453,7 @@ for (const [name, accent, stored] of [
     await page.addInitScript((s) => {
       for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v);
     }, stored);
-    await page.goto('./');
+    await page.goto(accent === 'crown' ? './?scene=room' : './'); // the terrace leaves the Hull's crown off (#1374)
     await page.locator('canvas').waitFor();
     await page.locator('#boss-list').getByRole('button', { name, includeHidden: true }).dispatchEvent('click');
     await expect(page.locator('#boss-bar .name')).toContainText(name);

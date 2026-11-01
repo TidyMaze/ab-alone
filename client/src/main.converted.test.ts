@@ -2,6 +2,7 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
+import { BONE } from './scene';
 import { contrastRatio, type RGB } from './contrast';
 import { SKINS } from './skins';
 import { CONVERTED_AT, SEED } from './test/chaplain-game';
@@ -71,7 +72,7 @@ const box = (mesh: Mesh): THREE.Box3 => (mesh.geometry.computeBoundingBox(), mes
 describe('main.ts converted look (#508)', () => {
   it('a converted marble is the ridged shell below, the glass above, under the wax, no core inside the opaque glass (#885)', async () => {
     const scene = catchScene();
-    const game = await boot('?nodes=200', { reducedMotion: true });
+    const game = await boot('?nodes=200&scene=room', { reducedMotion: true });
     const cells = await convertOne(game);
     const looks = game.hook<Look[]>('__convertedLooks');
     expect(looks).toHaveLength(cells.length);
@@ -95,9 +96,20 @@ describe('main.ts converted look (#508)', () => {
 
   // The glass skins are out of this check: they are the white ambientCG materials now, and a pale mark cannot read 3:1 on a
   // white body (it did on the dark glass of the procedural skins). The marks keep their 3:1 on every shell skin.
-  it('wears the Chaplain glyph above the wax and a cracked pale skin on the shell half, 3:1 on every shell skin (#790)', async () => {
+  it('wears, on the terrace, a near-black glyph with a Bone outline behind it (#1374)', async () => {
     const scene = catchScene();
     const game = await boot('?nodes=200', { reducedMotion: true });
+    const [cell] = await convertOne(game);
+    const marble = marbleOn(scene(), cell!);
+    const [glyph, outline] = ['glyph', 'glyph-outline'].map((name) => part(marble, name));
+    expect((glyph!.material as THREE.MeshBasicMaterial).color.getHex()).toBe(0x15191c);
+    expect((outline!.material as THREE.MeshBasicMaterial).color.getHex()).toBe(BONE);
+    expect(box(outline!).max.y).toBeGreaterThan(box(glyph!).max.y);
+  }, 60_000);
+
+  it('wears the Chaplain glyph above the wax and a cracked pale skin on the shell half, 3:1 on every shell skin (#790)', async () => {
+    const scene = catchScene();
+    const game = await boot('?nodes=200&scene=room', { reducedMotion: true });
     const cells = await convertOne(game);
     const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
     for (const cell of cells) {
@@ -116,7 +128,7 @@ describe('main.ts converted look (#508)', () => {
 
   it('follows the white skin', async () => {
     const scene = catchScene();
-    const game = await boot('?nodes=200', { reducedMotion: true });
+    const game = await boot('?nodes=200&scene=room', { reducedMotion: true });
     const [cell] = await convertOne(game);
     game.openSettings();
     for (let i = 0; i < 6; i++) byId('setting-glass-skin').click();

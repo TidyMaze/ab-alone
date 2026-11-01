@@ -413,7 +413,7 @@ describe('main.ts board and HUD', () => {
 
   it('counts in the hooks only what the scene draws', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     startBoss(game, 'echo');
     const { notches, tallies, plate } = parts(scene());
     scene().remove(notches, ...tallies);
@@ -488,7 +488,7 @@ describe('main.ts board and HUD', () => {
     await game.hook<Promise<number>>('__playTurns', 6, [0, 1, 2, 3, 4, 5]); // a crack at ply 8, its cell gone at ply 11
     const vanished = Number(document.body.dataset.vanished);
     expect(vanished).toBeGreaterThan(0);
-    expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true });
+    expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true, dishes: 61 - vanished }); // on the terrace, one dish fewer per hole (#1374)
     expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished + 108); // rings 5 to 7 are off this board (#564, #947, #955)
     await game.settle();
   });

@@ -87,9 +87,9 @@ describe('main.ts The Rail Yard (#626)', () => {
     expect(counter!.position.y).toBeGreaterThan(entry.position.y);
   });
 
-  it('counts down after each player move, then the train passes and ejects the marbles of both sides on its line', async () => {
+  it.each([['', 2], ['&scene=room', 0]])('counts down after each player move, then the train passes and ejects the marbles of both sides on its line%s', async (look, buffers) => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot(`?bot=off${look}`);
     fightRailYard(game);
     plies(game, 1);
     const counts: string[] = [body().trainCounters!];
@@ -109,6 +109,8 @@ describe('main.ts The Rail Yard (#626)', () => {
     const start = train!.position.clone();
     expect(body().ejecting).toBe('tumble'); // the 6 marbles wait on their cells for the train
     expect(named(scene(), 'rail')).toHaveLength(2); // on its rails, which stay until it is gone
+    const stops = named(scene(), 'rail')[0]!.parent!.children.filter((c) => ((c as THREE.Mesh).geometry as THREE.BoxGeometry).parameters?.height === 0.1);
+    expect(stops).toHaveLength(buffers); // a buffer stop of the boss kit at each end of its line on the terrace (#1374)
     game.frame(PASS_MS / 2);
     expect(train!.position.distanceTo(start)).toBeGreaterThan(3); // it runs the line
     game.frame(PASS_MS);

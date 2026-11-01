@@ -45,6 +45,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 grate-normal.ktx2',
     '200 grate-roughness.ktx2',
     '200 kit-arena.glb', // the terrace's marks and pedestal (#1314)
+    '200 kit-boss.glb', // the bosses' props (#1374)
     '200 kit-ring-hint.glb', // the terrace's hint ring (#1364)
     '200 plate-albedo.ktx2', // the board's plate (#772)
     '200 plate-normal.ktx2',
@@ -55,6 +56,8 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 skin-Marble025-albedo.ktx2', // the default glass skin
     '200 skin-Marble025-normal.ktx2',
     '200 skin-Marble025-roughness.ktx2',
+    '200 slab-ballast.glb', // the Ballast Mind's board (#1374)
+    '200 slab-dual.glb', // the Dual Room's board (#1374)
     '200 spaceship-bay.glb',
   ]);
 });

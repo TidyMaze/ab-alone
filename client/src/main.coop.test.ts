@@ -365,7 +365,7 @@ describe('co-op: the end of the fight', () => {
 // counter fit the window, off the HUD plate (#691), and a new window size fits it again (#696).
 describe('co-op: the view of a Pulsar fight', () => {
   it('opens drawn back as in solo, and a new window size fits it again', async () => {
-    const game = await boot('?bot=off', calm);
+    const game = await boot('?bot=off&scene=room', calm);
     fightTogether(game, 'The Pulsar');
     await until(game, () => data().seat === 'player');
     const fitted = game.hook<View>('__view');
