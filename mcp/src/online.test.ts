@@ -3,12 +3,13 @@
 // would. The run over real WebRTC is e2e/online.spec.ts.
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { SITE } from '../../client/src/daily';
-import { fingerprint, inviteUrl } from '../../client/src/invite';
+import { bossSeatFromHash, fingerprint, inviteUrl } from '../../client/src/invite';
 import { generateKeys, signHello, type Wire } from '../../client/src/moverecord';
 import { OnlineSession } from '../../client/src/session';
 import { localPair, type Transport } from '../../client/src/transport';
 import { engineVersion, newEncounter, newEngine } from './engine';
 import { Session, type EngineLike, type Result, type ToolError } from './game';
+import { bossState } from './boss';
 import { formatMove, fromRecord, parseMove, toRecord } from './notation';
 
 function value<T>(result: Result<T>): T {
@@ -55,8 +56,7 @@ function agent(factory: () => EngineLike = newEngine) {
 }
 
 /** The browser client's session on the other end, with its own engine: it checks every move the agent sends. */
-async function peer(transport: Transport, game: string, side: number) {
-  const engine = newEngine();
+async function peer(transport: Transport, game: string, side: number, engine: Pick<EngineLike, 'to_move' | 'play' | 'status' | 'board'> = newEngine()) {
   const moves: string[] = [];
   const refused: string[] = [];
   const keys = await generateKeys();
@@ -351,5 +351,83 @@ describe('join_room', () => {
     });
     expect(failure(await session.joinRoom({ room: '' })).code).toBe('room_not_found');
     expect(rooms).toEqual([]);
+  });
+});
+
+describe('the boss seat (#1316)', () => {
+  const FIGHT = { boss: 'hull', seed: 3 };
+
+  test('create_room with a boss opens a duel: the invite names the boss and the seat, the state shows the boss', async () => {
+    const { session, rooms } = agent();
+    const room = value(await session.createRoom(FIGHT));
+    expect(room.you).toBe('black');
+    expect(room.invite).toBe(inviteUrl(SITE, room.room, FIGHT, await fingerprint(room.pub), true));
+    expect(bossSeatFromHash(new URL(room.invite).hash)).toEqual({ room: room.room, ...FIGHT });
+    expect(rooms).toEqual([room.room]);
+    expect(value(session.getState())).toMatchObject({ mode: 'online', you: 'black', boss: { id: 'hull', result: 'playing' } });
+  });
+
+  test('an unknown boss is unknown_boss and opens nothing', async () => {
+    const { session, rooms } = agent();
+    expect(failure(await session.createRoom({ boss: 'nope', seed: 0 })).code).toBe('unknown_boss');
+    expect(failure(await session.joinRoom({ room: inviteUrl(SITE, 'r1', { boss: 'nope', seed: 0 }, undefined, true) })).code).toBe('unknown_boss');
+    expect(rooms).toEqual([]);
+  });
+
+  test('join_room on a boss-seat link seats the agent as the boss, White, and plays the boss moves through the encounter', async () => {
+    const { session, theirs } = agent();
+    const encounter = newEncounter(FIGHT.boss, FIGHT.seed);
+    const creator = await peer(theirs, 'duel', 1, encounter);
+    const link = inviteUrl(SITE, 'duel', FIGHT, await fingerprint(creator.keys.pub), true);
+    expect(value(await session.joinRoom({ room: link }))).toMatchObject({ room: 'duel', invite: link, you: 'white' });
+    expect(value(session.getState())).toMatchObject({ mode: 'online', you: 'white', boss: { id: 'hull' } });
+
+    await creator.play('(1,3)>NE');
+    const waited = value(await session.waitForOpponentMove({ timeout_s: 10 }));
+    expect(waited).toMatchObject({ event: 'opponent_moved', move: '(1,3)>NE', state: { you: 'white', to_move: 'white' } });
+    // The boss's own move is the agent's choice, validated by the same rules: the first one of the engine's list.
+    const mine = value(session.legalMoves());
+    expect(mine.to_move).toBe('white');
+    expect(failure(session.playMove({ move: '(0,0)>E' })).code).toBe('illegal_move');
+    value(session.playMove({ move: mine.moves[0]! }));
+    await vi.waitFor(() => expect(encounter.to_move()).toBe(1));
+    expect(creator.refused).toEqual([]);
+    expect(creator.moves).toEqual([mine.moves[0]]);
+    expect(value(session.getState()).board).toBe(Array.from(encounter.board(), (c) => '.BWx'[c]).join(''));
+  });
+
+  test('the boss hooks run for the boss seat: both peers reach the same position after a move that fires a tell', async () => {
+    const { session, theirs } = agent();
+    const encounter = newEncounter(FIGHT.boss, FIGHT.seed);
+    const creator = await peer(theirs, 'hooks', 1, encounter);
+    value(await session.joinRoom({ room: inviteUrl(SITE, 'hooks', FIGHT, await fingerprint(creator.keys.pub), true) }));
+    for (let ply = 0; ply < 4; ply++) {
+      const seat = ply % 2 === 0 ? creator : null;
+      if (seat) {
+        await seat.play(formatMove(fromRecord(encounter.legal_moves().slice(0, 9))));
+        value(await session.waitForOpponentMove({ timeout_s: 10 }));
+      } else {
+        value(session.playMove({ move: value(session.legalMoves()).moves[0]! }));
+        await vi.waitFor(() => expect(encounter.to_move()).toBe(1));
+      }
+      expect(value(session.getState()).board).toBe(Array.from(encounter.board(), (c) => '.BWx'[c]).join(''));
+      expect(value(session.getState()).boss).toEqual(bossState('hull', encounter));
+    }
+    expect(creator.refused).toEqual([]);
+  });
+
+  test('a boss-seat link with the wrong creator fingerprint is not joined', async () => {
+    const [mine, theirs] = localPair();
+    const pairs = [localPair()[0], mine];
+    const session = new Session(newEngine, newEncounter, () => pairs.shift()!);
+    value(await session.createRoom()); // makes the agent key, so the clock below only runs the wait
+    value(session.newGame({ bot_nodes: 20 }));
+    await peer(theirs, 'x', 1, newEncounter(FIGHT.boss, FIGHT.seed));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    let result: Result<unknown> | undefined;
+    void session.joinRoom({ room: inviteUrl(SITE, 'x', FIGHT, 'AAAAAAAA', true) }).then((r) => (result = r));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(failure(result!).code).toBe('room_not_found');
+    expect(mine.state).toBe('closed');
   });
 });

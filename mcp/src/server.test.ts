@@ -104,9 +104,15 @@ describe('the MCP server', () => {
       required: ['move'],
       additionalProperties: false,
     });
-    for (const name of ['get_state', 'legal_moves', 'resign', 'create_room']) {
+    for (const name of ['get_state', 'legal_moves', 'resign']) {
       expect(schema(name)).toMatchObject({ type: 'object', properties: {} });
     }
+    expect(schema('create_room')).toMatchObject({
+      type: 'object',
+      properties: { boss: { type: 'string' }, seed: { type: 'integer', minimum: 0 } },
+      additionalProperties: false,
+    });
+    expect(schema('create_room').required ?? []).toEqual([]);
     expect(schema('join_room')).toMatchObject({
       type: 'object',
       properties: { room: { type: 'string' } },
@@ -191,6 +197,13 @@ describe('the MCP server', () => {
       expect(result.isError).toBe(true);
       expect(result.text).toContain('timeout_s');
     }
+  });
+
+  test('create_room with a boss opens a duel whose invite names the boss and the boss seat (#1316)', async () => {
+    await connect();
+    const room = JSON.parse((await call('create_room', { boss: 'hull', seed: 5 })).text);
+    expect(room.invite).toContain(`#room=${room.room}&boss=hull&seed=5&seat=boss&key=`);
+    expect(JSON.parse((await call('get_state')).text)).toMatchObject({ mode: 'online', boss: { id: 'hull' } });
   });
 
   test('new_game with no argument plays against the default bot', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl } from './invite';
+import { bossSeatFromHash, coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl } from './invite';
 
 describe('invite links', () => {
   it('makes a url safe room id from random bytes', () => {
@@ -80,5 +80,20 @@ describe('invite links', () => {
     expect(roomFromHash('#room=r&key=ungWv48B9')).toBeNull();
     expect(coopFromHash('#room=r&key=ungWv48B&boss=echo&seed=7')).toBeNull();
     expect(royaleFromHash('#royale=r&key=a+b/cdef')).toBeNull();
+  });
+
+  it('marks an invite whose boss is played by the joiner, apart from a co-op and a versus invite (#1316)', () => {
+    const url = inviteUrl('https://x.github.io/ab-alone/', 'abc', { boss: 'hull', seed: 7 }, 'AAAAAAAA', true);
+    expect(new URL(url).hash).toBe('#room=abc&boss=hull&seed=7&seat=boss&key=AAAAAAAA');
+    expect(bossSeatFromHash(new URL(url).hash)).toEqual({ room: 'abc', boss: 'hull', seed: 7 });
+    expect(bossSeatFromHash('#room=abc&boss=hull&seed=7&seat=boss')).toEqual({ room: 'abc', boss: 'hull', seed: 7 });
+    expect(creatorFromHash(new URL(url).hash)).toBe('AAAAAAAA');
+    expect(coopFromHash(new URL(url).hash)).toBeNull();
+    expect(roomFromHash(new URL(url).hash)).toBeNull();
+    expect(bossSeatFromHash('#room=abc&boss=hull&seed=7&key=AAAAAAAA')).toBeNull();
+    expect(bossSeatFromHash('#room=abc&seat=boss')).toBeNull();
+    expect(bossSeatFromHash('#room=abc&boss=hull&seed=4294967296&seat=boss')).toBeNull();
+    expect(bossSeatFromHash('#room=abc&boss=hull&seed=007&seat=boss')).toBeNull();
+    expect(bossSeatFromHash('')).toBeNull();
   });
 });
