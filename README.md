@@ -128,6 +128,8 @@ Online, the agent plays a human or another agent over the same P2P rooms as the 
 `wait_for_opponent_move` and `play_move` in turn. The server imports the client's online code, so
 run `bun install` in `client/` too.
 
+How the game and the network work: [docs/architecture.md](docs/architecture.md).
+
 ## Contribute
 
 - Built by two co-developers: [@TidyMaze](https://github.com/TidyMaze) and
