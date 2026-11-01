@@ -66,7 +66,14 @@ peer re-validates online moves (see `tech.md`).
    hexagon), Enter confirms, Esc backs out one step. The group and the direction are announced in the HUD.
    Whole game playable without a mouse.
 6. **Touch.** Tap to select, tap arrow, tap again to confirm. A drag works too (item 1).
-7. **Not now.** Gamepad, voice, haptics.
+7. **Gamepad (#1252).** A pad of the browser's `standard` layout (Xbox, PlayStation) takes the keyboard's paths, no
+   game logic of its own. The D-pad or the left stick moves the focus to the previous (up, left) or next (down, right)
+   control, or on the board picks the nearest of the 6 directions (`Q W E A S D`). A confirms (Enter), B backs out one
+   step (Esc), Start opens the settings menu, LB and RB walk the legal groups (Shift+Tab, Tab), the right stick orbits
+   the camera and the triggers zoom (RT in, LT out). A held aim, LB or RB repeats. The first press switches the HUD hints
+   to the pad's buttons and rings the focused control; a key press or a mouse move switches back. A pad that disconnects
+   changes nothing in the game. The Open world comes next (#1252).
+8. **Not now.** Voice, haptics.
 
 Accessibility: legal-move highlight can be forced on, colorblind-safe palette, the "clear board"
 toggle from `SPEC.md` section 5, reduced motion setting for ejection animations.

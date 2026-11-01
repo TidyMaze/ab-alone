@@ -38,6 +38,7 @@ On top of it, the ship:
 | | Mode | State |
 |---|---|---|
 | 🕹️ | **Hot-seat** on one screen | ✅ playable |
+| 🎮 | **Gamepad**: menus, HUD and the board fights with a standard pad (A confirm, B back, LB RB groups, stick to aim), the Open world next | ✅ playable |
 | 🤖 | **Versus TALLY's bot** (alpha-beta, runs in a Web Worker); an Auto-play toggle lets the bot play your side in any offline fight, a boss needs its medal | ✅ playable |
 | 📡 | **Online 1v1**, peer to peer, invite link, signed move log | ✅ playable |
 | 💀 | **Souls-like bosses**, fifteen of them (below), from the Boss fight menu, a medal per beaten boss with your fewest turns | ✅ playable |

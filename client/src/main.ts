@@ -21,6 +21,7 @@ import {
 } from './board';
 import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
+import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
@@ -4005,7 +4006,53 @@ canvas.addEventListener('keydown', (e) => {
     else selected = [];
   } else return;
   refresh();
-  hud(` · ${announce(moves, selected, keyDir)}`);
+  hud(` · ${announce(moves, selected, keyDir, padInUse)}`);
+});
+// The gamepad (#1252): its buttons press the keyboard's keys on the focused control, so the pad takes the keyboard's
+// paths. A Tab no one took, or the D-pad off the board, walks the focus. The first press shows the pad's hints and focus
+// rings (body[data-pad]); a real key or a mouse move gives the keyboard's back.
+let padInUse = false;
+let padKeys = false; // a key the pad presses
+function padKey(key: string, shiftKey = false): boolean {
+  padKeys = true;
+  const kept = document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+  padKeys = false;
+  return kept;
+}
+const keysBack = (): void => {
+  padInUse = false;
+  delete document.body.dataset.pad;
+};
+addEventListener('keydown', () => padKeys || keysBack(), { capture: true });
+addEventListener('mousemove', keysBack);
+const padKeyOf = (dir: number): string => Object.keys(KEY_DIRS).find((k) => KEY_DIRS[k] === dir)!;
+const pollPad = gamepad((action: PadAction) => {
+  padInUse = true;
+  document.body.dataset.pad = '';
+  const focused = document.activeElement as HTMLElement;
+  switch (action.kind) {
+    case 'confirm':
+      if (padKey('Enter') && focused !== canvas) focused.click(); // a button, a toggle
+      return;
+    case 'back':
+      return void padKey('Escape');
+    case 'menu':
+      cog.click();
+      return cog.focus();
+    case 'prev':
+    case 'next':
+      if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1).focus();
+      return;
+    case 'move':
+      if (focused === canvas) return void padKey(padKeyOf(action.hex));
+      return nextFocus(focused, action.step).focus();
+    case 'orbit':
+      view = orbit(view, action.dx, action.dy);
+      return applyView();
+    default:
+      view = zoom(view, action.scale);
+      return applyView();
+  }
 });
 canvas.addEventListener('pointerleave', () => {
   if (hub && hub.onPointerLeave()) {
@@ -5665,6 +5712,7 @@ function moving(): boolean {
 }
 
 renderer.setAnimationLoop((now) => {
+  pollPad(now); // the gamepad, read once per frame (#1252)
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {
