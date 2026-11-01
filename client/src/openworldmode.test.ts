@@ -9,7 +9,7 @@ import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
-import { GLIDE_MS, NUDGE_MS } from './openworldglide';
+import { CRUISE_MS, GLIDE_MS, NUDGE_MS, stepMs } from './openworldglide';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1). The badlands have no particles (#1110), so a frame
 // with motion on is idle when nothing moves; `meadow` is the same world with pollen.
@@ -1031,6 +1031,28 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS, pace: 'start' }); // the first step of a held arrow (#1065)
   });
 
+  it('a held walk speeds up to the cruise pace, each glide lasting until the next step (#1290)', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    const m = standing();
+    const span = (): number => (show.mock.calls.at(-1)![2] as { span: number }).span;
+    m.key('ArrowRight');
+    const spans = [span()];
+    for (let i = 1; i < 8; i++) {
+      clock += spans.at(-1)!;
+      m.frame(vi.fn(), clock);
+      spans.push(span());
+    }
+    expect(spans).toEqual([0, 1, 2, 3, 4, 5, 6, 7].map(stepMs));
+    expect(spans.at(-1)).toBe(CRUISE_MS);
+    m.release('ArrowRight');
+    clock += 1;
+    m.frame(vi.fn(), clock);
+    m.key('ArrowRight'); // a new press starts from the first pace again
+    expect(span()).toBe(GLIDE_MS);
+  });
+
   it('stretches the glide by the slow factor of the page, read when the step starts (a webdriver check)', () => {
     const show = vi.spyOn(OpenWorldView.prototype, 'show');
     (window as { __openworldSlow?: number }).__openworldSlow = 10;
@@ -1627,5 +1649,43 @@ describe('the scene of a world is released to the renderer (#1258)', () => {
     const second = m.scene;
     m.leave();
     expect(released).toEqual([first, second]);
+  });
+});
+
+describe('the Dungeon button walks to the nearest tower (#1291)', () => {
+  type Bridge = (seed: number, from: Axial, beaten: Int32Array, blocked: Int32Array, broken: Int32Array) => Int32Array;
+  const dungeoner = (dungeon?: Bridge, foes = new Int32Array(), lairs = new Int32Array()) =>
+    new OpenWorldMode(
+      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true, noPush,
+      worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, undefined, undefined, undefined, dungeon,
+    );
+  beforeEach(() => {
+    document.body.innerHTML = '<output id="openworld-mode"></output><p id="openworld-dungeon-note"></p>';
+  });
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('asks for the tower with the beaten lairs, the enemies and lairs as blocked, and walks the cells after the lair number', () => {
+    const dungeon = vi.fn<Bridge>(() => Int32Array.of(2, 1, 0, 2, 0, 3, 0));
+    const m = dungeoner(dungeon, Int32Array.of(0, 4), Int32Array.of(9, 9));
+    m.enter(5, 800, 600);
+    expect(m.dungeon()).toBe(true);
+    expect(dungeon).toHaveBeenCalledWith(5, [0, 0], new Int32Array(), Int32Array.of(0, 4, 9, 9), new Int32Array());
+    expect(m.hero!.at).toEqual([1, 0]);
+    expect(body().openworldRoute).toBe('2');
+    expect(document.getElementById('openworld-dungeon-note')!.textContent).toBe('');
+    m.key('Shift'); // a key cancels it, as for tap to walk
+    expect(body().openworldRoute).toBe('0');
+  });
+
+  it('says so when no tower is in reach, and does not move', () => {
+    const m = dungeoner(); // the default bridge knows no tower
+    m.enter(5, 800, 600);
+    expect(m.dungeon()).toBe(false);
+    expect(document.getElementById('openworld-dungeon-note')!.textContent).toBe('No tower in reach: walk on and try again.');
+    expect(m.hero!.at).toEqual([0, 0]);
+    document.getElementById('openworld-dungeon-note')!.remove();
+    expect(m.dungeon()).toBe(false); // no note in the page: nothing to write to
   });
 });

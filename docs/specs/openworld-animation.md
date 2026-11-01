@@ -34,8 +34,12 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 - **Props near the hero** (#1058): the loaded 441 chunks are not rebuilt or re-uploaded by an animation. Per-prop motion is a
   term of the shader driven by one uniform (`uTime`), never an instance-matrix rewrite; the hi-detail props near the hero
   keep their set. No animation changes the chunk centre, `reach` or the loaded instances.
-- **Held walk** (#1065): the walk keeps one speed. No animation lengthens a step, delays the next, or adds a pause: the step
-  is `motion.step` (140 ms, `GLIDE_MS`) in `tap`, `start` and `walk` paces alike; squash and turn ride inside it.
+- **Held walk** (#1065, #1290): within a step the pace is steady. No animation lengthens a step, delays the next, or adds a pause.
+  A tap or a short walk steps at `motion.step` (140 ms, `GLIDE_MS`). A held key, a held stick or a far tap keeps 140 ms for its
+  first 2 steps, then each step is 15 ms shorter down to the cruise pace of 80 ms (`CRUISE_MS`, `stepMs(n)`: 140, 140, 125, 110,
+  95, 80...). The glide of a step lasts as long as the cadence to the next step (the marble never pauses), the troop delay stays
+  at most half of it. A release stops at once, a new press starts at 140 ms again. Reduced motion has the same cadence (no glide).
+  A 150-cell held walk lasts 12.2 s instead of 21.0 s; squash and turn ride inside the step.
 - **Per-frame cost**: no allocation in the frame (pools and reused vectors, as `Marble` poses). Each story measures the frame
   time and CPU before/after in its PR (budget #1034); the allowed increase is 0.3 ms median per frame at the widest zoom with
   441 chunks, 0 on a frame where nothing is live.
@@ -57,7 +61,7 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 - **Reduced**: no hop, squash, settle, breath or turn; the marble jumps to its cell facing the new way.
 - **Static**: enemies (they only move when pushed, #967), the troop's idle (no breath), the ejected marble (its own fall).
 - **Acceptance**: with the fixed clock, a step at `t = 0` has the marble on the old cell, at `t = 140 ms` on the new cell with
-  scale 1 (unit); a held walk of 5 steps lasts 5 x 140 ms, to the ms; idle for 800 ms starts the breath, the next step stops it;
+  scale 1 (unit); a held walk of 5 steps lasts 140 + 140 + 125 + 110 + 95 ms (`stepMs`), to the ms; idle for 800 ms starts the breath, the next step stops it;
   with `reduced()` true the pose is the rest pose at once.
 
 ## 3. Story 3: water
