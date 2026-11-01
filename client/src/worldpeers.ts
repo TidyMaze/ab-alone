@@ -1,0 +1,144 @@
+// The other heroes of the public Open world (#1305, docs/specs/multiplayer.md section 7): the wire format, what a hero sends and
+// what it keeps of the others. Pure code, no network. Messages are small and unsigned: a peer lies only about itself, so a
+// position is cosmetic. Everything received is untrusted bytes, checked here before it is used.
+import type { Axial } from './board';
+
+/** The seed of the one public world every player lands in by default (lead decision on #1305). New world stays private. */
+export const PUBLIC_SEED = 1305;
+/** The room of a public seed. Rooms split by region and shard in a later slice; for now there is one. */
+export const roomOf = (seed: number): string => `ow:${seed}:0`;
+
+/** The version of this wire format, its first byte: a message of another version is dropped. */
+const VERSION = 1;
+const HELLO = 1;
+const POS = 2;
+
+export type Message = { t: 'hello' } | { t: 'pos'; q: number; r: number; seq: number };
+
+/** At most 4 positions a second. */
+export const SEND_MS = 250;
+/** A still hero repeats its place this often, so peers do not drop it (0.2 Hz). */
+export const KEEPALIVE_MS = 5000;
+/** A peer silent for this long is dropped. */
+export const PEER_TTL_MS = 10_000;
+/** Positions from one peer closer together than this are dropped (flood guard; the honest rate is SEND_MS). */
+export const MIN_GAP_MS = 100;
+/** The most heroes drawn, markers and edge indicators. */
+export const MAX_PEERS = 20;
+/** The table keeps at most this many peers, shown or not. */
+const MAX_TABLE = MAX_PEERS * 4;
+
+/** Hello: version and type, 2 bytes. */
+export const encodeHello = (): Uint8Array => Uint8Array.of(VERSION, HELLO);
+
+const int16 = (n: number): number => Math.max(-32768, Math.min(32767, Math.trunc(n)));
+
+/** A position: version, type, q and r as big-endian int16 (clamped), seq, 7 bytes. */
+export function encodePos(q: number, r: number, seq: number): Uint8Array {
+  const out = new Uint8Array(7);
+  const view = new DataView(out.buffer);
+  out[0] = VERSION;
+  out[1] = POS;
+  view.setInt16(2, int16(q));
+  view.setInt16(4, int16(r));
+  out[6] = seq & 0xff;
+  return out;
+}
+
+/** The message in bytes received from a peer, or null when it is not one of ours. */
+export function decode(data: unknown): Message | null {
+  if (!(data instanceof Uint8Array) || data.length < 2 || data[0] !== VERSION) return null;
+  if (data[1] === HELLO) return data.length === 2 ? { t: 'hello' } : null;
+  if (data[1] !== POS || data.length !== 7) return null;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  return { t: 'pos', q: view.getInt16(2), r: view.getInt16(4), seq: data[6]! };
+}
+
+/** The distance in cells between two axial cells. */
+export const hexDistance = (a: Axial, b: Axial): number => {
+  const dq = a[0] - b[0];
+  const dr = a[1] - b[1];
+  return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+};
+
+/** What this hero sends: its place, when it changed and SEND_MS passed, or KEEPALIVE_MS passed. */
+export class Sender {
+  private at: Axial | null = null;
+  private sent: Axial | null = null;
+  private lastMs = 0;
+  private seq = 0;
+
+  set(q: number, r: number): void {
+    this.at = [q, r];
+  }
+
+  /** The position message to send at `now` (ms), or null. */
+  due(now: number): Uint8Array | null {
+    const at = this.at;
+    if (!at) return null;
+    const waited = now - this.lastMs;
+    const moved = !this.sent || this.sent[0] !== at[0] || this.sent[1] !== at[1];
+    if (this.sent && !(moved ? waited >= SEND_MS : waited >= KEEPALIVE_MS)) return null;
+    this.sent = at;
+    this.lastMs = now;
+    return encodePos(at[0], at[1], this.seq++);
+  }
+
+  /** The place now, for a peer that just joined; it takes no seq of its own (the next send is a newer one). */
+  now(): Uint8Array | null {
+    return this.at ? encodePos(this.at[0], this.at[1], this.seq - 1) : null;
+  }
+}
+
+interface Entry {
+  cell: Axial | null;
+  seq: number;
+  /** The time of the last message of any kind, and of the last accepted position (ms). */
+  heard: number;
+  posAt: number;
+}
+
+/** What this hero knows of the others, by transport peer. */
+export class Peers {
+  private readonly table = new Map<string, Entry>();
+
+  get size(): number {
+    return this.table.size;
+  }
+
+  hello(peer: string, now: number): void {
+    const known = this.table.get(peer);
+    if (known) known.heard = now;
+    else if (this.table.size < MAX_TABLE) this.table.set(peer, { cell: null, seq: 0, heard: now, posAt: -Infinity });
+  }
+
+  /** A position from `peer`. False when it is refused: no Hello first, too fast, or not newer than the last (seq mod 256). */
+  position(peer: string, { q, r, seq }: { q: number; r: number; seq: number }, now: number): boolean {
+    const e = this.table.get(peer);
+    if (!e) return false;
+    if (now - e.posAt < MIN_GAP_MS) return false;
+    const ahead = (seq - e.seq + 256) % 256;
+    if (e.cell && (ahead === 0 || ahead > 127)) return false;
+    e.cell = [q, r];
+    e.seq = seq;
+    e.heard = now;
+    e.posAt = now;
+    return true;
+  }
+
+  leave(peer: string): void {
+    this.table.delete(peer);
+  }
+
+  /** Drops the peers silent for more than PEER_TTL_MS. */
+  expire(now: number): void {
+    for (const [peer, e] of this.table) if (now - e.heard > PEER_TTL_MS) this.table.delete(peer);
+  }
+
+  /** The peers with a known place: at most MAX_PEERS, the nearest to `from` first when it is given. */
+  cells(from?: Axial): { peer: string; cell: Axial }[] {
+    const known = [...this.table].flatMap(([peer, e]) => (e.cell ? [{ peer, cell: e.cell }] : []));
+    if (from) known.sort((a, b) => hexDistance(from, a.cell) - hexDistance(from, b.cell));
+    return known.slice(0, MAX_PEERS);
+  }
+}

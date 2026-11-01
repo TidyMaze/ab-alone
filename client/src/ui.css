@@ -816,6 +816,12 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #openworld-hud button { margin: 0 0.5rem 0.25rem 0; min-height: var(--target); padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 #openworld-hud button:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
 #openworld-hud button:active { border-color: var(--plate-accent); background: var(--bg); }
+/* The other heroes of the public Open world out of view (#1305): an arrow at the screen edge pointing their way, with the distance in tiles.
+   The elements are placed by percent from the script, over the canvas, never in the way of a touch. */
+#openworld-peers { position: fixed; inset: 0; z-index: 1; display: none; pointer-events: none; }
+body[data-openworld] #openworld-peers:not([hidden]) { display: block; }
+.peer-edge { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 1px; transform: translate(-50%, -50%); color: #ff7ad9; font: 700 1rem/1 var(--ui); text-shadow: 0 0 3px #0b0d0f, 0 0 3px #0b0d0f; }
+.peer-edge svg { transform: rotate(var(--angle, 0rad)); filter: drop-shadow(0 0 2px #0b0d0f); }
 /* The virtual joystick (#1025): a base under the thumb of a touch on the left half, shown only while the touch lasts, so never on a
    desktop. It passes the pointer through, the canvas keeps the touch's pinch and taps. */
 #joystick { position: fixed; z-index: 1; width: 96px; height: 96px; margin: -48px 0 0 -48px; box-sizing: border-box; border: 5px solid #8a949c; border-radius: 50%; background: rgba(22, 26, 29, 0.25); box-shadow: 0 0 0 1px #2a3034, inset 0 0 0 1px #2a3034; opacity: 0.9; pointer-events: none; }
