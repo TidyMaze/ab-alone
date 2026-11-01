@@ -3,11 +3,12 @@ import { ballastText, firedText, parseFired } from './ballast';
 
 describe('ballastText', () => {
   it('names the borrowed effect and the boss it comes from, one line per code of the bridge', () => {
-    expect([0, 1, 2, 3].map(ballastText)).toEqual([
+    expect([0, 1, 2, 3, 4].map(ballastText)).toEqual([
       "Next turn: the Hull's crack",
       "Next turn: the Pulsar's pulse",
       "Next turn: the Magnetizer's polarity",
       "Next turn: the Chaplain's conversion check",
+      "Next turn: the Swarm's wave",
     ]);
   });
 
@@ -33,11 +34,12 @@ describe('parseFired (#838)', () => {
 
 describe('firedText (#838)', () => {
   it('names the effect that just fired, one line per code of the bridge', () => {
-    expect([0, 1, 2, 3].map((effect) => firedText({ effect, cells: [] }))).toEqual([
+    expect([0, 1, 2, 3, 4].map((effect) => firedText({ effect, cells: [] }))).toEqual([
       "Fired: the Hull's crack",
       "Fired: the Pulsar's pulse",
       "Fired: the Magnetizer's polarity",
       "Fired: the Chaplain's conversion check",
+      "Fired: the Swarm's wave",
     ]);
   });
 

@@ -60,15 +60,20 @@ pub fn arrivals(turn: u32) -> u8 {
 /// The rim cells a swarm marble may land on, in `q` then `r` order: the rim of the radius 4 board
 /// with `r <= 0`, away from the player's start side.
 pub fn allowed_rim() -> Vec<P> {
-    (-4..=4)
-        .flat_map(|q| (-4..=0).map(move |r| (q, r)))
-        .filter(|&c| distance(c, (0, 0)) == 4)
+    allowed_rim_of(4)
+}
+
+/// The allowed rim of a board of radius `radius` (The Ballast Mind borrows the wave on its radius 5).
+pub fn allowed_rim_of(radius: i32) -> Vec<P> {
+    (-radius..=radius)
+        .flat_map(|q| (-radius..=0).map(move |r| (q, r)))
+        .filter(|&c| distance(c, (0, 0)) == radius)
         .collect()
 }
 
 /// The empty allowed rim cells of `board`, in `q` then `r` order.
 fn free_rim(board: &Board) -> Vec<P> {
-    allowed_rim()
+    allowed_rim_of(board.radius())
         .into_iter()
         .filter(|&(q, r)| board.get(q, r) == Some(Cell::Empty))
         .collect()
@@ -103,6 +108,12 @@ pub fn land(board: &Board, cells: &[P]) -> (Board, Vec<P>) {
         }
     }
     (out, landed)
+}
+
+/// The wave of phase `phase` landing at once on `board`, its cells picked by `seed` (The Ballast
+/// Mind's borrowed effect).
+pub fn wave(board: &Board, seed: u64, phase: usize) -> Board {
+    land(board, &announce(board, seed, SWARM_ARRIVALS[phase])).0
 }
 
 /// The start board: the player's standard layout minus its marbles nearest the centre, no swarm.
@@ -420,6 +431,16 @@ mod tests {
         let mut sorted = rim.clone();
         sorted.sort();
         assert_eq!(rim, sorted, "in q then r order");
+    }
+
+    #[test]
+    fn the_allowed_rim_of_a_bigger_board_is_its_rim_with_r_at_most_0() {
+        assert_eq!(allowed_rim_of(4), allowed_rim());
+        let rim = allowed_rim_of(5);
+        assert_eq!(rim.len(), 16);
+        assert!(rim
+            .iter()
+            .all(|&(q, r)| r <= 0 && distance((q, r), (0, 0)) == 5));
     }
 
     #[test]

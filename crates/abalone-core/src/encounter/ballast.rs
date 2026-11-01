@@ -1,13 +1,15 @@
 //! The Ballast Mind (#47, docs/specs/game-design.md section 7.5): the final exam. A radius 5
 //! board with six void pillars, 16 marbles each, and no rule code of its own. Every
 //! [`BALLAST_EVERY`] turns it borrows one effect of another boss, picked by the engine PRNG among
-//! four one-shot hooks that run that boss's own code:
+//! five one-shot hooks that run that boss's own code:
 //!
 //! - the Hull's crack (P1 rim, P2 inner, P3 any cell), whose timer the Hull ticks on every
 //!   player turn (special id [`BALLAST_TICK`]);
 //! - the Pulsar's pulse from a random direction, at force 2, 3 and infinite;
 //! - the Magnetizer's polarity: one marble polarized, then the settle;
-//! - the Chaplain's conversion check, at threshold 4.
+//! - the Chaplain's conversion check, at threshold 4;
+//! - the Swarm's wave: the arrivals of the phase land at once on the empty rim cells away from the
+//!   player's start side.
 //!
 //! The phases come from the ejections (P2 after 3, P3 after 5), as in the bosses it borrows from.
 //! The effect fires at the end of a boss turn, so the player reads it one turn ahead in the HUD.
@@ -17,6 +19,7 @@ use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
 use crate::encounter::hull::{hull_boss, hull_step, mix, HULL_CRACKS, HULL_PLAYER_END};
 use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETIZER_TURN};
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
+use crate::encounter::swarm::wave;
 use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
 use crate::moves::{apply, legal_moves, Move, Player};
@@ -94,16 +97,18 @@ pub enum Borrowed {
     PulsarPulse(u8),
     MagnetizerPolarity,
     ChaplainConversion,
+    SwarmWave,
 }
 
 /// The effect the hook seed `seed` picks (the PRNG of the fight seed and the ply).
 pub fn borrowed(seed: u64) -> Borrowed {
     let state = mix(!seed);
-    match state % 4 {
+    match state % 5 {
         0 => Borrowed::HullCrack,
-        1 => Borrowed::PulsarPulse(((state / 4) % 6) as u8),
+        1 => Borrowed::PulsarPulse(((state / 5) % 6) as u8),
         2 => Borrowed::MagnetizerPolarity,
-        _ => Borrowed::ChaplainConversion,
+        3 => Borrowed::ChaplainConversion,
+        _ => Borrowed::SwarmWave,
     }
 }
 
@@ -213,6 +218,7 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
             run(magnetizer_boss(), MAGNETIZER_TURN, &announced)
         }
         Borrowed::ChaplainConversion => run(chaplain_boss(), CHAPLAIN_BOSS_END, board),
+        Borrowed::SwarmWave => wave(board, seed, phase),
     }
 }
 
@@ -362,24 +368,23 @@ mod tests {
         (0..).find(|&s| want(borrowed(ply_seed(s, 6)))).unwrap()
     }
 
+    /// The direction of the pulse the hook seed `seed` picks.
+    fn pulse_dir(seed: u64) -> u8 {
+        (0..6)
+            .find(|&d| borrowed(seed) == Borrowed::PulsarPulse(d))
+            .unwrap()
+    }
+
     /// A hook seed that picks a pulse, and its direction.
     fn pulse_seed() -> (u64, u8) {
-        (0..)
-            .find_map(|s| match borrowed(s) {
-                Borrowed::PulsarPulse(dir) => Some((s, dir)),
-                _ => None,
-            })
-            .unwrap()
+        let seed = seed_of(|b| matches!(b, Borrowed::PulsarPulse(_)));
+        (seed, pulse_dir(seed))
     }
 
     /// A fight seed whose pick at the end of ply 6 is a pulse, and its direction.
     fn fight_pulse_seed() -> (u64, u8) {
-        (0..)
-            .find_map(|s| match borrowed(ply_seed(s, 6)) {
-                Borrowed::PulsarPulse(dir) => Some((s, dir)),
-                _ => None,
-            })
-            .unwrap()
+        let seed = fight_seed(|b| matches!(b, Borrowed::PulsarPulse(_)));
+        (seed, pulse_dir(ply_seed(seed, 6)))
     }
 
     fn is_rim(board: &Board, (q, r): P) -> bool {
@@ -486,12 +491,13 @@ mod tests {
     }
 
     #[test]
-    fn the_pick_covers_the_four_effects_and_the_six_pulse_directions() {
+    fn the_pick_covers_the_five_effects_and_the_six_pulse_directions() {
         let picks: Vec<Borrowed> = (0..400).map(borrowed).collect();
         assert_eq!(picks, (0..400).map(borrowed).collect::<Vec<_>>());
         assert!(picks.contains(&Borrowed::HullCrack));
         assert!(picks.contains(&Borrowed::MagnetizerPolarity));
         assert!(picks.contains(&Borrowed::ChaplainConversion));
+        assert!(picks.contains(&Borrowed::SwarmWave));
         for dir in 0..6 {
             assert!(
                 picks.contains(&Borrowed::PulsarPulse(dir)),
@@ -520,6 +526,31 @@ mod tests {
                 assert_eq!(is_rim(&out, out.cracks()[0].0), rim, "phase {phase}");
             }
         }
+    }
+
+    #[test]
+    fn the_swarm_wave_lands_the_phase_count_on_empty_rim_cells_away_from_the_player_side() {
+        let seed = seed_of(|b| b == Borrowed::SwarmWave);
+        for (phase, count) in [(0, 1), (1, 1), (2, 2)] {
+            let out = hook(&open_board(), BALLAST_FIRE + phase, seed);
+            let landed: Vec<P> = touched(&open_board(), &out);
+            assert_eq!(landed.len(), count, "phase {phase}");
+            for &(q, r) in &landed {
+                assert_eq!(out.get(q, r), Some(Cell::White), "phase {phase}");
+                assert!(r <= 0 && is_rim(&out, (q, r)), "{q}, {r}");
+                assert_eq!(open_board().get(q, r), Some(Cell::Empty));
+            }
+        }
+    }
+
+    #[test]
+    fn the_swarm_wave_of_a_full_allowed_rim_does_not_arrive() {
+        let mut board = open_board();
+        for (q, r) in crate::encounter::swarm::allowed_rim_of(BALLAST_RADIUS) {
+            board.set(q, r, Cell::White);
+        }
+        let seed = seed_of(|b| b == Borrowed::SwarmWave);
+        assert_eq!(hook(&board, BALLAST_FIRE + 2, seed), board);
     }
 
     #[test]
@@ -762,6 +793,26 @@ mod tests {
     }
 
     #[test]
+    fn the_search_plays_the_swarm_wave_due_this_turn() {
+        let seed = fight_seed(|b| b == Borrowed::SwarmWave);
+        let mut enc = Encounter::new(
+            Game::from_position(open_board(), Player::Black, [0, 0]),
+            ballast_boss(),
+            seed,
+        )
+        .counting_by_colour();
+        enc.boss.node_budget = 300;
+        while enc.game().history().len() < 5 {
+            let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
+            enc.play(&m).unwrap();
+        }
+        let before = count(enc.game().board(), Cell::White);
+        let hooked = ballast_move(&enc).unwrap();
+        enc.play(&hooked).unwrap();
+        assert_eq!(count(enc.game().board(), Cell::White), before + 1);
+    }
+
+    #[test]
     fn the_search_is_for_the_boss_turn_only() {
         assert_eq!(ballast_move(&ballast_start(0)), None);
     }
@@ -803,6 +854,11 @@ mod tests {
             vec![(0, 0)],
             "the flipped marble"
         );
+        let wave = seed_of(|b| b == Borrowed::SwarmWave);
+        let landed = hook(&open_board(), BALLAST_FIRE, wave);
+        let cells = touched(&open_board(), &landed);
+        assert_eq!(cells.len(), 1, "the cell the swarm marble landed on");
+        assert_eq!(landed.get(cells[0].0, cells[0].1), Some(Cell::White));
         let idle = hook(&open_board(), BALLAST_FIRE, flip);
         assert_eq!(
             touched(&open_board(), &idle),
@@ -923,7 +979,7 @@ mod tests {
             board.set(q, r, Cell::White);
         }
         let game = Game::from_position(board, Player::Black, [2, 0]).with_win([12, 12]);
-        let mut enc = Encounter::new(game, ballast_boss(), 20709).counting_by_colour();
+        let mut enc = Encounter::new(game, ballast_boss(), 5).counting_by_colour();
         for m in [
             mv(&[(-1, -2), (0, -3)], Direction::NE),
             mv(&[(2, 3)], Direction::NW),
