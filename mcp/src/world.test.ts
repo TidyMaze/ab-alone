@@ -140,9 +140,10 @@ describe('a step', () => {
     value(open.newWorld({ seed: found!.seed }));
     const [q, r] = found!.spot!.at;
     if (q !== 0 || r !== 0) value(open.walk({ q, r }));
+    const broken = value(open.state({})).broken;
     const moved = value(open.step({ direction: found!.spot!.dir as 'E' }));
     expect(moved.smashed).toBe('boulder');
-    expect(moved.state.broken).toBe(1);
+    expect(moved.state.broken).toBe(broken + 1);
     const [dq, dr] = STEPS[found!.spot!.dir]!;
     expect(moved.state.hero).toBe(`(${q + dq},${r + dr})`);
     const here = value(open.state({ radius: 1 })).window.rows.find((row) => row.r === r + dr)!;
@@ -158,9 +159,16 @@ describe('a step', () => {
     value(open.newWorld({ seed: found!.seed }));
     const [q, r] = found!.spot!.at;
     if (q !== 0 || r !== 0) value(open.walk({ q, r }));
+    const broken = value(open.state({})).broken;
     const moved = value(open.step({ direction: found!.spot!.dir as 'E' }));
     expect(moved.smashed).toBe('tree');
-    expect(moved.state.broken).toBe(1);
+    expect(moved.state.broken).toBe(broken + 1);
+    const [dq, dr] = STEPS[found!.spot!.dir]!;
+    // Walk 8 cells away, along the first line that is open, so the troop has left the cell: it shows as grass.
+    const away = Object.values(STEPS).map(([sq, sr]) => open.walk({ q: q + dq + 8 * sq, r: r + dr + 8 * sr })).find((walk) => walk.ok);
+    expect(away).toBeTruthy();
+    const left = value(open.state({ radius: 8 })).window.rows.find((row) => row.r === r + dr)!;
+    expect(left.cells[q + dq - left.q0]).toBe('g');
   });
 
   test('a tree next to another tree stays in the way', () => {
@@ -174,12 +182,22 @@ describe('a step', () => {
     expect(failure(open.step({ direction: found!.spot!.dir as 'E' })).code).toBe('blocked');
   });
 
+  test('a cell off the world refuses the step', () => {
+    const rules: WorldRules = { ...worldRules(), world_path: () => new Int32Array() };
+    const open = new OpenWorld({ ...rules, world_chunk: () => new Uint8Array() }, bossIds);
+    value(open.newWorld({ seed: 0 }));
+    const error = failure(open.step({ direction: 'W' }));
+    expect(error.message).toContain('off the world');
+  });
+
   test('an enemy blocks the step', () => {
     const open = world();
     value(open.newWorld({ seed: 1 }));
     // seed 1 has a group at (6,6), (7,5), (8,4): walk next to it
     value(open.walk({ q: 5, r: 6 }));
-    expect(failure(open.step({ direction: 'E' })).code).toBe('blocked');
+    const error = failure(open.step({ direction: 'E' }));
+    expect(error.code).toBe('blocked');
+    expect(error.message).toContain('an enemy stands there');
     expect(value(open.state({ radius: 2 })).enemies).toContain('(6,6)');
   });
 
