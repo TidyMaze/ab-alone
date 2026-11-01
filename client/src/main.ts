@@ -190,7 +190,7 @@ import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
-import { bindJoystick } from './openworldjoystick';
+import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
 import { bindNewWorld } from './openworldnew';
 import { worldSaves } from './openworldsave';
@@ -261,9 +261,9 @@ import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight, type FrameShape, typ
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
-import { bestTurns, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
+import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { roomAt, type Spot as HubSpot } from './hub';
+import { roomAt, type Door, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
 import { labelsHtml, pipsHtml, railHtml } from './hubview';
 import { indexedDbStore } from './idb';
@@ -356,7 +356,7 @@ const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {
-  if (hub) return resetView(innerWidth < innerHeight ? 2.4 : 3); // the hub's deck plan (#1249): its 19 cells and their plates, closer than a board, closer still upright
+  if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
   if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
   return resetView(activeRadius());
@@ -3263,7 +3263,7 @@ function refresh(): void {
   if (hub) {
     const { beaten } = loadProgress(store);
     hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim);
-    hubLabels.innerHTML = labelsHtml(hub.at, beaten);
+    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store)); // a beaten boss's door shows its medal (#1249)
     document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
     document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
     placeHubLabels();
@@ -4062,11 +4062,13 @@ const keysBack = (): void => {
 };
 addEventListener('keydown', () => padKeys || keysBack(), { capture: true });
 addEventListener('mousemove', keysBack);
+const WALK_PX = 100; // a full push of the stick is this many px of the touch stick's drag
 const padKeyOf = (dir: number): string => Object.keys(KEY_DIRS).find((k) => KEY_DIRS[k] === dir)!;
 const pollPad = gamepad((action: PadAction) => {
   padInUse = true;
   document.body.dataset.pad = '';
   const focused = document.activeElement as HTMLElement;
+  const free = focused === canvas || focused === document.body; // the canvas has the focus: the Open world's hero is the pad's
   switch (action.kind) {
     case 'confirm':
       if (padKey('Enter') && focused !== canvas) focused.click(); // a button, a toggle
@@ -4078,15 +4080,25 @@ const pollPad = gamepad((action: PadAction) => {
       return cog.focus();
     case 'prev':
     case 'next':
+      if (openWorld.active && free) return void padKey(action.kind === 'prev' ? 'q' : 'e'); // the camera turns a step (#1251)
       if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1).focus();
       return;
+    case 'reset':
+      if (openWorld.active) padKey('r'); // the camera back to its default angle (#1026)
+      return;
+    case 'walk':
+      // The stick walks the hero as the touch stick does, in the yaw of the camera; a rest lets go (#1252).
+      return openWorld.hold(openWorld.active && free ? heldKeys(action.x * WALK_PX, action.y * WALK_PX, openWorld.yaw) : []);
     case 'move':
+      if (openWorld.active && free) return; // the stick walked the hero already
       if (focused === canvas) return void padKey(padKeyOf(action.hex));
       return nextFocus(focused, action.step).focus();
     case 'orbit':
+      if (openWorld.active) return; // LB and RB turn the Open world's camera
       view = orbit(view, action.dx, action.dy);
       return applyView();
     default:
+      if (openWorld.active) return openWorld.zoom(action.scale);
       view = zoom(view, action.scale);
       return applyView();
   }
@@ -4139,8 +4151,8 @@ addEventListener('resize', () => {
 });
 
 // Used by the browser checks to click a cell by its axial coordinates.
-(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number) => {
-  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1);
+(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number, lift = 0) => {
+  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1, lift);
 };
 // Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
 // corners, in pixels.
@@ -4622,8 +4634,22 @@ function enterRoom(at: HubSpot): void {
   else if (door?.kind === 'hotseat' || door?.kind === 'bot') startLocal(door.kind === 'bot');
   else if (door?.kind === 'online' && !playOnlineButton.disabled) playOnline();
   else if (door?.kind === 'royale') startRoyale({ seed: crypto.getRandomValues(new Uint32Array(1))[0]!, rounds: [] });
-  else return;
+  else if (door?.kind === 'daily') startDaily();
+  else if (door?.kind === 'ranked' && !rankedButton.disabled) rankedButton.click();
+  else return enterModeRoom(door);
   roomOf = at;
+}
+// The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the ship: Ship in the mode
+// menu takes the player back from a run, the Trainer and the Open world, and Fight together opens the mode menu on its
+// boss list.
+function enterModeRoom(door: Door | undefined): void {
+  if (door?.kind === 'run') runButton.click();
+  else if (door?.kind === 'trainer') trainerButton.click();
+  else if (door?.kind === 'world') openWorldButton.click();
+  else if (door?.kind === 'together') {
+    if (!modesOpen) moveModes('button');
+    showCoopList(true);
+  }
 }
 function startLocal(bot: boolean): void {
   worker = bot ? botWorker : null;

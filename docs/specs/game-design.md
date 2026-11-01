@@ -72,7 +72,8 @@ peer re-validates online moves (see `tech.md`).
    step (Esc), Start opens the settings menu, LB and RB walk the legal groups (Shift+Tab, Tab), the right stick orbits
    the camera and the triggers zoom (RT in, LT out). A held aim, LB or RB repeats. The first press switches the HUD hints
    to the pad's buttons and rings the focused control; a key press or a mouse move switches back. A pad that disconnects
-   changes nothing in the game. The Open world comes next (#1252).
+   changes nothing in the game. In the Open world the left stick walks the hero (as the touch stick, in the camera's
+   yaw), LB and RB turn the camera one step, R3 resets it and the triggers zoom it (`openworld.md` section 4).
 8. **Not now.** Voice, haptics.
 
 Accessibility: legal-move highlight can be forced on, colorblind-safe palette, the "clear board"
@@ -136,7 +137,7 @@ See section 6.
 | Item | Rule |
 |---|---|
 | Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Ship hub (Mess deck, #602). A "Ship" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
-| Space | One small hex map per deck (`client/src/hub.ts`): 19 cells (radius 2), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
+| Space | One small hex map per deck (`client/src/hub.ts`): 37 cells (radius 3), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
 | Rooms | Cells with a prop and a label plate, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
@@ -150,7 +151,7 @@ the five decks (beaten, open, locked, and where the marble is) and boss pips cou
 
 | Room | Prop | Plate (short on a phone) |
 |---|---|---|
-| Boss | A blast door in a crimson frame with an amber core; open with a gold seal once its boss is beaten | Boss door, the boss's name and `beaten` once it is (the boss's name) |
+| Boss | A blast door in a crimson frame with an amber core; open with a gold seal once its boss is beaten | Boss door, the boss's name, and once beaten its medal's best turns, or `beaten` with no medal (the boss's name without "The") |
 | Hot-seat | A table with two amber chairs | Hot-seat, 2 players (Hot-seat) |
 | Bot | A cyan robot | Bot table, vs the ship AI (Bot) |
 | Online | An antenna with two signal arcs | Online, 1v1 peer room (Online) |
@@ -158,12 +159,19 @@ the five decks (beaten, open, locked, and where the marble is) and boss pips cou
 | Terminal | A CRT, its screen green | Terminal, lore entry (Terminal) |
 | Medal room | A gold medal on a plinth | Medal room, best turns (Medals) |
 | Lift | A cage of four posts around its arrow, a bar across while locked | Lift ▲ or ▼ and its deck, open or locked (▲ and the deck, or ▲ Locked) |
+| Daily | A calendar with a sky-blue header | Daily, boss of the day (Daily) |
+| Rogue-lite | A map table with three grape route nodes | Rogue-lite, 3-act run (Run) |
+| Together | Two pink marbles on one plinth | Together, co-op vs a boss (Co-op) |
+| Ranked | A podium of three steps, the first one lime | Ranked, Elo ladder (Ranked) |
+| Open world | An indigo globe of Hollow on a stand | Open world, walk Hollow (World) |
+| Trainer | A target dummy: a post and a tan target disc | Trainer, bot waves (Trainer) |
 
 Room kinds:
 
 | Room | Enters |
 |---|---|
-| Boss | The deck's door boss, one of the five lore-slot bosses of section 7 (the other bosses of the roster are in the boss menu; every boss has an Open world lair): the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
+| Boss | That boss's fight, as the boss menu starts it. Every boss of the roster has one door, on its deck (README "The game", `deck.ts`, #1249). The deck's lore-slot boss of section 7 keeps the east door: the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge). The other bosses stand in the gallery ring: the Dual Room (Mess); the Alien, the Rail Yard, the Assembly Line, the Swarm (Cargo); the Magnetizer, the Unstable Core (Furnace); the Overseer, the Stalker (Chapel); the Pulsar (Bridge). Only the lore-slot boss opens the lift |
+| Mode rooms | A mode with no table of its own, the same as its mode menu entry (#1249): the Daily challenge and the Open world on the Mess, the Rogue-lite run on the Cargo, Fight together on the Furnace (it opens the mode menu on its boss list), Ranked and the Trainer on the Bridge (Ranked offline opens nothing, as the online table). Every entry of the mode menu has its room. Back to the ship comes back from the daily and a ranked game; from a run, the Trainer and the Open world, Ship in the mode menu does |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
 | Medal room | On the Mess only (0, 2), a gold medal prop (#812, #1249). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
@@ -171,10 +179,18 @@ Room kinds:
 | BR lobby | Shown closed until battle royale ships (Phase 4): a bar across its glyph, the HUD says closed, the marble may stand on it. Every deck has one |
 
 Layout, the same on every deck so it is learned once: the centre and its 6 neighbours are floor,
-the rooms sit on the outer ring. Lift up at the top (q 1, r -2), lift down at the bottom (-1, 2),
+the rooms sit on the two outer rings. Lift up at the top (q 1, r -2), lift down at the bottom (-1, 2),
 boss at the east corner (2, 0) between the two terminals (2, -1) and (1, 1), the tables on the
 west side: hot-seat (-1, -1), bot (-2, 0), online (-2, 1), and the BR lobby on the south-west corner (-2, 2)
-next to them, and the Mess alone has the Medal room at the south cell (0, 2). The Mess has no lift down, the Bridge no lift up, so every deck has 8 or 9 rooms.
+next to them, and the Mess alone has the Medal room at the south cell (0, 2). The Mess has no lift down, the Bridge no lift up.
+
+The gallery ring (#1249): with a boss door for every boss and a room for every mode, the Cargo needs 14 rooms, more
+than the 12 cells of the ring of radius 2. So the map grows by one ring, the simplest way that still frames on a phone
+(37 cells, ui.md section 4.5), and the rooms of radius 2 stay where they were: a saved spot still loads, and the test
+hooks see the same cells. The gallery rooms take these cells in order: (3, -2) by the boss door, the north corners
+(3, -3) and (0, -3), then the south-west corner (-3, 3) and the south corner (0, 3); each deck lists its other bosses in
+roster order, then its mode rooms. No gallery room has a room next to it in its row, so no two plates overlap, and every
+other cell of the ring is floor that the marble walks around. Every deck has 11 to 14 rooms.
 
 Lobbies without a matchmaker: a PvP table or BR lobby is a public peer-to-peer room (Trystero)
 where waiting players are listed and pick each other, plus invite links. Invite-first. With no

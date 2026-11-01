@@ -51,3 +51,11 @@ describe('main.ts the board centred in the window (#957)', () => {
       }
     });
 });
+
+describe('main.ts the screen point of a cell (#1259)', () => {
+  it('__cellToScreen draws a point lifted above the cell higher in the window', async () => {
+    const game = await boot('?bot=off');
+    const lifted = game.hook<{ x: number; y: number }>('__cellToScreen', -4, 0, 0.76);
+    expect(lifted.y).toBeLessThan(drawn(game, -4, 0).y);
+  });
+});

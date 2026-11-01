@@ -156,14 +156,14 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(hub()).toBe('mess 0,0');
     expect(document.body.dataset.deck).toBe('mess');
     expect(byId('modes').getAttribute('aria-expanded')).toBe('false');
-    expect(game.hook('__frame')).toMatchObject({ radius: 2, holes: 0 });
+    expect(game.hook('__frame')).toMatchObject({ radius: 3, holes: 0 });
     expect(document.body.dataset.rim).toBe('off');
     const { discs, glass, shells, glyphs } = drawn(scene());
-    expect(discs).toBe(19);
+    expect(discs).toBe(37);
     expect(shells).toHaveLength(0);
     expect(glass).toHaveLength(1);
     expect(glass[0]!.position.toArray()).toEqual([0, 0.36, 0]);
-    expect(glyphs).toBe(9); // eight rooms (with the Medal room) and the lift up: the Mess has no lift down
+    expect(glyphs).toBe(12); // eight rooms (with the Medal room), the lift up and the gallery's three: the Mess has no lift down
     expect(game.hud()).toBe('Ship · Mess');
   });
 
@@ -195,9 +195,10 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(press('a').defaultPrevented).toBe(false);
     press('ArrowDown', byId<HTMLInputElement>('invite'));
     expect(hub()).toBe('mess 0,-1');
-    press('ArrowUp'); // up to (0, -2), up again: off the map, the marble stays
+    press('ArrowUp'); // up to (0, -2), then (1, -3), up again: off the map, the marble stays
     press('ArrowUp');
-    expect(hub()).toBe('mess 0,-2');
+    press('ArrowUp');
+    expect(hub()).toBe('mess 1,-3');
   });
 
   it('leaves the arrow keys to the terminal reader while it is open', async () => {
@@ -223,7 +224,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(hub()).toBe('cargo -1,2');
     expect(document.body.dataset.deck).toBe('cargo');
     expect(saved()).toEqual({ version: 1, deck: 'cargo', cell: [-1, 2], beaten: ['echo'] });
-    expect(drawn(scene()).glyphs).toBe(9); // the two lifts
+    expect(drawn(scene()).glyphs).toBe(14); // the two lifts and the gallery's five
     expect(game.hud()).toBe('Ship · CargoLift to Mess');
     press('ArrowRight');
     expect(hub()).toBe('cargo 0,2');
@@ -566,6 +567,86 @@ const END_ROYALE = {
     expect(data().royale).toBeUndefined();
   });
 
+  // #1249: every boss of the roster has its door on its deck, and every mode with no table its room.
+  it('a gallery boss door starts its own boss, its plate shows its medal once beaten', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'cargo', cell: [2, -2], beaten: ['echo', 'alien'] }));
+    localStorage.setItem('ab-alone.medals', JSON.stringify({ alien: 22 }));
+    ship(game);
+    expect(document.querySelector('#hub-labels [data-cell="3,-2"]')!.textContent).toContain('The Alien · Medal: 22 turns');
+    game.click(3, -2);
+    expect(hub()).toBeUndefined();
+    expect(data().boss).toBe('alien');
+    expect(data().deck).toBe('cargo');
+  });
+
+  it('the Daily room starts the daily challenge, as its menu entry does', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    shipAt(game, [2, -3]);
+    game.click(3, -3);
+    expect(hub()).toBeUndefined();
+    expect(game.hook<{ daily?: unknown }>('__fight')!.daily).toBeDefined();
+  });
+
+  it('the Rogue-lite room starts a run on its map', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'cargo', cell: [-1, 3], beaten: ['echo'] }));
+    ship(game);
+    game.click(0, 3);
+    expect(hub()).toBeUndefined();
+    expect(byId('run-map').hidden).toBe(false);
+  });
+
+  it('the Open world room opens the Open world', async () => {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+    shipAt(game, [1, -3]);
+    game.click(0, -3);
+    for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done)); // the world reads its save first
+    expect(data().openworld).toBe('7');
+  });
+
+  it('the Fight together room opens the mode menu on its boss list; the marble stays on the room', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    const beaten = ['echo', 'hull'];
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'furnace', cell: [1, -3], beaten }));
+    ship(game);
+    game.click(0, -3);
+    expect(hub()).toBe('furnace 0,-3');
+    expect(byId('mode-menu').hidden).toBe(false);
+    expect(byId('coop-list').hidden).toBe(false);
+    game.click(1, -3); // off the room and back: the list stays open
+    game.click(0, -3);
+    expect(byId('coop-list').hidden).toBe(false);
+  });
+
+  it('the Ranked room opens a ranked room as its menu entry does; offline it opens nothing', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    const beaten = ['echo', 'hull', 'choir', 'chaplain'];
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'bridge', cell: [2, -3], beaten }));
+    ship(game);
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    window.dispatchEvent(new Event('offline'));
+    game.click(3, -3);
+    expect(hub()).toBe('bridge 3,-3');
+    Reflect.deleteProperty(navigator, 'onLine');
+    window.dispatchEvent(new Event('online'));
+    game.click(2, -3);
+    game.click(3, -3);
+    expect(hub()).toBeUndefined();
+    expect(byId('invite').hidden).toBe(false);
+    expect(byId('hud').querySelector('.rank-badge')).not.toBeNull();
+  });
+
+  it('the Trainer room starts the Trainer at wave 1, as its menu entry does', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    const beaten = ['echo', 'hull', 'choir', 'chaplain'];
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'bridge', cell: [1, -3], beaten }));
+    ship(game);
+    game.click(0, -3);
+    expect(hub()).toBeUndefined();
+    expect(data().trainer).toBe('1');
+  });
+
   it('Back to the ship never shows after a game no room started', async () => {
     const game = await boot('?nodes=100');
     await game.hook<Promise<number>>('__playTurns', 30, [4]);
@@ -725,7 +806,7 @@ describe('main.ts, the deck plan (#1249)', () => {
     localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'cargo', cell: [0, 0], beaten: ['echo'] }));
     ship(game);
     expect(plan().hidden).toBe(false);
-    expect(document.querySelectorAll('#hub-labels .hub-label')).toHaveLength(10); // the nine rooms of the Cargo and YOU
+    expect(document.querySelectorAll('#hub-labels .hub-label')).toHaveLength(15); // the fourteen rooms of the Cargo and YOU
     expect(plate('2,0').textContent).toContain('The Hull');
     expect(plate('0,0').textContent).toBe('You');
     placed(game, [2, 0]);
@@ -755,13 +836,13 @@ describe('main.ts, the deck plan (#1249)', () => {
     const game = await boot('?bot=off');
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
     shipAt(game, [-1, 1]);
-    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3).distance);
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.6).distance);
     byId('reset-view').click(); // Reset view in the hub frames the deck
-    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3).distance);
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.6).distance);
     vi.stubGlobal('innerWidth', 390); // a phone held upright: closer still, so the plates read
     vi.stubGlobal('innerHeight', 844);
     window.dispatchEvent(new Event('resize'));
-    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(2.4).distance);
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.4).distance);
     vi.unstubAllGlobals();
     game.click(-2, 2); // the battle royale lobby
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
