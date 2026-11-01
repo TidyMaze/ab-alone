@@ -17,6 +17,10 @@ describe('the light of the terrace', () => {
     expect(group.children).toHaveLength(2);
     expect(lights[1].color.getHex()).toBe(SUN.colour);
   });
+  it('keeps a contrasty light: the sun at least 3 times the hemisphere, a shadow that darkens by at least 80 % (#1398)', () => {
+    expect(SUN.intensity / SUN.hemisphere).toBeGreaterThanOrEqual(3);
+    expect(SUN_SHADOW.intensity).toBeGreaterThanOrEqual(0.8);
+  });
   it('puts the sun at its elevation, 25 degrees left of the camera axis', () => {
     const [x, y, z] = sunPosition(10);
     expect(Math.asin(y / 10) * (180 / Math.PI)).toBeCloseTo(SUN.elevation);

@@ -514,9 +514,9 @@ export class OpenWorldView {
   ) {
     this.scene.background = new THREE.Color(SHIP_BLACK);
     this.scene.fog = this.fog;
-    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 1.6));
+    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 0.9));
     // The arena's sun (tablezero.ts, #1364): its colour and its direction, the hero's cell at its target; the shadow is the high tier's.
-    this.sun = new THREE.DirectionalLight(SUN.colour, 2.2);
+    this.sun = new THREE.DirectionalLight(SUN.colour, 3.2);
     this.scene.add(this.sun, this.sun.target);
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     const top = topOnly(prism);
