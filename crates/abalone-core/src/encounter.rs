@@ -300,8 +300,10 @@ impl Encounter {
     pub fn phase_after(&self, board: &Board) -> usize {
         let root = marbles(self.game.board(), Cell::White);
         let left = marbles(board, Cell::White);
-        let ejected = self.game.ejected(Player::Black) + root.saturating_sub(left);
-        self.phase_of(left, ejected).max(self.phase())
+        let ejected = self.game.ejected(Player::Black);
+        let now = self.phase_of(root, ejected);
+        let gone = root.saturating_sub(left);
+        self.phase_of(left, ejected + gone).max(now)
     }
 
     /// The phase with `left` boss marbles on the board and `ejected` credited to the player.
