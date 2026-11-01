@@ -1383,7 +1383,7 @@ export class OpenWorldView {
       if (Math.abs(kx - cx) > reach || Math.abs(ky - cy) > reach) continue;
       const tile = this.world.tile(q, r)!;
       const p = axialTo3D(q, r);
-      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height), p.z);
+      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
       dummy.updateMatrix();
       this.pads.setMatrixAt(n, dummy.matrix);
       this.rings.setMatrixAt(n++, dummy.matrix);
