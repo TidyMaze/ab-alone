@@ -19,8 +19,8 @@ describe('README.md', () => {
     expect(theGame).toContain(boss_name(id)!);
   });
 
-  it('marks Ranked as playable in "The game" (#711)', () => {
-    const rankedRow = theGame.split('\n').find((line) => line.includes('**Ranked**'));
-    expect(rankedRow).toContain('✅ playable');
+  // #711, then #1284: the README lists ranked online play in "The game" (since #1282, a bullet, no status table).
+  it('names ranked online play in "The game" (#711)', () => {
+    expect(theGame).toMatch(/ranked online/i);
   });
 });

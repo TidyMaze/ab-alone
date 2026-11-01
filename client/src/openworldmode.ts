@@ -96,7 +96,8 @@ function intentOf(held: ReadonlySet<string>, yaw: number): number | null {
 /** The hex step of the held arrows in the yaw of the camera (#1026, docs/specs/openworld.md section 4). The held arrows are a screen
  * direction (the sum of the two of a diagonal), and the hero rolls to the neighbour of the hex grid that the camera shows nearest to
  * it: a neighbour at ground angle `a` shows at `a - yaw`, so the one nearest to `direction + yaw` is taken. A tie (the zigzag of an
- * odd or even row, or a yaw at the middle of two neighbours) takes the step the keyboard takes at yaw 0, as it always did. `null`
+ * odd or even row, or a yaw at the middle of two neighbours) takes the step the keyboard takes at yaw 0, as it always did; for Left or
+ * Right alone it takes the neighbour that leans up on the screen (#1273). `null`
  * for no arrow or for opposite arrows. */
 export function stepOf(at: Axial, held: ReadonlySet<string>, yaw: number): Axial | null {
   const want = intentOf(held, yaw);
@@ -104,10 +105,13 @@ export function stepOf(at: Axial, held: ReadonlySet<string>, yaw: number): Axial
   const arrows = [...held].filter((key) => SCREEN.has(key));
   const fallback = arrows.length === 1 ? arrowCell(at, arrows[0]!)! : heldCell(at, held)!;
   const fallbackAngle = groundAngle([fallback[0] - at[0], fallback[1] - at[1]]);
+  // A pure sideways intent (Left or Right alone) breaks a tie toward the neighbour that leans up on the screen (#1273).
+  const sideways = arrows.length === 1 && (arrows[0] === 'ArrowLeft' || arrows[0] === 'ArrowRight');
   let best = DIRECTIONS[0]!;
   let bestScore = [Infinity, Infinity];
   for (const dir of DIRECTIONS) {
-    const score = [Math.round(gapOf(groundAngle(dir), want) * 1e9), Math.round(gapOf(groundAngle(dir), fallbackAngle) * 1e9)];
+    const tie = sideways ? -Math.sin(groundAngle(dir) - yaw) : gapOf(groundAngle(dir), fallbackAngle);
+    const score = [Math.round(gapOf(groundAngle(dir), want) * 1e9), Math.round(tie * 1e9)];
     if (score[0]! < bestScore[0]! || (score[0] === bestScore[0] && score[1]! < bestScore[1]!)) {
       best = dir;
       bestScore = score;
@@ -194,6 +198,8 @@ export class OpenWorldMode {
     private readonly path: WalkPath = () => new Int32Array(),
     /** Whether steering is on (the Settings item, #1137): the held arrows slide round obstacles and a far tap walks there. */
     private readonly steering: () => boolean = () => true,
+    /** Called with the scene of a world left, after its view is freed: the renderer frees what it keeps per scene, the lights node's textures (#1258). */
+    private readonly releaseScene: (scene: THREE.Scene) => void = () => {},
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -207,7 +213,7 @@ export class OpenWorldMode {
   /** Enters the world of `seed` with the hero, the troop and the fight of `saved` (a save of this seed), or on the spawn. */
   enter(seed: number, width: number, height: number, saved: WorldSave | null = null, skins?: MarbleSkins): void {
     this.flush(); // the world left (another seed entered over it) is saved first
-    this.view?.dispose();
+    this.freeView();
     this.seed = seed;
     const world = new World(
       (cx, cy) => this.load(seed, cx, cy),
@@ -256,11 +262,18 @@ export class OpenWorldMode {
     return this.view?.scene ?? null;
   }
 
+  /** Frees the view drawn now, if any, and hands its scene to the renderer to release (#1258). */
+  private freeView(): void {
+    if (!this.view) return;
+    this.view.dispose();
+    this.releaseScene(this.view.scene);
+  }
+
   leave(): void {
     this.flush();
     this.active = false;
     this.held.clear();
-    this.view?.dispose();
+    this.freeView();
     this.view = null;
     this.world = null;
     this.dirty = false;

@@ -52,7 +52,7 @@ test('the arrows in the Open world do not open the board replay, and leaving the
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await page.keyboard.press('ArrowLeft');
-  await expect.poll(at).toBe('-1,0');
+  await expect.poll(at).toBe('0,-1'); // up-left (#1273)
   await expect(page.locator('#replay-bar')).toHaveJSProperty('hidden', true); // the attribute, not the CSS: the HUD is hidden here anyway
   await page.keyboard.press('Escape');
   expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
@@ -797,4 +797,19 @@ test('a push punches the camera in and back, without moving the chunk centre, #1
   const punched = samples.filter((s) => s.camera.zoom !== base.zoom);
   expect(punched.at(-1)!.t - punched[0]!.t).toBeLessThanOrEqual(260); // at most 250 ms, a frame of slack
   await page.screenshot({ path: test.info().outputPath('camera-after.png') });
+});
+
+// #1273: at the default view a Right press from an odd row walks forward (up-right), as Left does, not back down-right.
+test('Right from an odd row walks forward in the Open world, #1273', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  await page.evaluate(() => {
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 1], troop: [[-1, 1]], enemies: [] });
+  });
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(at).toBe('1,1'); // up-right (it was down-right, 0,2)
 });

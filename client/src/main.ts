@@ -5260,6 +5260,9 @@ const openWorld = new OpenWorldMode(
   },
   (seed, from, to, blocked, broken) => Int32Array.from(world_path(seed, from[0], from[1], to[0], to[1], blocked, broken)), // the walk to a far cell (#1137)
   () => steering,
+  // The lights node the renderer keeps per scene holds GPU textures (clustered lighting: 2 per scene) that nothing else frees, so
+  // each world entered leaked them (#1258).
+  (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {
