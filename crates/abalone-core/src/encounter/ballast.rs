@@ -20,7 +20,7 @@ use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
 use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
 use crate::moves::{apply, legal_moves, Move, Player};
-use crate::search::{search_hooked, DEFAULT_WEIGHTS};
+use crate::search::{search_phased, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -187,6 +187,17 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
     }
 }
 
+/// The phase at a ply of the tree: the root's phase or the one the player's ejections credited so
+/// far reach, so a player move that ejects (P2 at 3, P3 at 5) strengthens the effect that answers
+/// it (#1115). Ejections never go back, so it never falls below the root's.
+fn tree_phase(root: usize, ejected: [u8; 2]) -> usize {
+    let reached = BALLAST_PHASE_EJECTIONS
+        .iter()
+        .filter(|&&t| ejected[0] >= t)
+        .count();
+    reached.max(root)
+}
+
 /// The tick, or the effect the seed picks, each by the code of the boss it comes from.
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
     let run = |boss: BossDef, id: u8, board: &Board| (boss.hook)(board, id, seed);
@@ -229,7 +240,8 @@ pub(crate) fn ballast_search(
     let root = enc.game().board();
     let boss_turn = enc.game().to_move() == Player::White;
     let ply = enc.game().history().len() as u32 + if boss_turn { 1 } else { 2 };
-    let due = special(ply, enc.phase()).map(|id| (id, ply_seed(enc.seed, u64::from(ply))));
+    // Only a boss ply fires, so the id of the effect waits for the phase of the tree.
+    let due = special(ply, 0).map(|_| ply_seed(enc.seed, u64::from(ply)));
     let tick = |before: &Board, mover: Player, mv: &Move, after: Board| {
         // The Hull's own tick, which does nothing without a crack: skip its board copy.
         if after.cracks().is_empty() {
@@ -255,13 +267,15 @@ pub(crate) fn ballast_search(
             })
             .collect(),
     };
-    let step = |before: &Board, mover: Player, mv: &Move, after: Board| {
+    let root_phase = enc.phase();
+    let step = |before: &Board, mover: Player, mv: &Move, after: Board, ejected: [u8; 2]| {
         if mover == Player::Black {
             return tick(before, mover, mv, after);
         }
-        let Some((id, seed)) = due.filter(|_| fires.contains(before)) else {
+        let Some(seed) = due.filter(|_| fires.contains(before)) else {
             return (after, [0, 0]);
         };
+        let id = BALLAST_FIRE + tree_phase(root_phase, ejected) as u8;
         let out = hook(&after, id, seed);
         // A conversion moves marbles to the other side without ejecting any.
         let [lost_black, lost_white] = if no_gain(&after, &out) {
@@ -271,7 +285,7 @@ pub(crate) fn ballast_search(
         };
         (out, [lost_white, lost_black])
     };
-    search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
+    search_phased(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step, None).map(|r| r.mv)
 }
 
 /// The Ballast board with no marble: radius 5 with the six pillars void.
@@ -877,5 +891,63 @@ mod tests {
         assert_eq!(run(4), run(4));
         let boards: Vec<_> = (0..8).map(run).collect();
         assert!(boards.iter().any(|b| *b != boards[0]));
+    }
+
+    #[test]
+    fn the_tree_phase_is_the_root_phase_or_the_one_the_credits_reach() {
+        assert_eq!(tree_phase(0, [2, 0]), 0);
+        assert_eq!(tree_phase(0, [3, 0]), 1, "P2 at 3");
+        assert_eq!(tree_phase(0, [5, 0]), 2, "P3 at 5");
+        assert_eq!(tree_phase(2, [0, 0]), 2, "the root phase holds");
+        assert_eq!(tree_phase(0, [0, 9]), 0, "only the player's credit counts");
+    }
+
+    /// Black to move after four plies, 2 ejections credited to the player (P1): the due effect is a
+    /// pulse. A player move that ejects a third marble reaches P2 before the boss reply, so the
+    /// pulse that answers it is stronger (#1115).
+    fn pulse_after_an_ejection() -> Encounter {
+        let mut board = ballast_board();
+        for (q, r) in [
+            (-5, 1),
+            (-2, 0),
+            (-1, -2),
+            (0, -4),
+            (0, -3),
+            (4, -4),
+            (4, -3),
+            (4, 1),
+        ] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(-3, 2), (2, -5), (2, 3), (3, 2), (5, -1), (5, 0)] {
+            board.set(q, r, Cell::White);
+        }
+        let game = Game::from_position(board, Player::Black, [2, 0]).with_win([12, 12]);
+        let mut enc = Encounter::new(game, ballast_boss(), 20709).counting_by_colour();
+        for m in [
+            mv(&[(-1, -2), (0, -3)], Direction::NE),
+            mv(&[(2, 3)], Direction::NW),
+            mv(&[(0, -4)], Direction::SW),
+            mv(&[(-3, 2)], E),
+        ] {
+            enc.play(&m).unwrap();
+        }
+        assert_eq!(enc.phase(), 0, "P1 at the root");
+        assert_eq!(
+            std::mem::discriminant(&borrowed(ply_seed(enc.seed, 6))),
+            std::mem::discriminant(&Borrowed::PulsarPulse(0)),
+            "a pulse is due on the boss reply"
+        );
+        enc
+    }
+
+    #[test]
+    fn the_phase_reached_in_the_tree_changes_the_best_move() {
+        let enc = pulse_after_an_ejection();
+        // The search that keeps the phase of its root, as before #1115, picked this move.
+        let frozen = mv(&[(4, 1)], W);
+        let new = ballast_search(&enc, 1000, &|_| true).unwrap();
+        assert_eq!(new, mv(&[(0, -3), (1, -4)], Direction::NE));
+        assert_ne!(new, frozen);
     }
 }
