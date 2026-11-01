@@ -237,6 +237,10 @@ import {
   hasNormalMaps,
   meshDetail,
   nextPixelRatio,
+  offersLowTier,
+  readLowOffer,
+  slowRun,
+  writeLowOffer,
   read,
   write,
   renderPixelRatio,
@@ -742,14 +746,43 @@ function setPixelRatio(ratio: number): void {
   renderer.setPixelRatio(ratio);
   document.body.dataset.ratio = String(ratio);
 }
-function adaptResolution(now: number): void {
-  frameTimes.push(now - lastFrame);
-  lastFrame = now;
-  if (frameTimes.length < RATIO_FRAMES) return;
+// The low tier offer (#849): a sustained slow rate (quality.ts slowRun) offers the low tier once per page view, as a quiet
+// note with Accept and Dismiss, shown at a quiet moment only: no move animation, no online game or Battle royale.
+let lowRun = 0;
+let lowOfferShown = false;
+const lowOffer = document.getElementById('low-offer') as HTMLDivElement;
+function endWindow(): void {
+  lowRun = slowRun(lowRun, frameTimes);
   const next = nextPixelRatio(pixelRatio, frameTimes, Math.min(devicePixelRatio, 1));
   if (next !== pixelRatio) setPixelRatio(next);
   else frameTimes = [];
 }
+function adaptResolution(now: number): void {
+  frameTimes.push(now - lastFrame);
+  lastFrame = now;
+  if (frameTimes.length >= RATIO_FRAMES) endWindow();
+}
+function offerLowTier(quiet: boolean): void {
+  if (!quiet || online || royaleNet || !offersLowTier(tier, lowRun, readLowOffer(store), lowOfferShown)) return;
+  lowOfferShown = true;
+  lowOffer.hidden = false;
+}
+function answerLowOffer(accepted: boolean): void {
+  lowOffer.hidden = true;
+  writeLowOffer(store, accepted ? 'accepted' : 'dismissed');
+  if (accepted) {
+    tier = 'low';
+    writeTier(store, tier);
+    applyLook();
+  }
+}
+(document.getElementById('low-offer-accept') as HTMLButtonElement).addEventListener('click', () => answerLowOffer(true));
+(document.getElementById('low-offer-dismiss') as HTMLButtonElement).addEventListener('click', () => answerLowOffer(false));
+// For the tests (adaptation is skipped under automation): one window of frames of `ms` each.
+(window as unknown as Record<string, unknown>).__slowWindow = (ms: number) => {
+  frameTimes = Array.from({ length: RATIO_FRAMES }, () => ms);
+  endWindow();
+};
 
 // How many times the look was rebuilt: an orbit never rebuilds it (bug #475, e2e/camera.spec.ts).
 let looks = 0;
@@ -6049,6 +6082,7 @@ renderer.setAnimationLoop((now) => {
     }
   }
   if (!navigator.webdriver) adaptResolution(now);
+  offerLowTier(!sliding() && !lastMovePlaying); // at a quiet moment: no move animation (the ambient dust and heat pulse always move)
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
   renderer.info.reset();

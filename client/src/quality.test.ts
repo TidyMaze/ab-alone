@@ -17,6 +17,11 @@ import {
   renderPixelRatio,
   smoothEdges,
   nextPixelRatio,
+  slowRun,
+  offersLowTier,
+  readLowOffer,
+  writeLowOffer,
+  SLOW_RUNS,
   readFlatHud,
   readHudFolded,
   readTranscript,
@@ -666,5 +671,32 @@ describe('the low tier drops the costly passes of the board room (#849)', () => 
   it('loads and draws no normal map on low, the maps on high', () => {
     expect(hasNormalMaps('low')).toBe(false);
     expect(hasNormalMaps('high')).toBe(true);
+  });
+});
+
+describe('the low tier offer after a sustained slow frame rate (#849)', () => {
+  const frames = (ms: number, n = 30): number[] => Array.from({ length: n }, () => ms);
+  it('counts consecutive slow windows (median over 20 ms) and a fast one starts over', () => {
+    expect(slowRun(0, frames(40))).toBe(1);
+    expect(slowRun(2, frames(40))).toBe(3);
+    expect(slowRun(3, frames(16.7))).toBe(0);
+    expect(slowRun(3, [...frames(16, 29), 8000])).toBe(0); // one long frame is no slow window
+  });
+  it('offers the low tier only after SLOW_RUNS slow windows, on the high tier, once, until answered', () => {
+    expect(offersLowTier('high', SLOW_RUNS, null, false)).toBe(true);
+    expect(offersLowTier('high', SLOW_RUNS - 1, null, false)).toBe(false);
+    expect(offersLowTier('low', SLOW_RUNS, null, false)).toBe(false);
+    expect(offersLowTier('high', SLOW_RUNS, 'dismissed', false)).toBe(false);
+    expect(offersLowTier('high', SLOW_RUNS, null, true)).toBe(false); // once per session
+  });
+  it('remembers the answer', () => {
+    const data: Record<string, string> = {};
+    const store = { getItem: (k: string) => data[k] ?? null, setItem: (k: string, v: string) => void (data[k] = v) };
+    expect(readLowOffer(store)).toBeNull();
+    writeLowOffer(store, 'dismissed');
+    expect(readLowOffer(store)).toBe('dismissed');
+    data['ab-alone.low-offer'] = 'junk';
+    expect(readLowOffer(store)).toBeNull();
+    expect(readLowOffer(null)).toBeNull();
   });
 });

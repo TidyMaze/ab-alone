@@ -246,10 +246,25 @@ export const smoothEdges = (drawnRatio: number, msaa: boolean): boolean => drawn
 // load) changes nothing. It never steps back up: with vsync a fast frame and a frame with room to spare look the same.
 const SLOW_FRAME_MS = 20;
 const RATIO_STEP = 0.25;
+const isSlow = (frameMs: readonly number[]): boolean => [...frameMs].sort((a, b) => a - b)[frameMs.length >> 1]! > SLOW_FRAME_MS;
 export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor: number): number {
-  const median = [...frameMs].sort((a, b) => a - b)[frameMs.length >> 1]!;
-  return median > SLOW_FRAME_MS ? Math.max(floor, ratio - RATIO_STEP) : ratio;
+  return isSlow(frameMs) ? Math.max(floor, ratio - RATIO_STEP) : ratio;
 }
+
+// The low tier offer (#849): after SLOW_RUNS slow windows in a row (about 4 s at 30 FPS) the high tier offers the low one,
+// once per page view, until the player answered. Never automatic: Accept or Dismiss, remembered.
+export const SLOW_RUNS = 4;
+export type LowOffer = 'accepted' | 'dismissed';
+const OFFER_KEY = 'ab-alone.low-offer';
+/** The count of slow windows in a row after one more window of frames: a fast window starts over. */
+export const slowRun = (run: number, frameMs: readonly number[]): number => (isSlow(frameMs) ? run + 1 : 0);
+export const offersLowTier = (tier: Tier, run: number, answer: LowOffer | null, shown: boolean): boolean =>
+  tier === 'high' && run >= SLOW_RUNS && answer === null && !shown;
+export const readLowOffer = (store: Store): LowOffer | null => {
+  const stored = read(store, OFFER_KEY);
+  return stored === 'accepted' || stored === 'dismissed' ? stored : null;
+};
+export const writeLowOffer = (store: Store, answer: LowOffer): void => write(store, OFFER_KEY, answer);
 
 /**
  * Airborne particles (#443): light dust/steam/smoke outside the board volume.

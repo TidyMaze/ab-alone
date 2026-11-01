@@ -68,6 +68,12 @@
       <button id="openworld-chip" type="button" aria-label="Open world help and seed" aria-controls="openworld-hud" aria-expanded="false" hidden>i</button>
       <div id="joystick" aria-hidden="true" hidden><span id="joystick-knob"></span></div>
       <div id="fps" aria-hidden="true" hidden></div>
+      <!-- The low tier offer (#849): shown once after a sustained slow frame rate, never taken without a press. -->
+      <div id="low-offer" role="status" hidden>
+        <span>Running slowly? The low quality tier draws fewer effects.</span>
+        <button id="low-offer-accept" type="button">Use low quality</button>
+        <button id="low-offer-dismiss" type="button">Dismiss</button>
+      </div>
       <div id="online">
         <div id="settings-box">
           <button id="settings" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu" disabled>
