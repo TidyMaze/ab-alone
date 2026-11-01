@@ -15,6 +15,10 @@ const VERSION = 2;
 const HELLO = 1;
 const POS = 2;
 const BREAK = 3;
+const TROOP = 4;
+/** The most marbles of a troop on the wire, and how far from its hero one may stand (cells). */
+export const TROOP_MAX = 6;
+export const TROOP_REACH = 8;
 
 /** A hero broke the obstacle on a cell of the world `seed` (#1305): signed by its key (`pub`, `sig` in base64url), see worldevents.ts. */
 export interface BreakEvent {
@@ -40,7 +44,7 @@ export function encodeBreak(e: BreakEvent): Uint8Array {
   return out;
 }
 
-export type Message = { t: 'break'; event: BreakEvent } | { t: 'hello'; name: string } | { t: 'pos'; q: number; r: number; seq: number };
+export type Message = { t: 'break'; event: BreakEvent } | { t: 'troop'; offsets: Axial[] } | { t: 'hello'; name: string } | { t: 'pos'; q: number; r: number; seq: number };
 
 /** At most 4 positions a second. */
 export const SEND_MS = 250;
@@ -98,6 +102,27 @@ export function encodePos(q: number, r: number, seq: number): Uint8Array {
   return out;
 }
 
+/** The troop of a hero: version, type, the count, then the offset of each marble from the hero (two int8), at most TROOP_MAX. */
+export function encodeTroop(offsets: readonly Axial[]): Uint8Array {
+  const kept = offsets.slice(0, TROOP_MAX);
+  const out = new Uint8Array(3 + 2 * kept.length);
+  out.set([VERSION, TROOP, kept.length]);
+  const view = new DataView(out.buffer);
+  kept.forEach(([dq, dr], i) => {
+    view.setInt8(3 + 2 * i, dq);
+    view.setInt8(4 + 2 * i, dr);
+  });
+  return out;
+}
+
+/** Whether `offsets` are a troop: at most TROOP_MAX marbles, each within TROOP_REACH of the hero, none on it, none twice. */
+const isTroop = (offsets: readonly Axial[]): boolean =>
+  offsets.length <= TROOP_MAX &&
+  offsets.every(([dq, dr], i) => {
+    const far = hexDistance([0, 0], [dq, dr]);
+    return far >= 1 && far <= TROOP_REACH && offsets.findIndex((o) => o[0] === dq && o[1] === dr) === i;
+  });
+
 /** The message in bytes received from a peer, or null when it is not one of ours. */
 export function decode(data: unknown): Message | null {
   if (!(data instanceof Uint8Array) || data.length < 2 || data[0] !== VERSION) return null;
@@ -107,6 +132,12 @@ export function decode(data: unknown): Message | null {
     if (data.length !== BREAK_BYTES) return null;
     const event = { seed: view.getUint32(2), q: view.getInt16(6), r: view.getInt16(8), pub: b64(data.slice(10, 42).buffer), sig: b64(data.slice(42).buffer) };
     return { t: 'break', event };
+  }
+  if (data[1] === TROOP) {
+    const count = data[2]!;
+    if (data.length !== 3 + 2 * count) return null;
+    const offsets = Array.from({ length: count }, (_, i): Axial => [view.getInt8(3 + 2 * i), view.getInt8(4 + 2 * i)]);
+    return isTroop(offsets) ? { t: 'troop', offsets } : null;
   }
   if (data[1] !== POS || data.length !== 7) return null;
   return { t: 'pos', q: view.getInt16(2), r: view.getInt16(4), seq: data[6]! };
@@ -125,9 +156,27 @@ export class Sender {
   private sent: Axial | null = null;
   private lastMs = 0;
   private seq = 0;
+  private troop: Axial[] = [];
+  private sentTroop: string | null = null;
+  private troopMs = 0;
 
   set(q: number, r: number): void {
     this.at = [q, r];
+  }
+
+  /** The cells of this hero's troop (absolute). Call after `set`: the offsets are taken from the hero's place. */
+  setTroop(cells: readonly Axial[]): void {
+    this.troop = cells.map((c): Axial => [c[0], c[1]]);
+  }
+
+  /** The offsets of the marbles from the hero that a peer accepts: not on the hero, within TROOP_REACH, at most TROOP_MAX. */
+  private get offsets(): Axial[] | null {
+    const at = this.at;
+    if (!at) return null;
+    return this.troop
+      .map((c): Axial => [c[0] - at[0], c[1] - at[1]])
+      .filter((o) => hexDistance([0, 0], o) >= 1 && hexDistance([0, 0], o) <= TROOP_REACH)
+      .slice(0, TROOP_MAX);
   }
 
   /** The position message to send at `now` (ms), or null. */
@@ -142,6 +191,20 @@ export class Sender {
     return encodePos(at[0], at[1], this.seq++);
   }
 
+  /** The troop to send at `now` (ms): its offsets from the hero changed since the last one and SEND_MS passed; null otherwise. */
+  dueTroop(now: number): Uint8Array | null {
+    const offsets = this.offsets;
+    if (!offsets || (this.sentTroop !== null && (this.sentTroop === offsets.join() || now - this.troopMs < SEND_MS))) return null;
+    this.sentTroop = offsets.join();
+    this.troopMs = now;
+    return encodeTroop(offsets);
+  }
+
+  /** The troop now, for a peer that just joined. */
+  nowTroop(): Uint8Array | null {
+    return this.offsets ? encodeTroop(this.offsets) : null;
+  }
+
   /** The place now, for a peer that just joined; it takes no seq of its own (the next send is a newer one). */
   now(): Uint8Array | null {
     return this.at ? encodePos(this.at[0], this.at[1], this.seq - 1) : null;
@@ -150,11 +213,14 @@ export class Sender {
 
 interface Entry {
   cell: Axial | null;
+  /** The marbles of its troop as offsets from its hero. */
+  offsets: Axial[];
   name: string;
   seq: number;
   /** The time of the last message of any kind, and of the last accepted position (ms). */
   heard: number;
   posAt: number;
+  troopAt: number;
 }
 
 /** What this hero knows of the others, by transport peer. */
@@ -171,7 +237,7 @@ export class Peers {
     if (known) {
       known.heard = now;
       known.name = name;
-    } else if (this.table.size < MAX_TABLE) this.table.set(peer, { cell: null, name, seq: 0, heard: now, posAt: -Infinity });
+    } else if (this.table.size < MAX_TABLE) this.table.set(peer, { cell: null, offsets: [], name, seq: 0, heard: now, posAt: -Infinity, troopAt: -Infinity });
   }
 
   /** A position from `peer`. False when it is refused: no Hello first, too fast, or not newer than the last (seq mod 256). */
@@ -188,6 +254,16 @@ export class Peers {
     return true;
   }
 
+  /** The troop of `peer` as offsets from its hero. False when refused: no Hello, or too fast (a flood). */
+  troop(peer: string, offsets: readonly Axial[], now: number): boolean {
+    const e = this.table.get(peer);
+    if (!e || now - e.troopAt < MIN_GAP_MS) return false;
+    e.offsets = offsets.map((o): Axial => [o[0], o[1]]);
+    e.heard = now;
+    e.troopAt = now;
+    return true;
+  }
+
   leave(peer: string): void {
     this.table.delete(peer);
   }
@@ -198,8 +274,11 @@ export class Peers {
   }
 
   /** The peers with a known place: at most MAX_PEERS, the nearest to `from` first when it is given. */
-  cells(from?: Axial): { peer: string; cell: Axial; name: string }[] {
-    const known = [...this.table].flatMap(([peer, e]) => (e.cell ? [{ peer, cell: e.cell, name: e.name }] : []));
+  cells(from?: Axial): { peer: string; cell: Axial; name: string; troop: Axial[] }[] {
+    const known = [...this.table].flatMap(([peer, e]) => {
+      const [q, r] = e.cell ?? [0, 0];
+      return e.cell ? [{ peer, cell: e.cell, name: e.name, troop: e.offsets.map(([dq, dr]): Axial => [q + dq, r + dr]) }] : [];
+    });
     if (from) known.sort((a, b) => hexDistance(from, a.cell) - hexDistance(from, b.cell));
     return known.slice(0, MAX_PEERS);
   }

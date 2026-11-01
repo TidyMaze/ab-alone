@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { b64 } from './moverecord';
-import { BREAK_BYTES, cleanName, decode, encodeBreak, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_NAME, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, PUBLIC_SEED, readName, roomOf, SEND_MS, Sender, writeName } from './worldpeers';
+import { BREAK_BYTES, encodeTroop, TROOP_MAX, TROOP_REACH, cleanName, decode, encodeBreak, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_NAME, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, PUBLIC_SEED, readName, roomOf, SEND_MS, Sender, writeName } from './worldpeers';
 
 describe('the wire format', () => {
   it('names one room for the public world', () => {
@@ -85,6 +85,36 @@ describe('the broken-cell event on the wire', () => {
   });
 });
 
+describe('the troop on the wire', () => {
+  it('is 3 bytes and 2 per marble, as offsets from the hero: 15 bytes for a full troop of 6', () => {
+    expect(TROOP_MAX).toBe(6);
+    expect(encodeTroop([])).toEqual(Uint8Array.of(2, 4, 0));
+    expect(encodeTroop([[1, 0], [-2, 3]])).toEqual(Uint8Array.of(2, 4, 2, 1, 0, 254, 3));
+    const six = encodeTroop([[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]]);
+    expect(six).toHaveLength(15);
+    expect(decode(six)).toEqual({ t: 'troop', offsets: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]] });
+    expect(decode(encodeTroop([[-2, 3]]))).toEqual({ t: 'troop', offsets: [[-2, 3]] });
+  });
+
+  it('keeps only the first 6 marbles when sent more', () => {
+    const many = Array.from({ length: 9 }, (_, i): [number, number] => [i + 1, 0]);
+    expect(decode(encodeTroop(many))).toEqual({ t: 'troop', offsets: [[1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0]] });
+  });
+
+  it('refuses what a troop cannot be: a wrong length, too many, a marble on the hero, far off, or twice', () => {
+    expect(TROOP_REACH).toBe(8);
+    expect(decode(Uint8Array.of(2, 4))).toBeNull();
+    expect(decode(Uint8Array.of(2, 4, 2, 1, 0))).toBeNull(); // says 2 marbles, holds 1
+    expect(decode(Uint8Array.of(2, 4, 1, 1, 0, 9))).toBeNull(); // a byte too many
+    expect(decode(new Uint8Array([2, 4, 7, ...new Array(14).fill(1)]))).toBeNull(); // 7 marbles
+    expect(decode(Uint8Array.of(2, 4, 1, 0, 0))).toBeNull(); // on the hero
+    expect(decode(Uint8Array.of(2, 4, 1, 9, 0))).toBeNull(); // 9 cells off
+    expect(decode(Uint8Array.of(2, 4, 1, 5, 5))).toBeNull(); // 10 cells off on the diagonal
+    expect(decode(Uint8Array.of(2, 4, 2, 1, 0, 1, 0))).toBeNull(); // the same cell twice
+    expect(decode(Uint8Array.of(2, 4, 1, 8, 0))).not.toBeNull(); // 8 is the edge
+  });
+});
+
 describe('hexDistance', () => {
   it('counts cells between two axial cells', () => {
     expect(hexDistance([0, 0], [0, 0])).toBe(0);
@@ -139,6 +169,36 @@ describe('Sender: position on change, 4 Hz at most', () => {
   });
 });
 
+describe('Sender: the troop, on change only, 4 Hz at most', () => {
+  it('sends the offsets from the hero when they change, never the same twice, never faster than every 250 ms', () => {
+    const s = new Sender();
+    expect(s.dueTroop(0)).toBeNull(); // nothing known
+    s.set(10, 10);
+    s.setTroop([[11, 10], [9, 10]]);
+    expect(s.dueTroop(0)).toEqual(encodeTroop([[1, 0], [-1, 0]]));
+    expect(s.dueTroop(300)).toBeNull(); // unchanged
+    s.setTroop([[11, 10]]);
+    s.set(11, 10); // the hero moved: the same cells are other offsets
+    expect(s.dueTroop(100)).toBeNull(); // too soon
+    expect(s.dueTroop(250)).toEqual(encodeTroop([])); // the one marble stands on the hero now: dropped
+  });
+
+  it('now: the troop for a peer that just joined, none before one is known', () => {
+    const s = new Sender();
+    expect(s.nowTroop()).toBeNull();
+    s.set(0, 0);
+    s.setTroop([[1, 0]]);
+    expect(s.nowTroop()).toEqual(encodeTroop([[1, 0]]));
+  });
+
+  it('drops a marble too far from the hero or on it, so what it sends a peer accepts', () => {
+    const s = new Sender();
+    s.set(0, 0);
+    s.setTroop([[0, 0], [20, 0], [1, 0]]);
+    expect(s.dueTroop(0)).toEqual(encodeTroop([[1, 0]]));
+  });
+});
+
 describe('Peers', () => {
   const pos = (q: number, r: number, seq: number) => ({ t: 'pos' as const, q, r, seq });
 
@@ -148,7 +208,7 @@ describe('Peers', () => {
     expect(p.cells()).toEqual([]);
     p.hello('a', 0);
     expect(p.position('a', pos(1, 1, 0), 0)).toBe(true);
-    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 1], name: '' }]);
+    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 1], name: '', troop: [] }]);
   });
 
   it('lists no peer that said Hello but has sent no place yet', () => {
@@ -197,9 +257,9 @@ describe('Peers', () => {
     const p = new Peers();
     p.hello('a', 0, 'Ana');
     p.position('a', pos(1, 0, 0), 0);
-    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 0], name: 'Ana' }]);
+    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 0], name: 'Ana', troop: [] }]);
     p.hello('a', 5, 'Anna');
-    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 0], name: 'Anna' }]);
+    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 0], name: 'Anna', troop: [] }]);
     p.hello('a', 6);
     expect(p.cells()[0]!.name).toBe('');
   });
@@ -219,5 +279,19 @@ describe('Peers', () => {
     const p = new Peers();
     for (let i = 0; i < MAX_PEERS * 4 + 3; i++) p.hello(`p${i}`, 0);
     expect(p.size).toBe(MAX_PEERS * 4);
+  });
+
+  it('keeps the troop of a peer as cells round its hero, and moves it with the hero', () => {
+    const p = new Peers();
+    expect(p.troop('a', [[1, 0]], 0)).toBe(false); // no Hello
+    p.hello('a', 0);
+    p.position('a', { t: 'pos', q: 5, r: 5, seq: 0 }, 0);
+    expect(p.troop('a', [[1, 0], [0, -1]], 1000)).toBe(true);
+    expect(p.cells()[0]!.troop).toEqual([[6, 5], [5, 4]]);
+    p.position('a', { t: 'pos', q: 7, r: 5, seq: 1 }, 2000);
+    expect(p.cells()[0]!.troop).toEqual([[8, 5], [7, 4]]);
+    expect(p.troop('a', [], 1001)).toBe(false); // a flood: under MIN_GAP_MS after the last
+    expect(p.troop('a', [], 3000)).toBe(true);
+    expect(p.cells()[0]!.troop).toEqual([]);
   });
 });
