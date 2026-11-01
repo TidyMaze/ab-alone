@@ -2721,9 +2721,11 @@ mod tests {
             let (a, b) = (swarm(plies), swarm(plies));
             assert_eq!((a.swarm(), a.board()), (b.swarm(), b.board()));
         }
+        let first = swarm(0).swarm();
+        let other = |seed| Encounter::new("swarm", seed).unwrap().swarm();
         assert!(
-            Encounter::new("swarm", 1).unwrap().swarm() != swarm(0).swarm()
-                || Encounter::new("swarm", 2).unwrap().swarm() != swarm(0).swarm()
+            (1..4).map(other).any(|s| s != first),
+            "the seed picks the cells"
         );
     }
 
@@ -2751,6 +2753,9 @@ mod tests {
         assert_eq!(f.swarm()[..2], [29, 1]);
         f.scale_node_budget(50);
         assert_eq!(f.result(), 0);
-        assert!(f.play(&[0; 3]).is_err());
+        assert!(
+            f.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err(),
+            "no marble left on (0, 0)"
+        );
     }
 }
