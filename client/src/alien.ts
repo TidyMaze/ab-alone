@@ -3,6 +3,7 @@
 // `eggs()` records, the board drawing lives in main.ts.
 import type { Axial } from './board';
 import { parseCracks } from './hull';
+import { mix } from './look';
 
 export interface Egg {
   cell: Axial;
@@ -53,4 +54,34 @@ export function drawCounter(g: CanvasRenderingContext2D, n: number, size: number
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(String(n), half, half);
+}
+
+/** The marks of a shell: the Alien colour a good way towards the pale tell digit, so they read 3:1 on any Alien skin. */
+export const shellTint = (base: number): number => mix(base, COUNTER.ink, 0.7);
+
+/** Draws the egg's shell map on a `size` square: the Alien colour, speckled and veined in its tint. The marks come from a
+ * fixed sequence, not `Math.random`, so every egg and every run looks the same. */
+export function drawShell(g: CanvasRenderingContext2D, base: number, size: number): void {
+  const tint = css(shellTint(base));
+  let seed = 7;
+  const next = (): number => {
+    seed = (seed * 48271) % 2147483647;
+    return seed / 2147483647;
+  };
+  g.fillStyle = css(base);
+  g.fillRect(0, 0, size, size);
+  g.fillStyle = tint;
+  for (let i = 0; i < 40; i++) {
+    g.beginPath();
+    g.arc(next() * size, next() * size, size * (0.008 + 0.02 * next()), 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = tint;
+  g.lineWidth = size / 48;
+  for (let i = 0; i < 4; i++) {
+    g.beginPath();
+    g.moveTo(next() * size, next() * size);
+    g.quadraticCurveTo(next() * size, next() * size, next() * size, next() * size);
+    g.stroke();
+  }
 }
