@@ -115,6 +115,8 @@ pub struct Board {
     specials: Option<Vec<((i32, i32), Special)>>,
     /// The Choir's armies and turn order, only inside its search tree (#825).
     choir: Option<ChoirMarks>,
+    /// The plies played, only inside The Magnetizer's search tree: its assignment clock (#916).
+    magnetizer_ply: Option<u32>,
 }
 
 /// What the Choir's search tree needs to play the army cycle: which army owns each boss marble and
@@ -248,6 +250,7 @@ impl Board {
             echoes: Vec::new(),
             specials: None,
             choir: None,
+            magnetizer_ply: None,
         }
     }
 
@@ -456,6 +459,15 @@ impl Board {
 
     pub fn set_choir(&mut self, choir: Option<ChoirMarks>) {
         self.choir = choir;
+    }
+
+    /// The plies played in The Magnetizer's fight, `None` outside its search tree.
+    pub fn magnetizer_ply(&self) -> Option<u32> {
+        self.magnetizer_ply
+    }
+
+    pub fn set_magnetizer_ply(&mut self, ply: Option<u32>) {
+        self.magnetizer_ply = ply;
     }
 
     /// Standard start layout: 14 marbles per side.

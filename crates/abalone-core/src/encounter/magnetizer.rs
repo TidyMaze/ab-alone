@@ -212,11 +212,28 @@ pub(crate) fn carried_announce(before: &Board, mv: &Move, after: &Board) -> Opti
     })
 }
 
-/// What a ply does in the boss search: the polarities follow the move, then the board settles.
-/// The search draws the pairs with the seed 0: it cannot know the ply's seed deeper in the tree.
-fn search_step(before: &Board, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {
+/// What a ply does in the boss search, as in `Encounter::play`: the polarities and the announce
+/// follow the move and the board settles; then the hook fires when the special of that ply says
+/// so, in the phase the tree's credits reach at the start of the ply (`Encounter::phase_after`,
+/// as the encounter takes the tell before the move), and the board settles again. The ply comes
+/// from the clock `magnetizer_move` puts on the root board. Seed 0 for the picks and the pairs:
+/// the search cannot know the ply's seed deeper in the tree.
+fn magnetizer_step(
+    enc: &Encounter,
+    before: &Board,
+    mv: &Move,
+    mut after: Board,
+) -> (Board, [u8; 2]) {
+    let ply = before.magnetizer_ply().expect("the tree's clock") + 1;
     after.set_polarities(carried_poles(before, mv, &after));
-    settle(&after, 0, &mut |_, _| {})
+    after.set_announce(carried_announce(before, mv, &after));
+    after.set_magnetizer_ply(Some(ply));
+    let (board, credits) = settle(&after, 0, &mut |_, _| {});
+    let Some(id) = special(ply, enc.phase_after(before)) else {
+        return (board, credits);
+    };
+    let (out, more) = settle(&hook(&board, id, 0), 0, &mut |_, _| {});
+    (out, [credits[0] + more[0], credits[1] + more[1]])
 }
 
 /// The Magnetizer boss definition.
@@ -232,15 +249,21 @@ pub fn magnetizer_boss() -> BossDef {
     }
 }
 
-/// The boss reply: its node-limited search, where every ply of the tree settles, so it sees the
-/// repulsions. `None` on the player's turn or when the game is over.
+/// The boss reply: its node-limited search, where every ply of the tree settles and runs the
+/// assignments (`magnetizer_step`), so it sees the repulsions. `None` on the player's turn or when
+/// the game is over.
 pub fn magnetizer_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
-    let step = |before: &Board, _: Player, mv: &Move, after: Board| search_step(before, mv, after);
+    let mut board = enc.game().board().clone();
+    board.set_magnetizer_ply(Some(enc.game().history().len() as u32));
+    let game = enc.game().clone().with_board(board);
+    let step = |before: &Board, _: Player, mv: &Move, after: Board| {
+        magnetizer_step(enc, before, mv, after)
+    };
     search_hooked(
-        enc.game(),
+        &game,
         enc.boss.node_budget,
         DEFAULT_WEIGHTS,
         &|_| true,
