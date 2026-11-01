@@ -1,6 +1,7 @@
 //! The hero's step in the Open world (docs/specs/openworld.md section 4): the held arrows and the camera's yaw give a hex
 //! step, and the semi-auto steering (#1137) slides it round an obstacle. Pure maths; the cells that are free come as a mask.
 
+use crate::world::Terrain;
 use std::f64::consts::PI;
 
 /// The neighbour steps, the index is the bridge direction code: E, W, NE, SW, NW, SE.
@@ -107,6 +108,49 @@ pub fn hero_dir(at_r: i32, keys: u8, yaw: f64, steering: bool, free: u8) -> Opti
         }
     }
     Some(best.0)
+}
+
+/// How many marbles follow the hero.
+pub const TROOP: usize = 6;
+
+/// What the hero's step onto a cell does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Entry {
+    /// The step is refused.
+    Refused,
+    /// The hero rolls onto an open cell.
+    Rolls,
+    /// The hero rolls onto an obstacle and breaks it (#1147).
+    Breaks,
+}
+
+/// What the hero's step from `at` to `to` does, `terrain` being that of `to` (`None` off the world), `occupied` whether an enemy
+/// stands on it and `trees_near` whether a tree stands on one of its six neighbours.
+pub fn entry(
+    at: (i32, i32),
+    to: (i32, i32),
+    terrain: Option<Terrain>,
+    occupied: bool,
+    trees_near: bool,
+) -> Entry {
+    let delta = (to.0 - at.0, to.1 - at.1);
+    let Some(terrain) = terrain.filter(|_| DIRECTIONS.contains(&delta) && !occupied) else {
+        return Entry::Refused;
+    };
+    match terrain {
+        Terrain::Boulder => Entry::Breaks,
+        Terrain::Tree if !trees_near => Entry::Breaks,
+        _ if terrain.blocked() => Entry::Refused,
+        _ => Entry::Rolls,
+    }
+}
+
+/// The troop after the hero steps from `at` to `to`: the cell the hero left first, then the marbles before, none on `to`, at most `TROOP`.
+pub fn trail(troop: &[(i32, i32)], at: (i32, i32), to: (i32, i32)) -> Vec<(i32, i32)> {
+    let mut out = vec![at];
+    out.extend(troop.iter().copied().filter(|&cell| cell != to));
+    out.truncate(TROOP);
+    out
 }
 
 #[cfg(test)]
@@ -221,5 +265,97 @@ mod tests {
                 assert!((angle(to) - yaw).sin() < 0.0);
             }
         }
+    }
+
+    #[test]
+    fn a_neighbour_of_open_ground_free_of_enemies_is_rolled_onto() {
+        for terrain in [Terrain::Sand, Terrain::Grass, Terrain::Rock] {
+            assert_eq!(
+                entry((0, 0), (1, 0), Some(terrain), false, false),
+                Entry::Rolls
+            );
+        }
+        for to in DIRECTIONS {
+            assert_eq!(
+                entry(
+                    (2, 3),
+                    (2 + to.0, 3 + to.1),
+                    Some(Terrain::Grass),
+                    false,
+                    true
+                ),
+                Entry::Rolls
+            );
+        }
+    }
+
+    #[test]
+    fn a_cell_that_is_not_a_neighbour_is_refused() {
+        for to in [(0, 0), (2, 0), (1, 1), (-1, -1), (5, 5)] {
+            assert_eq!(
+                entry((0, 0), to, Some(Terrain::Grass), false, false),
+                Entry::Refused
+            );
+        }
+    }
+
+    #[test]
+    fn off_the_world_or_under_an_enemy_is_refused_even_for_a_boulder() {
+        assert_eq!(entry((0, 0), (1, 0), None, false, false), Entry::Refused);
+        assert_eq!(
+            entry((0, 0), (1, 0), Some(Terrain::Grass), true, false),
+            Entry::Refused
+        );
+        assert_eq!(
+            entry((0, 0), (1, 0), Some(Terrain::Boulder), true, false),
+            Entry::Refused
+        );
+    }
+
+    #[test]
+    fn a_boulder_and_a_lone_tree_are_broken_and_nothing_else_blocked() {
+        assert_eq!(
+            entry((0, 0), (1, 0), Some(Terrain::Boulder), false, true),
+            Entry::Breaks
+        );
+        assert_eq!(
+            entry((0, 0), (1, 0), Some(Terrain::Tree), false, false),
+            Entry::Breaks
+        );
+        assert_eq!(
+            entry((0, 0), (1, 0), Some(Terrain::Tree), false, true),
+            Entry::Refused
+        );
+        for terrain in [Terrain::Water, Terrain::Peak, Terrain::Wall] {
+            assert_eq!(
+                entry((0, 0), (1, 0), Some(terrain), false, false),
+                Entry::Refused
+            );
+        }
+    }
+
+    #[test]
+    fn the_troop_trails_the_hero_and_stays_at_six() {
+        let around = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+        let mut troop = around.to_vec();
+        let mut at = (0, 0);
+        for to in [(1, 0), (1, -1), (1, -2), (1, -3)] {
+            troop = trail(&troop, at, to);
+            at = to;
+        }
+        assert_eq!(troop.len(), TROOP);
+        assert_eq!(troop[..4], [(1, -2), (1, -1), (1, 0), (0, 0)]);
+    }
+
+    #[test]
+    fn rolling_onto_a_marble_takes_it_out_of_the_troop() {
+        let troop = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+        let after = trail(&troop, (0, 0), (1, 0));
+        assert_eq!(after, [(0, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)]);
+    }
+
+    #[test]
+    fn a_short_troop_grows_to_the_hero_trail() {
+        assert_eq!(trail(&[], (0, 0), (1, 0)), [(0, 0)]);
     }
 }

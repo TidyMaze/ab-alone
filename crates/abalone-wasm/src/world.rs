@@ -3,7 +3,7 @@
 
 use abalone_core::world::{self, Terrain};
 use abalone_core::worldfight::{self, Fall, Outcome};
-use abalone_core::worldstep;
+use abalone_core::worldstep::{self, Entry};
 use wasm_bindgen::prelude::*;
 
 /// Bytes per cell: `[height, terrain, biome]`.
@@ -21,6 +21,22 @@ fn terrain_code(terrain: Terrain) -> u8 {
         Terrain::Tree => 6,
         Terrain::Wall => 7,
     }
+}
+
+/// The terrain of a bridge code, `None` for `-1` (off the world) or an unknown code.
+fn terrain_of_code(code: i32) -> Option<Terrain> {
+    [
+        Terrain::Water,
+        Terrain::Sand,
+        Terrain::Grass,
+        Terrain::Rock,
+        Terrain::Peak,
+        Terrain::Boulder,
+        Terrain::Tree,
+        Terrain::Wall,
+    ]
+    .into_iter()
+    .find(|&terrain| i32::from(terrain_code(terrain)) == code)
 }
 
 /// The version of the generated world (`WORLD_VERSION` of the core): a save of another version is not loaded (#968).
@@ -139,6 +155,42 @@ pub fn world_dungeon(
 #[wasm_bindgen]
 pub fn world_step(row: i32, keys: u32, yaw: f64, steering: bool, free: u32) -> i32 {
     worldstep::hero_dir(row, keys as u8, yaw, steering, free as u8).map_or(-1, |dir| dir as i32)
+}
+
+/// What the hero's step from `(q, r)` to `(tq, tr)` does: `0` refused, `1` rolls, `2` breaks the obstacle (#1147). `terrain` is the
+/// bridge code of the target cell (`-1` or an unknown code: off the world), `occupied` whether an enemy stands on it, `trees_near`
+/// whether a tree stands on one of its neighbours.
+#[wasm_bindgen]
+pub fn world_enter(
+    q: i32,
+    r: i32,
+    tq: i32,
+    tr: i32,
+    terrain: i32,
+    occupied: bool,
+    trees_near: bool,
+) -> i32 {
+    let entry = worldstep::entry(
+        (q, r),
+        (tq, tr),
+        terrain_of_code(terrain),
+        occupied,
+        trees_near,
+    );
+    match entry {
+        Entry::Refused => 0,
+        Entry::Rolls => 1,
+        Entry::Breaks => 2,
+    }
+}
+
+/// The troop after the hero steps from `(q, r)` to `(tq, tr)`: `q, r` pairs, the cell the hero left first.
+#[wasm_bindgen]
+pub fn world_trail(troop: Vec<i32>, q: i32, r: i32, tq: i32, tr: i32) -> Vec<i32> {
+    worldstep::trail(&pairs(&troop), (q, r), (tq, tr))
+        .into_iter()
+        .flat_map(|(q, r)| [q, r])
+        .collect()
 }
 
 /// The terrain of a cell of the world `seed`, `None` off the world.
@@ -275,6 +327,32 @@ mod tests {
         assert_eq!(round.len(), 8);
         assert_eq!(round[6..], [3, 0]);
         assert!(world_path(9, 0, 0, 0, 0, vec![], vec![]).is_empty());
+    }
+
+    #[test]
+    fn an_entry_is_zero_refused_one_rolls_two_breaks() {
+        assert_eq!(world_enter(0, 0, 1, 0, 2, false, false), 1); // grass
+        assert_eq!(world_enter(0, 0, 1, 0, 5, false, false), 2); // boulder
+        assert_eq!(world_enter(0, 0, 1, 0, 6, false, true), 0); // tree in a grove
+        assert_eq!(world_enter(0, 0, 1, 0, 0, false, false), 0); // water
+        assert_eq!(world_enter(0, 0, 1, 0, 2, true, false), 0); // enemy
+        assert_eq!(world_enter(0, 0, 3, 0, 2, false, false), 0); // not a neighbour
+        assert_eq!(world_enter(0, 0, 1, 0, -1, false, false), 0); // off the world
+        assert_eq!(world_enter(0, 0, 1, 0, 99, false, false), 0); // unknown code
+    }
+
+    #[test]
+    fn every_terrain_code_gives_its_entry() {
+        let codes: Vec<i32> = (0..8)
+            .map(|t| world_enter(0, 0, 1, 0, t, false, false))
+            .collect();
+        assert_eq!(codes, vec![0, 1, 1, 1, 0, 2, 2, 0]);
+    }
+
+    #[test]
+    fn a_trail_is_the_old_cell_then_the_troop_without_the_new_one() {
+        let out = world_trail(vec![1, 0, -1, 0], 0, 0, 1, 0);
+        assert_eq!(out, vec![0, 0, -1, 0]);
     }
 
     #[test]
