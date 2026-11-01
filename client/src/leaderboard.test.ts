@@ -1,6 +1,17 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { RIVALS_STORAGE_KEY, MAX_RIVALS, boardHtml, buildBoard, loadRivals, ratingHistory, recordRival } from './leaderboard';
+import {
+  BOARD_VISIT_STORAGE_KEY,
+  RIVALS_STORAGE_KEY,
+  MAX_RIVALS,
+  boardHtml,
+  buildBoard,
+  loadLastRank,
+  loadRivals,
+  ratingHistory,
+  recordRival,
+  visitBoard,
+} from './leaderboard';
 
 describe('local 1v1 leaderboard (#1287)', () => {
   beforeEach(() => localStorage.clear());
@@ -94,5 +105,47 @@ describe('local 1v1 leaderboard (#1287)', () => {
     const html = boardHtml(buildBoard(1250, []), [1200, 1250]);
     expect(html).toContain('<ol id="board-history" aria-label="Your rating over your last matches"><li>1200</li><li>1250</li></ol>');
     expect(boardHtml(buildBoard(1250, []), [])).not.toContain('board-history');
+  });
+
+  it('remembers your position at the last visit, and nothing when storage is bad', () => {
+    expect(loadLastRank(localStorage)).toBeNull();
+    localStorage.setItem(BOARD_VISIT_STORAGE_KEY, 'nope{');
+    expect(loadLastRank(localStorage)).toBeNull();
+    localStorage.setItem(BOARD_VISIT_STORAGE_KEY, JSON.stringify({ version: 2, rank: 1 }));
+    expect(loadLastRank(localStorage)).toBeNull();
+    localStorage.setItem(BOARD_VISIT_STORAGE_KEY, JSON.stringify({ version: 1, rank: 'x' }));
+    expect(loadLastRank(localStorage)).toBeNull();
+    localStorage.setItem(BOARD_VISIT_STORAGE_KEY, JSON.stringify({ version: 1, rank: 4 }));
+    expect(loadLastRank(localStorage)).toBe(4);
+    const bad = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(loadLastRank(bad)).toBeNull();
+    expect(loadLastRank(null)).toBeNull();
+    expect(() => visitBoard(bad, buildBoard(1200, []))).not.toThrow();
+    expect(() => visitBoard(null, buildBoard(1200, []))).not.toThrow();
+  });
+
+  it('says how your position moved since your last visit, and saves the new one', () => {
+    const rowsAt = (rank: number) => buildBoard(1200, Array.from({ length: 4 }, (_, i) => ({ pub: `k${i}`, rating: i < rank - 1 ? 1500 : 1000, timestamp: i })));
+    expect(visitBoard(localStorage, rowsAt(3))).toBeNull(); // first visit: nothing to compare with
+    expect(loadLastRank(localStorage)).toBe(3);
+    expect(visitBoard(localStorage, rowsAt(1))).toEqual({ move: 'up', places: 2 });
+    expect(visitBoard(localStorage, rowsAt(1))).toEqual({ move: 'same', places: 0 });
+    expect(visitBoard(localStorage, rowsAt(2))).toEqual({ move: 'down', places: 1 });
+    expect(loadLastRank(localStorage)).toBe(2);
+  });
+
+  it('writes your move in the board, and nothing on a first visit', () => {
+    const rows = buildBoard(1250, [{ pub: 'abcdef123', rating: 1400, timestamp: 1 }]);
+    expect(boardHtml(rows, [], null)).not.toContain('board-move');
+    expect(boardHtml(rows, [], { move: 'up', places: 1 })).toContain('<p id="board-move" data-move="up">Up 1 place since your last visit</p>');
+    expect(boardHtml(rows, [], { move: 'down', places: 3 })).toContain('Down 3 places since your last visit');
+    expect(boardHtml(rows, [], { move: 'same', places: 0 })).toContain('Unchanged since your last visit');
   });
 });

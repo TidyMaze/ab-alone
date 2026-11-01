@@ -25,6 +25,20 @@ describe('ranked leaderboard dialog', () => {
     expect(document.activeElement).toBe(byId('leaderboard'));
   });
 
+  it('tells how your position moved since the last time you opened it', async () => {
+    const game = await boot('?bot=off');
+    localStorage.setItem('ab-alone.ranked', JSON.stringify({ version: 1, rating1v1: 1250, ratingRoyale: 1200, matches: [] }));
+    localStorage.setItem('ab-alone.ranked.rivals', JSON.stringify({ version: 1, rivals: [{ pub: 'abcdef123', rating: 1400, timestamp: 1 }] }));
+    localStorage.setItem('ab-alone.ranked.board', JSON.stringify({ version: 1, rank: 1 }));
+    game.openModes();
+    byId('leaderboard').click();
+    expect(byId('board-move').textContent).toBe('Down 1 place since your last visit');
+    byId('board-close').click();
+    game.openModes();
+    byId('leaderboard').click();
+    expect(byId('board-move').textContent).toBe('Unchanged since your last visit');
+  });
+
   it('shows an empty board, keeps Tab inside and closes on Escape', async () => {
     const game = await boot('?bot=off');
     game.openModes();

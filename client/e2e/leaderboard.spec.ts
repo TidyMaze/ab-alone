@@ -26,6 +26,7 @@ test('the leaderboard shows my position among the opponents I met, my row highli
         ],
       }),
     );
+    localStorage.setItem('ab-alone.ranked.board', JSON.stringify({ version: 1, rank: 1 }));
   });
   await page.goto('./?bot=off');
   await page.getByRole('button', { name: 'Game modes' }).click();
@@ -35,6 +36,7 @@ test('the leaderboard shows my position among the opponents I met, my row highli
   await expect(board).toContainText('Your position: 3 of 4');
   await expect(board.locator('tr[data-me]')).toContainText('You');
   await expect(board.locator('#board-history li')).toHaveText(['1238', '1250']);
+  await expect(board.locator('#board-move')).toHaveText('Down 2 places since your last visit');
   await page.keyboard.press('Escape');
   await expect(board).toBeHidden();
 });
