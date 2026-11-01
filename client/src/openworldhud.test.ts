@@ -71,7 +71,26 @@ describe('the Open world help (#1252)', () => {
   it('names the keys, and the pad\'s buttons while the pad is in use (body[data-pad])', () => {
     expect(css).toContain('.pad-hint, body[data-pad] .keys-hint { display: none; }');
     expect(css).toContain('body[data-pad] .pad-hint { display: inline; }');
-    expect(html).toMatch(/<span class="keys-hint">arrows[^<]*Q E[^<]*Esc to leave\.<\/span>/);
+    expect(html).toMatch(/<span class="keys-hint">arrows[^<]*Q E[^<]*<span class="esc-hint">Esc<\/span><span class="touch-hint">the Ship button<\/span> to leave\.<\/span>/);
     expect(html).toMatch(/<span class="pad-hint">left stick to walk, LB RB[^<]*R3[^<]*B to leave\.<\/span>/);
+  });
+});
+
+describe('the Ship button of the Open world (#1373)', () => {
+  it('is a 44 px button at the bottom right on a touch screen, above the peers arrows, out of the joystick half', () => {
+    expect(html).toMatch(/<button id="openworld-ship" type="button"[^>]*>Ship<\/button>/);
+    expect(css).toContain('@media (pointer: coarse) { body[data-openworld] #openworld-ship { display: grid; } }');
+    const ship = rule('#openworld-ship');
+    expect(ship).toContain('min-width: var(--target)');
+    expect(ship).toContain('min-height: var(--target)');
+    expect(ship).toContain('right: 1rem');
+    expect(ship).toContain('z-index: 2');
+    expect(ship).toContain('display: none');
+    expect(css).toContain('@media (pointer: coarse) and (orientation: portrait) { #openworld-hud { bottom: calc(1.5rem + var(--target)); } }');
+  });
+
+  it('asks for Esc on a keyboard only; a touch screen reads the Ship button', () => {
+    expect(css).toContain('.touch-hint { display: none; }');
+    expect(css).toContain('@media (pointer: coarse) { .esc-hint { display: none; } .touch-hint { display: inline; } }');
   });
 });
