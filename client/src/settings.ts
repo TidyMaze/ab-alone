@@ -77,6 +77,7 @@ export const settingsList = (
   { id: 'render-mode', label: `Render: ${RENDER_MODE_NAMES[renderMode]}`, icon: 'render' },
   { id: 'free-cam', label: 'Free camera', icon: 'camera', on: freeCam }, // a developer view (#938), shortcut C
   { id: 'steering', label: 'Steering', icon: 'steer', on: steering }, // Open world: go round obstacles, tap to walk (#1137)
+  { id: 'guide', label: 'Guide', icon: 'guide' }, // the first-launch guide again (#1293)
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'difficulty', label: DIFFICULTY_LABELS[difficulty], icon: 'scale' },
   { id: 'import-game', label: 'Import game', icon: 'import' },

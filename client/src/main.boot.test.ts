@@ -504,6 +504,7 @@ describe('the settings toggles', () => {
       'setting-render-mode',
       'setting-free-cam',
       'setting-steering',
+      'setting-guide',
       'setting-export-game',
       'setting-difficulty',
       'setting-import-game',
