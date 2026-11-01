@@ -370,7 +370,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    21 // 21: The Overseer's vents pull in a core next to them and burn the boss's marbles in every phase, P3 dropped (#1241); 20: The Magnetizer assigns a polarity every 3rd turn in P2 and every 2nd in P3 (#1237); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    22 // 22: The Unstable Core enters P2 after 1 ejection and P3 after 2, a shockwave every 4 turns (#1229); 21: The Overseer's vents pull in a core next to them and burn the boss's marbles in every phase, P3 dropped (#1241); 20: The Magnetizer assigns a polarity every 3rd turn in P2 and every 2nd in P3 (#1237); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -1095,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_21_since_the_overseer_vents_pull_in_cores() {
-        assert_eq!(engine_version(), 21);
+    fn the_engine_version_is_22_since_the_unstable_core_enters_p2_and_p3_after_1_and_2_ejections() {
+        assert_eq!(engine_version(), 22);
     }
 
     #[test]
@@ -1939,7 +1939,7 @@ mod tests {
     // The Unstable Core (#751): charged marbles weigh more in a push.
 
     /// The fixtures of the core tests and client/e2e/unstable.spec.ts: one marble per ply
-    /// `[q, r, dir]`, the pair pushing three (7 plies) and the 25-ply fight to the shockwave.
+    /// `[q, r, dir]`, the pair pushing three (7 plies) and the 17-ply fight to the shockwave.
     const CORE_PUSH: [&[[i32; 2]]; 7] = [
         &[[0, 2], [0, 3]],
         &[[-1, -3]],
@@ -1986,7 +1986,7 @@ mod tests {
         assert!(choir().unstable().is_empty() && choir().last_unstable().is_empty());
     }
 
-    const CORE_FULL: [[i32; 3]; 25] = [
+    const CORE_FULL: [[i32; 3]; 17] = [
         [1, 3, 2],
         [0, -2, 5],
         [2, 2, 3],
@@ -1998,19 +1998,11 @@ mod tests {
         [1, 3, 2],
         [1, -2, 3],
         [2, 2, 3],
-        [2, -2, 3],
+        [2, -2, 0],
         [1, 3, 2],
-        [1, -3, 5],
+        [3, -2, 1],
         [2, 2, 3],
-        [4, -3, 3],
-        [1, 3, 2],
-        [0, -2, 5],
-        [2, 2, 3],
-        [3, -2, 2],
-        [1, 3, 2],
-        [4, -3, 3],
-        [2, 2, 3],
-        [3, -2, 2],
+        [2, -2, 0],
         [1, 3, 2],
     ];
 
@@ -2037,38 +2029,38 @@ mod tests {
         assert_eq!(over[4 + 61..], [0, -1]);
         assert!(run[8].2.is_empty());
         assert_eq!(
-            run[17].1[..2],
+            run[9].1[..2],
             [1, 1],
             "the boss ply of P2 announces the collapse"
         );
-        let collapse = &run[18].2;
+        let collapse = &run[10].2;
         assert_eq!(collapse[..4], [0, 1, -1, 0]);
-        assert_eq!(run[18].1[..2], [0, 0], "the core is gone");
-        assert_eq!(run[18].0[index(0, 0)], 3, "a vanished cell");
+        assert_eq!(run[10].1[..2], [0, 0], "the core is gone");
+        assert_eq!(run[10].0[index(0, 0)], 3, "a vanished cell");
         assert_eq!(
-            run[19].1,
+            run[11].1,
             vec![0, 0, -1, 3],
             "P3: 3 turns to the first shockwave"
         );
-        assert_eq!(run[20].1[3], 2);
+        assert_eq!(run[12].1[3], 2);
         assert!(
-            run[22].1[2] >= 0 && run[22].1[3] == 1,
+            run[14].1[2] >= 0 && run[14].1[3] == 1,
             "the wedge is announced"
         );
-        let shock = &run[24].2;
+        let shock = &run[16].2;
         assert_eq!(shock[0], 0);
         assert!(
             shock[2] >= 0 && shock[3] > 0,
             "a wedge and the marbles it shoved"
         );
         assert_eq!(shock.len(), 4 + 61 + 4 * shock[3] as usize);
-        assert_eq!(run[24].1, vec![0, 0, -1, 3], "the clock restarts");
+        assert_eq!(run[16].1, vec![0, 0, -1, 4], "the clock restarts");
     }
 
     #[test]
     fn two_core_encounters_with_the_same_seed_and_moves_give_the_same_fight() {
         assert_eq!(core_run(1), core_run(1));
-        assert!((0..8).any(|seed| core_run(seed)[24] != core_run(1)[24]));
+        assert!((0..8).any(|seed| core_run(seed)[16] != core_run(1)[16]));
     }
 
     #[test]
@@ -2326,7 +2318,7 @@ mod tests {
         assert_eq!(lit("railyard"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("pulsar"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("assembly"), vec![3, 0], "P2 after 3 ejections");
-        assert_eq!(lit("core"), vec![3, 0], "P2 after 3 ejections");
+        assert_eq!(lit("core"), vec![1, 0], "P2 after 1 ejection");
     }
 
     #[test]
