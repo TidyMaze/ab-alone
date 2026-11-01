@@ -705,3 +705,46 @@ test('the hero breaks the isolated boulder it rolls into, and it stays broken af
   expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
   expect(await boulders()).toBe(before - 1);
 });
+
+// #1103: a push punches the camera in 3 % and back within 250 ms; the chunk centre and the reach never change, and the zoom is exactly
+// the base one at the end. The page samples what the camera draws (`__openworldCamera`) on every frame for 700 ms after the press.
+test('a push punches the camera in and back, without moving the chunk centre, #1103', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  type Camera = { zoom: number; shake: number; centre: number[]; reach: number };
+  const result = await page.evaluate(async () => {
+    const w = window as unknown as { __openworldFixture: (f: object) => void; __openworldCamera: () => Camera };
+    w.__openworldFixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    await new Promise((done) => requestAnimationFrame(() => done(null)));
+    const base = w.__openworldCamera();
+    const samples: { t: number; camera: Camera }[] = [];
+    const start = performance.now();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight' }));
+    await new Promise<void>((done) => {
+      const sample = (): void => {
+        const t = performance.now() - start;
+        samples.push({ t, camera: w.__openworldCamera() });
+        if (t < 700) requestAnimationFrame(sample);
+        else done();
+      };
+      sample();
+    });
+    return { base, samples };
+  });
+  const { base, samples } = result;
+  const zooms = samples.map((s) => s.camera.zoom);
+  expect(Math.min(...zooms)).toBeLessThan(base.zoom * 0.99); // it went in
+  expect(Math.min(...zooms)).toBeGreaterThanOrEqual(base.zoom * 0.97 - 1e-9); // by 3 % at most
+  expect(samples.at(-1)!.camera.zoom).toBe(base.zoom); // and is exactly back
+  for (const { camera } of samples) {
+    expect(camera.centre).toEqual(base.centre);
+    expect(camera.reach).toBe(base.reach);
+  }
+  const punched = samples.filter((s) => s.camera.zoom !== base.zoom);
+  expect(punched.at(-1)!.t - punched[0]!.t).toBeLessThanOrEqual(260); // at most 250 ms, a frame of slack
+  await page.screenshot({ path: test.info().outputPath('camera-after.png') });
+});

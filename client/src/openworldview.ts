@@ -572,6 +572,12 @@ export class OpenWorldView {
     return this.endLife();
   }
 
+  /** What the camera draws now, for the browser checks (#1103): the zoom with the punch, the image shake in pixels, the chunk centre
+   * and the reach loaded. */
+  probe(): { zoom: number; shake: number; centre: Axial; reach: number } {
+    return { zoom: this.drawnLevel * this.life.zoom, shake: this.camera.view?.enabled ? -this.camera.view.offsetX : 0, centre: this.centre, reach: this.loadedReach };
+  }
+
   /** Cuts the offsets: the base camera at once. Returns whether there were some to cut. */
   private endLife(): boolean {
     const was = this.lifeOn;

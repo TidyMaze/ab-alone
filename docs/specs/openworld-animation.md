@@ -105,6 +105,9 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
   shake never change `reach`, the chunk centre or the zoom the player set: they are an offset applied on top and removed at the
   end. The existing height and yaw easing (`ease`, `easeYaw`) is kept. The held walk keeps its speed: the pan ease cannot lag the
   hero by more than the existing follow lag, and the end of a walk is not delayed.
+- **Built (#1103)**: `client/src/openworldcamera.ts`. The punch and the shake start when the push lands (after the step's glide); the
+  pan lags 0.15 cell behind the hero at the first step of a walk and carries 0.15 cell on at its end, both over `motion.base`. The
+  shake is horizontal, 2 px over 200 ms. Offsets are applied to the camera only (look-at point, zoom factor, view offset).
 - **Reduced**: no punch, pan ease or shake; the camera follows as today.
 - **Static**: the camera on a refused step; zoom and yaw set by the player.
 - **Acceptance**: at the end of each (250 ms later) the camera offset and zoom factor are exactly the base values (unit);

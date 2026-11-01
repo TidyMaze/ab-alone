@@ -256,6 +256,11 @@ export class OpenWorldMode {
     return seed;
   }
 
+  /** What the camera draws now (the browser checks read it, #1103). */
+  camera(): ReturnType<OpenWorldView['probe']> {
+    return this.view!.probe();
+  }
+
   /** The enemy marbles near the hero now, the pushed ones where they stand (the browser checks read them). */
   enemies(): Axial[] {
     return this.fight.enemiesAround(this.world!, this.hero!.at, PUSH_REACH);

@@ -1945,6 +1945,7 @@ describe('the particles of the Open world (#1110)', () => {
   });
 
   describe('the camera offsets (#1103)', () => {
+    const PUNCH_QUARTER = 50;
     const lit = (): OpenWorldView => {
       const view = new OpenWorldView(new World(bytes));
       view.resize(800, 600);
@@ -1996,6 +1997,21 @@ describe('the particles of the Open world (#1110)', () => {
       expect(pos(view)[0]).toBeGreaterThan(base[0]!); // a little ahead of it
       view.offsets(1300);
       expect(pos(view)).toEqual(base);
+    });
+
+    it('tells what it draws: the punched zoom, the shake in pixels, the chunk centre', () => {
+      const view = lit();
+      const rest = view.probe();
+      expect(rest.shake).toBe(0);
+      expect(rest.zoom).toBe(view.drawnZoom);
+      view.punch(0);
+      view.shake(0);
+      view.offsets(PUNCH_QUARTER);
+      const moving = view.probe();
+      expect(moving.zoom).toBeLessThan(rest.zoom);
+      expect(moving.shake).not.toBe(0);
+      expect(moving.centre).toEqual(rest.centre);
+      expect(moving.reach).toBe(rest.reach);
     });
 
     it('snaps to the base on a resize', () => {
