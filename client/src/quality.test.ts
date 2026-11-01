@@ -187,9 +187,9 @@ describe('glass skin storage: Smoked glass unless the player picked another', ()
   });
 });
 
-describe('theme storage: System unless the player picked Dark or Light', () => {
-  it('defaults to system', () => {
-    expect(readTheme(memoryStorage())).toBe('system');
+describe('theme storage: Dark unless the player picked System or Light', () => {
+  it('defaults to dark (#1184)', () => {
+    expect(readTheme(memoryStorage())).toBe('dark');
   });
   it('writes then reads back, under its own key', () => {
     const s = memoryStorage();
@@ -197,14 +197,15 @@ describe('theme storage: System unless the player picked Dark or Light', () => {
     expect(s.data.get('ab-alone.theme')).toBe('light');
     expect(readTheme(s)).toBe('light');
     writeTheme(s, 'system');
+    expect(s.data.get('ab-alone.theme')).toBe('system');
     expect(readTheme(s)).toBe('system');
   });
-  it('ignores a garbage stored value: system', () => {
-    expect(readTheme(memoryStorage({ 'ab-alone.theme': 'blue' }))).toBe('system');
+  it('ignores a garbage stored value: dark', () => {
+    expect(readTheme(memoryStorage({ 'ab-alone.theme': 'blue' }))).toBe('dark');
   });
-  it('falls back to system when storage throws or is missing, and does not throw writing', () => {
-    expect(readTheme(throwing)).toBe('system');
-    expect(readTheme(null)).toBe('system');
+  it('falls back to dark when storage throws or is missing, and does not throw writing', () => {
+    expect(readTheme(throwing)).toBe('dark');
+    expect(readTheme(null)).toBe('dark');
     expect(() => writeTheme(throwing, 'dark')).not.toThrow();
     expect(() => writeTheme(null, 'dark')).not.toThrow();
   });

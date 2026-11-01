@@ -634,6 +634,7 @@ test('the Open world HUD plate folds after 3 steps and the chip reopens it, #113
 // #1138 and #1172: the HUD plate has four rivets and takes the shared tokens: dark in the dark theme, light in the light one.
 test('the Open world HUD plate follows the theme with four rivets, #1138, #1172', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
+  await page.addInitScript(() => localStorage.setItem('ab-alone.theme', 'system')); // light really applies (#1184)
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
   await openModes(page);

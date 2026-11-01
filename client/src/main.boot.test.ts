@@ -403,19 +403,16 @@ describe('the view and the fog', () => {
 });
 
 describe('the Theme row: theme, UI scale and safe mode', () => {
-  it('cycles System, Dark, Light, then flips safe mode once the scale is at its cap', async () => {
+  it('starts on Dark, cycles Light, System, Dark, then flips safe mode once the scale is at its cap', async () => {
     await boot('?bot=off');
     const theme = row('theme');
-    expect(theme.textContent).toBe('Theme: System');
-    expect(root.dataset.theme).toBeUndefined();
+    expect(theme.textContent).toBe('Theme: Dark'); // nothing stored: dark (#1184), index.html sets data-theme itself
     expect(theme.getAttribute('aria-pressed')).toBe('true'); // safe mode, on by default
     expect([style('--end-peak'), style('--end-duration')]).toEqual(['0.2', '1.6s']);
     theme.click();
-    expect([theme.textContent, root.dataset.theme, localStorage.getItem('ab-alone.theme')]).toEqual(['Theme: Dark', 'dark', 'dark']);
-    theme.click();
-    expect([theme.textContent, root.dataset.theme]).toEqual(['Theme: Light', 'light']);
-    theme.click(); // back to System: the 1024 by 768 window has room for 150 %, so the scale steps up first (#927)
-    expect([theme.textContent, root.dataset.theme, style('--ui-scale')]).toEqual(['Theme: System', undefined, '1.25']);
+    expect([theme.textContent, root.dataset.theme, localStorage.getItem('ab-alone.theme')]).toEqual(['Theme: Light', 'light', 'light']);
+    theme.click(); // System: the 1024 by 768 window has room for 150 %, so the scale steps up first (#927)
+    expect([theme.textContent, root.dataset.theme, localStorage.getItem('ab-alone.theme'), style('--ui-scale')]).toEqual(['Theme: System', undefined, 'system', '1.25']);
     expect(theme.getAttribute('aria-pressed')).toBe('true');
     for (let i = 0; i < 3; i++) theme.click(); // a theme cycle: the scale reaches its cap
     expect(style('--ui-scale')).toBe('1.5');
@@ -602,7 +599,7 @@ describe('the settings toggles', () => {
   });
 
   it('follows the system theme for the accent pair when the theme is System', async () => {
-    const booting = boot('?bot=off');
+    const booting = bootWith({ 'ab-alone.theme': 'system' });
     const system = { matches: true, change: (): void => {} };
     vi.stubGlobal('matchMedia', (media: string) => ({
       media,

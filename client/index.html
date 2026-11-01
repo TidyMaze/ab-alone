@@ -9,10 +9,10 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>AB-ALONE</title>
     <script>
-      // The theme (#317) before the first paint: Dark or Light when the player picked one, else the system setting.
+      // The theme (#317) before the first paint: Light or System when the player picked one, else Dark (#1184).
       try {
         const theme = localStorage.getItem('ab-alone.theme');
-        if (theme === 'dark' || theme === 'light') document.documentElement.dataset.theme = theme;
+        if (theme !== 'system') document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
         const palette = localStorage.getItem('ab-alone.palette');
         if (palette) document.documentElement.dataset.palette = palette;
       } catch {}

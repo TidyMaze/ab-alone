@@ -33,7 +33,7 @@ Reference notes (all from world.md):
 
 Tokens live in `client/src/ui.css` on `:root`. Dark is the default (the deck). Light is picked by
 `prefers-color-scheme: light` and can be forced with `data-theme="light"` or `data-theme="dark"`
-on `<html>`. Both themes define exactly the same token names. The Theme item of the cog menu (#317) sets it: System (the default) removes the attribute and follows the system, Dark and Light set it. The choice is stored under `ab-alone.theme`, and `index.html` applies it before the first paint.
+on `<html>`. Both themes define exactly the same token names. The Theme item of the cog menu (#317) sets it: Dark (the default, #1184: with nothing stored the game opens dark whatever the system theme) and Light set the attribute, System removes it and follows the system. A press cycles Dark, Light, System. The choice, System included, is stored under `ab-alone.theme`, and `index.html` applies it before the first paint (no light flash).
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
@@ -111,7 +111,7 @@ item below), then Sound (#284, no longer a button of the column; a press shows t
 Effects and Voice, each its name over a range of 0 to 100 %, in place of the items, so the menu never grows taller and
 covers no cell; the menu opens on its items again once closed; opening the menu and moving a slider count as the first
 gesture that starts audio; the Transcript toggle of the audio logs, #516, shares its item, on by default and saved
-locally), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column),
+locally), then Theme (#317, Dark, Light or System: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column),
 then Logs, the log archive of world.md section 4 (#513): a short word beside Import game, as FPS is beside Clear board,
 titled "Log archive"; a press shows the lore entries read, then the audio logs heard (#517), one button per title
 in ship order, in place of the items ("Nothing read yet." before any), and a press on one closes the menu and opens that
