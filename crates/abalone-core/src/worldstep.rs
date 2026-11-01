@@ -39,13 +39,30 @@ fn screen(keys: u8) -> Option<(i32, i32)> {
 /// The direction the keyboard takes at yaw 0, the tie-break: left and right roll along the row, up and down zigzag with the row.
 fn keyboard_dir(at_r: i32, keys: u8) -> usize {
     let odd = at_r.rem_euclid(2) == 1;
-    match (keys & UP != 0, keys & DOWN != 0, keys & LEFT != 0, keys & RIGHT != 0) {
+    match (
+        keys & UP != 0,
+        keys & DOWN != 0,
+        keys & LEFT != 0,
+        keys & RIGHT != 0,
+    ) {
         (true, _, true, _) => 4,
         (true, _, _, true) => 2,
         (_, true, true, _) => 3,
         (_, true, _, true) => 5,
-        (true, ..) => if odd { 4 } else { 2 },
-        (_, true, ..) => if odd { 3 } else { 5 },
+        (true, ..) => {
+            if odd {
+                4
+            } else {
+                2
+            }
+        }
+        (_, true, ..) => {
+            if odd {
+                3
+            } else {
+                5
+            }
+        }
         (_, _, true, _) => 1,
         _ => 0,
     }
@@ -57,7 +74,12 @@ fn straight(at_r: i32, keys: u8, yaw: f64) -> Option<(usize, f64)> {
     let (x, y) = screen(keys)?;
     let want = f64::from(y).atan2(f64::from(x)) + yaw;
     let fallback = ground_angle(DIRECTIONS[keyboard_dir(at_r, keys)]);
-    let score = |i: usize| (nano(gap_of(ground_angle(DIRECTIONS[i]), want)), nano(gap_of(ground_angle(DIRECTIONS[i]), fallback)));
+    let score = |i: usize| {
+        (
+            nano(gap_of(ground_angle(DIRECTIONS[i]), want)),
+            nano(gap_of(ground_angle(DIRECTIONS[i]), fallback)),
+        )
+    };
     let best = (1..6).fold(0, |best, i| if score(i) < score(best) { i } else { best });
     Some((best, want))
 }
@@ -143,7 +165,10 @@ mod tests {
     #[test]
     fn steering_slides_to_the_side_the_intent_follows_best() {
         assert_eq!(hero_dir(0, RIGHT | UP, 0.0, true, except(&[NE])), Some(E));
-        assert_eq!(hero_dir(0, RIGHT | UP, 0.0, true, except(&[NE, E])), Some(NW));
+        assert_eq!(
+            hero_dir(0, RIGHT | UP, 0.0, true, except(&[NE, E])),
+            Some(NW)
+        );
     }
 
     #[test]
