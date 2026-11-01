@@ -2,6 +2,7 @@
 // meshes come from the glTF of `3d-artist` (public/assets/pbr/arena.glb), never rebuilt in code. Art direction: art2/notes-round4.md.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { fitView, type View } from './camera';
 
 /** The palette the port must match (notes-round4.md). */
 export const PALETTE = {
@@ -70,7 +71,7 @@ export function tableZeroActive(s: { room: boolean; ready: boolean }): boolean {
 }
 
 /** What the game draws itself, from its own state: marbles, pedestals, rings and arrows are left out of the arena file. */
-const GAME_DRAWN = /^scene_(marble|pedestal|ring|arrow|shadow|row21_lockbar|royale_crack)/; // the lock bar and the royale's cracks follow the game's state
+const GAME_DRAWN = /^scene_(marble|pedestal|ring|arrow|shadow|row21_lockbar|royale_crack|hub_(prop|ring|shadow|terminal))/; // the lock bar and the royale's cracks follow the game's state; the hub's props stand where its rooms are (hubKit)
 /** The turn bars stay meshes of their own: the game lights the one of the side to move. */
 const TURN_BAR = /^scene_turnbar/;
 /** The dishes: drawn as one instanced mesh, so a cell that vanishes (Hull, Rail Yard) is a hole to the gap and not a dish floating in the air. */
@@ -80,6 +81,8 @@ const BOARD_PART = /^scene_(slab_arena|ao_plinth|post_\d+)$/;
 const SLAB = /^scene_(slab_arena|ballast_slab|dual_slab_[ns])$/;
 
 const unlit = new Map<boolean, THREE.MeshBasicMaterial>();
+/** The lit materials already multiplied by TERRACE_TINT: a material is shared by every mesh of its file, whoever draws it first. */
+const tinted = new WeakSet<THREE.Material>();
 /**
  * The unlit materials of the file (sky, lamps, bars, haze, shadow): Blender emits their colour from COLOR_0, glTF gives them a white
  * emissive factor over a black base, so three would draw them white. The loader also folds them into one material (they differ by
@@ -121,7 +124,6 @@ export function mergeByMaterial(root: THREE.Object3D, split = false): THREE.Grou
     const into = split && BOARD_PART.test(o.name) ? ofBoard : byMaterial;
     into.set(material, [...(into.get(material) ?? []), g]);
   });
-  const tinted = new Set<THREE.Material>();
   const bake = (into: THREE.Group, groups: Map<THREE.Material, THREE.BufferGeometry[]>): void => {
     for (const [material, geometries] of groups) {
       const blended = material.transparent;
@@ -167,6 +169,64 @@ export function mergeByMaterial(root: THREE.Object3D, split = false): THREE.Grou
     board.add(bar);
   }
   return out;
+}
+
+/**
+ * The Blender camera (lights_camera.json, `scene_camera_main`): pitch 50 over the horizon (40 from the vertical), 13.6 away for a
+ * board of radius 4, fov 40 as the game's. The hub and the royale are framed from it (#1374).
+ */
+export const BLENDER_VIEW: View = { azimuth: 0, polar: (40 * Math.PI) / 180, distance: 13.6 };
+
+/** The corners of each cell of a board (a pointy hex of circumradius a half, the file's dish), at each of `heights`, in the world. */
+export function boardPoints(cells: readonly (readonly [number, number])[], scale = 1, heights: readonly number[] = [0]): { x: number; y: number; z: number }[] {
+  const corners = Array.from({ length: 6 }, (_, k) => [Math.sin((k * Math.PI) / 3) * 0.5, Math.cos((k * Math.PI) / 3) * 0.5] as const);
+  return cells.flatMap(([q, r]) =>
+    heights.flatMap((y) => corners.map(([dx, dz]) => ({ x: scale * (q + r / 2 + dx), y, z: scale * ((Math.sqrt(3) / 2) * r + dz) }))),
+  );
+}
+
+/** The Blender camera for a board of `radius` (a radius 4 board is at 13.6), drawn back until `points` are on the window: the play area is never cropped. */
+export function fitTerrace(points: readonly { x: number; y: number; z: number }[], radius: number, width: number, height: number, folded = false): View {
+  return fitView({ ...BLENDER_VIEW, distance: (BLENDER_VIEW.distance * radius) / 4 }, points, width, height, folded);
+}
+
+/** The props of the hub deck (scene_hub_deck.glb): per kind of prop its ring, the prop and its shadow, each placed relative to the prop; and the bar of a locked lift. */
+export interface HubKit {
+  parts: Record<string, THREE.Mesh[]>;
+  lockbar: THREE.Mesh | null;
+}
+
+/**
+ * The hub file's props, not merged into its board: the game puts one on each room of its deck, whichever cell the file drew it on.
+ * A part is a mesh with the file's material (unlit ones as the terrace draws them), placed relative to its prop; the shadow is blended.
+ */
+export function hubKit(root: THREE.Object3D): HubKit {
+  root.updateMatrixWorld(true);
+  const found = new Map<string, Record<string, THREE.Mesh>>();
+  let lockbar: THREE.Mesh | null = null;
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const [, part, kind] = /^scene_hub_(prop|ring|shadow)_(\w+)$/.exec(o.name) ?? [];
+    if (part) found.set(kind!, { ...found.get(kind!), [part]: mesh });
+    else if (o.name === 'scene_row21_lockbar') lockbar = mesh;
+  });
+  const put = (mesh: THREE.Mesh, prop: THREE.Mesh): THREE.Mesh => {
+    const part = mesh.clone();
+    part.material = terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
+    const lit = (part.material as THREE.MeshStandardMaterial).isMeshStandardMaterial === true;
+    if (lit && !tinted.has(part.material)) (part.material as THREE.MeshStandardMaterial).color.multiply(TERRACE_TINT);
+    tinted.add(part.material);
+    part.position.setFromMatrixPosition(mesh.matrixWorld).sub(new THREE.Vector3().setFromMatrixPosition(prop.matrixWorld));
+    part.castShadow = part.receiveShadow = lit;
+    part.renderOrder = part.material.transparent ? 1 : 0;
+    if (part.material.transparent) part.material.depthWrite = false;
+    return part;
+  };
+  const parts: Record<string, THREE.Mesh[]> = {};
+  for (const [kind, { prop, ring, shadow }] of found) if (prop) parts[kind] = [prop, ring, shadow].filter((m): m is THREE.Mesh => Boolean(m)).map((m) => put(m, prop));
+  const lift = found.get('lift')?.prop;
+  return { parts, lockbar: lockbar && lift ? put(lockbar, lift) : null };
 }
 
 /** The terrace's default camera, the Blender brief's: pitch 57 (33 from the vertical), 13.6 away, fov 40 as the game's. */
