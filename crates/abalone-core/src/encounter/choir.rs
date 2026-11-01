@@ -148,13 +148,15 @@ impl Choir {
 
     /// A fight resumed from a position: `members` are the boss marbles with their army.
     pub fn from_position(game: Game, members: Vec<(P, Army)>, seed: u64) -> Self {
-        Self {
+        let mut choir = Self {
             enc: Encounter::new(game, choir_boss(), seed),
             members,
             cycle_pos: 0,
             second_move: false,
             last_removal: None,
-        }
+        };
+        choir.pass_when_boss_stuck();
+        choir
     }
 
     pub fn game(&self) -> &Game {
@@ -266,14 +268,27 @@ impl Choir {
             while self.alive() > CYCLE.len() - self.phase() {
                 self.remove_weakest();
             }
-            let boss_next = self.enc.game.to_move() == Player::White;
-            if boss_next && self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn())
-            {
-                // No army can move: the boss passes (rules.md section 7) and the player goes again.
-                self.enc.game.pass_turn();
-            }
+            self.pass_when_boss_stuck();
         }
         Ok(())
+    }
+
+    /// The boss is to move and no army can: it passes (rules.md section 7) and the player goes
+    /// again. When the player has no move either, the fight ends in the blocked draw.
+    fn pass_when_boss_stuck(&mut self) {
+        let game = &self.enc.game;
+        if game.to_move() != Player::White
+            || game.outcome().is_some()
+            || self.can_move(self.army_in_turn())
+        {
+            return;
+        }
+        let game = &mut self.enc.game;
+        if legal_moves(game.board(), Player::Black).is_empty() {
+            game.end_blocked();
+        } else {
+            game.pass_turn();
+        }
     }
 
     /// Armies with marbles left.

@@ -142,7 +142,7 @@ Inline move, direction `d`, group of `n` own marbles. Let the opponent run be th
 - Black moves first (**OPEN-3**, see 2.3).
 - **FINAL.** Strict alternation. A move from the side not to move is refused.
 - **FINAL (#1301, owner decision).** The side to move has at least one marble but no legal move: its turn passes. The other side moves next, nothing on the board changes, and no ply is added to the move list: the rule decides it, so every peer passes alike and no message carries it. This holds in every mode and for every player (humans, bots, bosses, online peers). The HUD says so ("Black has no move: turn passed").
-- **FINAL (#1301).** When the side to move next has no legal move either, the game ends in a draw (draw reason "blocked"), or under the mode's own draw rule: a PvE draw is a loss for the player (section 9), a Trainer draw a clear. Two passes in a row never happen.
+- **FINAL (#1301).** When the side to move next has no legal move either, the game ends in a draw (draw reason "blocked"), or under the mode's own draw rule: a PvE draw is a loss for the player (section 9), a Trainer draw a clear. Two passes in a row never happen. The Choir follows it: a boss with no army able to move (#1325) passes, or ends the fight when the player is blocked too.
 - A side with no marble left keeps its own rule: it has lost (section 10.3).
 - The search (bots, bosses, the ladder) scores a blocked position as that pass, never as a static leaf.
 

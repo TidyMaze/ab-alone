@@ -320,11 +320,16 @@ impl Game {
             return;
         }
         if legal_moves(&self.board, other(side)).is_empty() {
-            self.outcome = Some(self.draw_to.map_or(Outcome::Draw, Outcome::Win));
-            self.draw_reason = Some(DrawReason::Blocked);
+            self.end_blocked();
         } else {
             self.pass_turn();
         }
+    }
+
+    /// Both sides are blocked in turn: the game ends in a draw, or the mode's own draw rule.
+    pub(crate) fn end_blocked(&mut self) {
+        self.outcome = Some(self.draw_to.map_or(Outcome::Draw, Outcome::Win));
+        self.draw_reason = Some(DrawReason::Blocked);
     }
 
     /// The side to move passes its turn, as it has no move.
