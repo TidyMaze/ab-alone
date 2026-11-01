@@ -368,24 +368,23 @@ mod tests {
         (0..).find(|&s| want(borrowed(ply_seed(s, 6)))).unwrap()
     }
 
+    /// The direction of the pulse the hook seed `seed` picks.
+    fn pulse_dir(seed: u64) -> u8 {
+        (0..6)
+            .find(|&d| borrowed(seed) == Borrowed::PulsarPulse(d))
+            .unwrap()
+    }
+
     /// A hook seed that picks a pulse, and its direction.
     fn pulse_seed() -> (u64, u8) {
-        (0..)
-            .find_map(|s| match borrowed(s) {
-                Borrowed::PulsarPulse(dir) => Some((s, dir)),
-                _ => None,
-            })
-            .unwrap()
+        let seed = seed_of(|b| matches!(b, Borrowed::PulsarPulse(_)));
+        (seed, pulse_dir(seed))
     }
 
     /// A fight seed whose pick at the end of ply 6 is a pulse, and its direction.
     fn fight_pulse_seed() -> (u64, u8) {
-        (0..)
-            .find_map(|s| match borrowed(ply_seed(s, 6)) {
-                Borrowed::PulsarPulse(dir) => Some((s, dir)),
-                _ => None,
-            })
-            .unwrap()
+        let seed = fight_seed(|b| matches!(b, Borrowed::PulsarPulse(_)));
+        (seed, pulse_dir(ply_seed(seed, 6)))
     }
 
     fn is_rim(board: &Board, (q, r): P) -> bool {

@@ -39,7 +39,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
-| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **1 of 20** (reading ladder player #834, 0 of 20 at 1x; the player has 16 marbles since #838; below the target, no boss-only knob reaches it, see section 3) | 133 | P2 | rim ejection 14, draw 5 |
+| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **3 of 20** (reading ladder player #834, 1 of 20 at 1x; the player has 16 marbles since #838; the Swarm's wave is the fifth borrowed effect since #1197, not tuned; below the target, no boss-only knob reaches it, see section 3) | 174 | P2 | rim ejection 10, draw 7 |
 | The Stalker | 3000 | 30000 (10x) | **9** (fogged pro player #1120, see section 3) | 185 | P2 | draw 1 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
@@ -449,6 +449,21 @@ position at 1000 nodes (seed 20709, seed index 668 of the scan). Ladder,
 
 Identical rows: the run is deterministic, not rerun. The #833 target (14 to 18 of 20 at 10x) is
 still not met, the owner's call.
+
+### The Ballast Mind: the Swarm's wave is its fifth effect (#1197), not tuned
+
+The pick went from 4 to 5 effects (`engine_version` 18), nothing else changed, no tuning. Same method
+(`LADDER_X=1` and `LADDER_X=10`, `LADDER_SEEDS=20 cargo run --release --example ladder -- ballast`,
+seeds 0 to 19, 300 plies at most), before (`origin/main` at the time) and after:
+
+| Player | Before | After |
+|---|---|---|
+| 1x | `100 \| 0/20 \| 112 \| 2 \| rim_ejection 18, draw 2` | `100 \| 1/20 \| 120 \| 2 \| push 1, rim_ejection 14, draw 4` |
+| 10x | `1000 \| 1/20 \| 127 \| 2 \| rim_ejection 13, draw 6` | `1000 \| 3/20 \| 174 \| 2 \| rim_ejection 10, draw 7` |
+
+Reading: the wave adds a marble or two to the boss on the rim, away from the player, and it hurts the
+player a little less than the pulse or the crack: 1 and 3 of 20 against 0 and 1, within the noise of 20
+seeds. The target of #833 (14 to 18 of 20 at 10x) is still out of reach, the owner's call.
 
 #### Earlier: NOT measured at pro level, 0 of 10 at 1x
 
