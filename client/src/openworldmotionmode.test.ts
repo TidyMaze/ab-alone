@@ -21,7 +21,7 @@ const lake = world(() => 0);
 const bank = world((i) => (i % CHUNK < 2 ? 2 : 0)); // land on the left, a lake on the right of each chunk
 const flat = world(() => 2);
 const mode = (load: (seed: number, cx: number, cy: number) => Uint8Array, reduced: boolean) =>
-  new OpenWorldMode(load, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => reduced, () => new Int32Array(), worldSaves(memoryStore(), 1));
+  new OpenWorldMode(load, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => reduced, worldSaves(memoryStore(), 1));
 
 afterEach(() => {
   vi.restoreAllMocks();

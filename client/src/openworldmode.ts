@@ -4,7 +4,7 @@
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
 import { chunkOf, Hero, neighbours, same, World } from './openworld';
-import { FightState, readPush } from './openworldfight';
+import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
@@ -12,10 +12,6 @@ import { endingLine } from './tally';
 import { MARBLES } from './trainer';
 import { enter, heroStep } from './openworldstep';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
-
-/** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
- * the enemies near the hero, the broken cells (#1154), all `q, r` pairs; its answer is empty when no push is legal (`readPush`). */
-export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array, broken: Int32Array) => Int32Array;
 
 /** The walk of the hero to a far cell, the bridge's `world_path` (docs/specs/openworld.md section 4): the seed, the cell the hero
  * stands on, the cell asked for, the cells it cannot enter (enemies, lairs) and the broken cells (#1154), as `q, r` pairs; its answer
@@ -28,9 +24,6 @@ export type DungeonPath = (seed: number, from: Axial, beaten: Int32Array, blocke
 
 /** The enemies near the hero that a walk goes round: the radius of the path search. */
 const PATH_REACH = 40;
-
-/** The enemies within this many cells of the hero are the ones a push can reach. */
-export const PUSH_REACH = 10;
 
 
 /** The cells as the bridge takes them: `q, r` pairs. */
@@ -91,13 +84,12 @@ export class OpenWorldMode {
   private modelsOnce?: Promise<PropModels>;
 
   /** `load` reads a chunk of a seed's world, `models` the low-poly and the detailed props: the first draw does not wait for them.
-   * `reduced` tells whether the page asks for reduced motion, which holds the water still. `push` plays the troop's push. */
+   * `reduced` tells whether the page asks for reduced motion, which holds the water still. */
   constructor(
     private readonly load: (seed: number, cx: number, cy: number) => Uint8Array,
     private readonly loadEnemies: (seed: number, cx: number, cy: number) => Int32Array,
     private readonly models: () => Promise<PropModels>,
     private readonly reduced: () => boolean,
-    private readonly push: TroopPush,
     private readonly saves: WorldSaves,
     /** The boss lairs of a seed's world: `q, r` pairs (the bridge's `world_lairs`), and what starts a lair, given its seed and number. */
     private readonly lairsOf: (seed: number) => Int32Array = () => new Int32Array(),
@@ -235,7 +227,7 @@ export class OpenWorldMode {
 
   /** The enemy marbles near the hero now, the pushed ones where they stand (the browser checks read them). */
   enemies(): Axial[] {
-    return this.fight.enemiesAround(this.world!, this.hero!.at, PUSH_REACH);
+    return this.fight.nearHero(this.world!, this.hero!.at);
   }
 
   /** Tally's line in the HUD (#1171): the ending once every lair is beaten (#1175), else the page's line (`fresh`: asked for, which
@@ -539,20 +531,17 @@ export class OpenWorldMode {
     if (!this.reduced()) this.view!.nudge(this.hero!.at, to, at, NUDGE_MS * slowBy());
   }
 
-  /** The troop's attack after a step: the bridge plays the legal push, if there is one, on the hero, the troop and the enemies near
-   * the hero. The hero and the troop take the cells it gives (the hero's first), the enemies are kept in the fight. Returns the push
-   * as it was played, from the cells before it, for its animation; `null` when no push was legal. */
+  /** The troop's attack after a step: the engine plays the legal push, if there is one, on the hero, the troop and the enemies near
+   * the hero (`FightState.troopPush`). The hero and the troop take the cells it gives (the hero's first). Returns the push as it was
+   * played, from the cells before it, for its animation; `null` when no push was legal. */
   private troopPush(): Played | null {
-    const enemies = this.enemies();
-    const from = [this.hero!.at, ...this.hero!.troop];
-    const pushed = readPush(this.push(this.seed, flat(from), flat(enemies), flat(this.world!.broken)));
-    if (!pushed) return null;
-    this.fight.apply(enemies, pushed.enemies, pushed.ejected);
-    const [hero, ...troop] = pushed.troop;
+    const played = this.fight.troopPush(this.world!, this.seed, [this.hero!.at, ...this.hero!.troop], this.world!.broken);
+    if (!played) return null;
+    const [hero, ...troop] = played.push.troop;
     this.hero!.at = hero!;
     this.hero!.troop = troop;
     this.pushes++;
-    return { from, foes: enemies, push: pushed };
+    return played;
   }
 
   /** Marks the world as changed: it is saved by the next frame, or when the mode is left. */

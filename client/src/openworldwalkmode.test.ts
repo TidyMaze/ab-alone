@@ -27,7 +27,6 @@ const make = (reduced: boolean, walled = false): OpenWorldMode => {
     () => new Int32Array(),
     async () => ({ low: {}, high: {} }),
     () => reduced,
-    () => new Int32Array(),
     worldSaves(memoryStore(), 1),
   );
   m.enter(1, 800, 600);

@@ -20,7 +20,7 @@ const setup = (beaten: number[] = []) => {
   const saves = worldSaves(store, 1);
   const lairsOf = vi.fn(() => LAIRS);
   const onLair = vi.fn();
-  const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), saves, lairsOf, onLair);
+  const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, lairsOf, onLair);
   return { m, saves, lairsOf, onLair, beaten };
 };
 const body = () => document.body.dataset;
@@ -79,7 +79,7 @@ describe('the boss lairs of the Open world mode (#1170)', () => {
   });
 
   it('leaves the world on a lair even when nothing is listening for it', () => {
-    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => LAIRS);
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => LAIRS);
     m.enter(7, 800, 600);
     m.fixture({ hero: [2, 0], troop: [], enemies: [] });
     m.key('ArrowRight');
@@ -102,7 +102,7 @@ describe('the boss lairs of the Open world mode (#1170)', () => {
 
 describe('the medal count of the Open world HUD (#1171)', () => {
   const withMedals = (medals: () => { have: number; total: number }) =>
-    new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, medals);
+    new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, medals);
 
   it('writes "Medals N / total" in the HUD when a world opens, and leaves the page alone without a HUD', () => {
     const out = document.createElement('output');
@@ -128,7 +128,7 @@ describe('the medal count of the Open world HUD (#1171)', () => {
 
 describe("Tally's line in the Open world HUD (#1171)", () => {
   const withTally = (tally: () => string) =>
-    new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally);
+    new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally);
 
   it('writes the line the page gives when a world opens, and clears it when the page gives none', () => {
     const out = document.createElement('p');
@@ -182,7 +182,7 @@ describe('the ending line of the Open world (#1175)', () => {
   it('does not use up the claim line when the world is over', async () => {
     const out = hud();
     const tally = vi.fn(() => 'Claim 0412: unworked.');
-    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally);
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally);
     m.enter(7, 800, 600, null);
     m.fixture({ hero: [0, 0], troop: [], enemies: [], beaten: [0, 1] });
     expect(tally).toHaveBeenCalledTimes(1);
@@ -192,7 +192,7 @@ describe('the ending line of the Open world (#1175)', () => {
 
   it('a world with no lair is never over', () => {
     const out = hud();
-    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => new Int32Array());
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => new Int32Array());
     m.enter(7, 800, 600);
     expect(out.textContent).toBe('');
     out.remove();

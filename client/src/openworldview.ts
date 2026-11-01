@@ -342,7 +342,7 @@ const eachNear = (centre: Axial, visit: (cell: Axial) => void): void => {
 };
 
 /** A push as the mode has played it: the hero and the troop before it (the hero first), the enemies before it, and the push the bridge
- * gave (`readPush`). The view draws the way from the first cells to the second ones. */
+ * gave (`FightState.troopPush`). The view draws the way from the first cells to the second ones. */
 export interface Played {
   from: Axial[];
   foes: Axial[];

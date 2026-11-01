@@ -184,8 +184,11 @@ fn flat_of(cells: &[(i32, i32)]) -> Vec<i32> {
     cells.iter().flat_map(|&(q, r)| [q, r]).collect()
 }
 
+/// A chunk and the generated enemies that start in it.
+type Block = ((i32, i32), Vec<(i32, i32)>);
+
 /// The chunks of a flat list: `cx, cy, n` then the `n` generated enemies of that chunk as `q, r` pairs, chunk after chunk.
-fn blocks_of(chunks: &[i32]) -> Vec<((i32, i32), Vec<(i32, i32)>)> {
+fn blocks_of(chunks: &[i32]) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut rest = chunks;
     while let [cx, cy, n, tail @ ..] = rest {
@@ -207,9 +210,8 @@ pub struct PushResult {
     pub enemies: Vec<i32>,
     /// The enemy ejected, none or one.
     pub ejected: Vec<i32>,
-    /// The direction of the push.
-    pub dir_q: i32,
-    pub dir_r: i32,
+    /// The direction of the push, `q, r`.
+    pub dir: Vec<i32>,
 }
 
 /// The enemies of the Open world fight as the pushes of the troop left them (abalone-core `worldoverlay`). The generated enemies of a
@@ -286,8 +288,7 @@ impl WorldFight {
             foes: flat_of(&played.foes),
             enemies: flat_of(&played.enemies),
             ejected: flat_of(&played.ejected),
-            dir_q: played.dir.0,
-            dir_r: played.dir.1,
+            dir: vec![played.dir.0, played.dir.1],
         })
     }
 
@@ -514,7 +515,7 @@ mod tests {
         assert_eq!(out.foes, vec![1, 0]);
         assert_eq!(out.enemies, vec![2, 0]);
         assert!(out.ejected.is_empty());
-        assert_eq!((out.dir_q, out.dir_r), (1, 0));
+        assert_eq!(out.dir, vec![1, 0]);
         assert_eq!(fight.added(), vec![2, 0]);
         assert_eq!(WorldFight::push_reach(), 10);
     }
