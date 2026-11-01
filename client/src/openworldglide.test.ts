@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { animT, loopT, slowBy, GLIDE_MS, Marble, NUDGE, NUDGE_MS, HOP, hopAt, ROLL_ZOOM, SQUASH, squashAt, type Vec } from './openworldglide';
+import { stepMs, CRUISE_MS, animT, loopT, slowBy, GLIDE_MS, Marble, NUDGE, NUDGE_MS, HOP, hopAt, ROLL_ZOOM, SQUASH, squashAt, type Vec } from './openworldglide';
 
 const RADIUS = 0.3;
 const at = (x: number, y: number, z: number): Vec => ({ x, y, z });
@@ -285,5 +285,17 @@ describe('the hop of a step (#1100)', () => {
     expect(m.pose.x).toBe(0);
     m.tick(GLIDE_MS);
     expect(m.pose.x).toBe(1);
+  });
+});
+
+describe('the cadence of a walk (#1290)', () => {
+  it('keeps the first steps at GLIDE_MS, ramps down, and cruises at CRUISE_MS', () => {
+    expect(stepMs(0)).toBe(GLIDE_MS);
+    expect(stepMs(1)).toBe(GLIDE_MS);
+    expect(stepMs(2)).toBeLessThan(GLIDE_MS);
+    expect(stepMs(5)).toBe(CRUISE_MS);
+    expect(stepMs(500)).toBe(CRUISE_MS);
+    for (let n = 1; n < 12; n++) expect(stepMs(n)).toBeLessThanOrEqual(stepMs(n - 1));
+    expect(CRUISE_MS).toBeLessThan(GLIDE_MS);
   });
 });
