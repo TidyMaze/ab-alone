@@ -3,8 +3,8 @@
 //! with no marble. Each boss reply, the swarm marbles announced the turn before land on the
 //! allowed rim cells (the rim with `r <= 0`), then the swarm plays one standard move, or passes
 //! when it has none. The 6-ejection win is off for both sides: the player wins once the 30th boss
-//! reply is done with a marble left, the boss when the player has none. No draw rule runs. Every
-//! pick is splitmix64 of the fight seed and the ply.
+//! reply is done, the boss once it has ejected `SWARM_EJECTIONS` player marbles. No draw rule
+//! runs. Every pick is splitmix64 of the fight seed and the ply.
 
 use crate::board::{Board, Cell, STANDARD_BLACK};
 use crate::encounter::hull::mix;
@@ -184,10 +184,14 @@ impl Swarm {
     }
 
     /// A fight resumed after `turn` boss replies, the player to move. It is lost once the swarm has
-    /// ejected every player marble on the board, and no draw rule ends it.
+    /// ejected `SWARM_EJECTIONS` player marbles, or every one when fewer are left, and no draw rule
+    /// ends it.
     pub fn from_position(game: Game, seed: u64, turn: u32) -> Self {
         let left = marbles(game.board(), Cell::Black);
-        let win = [u8::MAX, game.ejected(Player::White) + left];
+        let win = [
+            u8::MAX,
+            SWARM_EJECTIONS.min(game.ejected(Player::White) + left),
+        ];
         let mut swarm = Self {
             game: game.with_win(win).without_draws(),
             seed,
