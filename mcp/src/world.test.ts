@@ -118,7 +118,9 @@ describe('a step', () => {
     value(open.newWorld({ seed: 0 }));
     const moved = value(open.step({ direction: 'E' }));
     expect(moved.moved).toBe(true);
+    expect(moved.push).toBeNull();
     expect(moved.state.hero).toBe('(1,0)');
+    expect(moved.state.beaten).toBe(0);
     expect(moved.state.troop).toEqual(['(0,0)', '(-1,0)', '(1,-1)', '(-1,1)', '(0,-1)', '(0,1)']);
     expect(value(open.state({})).hero).toBe('(1,0)');
   });
@@ -193,26 +195,23 @@ describe('a step', () => {
     expect(error.message).toContain('off the world');
   });
 
-  test('an enemy blocks the step', () => {
-    const open = world();
-    value(open.newWorld({ seed: 1 }));
-    // seed 1 has a group at (6,6), (7,5), (8,4): walk next to it
-    value(open.walk({ q: 5, r: 6 }));
-    const error = failure(open.step({ direction: 'E' }));
-    expect(error.code).toBe('blocked');
-    expect(error.message).toContain('an enemy stands there');
-    expect(value(open.state({ radius: 2 })).enemies).toContain('(6,6)');
-  });
-
-  test('onto a lair does not move: the state names the boss to fight', () => {
+  test('onto a lair does not move: the state names the boss to fight and how to start it', () => {
     const open = world([3, 0, 0, 9, 0, -9]);
     value(open.newWorld({ seed: 0 }));
     value(open.walk({ q: 2, r: 0 }));
     const entered = value(open.step({ direction: 'E' }));
     expect(entered.moved).toBe(false);
-    expect(entered.lair).toEqual({ index: 0, boss: bossIds()[0] });
+    expect(entered.push).toBeNull();
+    expect(entered.lair).toEqual({ index: 0, boss: bossIds()[0], start: `new_game {"boss":"${bossIds()[0]}"}` });
     expect(entered.state.hero).toBe('(2,0)');
     expect(value(open.step({ direction: 'W' })).lair).toBeUndefined();
+  });
+
+  test('a lair past the roster is the boss of its number round the roster, as in the client', () => {
+    const far = Array.from({ length: bossIds().length }, (_, k) => [100 + k, -200]).flat();
+    const open = world([...far, 1, 0]);
+    value(open.newWorld({ seed: 0 }));
+    expect(value(open.step({ direction: 'E' })).lair).toMatchObject({ index: bossIds().length, boss: bossIds()[0] });
   });
 });
 
@@ -245,5 +244,40 @@ describe('a walk', () => {
       expect(failure(open.walk({ q: q!, r: r! })).code).toBe('no_path');
     }
     expect(value(open.state({})).hero).toBe('(0,0)');
+  });
+});
+
+// Seed 1 has an enemy group at (6,6), (7,5), (8,4). The values below are what the client gives for the same seed and moves:
+// `Hero.step` (client/src/openworld.ts) then `FightState.troopPush` (client/src/openworldfight.ts), as `OpenWorldMode.roll` calls them.
+describe('the same seed and moves as the client', () => {
+  const PUSHED = { hero: '(6,6)', troop: ['(5,6)', '(4,6)', '(2,6)', '(1,6)', '(0,6)', '(0,5)'] };
+
+  test('six steps SE then five E: the fifth E brings the troop beside the group and it pushes it east', () => {
+    const open = world();
+    value(open.newWorld({ seed: 1 }));
+    for (let i = 0; i < 6; i++) value(open.step({ direction: 'SE' }));
+    for (let i = 0; i < 3; i++) expect(value(open.step({ direction: 'E' })).push).toBeNull();
+    const near = value(open.step({ direction: 'E' }));
+    expect(near.state.hero).toBe('(4,6)');
+    expect(near.state.troop).toEqual(['(3,6)', '(2,6)', '(1,6)', '(0,6)', '(0,5)', '(0,4)']);
+    expect(near.state.enemies).toEqual(['(6,6)', '(7,5)']);
+    const pushed = value(open.step({ direction: 'E' }));
+    expect(pushed.moved).toBe(true);
+    expect(pushed.push).toEqual({ direction: 'E', ejected: [] });
+    expect(pushed.state).toMatchObject({ ...PUSHED, beaten: 0, enemies: ['(7,5)', '(8,4)', '(7,6)'] });
+    const row = value(open.state({ radius: 1 })).window.rows.find((r) => r.r === 6)!;
+    expect(row.cells[7 - row.q0]).toBe('E');
+    const refused = failure(open.step({ direction: 'E' }));
+    expect(refused.code).toBe('blocked');
+    expect(refused.message).toContain('an enemy stands there');
+  });
+
+  test('a walk to (5,6) takes the same path and ends on the push, the hero on (6,6)', () => {
+    const open = world();
+    value(open.newWorld({ seed: 1 }));
+    const walked = value(open.walk({ q: 5, r: 6 }));
+    expect(walked.steps).toBe(11);
+    expect(walked.pushes).toEqual([{ direction: 'E', ejected: [] }]);
+    expect(walked.state).toMatchObject(PUSHED);
   });
 });
