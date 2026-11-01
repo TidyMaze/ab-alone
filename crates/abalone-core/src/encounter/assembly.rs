@@ -752,6 +752,43 @@ mod tests {
     }
 
     #[test]
+    fn the_phase_reached_in_the_tree_changes_the_best_move() {
+        // Boss to move at 2 ejections (P1) with 5 marbles, the centre belt running toward -q: the
+        // boss marble on its west end falls next turn, the third ejection, which opens the side
+        // belts for the turn after. Found among 4000 random positions of this kind (2 gave two
+        // moves) at the shipped 3000 nodes.
+        let start = board(
+            &[(2, 2), (-2, -2)],
+            &[(-1, -1), (-4, 0), (-3, 2), (0, 2), (1, 2)],
+            belts(false, 0),
+        );
+        let enc = fight(start, Player::White, [2, 0]);
+        assert_eq!(enc.phase(), 0);
+        // The search before #914: every player ply of the tree belts at the root phase.
+        let frozen = |_: &Board, mover: Player, _: &Move, after: Board| {
+            if mover == Player::White {
+                return (after, [0, 0]);
+            }
+            let out = hook(&after, 0, 0);
+            let [black, white] = crate::encounter::losses(&after, &out);
+            (out, [white, black])
+        };
+        let old = search_hooked(
+            enc.game(),
+            ASSEMBLY_NODE_BUDGET,
+            DEFAULT_WEIGHTS,
+            &|_| true,
+            &frozen,
+        )
+        .unwrap();
+        assert_eq!(old.mv, mv(&[(-4, 0)], Direction::NE));
+        assert_eq!(
+            assembly_move(&enc),
+            Some(mv(&[(0, 2), (1, 2)], Direction::E))
+        );
+    }
+
+    #[test]
     fn the_boss_replies_only_on_its_turn() {
         let mut enc = assembly_start(0);
         assert_eq!(assembly_move(&enc), None);
