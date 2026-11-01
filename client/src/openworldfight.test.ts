@@ -1,3 +1,4 @@
+import './test/openworldwasm';
 import { describe, expect, it } from 'vitest';
 import { type Axial } from './board';
 import { CHUNK, World } from './openworld';
@@ -154,5 +155,24 @@ describe('a saved fight is read back only when it is whole (#968)', () => {
       { removed: [], added: [] },
     ];
     for (const raw of garbage) expect(FightState.fromJSON(raw).toJSON(), JSON.stringify(raw)).toEqual({ removed: [], added: [], beaten: 0 });
+  });
+});
+
+describe('a save written before the engine held the fight', () => {
+  // The exact JSON of `FightState.toJSON` as it was written by the TypeScript overlay: keys as `q,r` strings, the order they went in.
+  const old = { removed: ['5,5', '-3,12', '6,5'], added: [[7, 5], [-2, 1]], beaten: 2 };
+
+  it('loads and writes back the same JSON', () => {
+    const fight = FightState.fromJSON(JSON.parse(JSON.stringify(old)));
+    expect(JSON.parse(JSON.stringify(fight))).toEqual(old);
+    expect(fight.beaten).toBe(2);
+  });
+
+  it('keeps the enemies it saved: the pushed ones stand, the removed generated ones are gone', () => {
+    const fight = FightState.fromJSON(old);
+    const world = new World(grass, () => Int32Array.of(5, 5, 6, 5));
+    expect(fight.occupied(world, 7, 5)).toBe(true);
+    expect(fight.occupied(world, 5, 5)).toBe(false);
+    expect(fight.chunkEnemies(world, 0, 0)).toEqual([[7, 5]]);
   });
 });

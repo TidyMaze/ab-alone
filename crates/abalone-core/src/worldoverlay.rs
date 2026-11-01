@@ -67,7 +67,12 @@ impl Overlay {
             .copied()
             .filter(|cell| !self.removed.contains(cell))
             .collect();
-        cells.extend(self.added.iter().copied().filter(|&cell| chunk_of(cell) == chunk));
+        cells.extend(
+            self.added
+                .iter()
+                .copied()
+                .filter(|&cell| chunk_of(cell) == chunk),
+        );
         cells
     }
 
@@ -82,14 +87,14 @@ impl Overlay {
         for &cell in old {
             if let Some(i) = self.added.iter().position(|&c| c == cell) {
                 self.added.remove(i);
-            } else {
+            } else if !self.removed.contains(&cell) {
                 self.removed.push(cell);
             }
         }
         for &cell in new {
             if let Some(i) = self.removed.iter().position(|&c| c == cell) {
                 self.removed.remove(i);
-            } else {
+            } else if !self.added.contains(&cell) {
                 self.added.push(cell);
             }
         }
@@ -106,7 +111,10 @@ mod tests {
         let overlay = Overlay::new();
         assert!(overlay.removed().is_empty() && overlay.added().is_empty());
         assert_eq!(overlay.beaten(), 0);
-        assert_eq!(overlay.chunk_enemies(&[(1, 0), (2, 0)], (0, 0)), [(1, 0), (2, 0)]);
+        assert_eq!(
+            overlay.chunk_enemies(&[(1, 0), (2, 0)], (0, 0)),
+            [(1, 0), (2, 0)]
+        );
         assert!(overlay.occupied(&[(1, 0)], (1, 0)));
         assert!(!overlay.occupied(&[(1, 0)], (2, 0)));
     }
@@ -154,7 +162,10 @@ mod tests {
         overlay.apply(&[], &[(3, 0), (1, 0), (2, 0)], 0);
         overlay.apply(&[(1, 0)], &[], 0);
         assert_eq!(overlay.added(), [(3, 0), (2, 0)]);
-        assert_eq!(overlay.chunk_enemies(&[(9, 9)], (0, 0)), [(9, 9), (3, 0), (2, 0)]);
+        assert_eq!(
+            overlay.chunk_enemies(&[(9, 9)], (0, 0)),
+            [(9, 9), (3, 0), (2, 0)]
+        );
     }
 
     #[test]

@@ -1,3 +1,4 @@
+import './test/openworldwasm';
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';

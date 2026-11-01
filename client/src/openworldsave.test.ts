@@ -1,3 +1,4 @@
+import './test/openworldwasm';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';

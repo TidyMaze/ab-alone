@@ -528,7 +528,10 @@ mod tests {
         fight.apply(vec![1, 0], vec![2, 0], 1);
         assert!(!fight.occupied(vec![1, 0], 1, 0));
         assert!(fight.occupied(vec![], 2, 0));
-        assert_eq!(fight.chunk_enemies(vec![1, 0, 5, 5], 0, 0), vec![5, 5, 2, 0]);
+        assert_eq!(
+            fight.chunk_enemies(vec![1, 0, 5, 5], 0, 0),
+            vec![5, 5, 2, 0]
+        );
         assert_eq!(fight.removed(), vec![1, 0]);
         assert_eq!(fight.added(), vec![2, 0]);
         assert_eq!(fight.beaten(), 1);
