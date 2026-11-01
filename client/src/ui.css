@@ -167,11 +167,11 @@ body[data-pad] .pad-hint { display: inline; }
 #mode-menu[hidden] { display: none; }
 #modes[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 600px), (pointer: coarse) { #mode-menu button { min-height: 2.75rem; } }
-#update, #reset-view, #invite-copy, #hint, #replay, #auto-play, #new-game, #modes, #play-online, #fight-together, #ranked, #rematch, #boss-fight, #daily, #roguelite, #trainer, #trainer-next, #openworld, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #copy-diagnostics {
+#update, #reset-view, #invite-copy, #hint, #replay, #auto-play, #new-game, #modes, #play-online, #fight-together, #boss-duel, #ranked, #rematch, #boss-fight, #daily, #roguelite, #trainer, #trainer-next, #openworld, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #reset-view:focus-visible, #invite-copy:focus-visible, #hint:focus-visible, #replay:focus-visible, #replay-bar button:focus-visible, #auto-play:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #roguelite:focus-visible, #trainer:focus-visible, #trainer-next:focus-visible, #openworld:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#update:focus-visible, #reset-view:focus-visible, #invite-copy:focus-visible, #hint:focus-visible, #replay:focus-visible, #replay-bar button:focus-visible, #auto-play:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #boss-duel:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #roguelite:focus-visible, #trainer:focus-visible, #trainer-next:focus-visible, #openworld:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #boss-list, #coop-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
 #boss-list .medal { display: block; font-size: 0.7em; font-weight: 700; line-height: 1; white-space: nowrap; }
 /* Bug #653: in a desktop window an open boss list holds two bosses a row, each row compact, so every boss and Daily
@@ -984,6 +984,7 @@ body:has(#dock-wrap :is(#mode-menu, #daily-card, #lobby-sheet):not([hidden])) #s
 /* A desktop window keeps its compact sheet (#1069): the 4 px gaps, so every boss shows without a scroll at 1280x720. */
 @media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
   #dock-wrap :is(#mode-menu, #goal-sheet), #dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: 4px; }
+  #dock-wrap #mode-menu, #dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: 2px; } /* the Boss duel and Leaderboard entries need the room (#1316) */
 }
 @media (pointer: coarse) {
   #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: var(--target); }
