@@ -106,7 +106,7 @@ describe('instanceMarbles (#885)', () => {
     for (const o of [a, b, c]) expect(o.layers.test(camera.layers)).toBe(false);
     expect(group.children[3]!.layers.test(camera.layers)).toBe(true);
     expect(shells.frustumCulled).toBe(false);
-    expect([shells.castShadow, shells.receiveShadow]).toEqual([true, true]); // under the terrace's sun (#1364)
+    expect([shells.castShadow, shells.receiveShadow]).toEqual([false, true]); // shaded by the terrace's sun, casting none: the pedestal is the contact (#1364)
   });
 
   it('follows the marbles each frame: a moved, hidden, removed or new marble, and a look no marble wears any more', () => {

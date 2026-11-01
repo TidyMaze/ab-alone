@@ -34,10 +34,10 @@ export function sunPosition(distance = 30): [number, number, number] {
 }
 
 /**
- * The sun's soft shadow (#1364), the render's: a 2048 map over the board and its plinth (9 cells each way), a few texels of blur.
- * The marbles, the posts, the plinth and the plateau cast it; the baked ambient occlusion of the vertex colours stays under it.
+ * The sun's soft shadow (#1364), the render's: a 2048 map over the board and two rings round it (7 cells each way: the far ring and the ridges stay unshaded), very soft and light (the art director's values).
+ * The posts, the walls, the plinth and its steps cast it, not the marbles (their pedestal is their contact); the baked ambient occlusion of the vertex colours stays under it.
  */
-export const SUN_SHADOW = { size: 2048, extent: 9, near: 1, far: 90, bias: -0.0005, normalBias: 0.04, radius: 5, blurSamples: 12, intensity: 0.8 } as const;
+export const SUN_SHADOW = { size: 1024, extent: 7, near: 1, far: 90, bias: -0.0005, normalBias: 0.04, radius: 9, blurSamples: 8, intensity: 0.3 } as const;
 
 /** Sets the sun's shadow camera and map, on or off (the low tier draws none). */
 export function aimSunShadow(sun: THREE.DirectionalLight, on: boolean, reach: number = SUN_SHADOW.extent): void {
