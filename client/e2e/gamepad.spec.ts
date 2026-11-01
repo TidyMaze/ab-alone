@@ -9,16 +9,18 @@ const frames = (page: Page, n = 3): Promise<unknown> =>
     const next = (): void => void (--left <= 0 ? done(null) : requestAnimationFrame(next));
     requestAnimationFrame(next);
   }), n);
-const hold = async (page: Page, buttons: number[], axes = [0, 0, 0, 0], values: Record<number, number> = {}): Promise<void> => {
+// A held aim, LB or RB repeats after 400 ms (gamepad.ts REPEAT_DELAY), so a press is held for one frame: the game reads
+// it in that frame, and a slow run of frames cannot turn one press into two (#1413).
+const hold = async (page: Page, buttons: number[], axes = [0, 0, 0, 0], values: Record<number, number> = {}, n = 3): Promise<void> => {
   await page.evaluate(([buttons, axes, values]) => {
     const pad = (window as any).__pad;
     pad.axes = axes;
     pad.buttons.forEach((b: { pressed: boolean; value: number }, i: number) => Object.assign(b, { pressed: buttons.includes(i), value: (values as any)[i] ?? (buttons.includes(i) ? 1 : 0) }));
   }, [buttons, axes, values] as const);
-  await frames(page);
+  await frames(page, n);
 };
 const tap = async (page: Page, button: number): Promise<void> => {
-  await hold(page, [button]);
+  await hold(page, [button], [0, 0, 0, 0], {}, 1);
   await hold(page, []);
 };
 
