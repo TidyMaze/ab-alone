@@ -1,8 +1,8 @@
 import type * as THREE from 'three/webgpu';
 import { axialTo3D, VANISHED, type Axial } from './board';
-import { canEnter, roomsOf, step, type Spot as HubSpot } from './hub';
+import { canEnter, roomsOf, step, type Door, type Spot as HubSpot } from './hub';
 import { arrowCell, bumpLine, HUB_BOARD, hubHtml } from './hubview';
-import { createDoorGlyph } from './hubart';
+import { createDoorGlyph, type GlyphOptions } from './hubart';
 import type { SceneRenderer } from './scene';
 
 export interface ModeController<TContext = unknown> {
@@ -103,6 +103,7 @@ export class HubController implements ModeController<HubSpot> {
     playerMarble: THREE.Mesh,
     drawFrame: (board: ArrayLike<number>) => unknown = (b) => sceneRenderer.drawFrame(b),
     lightRim: () => unknown = () => sceneRenderer.lightRim(null),
+    glyphOf: (door: Door, options: GlyphOptions) => THREE.Group = createDoorGlyph, // the terrace's own props (#1374)
   ): void {
     const lifts: string[] = [];
     drawFrame(HUB_BOARD);
@@ -119,8 +120,8 @@ export class HubController implements ModeController<HubSpot> {
     for (const { cell, door } of roomsOf(this.at.deck)) {
       const p = axialTo3D(cell[0], cell[1]);
       const open = door.kind === 'lift' && canEnter(door, beaten);
-      const glyph = createDoorGlyph(door, { open, cell, beaten: door.kind === 'boss' && beaten.includes(door.boss) });
-      glyph.position.set(p.x, 0.02, p.z);
+      const glyph = glyphOf(door, { open, cell, beaten: door.kind === 'boss' && beaten.includes(door.boss) });
+      glyph.position.set(p.x, glyph.position.y + 0.02, p.z); // a little over where the glyph stands
       sceneRenderer.marbles.add(glyph);
       if (door.kind === 'lift') lifts.push(`${door.to} ${open ? 'open' : 'locked'}`);
     }

@@ -265,7 +265,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           // The terrace (#1314): the arena as one box, its kit as the pieces the game draws itself.
           const scene = new Group();
           if (url.endsWith('arena.glb') && !url.endsWith('kit-arena.glb')) {
-            scene.add(piece('scene_slab_arena'));
+            scene.add(piece('scene_slab_arena'), piece('scene_post_0')); // a post: the royale's slab borrows the arena's (#1374)
             // its 61 dishes, where the board's cells are (#1374)
             for (let q = -4, i = 0; q <= 4; q++) {
               for (let r = -4; r <= 4; r++) {
@@ -278,7 +278,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           }
           if (url.endsWith('kit-boss.glb')) scene.add(...['kit_prop_pylon', 'kit_prop_pylon_core', 'kit_prop_press_gantry', 'kit_prop_buffer_stop'].map(piece));
           if (url.endsWith('slab-ballast.glb')) scene.add(piece('scene_ballast_slab'), piece('scene_ballast_cell_000'));
-          if (url.endsWith('slab-hub.glb')) scene.add(piece('scene_slab_hub'), piece('scene_hub_cell_00'));
+          if (url.endsWith('slab-hub.glb')) scene.add(piece('scene_slab_hub'), piece('scene_hub_cell_00'), ...['scene_hub_prop_door', 'scene_hub_ring_door', 'scene_hub_prop_lift', 'scene_row21_lockbar'].map(piece)); // the props the game puts on its rooms (#1374)
           if (url.endsWith('slab-royale.glb')) scene.add(piece('scene_royale_slab'), piece('scene_royale_cell_000'));
           if (url.endsWith('slab-dual.glb')) scene.add(piece('scene_dual_slab_n'), piece('scene_dual_cell_000'));
           if (url.endsWith('kit-arena.glb')) scene.add(...['kit_pedestal_flat', 'kit_ring_target', 'kit_arrow_target', 'kit_ring_select', 'kit_ring_lastmove'].map(piece));
