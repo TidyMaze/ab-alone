@@ -27,6 +27,8 @@ pub struct Weights {
     pub threat: i32,
     /// Per egg on the board (The Alien's): the White side's chance, the foe's loss.
     pub egg: i32,
+    /// Per charge (The Unstable Core's) on the side's marbles minus the foe's.
+    pub charges: i32,
 }
 
 /// Hand-tuned weights of the plain search.
@@ -37,6 +39,7 @@ pub const DEFAULT_WEIGHTS: Weights = Weights {
     cohesion: 2,
     threat: 0,
     egg: 0,
+    charges: 0,
 };
 
 /// What a search found.
@@ -138,6 +141,19 @@ fn threatened(board: &Board) -> [i32; 2] {
     out
 }
 
+/// Charges on the marbles of Black and of White (`Board::unstable`, The Unstable Core's).
+fn charges_of(board: &Board) -> [i32; 2] {
+    let mut out = [0, 0];
+    for &((q, r), n) in board.unstable().map_or(&[][..], |u| &u.charges[..]) {
+        match board.get(q, r) {
+            Some(Cell::Black) => out[0] += i32::from(n),
+            Some(Cell::White) => out[1] += i32::from(n),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Score of a position for `player`: marble difference, ejections made, centrality (a lower
 /// distance sum is better) and cohesion.
 fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32 {
@@ -149,6 +165,12 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
     } else {
         let at = threatened(board);
         at[index(other(player))] - at[index(player)]
+    };
+    let charged = if w.charges == 0 {
+        0
+    } else {
+        let at = charges_of(board);
+        at[index(player)] - at[index(other(player))]
     };
     let eggs = if w.egg == 0 {
         0
@@ -166,6 +188,7 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
         + w.cohesion * (own_pairs - opp_pairs)
         + w.threat * threat
         + w.egg * eggs
+        + w.charges * charged
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
@@ -643,10 +666,40 @@ mod tests {
             cohesion: 0,
             threat: 0,
             egg: 7,
+            charges: 0,
         };
         assert_eq!(evaluate(&board, Player::White, [0, 0], &only_eggs), 14);
         assert_eq!(evaluate(&board, Player::Black, [0, 0], &only_eggs), -14);
         assert_eq!(evaluate(&board, Player::White, [0, 0], &DEFAULT_WEIGHTS), 0);
+    }
+
+    #[test]
+    fn a_charge_is_worth_to_its_side_and_counts_against_the_other() {
+        use crate::board::Unstable;
+        let mut board = Board::empty();
+        board.set(0, 0, Cell::White);
+        board.set(1, 0, Cell::White);
+        board.set(-1, 0, Cell::Black);
+        board.set(0, 3, Cell::Empty);
+        board.set_unstable(Some(Unstable {
+            charges: vec![((-1, 0), 1), ((0, 0), 1), ((1, 0), 2), ((0, 3), 3)],
+            ..Unstable::default()
+        }));
+        let only = Weights {
+            marbles: 0,
+            ejected: 0,
+            centre: 0,
+            cohesion: 0,
+            threat: 0,
+            egg: 0,
+            charges: 5,
+        };
+        // White holds 3 charges, Black 1; a charge on an empty cell counts for nobody.
+        assert_eq!(evaluate(&board, Player::White, [0, 0], &only), 10);
+        assert_eq!(evaluate(&board, Player::Black, [0, 0], &only), -10);
+        let off = Weights { charges: 0, ..only };
+        assert_eq!(evaluate(&board, Player::White, [0, 0], &off), 0);
+        assert_eq!(evaluate(&Board::empty(), Player::White, [0, 0], &only), 0);
     }
 
     #[test]
@@ -686,6 +739,7 @@ mod tests {
             cohesion: 0,
             threat: 10,
             egg: 0,
+            charges: 0,
         };
         let board = game.board();
         assert_eq!(evaluate(board, Player::White, [0, 0], &only_threat), 10);

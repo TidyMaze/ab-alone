@@ -11,7 +11,7 @@ use crate::encounter::hull::mix;
 use crate::encounter::{carried_marks, losses, BossDef, Encounter};
 use crate::game::Game;
 use crate::moves::{Move, Player};
-use crate::search::{search_hooked, DEFAULT_WEIGHTS};
+use crate::search::{search_hooked, Weights, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -19,6 +19,14 @@ type P = (i32, i32);
 pub const UNSTABLE_PHASE_EJECTIONS: [u8; 2] = [1, 2];
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
 pub const UNSTABLE_NODE_BUDGET: u32 = 3000;
+/// What a charge is worth to the search, in centi-marbles, for the side that holds it (own charges
+/// minus the foe's). TUNE.
+pub const UNSTABLE_CHARGE_WEIGHT: i32 = 30;
+/// The weights of the search: the plain ones plus the charges.
+pub const UNSTABLE_WEIGHTS: Weights = Weights {
+    charges: UNSTABLE_CHARGE_WEIGHT,
+    ..DEFAULT_WEIGHTS
+};
 /// A marble that reaches this many charges is ejected. TUNE.
 pub const OVERLOAD: u8 = 4;
 /// Player turns between two wedge shockwaves in P3. TUNE.
@@ -275,6 +283,12 @@ fn search_step(
     (out, [white, black])
 }
 
+/// The phase a ply of the tree starts in, as the encounter takes it: the boss marbles gone since
+/// the root count as ejections of the player (`Encounter::phase_after`).
+fn tree_phase(enc: &Encounter, before: &Board) -> u8 {
+    enc.phase_after(before) as u8
+}
+
 /// The node-limited search of whoever is to move, with `budget` nodes: every ply of the tree
 /// carries the charges and goes through the hook (seed 0 for the picks), so it plays the weighted
 /// rule and sees the overloads, the collapse and the shockwaves. The boss plays it with its own
@@ -284,11 +298,10 @@ pub(crate) fn unstable_search(
     budget: u32,
     allow: &dyn Fn(&Move) -> bool,
 ) -> Option<Move> {
-    let phase = enc.phase() as u8;
     let step = |before: &Board, mover: Player, mv: &Move, after: Board| {
-        search_step(phase, before, mover, mv, after)
+        search_step(tree_phase(enc, before), before, mover, mv, after)
     };
-    search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
+    search_hooked(enc.game(), budget, UNSTABLE_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 /// The boss reply: its node-limited search. `None` on the player's turn or when over.
@@ -827,6 +840,59 @@ mod tests {
         let mut enc = fight(start, Player::Black, [0, 5]);
         enc.play(&mv(&[(3, -3)], W)).unwrap();
         assert_eq!(unstable_move(&enc), Some(mv(&[(3, 0)], E)));
+    }
+
+    #[test]
+    fn the_boss_steps_onto_the_core_to_charge_where_the_plain_weights_do_not() {
+        let start = board(&[(3, -3), (-4, 4)], &[(2, 0), (4, -2)], &[]);
+        let enc = fight(start, Player::White, [0, 0]);
+        let step = |before: &Board, mover: Player, m: &Move, after: Board| {
+            search_step(tree_phase(&enc, before), before, mover, m, after)
+        };
+        let plain = search_hooked(enc.game(), 3000, DEFAULT_WEIGHTS, &|_| true, &step).unwrap();
+        assert_eq!(
+            plain.mv,
+            mv(&[(4, -2)], SW),
+            "the plain weights ignore the charge"
+        );
+        assert_eq!(unstable_move(&enc), Some(mv(&[(2, 0)], W)), "onto (1, 0)");
+    }
+
+    #[test]
+    fn only_the_unstable_core_values_charges() {
+        use crate::encounter::{alien, chaplain, choir, dual, swarm};
+        let others = [
+            DEFAULT_WEIGHTS,
+            alien::ALIEN_WEIGHTS,
+            chaplain::CHAPLAIN_WEIGHTS,
+            choir::ALTO_WEIGHTS,
+            choir::TENOR_WEIGHTS,
+            choir::BASS_WEIGHTS,
+            dual::DUAL_WEIGHTS,
+            swarm::SWARM_WEIGHTS,
+        ];
+        assert!(others.iter().all(|w| w.charges == 0));
+        assert_eq!(UNSTABLE_WEIGHTS.charges, UNSTABLE_CHARGE_WEIGHT);
+        assert_eq!(
+            Weights {
+                charges: 0,
+                ..UNSTABLE_WEIGHTS
+            },
+            DEFAULT_WEIGHTS,
+            "nothing else differs from the plain weights"
+        );
+    }
+
+    #[test]
+    fn the_tree_phase_follows_the_boss_marbles_gone_in_the_tree() {
+        let start = board(&[(4, 0)], &[(3, 0), (-4, 4), (-3, 4)], &[]);
+        let enc = fight(start, Player::Black, [0, 0]);
+        let none = enc.game().board();
+        assert_eq!(tree_phase(&enc, none), 0);
+        let one = board(&[(4, 0)], &[(-4, 4), (-3, 4)], &[]);
+        assert_eq!(tree_phase(&enc, &one), 1, "1 ejection: P2");
+        let two = board(&[(4, 0)], &[(-4, 4)], &[]);
+        assert_eq!(tree_phase(&enc, &two), 2, "2 ejections: P3");
     }
 
     #[test]
