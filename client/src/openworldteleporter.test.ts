@@ -35,7 +35,7 @@ describe('the look of a teleporter (#1412)', () => {
     expect(pads).toHaveLength(2);
     const p = axialTo3D(3, 0);
     expect(pads[0]!.x).toBeCloseTo(p.x);
-    expect(pads[0]!.y).toBeCloseTo(topOf(GROUND.grass, 5));
+    expect(pads[0]!.y).toBeCloseTo(topOf(GROUND.grass, 5, 3, 0)); // on the lifted ground (#1418)
     expect(pads[0]!.z).toBeCloseTo(p.z);
     expect(placed(view, 'teleporter-ring')).toEqual(pads);
     const look = mesh(view, 'teleporter-pad').material as THREE.MeshStandardMaterial;
