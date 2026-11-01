@@ -148,13 +148,15 @@ impl Choir {
 
     /// A fight resumed from a position: `members` are the boss marbles with their army.
     pub fn from_position(game: Game, members: Vec<(P, Army)>, seed: u64) -> Self {
-        Self {
+        let mut choir = Self {
             enc: Encounter::new(game, choir_boss(), seed),
             members,
             cycle_pos: 0,
             second_move: false,
             last_removal: None,
-        }
+        };
+        choir.pass_when_boss_stuck();
+        choir
     }
 
     pub fn game(&self) -> &Game {
@@ -266,14 +268,27 @@ impl Choir {
             while self.alive() > CYCLE.len() - self.phase() {
                 self.remove_weakest();
             }
-            let boss_next = self.enc.game.to_move() == Player::White;
-            if boss_next && self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn())
-            {
-                // No army can move: the boss passes (rules.md section 7) and the player goes again.
-                self.enc.game.pass_turn();
-            }
+            self.pass_when_boss_stuck();
         }
         Ok(())
+    }
+
+    /// The boss is to move and no army can: it passes (rules.md section 7) and the player goes
+    /// again. When the player has no move either, the fight ends in the blocked draw.
+    fn pass_when_boss_stuck(&mut self) {
+        let game = &self.enc.game;
+        if game.to_move() != Player::White
+            || game.outcome().is_some()
+            || self.can_move(self.army_in_turn())
+        {
+            return;
+        }
+        let game = &mut self.enc.game;
+        if legal_moves(game.board(), Player::Black).is_empty() {
+            game.end_blocked();
+        } else {
+            game.pass_turn();
+        }
     }
 
     /// Armies with marbles left.
@@ -508,7 +523,7 @@ fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
 mod tests {
     use super::*;
     use crate::board::MAX_RADIUS;
-    use crate::game::Outcome;
+    use crate::game::{DrawReason, Outcome};
     use crate::moves::Direction::{E, NW, W};
     use crate::moves::{legal_moves, Direction, MoveError};
     use Army::{Alto, Bass, Tenor};
@@ -1088,5 +1103,31 @@ mod tests {
         assert!(marks.armies.iter().all(|a| a.1 != 0), "Alto is removed");
         assert_eq!(after.get(0, 3), Some(Cell::Empty));
         assert_eq!(marks.armies.len(), 4);
+    }
+
+    #[test]
+    fn both_blocked_in_turn_ends_the_fight_as_a_blocked_draw_a_loss_for_the_player() {
+        // A line of four cells, the rest void: Black, Alto, Tenor, Black. Only the pair can push, no
+        // army may, and Black is walled in.
+        let mut board = Board::empty();
+        for q in -4..=4 {
+            for r in -4..=4 {
+                if r != 0 || !(0..=3).contains(&q) {
+                    board.void(q, r);
+                }
+            }
+        }
+        board.set(0, 0, Cell::Black);
+        board.set(3, 0, Cell::Black);
+        board.set(1, 0, Cell::White);
+        board.set(2, 0, Cell::White);
+        let members = vec![((1, 0), Alto), ((2, 0), Tenor)];
+        let game = Game::from_position(board, Player::White, [0, 0]);
+        assert!(!legal_moves(game.board(), Player::White).is_empty());
+        assert!(legal_moves(game.board(), Player::Black).is_empty());
+        let c = Choir::from_position(game, members, 0);
+        assert_eq!(c.game().outcome(), Some(Outcome::Draw));
+        assert_eq!(c.game().draw_reason(), Some(DrawReason::Blocked));
+        assert_eq!(c.result(), Some(PveResult::Lost));
     }
 }
