@@ -633,7 +633,7 @@ const END_ROYALE = {
     game.click(2, -3);
     game.click(3, -3);
     expect(hub()).toBeUndefined();
-    expect(byId('invite').hidden).toBe(false);
+    await until(game, () => !byId('invite').hidden); // once the room's keys are made
     expect(byId('hud').querySelector('.rank-badge')).not.toBeNull();
   });
 

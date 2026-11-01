@@ -81,6 +81,7 @@ async function partner(transport: Transport, room: string, side: number, fight =
  * creator, and the page's Hello goes out only once `open` runs, after the partner listens (as in main.online.test.ts). */
 async function invited(hash: string) {
   const game = await boot(`?bot=off&net=hook${hash}`, calm);
+  await until(game, () => data().seat === 'pending'); // the room opens once the page's keys are made
   const w = window as unknown as Record<string, (...args: unknown[]) => void>;
   const end: Transport & { leave(): void } = {
     state: 'open',

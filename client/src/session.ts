@@ -1,5 +1,6 @@
 import { COOP_SIDE } from './coop';
 import { Coordination } from './coordinator';
+import { fingerprint } from './invite';
 import { MoveLog } from './movelog';
 import {
   parseCoordinator,
@@ -56,6 +57,7 @@ export interface SessionOptions {
   side: number; // the seat we are or ask for: 1 Black, 2 White in the first game
   seatCount?: number; // seats of the mode, 2 for 1v1
   agent?: true; // we are an agent player: our Hello carries the signed flag (docs/specs/mcp.md section 8)
+  creator?: string; // a joiner's: the fingerprint of the creator's key from the invite link, none in an older link (#1323)
   engine: number; // `engine_version()` of our wasm, in our Hello: a Hello from another version, or with none, is refused (#526)
   keys: Keys;
   transport: Transport;
@@ -479,8 +481,10 @@ export class OnlineSession {
       if (!this.seats.claim(h.seat, h.pub) && !this.seats.claim(free, h.pub)) this.o.onRefuse('seat-refused');
       return this.hello();
     }
-    // Joiners trust the first Hello for seat 1 (the creator) and take the roster from it.
+    // Joiners trust the first Hello for seat 1 (the creator) and take the roster from it. With the invite link's
+    // fingerprint, only a Hello of the key it names counts (#1323).
     if (h.seat !== CREATOR || (this.seats.keyOf(CREATOR) !== '' && this.seats.keyOf(CREATOR) !== h.pub)) return;
+    if (this.o.creator && (await fingerprint(h.pub)) !== this.o.creator) return;
     if (h.roster[0] !== h.pub || !this.seats.adopt(h.roster)) return;
     if (h.order) this.coord.adopt(h.order);
     const mine = this.seats.seatOf(this.o.keys.pub);

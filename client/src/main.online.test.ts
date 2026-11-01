@@ -396,6 +396,7 @@ describe('The invite link', () => {
     const transport = vi.spyOn(p2p, 'p2pTransport');
     game.openModes();
     byId('play-online').click();
+    await until(game, () => transport.mock.calls.length > 0); // the room opens once the page's keys are made
     transport.mock.calls[0]![1]!('ICE failed');
     byId('copy-diagnostics').click();
     await until(game, () => calls() > 0);
@@ -472,8 +473,8 @@ describe('Copy on the invite link (#839)', () => {
     expect(shown()).toEqual([false, false, false]);
     game.openModes();
     byId('play-online').click();
-    expect(shown()).toEqual([true, true, true]);
     await until(game, () => data().seat === 'player');
+    expect(shown()).toEqual([true, true, true]);
   });
 });
 

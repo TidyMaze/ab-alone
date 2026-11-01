@@ -111,8 +111,8 @@ describe('Battle royale online (#504)', () => {
     button('battle-royale').click();
     byId('online').scrollTop = 40;
     button('royale-invite').click();
+    await until(game, () => data().seat === 'player'); // the link shows once the keys are made
     expect(byId('online').scrollTop).toBe(0);
-    await until(game, () => data().seat === 'player'); // the room is open before the test ends
   });
 
   it('Invite opens a room of 6 seats: its invite link, the arena in the lobby, Start for the creator alone', async () => {

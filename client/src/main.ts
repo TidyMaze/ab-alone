@@ -158,7 +158,7 @@ import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
-import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
+import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
 import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
@@ -4958,9 +4958,13 @@ function signalingTimeout(side: number): void {
 function roomTransport(room: string): Transport {
   return new URLSearchParams(location.search).get('net') === 'hook' ? hookTransport() : p2pTransport(room, (message) => diag.joinError(message));
 }
-/** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. */
-async function goOnline(room: string, side: number, coop?: CoopFight): Promise<void> {
+/** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. A joiner
+ * from a link with the creator's fingerprint `creator` takes seat 1 only from that key (#1323). */
+async function goOnline(room: string, side: number, coop?: CoopFight, creator?: string): Promise<void> {
+  const keys = await generateKeys(); // first: the creator's invite link carries their fingerprint
+  const key = await fingerprint(keys.pub);
   leaveMode();
+  if (side === 1) showInvite(inviteUrl(location.href, room, coop, key), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
   // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
@@ -5002,7 +5006,8 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
     game: room,
     side,
     engine: engine_version(),
-    keys: await generateKeys(),
+    keys,
+    creator,
     transport: net,
     judge: {
       to_move: () => engine.to_move(),
@@ -5058,10 +5063,8 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
 function playOnline(coop?: CoopFight): void {
   rankedMode = null;
   moveModes('pick');
-  leaveMode(); // the room left first: its invite link goes, the new one shows below
-  const room = newRoomId((b) => crypto.getRandomValues(b));
-  showInvite(inviteUrl(location.href, room, coop), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
-  void goOnline(room, 1, coop);
+  leaveMode(); // the room left first: its invite link goes, the new one shows once its keys are made
+  void goOnline(newRoomId((b) => crypto.getRandomValues(b)), 1, coop); // it shows the invite link
 }
 document.getElementById('play-online')!.addEventListener('click', () => playOnline());
 const rankedButton = document.getElementById('ranked') as HTMLButtonElement;
@@ -5668,11 +5671,14 @@ function royaleStatus(net: RoyaleNet<Royale>): OnlineStatus {
   startButton.hidden = net.phase !== 'lobby' || !session.isCoordinator;
   return netStatus(net.phase, session.isCoordinator, net.players, net.desync);
 }
-// The keys first: from the arena on, every order goes to the room.
-async function goRoyale(room: string, side: number): Promise<void> {
+// The keys first: from the arena on, every order goes to the room, and the creator's invite link carries their
+// fingerprint. A joiner from a link with one, `creator`, takes seat 1 only from that key (#1323).
+async function goRoyale(room: string, side: number, creator?: string): Promise<void> {
   const keys = await generateKeys();
+  const key = await fingerprint(keys.pub);
   leaveRoyale();
   startRoyale({ seed: seedOf(room), rounds: [] });
+  if (side === 1) showInvite(royaleUrl(location.href, room, key), 'Invite link: send it to the other players');
   const game = royale!;
   diag.connecting();
   const net = roomTransport(room);
@@ -5684,6 +5690,7 @@ async function goRoyale(room: string, side: number): Promise<void> {
     seatCount: ONLINE_SEATS,
     engine: engine_version(),
     keys,
+    creator,
     transport: net,
     judge: ROOM_JUDGE,
     onMove: refresh, // never: the judge plays no move
@@ -5728,9 +5735,7 @@ async function goRoyale(room: string, side: number): Promise<void> {
 }
 startButton.addEventListener('click', () => void royaleNet?.start());
 royaleInviteButton.addEventListener('click', () => {
-  const room = newRoomId((b) => crypto.getRandomValues(b));
-  showInvite(royaleUrl(location.href, room), 'Invite link: send it to the other players');
-  void goRoyale(room, 1);
+  void goRoyale(newRoomId((b) => crypto.getRandomValues(b)), 1); // it shows the invite link
 });
 // Used by the browser checks to load a royale game file (#502).
 (window as unknown as Record<string, unknown>).__royale = startRoyale;
@@ -5794,9 +5799,10 @@ syncConnectivity();
 const invited = roomFromHash(location.hash);
 const coopInvite = coopFromHash(location.hash);
 const royaleInvite = royaleFromHash(location.hash);
-if (invited) void goOnline(invited, 2);
-else if (royaleInvite) void goRoyale(royaleInvite, 2);
-else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite); // an unknown boss starts nothing
+const creator = creatorFromHash(location.hash); // the fingerprint of the creator's key, none in an older link (#1323)
+if (invited) void goOnline(invited, 2, undefined, creator);
+else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
+else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite, creator); // an unknown boss starts nothing
 else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
 else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Ship hub (#602)
 else analyse(); // the start position
