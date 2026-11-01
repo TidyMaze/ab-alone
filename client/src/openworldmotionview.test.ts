@@ -57,7 +57,7 @@ describe('the water and the trees move (#1101, #1102)', () => {
   it('keeps the palette (#1173): the tree keeps its colours, the water has no glow (#1315)', () => {
     const view = new OpenWorldView(new World(world(() => GRASS_CODE)));
     const tree = mesh(view, 'prop-tree').material as THREE.MeshStandardMaterial;
-    expect([tree.color.getHex(), tree.emissive.getHex()]).toEqual([0x2fb5a0, 0x0b3d36]);
+    expect([tree.color.getHex(), tree.emissive.getHex()]).toEqual([0x2fb5a0, 0x000000]);
     expect((mesh(view, 'terrain-water').material as THREE.MeshStandardMaterial).emissive.getHex()).toBe(0x000000);
   });
 

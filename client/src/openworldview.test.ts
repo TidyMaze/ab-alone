@@ -1093,6 +1093,13 @@ describe('the water (docs/specs/openworld.md section 2): depth, a glossy surface
     for (const [up, value] of ups) expect(value).toBeCloseTo(up ? 1.15 : 1); // the top faces are 15 % lighter
     expect(mesh(view, 'prop-boulder-hi').geometry.getAttribute('position').count).toBe(position.count); // near the hero it is the same shell
   });
+
+  it('draws a tree as a matte teal outcrop, emissive off, as the world spec allows no glow on a prop (#1315)', () => {
+    const view = new OpenWorldView(new World(terrain(() => GRASS_CODE)));
+    const material = mesh(view, 'prop-tree').material as THREE.MeshStandardMaterial;
+    expect(material.color.getHex()).toBe(0x2fb5a0); // Slag Teal
+    expect(material.emissive.getHex()).toBe(0x000000);
+  });
 });
 
 /** The geometries and the materials of the meshes of a view's scene, each once. */
