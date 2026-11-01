@@ -167,6 +167,18 @@
         </div>
       </div>
     </div>
+    <!-- The online opt-in (#1338): asked once before any relay or peer is contacted. Accept stores it, Stay solo goes back to solo play. -->
+    <div id="consent" role="dialog" aria-modal="true" aria-labelledby="consent-title" aria-describedby="consent-text" tabindex="-1" hidden>
+      <div class="card">
+        <h2 id="consent-title">Online play</h2>
+        <p id="consent-text"></p>
+        <a id="consent-notice" target="_blank" rel="noopener noreferrer">Privacy notice</a>
+        <div class="actions">
+          <button id="consent-stay" type="button">Stay solo</button>
+          <button id="consent-accept" type="button">Accept</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
