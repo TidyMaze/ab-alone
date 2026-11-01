@@ -3397,8 +3397,8 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
   .catch(() => undefined);
 // The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
 // clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
-const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x101317, roughness: 0.4, metalness: 0, specularIntensity: 0.35, envMapIntensity: 1.25 }); // the sky's reflection leads, the sun's dot is kept small
-const terraceGlass = new THREE.MeshStandardMaterial({ color: 0xe0d6bc, roughness: 0.6, metalness: 0 }); // warm ivory, no reflection: the whites take no blue fill
+const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x101317, roughness: 0.35, metalness: 0, specularIntensity: 0.3, envMapIntensity: 2 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
+const terraceGlass = new THREE.MeshStandardMaterial({ color: 0xe8d9b4, emissive: 0x2a2012, roughness: 0.6, metalness: 0 }); // warm ivory: the emissive keeps the hemisphere's blue fill off it, no reflection: the whites take no blue fill
 function terraceMarbles(on: boolean): void {
   marbleMaterials[1] = on && skin === DEFAULT_SKIN ? terraceShell : shellMaterial(skin);
   marbleMaterials[2] = on && glass === DEFAULT_GLASS_SKIN ? terraceGlass : glassMaterial(glass);
@@ -3409,7 +3409,7 @@ function syncTableZero(): void {
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
   terraceMarbles(on);
   if (on && isDefaultView(view, resetView(4))) {
-    view = { ...TERRACE_VIEW }; // the Blender brief's camera, for the terrace only: any view the player chose stays
+    view = { ...TERRACE_VIEW, distance: innerWidth < innerHeight ? 18 : TERRACE_VIEW.distance }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
     applyView();
   }
   if (on === sceneRenderer.terraceOn) return;
