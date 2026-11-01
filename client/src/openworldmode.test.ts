@@ -209,15 +209,15 @@ describe('the Open world mode', () => {
     const m = mode();
     m.enter(1, 800, 600);
     expect(m.key('ArrowLeft')).toBe(true);
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]); // Left leans forward, up-left (#1273)
     expect(m.key('ArrowUp')).toBe(true); // Left and Up held: the diagonal rolls on the next step, not at once (#1059)
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]);
     clock = GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([-1, -1]); // up-left
+    expect(m.hero!.at).toEqual([0, -2]); // up-left
     clock = 2 * GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([-1, -2]); // up-left again, the arrows still held
+    expect(m.hero!.at).toEqual([0, -3]); // up-left again, the arrows still held
     vi.restoreAllMocks();
   });
 
@@ -227,15 +227,15 @@ describe('the Open world mode', () => {
     const m = mode();
     m.enter(1, 800, 600);
     expect(m.key('ArrowLeft')).toBe(true);
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]);
     expect(m.key('ArrowRight')).toBe(true); // Left and Right: nothing, on the cadence either
     clock = GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]);
     m.release('ArrowLeft');
     clock = 2 * GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([0, 0]); // Right alone rolls again
+    expect(m.hero!.at).toEqual([1, -1]); // Right alone rolls again
     vi.restoreAllMocks();
   });
 
@@ -245,7 +245,7 @@ describe('the Open world mode', () => {
     m.key('ArrowUp'); // (1, -1) from the even spawn row, Up held
     m.release(); // blur: no key is held any more
     expect(tap(m, 'ArrowLeft')).toBe(true);
-    expect(m.hero!.at).toEqual([0, -1]); // a single arrow, not a diagonal with Up
+    expect(m.hero!.at).toEqual([1, -2]); // a single arrow, not a diagonal with Up
     m.key('ArrowUp'); // held again
     m.key('Escape'); // leaving clears the held keys too
     m.enter(1, 800, 600);
@@ -1512,7 +1512,7 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
   const beside = (reduced = false, saves = worldSaves(memoryStore(), 1)): OpenWorldMode => {
     const m = mode(undefined, undefined, () => reduced, undefined, noPush, saves);
     m.enter(1, 800, 600);
-    m.fixture({ hero: [1, 1], troop: [[2, 1], [3, 1]], enemies: [] });
+    m.fixture({ hero: [0, 2], troop: [[1, 2], [2, 2]], enemies: [] });
     return m;
   };
   afterEach(() => vi.restoreAllMocks());
@@ -1544,10 +1544,9 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     const push = vi.fn<PushBridge>(() => new Int32Array());
     const m = mode(undefined, undefined, () => true, undefined, push);
     m.enter(1, 800, 600);
-    m.fixture({ hero: [1, 1], troop: [[2, 1], [3, 1]], enemies: [] });
+    m.fixture({ hero: [-1, 2], troop: [[-2, 2], [-3, 2]], enemies: [] });
     tap(m, 'ArrowRight');
     expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([]);
-    tap(m, 'ArrowLeft');
     tap(m, 'ArrowLeft');
     expect(m.hero!.at).toEqual([0, 1]);
     expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([0, 1]);

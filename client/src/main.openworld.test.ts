@@ -135,16 +135,16 @@ describe('the Open world mode', () => {
     game.openModes();
     byId('openworld').click();
     await settle();
-    press('ArrowLeft'); // (-1, 0)
+    press('ArrowLeft'); // (0, -1), up-left (#1273)
     press('ArrowUp'); // Left and Up held: up-left on the next step of the cadence (#1059)
     game.frame(GLIDE_MS);
-    expect(data().openworldAt).toBe('-1,-1');
-    release('ArrowLeft');
-    game.frame(GLIDE_MS); // Left let go: a single Up, north-east at the default camera, (0, -2)
     expect(data().openworldAt).toBe('0,-2');
+    release('ArrowLeft');
+    game.frame(GLIDE_MS); // Left let go: a single Up, north-east at the default camera, (1, -3)
+    expect(data().openworldAt).toBe('1,-3');
     window.dispatchEvent(new Event('blur')); // the window loses focus: nothing is held any more
-    press('ArrowRight'); // single, not up-right with the Up still held: (1, -2)
-    expect(data().openworldAt).toBe('1,-2');
+    press('ArrowRight'); // single, not up-right with the Up still held: (2, -3)
+    expect(data().openworldAt).toBe('2,-3');
   });
 
   it('steps an arrow at its keydown, ignores the key repeat, and walks on the frames while it is held, #1059', async () => {
@@ -351,7 +351,7 @@ describe('the board keys in the Open world, #1063', () => {
     const turn = game.turn();
     await enterWorld(game);
     press('ArrowLeft');
-    expect(data().openworldAt).toBe('-1,0');
+    expect(data().openworldAt).toBe('0,-1');
     expect(byId('replay-bar').hidden).toBe(true);
     expect(game.turn()).toBe(turn);
     expect(game.hook('__plies')).toBe(2);
