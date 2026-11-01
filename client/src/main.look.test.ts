@@ -62,6 +62,26 @@ describe('main.ts tonal look (#1138)', () => {
     expect(glass.map).toBeNull();
   });
 
+  it.each([
+    ['/?bot=off', []],
+    ['/?bot=off&scene=room', ['bulkhead-albedo.ktx2', 'deck-pbr-albedo.ktx2', 'grate-albedo.ktx2']],
+  ])('the bay wears its walls, grates and deck maps in the room only, the terrace draws none of them (#1370): %s', async (search, room) => {
+    const requested: string[] = []; // the files the page asks the texture loader for
+    const booting = boot(search);
+    vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', () => ({
+      KTX2Loader: class {
+        detectSupport = (): this => this;
+        loadAsync = async (url: string): Promise<never> => {
+          requested.push(url.slice(url.lastIndexOf('/') + 1));
+          return Promise.reject(new Error('404'));
+        };
+      },
+    }));
+    await booting;
+    const bay = requested.filter((name) => /^(bulkhead|deck-pbr|grate)-/.test(name)).sort();
+    expect(bay).toEqual(room.length ? expect.arrayContaining(room) : []);
+  });
+
   it.each(['/?bot=off', '/?bot=off&look=pbr'])('keeps the maps of today in the pbr look, %s', async (search) => {
     const scene = catchScene();
     await boot(`${search}&scene=room`); // the room's textures: the terrace draws none (#1314)

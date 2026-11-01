@@ -234,6 +234,17 @@ describe('roomloader PBR pipeline', () => {
     expect(fallbackBay!.materials.trench!.metalnessMap).toBeNull();
   });
 
+  it('asks for no bay map without a texture loader, the terrace draws none of them (#1370)', async () => {
+    const floor = new THREE.Mesh(new THREE.BoxGeometry());
+    floor.name = 'Ship_Deck_Floor';
+    const gltfLoader = { loadAsync: vi.fn(async () => ({ scene: new THREE.Group().add(floor) })) };
+    const bay = await loadSpaceshipBay('/assets/pbr/', gltfLoader as any, null);
+    expect(bay).not.toBeNull();
+    expect(bay!.scene.children).toContain(floor);
+    expect((floor.material as THREE.MeshStandardMaterial).map).toBeNull();
+    expect((floor.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0x333b42);
+  });
+
   it('decodes the meshopt-compressed bay with its named meshes and their UVs (#701)', async () => {
     const loader = meshoptLoader();
     expect(loader.meshoptDecoder).toBe(MeshoptDecoder);
