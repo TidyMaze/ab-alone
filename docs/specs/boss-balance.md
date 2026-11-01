@@ -1100,6 +1100,46 @@ replies only, ms, average / 95th percentile / max), the old build timed on the s
 the Pulsar 143 / 191 / 423 after, 128 / 173 / 362 before (about 12 % more: `phase_after` counts the boss marbles of
 two boards on each player ply of the tree); measured alone in the same session, the Hull 118 / 161 / 322.
 
+### The Pulsar: the ladder player reads the pulses (#1231), 18 of 20 at 10x, not tuned
+
+Target (#753, #833): the pro player (10x) wins 14 to 18 of 20, the 1x player fewer. Method of #1209: a local
+probe (not committed) replays the 20 ladder games at 10x and splits every lost marble by cause, then the ladder
+reruns, `LADDER_X=<1|10> LADDER_SEEDS=<20|40> cargo run --release --example ladder -- pulsar`, seeds from 0, 300
+plies at most, one run at a time.
+
+**Why the player lost.** The boss search sees the pulses (#675, #913), the ladder player did not: it searched the
+standard rules only, as the Ballast Mind's player before #834. Before, at 10x, 20 games, 497 pulses fired:
+
+| Cause | Player marbles lost | Boss marbles lost |
+|---|---|---|
+| a pulse (P1, P2, P3) | 41, 10, 2 (53) | 1, 2, 4 (7) |
+| a push (the other side's) | 52 | 54 |
+
+The pushes are even. The pulses decide the fight: the boss keeps its marbles out of them and the player walks
+into them. The "rim ejection" deaths are those pulses.
+
+**Change, ladder only:** `player_move` plays `pulsar_search` against the Pulsar, the boss reply's own search
+(`pulsar.rs`) with the player's budget: every player ply of its tree goes through the hook, at the phase it reaches,
+with seed 0 for the next pulsar, so it reads the tell as the HUD shows it (the pulsar, the turns left, the force). Unit
+test `the_player_reads_the_pulse_of_the_pulsar`: with a pulse due at the end of the turn, the plain search pushes a
+lone boss marble off the rim and loses 2 of its own to the pulse; the reading player loses none. No rule or knob
+changed, `PULSAR_NODE_BUDGET` stays 3000, `engine_version` unchanged, no text changed.
+
+After, at 10x, 20 games, 478 pulses fired: the pulses eject 10 player marbles (3, 7, 0) against 47 boss ones
+(15, 26, 6), the pushes 45 against 71. The pulses now eject mostly boss marbles, the counter of game-design.md 7.10.
+
+| Player | Before (main at adb99ad) | After (#1231) | After, 40 seeds |
+|---|---|---|---|
+| 1x | `3000 \| 2/20 \| 137 \| 2 \| push 10, rim_ejection 7, draw 1` | `3000 \| 10/20 \| 171.5 \| 2 \| push 5, draw 5` | `3000 \| 14/40 \| 159.5 \| 2 \| push 14, draw 12` |
+| 10x | `30000 \| 4/20 \| 123.5 \| 2 \| push 5, rim_ejection 10, draw 1` | `30000 \| 18/20 \| 112 \| 2 \| push 1, draw 1` | `30000 \| 29/40 \| 115 \| 2 \| push 5, rim_ejection 1, draw 5` |
+
+**Tries:** none on the boss's knobs (budget, weights, `PULSAR_FORCE`, the cadence, the phase thresholds). The
+reading player alone lands inside the target: 18 of 20 at 10x on seeds 0 to 19, the top of the range, and 29 of 40
+(14.5 of 20) on seeds 0 to 39, the middle of it; the 1x player wins fewer, 10 of 20 and 14 of 40. A knob that weakens
+the boss further would push the 20-seed row past 18, one that strengthens it would change play and `engine_version`
+for a rate already on target, so nothing was tuned. `PULSAR_FORCE` is also shared with the Ballast Mind's borrowed
+pulse (#1209), a reason more to leave it.
+
 ### The Assembly Line's search follows its phase in the tree (#914), not tuned
 
 Until #914 `assembly_move` ran the belts on every player ply of the tree at the phase of the root. Now
