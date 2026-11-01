@@ -1751,6 +1751,27 @@ describe('the stripe of the marbles fades with the zoom, and the materials keep 
   });
 });
 
+describe('the marbles wear the skins of the ship (#1176)', () => {
+  const skin = (): THREE.MeshStandardMaterial => Object.assign(new THREE.MeshStandardMaterial({ color: 0x445566 }), { map: new THREE.Texture() });
+  it('dresses the hero and the troop in the player skin, the foes and the ejected marble in the shell skin, each with its own ring', () => {
+    const player = skin();
+    const shell = skin();
+    const view = new OpenWorldView(new World(grass), new FightState(), { player, shell });
+    const of = (m: THREE.Material | THREE.Material[]) => (m as THREE.MeshStandardNodeMaterial);
+    const hero = of((view.scene.getObjectByName('hero') as THREE.Mesh).material);
+    const troop = of((view.scene.getObjectByName('troop') as THREE.Mesh).material);
+    const foes = of((view.scene.getObjectByName('enemies') as THREE.Mesh).material);
+    expect([hero.map, troop.map]).toEqual([player.map, player.map]);
+    expect([foes.map, of(view.ejected.material).map]).toEqual([shell.map, shell.map]);
+    for (const m of [hero, troop, foes]) expect(m.colorNode).not.toBeNull(); // the ring is the one cue of the team
+  });
+
+  it('keeps the plain looks of the marbles when no skin is given', () => {
+    const view = new OpenWorldView(new World(grass));
+    expect(((view.scene.getObjectByName('hero') as THREE.Mesh).material as THREE.MeshStandardNodeMaterial).map).toBeNull();
+  });
+});
+
 describe('the loaded chunks keep their centre while the hero paces along a chunk line (#1046)', () => {
   const DEG = Math.PI / 180;
   // The farthest ground in view from the hero's cell, as the view draws it (the camera as it stands now).

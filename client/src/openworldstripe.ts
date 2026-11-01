@@ -33,10 +33,23 @@ export interface MarbleLook {
   roughness: number;
 }
 
+/** The skins of the ship (#1176) that the marbles wear: the player's for the hero and the troop, the shell's for the enemies. */
+export interface MarbleSkins {
+  player: THREE.MeshStandardMaterial;
+  shell: THREE.MeshStandardMaterial;
+}
+
 /** A marble material with the stripe of `look`, its strength read from the `fade` uniform (see `stripeStrength`). Its colour is
- * the base, mixed toward the stripe colour across the band of the great circle. */
-export function stripedMaterial(look: MarbleLook, fade: Fade): THREE.MeshStandardNodeMaterial {
+ * the base, mixed toward the stripe colour across the band of the great circle. With a `skin` (#1176) the material wears its
+ * colour, maps and finish, so the stripe is the one cue of the team. */
+export function stripedMaterial(look: MarbleLook, fade: Fade, skin?: THREE.MeshStandardMaterial): THREE.MeshStandardNodeMaterial {
   const material = new THREE.MeshStandardNodeMaterial({ color: look.base, roughness: look.roughness });
+  if (skin) {
+    const { color, roughness, metalness, emissive, emissiveIntensity, map, normalMap, roughnessMap, metalnessMap, aoMap, emissiveMap } = skin;
+    material.color.copy(color);
+    material.emissive.copy(emissive);
+    Object.assign(material, { roughness, metalness, emissiveIntensity, map, normalMap, roughnessMap, metalnessMap, aoMap, emissiveMap });
+  }
   const stripe = uniform(new THREE.Color(look.stripe));
   // The direction of the point on the marble, in its own frame: a sphere's unit normal, so it turns with the marble.
   const direction = normalize(varying(positionLocal));

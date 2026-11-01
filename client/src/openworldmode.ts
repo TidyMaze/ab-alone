@@ -8,6 +8,7 @@ import { blocked, breakable, chunkOf, Hero, neighbours, same, World } from './op
 import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
+import type { MarbleSkins } from './openworldstripe';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
@@ -165,18 +166,20 @@ export class OpenWorldMode {
     /** The boss lairs of a seed's world: `q, r` pairs (the bridge's `world_lairs`), and what starts a lair, given its seed and number. */
     private readonly lairsOf: (seed: number) => Int32Array = () => new Int32Array(),
     private readonly onLair: (seed: number, lair: number) => void = () => {},
+    /** The skins of the ship the marbles wear, read when a world opens (#1176): none draws the plain looks. */
+    private readonly skins?: () => Promise<MarbleSkins>,
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
    * The save is read before the first draw, and the seed is remembered as the last world played (#968). */
   async open(seed: number, width: number, height: number, resume = true): Promise<void> {
     const saved = resume ? await this.saves.load(seed) : null;
-    this.enter(seed, width, height, saved);
+    this.enter(seed, width, height, saved, await this.skins?.());
     void this.saves.remember(seed);
   }
 
   /** Enters the world of `seed` with the hero, the troop and the fight of `saved` (a save of this seed), or on the spawn. */
-  enter(seed: number, width: number, height: number, saved: WorldSave | null = null): void {
+  enter(seed: number, width: number, height: number, saved: WorldSave | null = null, skins?: MarbleSkins): void {
     this.flush(); // the world left (another seed entered over it) is saved first
     this.view?.dispose();
     this.seed = seed;
@@ -191,7 +194,7 @@ export class OpenWorldMode {
     const flatLairs = this.lairsOf(seed);
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
     this.beaten = saved ? [...saved.lairs] : [];
-    const view = new OpenWorldView(world, this.fight);
+    const view = new OpenWorldView(world, this.fight, skins);
     this.hero = new Hero(world, this.fight);
     if (saved) {
       this.hero.at = saved.hero;
