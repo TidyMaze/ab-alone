@@ -1828,7 +1828,8 @@ const armyGlyphs = [
   new THREE.TorusGeometry(0.07, 0.025, 8, 16),
   new THREE.BoxGeometry(0.13, 0.13, 0.13),
 ].map((glyph) => glyph.scale(neonTell.glyph, neonTell.glyph, neonTell.glyph));
-const armyHalos = armyGlyphs.map((glyph) => glyph.clone().scale(1.7, 1.7, 1.7)); // the Bone outline behind the neon look's near-black glyph
+if (neonLook) armyGlyphs[0]!.scale(1.3, 1, 1.3); // the Alto cone: a wider base
+const armyHalos = armyGlyphs.map((glyph, army) => army === 0 ? glyph.clone().scale(1.85, 2.4, 1.85) : glyph.clone().scale(1.7, 1.7, 1.7)); // the Bone outline behind the neon look's near-black glyph: wider on the cone, which reads small from above
 const choirInk = new THREE.MeshBasicMaterial({ color: 0x15191c });
 const choirHalo = Object.assign(new THREE.MeshBasicMaterial({ side: THREE.BackSide, toneMapped: false }), { color: paleMaterial.color }); // the pale tell colour, shared: only the back faces of the larger shape show, an outline round the glyph
 // The Overseer (#635, game-design.md section 7.11): a dark hexagonal pedestal with a pale eye on the centre cell; a core

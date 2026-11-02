@@ -160,7 +160,7 @@ shared('the wheel zooms the Open world out far and back, and the hero still roll
 });
 
 // #976: the loaded chunks cover the ground in view at every zoom, so the edge of the loaded area never shows: on a 32:9 screen
-// at the widest zoom, the four edge strips of a screenshot have no pixel of the background colour (#0b1220).
+// at the widest zoom, the four edge strips of a screenshot have no pixel of the background colour (the neon look's sky, #04050c, #1424).
 test('the widest zoom on a 32:9 screen shows no black background at its edges, #976', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 540 });
   await page.goto('./?bot=off&openworld=7');
@@ -188,7 +188,7 @@ test('the widest zoom on a 32:9 screen shows no black background at its edges, #
     const strip = (x: number, y: number, w: number, h: number): number => {
       const d = ctx.getImageData(x, y, w, h).data;
       let n = 0;
-      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i]! - 11) <= 2 && Math.abs(d[i + 1]! - 18) <= 2 && Math.abs(d[i + 2]! - 32) <= 2) n++;
+      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i]! - 4) <= 2 && Math.abs(d[i + 1]! - 5) <= 2 && Math.abs(d[i + 2]! - 12) <= 2) n++;
       return n;
     };
     const { width: w, height: h } = canvas;
