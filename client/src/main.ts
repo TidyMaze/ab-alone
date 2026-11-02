@@ -5898,6 +5898,8 @@ const peersHost = new WorldPeersHost(
     canLair: (seed, q, r) => lairCells(seed).some(([a, b]) => a === q && b === r),
     lair: (cell) => openWorld.remoteLair(cell),
   },
+  undefined,
+  store, // the signed events are kept in this browser (#1305)
 );
 /** The boss lairs of the world `seed` (#1305), one cell per boss, the bridge's `world_lairs` read as cells. */
 function lairCells(seed: number): Axial[] {

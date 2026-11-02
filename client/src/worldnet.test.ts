@@ -10,7 +10,8 @@ const until = (check: () => boolean): Promise<void> =>
 import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
 import { generateKeys } from './moverecord';
-import { signBeaten, signBreak, signLair } from './worldevents';
+import type { Store } from './quality';
+import { EVENTS_KEY, signBeaten, signBreak, signLair } from './worldevents';
 import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
 import { PeersLayer } from './worldpeersview';
@@ -42,7 +43,7 @@ class FakeNet implements PeerNet {
   }
 }
 
-function setup(allowed = true) {
+function setup(allowed = true, store: Store = null) {
   const nets: FakeNet[] = [];
   const rooms: string[] = [];
   const clock = { now: 0 };
@@ -71,6 +72,7 @@ function setup(allowed = true) {
     () => me.name,
     { keys: () => keysOnce, canBreak: (_seed, q) => q >= 0, apply: (cell) => applied.push(cell), canBeaten: (_seed, q) => q >= 0, beat: (cell) => beaten.push(cell), canLair: (_seed, q) => q >= 0, lair: (cell) => lairs.push(cell) },
     () => clock.now,
+    store,
   );
   const enter = (seed = PUBLIC_SEED) => host.enter(seed, scene, camera, world as never);
   return { host, nets, rooms, clock, root, scene, enter, reports, me, applied, beaten, lairs, keysOnce };
@@ -413,6 +415,94 @@ describe('WorldPeersHost', () => {
       nets[0]!.data(encodeBreak(await signLair(keys, PUBLIC_SEED, 3, 5)), 'q'); // the same lair from another peer
       await flush();
       expect(lairs).toEqual([[3, 5]]);
+    });
+
+    describe('saved events (#1305)', () => {
+      const memory = () => {
+        const data = new Map<string, string>();
+        return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), data };
+      };
+      const savedCells = (store: ReturnType<typeof memory>) => (JSON.parse(store.data.get(EVENTS_KEY) ?? '{"events":[]}') as { events: { q: number }[] }).events.map((e) => e.q);
+
+      it('saves what is signed, applies it after a reload, and gives it to a joiner (a break, a beaten enemy, a lair)', async () => {
+        const store = memory();
+        const first = setup(true, store);
+        first.enter();
+        const keys = await first.keysOnce;
+        first.host.broke([1, 0]);
+        first.host.beaten([2, 0]);
+        first.host.lairWon(PUBLIC_SEED, [3, 0]);
+        await until(() => savedCells(store).length === 3);
+        first.host.leave(); // leaving does not wipe the saved set
+        expect(savedCells(store)).toEqual([1, 2, 3]);
+        // the page reloads: a new host on the same store
+        const again = setup(true, store);
+        again.enter();
+        await until(() => again.applied.length + again.beaten.length + again.lairs.length === 3);
+        expect(again.applied).toEqual([[1, 0]]);
+        expect(again.beaten).toEqual([[2, 0]]);
+        expect(again.lairs).toEqual([[3, 0]]);
+        again.nets[0]!.join('late');
+        again.host.frame(1000, [0, 0]);
+        again.host.frame(1300, [0, 0]);
+        again.host.frame(1500, [0, 0]);
+        const given = again.nets[0]!.sent.filter(([d, to]) => to === 'late' && d.length === 106).map(([d]) => (decode(d) as { event: { q: number; pub: string } }).event);
+        expect(given.map((e) => e.q).sort()).toEqual([1, 2, 3]);
+        expect(given[0]!.pub).toBe(keys.pub);
+        // entering again after a leave brings the world back
+        again.host.leave();
+        const third = setup(true, store);
+        third.enter();
+        await until(() => third.applied.length === 1);
+        expect(savedCells(store)).toEqual([1, 2, 3]);
+      });
+
+      it('drops a saved event that is forged, of another seed, or against the rules, and keeps going', async () => {
+        const store = memory();
+        const keys = await generateKeys();
+        const good = await signBreak(keys, PUBLIC_SEED, 4, 0);
+        const forged = { ...(await signBreak(keys, PUBLIC_SEED, 5, 0)), q: 6 };
+        const other = await signBreak(keys, 7, 8, 0);
+        const noRule = await signBeaten(keys, PUBLIC_SEED, -1, 0); // canBeaten says no
+        const noLair = await signLair(keys, PUBLIC_SEED, -2, 0);
+        const noBreak = await signBreak(keys, PUBLIC_SEED, -3, 0);
+        store.setItem(EVENTS_KEY, JSON.stringify({ v: 1, events: [forged, other, noRule, noLair, noBreak, good] }));
+        const { applied, beaten, lairs, enter } = setup(true, store);
+        enter();
+        await until(() => applied.length === 1);
+        await flush();
+        expect(applied).toEqual([[4, 0]]);
+        expect(beaten).toEqual([]);
+        expect(lairs).toEqual([]);
+        expect(savedCells(store)).toEqual([4]);
+      });
+
+      it('stores nothing for a private seed, and reapplies nothing after a Hide and Show', async () => {
+        const store = memory();
+        const { host, applied, enter } = setup(true, store);
+        enter(7);
+        host.broke([1, 0]); // no room: nothing signed
+        await flush();
+        expect(store.data.size).toBe(0);
+        enter();
+        host.broke([1, 0]);
+        await until(() => savedCells(store).length === 1);
+        host.hide();
+        host.show();
+        await flush();
+        expect(applied).toEqual([]);
+      });
+
+      it('goes on when the room closes while the saved events are checked', async () => {
+        const store = memory();
+        const keys = await generateKeys();
+        store.setItem(EVENTS_KEY, JSON.stringify({ v: 1, events: [await signBreak(keys, PUBLIC_SEED, 4, 0)] }));
+        const { host, applied, enter } = setup(true, store);
+        enter();
+        host.leave();
+        await flush();
+        expect(applied).toEqual([]);
+      });
     });
 
     it('a break that arrives after the room closed is dropped', async () => {

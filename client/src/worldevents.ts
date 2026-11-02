@@ -59,9 +59,25 @@ export async function worldKeys(store: Store): Promise<Keys> {
   return fresh;
 }
 
-/** The cells broken or beaten, keyed by cell, in the order they came. A break and a beaten enemy never share a cell: an enemy stands on open ground. */
+/** Where the held events are saved (#1305): `{ v: 1, events }`, the events as sent on the wire, oldest first. */
+export const EVENTS_KEY = 'ab-alone.world-events';
+const EVENTS_VERSION = 1;
+
+const KINDS = new Set(['break', 'beaten', 'lair']);
+const wellFormed = (e: unknown): e is BreakEvent => {
+  const x = e as BreakEvent | null;
+  return !!x && KINDS.has(x.kind) && Number.isInteger(x.seed) && Number.isInteger(x.q) && Number.isInteger(x.r) && typeof x.pub === 'string' && typeof x.sig === 'string';
+};
+
+/**
+ * The cells broken or beaten, keyed by cell, in the order they came. A break and a beaten enemy never share a cell: an enemy stands on
+ * open ground. With a store, the set is saved on each add (#1305) so a reload keeps the world; `clear()` empties the memory only. What
+ * is saved is untrusted: `stored` returns it unchecked and the caller verifies each signature before `adopt`.
+ */
 export class BreakSet {
   private readonly held = new Map<string, BreakEvent>();
+
+  constructor(private readonly store: Store = null) {}
 
   get size(): number {
     return this.held.size;
@@ -71,8 +87,21 @@ export class BreakSet {
     return this.held.has(`${q},${r}`);
   }
 
-  /** Holds the event unless its cell is held already. Past MAX_HELD the oldest goes. True when it was new. */
+  /** Holds the event unless its cell is held already, and saves. Past MAX_HELD the oldest goes. True when it was new. */
   add(e: BreakEvent): boolean {
+    if (!this.hold(e)) return false;
+    this.save();
+    return true;
+  }
+
+  /** Holds the events that were checked, then saves once. Returns those that were new. */
+  adopt(events: BreakEvent[]): BreakEvent[] {
+    const fresh = events.filter((e) => this.hold(e));
+    this.save(false);
+    return fresh;
+  }
+
+  private hold(e: BreakEvent): boolean {
     const key = `${e.q},${e.r}`;
     if (this.held.has(key)) return false;
     this.held.set(key, e);
@@ -80,11 +109,43 @@ export class BreakSet {
     return true;
   }
 
+  /** The saved events of the world `seed`, oldest first, shape-checked only. A missing, broken or other-version record gives none. */
+  stored(seed: number): BreakEvent[] {
+    return this.saved().filter((e) => e.seed === seed);
+  }
+
+  private saved(): BreakEvent[] {
+    try {
+      const record = JSON.parse(read(this.store, EVENTS_KEY) ?? '') as { v: number; events: unknown };
+      return record.v === EVENTS_VERSION && Array.isArray(record.events) ? record.events.filter(wellFormed) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Writes the saved events not held (another tab, or not loaded yet; none after `adopt`, which has checked them) then the held ones. Over the quota the oldest saved go, one at a
+   * time; with no room at all the set lives in memory only. */
+  private save(merge = true): void {
+    if (!this.store) return;
+    const old = merge ? this.saved().filter((e) => !this.held.has(`${e.q},${e.r}`)) : [];
+    const events = [...old, ...this.held.values()].slice(-MAX_HELD);
+    for (;;) {
+      try {
+        this.store.setItem(EVENTS_KEY, JSON.stringify({ v: EVENTS_VERSION, events }));
+        return;
+      } catch {
+        if (events.length === 0) return;
+        events.shift();
+      }
+    }
+  }
+
   /** At most `count` events, the newest first. */
   newest(count: number): BreakEvent[] {
     return [...this.held.values()].reverse().slice(0, count);
   }
 
+  /** Empties the memory; the saved set stays, so the world is back when the player returns. */
   clear(): void {
     this.held.clear();
   }

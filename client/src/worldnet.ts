@@ -7,6 +7,7 @@ import type { World } from './openworld';
 import type { PeerNet } from './p2p';
 import { joinErrorCause } from './netcounters';
 import type { Keys } from './moverecord';
+import type { Store } from './quality';
 import { BreakSet, SYNC_MAX, SYNC_MS, signBeaten, signBreak, signLair, verifyBreak } from './worldevents';
 import { type BreakEvent, decode, encodeBreak, encodeHello, Peers, PUBLIC_SEED, roomOf, Sender } from './worldpeers';
 import { PeersLayer } from './worldpeersview';
@@ -72,7 +73,7 @@ export class WorldPeersHost implements PeerHost {
   private lastCount = 0;
   private failed = '';
   /** The cells broken this visit, what is owed to peers that joined (a queue each), and when a peer last sent a break. */
-  private readonly held = new BreakSet();
+  private readonly held: BreakSet;
   private syncing: { peer: string; events: BreakEvent[] }[] = [];
   private lastSync = -Infinity;
   private readonly lastBreak = new Map<string, number>();
@@ -92,7 +93,10 @@ export class WorldPeersHost implements PeerHost {
     private readonly name: () => string,
     private readonly hooks: BreakHooks,
     private readonly clock: () => number = () => performance.now(),
-  ) {}
+    store: Store = null,
+  ) {
+    this.held = new BreakSet(store);
+  }
 
   enter(seed: number, scene: THREE.Scene, camera: THREE.PerspectiveCamera, world: Pick<World, 'tile'>): void {
     this.leave();
@@ -149,6 +153,24 @@ export class WorldPeersHost implements PeerHost {
     this.text = '';
     this.update();
     this.sendOwed();
+    void this.restore(this.running);
+  }
+
+  /** The events saved by earlier visits (#1305): each checked as a peer's would be (this world, a cell the rules allow, a signature that
+   * verifies), then held, applied to the world and given to the peers that join. Whatever does not check is dropped. */
+  private async restore(run: Running): Promise<void> {
+    const good: BreakEvent[] = [];
+    for (const event of this.held.stored(PUBLIC_SEED)) {
+      if (this.held.has(event.q, event.r)) continue; // held already (the room opened again after a Hide)
+      const allowed = event.kind === 'beaten' ? this.hooks.canBeaten : event.kind === 'lair' ? this.hooks.canLair : this.hooks.canBreak;
+      if (allowed(event.seed, event.q, event.r) && (await verifyBreak(event))) good.push(event);
+      if (this.running !== run) return; // the room closed meanwhile
+    }
+    for (const event of this.held.adopt(good)) {
+      if (event.kind === 'beaten') this.hooks.beat([event.q, event.r]);
+      else if (event.kind === 'lair') this.hooks.lair([event.q, event.r]);
+      else this.hooks.apply([event.q, event.r]);
+    }
   }
 
   /** A lair was taken: told to the peers now, or when the room opens if it is closed (the lair's fight leaves the world). Only the

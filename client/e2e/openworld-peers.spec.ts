@@ -286,6 +286,25 @@ test('the obstacle the hero breaks goes out signed, 106 bytes, #1305', async ({ 
   await expect.poll(() => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m.length === 106 && m[1] === 3).length)).toBe(1);
 });
 
+test('a broken cell survives a reload, and a hero who joins late is given it, #1305', async ({ page }) => {
+  await enter(page, PUBLIC);
+  const { cell, free } = await obstacle(page);
+  await page.evaluate((hero) => (window as unknown as Break).__openworldFixture({ hero: hero as [number, number], troop: [], enemies: [] }), free);
+  await page.keyboard.press(free![0]! < cell![0]! ? 'ArrowRight' : 'ArrowLeft');
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-broken', '1');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ab-alone.world-events'))).toContain('"v":1');
+  await page.reload();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-broken', '1'); // the cell is still broken after the reload
+  await page.evaluate(() => (window as unknown as Hook).__netPeerJoin('q'));
+  await expect.poll(() => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m.length === 106 && m[1] === 3).length)).toBe(1); // re-served
+  // a private seed stores nothing
+  await page.evaluate(() => localStorage.removeItem('ab-alone.world-events'));
+  await page.goto('./?bot=off&net=hook&openworld=7');
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
+  expect(await page.evaluate(() => localStorage.getItem('ab-alone.world-events'))).toBeNull();
+});
+
 // The HUD of the public world on a phone (390x844): the name field and Hide are touch targets of 44 px, and the plate leaves the hero
 // and the troop (the centre of the screen) free. A hero on our own cell is lifted above ours.
 test('on a phone the name field and Hide are 44 px high and the plate leaves the play area free, #1305', async ({ page }) => {

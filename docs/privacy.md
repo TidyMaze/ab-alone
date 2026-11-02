@@ -12,12 +12,12 @@ Best effort by the project's owners. Not reviewed by a lawyer.
 |---|---|---|
 | Your IP address | The players you connect to; the STUN servers (Google `stun*.l.google.com`, Cloudflare `stun.cloudflare.com`); the Nostr relays you reach | WebRTC needs it to connect you |
 | A random public key, your public name (up to 16 characters, optional in the Open world), your moves, and in the public Open world your position and the cells of your troop (at most 4 times a second, as offsets from your hero) | The players in your room; for a room beacon, the relays | Play and signed move logs |
-| In the public Open world, a random signing key (its private part stays in your browser's localStorage, `ab-alone.world-key`, and is never sent) and one signed event per obstacle you break: the cell and your public key | The players in the room, who may keep it and pass it to players who join later | Showing others the obstacles you broke |
+| In the public Open world, a random signing key (its private part stays in your browser's localStorage, `ab-alone.world-key`, and is never sent) and one signed event per obstacle you break: the cell and your public key | The players in the room, who may keep it and pass it to players who join later. Your browser also keeps the events it holds, yours and other players', in localStorage (`ab-alone.world-events`, at most 2000, about 384 KB) so the world is back after a reload | Showing others the obstacles you broke |
 | Room topics and room beacons (ephemeral Nostr events) | The Nostr relays in [docs/specs/multiplayer.md](specs/multiplayer.md), and anyone reading them | Finding other players |
 
 **Basis.** Your consent (GDPR art. 6(1)(a)), given by the opt-in. You can withdraw it by leaving online play.
 
-**Retention.** We store nothing. Relays are asked for ephemeral events (kinds 20000-29999), which the protocol says relays are not expected to store; a relay may still log. Other players keep what they received (moves, names, results) as long as they like. Relay and STUN operators have their own policies, which we do not control.
+**Retention.** We store nothing on a server. Your browser keeps the Open world's signed events (cells and public keys) until you clear the site data. Relays are asked for ephemeral events (kinds 20000-29999), which the protocol says relays are not expected to store; a relay may still log. Other players keep what they received (moves, names, results) as long as they like. Relay and STUN operators have their own policies, which we do not control.
 
 **Leave.** In the public Open world use Hide (it leaves the room at once) or Esc, in a game use Leave, or close the tab: you stop sending, and peers drop you after about 10 s. Clearing the site data deletes your key and saves, and the next visit gets a new key.
 
