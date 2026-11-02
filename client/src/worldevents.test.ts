@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { BreakSet, MAX_HELD, signBeaten, signBreak, verifyBreak, worldKeys } from './worldevents';
+import { BreakSet, MAX_HELD, signBeaten, signBreak, signLair, verifyBreak, worldKeys } from './worldevents';
 import type { BreakEvent } from './worldpeers';
 import { generateKeys } from './moverecord';
 
@@ -26,6 +26,16 @@ describe('a signed break', () => {
     expect(e).toMatchObject({ kind: 'beaten', seed: 1305, q: 4, r: -9, pub: keys.pub });
     expect(await verifyBreak(e)).toBe(true);
     expect(await verifyBreak({ ...e, kind: 'break' })).toBe(false); // a beaten enemy is not a break of the same cell
+  });
+});
+
+describe('a lair taken', () => {
+  it('is signed the same way with kind 3, and its kind is in the signature (#1305)', async () => {
+    const keys = await generateKeys();
+    const e = await signLair(keys, 1305, 4, -9);
+    expect(e).toMatchObject({ kind: 'lair', seed: 1305, q: 4, r: -9, pub: keys.pub });
+    expect(await verifyBreak(e)).toBe(true);
+    expect(await verifyBreak({ ...e, kind: 'beaten' })).toBe(false); // a lair is not a beaten enemy of the same cell
   });
 });
 

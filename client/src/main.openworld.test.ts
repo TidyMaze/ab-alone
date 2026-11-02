@@ -9,7 +9,7 @@ import { SLIDE_MS } from './slide';
 import './test/openworldwasm';
 import { world_can_break } from 'abalone-wasm';
 import { boot, type Game } from './test/harness';
-import { signBeaten, signBreak } from './worldevents';
+import { signBeaten, signBreak, signLair } from './worldevents';
 import { generateKeys } from './moverecord';
 import { BREAK_BYTES, encodeBreak, encodeTroop } from './worldpeers';
 import { decode, encodeHello, encodePos, PUBLIC_SEED } from './worldpeers';
@@ -677,6 +677,17 @@ describe('the public Open world online', () => {
     room.data(encodeBreak(event), 'p');
     for (let i = 0; i < 40 && data().openworldBeaten !== '1'; i++) await new Promise((done) => setTimeout(done, 10));
     expect(data().openworldBeaten).toBe('1');
+  });
+
+  it('a peer takes a boss lair: it shows beaten here, once (#1305)', async () => {
+    const game = await joined();
+    const room = game.world()!;
+    const lairs = (window as unknown as { __openworldLairs: (seed: number) => [number, number][] }).__openworldLairs(PUBLIC_SEED); // the test hook of the e2e
+    const [q, r] = lairs[0]!;
+    const event = await signLair(await generateKeys(), PUBLIC_SEED, q, r);
+    room.data(encodeBreak(event), 'p');
+    for (let i = 0; i < 40 && data().openworldLairsBeaten !== '0'; i++) await new Promise((done) => setTimeout(done, 10));
+    expect(data().openworldLairsBeaten).toBe('0');
   });
 });
 

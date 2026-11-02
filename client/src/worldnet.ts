@@ -7,7 +7,7 @@ import type { World } from './openworld';
 import type { PeerNet } from './p2p';
 import { joinErrorCause } from './netcounters';
 import type { Keys } from './moverecord';
-import { BreakSet, SYNC_MAX, SYNC_MS, signBeaten, signBreak, verifyBreak } from './worldevents';
+import { BreakSet, SYNC_MAX, SYNC_MS, signBeaten, signBreak, signLair, verifyBreak } from './worldevents';
 import { type BreakEvent, decode, encodeBreak, encodeHello, Peers, PUBLIC_SEED, roomOf, Sender } from './worldpeers';
 import { PeersLayer } from './worldpeersview';
 
@@ -23,16 +23,21 @@ export interface PeerHost {
   broke(cell: Axial): void;
   /** The hero ejected the generated enemy that starts on `cell` (#1305): told to the others when the rule allows it, signed. */
   beaten(cell: Axial): void;
+  /** The hero took the boss lair on `cell` of the world `seed` (#1305): told to the others once the room is open, signed. */
+  lairWon(seed: number, cell: Axial): void;
 }
 
-/** What the signed events need of the page: the player's key, the rules of the world (`world_can_break`, `world_is_enemy`) and what
- * happens to a cell another hero broke (the world opens it and the view smashes its prop) or to an enemy another hero ejected. */
+/** What the signed events need of the page: the player's key, the rules of the world (`world_can_break`, `world_is_enemy`, the lairs of
+ * `world_lairs`) and what happens to a cell another hero broke (the world opens it and the view smashes its prop), to an enemy another
+ * hero ejected, or to a lair another hero took. */
 export interface BreakHooks {
   keys: () => Promise<Keys>;
   canBreak: (seed: number, q: number, r: number) => boolean;
   apply: (cell: Axial) => void;
   canBeaten: (seed: number, q: number, r: number) => boolean;
   beat: (cell: Axial) => void;
+  canLair: (seed: number, q: number, r: number) => boolean;
+  lair: (cell: Axial) => void;
 }
 
 /** Breaks from one peer closer together than this are dropped (flood guard; the sync of a newcomer goes at SYNC_MS). */
@@ -71,6 +76,8 @@ export class WorldPeersHost implements PeerHost {
   private syncing: { peer: string; events: BreakEvent[] }[] = [];
   private lastSync = -Infinity;
   private readonly lastBreak = new Map<string, number>();
+  /** The lairs taken while the room was closed (the fight leaves the world): told when it opens. Kept across a leave. */
+  private owed: Axial[] = [];
 
   /**
    * `open` joins a room, `allowed` says whether online play was accepted (read when a world is entered), `root` holds the edge
@@ -141,6 +148,20 @@ export class WorldPeersHost implements PeerHost {
     this.failed = '';
     this.text = '';
     this.update();
+    this.sendOwed();
+  }
+
+  /** A lair was taken: told to the peers now, or when the room opens if it is closed (the lair's fight leaves the world). Only the
+   * public world's lairs are shared. */
+  lairWon(seed: number, cell: Axial): void {
+    if (seed !== PUBLIC_SEED) return;
+    this.owed.push(cell);
+    this.sendOwed();
+  }
+
+  private sendOwed(): void {
+    if (!this.running) return;
+    for (const cell of this.owed.splice(0)) void this.announce('lair', cell);
   }
 
   /** The hero broke the obstacle on `cell`: signs it, holds it and tells every peer. */
@@ -156,7 +177,7 @@ export class WorldPeersHost implements PeerHost {
   private async announce(kind: BreakEvent['kind'], [q, r]: Axial): Promise<void> {
     const run = this.running;
     if (!run) return;
-    const sign = kind === 'beaten' ? signBeaten : signBreak;
+    const sign = kind === 'beaten' ? signBeaten : kind === 'lair' ? signLair : signBreak;
     const event = await sign(await this.hooks.keys(), PUBLIC_SEED, q, r);
     if (this.running !== run) return; // the room closed while the key signed
     this.held.add(event);
@@ -171,10 +192,11 @@ export class WorldPeersHost implements PeerHost {
     const now = this.clock();
     if (now - (this.lastBreak.get(peer) ?? -Infinity) < BREAK_GAP_MS) return;
     this.lastBreak.set(peer, now);
-    const allowed = event.kind === 'beaten' ? this.hooks.canBeaten : this.hooks.canBreak;
+    const allowed = event.kind === 'beaten' ? this.hooks.canBeaten : event.kind === 'lair' ? this.hooks.canLair : this.hooks.canBreak;
     if (!allowed(event.seed, event.q, event.r) || !(await verifyBreak(event))) return;
     if (this.running !== run || !this.held.add(event)) return; // the room closed meanwhile, or the same cell came first
     if (event.kind === 'beaten') this.hooks.beat([event.q, event.r]);
+    else if (event.kind === 'lair') this.hooks.lair([event.q, event.r]);
     else this.hooks.apply([event.q, event.r]);
   }
 

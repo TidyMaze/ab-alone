@@ -86,6 +86,14 @@ describe('the broken-cell event on the wire', () => {
     expect(decode(bytes)).toEqual({ t: 'break', event: beaten });
   });
 
+  it('a lair taken has the same 106 bytes under type 6, and comes back with its kind (#1305)', () => {
+    const lair = { ...event, kind: 'lair' as const };
+    const bytes = encodeBreak(lair);
+    expect(bytes).toHaveLength(BREAK_BYTES);
+    expect([...bytes.subarray(0, 2)]).toEqual([2, 6]);
+    expect(decode(bytes)).toEqual({ t: 'break', event: lair });
+  });
+
   it('refuses a break of another length', () => {
     const bytes = encodeBreak(event);
     expect(decode(bytes.subarray(0, 105))).toBeNull();

@@ -355,6 +355,17 @@ export class OpenWorldMode {
     this.mark(document.body.dataset.openworld!);
   }
 
+  /** Another hero took the boss lair on `cell` (#1305, a signed event checked by the peers host): the lair shows beaten for the visit.
+   * A cell that is no lair of this world, or a lair beaten already, does nothing. */
+  remoteLair(cell: Axial): void {
+    const lair = this.lairs.findIndex((c) => same(c, cell));
+    if (!this.view || lair < 0 || this.beaten.includes(lair)) return;
+    this.beaten.push(lair);
+    this.view.setLairs(this.lairs, this.beaten);
+    this.dirty = true;
+    this.mark(document.body.dataset.openworld!);
+  }
+
   /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
   resize(width: number, height: number): void {
     this.size = [width, height];
