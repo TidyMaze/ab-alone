@@ -2,7 +2,7 @@
 // land so the cells read as tidy tiles, a soft light line on water. It is a colour node of the ground's material (no texture, no
 // extra mesh, no extra draw call): the band is computed from the prism's own position, before the instance moves it.
 import * as THREE from 'three/webgpu';
-import { abs, attribute, float, fwidth, materialColor, max, positionLocal, smoothstep, step, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, color, float, fwidth, length, materialColor, max, mix, positionLocal, positionWorld, smoothstep, step, texture, vec2, vec3 } from 'three/tsl';
 
 /** The radius of a ground prism (a hex of side 0.56 tiles the grid of spacing 1 with a thin gap) and its apothem. */
 export const HEX_RADIUS = 0.56;
@@ -41,9 +41,17 @@ export const gapFill = (zoom: number): number => {
   return GAP_FILL * t * t * (3 - 2 * t);
 };
 
+/** The neon look's grid and traces (#1424), all in the ground's shader: no mesh, no draw call. `hero` is where the hero stands (x, z). */
+export interface NeonGrid {
+  hero: THREE.UniformNode<'vec2', THREE.Vector2>;
+  traces: THREE.Texture;
+}
+/** The look's numbers: the cyan line is 1 px and 30 % lit, the violet traces 25 %; both quieter far from the hero (full within `NEAR`, a third past `FAR`), and the far ground darker. */
+export const NEON_GRID = { line: 0.2, trace: 0.2, quiet: 0.2, near: 6, far: 18, farDim: 0.55, traceScale: 1 / 40 } as const;
+
 /** A ground material: white until an instance colours it (the colour comes per cell), with the edge band of `gain` on the top face and
  * the `emissiveNode` given in place of the plain emissive colour. */
-export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node; positionNode?: THREE.Node; widen?: THREE.UniformNode<'float', number> }): THREE.MeshStandardNodeMaterial {
+export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node; positionNode?: THREE.Node; widen?: THREE.UniformNode<'float', number>; neon?: NeonGrid }): THREE.MeshStandardNodeMaterial {
   const material = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, emissive: look.emissive, roughness: look.roughness });
   const position = attribute('position', 'vec3');
   const flat = vec2(position.x, position.z);
@@ -55,6 +63,17 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
   const top = step(0.5, attribute('normal', 'vec3').y); // the sides of the column keep their colour
   material.colorNode = materialColor.mul(float(1).add(band.mul(top).mul(fade).mul(look.gain)));
   if (look.emissiveNode) material.emissiveNode = look.emissiveNode; // the water's foam and ripples (#1101)
+  if (look.neon) {
+    const { hero, traces } = look.neon;
+    const flatWorld = vec2(positionWorld.x, positionWorld.z);
+    const near = float(1).sub(smoothstep(NEON_GRID.near, NEON_GRID.far, length(flatWorld.sub(hero)))); // 1 round the hero, 0 far out
+    const quiet = mix(float(NEON_GRID.quiet), float(1), near);
+    material.colorNode = (material.colorNode as ReturnType<typeof vec3>).mul(mix(float(NEON_GRID.farDim), float(1), near)); // the far ground is darker
+    const line = float(1).sub(smoothstep(pixel.mul(0.5), pixel.mul(1.5), distance)).mul(top); // 1 px, in the gap, never on a cell top
+    const glow = color(0x19e6ff).mul(line).mul(NEON_GRID.line).mul(quiet);
+    const circuit = color(0x9a6bff).mul(texture(traces, flatWorld.mul(NEON_GRID.traceScale)).r).mul(NEON_GRID.trace).mul(top).mul(quiet);
+    material.emissiveNode = ((look.emissiveNode ?? vec3(0)) as ReturnType<typeof vec3>).add(glow).add(circuit);
+  }
   // The desert's shimmer (#1104) and the widening of the prisms (#1347). The position node reads the position after the instance moved it:
   // the corner is pushed out from the cell's centre by its own local position, not scaled from the world's origin.
   if (look.widen) {

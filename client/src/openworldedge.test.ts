@@ -1,6 +1,7 @@
 import { float, uniform } from 'three/tsl';
 import { describe, expect, it } from 'vitest';
-import { EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial, GAP_FILL, gapFill } from './openworldedge';
+import * as THREE from 'three/webgpu';
+import { NEON_GRID, EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial, GAP_FILL, gapFill } from './openworldedge';
 
 describe('the hex edge of an Open world ground (#1138)', () => {
   it('is 0 on an edge of the prism, the apothem at the centre, and the same on the six edges of the hex', () => {
@@ -66,5 +67,19 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect(edgeMaterial(look).positionNode).toBeNull();
     const glow = float(2);
     expect(edgeMaterial({ ...look, emissiveNode: glow }).emissiveNode).toBe(glow);
+  });
+
+  it('draws the neon grid and traces in the shader, with no extra node when the look is off (#1424)', () => {
+    const look = { emissive: 0, roughness: 0.2, gain: -0.7 };
+    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1) };
+    const plain = edgeMaterial(look);
+    const lit = edgeMaterial({ ...look, neon });
+    expect(plain.emissiveNode).toBeNull();
+    expect(lit.emissiveNode).not.toBeNull();
+    expect(lit.colorNode).not.toBe(plain.colorNode);
+    const water = float(2);
+    expect(edgeMaterial({ ...look, emissiveNode: water, neon }).emissiveNode).not.toBe(water); // the foam keeps its term, the grid is added
+    expect(NEON_GRID.line).toBeLessThan(0.3); // quiet: a lit line, never a cell top
+    expect(NEON_GRID.near).toBeLessThan(NEON_GRID.far);
   });
 });

@@ -2,7 +2,7 @@ import './test/openworldwasm';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { NEON, neonSunPosition, neonWorldOn } from './neonlook';
-import { WORLD, WORLD_SHADOW, applyNeonWorld, mapColour, neonProp } from './neonworld';
+import { WORLD, WORLD_EDGE_GAIN, WORLD_SHADOW, applyNeonWorld, mapColour, neonProp, neonTraces } from './neonworld';
 import { AMBIENT } from './openworldparticles';
 import { CHUNK, World } from './openworld';
 import { terrainColour } from './openworldminimap';
@@ -40,7 +40,7 @@ describe('the neon palette of the Open world (#1424)', () => {
     expect([LAIR_LOOK.open, LAIR_LOOK.beaten]).toEqual([NEON.violet, NEON.cyan]);
     expect(PROPS.boulder.color).toBe(WORLD.boulder);
     expect(PROPS.tree.geometry).toBe(geometry); // only colours are touched
-    expect(Object.values(AMBIENT).every((a) => a!.colour === 0x5a7090)).toBe(true);
+    expect(Object.values(AMBIENT).every((a) => a!.colour === 0x2b3648)).toBe(true);
     applyNeonWorld(false, palette);
     expect(neonWorldOn()).toBe(false);
     expect([LOOK.grass.color, LOOK.sand.color, PROPS.mountain.color]).toEqual([grass, sand, mountain]);
@@ -116,5 +116,19 @@ describe('the Open world view with the look (#1424)', () => {
     view.scene.traverse((o) => void ((o as THREE.DirectionalLight).isDirectionalLight && (sun = o as THREE.DirectionalLight)));
     view.setShadows(true);
     expect(sun.shadow.intensity).not.toBe(WORLD_SHADOW);
+  });
+});
+
+describe('the circuit traces of the Open world ground (#1424)', () => {
+  it('is a tile of thin lines, most of it dark, that repeats', () => {
+    const tile = neonTraces(64);
+    const data = tile.image.data as Uint8Array;
+    let lit = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i] === 255) lit++;
+    expect(lit).toBeGreaterThan(40);
+    expect(lit / (64 * 64)).toBeLessThan(0.5);
+    expect(tile.wrapS).toBe(THREE.RepeatWrapping);
+    expect(neonTraces().image.width).toBe(512);
+    expect(WORLD_EDGE_GAIN).toBeLessThan(-0.5); // a deep seam, the cyan line sits in it
   });
 });
