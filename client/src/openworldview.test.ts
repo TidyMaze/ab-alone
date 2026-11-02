@@ -2661,6 +2661,48 @@ describe('the ground in view only, on a software renderer (#1483)', () => {
     expect(mesh(whole, 'terrain-grass').instanceMatrix.count).toBeGreaterThan(3000);
   });
 
+  it('lays every column that shows on the screen, its top or its foot, on tall ground, at the closest and the widest zoom and at every turn', () => {
+    const tall = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([(i * 7 + cx * 3 + cy * 5) % 11, 2, 0], i * 3); // grass, heights 0 to 10: tops up to 5.2
+      return out;
+    };
+    const world = new World(tall);
+    const shows = (view: OpenWorldView): number => {
+      const have = laid(view);
+      view.camera.updateMatrixWorld();
+      const point = new THREE.Vector3();
+      let missing = 0;
+      for (let q = -3 * CHUNK; q < 4 * CHUNK; q++) {
+        for (let r = -3 * CHUNK; r < 4 * CHUNK; r++) {
+          const p = axialTo3D(q, r);
+          const top = topOf('grass', world.tile(q, r)!.height, q, r);
+          const corners = [[0, 0], ...[0, 1, 2, 3, 4, 5].map((k) => [0.56 * Math.sin((k * Math.PI) / 3), 0.56 * Math.cos((k * Math.PI) / 3)])];
+          const inView = corners.some(([dx, dz]) => [0, top].some((y) => {
+            point.set(p.x + dx!, y, p.z + dz!).project(view.camera);
+            return Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1 && point.z <= 1;
+          }));
+          if (inView && !have.has(`${Math.round(p.x * 100)},${Math.round(p.z * 100)}`)) missing++;
+        }
+      }
+      return missing;
+    };
+    for (const [width, height] of [[1600, 900], [900, 1600], [1200, 500]] as const) {
+      const view = new OpenWorldView(world);
+      view.resize(width, height);
+      view.cullGround(true);
+      view.show([0, 0]);
+      for (const scale of [1, 4]) {
+        zoomed(view, scale);
+        for (let deg = 0; deg < 360; deg += 30) {
+          view.turnTo((deg * Math.PI) / 180);
+          expect(shows(view), `${width}x${height} zoom ${scale} turn ${deg}`).toBe(0);
+        }
+      }
+    }
+  });
+
   it('lays the ground again when the hero walks, the camera turns or the zoom moves, so what the screen shows is always laid', () => {
     const view = cullView();
     view.show([0, 0]);

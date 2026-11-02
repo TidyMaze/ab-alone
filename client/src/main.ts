@@ -815,13 +815,16 @@ function setPixelRatio(ratio: number): void {
 // The low tier offer (#849): a sustained slow rate (quality.ts slowRun) offers the low tier once per page view, as a quiet
 // note with Accept and Dismiss, shown at a quiet moment only: no move animation, no online game or Battle royale.
 let lowRun = 0;
+let softwareJudged = software; // a renderer that says it is software needs no judging
 let lowOfferShown = false;
 const lowOffer = document.getElementById('low-offer') as HTMLDivElement;
 function endWindow(): void {
-  if (!software && looksSoftware(frameTimes)) {
-    software = true; // the renderer did not say so, the frames do: the next world lays the ground in view only (#1483)
+  // The first window only (#1483): a GPU page that is slow later (a throttled tab, a heavy scene) stays on its GPU paths.
+  if (!softwareJudged && looksSoftware(frameTimes)) {
+    software = true; // the renderer did not say so, the frames do: the next world lays the ground in view only
     document.body.dataset.software = 'on';
   }
+  softwareJudged = true;
   lowRun = slowRun(lowRun, frameTimes);
   const next = nextPixelRatio(pixelRatio, frameTimes, ratioFloor(devicePixelRatio, software));
   if (next !== pixelRatio) setPixelRatio(next);

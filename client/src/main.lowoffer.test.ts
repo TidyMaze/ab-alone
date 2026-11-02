@@ -111,13 +111,24 @@ describe('a machine with no GPU (#1483)', () => {
     expect([document.body.dataset.software, document.body.dataset.tier]).toEqual(['on', 'high']);
   });
 
-  it('is known by its frames when the renderer says nothing, not by a fast window', async () => {
+  it('is known by its first window of frames when the renderer says nothing', async () => {
     const game = await boot('?bot=off');
-    game.hook('__slowWindow', 16);
-    expect(document.body.dataset.software).toBe('off');
     game.hook('__slowWindow', 150);
     expect(document.body.dataset.software).toBe('on');
-    game.hook('__slowWindow', 150); // already known
+    game.hook('__slowWindow', 16); // known for the session
+    expect(document.body.dataset.software).toBe('on');
+  });
+
+  it('stays a GPU page when the first window is fast, however slow it gets later', async () => {
+    const game = await boot('?bot=off');
+    game.hook('__slowWindow', 16);
+    for (let i = 0; i < 6; i++) game.hook('__slowWindow', 300); // a throttled tab, a heavy scene
+    expect(document.body.dataset.software).toBe('off');
+  });
+
+  it('keeps what the renderer said, whatever the frames', async () => {
+    const game = await boot('?bot=off&software=on');
+    game.hook('__slowWindow', 16);
     expect(document.body.dataset.software).toBe('on');
   });
 });
