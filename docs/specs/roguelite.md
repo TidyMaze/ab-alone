@@ -52,7 +52,7 @@ links of the last node.
 
 ## 3. Saving
 
-The run (seed, army, its special marbles, its relics, the nodes picked, the special marbles placed on
+The run (seed, army, its special marbles, its relics, its tactics, the nodes picked, the special marbles placed on
 the fight on and its moves, a reward waiting to be picked, an event or a rest site waiting for its
 choice, and a relic offer waiting to be taken) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
@@ -143,7 +143,7 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   reward screen, whose line says so.
 - **Rest**: no fight; a rest site (section 10): Rest brings the army back up to 14 marbles, and the
   run line says it rested.
-- **Event**: no fight; the event screen shows one of 5 events, picked by the run seed and the node
+- **Event**: no fight; the event screen shows one of 6 events, picked by the run seed and the node
   (a 32-bit hash, as the reward offers), with a trade and Leave. The trade is offered only when the
   army can pay it (no fewer than 4 marbles after, no more special marbles than marbles, a special
   marble to give) and gains something; Leave changes nothing.
@@ -155,6 +155,7 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   | Live wiring | a Spark | 1 marble |
   | Salvage drone | 2 Sparks | 3 marbles |
   | Cryo pods | 3 marbles (up to 14) | a special marble, the Sparks first, then the Anchors, then the Heavies |
+  | Field manual | a tactic (section 11) | 1 marble |
 
 - **Act boss**: a boss of the roster (the bridge's `boss_ids`), dealt by the run seed, a new one each
   act, played as from the boss menu (`Encounter`, its deck, view and rules, its own layout: the army
@@ -277,3 +278,41 @@ two actions, and the map waits until one is picked.
 - **Determinism and saving**: the choice is the player's, nothing is drawn. A rest site waiting is
   saved with the run and resumed on load. A run saved before this change (3 counts, no rest flag) loads
   with no upgraded marble and no rest site waiting.
+
+## 11. Tactics (#1460)
+
+A tactic is a one-use play of a fight (Slay the Spire's potions): a way out of a bad fight and a reason to
+plan. The run holds up to 3 (`MAX_TACTICS`), starts with none (only variety carries between runs,
+Decision #934) and loses one when it is played.
+
+- **The four tactics**, each one rule of the engine (`Game::play_tactic`), behind the rogue-lite flag like
+  the special marbles (refused on any other board with `TacticError::NotRogueLite`), so the bot's search and
+  every other mode play bit for bit as before (section 5's digest still matches). A tactic is the army's
+  (Black) and is played on its turn, before a move; the engine refuses it out of turn or once the fight is
+  over.
+
+  | Code | Tactic | Rule | Costs the move |
+  |---|---|---|---|
+  | 1 | Reinforce | a marble joins the army on the first free cell of its back row, in the order of the standard layout (`(-4, 4)`, `(-3, 4)`, `(-2, 4)`, `(-1, 4)`, `(0, 4)`): a function of the board, so a replay puts it on the same cell. Refused when the back row is full. The bot needs one more ejection to win, up to the usual 6, so the army is still 3 marbles short of losing. The marble is the fight's: if it is thrown off it counts as lost like any other, and one that survives is not kept | no |
+  | 2 | Freeze | the bot skips its next turn: after the army's next move the turn passes back to it as the engine passes a blocked side (#1301, `Game::pass_turn`, `passed` says White). Refused while a Freeze waits | no |
+  | 3 | Swap | two different marbles of the army trade places, one of them special (two plain marbles are identical): the special mark moves with the marble's cell, a special trades with a special. The turn goes to the bot | yes |
+  | 4 | Fall back | the army's last move and the bot's answer are undone: the board, the ejections, the Freeze and the Gyroscope as they were before that move, one turn at a time as far back as the fight goes. A Reinforce or a Swap played before that move stays, one after it goes. Refused before the first move | no |
+- **In the move list**: a tactic is a record of the move list, 8 integers `[0, code, q0, r0, q1, r1, 0, 0]`,
+  the `0` where a move has its marble count (a Swap names its two cells). `Engine.play` takes it like a move,
+  `Engine.tactics` says which can be played now (a mask, bit `code - 1`, used by the HUD), so a saved fight
+  replays its tactics, the bot's worker included, and the run's `moves` hold them. The client keeps the
+  engine as the only judge: a tactic the engine refuses changes nothing and the tactic is kept.
+- **Gained**: a won fight's reward screen (section 6) offers one tactic more, dealt by the run seed and the
+  node (a 32-bit hash, as the reward offers) as an extra button after the other offers, which are the same as
+  before; taking it replaces the reward. It is not offered with 3 held, and a reward is still there for it
+  when no other offer is. The **Field manual** event (section 7, a 6th event) teaches one tactic, dealt the
+  same way, for 1 marble; its trade is refused with 3 held. The shop (#1459) will sell them.
+- **On screen**: in the HUD of an army fight a glyph button per tactic held (a line icon in the accent colour,
+  3:1 on the plate in both themes), its name and rule as its tooltip (and its accessible name). A tactic the
+  engine cannot play now is disabled and dimmed, all of them during the placement of special marbles and a
+  replay, and when the bot is to move. Swap is pressed, then the army's two marbles; pressing Swap again
+  cancels, and two marbles that cannot swap say so in the HUD line. Act boss fights (an `Encounter`, not an
+  army fight) have no tactics for now.
+- **Saving**: the tactics held are saved with the run (`tactics`, the codes in the order gained); a run saved
+  before this change loads with none. A Field manual waiting in a save made before this change may show
+  another event, as the pool grew.
