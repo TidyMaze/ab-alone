@@ -13,7 +13,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # The event name is in the group: a push never cancels a dispatched e2e run.
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   # A skipped draft run must not cancel a real run (bug #179): only real runs cancel older ones.
   cancel-in-progress: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
 
@@ -247,8 +248,8 @@ jobs:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --workspace --locked --fail-under-lines 100 --fail-under-regions 100
 
-  # The e2e suite runs only on a manual dispatch (`gh workflow run ci.yml --ref <branch>`), never on a PR or a push: the
-  # full suite runs locally before every merge (decision #445).
+  # The e2e suite runs only on a dispatch (`gh workflow run ci.yml --ref main`), never on a PR or a push: e2e-hourly.yml
+  # dispatches it every hour when main moved (#1433, which replaces the "full suite before every merge" of #445).
   # The WASM package is built once here and shared with the e2e shards as an artifact (#258).
   wasm:
     if: github.event_name == 'workflow_dispatch'

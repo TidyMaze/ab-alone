@@ -1,0 +1,20 @@
+name: E2E hourly
+# Runs the full CI (with e2e) when main moved since the last dispatched run (#1433).
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          head=$(gh api repos/$GH_REPO/commits/main --jq .sha)
+          last=$(gh run list --workflow ci.yml --branch main --event workflow_dispatch --limit 1 --json headSha --jq '.[0].headSha // ""')
+          [ "$head" = "$last" ] || gh workflow run ci.yml --ref main
