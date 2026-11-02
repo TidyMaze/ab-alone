@@ -12,6 +12,7 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
+import { NEON, NEON_LIGHT, lightNeon, neonStars } from './neonlook';
 import { TERRACE_EXPOSURE, addSun, aimSunShadow } from './tablezero';
 
 export const BONE = 0xd8d4c8;
@@ -34,6 +35,8 @@ export interface SceneRendererOptions {
   innerHeight?: number;
   devicePixelRatio?: number;
   webdriver?: boolean;
+  /** `?look=neon` (#1424): the terrace's picture is not graded (no extra saturation or contrast: the palette is already the look). */
+  neon?: boolean;
   backdrop?: THREE.Texture | null;
   deckAlbedo?: THREE.Texture | null;
   deckRoughness?: THREE.Texture | null;
@@ -150,6 +153,7 @@ export class SceneRenderer {
   terraceOn = false;
   /** The terrace's sun: it casts the soft shadow on the high tier (#1364). */
   readonly sun: THREE.DirectionalLight;
+  private readonly hemisphere: THREE.HemisphereLight;
   private roomBackground: THREE.Color | THREE.Texture | null = null;
 
   readonly notches: THREE.Group;
@@ -271,7 +275,7 @@ export class SceneRenderer {
     this.terrace = new THREE.Group();
     this.terrace.name = 'terrace';
     this.terrace.visible = false;
-    this.sun = addSun(this.terrace)[1];
+    [this.hemisphere, this.sun] = addSun(this.terrace);
 
     this.notches = new THREE.Group();
     this.tallies = [new THREE.Group(), new THREE.Group()] as const;
@@ -303,7 +307,7 @@ export class SceneRenderer {
 
     const smooth = smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0);
     this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, webdriver ? 1 : 2, options.bloom ?? true);
-    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, 1, false, TERRACE_SATURATION, TERRACE_CONTRAST);
+    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, 1, false, options.neon ? 1 : TERRACE_SATURATION, options.neon ? 1 : TERRACE_CONTRAST);
   }
 
   async init(): Promise<void> {
@@ -501,6 +505,15 @@ export class SceneRenderer {
     this.camera.far = on ? 300 : 100;
     this.camera.updateProjectionMatrix();
     this.setShadows(on && shadows);
+  }
+
+  /** The neon look (#1424, `?look=neon`): black sky with fine stars, a cold sun, ACES, in place of the terrace's own light. Asked once, after `setTerrace`. */
+  setNeon(): void {
+    lightNeon(this.sun, this.hemisphere);
+    this.scene.background = new THREE.Color(NEON.sky);
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = NEON_LIGHT.exposure;
+    if (!this.terrace.getObjectByName('neon_stars')) this.terrace.add(neonStars());
   }
 
   /** The sun's soft shadow, on the high tier only: the low tier draws none (#1364). */

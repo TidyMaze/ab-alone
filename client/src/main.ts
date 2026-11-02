@@ -184,6 +184,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
+import { neonLookOn, neonPedestal, NEON } from './neonlook';
 import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
@@ -560,8 +561,10 @@ if (plateNormal) {
   plateNormal.repeat.set(0.15, 0.15);
 }
 
+const neonLook = neonLookOn(location.search); // `?look=neon` (#1424): the circuit slab, colours and light only; never stored
 const sceneRenderer = new SceneRenderer({
   renderer,
+  neon: neonLook,
   backdrop,
   deckAlbedo,
   deckRoughness,
@@ -3537,13 +3540,13 @@ function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
 const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
 void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual'), terraceFile('slab-hub'), terraceFile('slab-royale')])
   .then(([arena, kit, hint, props, ballast, dual, hubDeck, royaleSlab]) => {
-    const drawn = mergeByMaterial(arena.scene, true); // 5 draw calls, not 1,489 nodes
+    const drawn = mergeByMaterial(arena.scene, true, neonLook); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     terraceBoards.arena = drawn.getObjectByName('terrace_board') as THREE.Group;
     hubProps = hubKit(hubDeck.scene);
     for (const [name, file] of [['ballast', ballast], ['dual', dual], ['hub', hubDeck], ['royale', royaleSlab]] as const) {
       if (name === 'royale') file.scene.add(...arena.scene.children.filter((c) => /^scene_post_\d+$/.test(c.name)).map((c) => c.clone())); // its slab stands in the arena's footprint: the arena's six posts frame it (#1374)
-      const board = mergeByMaterial(file.scene);
+      const board = mergeByMaterial(file.scene, false, neonLook);
       board.visible = false;
       sceneRenderer.terrace.add(board);
       terraceBoards[name] = board;
@@ -3561,6 +3564,7 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
       pmrem.dispose();
     }
     terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
+    if (neonLook) terraceKit.pedestal = neonPedestal(terraceKit.pedestal);
     const pedestals = [marbles, arenaMarbles].map((group) => instanceMarbles(group, terraceKit.pedestal!.geometry, scene)); // the 1v1's and the royale's
     syncPedestals = pedestals;
     const named = (name: string): THREE.Mesh => kit.scene.getObjectByName(name) as THREE.Mesh;
@@ -3575,8 +3579,8 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
   });
 // The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
 // clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
-const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x0a0c0f, roughness: 0.3, metalness: 0, specularIntensity: 0.12, envMapIntensity: 6 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
-const terraceGlass = new THREE.MeshStandardMaterial({ color: 0xe8d9b4, emissive: 0x2a2012, roughness: 0.6, metalness: 0 }); // warm ivory: the emissive keeps the hemisphere's blue fill off it, no reflection: the whites take no blue fill
+const terraceShell = new THREE.MeshPhysicalMaterial({ color: neonLook ? NEON.blackMarble : 0x0a0c0f, roughness: 0.3, metalness: 0, specularIntensity: 0.12, envMapIntensity: 6 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
+const terraceGlass = new THREE.MeshStandardMaterial({ color: neonLook ? NEON.whiteMarble : 0xe8d9b4, emissive: neonLook ? 0x2a2a2a : 0x2a2012, roughness: 0.6, metalness: 0 }); // warm ivory: the emissive keeps the hemisphere's blue fill off it, no reflection: the whites take no blue fill
 function terraceMarbles(on: boolean): void {
   marbleMaterials[1] = on && skin === DEFAULT_SKIN ? terraceShell : shellMaterial(skin);
   marbleMaterials[2] = on && glass === DEFAULT_GLASS_SKIN ? terraceGlass : glassMaterial(glass);
@@ -3595,6 +3599,7 @@ function syncTableZero(): void {
   }
   if (on === sceneRenderer.terraceOn) return;
   sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364); the room never comes back once the terrace is on (#1374)
+  if (neonLook) sceneRenderer.setNeon(); // #1424
   for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = TERRACE_LIFT; // the marbles stand on their pedestals, 0.11 over the board plane
   if ((hub || royale || blenderBoard()) && view === fitted) {

@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;background:#000;overflow:hidden;font-family:"Avenir Next Condensed","Helvetica Neue",Helvetica,sans-serif;color:#e8f0ff}
+#root{position:relative;display:inline-block}#v canvas{display:block}
+#hud{position:absolute;inset:0;pointer-events:none;--n:#19e6ff;--n2:#9a6bff}
+.pan{position:absolute;background:rgba(5,8,18,.82);border:1px solid var(--n);box-shadow:0 0 10px color-mix(in srgb,var(--n) 45%,transparent),inset 0 0 12px color-mix(in srgb,var(--n2) 18%,transparent);clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));padding:10px 14px}
+.tl{left:16px;top:16px;width:270px;transform:scale(.85);transform-origin:top left}.tl b{display:block;font-size:22px;letter-spacing:.09em}.tl i{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--n);box-shadow:0 0 8px var(--n);margin-right:9px}
+.tl span{display:block;font-size:14px;margin-top:4px;color:#b8c8e0}.tl em{display:flex;justify-content:space-between;font-style:normal;font-size:12px;color:var(--n);margin-top:6px;letter-spacing:.14em}.tl em u{text-decoration:none;color:var(--n2)}
+.tally{left:66%;top:18px;transform:translateX(-50%);font-size:15px;color:var(--n);border-color:var(--n2);white-space:nowrap}
+.dock{left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:30px;font-size:14px;letter-spacing:.06em}
+.mini{right:16px;top:16px;width:150px;height:150px;border-radius:50%;clip-path:none;padding:0;background:radial-gradient(circle,#12203a,#05070e 70%)}
+.mini s{position:absolute;left:48%;top:48%;width:8px;height:8px;background:var(--n);border-radius:50%;box-shadow:0 0 8px var(--n)}.mini .b{left:28%;top:32%;background:var(--n2);box-shadow:0 0 8px var(--n2)}.mini .c{left:70%;top:24%;background:var(--n2);box-shadow:0 0 8px var(--n2)}
+.map{right:16px;top:178px;font-size:15px;letter-spacing:.1em}
+.phone .tl{left:10px;top:10px;width:auto;right:10px;transform:none}.phone .tally{left:50%;top:112px;font-size:13px}.phone .dock{gap:18px;bottom:12px;width:330px;justify-content:space-between;font-size:13px}.phone .mini{width:96px;height:96px;right:10px;top:10px}.phone .map{top:112px;right:10px;font-size:13px}
+</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body><div id="root"><div id="v"></div><div id="hud"></div><div id="sheet"></div></div><script type="module" src="/m/mock.js"></script></body></html>

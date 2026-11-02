@@ -8,6 +8,7 @@ import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
+import { NEON, NEON_LIGHT } from './neonlook';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
@@ -558,6 +559,18 @@ describe('SceneRenderer (#632)', () => {
     sr.setTerrace(true);
     sr.render();
     expect([room.mock.calls.length, flat.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it('wears the neon look on request: black sky, stars once, cold light, a picture with no extra grading (#1424)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    sr.setTerrace(true);
+    sr.setNeon();
+    sr.setNeon(); // asked again: one set of stars
+    expect((sr.scene.background as THREE.Color).getHex()).toBe(NEON.sky);
+    expect(sr.terrace.children.filter((c) => c.name === 'neon_stars')).toHaveLength(1);
+    expect([sr.renderer.toneMapping, sr.renderer.toneMappingExposure, sr.sun.intensity]).toEqual([THREE.NeutralToneMapping, NEON_LIGHT.exposure, NEON_LIGHT.sunIntensity]);
+    const plain = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
+    expect(plain.sun.intensity).not.toBe(NEON_LIGHT.sunIntensity); // nothing changes without the look
   });
 
   it('casts the sun shadow on the terrace on the high tier only, and a tier change moves it (#1364)', () => {

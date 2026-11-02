@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fitView, type View } from './camera';
+import { NEON_HIDDEN, neonEdgeGeometry, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
 
 /** The palette the port must match (notes-round4.md). */
 export const PALETTE = {
@@ -102,7 +103,7 @@ export function terraceMaterial(material: THREE.Material, geometry: THREE.Buffer
  * The arena file has 1,489 nodes: drawn as they are, that is 1,000 calls. This bakes every static node into the world, then
  * draws one mesh per material (5 calls), the turn bars apart. Blended materials draw last and write no depth.
  */
-export function mergeByMaterial(root: THREE.Object3D, split = false): THREE.Group {
+export function mergeByMaterial(root: THREE.Object3D, split = false, neon = false): THREE.Group {
   root.updateMatrixWorld(true);
   const byMaterial = new Map<THREE.Material, THREE.BufferGeometry[]>();
   const ofBoard = new Map<THREE.Material, THREE.BufferGeometry[]>();
@@ -110,17 +111,19 @@ export function mergeByMaterial(root: THREE.Object3D, split = false): THREE.Grou
   const dishes: THREE.Mesh[] = [];
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh || GAME_DRAWN.test(o.name)) return;
+    if (!mesh.isMesh || GAME_DRAWN.test(o.name) || (neon && NEON_HIDDEN.test(o.name))) return;
     if (TURN_BAR.test(o.name)) return void bars.push(mesh);
     if (DISH.test(o.name)) return void dishes.push(mesh);
     const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
     g.deleteAttribute('uv');
+    if (neon) neonPaint(o.name, g);
     if (o.name === 'scene_sky_dome') {
       saturateColours(g, SKY_SATURATION, -Infinity, ZENITH_FROM); // the horizon band
       saturateColours(g, ZENITH_SATURATION, ZENITH_FROM, Infinity); // the zenith
     }
-    if (SLAB.test(o.name)) saturateColours(g, RIM_SATURATION); // the rim and the plinth read brown against Blender's grey-taupe
-    const material = terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
+    if (SLAB.test(o.name) && !neon) saturateColours(g, RIM_SATURATION); // the rim and the plinth read brown against Blender's grey-taupe
+    const lit = (mesh.material as THREE.MeshStandardMaterial).emissive?.getHex() !== 0xffffff; // the file's unlit sky, haze and shadows keep their own material
+    const material = neon && lit ? neonMaterial(o.name) : terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
     const into = split && BOARD_PART.test(o.name) ? ofBoard : byMaterial;
     into.set(material, [...(into.get(material) ?? []), g]);
   });
@@ -128,7 +131,7 @@ export function mergeByMaterial(root: THREE.Object3D, split = false): THREE.Grou
     for (const [material, geometries] of groups) {
       const blended = material.transparent;
       if (blended) material.depthWrite = false;
-      else if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial && !tinted.has(material)) (material as THREE.MeshStandardMaterial).color.multiply(TERRACE_TINT);
+      else if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial && !tinted.has(material) && !neon) (material as THREE.MeshStandardMaterial).color.multiply(TERRACE_TINT);
       tinted.add(material);
       const merged = new THREE.Mesh(mergeGeometries(geometries, false), material);
       merged.frustumCulled = false; // the arena is always in view
@@ -147,24 +150,39 @@ export function mergeByMaterial(root: THREE.Object3D, split = false): THREE.Grou
   }
   if (dishes.length) {
     const first = dishes[0]!;
-    const material = terraceMaterial(first.material as THREE.Material, first.geometry);
+    const material = neon ? neonMaterial('dish') : terraceMaterial(first.material as THREE.Material, first.geometry);
     const matrices = dishes.map((d) => d.matrixWorld.clone());
-    const mesh = new THREE.InstancedMesh(first.geometry, material, dishes.length);
+    const geometry = neon ? first.geometry.clone() : first.geometry;
+    if (neon) neonPaint(first.name, geometry); // the dish takes the slate, its edge the cyan line in the gap
+    const mesh = new THREE.InstancedMesh(geometry, material, dishes.length);
+    const edges = neon ? new THREE.InstancedMesh(neonEdgeGeometry(), neonEdgeMaterial(), dishes.length) : null;
+    if (edges) Object.assign(edges, { frustumCulled: false, name: 'terrace_edges' });
     mesh.frustumCulled = false;
     mesh.name = 'terrace_dishes';
     mesh.castShadow = mesh.receiveShadow = true; // the lit board (#1364)
     const spot = new THREE.Vector3();
     mesh.userData.show = (shown: (x: number, z: number) => boolean): void => {
       let n = 0;
-      for (const m of matrices) if (shown(...(spot.setFromMatrixPosition(m).toArray().filter((_, i) => i !== 1) as [number, number]))) mesh.setMatrixAt(n++, m);
+      for (const m of matrices) {
+        if (!shown(...(spot.setFromMatrixPosition(m).toArray().filter((_, i) => i !== 1) as [number, number]))) continue;
+        edges?.setMatrixAt(n, m);
+        mesh.setMatrixAt(n++, m);
+      }
       mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
+      if (edges) {
+        edges.count = n;
+        edges.instanceMatrix.needsUpdate = true;
+      }
     };
     mesh.userData.show(() => true);
     board.add(mesh);
+    if (edges) board.add(edges);
   }
   for (const bar of bars) {
-    bar.material = terraceMaterial(bar.material as THREE.Material, bar.geometry);
+    if (neon) bar.geometry = bar.geometry.clone();
+    if (neon) neonPaint(bar.name, bar.geometry);
+    bar.material = neon ? neonMaterial(bar.name) : terraceMaterial(bar.material as THREE.Material, bar.geometry);
     bar.matrix.copy(bar.matrixWorld).decompose(bar.position, bar.quaternion, bar.scale);
     board.add(bar);
   }

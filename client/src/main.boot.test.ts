@@ -182,6 +182,28 @@ describe('the renderer and its textures', () => {
     expect((env!.userData as { scene: THREE.Scene }).scene.children).toHaveLength(3); // a sky ramp, a window, a cyan strip: no lamps
   });
 
+  it('wears the neon look on ?look=neon only: black sky and stars, slate marbles and pedestals, the edge lines (#1424)', async () => {
+    const game = await boot('?bot=off&look=neon');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { scene } = await drawn(game);
+    const terrace = scene.getObjectByName('terrace')!;
+    expect((scene.background as THREE.Color).getHex()).toBe(0x04050c);
+    expect(terrace.getObjectByName('neon_stars')).toBeDefined();
+    expect(terrace.getObjectByName('terrace_edges')).toBeDefined();
+    expect(materials(scene).some((m) => m.color.getHex() === 0x14161a)).toBe(true); // the black marble
+    expect(materials(scene).some((m) => m.color.getHex() === 0xf2f0ea)).toBe(true); // the white one
+  });
+
+  it('leaves the terrace as it was without ?look=neon (#1424)', async () => {
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { scene } = await drawn(game);
+    const terrace = scene.getObjectByName('terrace')!;
+    expect(terrace.getObjectByName('neon_stars')).toBeUndefined();
+    expect(terrace.getObjectByName('terrace_edges')).toBeUndefined();
+    expect((scene.background as THREE.Color).getHex()).toBe(0x2c3438);
+  });
+
   it('reports the WebGL2 backend in the diagnostics', async () => {
     const game = await boot('?bot=off');
     const report = await diagnostics(game);

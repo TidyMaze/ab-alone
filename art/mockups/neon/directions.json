@@ -1,0 +1,253 @@
+{
+ "common": {
+  "theme": "Dark sci-fi with neons (owner decision). Neon only on edges, rim, lines, veins, towers; never on cell centres. Red reserved for danger. Steady, no flicker. Overrides world.md 'no emissive' and 'nothing saturated'."
+ },
+ "A": {
+  "name": "Circuit Slab",
+  "idea": "Tally's ledger wiring runs through the dead moon's slag-glass: cyan and violet circuit lines trace every cell edge and the rim, as if the books were still being counted.",
+  "neon_pair": [
+   "#19e6ff cyan",
+   "#9a6bff violet"
+  ],
+  "neon_carried_by": "cell edges (1 px lines in the gap), rim channel, and circuit traces running across the ground to the horizon",
+  "palette": [
+   {
+    "name": "Sky",
+    "hex": "#04050c",
+    "role": "black sky, stars, violet nebula haze at the horizon"
+   },
+   {
+    "name": "Far ground",
+    "hex": "#1b2233",
+    "role": "far plain, lit by neon bounce"
+   },
+   {
+    "name": "Near ground",
+    "hex": "#2a3347",
+    "role": "near slag plate, visible relief"
+   },
+   {
+    "name": "Slab/rim",
+    "hex": "#171c2b",
+    "role": "dark rim with a violet neon channel #9a6bff"
+   },
+   {
+    "name": "Cell top",
+    "hex": "#5d6a82",
+    "role": "cool slate glass, lit bevel"
+   },
+   {
+    "name": "Cell gap",
+    "hex": "#0a0e18",
+    "role": "dark gap holding the cyan edge line #19e6ff"
+   },
+   {
+    "name": "Slag-glass accent",
+    "hex": "#9a6bff",
+    "role": "violet glass veins"
+   },
+   {
+    "name": "Player cyan",
+    "hex": "#7fd6e8",
+    "role": "player ring, turn rim"
+   },
+   {
+    "name": "Enemy shell",
+    "hex": "#14161a",
+    "role": "matte black shell"
+   },
+   {
+    "name": "Sodium / last move",
+    "hex": "#d9822b",
+    "role": "last move, shell-side rim"
+   }
+  ],
+  "sky": "Black, ~500 stars in 3 brightness steps, a slow violet nebula band low on the horizon (#2a1d55, soft, static), a small pale planet (8 deg, #9fb0c8) high right giving a cool rim.",
+  "sun": {
+   "colour": "#e8f0ff",
+   "elevation_deg": 20,
+   "azimuth_deg": -50,
+   "intensity": "hard small disc, ~3.5, cool white; neon lines add local bounce"
+  },
+  "arena": "Cells: slate glass with fine internal grain and a lit 2 px bevel; edge = 1 px cyan line in the dark gap, glow bloom limited to 3 px so cells stay clean. Rim: dark plate with a continuous violet channel. Ground: slag plate with a PCB-like grid of 1 px circuit traces (right-angle, 45 degree jogs, node pads) in dim violet/cyan, over regolith grain and fine cracks.",
+  "world": "Terrain: stepped terraces with strata, circuit traces crossing them. Outcrops: faceted dark glass blocks with cyan edge lines. Towers: thin spires with a violet lamp ring. Walls: low plates with a glowing seam.",
+  "contrast": {
+   "cell_top_vs_gap": 3.54,
+   "black_marble_vs_cell": 3.32,
+   "white_marble_vs_cell": 4.79,
+   "pass_3to1": true,
+   "marbles": {
+    "black": "#14161a",
+    "white": "#f2f0ea"
+   }
+  },
+  "neon_checks": "neon lines sit in the gap, not on cell tops, so the ratios above are not affected"
+ },
+ "B": {
+  "name": "Crystal Vein",
+  "idea": "Slag-glass remembers heat: in this view it has grown into living crystal veins that glow acid-green and blue-teal, the warmth of the crew still stored in the rock.",
+  "neon_pair": [
+   "#7dff4a acid green",
+   "#2f8cff electric blue"
+  ],
+  "neon_carried_by": "crystal veins in the ground and outcrops, vein cracks along the rim, crystal clusters as towers",
+  "palette": [
+   {
+    "name": "Sky",
+    "hex": "#03060a",
+    "role": "black sky, dense stars, green aurora-like glow low"
+   },
+   {
+    "name": "Far ground",
+    "hex": "#10241f",
+    "role": "far ground, rim-lit ridges"
+   },
+   {
+    "name": "Near ground",
+    "hex": "#22362f",
+    "role": "near mineral ground with lit crystal shards"
+   },
+   {
+    "name": "Slab/rim",
+    "hex": "#13201f",
+    "role": "dark crystal-plate rim with green vein cracks"
+   },
+   {
+    "name": "Cell top",
+    "hex": "#56706a",
+    "role": "grey-green polished mineral"
+   },
+   {
+    "name": "Cell gap",
+    "hex": "#08110f",
+    "role": "dark gap with faint green vein edge #7dff4a"
+   },
+   {
+    "name": "Slag-glass accent",
+    "hex": "#2f8cff",
+    "role": "blue crystal glint"
+   },
+   {
+    "name": "Player cyan",
+    "hex": "#7fd6e8",
+    "role": "player ring, turn rim"
+   },
+   {
+    "name": "Enemy shell",
+    "hex": "#14161a",
+    "role": "matte black shell"
+   },
+   {
+    "name": "Sodium / last move",
+    "hex": "#d9822b",
+    "role": "last move, shell-side rim"
+   }
+  ],
+  "sky": "Black, ~450 stars, a large ringless planet (22 deg, deep blue #1c3a6a with a thin lit crescent) low left; a faint static green glow band at the horizon.",
+  "sun": {
+   "colour": "#f4fff0",
+   "elevation_deg": 28,
+   "azimuth_deg": 35,
+   "intensity": "hard, ~3.2; green and blue crystal light as fill, shadows keep a visible floor"
+  },
+  "arena": "Cells: polished mineral with faceted micro-relief (Voronoi normal, 1 px), edges thin green vein line in the gap; no neon on centres. Rim: dark crystal plate, vein cracks branching along it (Voronoi edges, steady emissive). Ground: mineral dust plus crystal shards (small bright prisms, specular) and branching vein cracks fading with distance.",
+  "world": "Terrain: faceted mineral ridges with vein cracks glowing on slopes. Outcrops: crystal clusters, green core and blue tips. Towers: tall crystal spires. Walls: jagged crystal ridges with a lit seam.",
+  "contrast": {
+   "cell_top_vs_gap": 3.57,
+   "black_marble_vs_cell": 3.38,
+   "white_marble_vs_cell": 4.7,
+   "pass_3to1": true,
+   "marbles": {
+    "black": "#14161a",
+    "white": "#f2f0ea"
+   }
+  },
+  "neon_checks": "neon lines sit in the gap, not on cell tops, so the ratios above are not affected"
+ },
+ "C": {
+  "name": "Signal Hull",
+  "idea": "CSV Ballast at 11 % power: its last signal lights, amber and electric blue, run along the board rim and gantry towers while the hull looms overhead.",
+  "neon_pair": [
+   "#ffab2e sodium amber",
+   "#2f7bff electric blue"
+  ],
+  "neon_carried_by": "rim light strips, gantry tower beacons, runway-style marker lines on the ground, hull running lights in the sky",
+  "palette": [
+   {
+    "name": "Sky",
+    "hex": "#04050a",
+    "role": "black sky, stars, Ballast hull silhouette with lit windows"
+   },
+   {
+    "name": "Far ground",
+    "hex": "#1c2430",
+    "role": "far plain with floodlit pools"
+   },
+   {
+    "name": "Near ground",
+    "hex": "#2d3744",
+    "role": "dock apron plate, visible seams"
+   },
+   {
+    "name": "Slab/rim",
+    "hex": "#1a202a",
+    "role": "girder rim with amber strip #ffab2e"
+   },
+   {
+    "name": "Cell top",
+    "hex": "#667282",
+    "role": "brushed steel, lit"
+   },
+   {
+    "name": "Cell gap",
+    "hex": "#0b0e14",
+    "role": "dark engraved gap with a faint blue edge #2f7bff"
+   },
+   {
+    "name": "Slag-glass accent",
+    "hex": "#2f7bff",
+    "role": "blue marker glow"
+   },
+   {
+    "name": "Player cyan",
+    "hex": "#7fd6e8",
+    "role": "player ring, turn rim"
+   },
+   {
+    "name": "Enemy shell",
+    "hex": "#14161a",
+    "role": "matte black shell"
+   },
+   {
+    "name": "Sodium / last move",
+    "hex": "#d9822b",
+    "role": "last move, shell-side rim"
+   }
+  ],
+  "sky": "Black, ~350 stars. The Ballast hull fills the top third: dark steel with panel lines, 6 steady amber running lights, 3 blue beacons, one cold flood lamp. A thin crescent of Hollow behind.",
+  "sun": {
+   "colour": "#d8ecff",
+   "elevation_deg": 35,
+   "azimuth_deg": 30,
+   "intensity": "hard flood lamp ~5.0, cold white; amber strips as warm accent fill"
+  },
+  "arena": "Cells: brushed steel (anisotropic streaks along one axis), engraved rim, light rivets; edge = faint blue line in the gap. Rim: riveted girder with a continuous amber strip. Ground: dock apron of 2 m plates, seams, oil stains, dashed amber and blue marker lines pointing to the board.",
+  "world": "Terrain: dark plain with floodlit pools, rim-lit ridges. Outcrops: ore heaps with slag crust. Towers: gantry masts with amber and blue beacons. Walls: stacked cargo containers with edge strips.",
+  "contrast": {
+   "cell_top_vs_gap": 3.95,
+   "black_marble_vs_cell": 3.7,
+   "white_marble_vs_cell": 4.29,
+   "pass_3to1": true,
+   "marbles": {
+    "black": "#14161a",
+    "white": "#f2f0ea"
+   }
+  },
+  "neon_checks": "neon lines sit in the gap, not on cell tops, so the ratios above are not affected"
+ },
+ "recommendation": {
+  "direction": "A",
+  "reason": "A: cyan and violet circuit lines on a lit slate slab give the most legible neon edges and the clearest 'Tally ledger' lore link; contrast passes (cell vs gap 3.54, black marble 3.32, white marble 4.79). Risk: cyan edge is the same hue family as the player accent, so keep the edge a 1 px line and the turn rim thick. C has the best raw contrast (3.95 / 3.70 / 4.29) and is the closest to the existing industrial look; B is the most alien but its green may clash with the Okabe-Ito tints.",
+  "note": "Computed from hexes only (WCAG), nothing rendered; real renders may shift values."
+ }
+}
