@@ -328,7 +328,9 @@ jobs:
           path: ~/.cache/ab-alone-ktx2
           key: ktx2-${{ hashFiles('client/textures/**', 'client/scripts/ktx2-textures.mjs', 'client/bun.lock') }}
           restore-keys: ktx2-
-      - run: bun run e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+      # --no-deps: chromium-serial depends on chromium, and Playwright refuses to shard a project others depend on (#1436).
+      # One worker per runner keeps the frame-time check alone anyway.
+      - run: bun run e2e --no-deps --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         working-directory: client
       # The 10 slowest tests of this shard, in the run summary even when the shard fails (#323).
       - if: always()
