@@ -92,7 +92,10 @@ describe('the boats of the hero and the troop on water (#1441)', () => {
       expect(Math.abs(boat!)).toBeLessThanOrEqual(BOB_AMP + 1e-9);
       expect(marble).toBeCloseTo(boat!); // the marble rides its boat
     }
+    v.animate(900, false);
+    expect(v.bobAt).toBe(900); // the peers' boats bob at the same time (#1447)
     v.animate(1200, true);
+    expect(v.bobAt).toBeNull();
     expect(drawn(v)[0]!.at.y).toBeCloseTo(rest);
     expect(hero(v).position.y).toBeCloseTo(topOf('water', 0, 3, 0) + MARBLE);
   });

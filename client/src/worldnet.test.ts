@@ -106,6 +106,16 @@ describe('WorldPeersHost', () => {
     ]);
   });
 
+  it('hands the time the boats bob at to the layer that draws the peers, once per frame', () => {
+    const { host, enter } = setup();
+    enter();
+    const update = vi.spyOn(PeersLayer.prototype, 'update');
+    host.frame(10, [3, 1], [[3, 2]], 10);
+    host.frame(20, [3, 1], [], null);
+    expect(update.mock.calls.map((call) => call[3])).toEqual([10, null]);
+    update.mockRestore();
+  });
+
   it('sends the hero position on change, 4 Hz at most, to every peer', () => {
     const { nets, host, enter } = setup();
     enter();
