@@ -34,8 +34,8 @@ describe('bossProp', () => {
     expect(Math.hypot(prop.x, prop.z)).toBeGreaterThan(RADIUS);
     expect(Math.hypot(prop.x, prop.z)).toBeCloseTo(PULSAR_DISTANCE - 0.3, 5);
     const crane = bossProp('magnetizer')!;
-    expect(bossProp('magnetizer', true)!.x).toBeLessThan(crane.x); // on a phone the crane stands nearer the middle
-    expect(bossProp('magnetizer', true)!.z).toBe(crane.z);
+    expect(crane.piece).toBe('kit_prop_magnetcrane');
+    expect(bossProp('magnetizer', true)).toBeNull(); // on a phone the crane is cut or hides a cell: decor, not drawn
     expect(bossProp('echo', true)).toEqual(prop); // the others keep their spot
     expect(bossProp(undefined)).toBeNull();
     expect(bossProp(null)).toBeNull();

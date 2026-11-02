@@ -29,8 +29,8 @@ export const BOSS_PROP_PIECES: readonly string[] = Object.values(BOSS_PROPS);
 export function bossProp(id: string | null | undefined, phone = false): { piece: string; x: number; z: number } | null {
   const piece = (BOSS_PROPS as Record<string, string>)[id ?? ''];
   if (!piece) return null;
-  return { piece, ...(phone && id === 'magnetizer' ? PHONE_CRANE : SPOT) };
+  // On a phone the board fills the width: the crane, a tall piece, is cut by the screen edge at its spot and hides a cell nearer
+  // the middle. It is decor, so it is not drawn at that width (art-director, #1374).
+  if (phone && id === 'magnetizer') return null;
+  return { piece, ...SPOT };
 }
-
-/** On a phone the board fills the width and the south-east edge is off screen: the crane, a tall piece, stands nearer the middle. */
-const PHONE_CRANE = { x: SPOT.x * 0.55, z: SPOT.z };
