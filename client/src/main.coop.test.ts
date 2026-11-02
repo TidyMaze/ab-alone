@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { encodeMove, parseMoves, type Axial, type Move } from './board';
 import { resetView, type View } from './camera';
 import { seatAfter } from './coop';
-import { coopFromHash } from './invite';
+import { bossSeatFromHash, coopFromHash } from './invite';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
@@ -401,6 +401,22 @@ describe('boss duel: the joiner plays the boss (#1316)', () => {
     byId('play-online').click(); // a versus room after it: the duel is over
     await until(game, () => byId('invite-label').textContent === 'Invite link: send it to your opponent');
     expect(presence()).not.toContain('boss');
+  });
+
+  it('the hero page asks no bot for a boss reply to its move: the boss seat answers from the room (#1485)', async () => {
+    const game = await boot('?bot=off', calm);
+    game.openModes();
+    byId('boss-duel').click();
+    [...byId('coop-list').querySelectorAll('button')].find((b) => b.textContent === 'The Echo')!.click();
+    await until(game, () => data().seat === 'player');
+    await partner(game.peer()!, game.room()!, 2, bossSeatFromHash(location.hash)!);
+    await until(game, () => data().opponent === 'here');
+    const asked = vi.spyOn(Worker.prototype, 'postMessage');
+    play(game, forward(game.hook('__legal')));
+    for (let i = 0; i < 10; i++) await game.settle(); // a boss reply would be asked of the worker by now
+    expect(asked).not.toHaveBeenCalled(); // no search for the boss on the hero page
+    expect(game.hook('__plies')).toBe(1); // it waits for the boss player's move from the room
+    asked.mockRestore();
   });
 
   it('a link with seat=boss seats us as the boss, White: the hero moves, then we answer, no boss reply is computed', async () => {

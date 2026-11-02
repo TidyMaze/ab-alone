@@ -4391,7 +4391,7 @@ function play(seenMove: Move): void {
   selected = [];
   keyDir = -1;
   void online?.send(record);
-  if (online && fight) void answerBoss(true); // co-op: our move's boss reply
+  if (online && fight && !duel) void answerBoss(true); // co-op: our move's boss reply; in a duel the boss seat answers (#1485)
 }
 
 /** The legal moves, the Echo's free moves first: a click, a drag or a key on a free target plays the free move (#958). */
