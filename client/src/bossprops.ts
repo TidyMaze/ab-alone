@@ -25,7 +25,7 @@ export const BOSS_PROPS = {
 export const BOSS_PROP_PIECES: readonly string[] = Object.values(BOSS_PROPS);
 
 /** The piece of fight `id` and where it stands, off the south-east edge of the board where a pulsar stands (a fight has one
- * boss, so the spots never meet); `null` for a boss with no piece here, or no fight. */
+ * boss, so the spots never meet); `null` for a boss with no piece here, no fight, or the Magnetizer on a phone. */
 export function bossProp(id: string | null | undefined, phone = false): { piece: string; x: number; z: number } | null {
   const piece = (BOSS_PROPS as Record<string, string>)[id ?? ''];
   if (!piece) return null;
