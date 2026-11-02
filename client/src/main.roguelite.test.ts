@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial, Move } from './board';
-import { actBoss, newRun, parseMap, pick, visit, type MapNode, type Run } from './roguelite';
+import { actBoss, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
 import type { View } from './camera';
 import { boot, type Game } from './test/harness';
 
@@ -230,8 +230,8 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     await bot.settle();
     expect(bot.hook('__plies')).toBe(8); // the bot answered on the same board
   });
-  // Elites, rests, events and act bosses (#800). Seed 3: node 0 leads to the elite 2, the fight 1 to the rest 3 and the
-  // events 4 and 5.
+  // Elites, rests, events and act bosses (#800). Seed 3: node 0 leads to the elite 2, the fight 1 to the rest 3, the
+  // treasure 4 (#1457) and the event 5.
   const node = (i: number): HTMLButtonElement => map().querySelector<HTMLButtonElement>(`button[data-node="${i}"]`)!;
   it('a rest from the map brings the army back to 14 with no fight, saved with the run', async () => {
     const indexedDB = new IDBFactory();
@@ -251,7 +251,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
     await game.hook('__run', { ...newRun(3, 3), army: 12, specials: [0, 0, 1], path: [1] });
-    node(4).click();
+    node(5).click();
     expect(document.body.dataset.run).toBe('event');
     expect(line()).toMatch(/^Event · /);
     await game.settle();
@@ -287,6 +287,58 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     game.frame(1000);
     await game.settle();
     expect(game.hook('__plies')).toBe(2); // the bot answered
+  });
+
+  // Relics (#1457): a bar in the HUD, a treasure, an elite's and a boss's relic, and the army's fight board.
+  const bar = (): string[] => [...document.querySelectorAll<HTMLElement>('#hud .relics .relic')].map((r) => r.title);
+  const relics = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-relic]')];
+  it('a treasure from the map waits for its relic, saved, and the relic taken joins the bar in the HUD', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...newRun(3, 3), path: [1], relics: [Relic.Jammer] });
+    expect(bar()).toEqual([`Jammer: ${RELICS[Relic.Jammer]!.help}`]);
+    expect(node(4).getAttribute('aria-label')).toBe('Act 1, treasure');
+    node(4).click();
+    expect(document.body.dataset.run).toBe('relic');
+    expect(line()).toBe('Treasure · a chest holds a relic');
+    expect(relics()).toHaveLength(1);
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the relic waiting
+    expect(document.body.dataset.run).toBe('relic');
+    const found = Number(relics()[0]!.dataset.relic);
+    relics()[0]!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(bar()).toEqual([`Jammer: ${RELICS[Relic.Jammer]!.help}`, `${RELICS[found]!.name}: ${RELICS[found]!.help}`]);
+    expect(open().length).toBeGreaterThan(0);
+  });
+
+  it('an act boss beaten offers 3 relics, then its reward', async () => {
+    const game = await boot('?bot=off');
+    // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6.
+    await game.hook('__run', { ...newRun(3, 3), army: 12, path: [0, 2, 6, 9], reward: true, relic: true });
+    expect(document.body.dataset.run).toBe('relic');
+    expect(line()).toBe('Boss beaten · pick a relic');
+    expect(relics()).toHaveLength(3);
+    relics()[1]!.click();
+    expect(document.body.dataset.run).toBe('reward');
+    expect(bar()).toHaveLength(1);
+  });
+
+  it('the army fights with its relics on its board, the bot too, and the bar stays in the HUD', async () => {
+    const { Engine } = await import('abalone-wasm');
+    const taken = vi.spyOn(Engine.prototype, 'set_relics');
+    const game = await boot('?nodes=50');
+    await game.hook('__run', pick({ ...newRun(3, 3), relics: [Relic.Gyroscope, Relic.Detonator] }, 0));
+    expect(document.body.dataset.run).toBe('fight');
+    expect(taken).toHaveBeenLastCalledWith(0b10001);
+    expect(bar()).toHaveLength(2);
+    taken.mockClear();
+    playMove(game);
+    await game.settle();
+    game.frame(1000);
+    await game.settle();
+    expect(game.hook('__plies')).toBe(2); // the bot answered on the same board
+    expect(taken).toHaveBeenCalledWith(0b10001);
   });
 
   /** The path of the run `seed` from the act 1 first row, by first links, to the act 1 boss. */

@@ -95,11 +95,16 @@ describe('answer', () => {
 
   it('replays a rogue-lite fight on an engine of its army and its special marbles, #798 #961', () => {
     const made: unknown[][] = [];
-    const make = (army?: number, placed?: number[][], foes?: number, trainer?: TrainerRef) => (made.push([army, placed, foes, trainer]), new FakeEngine());
-    answer({ id: 9, history: [], nodes: 5, army: 9, placed: [[0, 4, 1]], foes: 10 }, make, noEncounter);
+    const make = (army?: number, placed?: number[][], foes?: number, trainer?: TrainerRef, relics?: number) =>
+      (made.push([army, placed, foes, trainer, relics]), new FakeEngine());
+    answer({ id: 9, history: [], nodes: 5, army: 9, placed: [[0, 4, 1]], foes: 10, relics: 0b10001 }, make, noEncounter);
     answer({ id: 10, history: [], nodes: 5 }, make, noEncounter);
     answer({ id: 11, history: [], nodes: 5, trainer: { wave: 5, left: 4 } }, make, noEncounter);
-    expect(made).toEqual([[9, [[0, 4, 1]], 10, undefined], [undefined, undefined, undefined, undefined], [undefined, undefined, undefined, { wave: 5, left: 4 }]]);
+    expect(made).toEqual([
+      [9, [[0, 4, 1]], 10, undefined, 0b10001], // its relics too, #1457
+      [undefined, undefined, undefined, undefined, undefined],
+      [undefined, undefined, undefined, { wave: 5, left: 4 }, undefined],
+    ]);
   });
 
   it('builds the engine of a request: a plain game, or an army with its special marbles placed, #961', () => {
@@ -113,8 +118,12 @@ describe('answer', () => {
       static trainer(wave: number, left: number): Board {
         return Object.assign(new Board(), { army: 100 + wave, foes: left });
       }
+      relics = 0;
       place_special(q: number, r: number, kind: number): void {
         placedOn.push([this.army, q, r, kind]);
+      }
+      set_relics(mask: number): void {
+        this.relics = mask;
       }
     }
     expect(engineFor(Board).army).toBe(0);
@@ -124,6 +133,8 @@ describe('answer', () => {
     expect(engineFor(Board, undefined, [], 14, { wave: 3, left: 5 })).toMatchObject({ army: 103, foes: 5 }); // a Trainer wave, #1159
     engineFor(Board, 9, [[0, 4, 1], [1, 3, 3]]);
     expect(placedOn).toEqual([[9, 0, 4, 1], [9, 1, 3, 3]]);
+    expect(engineFor(Board, 9, [], 10, undefined, 0b10001).relics).toBe(0b10001); // the run's relics, #1457
+    expect(engineFor(Board, 9).relics).toBe(0);
   });
 
   it('answers an evaluate request with the score of the replayed position, #191', () => {
@@ -153,8 +164,8 @@ describe('askBot', () => {
   it('posts the army of a rogue-lite fight, #798', async () => {
     const worker = fakeWorker();
     const posted = vi.spyOn(worker, 'postMessage');
-    await askBot(worker, [], 50, undefined, undefined, undefined, 7, [[0, 4, 1]], 10);
-    expect(posted.mock.calls[0]![0]).toMatchObject({ army: 7, placed: [[0, 4, 1]], foes: 10 });
+    await askBot(worker, [], 50, undefined, undefined, undefined, 7, [[0, 4, 1]], 10, undefined, 0b1);
+    expect(posted.mock.calls[0]![0]).toMatchObject({ army: 7, placed: [[0, 4, 1]], foes: 10, relics: 0b1 });
   });
 
   it('posts the wave of a Trainer game, #1159', async () => {

@@ -302,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn an_act_opens_on_fights_then_mixes_elites_rests_and_events() {
+    fn an_act_opens_on_fights_then_mixes_elites_rests_events_and_treasures() {
         let mut seen = Vec::new();
         for seed in 0..50 {
             let map = run_map(seed);
@@ -317,7 +317,7 @@ mod tests {
         }
         seen.sort_by_key(|k| *k as u8);
         use NodeKind::*;
-        assert_eq!(seen, [Fight, Elite, Rest, Event]);
+        assert_eq!(seen, [Fight, Elite, Rest, Event, Treasure]);
     }
 
     #[test]
@@ -911,5 +911,229 @@ mod special_marbles {
                 assert_eq!(a, b);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod relics {
+    use super::*;
+    use crate::board::{PlaceError, Special};
+    use crate::game::Outcome;
+    use crate::moves::Direction::{self, E};
+    use crate::moves::{apply, legal_moves, Move, MoveError};
+
+    type P = (i32, i32);
+
+    /// A rogue-lite board with the army's `relics`: Black and White marbles, then the special ones.
+    fn board(black: &[P], white: &[P], specials: &[(P, Special)], relics: &[Relic]) -> Board {
+        let mut b = Board::empty();
+        b.set_rogue_lite();
+        for &(q, r) in black {
+            b.set(q, r, Cell::Black);
+        }
+        for &(q, r) in white {
+            b.set(q, r, Cell::White);
+        }
+        for &(cell, kind) in specials {
+            b.place_special(cell, kind).unwrap();
+        }
+        b.set_relics(relics).unwrap();
+        b
+    }
+
+    fn mv(cells: &[P], dir: Direction) -> Move {
+        Move {
+            cells: cells.to_vec(),
+            dir,
+        }
+    }
+
+    fn cells(b: &Board, cell: Cell) -> Vec<P> {
+        let mut v: Vec<P> = (-4..=4)
+            .flat_map(|q| (-4..=4).map(move |r| (q, r)))
+            .filter(|&(q, r)| b.get(q, r) == Some(cell))
+            .collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn the_relics_are_listed_in_the_order_of_their_bridge_code() {
+        assert_eq!(Relic::ALL.len(), 12);
+        for (code, relic) in Relic::ALL.into_iter().enumerate() {
+            assert_eq!(relic as usize, code);
+            assert_eq!(relic.bit(), 1 << code);
+        }
+    }
+
+    #[test]
+    fn relics_are_set_on_a_rogue_lite_fight_before_its_first_move_only() {
+        let mut plain = Board::standard();
+        assert_eq!(
+            plain.set_relics(&[Relic::Gyroscope]),
+            Err(PlaceError::NotRogueLite)
+        );
+        assert!(!plain.has_relic(Relic::Gyroscope));
+        assert_eq!(
+            Game::new().set_relics(&[Relic::Gyroscope]),
+            Err(PlaceError::NotRogueLite)
+        );
+        let mut game = army_game(FULL_ARMY);
+        assert_eq!(game.set_relics(&[Relic::Gyroscope, Relic::Jammer]), Ok(()));
+        assert!(game.board().has_relic(Relic::Gyroscope));
+        assert!(game.board().has_relic(Relic::Jammer));
+        assert!(!game.board().has_relic(Relic::Detonator));
+        let first = legal_moves(game.board(), Player::Black)[0].clone();
+        game.play(&first).unwrap();
+        assert_eq!(game.set_relics(&[]), Err(PlaceError::Started));
+    }
+
+    #[test]
+    fn the_relics_are_part_of_the_position() {
+        let first = mv(&[(0, 2)], crate::moves::Direction::NE);
+        let mut plain = army_game(FULL_ARMY);
+        let mut gyro = army_game(FULL_ARMY);
+        gyro.set_relics(&[Relic::Gyroscope]).unwrap();
+        plain.play(&first).unwrap();
+        gyro.play(&first).unwrap();
+        assert_ne!(plain.history()[0].hash, gyro.history()[0].hash);
+    }
+
+    #[test]
+    fn the_gyroscope_lets_the_armys_first_push_one_short_through_once_per_fight() {
+        // 2 against 2: a tie, too weak without the Gyroscope.
+        let pair = mv(&[(0, 0), (1, 0)], E);
+        let black = [(0, 0), (1, 0), (-4, 4)];
+        let white = [(2, 0), (3, 0), (-4, 0)];
+        let plain = board(&black, &white, &[], &[]);
+        assert_eq!(
+            apply(&plain, Player::Black, &pair),
+            Err(MoveError::NotStrongEnough)
+        );
+        let gyro = board(&black, &white, &[], &[Relic::Gyroscope]);
+        assert!(legal_moves(&gyro, Player::Black).contains(&pair));
+        let (after, ejected) = apply(&gyro, Player::Black, &pair).unwrap();
+        assert!(!ejected);
+        assert_eq!(cells(&after, Cell::White), vec![(-4, 0), (3, 0), (4, 0)]);
+        assert!(!after.has_relic(Relic::Gyroscope), "spent by the push");
+        // A tie again: too weak now.
+        assert_eq!(
+            apply(&after, Player::Black, &mv(&[(1, 0), (2, 0)], E)),
+            Err(MoveError::NotStrongEnough)
+        );
+        // 2 against 3: one short by 2, still too weak.
+        let trio = board(
+            &[(0, 0), (1, 0)],
+            &[(2, 0), (3, 0), (4, 0)],
+            &[],
+            &[Relic::Gyroscope],
+        );
+        assert_eq!(
+            apply(&trio, Player::Black, &pair),
+            Err(MoveError::NotStrongEnough)
+        );
+    }
+
+    #[test]
+    fn a_push_strong_enough_and_a_move_keep_the_gyroscope() {
+        let gyro = board(&[(0, 0), (1, 0)], &[(2, 0)], &[], &[Relic::Gyroscope]);
+        let (after, _) = apply(&gyro, Player::Black, &mv(&[(0, 0), (1, 0)], E)).unwrap();
+        assert!(after.has_relic(Relic::Gyroscope), "2 push 1 without it");
+        let (after, _) = apply(&gyro, Player::Black, &mv(&[(0, 0)], Direction::SE)).unwrap();
+        assert!(after.has_relic(Relic::Gyroscope), "no push");
+    }
+
+    #[test]
+    fn the_gyroscope_is_the_armys_only() {
+        // White's pair against Black's pair: a tie, whatever the army holds.
+        let b = board(
+            &[(2, 0), (3, 0)],
+            &[(0, 0), (1, 0)],
+            &[],
+            &[Relic::Gyroscope],
+        );
+        assert_eq!(
+            apply(&b, Player::White, &mv(&[(0, 0), (1, 0)], E)),
+            Err(MoveError::NotStrongEnough)
+        );
+    }
+
+    #[test]
+    fn the_gyroscope_can_win_the_fight() {
+        // Black needs one more ejection: 2 against 2 at the rim, only with the Gyroscope.
+        let pair = mv(&[(1, 0), (2, 0)], E);
+        let b = board(
+            &[(1, 0), (2, 0)],
+            &[(3, 0), (4, 0), (-4, 0)],
+            &[],
+            &[Relic::Gyroscope],
+        );
+        let mut game = Game::from_position(b, Player::Black, [5, 0]);
+        game.play(&pair).unwrap();
+        assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
+    }
+
+    /// White pushes the army's Spark off from (4,-2): its neighbours (3,-2), White, (4,-3) and
+    /// (3,-1), Black, move away from it.
+    fn burst_of(relics: &[Relic], black: &[P], specials: &[(P, Special)]) -> Board {
+        let b = board(black, &[(2, -2), (3, -2)], specials, relics);
+        let (after, ejected) = apply(&b, Player::White, &mv(&[(2, -2), (3, -2)], E)).unwrap();
+        assert!(ejected);
+        after
+    }
+
+    #[test]
+    fn the_detonator_bursts_the_armys_sparks_two_cells() {
+        let black = [(4, -2), (4, -3), (3, -1)];
+        let spark = [((4, -2), Special::Spark)];
+        let one = burst_of(&[], &black, &spark);
+        assert_eq!(cells(&one, Cell::White), vec![(2, -2), (4, -2)]);
+        assert_eq!(cells(&one, Cell::Black), vec![(2, 0), (4, -4)]);
+        let two = burst_of(&[Relic::Detonator], &black, &spark);
+        // (4,-3) slides past (4,-4) off the board: White is credited with it.
+        assert_eq!(cells(&two, Cell::White), vec![(1, -2), (4, -2)]);
+        assert_eq!(cells(&two, Cell::Black), vec![(1, 1)]);
+        let mut game = Game::from_position(
+            board(&black, &[(2, -2), (3, -2)], &spark, &[Relic::Detonator]),
+            Player::White,
+            [0, 0],
+        );
+        game.play(&mv(&[(2, -2), (3, -2)], E)).unwrap();
+        assert_eq!(game.ejected(Player::White), 2);
+    }
+
+    #[test]
+    fn a_detonated_marble_stops_before_a_marble_and_an_anchor_on_the_rim() {
+        // (1,-2) stops White's pusher on (2,-2); the Anchor on (4,-3) stops on the rim; (3,-1)
+        // stops before (1,1).
+        let black = [(4, -2), (4, -3), (3, -1), (1, -2), (1, 1)];
+        let specials = [((4, -2), Special::Spark), ((4, -3), Special::Anchor)];
+        let after = burst_of(&[Relic::Detonator], &black, &specials);
+        assert_eq!(cells(&after, Cell::White), vec![(2, -2), (4, -2)]);
+        assert_eq!(
+            cells(&after, Cell::Black),
+            vec![(1, -2), (1, 1), (2, 0), (4, -4)]
+        );
+        assert_eq!(after.specials(), [((4, -4), Special::Anchor)]);
+    }
+
+    #[test]
+    fn the_detonator_leaves_the_enemys_sparks_alone() {
+        // Black pushes White's Spark off: one cell, as without the relic.
+        let b = board(
+            &[(2, -2), (3, -2)],
+            &[(4, -2), (4, -3), (3, -1)],
+            &[((4, -2), Special::Spark)],
+            &[Relic::Detonator],
+        );
+        let (after, _) = apply(&b, Player::Black, &mv(&[(2, -2), (3, -2)], E)).unwrap();
+        assert_eq!(cells(&after, Cell::White), vec![(2, 0), (4, -4)]);
+    }
+
+    #[test]
+    fn a_treasure_joins_the_node_draw() {
+        let found = (0..50).any(|seed| run_map(seed).iter().any(|n| n.kind == NodeKind::Treasure));
+        assert!(found);
+        assert_eq!(NodeKind::Treasure as u8, 5);
     }
 }

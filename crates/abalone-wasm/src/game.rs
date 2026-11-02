@@ -199,6 +199,20 @@ mod tests {
     }
 
     #[test]
+    fn set_relics_takes_the_relics_of_a_run_by_their_bit_before_the_first_move() {
+        let mut engine = Engine::with_army(14, 14);
+        // Gyroscope (0) and Detonator (4), and a bit no relic has.
+        assert_eq!(engine.set_relics(0b1_0001 | 1 << 20), Ok(()));
+        let board = engine.game.board();
+        assert!(board.has_relic(Relic::Gyroscope) && board.has_relic(Relic::Detonator));
+        assert!(!board.has_relic(Relic::Jammer));
+        let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&first).unwrap();
+        assert_eq!(engine.set_relics(1), Err("Started".to_string()));
+        assert_eq!(Engine::new().set_relics(1), Err("NotRogueLite".to_string()));
+    }
+
+    #[test]
     fn the_same_fight_gives_the_same_game_through_the_bridge() {
         // Two Sparks and a Heavy in a bot game: the same placement and moves give the same game.
         let run = || {

@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 // Elites, rests, events and act bosses of the rogue-lite run (#800, docs/specs/roguelite.md section 7) in the browser.
-// Each step loads the run it needs through the test hook. Seed 3: the fight 1 leads to the rest 3 and the events 4 and
-// 5, and its act 1 boss is reached by 0, 2 (an elite), 6 (an elite) and 9.
+// Each step loads the run it needs through the test hook. Seed 3: the fight 1 leads to the rest 3, the treasure 4 (#1457)
+// and the event 5, and its act 1 boss is reached by 0, 2 (an elite), 6 (an elite) and 9.
 test('the rogue-lite run: elite, rest, event and boss nodes, an event, a rest and an act boss, #800', async ({ page }, testInfo) => {
   const map = page.locator('#run-map');
   const line = map.locator('.run-line');
@@ -15,7 +15,7 @@ test('the rogue-lite run: elite, rest, event and boss nodes, an event, a rest an
   await page.screenshot({ path: testInfo.outputPath('roguelite-map-nodes.png') });
 
   await hook({ ...run, specials: [0, 0, 1] }); // a Spark to give: every trade can be paid
-  await map.locator('[data-node="4"]').click();
+  await map.locator('[data-node="5"]').click();
   await expect(line).toHaveText(/^Event · /);
   await page.screenshot({ path: testInfo.outputPath('roguelite-event.png') });
   await map.getByRole('button', { name: 'Leave' }).click();

@@ -32,8 +32,8 @@ mod tests {
 
     #[test]
     fn run_map_flattens_the_core_map() {
-        let flat = run_map(11);
-        let core = run::run_map(11);
+        let flat = run_map(3);
+        let core = run::run_map(3);
         assert_eq!(flat.len(), core.len() * NODE_STRIDE);
         for (record, node) in flat.chunks(NODE_STRIDE).zip(&core) {
             assert_eq!(
@@ -46,6 +46,7 @@ mod tests {
                 NodeKind::Elite => 2,
                 NodeKind::Rest => 3,
                 NodeKind::Event => 4,
+                NodeKind::Treasure => 5,
             };
             assert_eq!(record[3], code);
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
@@ -54,8 +55,8 @@ mod tests {
         assert_eq!(flat[flat.len() - 2], 1); // the act 3 boss closes the map
         let kinds: Vec<i32> = flat.chunks(NODE_STRIDE).map(|r| r[3]).collect();
         assert!(
-            (2..=4).all(|k| kinds.contains(&k)),
-            "seed 11 has an elite, a rest and an event"
+            (2..=5).all(|k| kinds.contains(&k)),
+            "seed 3 has an elite, a rest, an event and a treasure"
         );
     }
 }

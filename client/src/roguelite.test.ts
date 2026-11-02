@@ -46,6 +46,14 @@ import {
   SPECIAL_LOOKS,
   START_ARMY,
   MIN_ARMY,
+  left,
+  Relic,
+  RELICS,
+  relicBarHtml,
+  relicHtml,
+  relicMask,
+  relicOffers,
+  takeRelic,
   type MapNode,
   type Run,
 } from './roguelite';
@@ -88,7 +96,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false, best: 3 });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -163,7 +171,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual(fight);
     await saveRun(store, at(newRun(1, 3), 0));
@@ -192,6 +200,10 @@ describe('roguelite', () => {
     ['a bad reward flag', { ...newRun(1, 3), reward: 1 }],
     ['a bad event flag', { ...newRun(1, 3), event: 'x' }],
     ['a bad best', { ...newRun(1, 3), best: 4 }],
+    ['an unknown relic', { ...newRun(1, 3), relics: [12] }],
+    ['a relic twice', { ...newRun(1, 3), relics: [3, 3] }],
+    ['relics that are no list', { ...newRun(1, 3), relics: 3 }],
+    ['a bad relic flag', { ...newRun(1, 3), relic: 'yes' }],
   ])('drops a saved run with %s', async (_, raw) => {
     const store = memoryStore();
     await store.put(RUN_KEY, raw);
@@ -567,5 +579,167 @@ describe('roguelite', () => {
     ]);
     expect(none.querySelector('.run-tally')!.textContent).toBe('Reconciled: 14.');
     expect(parse(mapHtml(MAP, newRun(1, 3))).querySelector('.run-tally')).toBeNull(); // only a run over
+  });
+});
+
+// Relics (#1457, docs/specs/roguelite.md section 9): passive effects for the rest of the run.
+describe('roguelite relics', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  // One act: a fight leads to an elite, a rest, an event and a treasure, each to the boss. Indices: 0 fight, 1 elite,
+  // 2 rest, 3 event, 4 treasure, 5 boss.
+  const ACT = parseMap([0, 0, 0, 0, 0b1111, 0, 1, 0, 2, 1, 0, 1, 1, 3, 1, 0, 1, 2, 4, 1, 0, 1, 3, 5, 1, 0, 2, 0, 1, 0]);
+  const run = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3), path: [0], ...state });
+  const ALL = RELICS.map((_, code) => code);
+
+  it('twelve relics, by their code on the bridge, each a name, a one-line rule and its own glyph', () => {
+    expect(RELICS).toHaveLength(12);
+    expect(Object.keys(Relic)).toEqual(RELICS.map((r) => r.name.replace(/ (\w)/g, (_, c: string) => c.toUpperCase())));
+    expect(Object.values(Relic)).toEqual(ALL);
+    expect(new Set(RELICS.map((r) => r.icon)).size).toBe(12);
+    for (const r of RELICS) expect(r.help).toMatch(/^[^.]+$/); // one line, no full stop
+    expect(relicMask(run({ relics: [Relic.Gyroscope, Relic.Detonator] }))).toBe(0b10001);
+    expect(relicMask(run())).toBe(0);
+  });
+
+  it('a treasure holds one relic, dealt by the run seed and the node, never one the run holds', () => {
+    const chest = visit(ACT, run(), 4);
+    expect(chest).toMatchObject({ path: [0, 4], fighting: false, relic: true });
+    expect(choices(ACT, chest)).toEqual([]); // the map waits for the relic
+    const [found] = relicOffers(ACT, chest);
+    expect(relicOffers(ACT, chest)).toHaveLength(1);
+    expect(relicOffers(ACT, { ...chest })).toEqual([found]); // the same seed and node: the same relic
+    const seen = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => relicOffers(ACT, { ...chest, seed })[0]));
+    expect(seen.size).toBeGreaterThan(1); // other seeds, other relics
+    const one = ALL.filter((c) => c !== Relic.Bunks);
+    expect(relicOffers(ACT, { ...chest, relics: one })).toEqual([Relic.Bunks]); // only the one not held
+    expect(visit(ACT, run({ relics: ALL }), 4).relic).toBe(false); // none left: an empty chest
+    expect(relicOffers(ACT, run())).toEqual([]); // none waits
+  });
+
+  it('a relic taken joins the run once, only one offered, and the map goes on', () => {
+    const chest = visit(ACT, run(), 4);
+    const [found] = relicOffers(ACT, chest);
+    const taken = takeRelic(ACT, chest, found!);
+    expect(taken).toEqual({ ...chest, relics: [found], relic: false });
+    expect(choices(ACT, taken)).toEqual([5]);
+    expect(takeRelic(ACT, taken, found!)).toBe(taken); // none waits
+    expect(takeRelic(ACT, chest, (found! + 1) % 12)).toBe(chest); // not offered
+  });
+
+  it('an elite gives a relic before its reward, an act boss offers 3, the last boss and a fight none', () => {
+    const elite = fightOver(ACT, pick(run(), 1), true, 0);
+    expect(elite).toMatchObject({ relic: true, reward: true });
+    expect(relicOffers(ACT, elite)).toHaveLength(1);
+    expect(fightOver(ACT, pick(run(), 1), false, 2).relic).toBe(false); // lost
+    expect(fightOver(ACT, pick(newRun(1, 3), 0), true, 0).relic).toBe(false); // a fight
+    const boss = fightOver(MAP, pick(at(newRun(1, 3), 0), 2), true, 0);
+    expect(boss.relic).toBe(true);
+    expect(new Set(relicOffers(MAP, boss)).size).toBe(3);
+    expect(relicOffers(MAP, { ...boss, relics: ALL.slice(2) })).toEqual(expect.arrayContaining([0, 1])); // what is left
+    expect(fightOver(MAP, pick(at(newRun(1, 3), 0, 2, 3), 5), true, 0)).toMatchObject({ end: 'won', relic: false });
+    expect(fightOver(ACT, pick(run({ relics: ALL }), 1), true, 0).relic).toBe(false); // none left
+  });
+
+  it('draws the relic screen: a button per relic, its glyph, name and rule', () => {
+    const titleOf = (state: Run, map: MapNode[] = ACT): string => parse(relicHtml(map, state)).querySelector('.run-line')!.textContent!;
+    const chest = visit(ACT, run(), 4);
+    expect(titleOf(chest)).toBe('Treasure · a chest holds a relic');
+    expect(titleOf(fightOver(ACT, pick(run(), 1), true, 0))).toBe('Elite beaten · take its relic');
+    const boss = fightOver(MAP, pick(at(newRun(1, 3), 0), 2), true, 0);
+    expect(titleOf(boss, MAP)).toBe('Boss beaten · pick a relic');
+    const buttons = [...parse(relicHtml(MAP, boss)).querySelectorAll<HTMLButtonElement>('button[data-relic]')];
+    expect(buttons.map((b) => Number(b.dataset.relic))).toEqual(relicOffers(MAP, boss));
+    const first = RELICS[relicOffers(MAP, boss)[0]!]!;
+    expect(buttons[0]!.textContent).toBe(`${first.name}: ${first.help}`);
+    expect(buttons[0]!.querySelector('svg.glyph path')!.getAttribute('d')).toBe(first.icon);
+  });
+
+  it('draws the relic bar: a glyph per relic held, its name and rule as its tooltip, nothing when none', () => {
+    expect(relicBarHtml(run())).toBe('');
+    const bar = parse(relicBarHtml(run({ relics: [Relic.Jammer, Relic.Gyroscope] }))).querySelector('.relics')!;
+    expect(bar.getAttribute('aria-label')).toBe('Relics');
+    const glyphs = [...bar.querySelectorAll<HTMLElement>('.relic')];
+    expect(glyphs.map((g) => g.title)).toEqual([`Jammer: ${RELICS[3]!.help}`, `Gyroscope: ${RELICS[0]!.help}`]);
+    expect(glyphs.map((g) => g.getAttribute('aria-label'))).toEqual(glyphs.map((g) => g.title));
+    expect(glyphs.every((g) => g.tabIndex === 0 && g.querySelector('svg path'))).toBe(true);
+  });
+
+  // Each relic's rule, where it acts. The Gyroscope and the Detonator act inside a fight, in the engine (relicMask).
+  it('Hull plating: the first marble lost in each fight comes back after it', () => {
+    expect(fightOver(ACT, { ...pick(newRun(1, 3), 0), relics: [Relic.HullPlating] }, true, 2).army).toBe(13);
+    expect(fightOver(ACT, pick(newRun(1, 3), 0), true, 2).army).toBe(12);
+    expect(fightOver(ACT, { ...pick(newRun(1, 3), 0), relics: [Relic.HullPlating] }, true, 0).army).toBe(14);
+    expect(fightOver(ACT, { ...pick(newRun(1, 3), 0), army: 5, relics: [Relic.HullPlating] }, true, 2)).toMatchObject({ army: 4, end: '' }); // saved
+    expect(fightOver(ACT, { ...pick(newRun(1, 3), 0), relics: [Relic.HullPlating] }, false, 3).end).toBe('lost');
+  });
+
+  it('Salvage magnet: a won elite gives one more marble back', () => {
+    const elite = pick(run({ army: 10, relics: [Relic.SalvageMagnet] }), 1);
+    expect(fightOver(ACT, elite, true, 0).army).toBe(13);
+    expect(fightOver(ACT, { ...elite, army: 13 }, true, 0).army).toBe(START_ARMY);
+    expect(fightOver(ACT, { ...pick(newRun(1, 3), 0), army: 10, relics: [Relic.SalvageMagnet] }, true, 0).army).toBe(10); // a fight
+  });
+
+  it('Jammer: the bot searches a quarter fewer positions in fights and elites, not against a boss', () => {
+    const jammed = { relics: [Relic.Jammer] };
+    expect(fightBudget(ACT, { ...pick(newRun(1, 3), 0), ...jammed }, 1000)).toBe(750);
+    expect(fightBudget(ACT, pick(run(jammed), 1), 1000)).toBe(1500);
+    expect(fightBudget(ACT, pick(run(jammed), 5), 1000)).toBe(1000);
+  });
+
+  it('Bunks: a rest also makes a plain marble a Heavy', () => {
+    expect(visit(ACT, run({ army: 6, relics: [Relic.Bunks] }), 2)).toMatchObject({ army: START_ARMY, specials: [1, 0, 0] });
+    expect(visit(ACT, run({ specials: [5, 5, 4], relics: [Relic.Bunks] }), 2).specials).toEqual([5, 5, 4]); // no plain marble
+  });
+
+  it('Lucky coin: a reward offers 4 instead of 3', () => {
+    const short = { ...run({ army: 12 }), reward: true };
+    expect(offers(short)).toHaveLength(3);
+    expect(offers({ ...short, relics: [Relic.LuckyCoin] }).sort()).toEqual([0, 1, 2, 3]);
+  });
+
+  it('Bargain: an event trade costs a marble less', () => {
+    const [forge, , wiring, , pods] = EVENTS;
+    const cheap = run({ relics: [Relic.Bargain] });
+    expect(takeEvent(cheap, forge!)).toMatchObject({ army: 13, specials: [1, 0, 0] });
+    expect(takeEvent(cheap, wiring!)).toMatchObject({ army: 14, specials: [0, 0, 1] }); // free
+    expect(takeEvent({ ...cheap, army: 10, specials: [1, 0, 0] }, pods!)).toMatchObject({ army: 13 }); // a gain, no marble paid
+    const event = { ...visit(ACT, cheap, 3), seed: [1, 2, 3, 4, 5, 6, 7, 8].find((seed) => eventOf({ ...visit(ACT, cheap, 3), seed })!.army < 0)! };
+    expect(parse(eventHtml(event)).querySelector('button[data-choice="1"]')!.textContent).toBe(`${eventOf(event)!.take} · Bargain: 1 marble less`);
+  });
+
+  it('Saboteur: the bot has a marble fewer in fights and elites', () => {
+    expect(foesOf(ACT, { ...pick(newRun(1, 3), 0), relics: [Relic.Saboteur] })).toBe(FIGHT_FOES - 1);
+    expect(foesOf(ACT, pick(run({ relics: [Relic.Saboteur] }), 1))).toBe(START_ARMY - 1);
+  });
+
+  it('Dampener: an act boss plays at three quarters of its act strength', () => {
+    const ids = ['a', 'b'];
+    expect(actBoss(MAP, pick(at({ ...newRun(1, 3), relics: [Relic.Dampener] }, 0), 2), ids)!.percent).toBe(38);
+    expect(actBoss(MAP, pick(at({ ...newRun(1, 3), relics: [Relic.Dampener] }, 0, 2, 3), 5), ids)!.percent).toBe(75);
+  });
+
+  it('War chest: an act boss beaten gives 2 marbles back', () => {
+    const boss = pick(at({ ...newRun(1, 3), army: 10, relics: [Relic.WarChest] }, 0), 2);
+    expect(fightOver(MAP, boss, true, 1).army).toBe(11);
+    expect(fightOver(MAP, { ...boss, army: 14 }, true, 1).army).toBe(START_ARMY);
+    expect(fightOver(MAP, { ...pick(at(newRun(1, 3), 0, 2, 3), 5), army: 10, relics: [Relic.WarChest] }, true, 1)).toMatchObject({ army: 9, end: 'won' });
+  });
+
+  it('Quartermaster: a fight holds 4 of each special marble type', () => {
+    const fight = pick({ ...newRun(1, 3), specials: [5, 0, 0], relics: [Relic.Quartermaster] }, 0);
+    expect(left(fight, 1)).toBe(FIGHT_CAP + 1);
+    expect(left({ ...fight, relics: [] }, 1)).toBe(FIGHT_CAP);
+  });
+
+  it('only variety carries: a new run holds no relic', () => {
+    expect(newRun(1, 3)).toMatchObject({ relics: [], relic: false });
+  });
+
+  it('draws the treasure on the map', () => {
+    const nodes = [...parse(mapHtml(ACT, newRun(1, 3))).querySelectorAll<HTMLButtonElement>('button[data-node]')];
+    expect(nodes[4]!.textContent).toBe('Treasure');
+    expect(nodes[4]!.className).toBe('node treasure');
+    expect(nodes[4]!.getAttribute('aria-label')).toBe('Act 1, treasure');
   });
 });
