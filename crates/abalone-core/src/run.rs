@@ -180,10 +180,11 @@ pub(crate) fn carry_specials(
             }
         })
         .collect();
-    if let Some(spark) = off.filter(|&c| board.special(c) == Some(Special::Spark)) {
-        // The army's Detonator: its Sparks push 2 cells.
+    let reach = off.and_then(|c| board.special(c)).map_or(0, Special::burst);
+    if let Some(spark) = off.filter(|_| reach > 0) {
+        // The army's Detonator: its Sparks push 1 cell further (a Spark+ 3).
         let army = board.get(spark.0, spark.1) == Some(Cell::Black);
-        let reach = 1 + i32::from(army && board.has_relic(Relic::Detonator));
+        let reach = reach + i32::from(army && board.has_relic(Relic::Detonator));
         burst(next, &mut specials, spark, reach);
     }
     specials.sort_by_key(|s| s.0);
@@ -191,8 +192,8 @@ pub(crate) fn carry_specials(
 }
 
 /// A Spark's burst from its last cell: each marble next to it slides `reach` cells straight away
-/// from it, stops before a marble, and goes off the board past the rim, unless it is an Anchor, which
-/// stops on the rim. A Spark it throws off does not burst. The order, by cell, changes nothing: each
+/// from it, stops before a marble, and goes off the board past the rim, unless it is an Anchor (or an
+/// Anchor+), which stops on the rim. A Spark it throws off does not burst. The order, by cell, changes nothing: each
 /// neighbour slides along its own ray from the Spark.
 fn burst(
     next: &mut Board,
@@ -208,7 +209,7 @@ fn burst(
             continue;
         };
         let mark = specials.iter().position(|s| s.0 == (q, r));
-        let anchor = mark.map(|i| specials[i].1) == Some(Special::Anchor);
+        let anchor = mark.is_some_and(|i| specials[i].1.anchor());
         let (mut to, mut off) = ((q, r), false);
         for _ in 0..reach {
             match next.get(to.0 + dq, to.1 + dr) {
@@ -746,6 +747,11 @@ mod special_marbles {
         );
         let after = black_plays(&plain, &push).unwrap();
         assert_eq!(cells(&after, Cell::White), vec![(3, -1), (4, -3)]);
+        // Nor does a Heavy pushed off: only a Spark bursts.
+        let trio = [(1, -2), (2, -2), (3, -2)];
+        let heavy = board(&trio, &[(4, -2), (4, -3), (3, -1)], &[((4, -2), Heavy)]);
+        let after = black_plays(&heavy, &mv(&trio, E)).unwrap();
+        assert_eq!(cells(&after, Cell::White), vec![(3, -1), (4, -3)]);
     }
 
     #[test]
@@ -851,7 +857,11 @@ mod special_marbles {
         assert_eq!(cells(&after, Cell::White), vec![(2, 0), (3, 0), (4, 0)]);
         // 3 plain cannot push a White Heavy+ (3 against 3); a plain Heavy there they can.
         let trio = mv(&[(-1, 0), (0, 0), (1, 0)], E);
-        let b = board(&[(-1, 0), (0, 0), (1, 0)], &[(2, 0)], &[((2, 0), HeavyPlus)]);
+        let b = board(
+            &[(-1, 0), (0, 0), (1, 0)],
+            &[(2, 0)],
+            &[((2, 0), HeavyPlus)],
+        );
         assert_eq!(black_plays(&b, &trio), Err(MoveError::NotStrongEnough));
         let b = board(&[(-1, 0), (0, 0), (1, 0)], &[(2, 0)], &[((2, 0), Heavy)]);
         assert!(black_plays(&b, &trio).is_ok());
@@ -876,7 +886,11 @@ mod special_marbles {
         let after = black_plays(&b, &mv(&[(1, 0), (2, 0)], E)).unwrap();
         assert_eq!(after.specials(), [((4, 0), AnchorPlus)]);
         // In the pushing group it shields nothing: the pushed marble goes off.
-        let b = board(&[(1, 0), (2, 0), (3, 0)], &[(4, 0)], &[((3, 0), AnchorPlus)]);
+        let b = board(
+            &[(1, 0), (2, 0), (3, 0)],
+            &[(4, 0)],
+            &[((3, 0), AnchorPlus)],
+        );
         let (_, ejected) = apply(&b, Player::Black, &mv(&[(1, 0), (2, 0), (3, 0)], E)).unwrap();
         assert!(ejected);
         // A burst does not throw it off either.

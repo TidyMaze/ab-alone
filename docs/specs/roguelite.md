@@ -17,7 +17,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 - **Run**: 3 acts, each a branching map of nodes the player walks through, top to bottom. An act
   has 3 rows of nodes then its boss: 12 nodes on a path through a run, the bosses included.
 - **Nodes** (section 7): fight (the bot), elite (a stronger bot, a better reward), rest (marbles
-  back up to 14), event (a short text choice with a gain and a cost), treasure (a relic, section 9),
+  back up to 14, or a special marble upgraded, section 10), event (a short text choice with a gain and a cost), treasure (a relic, section 9),
   boss (a boss of the roster at the act's strength, ends the act). No shop and no currency.
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
@@ -53,8 +53,8 @@ links of the last node.
 ## 3. Saving
 
 The run (seed, army, its special marbles, its relics, the nodes picked, the special marbles placed on
-the fight on and its moves, a reward waiting to be picked, an event waiting for its choice, and a relic
-offer waiting to be taken) is saved in IndexedDB after
+the fight on and its moves, a reward waiting to be picked, an event or a rest site waiting for its
+choice, and a relic offer waiting to be taken) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -109,13 +109,14 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 - **The bot** plays these rules in its search: Heavy weights and Anchors in its legal moves, a
   burst's ejections in its score, and a side with no legal move as a pass.
 - **Bridge**: `Engine::place_special(q, r, kind)` and `Engine::specials()` (records `[q, r, kind]`,
-  `1` Heavy, `2` Anchor, `3` Spark).
+  `1` Heavy, `2` Anchor, `3` Spark, and the upgraded `4` Heavy+, `5` Anchor+, `6` Spark+ of section
+  10).
 
 ## 6. Special marbles on screen (#961)
 
 - **The army's special marbles** are some of its marbles, counted by type with the run, and never
   more than the army: when the army falls below its count, the Sparks go first, then the Anchors,
-  then the Heavies. One placed on a fight's board and thrown off is lost for the run.
+  then the Heavies (the upgraded ones after them, section 10). One placed on a fight's board and thrown off is lost for the run.
 - **Placement**: a fight of an army that holds special marbles opens on the placement screen,
   beside the board (over its far half when the window is held upright), so the army's marbles stay
   free. The player picks a type, then presses one of the army's marbles: it becomes that type
@@ -140,7 +141,8 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 - **Elite**: a fight against the bot on the army's board, the bot searching twice the positions of a
   fight's (`ELITE_BUDGET`). Won, the army gets up to 2 marbles back (never above 14) before the
   reward screen, whose line says so.
-- **Rest**: no fight; the army is back up to 14 marbles at once, and the run line says it rested.
+- **Rest**: no fight; a rest site (section 10): Rest brings the army back up to 14 marbles, and the
+  run line says it rested.
 - **Event**: no fight; the event screen shows one of 5 events, picked by the run seed and the node
   (a 32-bit hash, as the reward offers), with a trade and Leave. The trade is offered only when the
   army can pay it (no fewer than 4 marbles after, no more special marbles than marbles, a special
@@ -229,7 +231,7 @@ relic at most once, in the order taken, and starts with none: only variety carri
   flag like the special marbles (refused without it, `PlaceError::NotRogueLite`), and part of the
   position. The Gyroscope lets the first push of the army (Black) that ties in weight through and
   is spent by it; a push strong enough without it keeps it. With the Detonator, a burst of the
-  army's Spark slides each neighbour up to 2 cells away: it stops before a marble, goes off past the
+  army's Spark slides each neighbour up to 2 cells away (a Spark+ 3, section 10): it stops before a marble, goes off past the
   rim, and an Anchor stops on the rim; the enemy's Sparks burst 1 cell. Every other mode plays bit
   for bit as before (section 5's digest).
 - **On screen**: the relic bar, in the HUD on the map and in every fight of the run, shows a glyph
@@ -241,3 +243,37 @@ relic at most once, in the order taken, and starts with none: only variety carri
   has none.
 - **Later relics** plug in by a code: the shop (#1459) sells relics the run does not hold, the
   commanders (#1464) start with one, and boss relics (#1467) join a boss's offer.
+
+## 10. The rest site (#1458)
+
+A rest that always heals is no choice: as Slay the Spire's campfire (rest or smith), a rest node offers
+two actions, and the map waits until one is picked.
+
+- **Rest**: the army is back up to 14 marbles, as before (section 7), and with Bunks a plain marble
+  becomes a Heavy (section 9).
+- **Upgrade**: one special marble of the army, of the type the player picks (a button per plain type
+  the army holds), becomes its upgraded type; the army keeps its count. With no plain special marble
+  left (none at all, or all upgraded) Upgrade is disabled and says why: "no special marble left to
+  upgrade". No upgrade of an upgraded marble.
+- **The upgraded types**, each one rule in the engine, behind the rogue-lite flag like the plain ones
+  (section 5), so the bot plays them in its search and every other mode plays bit for bit as before
+  (section 5's digest still matches):
+
+  | Code | Type | Rule |
+  |---|---|---|
+  | 4 | Heavy+ | weighs 3 in a push, on either side: a lone Heavy+ pushes 2 plain marbles, not 3 (a tie); 3 plain cannot push it |
+  | 5 | Anchor+ | an Anchor (never leaves the board) that also keeps the marble in front of it in a pushed line from going off: the push is illegal (`MoveError::PushBlocked`). In the pushing group, or in a burst, it shields only itself |
+  | 6 | Spark+ | its burst pushes each neighbour up to 2 cells away (section 9's slide) |
+
+  **Spark+ and the Detonator** add up: the Detonator pushes the army's Sparks 1 cell further, so the
+  army's Spark+ bursts 3 cells; the enemy's Spark+ bursts 2.
+- **In the run**: the army counts its upgraded special marbles apart from the plain ones (`specials`
+  holds 6 counts, by code less 1). An upgraded type is a type of its own in the placement (its own
+  button, its own cap of 3), in the run line and in the summary ("1 Heavy+"). When the army falls
+  below its count or an event takes a special marble, the plain ones go first (Sparks, Anchors, then
+  Heavies), then the upgraded ones in the same order. Rewards and events give plain types only.
+- **Looks**: an upgraded type keeps its type's glyph and colour, with a `+` on it in the shell's
+  near-black, 3:1 on every glyph colour (they are 3:1 on the shell), on the board and on the buttons.
+- **Determinism and saving**: the choice is the player's, nothing is drawn. A rest site waiting is
+  saved with the run and resumed on load. A run saved before this change (3 counts, no rest flag) loads
+  with no upgraded marble and no rest site waiting.

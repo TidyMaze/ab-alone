@@ -62,14 +62,24 @@ pub(crate) fn special_code(kind: Special) -> u8 {
         Special::Heavy => 1,
         Special::Anchor => 2,
         Special::Spark => 3,
+        Special::HeavyPlus => 4,
+        Special::AnchorPlus => 5,
+        Special::SparkPlus => 6,
     }
 }
 
 /// The special marble of a kind code, `None` for an unknown code.
 pub(crate) fn special(code: u8) -> Option<Special> {
-    [Special::Heavy, Special::Anchor, Special::Spark]
-        .into_iter()
-        .find(|&kind| special_code(kind) == code)
+    [
+        Special::Heavy,
+        Special::Anchor,
+        Special::Spark,
+        Special::HeavyPlus,
+        Special::AnchorPlus,
+        Special::SparkPlus,
+    ]
+    .into_iter()
+    .find(|&kind| special_code(kind) == code)
 }
 
 /// Result code of an encounter, see the module docs.

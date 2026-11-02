@@ -270,8 +270,8 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     const kind = map().querySelector<HTMLButtonElement>('button[data-kind]')!;
     expect(kind.textContent).toBe('Heavy+ · 1 left');
     kind.click();
-    game.click(0, 4);
-    expect(specials()).toBe('0,4,4');
+    game.click(0, 3); // the back row is gone: an army of 9
+    expect(specials()).toBe('0,3,4');
   });
 
   it.each([['1', 'taken'], ['0', 'left']])('an event waits for its choice, %s: %s, then the map goes on', async (choice) => {

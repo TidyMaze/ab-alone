@@ -137,7 +137,8 @@ pub struct ChoirMarks {
     pub ejections: u8,
 }
 
-/// A special marble of a rogue-lite fight (docs/specs/roguelite.md section 5).
+/// A special marble of a rogue-lite fight (docs/specs/roguelite.md section 5), plain or upgraded at a
+/// rest site (section 10).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Special {
     /// Weighs 2 in a push.
@@ -146,6 +147,37 @@ pub enum Special {
     Anchor,
     /// Pushes its neighbours one cell away when it is ejected.
     Spark,
+    /// Weighs 3 in a push.
+    HeavyPlus,
+    /// An Anchor that also keeps the marble in front of it in a pushed line on the board.
+    AnchorPlus,
+    /// A Spark whose burst pushes its neighbours 2 cells away.
+    SparkPlus,
+}
+
+impl Special {
+    /// What it adds to its marble's weight in a push: 1 for a Heavy, 2 for a Heavy+.
+    pub fn extra_weight(self) -> u32 {
+        match self {
+            Special::Heavy => 1,
+            Special::HeavyPlus => 2,
+            _ => 0,
+        }
+    }
+
+    /// Whether it never leaves the board: an Anchor or an Anchor+.
+    pub fn anchor(self) -> bool {
+        matches!(self, Special::Anchor | Special::AnchorPlus)
+    }
+
+    /// How many cells its burst pushes its neighbours, `0` when it is no Spark.
+    pub fn burst(self) -> i32 {
+        match self {
+            Special::Spark => 1,
+            Special::SparkPlus => 2,
+            _ => 0,
+        }
+    }
 }
 
 /// Why a special marble cannot be placed.

@@ -81,12 +81,12 @@ fn at(board: &Board, (q, r): (i32, i32)) -> Option<Cell> {
 
 /// What `cells` weigh in a push: 1 per marble, plus its charges in The Unstable Core's fight
 /// (`Board::unstable`), where a charged marble weighs more on both sides, and 1 more for a Heavy
-/// of a rogue-lite fight.
+/// of a rogue-lite fight, 2 for a Heavy+.
 fn weight(board: &Board, cells: impl Iterator<Item = (i32, i32)>) -> u32 {
     cells
         .map(|c| {
             1 + board.unstable().map_or(0, |u| u32::from(u.charge(c)))
-                + u32::from(board.special(c) == Some(Special::Heavy))
+                + board.special(c).map_or(0, Special::extra_weight)
         })
         .sum()
 }
@@ -216,9 +216,14 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
                 Some(Cell::Empty) => {}
                 Some(_) => return Err(MoveError::PushBlocked),
                 // A core never leaves the board over the rim (The Overseer): only an incinerator
-                // takes it. Nor does an Anchor (a rogue-lite fight).
+                // takes it. Nor does an Anchor (a rogue-lite fight), nor the marble in front of an
+                // Anchor+ in the pushed line.
                 None if at(board, step(lead, d, run - 1)) == Some(Cell::Core)
-                    || board.special(step(lead, d, run - 1)) == Some(Special::Anchor) =>
+                    || board
+                        .special(step(lead, d, run - 1))
+                        .is_some_and(Special::anchor)
+                    || (run > 1
+                        && board.special(step(lead, d, run - 2)) == Some(Special::AnchorPlus)) =>
                 {
                     return Err(MoveError::PushBlocked)
                 }

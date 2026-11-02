@@ -42,8 +42,9 @@ First to eject 6 wins. On top of it, the ship:
   retry with the same seed. Rules per boss: [docs/specs/boss-balance.md](docs/specs/boss-balance.md).
 - **Daily challenge**: one boss and one seed for everyone each UTC day.
 - **Rogue-lite run**: 3 acts of a branching map of fights, your army carried from fight to fight,
-  every marble lost is lost for the run, and relics, passive effects for the whole run, from elites,
-  act bosses and treasure nodes ([spec](docs/specs/roguelite.md)).
+  every marble lost is lost for the run, relics, passive effects for the whole run, from elites,
+  act bosses and treasure nodes, and rest sites where you rest or upgrade a special marble (Heavy+,
+  Anchor+, Spark+) ([spec](docs/specs/roguelite.md)).
 - **Trainer**: waves against the bot, one more marble each wave.
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.

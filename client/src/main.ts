@@ -310,9 +310,13 @@ import {
   place,
   placeHtml,
   placing,
+  PLUS_INK,
+  PLUS_POINTS,
   readBest,
   recordBest,
   resolve,
+  rest,
+  restHtml,
   relicBarHtml,
   relicHtml,
   relicMask,
@@ -322,6 +326,7 @@ import {
   sparkBurst,
   SPECIAL_LOOKS,
   takeRelic,
+  upgrade,
   visit,
   type MapNode,
   type Run,
@@ -2034,6 +2039,11 @@ const specialGlyphs = SPECIAL_LOOKS.map(({ points }) =>
   new THREE.ShapeGeometry(new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x * 0.22, y * 0.22)))).rotateX(glyphTilt - Math.PI / 2),
 );
 const specialInks = SPECIAL_LOOKS.map(({ color }) => new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+// The `+` of an upgraded type (#1458), over its glyph in the shell's ink.
+const plusGlyph = new THREE.ShapeGeometry(new THREE.Shape(PLUS_POINTS.map(([x, y]) => new THREE.Vector2(x * 0.22, y * 0.22)))).rotateX(
+  glyphTilt - Math.PI / 2,
+);
+const plusInk = new THREE.MeshBasicMaterial({ color: PLUS_INK, side: THREE.DoubleSide });
 // The breach (#503): a cracked arena cell glows in the hazard colour under the Hull's crack decal and ticks.
 const breachGlow = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false });
 
@@ -3803,6 +3813,11 @@ function refresh(): void {
     glyph.position.set(p.x, 0.36, p.z).add(glyphLift);
     marbles.add(glyph);
     onMarble(cellIndex(...cell), glyph);
+    if (!SPECIAL_LOOKS[kind - 1]!.plus) continue;
+    const plus = Object.assign(new THREE.Mesh(plusGlyph, plusInk), { name: 'special-plus' });
+    plus.position.copy(glyph.position).addScaledVector(glyphLift, 0.01); // just over the glyph
+    marbles.add(plus);
+    onMarble(cellIndex(...cell), plus);
   }
   document.body.dataset.specials = specials.map((s) => `${s.cell},${s.kind}`).join(' '); // read by the e2e tests
 
@@ -5552,8 +5567,8 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
     refresh();
   }
 }
-// The run's panel: a relic offer (#1457), the reward of a won fight (#961), an event's choice (#800), the placement before a fight's first
-// move (never in a boss fight: no special marble there), or the map.
+// The run's panel: a relic offer (#1457), the reward of a won fight (#961), an event's choice (#800), a rest site's (#1458), the
+// placement before a fight's first move (never in a boss fight: no special marble there), or the map.
 function showRun(): void {
   const { map, state } = run!;
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
@@ -5564,12 +5579,14 @@ function showRun(): void {
       ? rewardHtml(map, state)
       : state.event
         ? eventHtml(state)
-        : placed
-          ? placeHtml(state, armed)
-          : mapHtml(map, state);
+        : state.rest
+          ? restHtml(state)
+          : placed
+            ? placeHtml(state, armed)
+            : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
-  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
   hud();
 }
@@ -5607,7 +5624,7 @@ function runMoved(): void {
   const boss = engine instanceof Encounter;
   const status = engine instanceof Encounter ? engine.result() : engine.status(); // a boss fight: 1 won, 2 lost
   const kept = (): number[] | undefined =>
-    boss ? undefined : [1, 2, 3].map((k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k).length);
+    boss ? undefined : SPECIAL_LOOKS.map((_, k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k + 1).length);
   const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2), kept());
   run!.state = state;
   armed = 0;
@@ -5641,6 +5658,10 @@ runPanel.addEventListener('click', (e) => {
     run!.state = resolve(run!.state, button.dataset.choice === '1');
     void saveRun(gameStore, run!.state);
     showRun();
+  } else if (button?.dataset.rest || button?.dataset.upgrade) {
+    run!.state = button.dataset.rest ? rest(run!.state) : upgrade(run!.state, Number(button.dataset.upgrade));
+    void saveRun(gameStore, run!.state);
+    showRun();
   } else if (button?.dataset.army) {
     run!.state = chooseArmy(run!.state, Number(button.dataset.army));
     void saveRun(gameStore, run!.state);
@@ -5652,7 +5673,7 @@ runPanel.addEventListener('click', (e) => {
     run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
     void saveRun(gameStore, run!.state);
     if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));
-    else showRun(); // a rest, an event or a treasure
+    else showRun(); // a rest site, an event or a treasure
   }
 });
 runButton.addEventListener('click', beginRun);

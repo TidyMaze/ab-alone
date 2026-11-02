@@ -2,7 +2,7 @@
 // bridge (run_map) and the result of each fight, and draws the map, placement and reward screens they describe.
 
 import { cellIndex, DIRECTIONS, isMarble, MOVE_STRIDE, RADIUS, type Axial, type Move } from './board';
-import { SEAT_GLYPHS } from './marbles';
+import { SEAT_GLYPHS, SHELL } from './marbles';
 import { read, write, type Store } from './quality';
 import { replay, type KeyStore, type ReplayEngine } from './savegame';
 
@@ -30,11 +30,12 @@ export interface MapNode {
 }
 
 /** A run: its seed, its army, the nodes picked (indices in the map), the fight of the last one while it is on and its
- * moves, and how it ended. `specials` counts the army's Heavy, Anchor and Spark marbles (#961), `placed` the ones on
+ * moves, and how it ended. `specials` counts the army's Heavy, Anchor and Spark marbles (#961), then its Heavy+, Anchor+
+ * and Spark+ (#1458), by the bridge's kind less 1, `placed` the ones on
  * the fight's board `[q, r, kind]`, `reward` is on while the reward of a won fight waits to be picked, and `event` while
  * the choice of an event node waits (#800). `best` is the most acts won in one run before this one, which unlocks its
  * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
- * `relic` is on while a relic offer waits to be taken (#1457). */
+ * `relic` is on while a relic offer waits to be taken (#1457). `rest` is on while a rest site's choice waits (#1458). */
 export interface Run {
   seed: number;
   army: number;
@@ -49,6 +50,7 @@ export interface Run {
   best: number;
   relics: number[];
   relic: boolean;
+  rest: boolean;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -90,13 +92,30 @@ export const relicMask = (run: Run): number => run.relics.reduce((mask, r) => ma
 /** The relics the run does not hold yet, by code: no relic twice in a run. */
 const unheld = (run: Run): number[] => RELICS.flatMap((_, code) => (has(run, code) ? [] : [code]));
 
-/** The looks of the special marbles, by the bridge's kind less 1 (#961): a flat glyph over the marble, its own shape
- * and a colour 3:1 on both marbles, never the colour alone. Its outline in units of its radius, y up. */
-export const SPECIAL_LOOKS: readonly { name: string; color: number; points: readonly [number, number][]; help: string }[] = [
-  { name: 'Heavy', color: 0xc8ccd0, points: SEAT_GLYPHS[2]!.points, help: 'weighs 2 in a push' }, // a block
-  { name: 'Anchor', color: 0x56b4e9, points: [[0, -1], [0.866, 0.5], [-0.866, 0.5]], help: 'never pushed off' }, // pointing down
-  { name: 'Spark', color: 0xf0e442, points: SEAT_GLYPHS[4]!.points, help: 'bursts when pushed off' }, // a star
+/** The `+` of an upgraded type's glyph (#1458): the shell's near-black, 3:1 on every glyph colour as they are on it. */
+export const PLUS_INK = SHELL.color;
+/** The `+`'s outline in units of the glyph's radius, inside every glyph's shape. */
+export const PLUS_POINTS: readonly [number, number][] = [
+  [0.1, 0.35], [0.1, 0.1], [0.35, 0.1], [0.35, -0.1], [0.1, -0.1], [0.1, -0.35],
+  [-0.1, -0.35], [-0.1, -0.1], [-0.35, -0.1], [-0.35, 0.1], [-0.1, 0.1], [-0.1, 0.35],
 ];
+const anchorPoints: readonly [number, number][] = [[0, -1], [0.866, 0.5], [-0.866, 0.5]]; // pointing down
+/** The looks of the special marbles, by the bridge's kind less 1 (#961): a flat glyph over the marble, its own shape
+ * and a colour 3:1 on both marbles, never the colour alone. Its outline in units of its radius, y up. An upgraded type
+ * (#1458) has its type's glyph with a `+` on it. */
+export const SPECIAL_LOOKS: readonly { name: string; color: number; points: readonly [number, number][]; help: string; plus: boolean }[] = [
+  { name: 'Heavy', color: 0xc8ccd0, points: SEAT_GLYPHS[2]!.points, help: 'weighs 2 in a push', plus: false }, // a block
+  { name: 'Anchor', color: 0x56b4e9, points: anchorPoints, help: 'never pushed off', plus: false },
+  { name: 'Spark', color: 0xf0e442, points: SEAT_GLYPHS[4]!.points, help: 'bursts when pushed off', plus: false }, // a star
+  { name: 'Heavy+', color: 0xc8ccd0, points: SEAT_GLYPHS[2]!.points, help: 'weighs 3 in a push', plus: true },
+  { name: 'Anchor+', color: 0x56b4e9, points: anchorPoints, help: 'never pushed off, nor the marble in front of it', plus: true },
+  { name: 'Spark+', color: 0xf0e442, points: SEAT_GLYPHS[4]!.points, help: 'bursts 2 cells', plus: true },
+];
+/** The plain special marble types, by the bridge's kind: Heavy, Anchor, Spark; kind + 3 is the upgraded one. */
+const PLAIN = [1, 2, 3];
+/** The order the special marbles go in when the army falls below their count or pays one: the plain Sparks, Anchors and
+ * Heavies first, then the upgraded ones in the same order (indices of `Run.specials`). */
+const FALL = [2, 1, 0, 5, 4, 3];
 
 /** A special marble of the bridge's records `[q, r, kind]`. */
 export interface Special {
@@ -123,10 +142,10 @@ export function parseMap(flat: ArrayLike<number>): MapNode[] {
 /** The starting armies (#801): 14 marbles each, some of them special, never more; `acts` is the most acts won in one
  * run that unlocks it. */
 export const ARMIES: readonly { name: string; specials: number[]; acts: number }[] = [
-  { name: 'Standard', specials: [0, 0, 0], acts: 0 },
-  { name: 'Bulwark', specials: [0, 2, 0], acts: 1 },
-  { name: 'Volatile', specials: [0, 0, 2], acts: 2 },
-  { name: 'Ironclad', specials: [2, 0, 0], acts: 3 },
+  { name: 'Standard', specials: [0, 0, 0, 0, 0, 0], acts: 0 },
+  { name: 'Bulwark', specials: [0, 2, 0, 0, 0, 0], acts: 1 },
+  { name: 'Volatile', specials: [0, 0, 2, 0, 0, 0], acts: 2 },
+  { name: 'Ironclad', specials: [2, 0, 0, 0, 0, 0], acts: 3 },
 ];
 /** The most acts won in one run that brings each special marble type into the rewards and events: Heavy, Anchor, Spark. */
 export const KIND_ACTS = [0, 1, 2];
@@ -142,13 +161,14 @@ export const newRun = (seed: number, best: number): Run => ({
   fighting: false,
   moves: [],
   end: '',
-  specials: [0, 0, 0],
+  specials: [0, 0, 0, 0, 0, 0],
   placed: [],
   reward: false,
   event: false,
   best,
   relics: [],
   relic: false,
+  rest: false,
 });
 
 /** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
@@ -159,7 +179,7 @@ export function chooseArmy(run: Run, army: number): Run {
 
 const sum = (counts: number[]): number => counts.reduce((a, b) => a + b, 0);
 /** The special marbles of each type in `placed`. */
-const countOf = (placed: number[][]): number[] => [1, 2, 3].map((k) => placed.filter((p) => p[2] === k).length);
+const countOf = (placed: number[][]): number[] => SPECIAL_LOOKS.map((_, k) => placed.filter((p) => p[2] === k + 1).length);
 
 const lastAct = (map: MapNode[]): number => map[map.length - 1]!.act;
 
@@ -178,23 +198,38 @@ function next(map: MapNode[], path: number[]): number[] {
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
 export const choices = (map: MapNode[], run: Run): number[] =>
-  run.fighting || run.end || run.reward || run.event || run.relic ? [] : next(map, run.path);
+  run.fighting || run.end || run.reward || run.event || run.relic || run.rest ? [] : next(map, run.path);
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [] });
 
-/** The run once `node` of `map` is visited (#800): a rest brings the army back up to START_ARMY (with Bunks, a plain
- * marble becomes a Heavy), an event waits for its choice, a treasure for its relic (#1457), any other node starts its
- * fight. */
+/** The run once `node` of `map` is visited (#800): a rest site waits for its choice (#1458), an event for its own, a
+ * treasure for its relic (#1457), any other node starts its fight. */
 export function visit(map: MapNode[], run: Run, node: number): Run {
   const path = [...run.path, node];
   const { kind } = map[node]!;
-  if (kind === 'rest') {
-    const bunk = Number(has(run, Relic.Bunks) && sum(run.specials) < START_ARMY);
-    return { ...run, path, army: START_ARMY, specials: [run.specials[0]! + bunk, ...run.specials.slice(1)] };
-  }
+  if (kind === 'rest') return { ...run, path, rest: true };
   if (kind === 'treasure') return { ...run, path, relic: unheld(run).length > 0 };
   return kind === 'event' ? { ...run, path, event: true } : pick(run, node);
+}
+
+/** The run once Rest is picked at its rest site: the army back up to START_ARMY (with Bunks, a plain marble becomes a
+ * Heavy). Unchanged when no rest site waits. */
+export function rest(run: Run): Run {
+  if (!run.rest) return run;
+  const bunk = Number(has(run, Relic.Bunks) && sum(run.specials) < START_ARMY);
+  return { ...run, army: START_ARMY, specials: [run.specials[0]! + bunk, ...run.specials.slice(1)], rest: false };
+}
+
+/** The plain special marble types the army holds, which its rest site may upgrade. */
+export const upgradable = (run: Run): number[] => PLAIN.filter((k) => run.specials[k - 1]! > 0);
+
+/** The run once Upgrade is picked at its rest site for one of its special marbles of the plain type `kind`: it becomes
+ * that type's upgraded one (kind + 3). Unchanged when no rest site waits or the army holds none of `kind`. */
+export function upgrade(run: Run, kind: number): Run {
+  if (!run.rest || !upgradable(run).includes(kind)) return run;
+  const specials = run.specials.map((n, k) => n - Number(k === kind - 1) + Number(k === kind + 2));
+  return { ...run, specials, rest: false };
 }
 
 /** The node of the run's last pick, if any. */
@@ -242,7 +277,7 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
 }
 
 /** An event (#800): its title and text, and the trade it offers: `army` marbles more or less (up to START_ARMY), `gain`
- * special marbles of each type, and `lose` one special marble (the Sparks first, then the Anchors, then the Heavies). */
+ * special marbles of each type, and `lose` one special marble (in the order FALL). */
 export interface RunEvent {
   title: string;
   text: string;
@@ -252,11 +287,11 @@ export interface RunEvent {
   lose: boolean;
 }
 export const EVENTS: readonly RunEvent[] = [
-  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: [1, 0, 0], lose: false },
-  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: [0, 1, 0], lose: false },
-  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: [0, 0, 1], lose: false },
-  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: [0, 0, 2], lose: false },
-  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: [0, 0, 0], lose: true },
+  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: [1, 0, 0, 0, 0, 0], lose: false },
+  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: [0, 1, 0, 0, 0, 0], lose: false },
+  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: [0, 0, 1, 0, 0, 0], lose: false },
+  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: [0, 0, 2, 0, 0, 0], lose: false },
+  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: [0, 0, 0, 0, 0, 0], lose: true },
 ];
 
 /** The event of the run's last node while its choice waits, seeded by the run seed and the node, else null. */
@@ -270,7 +305,7 @@ export function eventOf(run: Run): RunEvent | null {
 export function takeEvent(run: Run, e: RunEvent): Run | null {
   const army = Math.min(START_ARMY, run.army + e.army + Number(e.army < 0 && has(run, Relic.Bargain)));
   const specials = run.specials.map((n, k) => n + e.gain[k]!);
-  const lost = [2, 1, 0].find((k) => e.lose && specials[k]! > 0);
+  const lost = FALL.find((k) => e.lose && specials[k]! > 0);
   if (lost !== undefined) specials[lost]! -= 1;
   const paid = !e.lose || lost !== undefined;
   const gained = army > run.army || sum(specials) > sum(run.specials);
@@ -291,7 +326,7 @@ const CHEST_MARBLES = 2;
 /** The run after the fight of its last node, `won` or not, the army having lost `lost` marbles and kept `kept` of each
  * special marble type placed (all by default): a loss or an army below MIN_ARMY ends it, the boss of the last act wins
  * it, any other win offers a reward, and an elite or an act boss a relic first (#1457). The army never holds more special
- * marbles than marbles: past that, the Sparks go first, then the Anchors, then the Heavies. The relics act here: Hull
+ * marbles than marbles: past that, they go in the order FALL. The relics act here: Hull
  * plating brings one lost marble back, the Salvage magnet and the War chest more marbles after an elite and a boss. */
 export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, kept = countOf(run.placed)): Run {
   const node = lastNode(map, run)!;
@@ -306,8 +341,9 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const army = end === '' ? Math.min(START_ARMY, left + back) : left;
   const placed = countOf(run.placed);
   const specials = run.specials.map((n, k) => n - placed[k]! + kept[k]!);
-  for (let k = 2, over = sum(specials) - army; k >= 0 && over > 0; k--) {
-    const drop = Math.min(specials[k]!, over);
+  let over = sum(specials) - army;
+  for (const k of FALL) {
+    const drop = Math.max(0, Math.min(specials[k]!, over));
     specials[k]! -= drop;
     over -= drop;
   }
@@ -392,7 +428,7 @@ export function sparkBurst(before: ArrayLike<number>, specials: Special[], move:
   for (q += dq, r += dr; on([q, r]) && isMarble(before[cellIndex(q, r)]); q += dq, r += dr) last = [q, r];
   if (on([q, r]) || !last) return null; // a free cell stops the push, or nothing is pushed
   const [lq, lr] = last;
-  return specials.some((s) => s.kind === 3 && s.cell[0] === lq && s.cell[1] === lr) ? last : null;
+  return specials.some((s) => (s.kind === 3 || s.kind === 6) && s.cell[0] === lq && s.cell[1] === lr) ? last : null;
 }
 
 /** An army of `army` marbles, `specials` of them special. */
@@ -410,7 +446,7 @@ export function earned(map: MapNode[], run: Run): string[] {
   const won = actsWon(map, run);
   const fresh = (acts: number): boolean => acts > run.best && acts <= won;
   return [
-    ...SPECIAL_LOOKS.flatMap((l, k) => (fresh(KIND_ACTS[k]!) ? [`${l.name} marbles`] : [])),
+    ...SPECIAL_LOOKS.slice(0, PLAIN.length).flatMap((l, k) => (fresh(KIND_ACTS[k]!) ? [`${l.name} marbles`] : [])),
     ...ARMIES.flatMap((a) => (fresh(a.acts) ? [`${a.name} army`] : [])),
   ];
 }
@@ -433,8 +469,9 @@ export function recordBest(store: Store, acts: number): void {
  * them, and a button per starting army, the one picked pressed. */
 function startHtml(run: Run): string {
   const after = (acts: number): string => (acts === ALL_ACTS ? 'after a run won' : `after ${acts} act${acts === 1 ? '' : 's'} won in a run`);
-  const on = SPECIAL_LOOKS.filter((_, k) => kindOn(run, k + 1)).map((l) => l.name);
-  const off = SPECIAL_LOOKS.flatMap((l, k) => (kindOn(run, k + 1) ? [] : [` · ${l.name} ${after(KIND_ACTS[k]!)}`]));
+  const plain = SPECIAL_LOOKS.slice(0, PLAIN.length);
+  const on = plain.filter((_, k) => kindOn(run, k + 1)).map((l) => l.name);
+  const off = plain.flatMap((l, k) => (kindOn(run, k + 1) ? [] : [` · ${l.name} ${after(KIND_ACTS[k]!)}`]));
   const armies = ARMIES.map((a, i) => {
     const locked = a.acts > run.best;
     const pressed = a.specials.every((n, k) => n === run.specials[k]);
@@ -479,11 +516,14 @@ export function runLine(map: MapNode[], run: Run): string {
   return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
 }
 
-/** The glyph of a special marble type (`0` a plain marble), drawn in its colour, outlined in the text's colour. */
+const polygon = (points: readonly [number, number][]): string => points.map(([x, y]) => `${x},${-y}`).join(' ');
+/** The glyph of a special marble type (`0` a plain marble), drawn in its colour, outlined in the text's colour; an
+ * upgraded type's with its `+` (#1458). */
 function glyph(kind: number): string {
   const look = SPECIAL_LOOKS[kind - 1];
+  const plus = look?.plus ? `<polygon class="plus" points="${polygon(PLUS_POINTS)}" fill="#${PLUS_INK.toString(16).padStart(6, '0')}"/>` : '';
   const shape = look
-    ? `<polygon points="${look.points.map(([x, y]) => `${x},${-y}`).join(' ')}" fill="#${look.color.toString(16)}" stroke="currentColor" stroke-width="0.15"/>`
+    ? `<polygon points="${polygon(look.points)}" fill="#${look.color.toString(16)}" stroke="currentColor" stroke-width="0.15"/>${plus}`
     : '<circle r="0.8" fill="currentColor"/>';
   return `<svg class="glyph" viewBox="-1 -1 2 2" aria-hidden="true">${shape}</svg>`;
 }
@@ -508,6 +548,22 @@ export function rewardHtml(map: MapNode[], run: Run): string {
   const buttons = offers(run).map((o) => `<button type="button" data-offer="${o}">${glyph(o)}${label(o)}</button>`);
   const title = lastNode(map, run)?.kind === 'elite' ? `Elite beaten · up to ${ELITE_MARBLES} marbles back` : 'Fight won';
   return `<p class="run-line">${title} · pick a reward</p><div class="run-kinds">${buttons.join('')}</div>`;
+}
+
+/** The rest site's screen (#1458): Rest, and an Upgrade per plain special marble type the army holds, or Upgrade
+ * disabled with its reason when it holds none. */
+export function restHtml(run: Run): string {
+  const bunks = has(run, Relic.Bunks) ? ' · Bunks: a plain marble becomes a Heavy' : '';
+  const a = (name: string): string => (/^[AEIOU]/.test(name) ? 'an' : 'a');
+  const ups = upgradable(run).map((k) => {
+    const [from, to] = [SPECIAL_LOOKS[k - 1]!, SPECIAL_LOOKS[k + 2]!];
+    return `<button type="button" data-upgrade="${k}">${glyph(k + 3)}Upgrade ${a(from.name)} ${from.name}: ${to.name} ${to.help}</button>`;
+  });
+  const none = '<button type="button" data-upgrade="0" disabled>Upgrade: no special marble left to upgrade</button>';
+  return (
+    `<p class="run-line">Rest site · rest or upgrade</p>` +
+    `<div class="run-kinds"><button type="button" data-rest="1">Rest: back up to ${START_ARMY} marbles${bunks}</button>${ups.join('') || none}</div>`
+  );
 }
 
 /** The event screen: its title and text, its trade (disabled when it cannot be paid) and Leave. */
@@ -581,10 +637,11 @@ const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MO
 const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.length === n && v.every((x) => isInt(x, START_ARMY));
 
 /** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none, one
- * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none. */
+ * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
+ * upgrades (#1458) no upgraded special marble and no rest site waiting. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -594,7 +651,7 @@ function decodeRun(raw: unknown): Run | null {
     Array.isArray(moves) &&
     moves.every(isRecord) &&
     (end === '' || end === 'won' || end === 'lost') &&
-    isInts(specials, 3) &&
+    (isInts(specials, PLAIN.length) || isInts(specials, SPECIAL_LOOKS.length)) &&
     Array.isArray(placed) &&
     placed.every((p) => Array.isArray(p) && p.length === 3 && p.every((v) => Number.isInteger(v))) &&
     typeof reward === 'boolean' &&
@@ -602,9 +659,10 @@ function decodeRun(raw: unknown): Run | null {
     isInt(best, ALL_ACTS) &&
     Array.isArray(relics) &&
     relics.every((r, i) => isInt(r, RELICS.length - 1) && relics.indexOf(r) === i) &&
-    typeof relic === 'boolean';
+    typeof relic === 'boolean' &&
+    typeof rest === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials, placed: placed as number[][], reward, event, best, relics, relic }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest }
     : null;
 }
 
