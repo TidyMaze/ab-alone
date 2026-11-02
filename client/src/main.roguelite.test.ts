@@ -513,6 +513,9 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     await game.hook('__run', fight({ moves: [] }));
     expect(tactics().map((b) => b.dataset.tactic)).toEqual(['2', '3', '4']);
     expect(button(2).title).toBe('Freeze: the bot skips its next turn');
+    byId('hud').click(); // the plate itself: nothing happens
+    document.querySelector<HTMLElement>('#hud .tactics')!.click();
+    expect(tactics()).toHaveLength(3);
     expect(document.body.dataset.tactics).toBe('2,3,4');
     await game.hook('__run', fight({ moves: [], specials: [1, 0, 0, 0, 0, 0] }));
     expect(tactics().every((b) => b.disabled)).toBe(true); // special marbles are placed first
@@ -537,6 +540,7 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     await game.hook('__run', fight());
     await answered(game);
     expect(plies(game)).toBe(2);
+    const mine = game.turn(); // the player's turn line
     button(2).click();
     expect(plies(game)).toBe(3);
     expect(tactics().map((b) => b.dataset.tactic)).toEqual(['3', '4']);
@@ -544,11 +548,12 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     playMove(game);
     game.frame(1000);
     await game.settle();
-    expect(plies(game)).toBe(5); // the bot passed: no answer
-    expect(game.turn()).toContain('You');
+    expect(plies(game)).toBe(4); // the bot passed: no answer
+    expect(game.turn()).toBe(mine);
+    expect(game.hud()).toContain('turn passed');
     await game.settle();
     const again = await boot('?nodes=50', { indexedDB });
-    expect(plies(again)).toBe(5); // the records replay
+    expect(plies(again)).toBe(4); // the records replay
     expect(tactics().map((b) => b.dataset.tactic)).toEqual(['3', '4']);
   });
 
@@ -566,7 +571,7 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     expect(document.body.dataset.specials).toBe('1,3,1');
     expect(button(3)).toBeUndefined(); // used
     await answered(game);
-    expect(plies(game)).toBe(5); // the swap, then the bot's answer
+    expect(plies(game)).toBe(4); // the swap, then the bot's answer
     expect(game.hook<number[][]>('__history')[2]).toEqual([0, 3, 0, 4, 1, 3, 0, 0]);
   });
 
@@ -592,12 +597,13 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     await game.hook('__run', fight());
     await answered(game);
     const before = game.hook<number[]>('__board');
+    const mine = game.turn(); // the player's turn line
     expect(plies(game)).toBe(2);
     button(4).click();
     expect(game.hook<number[]>('__board')).not.toEqual(before);
     expect(game.hook<number[][]>('__history')[2]).toEqual([0, 4, 0, 0, 0, 0, 0, 0]);
     expect(tactics().map((b) => b.dataset.tactic)).toEqual(['2', '3']);
-    expect(game.turn()).toContain('You');
+    expect(game.turn()).toBe(mine);
   });
 
   it('Reinforce puts a marble on the back row', async () => {

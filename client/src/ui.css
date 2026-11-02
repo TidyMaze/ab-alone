@@ -439,6 +439,14 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   content: attr(aria-label); position: absolute; top: calc(100% + 0.25rem); left: 0; z-index: 1; width: max-content; max-width: 16rem;
   padding: 0.25rem 0.5rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font-size: 0.8125rem;
 }
+/* The rogue-lite tactic bar (#1460): a glyph button per tactic held in the army's fights, the accent on the plate (3:1 in both
+   themes). Its name and rule are the native tooltip. A tactic the engine cannot play now is dimmed and disabled. */
+#hud .tactics { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.375rem; pointer-events: auto; }
+#hud .tactic { display: inline-flex; padding: 0.25rem; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 2px; cursor: pointer; }
+#hud .tactic svg { width: 1.25rem; height: 1.25rem; }
+#hud .tactic[aria-pressed='true'] { background: var(--accent); color: var(--panel); }
+#hud .tactic:disabled { opacity: 0.4; cursor: not-allowed; }
+#hud .tactic:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Online status line. The words carry the state, the dot only repeats it. */
 #hud .presence { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; font-weight: 500; }
 #hud .presence::before { content: ''; flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--hazard); }

@@ -325,8 +325,12 @@ import {
   saveRun,
   sparkBurst,
   SPECIAL_LOOKS,
+  claimTactic,
+  tacticBarHtml,
+  tacticRecord,
   takeRelic,
   upgrade,
+  useTactic,
   visit,
   type MapNode,
   type Run,
@@ -424,6 +428,8 @@ let run: { map: MapNode[]; state: Run } | null = null;
 let trainer: { wave: number; lost: number } | null = null; // `lost`: the marbles of the run's pool lost before this wave
 // The special marble type a press on one of the army's marbles places before a fight (#961), 0 for none.
 let armed = 0;
+// Whether the Swap tactic is picking the army's two marbles (#1460): the first one is the selection.
+let swapping = false;
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
 let royaleNet: RoyaleNet<Royale> | null = null;
 let ticking = 0;
@@ -3357,7 +3363,15 @@ function drawHud(extra = ''): void {
           ? retryText(online.askedRematch(online.ourSeat), online.askedRematch(3 - online.ourSeat))
           : rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side), glassOf()),
   });
-  if (run) document.getElementById('hud')!.insertAdjacentHTML('beforeend', relicBarHtml(run.state)); // the relic bar (#1457)
+  if (run) {
+    document.getElementById('hud')!.insertAdjacentHTML('beforeend', relicBarHtml(run.state)); // the relic bar (#1457)
+    // The tactic bar (#1460): in the army's fights only, none enabled during the placement or a replay.
+    if (run.state.fighting && engine instanceof Engine) {
+      const mask = placing(run.state) || replaying !== null ? 0 : engine.tactics();
+      document.getElementById('hud')!.insertAdjacentHTML('beforeend', tacticBarHtml(run.state, mask, swapping));
+    }
+    document.body.dataset.tactics = run.state.tactics.join(','); // read by the e2e tests
+  }
   hudEjected = ejected; // the next render moves only the pips that are new (#1095)
   rematchButton.hidden = online?.role !== 'player' || status === 0 || duel; // spectators never see it, nor a duel yet (#1316)
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
@@ -4275,6 +4289,7 @@ function click(q: number, r: number): void {
   if (hub) return walk([q, r]);
   if (royale) return pickRoyale(q, r);
   if (armed) return placeAt(q, r); // only during a placement
+  if (swapping) return swapAt(q, r);
   if (blocked(() => click(q, r))) return;
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move() && outOfTurn(dualShown, [q, r])) {
@@ -5545,6 +5560,7 @@ function beginRun(): void {
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
   armed = 0;
+  swapping = false;
   moveModes('pick');
   leaveMode();
   applyDeck(deckOf('local'));
@@ -5631,10 +5647,59 @@ function runMoved(): void {
   void saveRun(gameStore, state);
   if (!state.fighting || state.moves.length === 1) showRun(); // the fight's end, or its first move ends the placement
 }
+// A tactic (#1460, docs/specs/roguelite.md section 11): its record joins the move list, the engine plays it behind the
+// rogue-lite flag and judges it, and the tactic is gone. False when the engine refuses it: nothing changed.
+function playTactic(record: number[]): boolean {
+  try {
+    engine.play(Int32Array.from(record));
+  } catch {
+    return false;
+  }
+  history.push(record);
+  run!.state = useTactic(run!.state, record[1]!);
+  swapping = false;
+  selected = [];
+  runMoved();
+  refresh();
+  void botTurn(); // a Swap costs the move
+  return true;
+}
+// The Swap's first press picks the army's marble, the second the one it trades places with.
+function swapAt(q: number, r: number): void {
+  if (engine.board()[cellIndex(q, r)] !== 1) return; // the army's marbles only
+  const first = selected[0];
+  if (!first) {
+    selected = [[q, r]];
+    return refresh();
+  }
+  if (first[0] === q && first[1] === r) return;
+  if (playTactic(tacticRecord(3, first, [q, r]))) return;
+  swapping = false;
+  selected = [];
+  refresh();
+  cue(document.body, 'refused', MOTION.fast);
+  hud(' · those marbles cannot swap');
+}
+document.getElementById('hud')!.addEventListener('click', (e) => {
+  const button = (e.target as Element).closest<HTMLButtonElement>('button[data-tactic]');
+  if (!button) return; // the bar exists in an army fight only, its buttons disabled during a replay
+  const code = Number(button.dataset.tactic);
+  if (code === 3) {
+    swapping = !swapping;
+    selected = [];
+    refresh();
+    return hud();
+  }
+  if (playTactic(tacticRecord(code))) return;
+  cue(document.body, 'refused', MOTION.fast);
+  hud(' · that tactic cannot be played now');
+});
 function leaveRun(): void {
   if (!run) return;
   run = null;
   armed = 0;
+  swapping = false;
+  delete document.body.dataset.tactics;
   runPanel.hidden = true;
   delete document.body.dataset.run;
   newGameButton.hidden = false;
@@ -5652,6 +5717,10 @@ runPanel.addEventListener('click', (e) => {
     showRun();
   } else if (button?.dataset.offer) {
     run!.state = claim(run!.state, Number(button.dataset.offer));
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.tacticOffer) {
+    run!.state = claimTactic(run!.state);
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.choice) {
