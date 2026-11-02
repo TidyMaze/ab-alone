@@ -51,12 +51,13 @@ A-light Explore (#720 to #725), which it does not touch.
   three axes, one per 24-cell square at most, laid on land) come on top.
 - **Biomes** (#984): meadow, forest, tundra (snow), desert and badlands, from a temperature and the moisture; each sets the
   colour of the low ground and the density of its trees and boulders (see [openworld-terrain.md](openworld-terrain.md) section 4).
-- **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: water, mountains,
-  trees, walls, and scattered boulders (about 2 % of the open cells). A push into an obstacle is
+- **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: mountains,
+  trees, walls, and scattered boulders (about 2 % of the open cells). Water blocks the enemies only: the hero and the troop
+  sail on it (section 4, #1441), and lairs, teleporters and the spawn stay on land. A push into an obstacle is
   refused, as a push into a friendly marble is in `rules.md`.
 - **Breakable obstacles** (#1147): the hero breaks a small isolated obstacle by rolling into it. Only a **boulder**, or a
-  **tree with no tree on its six neighbours**, is breakable (`breakable` in `openworld.ts`). Buildings (walls), mountains,
-  water and forests (a tree beside a tree) stay in the way, and so does any cell an enemy stands on. The move that would have
+  **tree with no tree on its six neighbours**, is breakable (`breakable` in `openworld.ts`). Buildings (walls), mountains
+  and forests (a tree beside a tree) stay in the way, and so does any cell an enemy stands on. The move that would have
   been refused goes through and the cell becomes plain ground of its terrain (a boulder leaves rock, a tree grass); only the
   hero breaks, the troop and the enemies treat an obstacle as blocked until it is broken, and a push into one is refused
   by the engine until then (the bridge gets the broken cells, which are plain ground for it: #1154). The break plays shards of the prop's colour, thrown outward and falling, gone within 0.7 s, drawn by the
@@ -81,7 +82,8 @@ The levels of noise, the biomes, the relief and the obstacle density are specifi
 Basic enemies only. A group is 1 to 3 loose black marbles in a line on passable cells, placed by
 the seed (about one group per 400 cells), none within 8 cells of the spawn, and a group stays
 inside one chunk, so no two groups share a cell. They hold their
-ground and have no behaviour of their own: they react only when pushed. A pushed enemy is
+ground and have no behaviour of their own: they react only when pushed. They never stand on water: a push that would put one
+there ejects it. A pushed enemy is
 ejected when the cell beyond the line is water or off the world (the edge of the world): the last
 enemy of the line falls, the others shift one cell. A push into a tree, boulder, wall or peak, or
 into a marble (troop or enemy), is refused. Enemies never push, so nothing ejects the hero yet.
@@ -109,7 +111,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   on the screen; the tie goes to the one that leans forward (up on the screen), so at every resting angle Left steps up-left and
   Right up-right (#1273). Up, Down and the diagonals keep their steps; Down with Left or Right still steps back.
 - **Steering** (#1137): a held direction (arrow, stick) is an *intent*, an angle on the ground. Each step takes the cell of
-  that direction when the hero can enter it. When it cannot (a rock, a tree, water, a wall, a cliff, an enemy), the hero takes
+  that direction when the hero can enter it. When it cannot (a rock, a tree, a wall, a cliff, an enemy), the hero takes
   the free one of the two neighbours 60 degrees to the side that the intent follows best; if both follow it equally, the lower
   direction index (E, W, NE, SW, NW, SE). It never steps back or to a cell 120 degrees off. When no side is free, it leans and
   stops as before (#1040). Only legal steps: the same `Hero.step` rules.
@@ -117,7 +119,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   is found on the ground under the pointer (the ray meets the plane of the hero's cell top, then the top of the cell it fell in,
   three times over). The path is a game rule, so it lives in Rust (#1164): `world::find_path`, a bounded A* on the hex grid,
   exported as `world_path(seed, from, to, blocked, broken)` (`q, r` pairs, the start left out, empty when there is no way).
-  A cell is entered when it is on the world, not an enemy or a lair (`blocked`) and open or an obstacle the hero breaks
+  A cell is entered when it is on the world, not an enemy or a lair (`blocked`) and open (water too, it is sailed) or an obstacle the hero breaks
   (a boulder, a tree with no tree beside it, #1147), the same rule as `Hero.step`; the cells of `broken` are plain ground. Every
   step costs 1, the estimate is the hex distance. Bounds: the destination is within 40 cells of the hero, and the search stops after
   6000 expanded cells, so a walled-in destination costs a bounded time; both give no path and the tap does nothing. Determinism: the
@@ -127,6 +129,16 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   refused (an enemy moved in, a push moved the hero off the path), or at once when any key is pressed, the stick is held, the camera
   is dragged, twisted or pinched, or steering is turned off. A new tap replaces the walk. A lair is a blocked cell: a tap does not
   walk into a boss fight. `body[data-openworld-route]` holds the cells still to take.
+- **Sailing** (#1441): the hero and the troop enter water and move on it exactly as on land: the same step, trail, steering, walk
+  path and push. The rule is the engine's, in one place: `Terrain::blocked` is what an enemy (and a lair, a teleporter, the spawn)
+  cannot stand on, `Terrain::open_to_hero` what the hero and the troop can enter, the open ground and water; the client and the MCP
+  server (`world_step`, `world_walk`) both ask the engine. Off the world still stops the hero: there is no sea past the edge. On
+  water each marble of the hero and the troop rides a small low-poly boat (`openworldboat.ts`): a wooden hull and a pale triangular
+  sail at the bow, 18 flat triangles, one geometry and one material for every boat (one instanced mesh, `boats` in
+  `body[data-openworld-drawn]`). The hull sits on the water round the lower part of the marble, which keeps its size and place;
+  the boat and its marble bob together (3 hundredths of a cell over 2.6 s, each boat on its own phase), held still under reduced
+  motion, on the low tier and past the roll zoom. A boat turns to the way its marble went once it went 0.3 cell, so the lean of a
+  blocked step never turns it. On land the boat goes away, from the moment the marble's drawn place leaves the water cell.
 - **Steering setting** (#1137): the Settings item *Steering*, on by default (team decision), stored under `ab-alone.steering`.
   Off, a held direction takes only the straight step and leans when it is blocked (#1040), and a far tap does nothing; a tap next
   to the hero rolls it either way. The Open world HUD line `#openworld-mode` names the mode: "Steering on" or "Steering off".

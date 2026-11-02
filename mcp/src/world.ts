@@ -243,8 +243,8 @@ export class OpenWorld {
     return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added, beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], discovered: discovered.toJSON(), savedAt: Date.now() });
   }
 
-  /** Rolls the hero one cell, then the troop pushes. An enemy, a wall, water or a tree beside a tree refuses it; a boulder, or a tree
-   * with no tree beside it, is broken. Onto a lair the hero stays and the lair's boss is named, where the client starts its fight. */
+  /** Rolls the hero one cell, then the troop pushes. Water is sailed (#1441); an enemy, a wall, a peak or a tree beside a tree
+   * refuses it; a boulder, or a tree with no tree beside it, is broken. Onto a lair the hero stays and the lair's boss is named, where the client starts its fight. */
   step({ direction }: StepInput): Result<Stepped> {
     const play = this.play;
     if (!play) return this.none();

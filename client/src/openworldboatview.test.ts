@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import './test/openworldwasm';
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';

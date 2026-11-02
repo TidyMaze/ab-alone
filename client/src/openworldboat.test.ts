@@ -44,9 +44,11 @@ describe('the low-poly boat of a marble on water (#1441, docs/specs/openworld.md
     expect([wake.x, wake.z]).toEqual([0, -1]);
     steer(wake, -1, -1);
     expect(Math.abs(wake.yaw)).toBeCloseTo(Math.PI);
-    const bow = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, Math.atan2(-1, 1), 0));
+    const diagonal: Wake = { x: 0, z: 0, yaw: 0 };
+    steer(diagonal, 1, -1);
+    const bow = new THREE.Vector3(1, 0, 0).applyEuler(new THREE.Euler(0, diagonal.yaw, 0));
     expect(bow.x).toBeCloseTo(Math.SQRT1_2);
-    expect(bow.z).toBeCloseTo(-Math.SQRT1_2); // a yaw of atan2(-dz, dx) points the bow along (dx, dz)
+    expect(bow.z).toBeCloseTo(-Math.SQRT1_2); // the bow points along the way (1, -1)
   });
 
   it('bobs gently, each boat on its own phase, and is held still under reduced motion', () => {

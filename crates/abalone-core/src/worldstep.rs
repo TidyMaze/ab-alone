@@ -140,7 +140,7 @@ pub fn entry(
     match terrain {
         Terrain::Boulder => Entry::Breaks,
         Terrain::Tree if !trees_near => Entry::Breaks,
-        _ if terrain.blocked() => Entry::Refused,
+        _ if !terrain.open_to_hero() => Entry::Refused,
         _ => Entry::Rolls,
     }
 }
