@@ -12,15 +12,17 @@ async function ready(page: Page): Promise<void> {
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
 }
 
-async function click(page: Page, q: number, r: number): Promise<void> {
+/** The click through the game's own handler (window.__click): no raycast, no frames. A test pays the mouse path once, on `mouse`. */
+async function click(page: Page, q: number, r: number, mouse = false): Promise<void> {
+  if (!mouse) return page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [q, r]);
   const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
   await page.mouse.click(p.x, p.y);
 }
 
 /** Moves one marble: select it, then click the cell it goes to. */
-async function move(page: Page, from: [number, number], to: [number, number]): Promise<void> {
-  await click(page, ...from);
-  await click(page, ...to);
+async function move(page: Page, from: [number, number], to: [number, number], mouse = false): Promise<void> {
+  await click(page, ...from, mouse);
+  await click(page, ...to, mouse);
 }
 
 const plies = (page: Page) => page.evaluate(() => (window as any).__plies() as number);
@@ -58,7 +60,7 @@ test('a hot-seat game survives a reload', async ({ page }) => {
   const hud = page.locator('#hud');
   await move(page, [0, 2], [0, 1]); // Black
   await move(page, [0, -2], [0, -1]); // White
-  await move(page, [0, 1], [0, 0]); // Black
+  await move(page, [0, 1], [0, 0], true); // Black, by the mouse
   await expect(hud).toContainText('White to move');
   await expect.poll(() => savedPlies(page)).toBe(3);
   const before = await snapshot(page);
@@ -132,7 +134,7 @@ test('a game against the bot survives a reload, with the bot still playing White
 });
 
 test('a boss fight is not saved: a reload shows a new local game', async ({ page }) => {
-  await page.goto('./?bot=on');
+  await page.goto('./?bot=on&nodes=200');
   await ready(page);
   const hud = page.locator('#hud');
   await openModes(page);
@@ -175,7 +177,7 @@ const A = [1, 4, 0, 2, 0, 0, 0, 0]; // Black (0, 2) to its NW neighbour (0, 1)
 const save = (bot: boolean, moves: number[][], version = 1) => ({ version, mode: 'local', layout: 'standard', bot, moves });
 
 test('a game saved while the bot was thinking resumes with the bot reply', async ({ page }) => {
-  await page.goto('./?bot=on');
+  await page.goto('./?bot=on&nodes=200');
   await ready(page);
   await writeSave(page, save(true, [A]));
 
