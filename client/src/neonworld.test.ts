@@ -107,6 +107,21 @@ describe('the Open world view with the look (#1424)', () => {
     expect(view.scene.getObjectByName('lair-0')).toBeDefined();
   });
 
+  it('stands its cold sun back with the zoom, so the shadow keeps covering what the camera sees (#1478)', () => {
+    applyNeonWorld(true, palette);
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    let sun!: THREE.DirectionalLight;
+    view.scene.traverse((o) => void ((o as THREE.DirectionalLight).isDirectionalLight && (sun = o as THREE.DirectionalLight)));
+    view.setShadows(true);
+    view.zoomBy(6);
+    view.follow(0, true);
+    const k = view.drawnZoom;
+    expect(k).toBeGreaterThan(5);
+    expect(sun.position.clone().sub(view.focusPoint).toArray().map((v) => +v.toFixed(3))).toEqual(neonSunPosition(30 * k).map((v) => +v.toFixed(3)));
+    expect(sun.shadow.camera.right).toBeCloseTo(14 * k);
+  });
+
   it('is the game as it was without the look: no stars, the ship black, the arena sun', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([0, 0]);

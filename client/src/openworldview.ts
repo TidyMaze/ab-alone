@@ -13,7 +13,7 @@ import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
 import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
-import { SUN, aimSunShadow, sunPosition } from './tablezero';
+import { SUN, SUN_SHADOW, aimSunShadow, sunPosition } from './tablezero';
 import { NEON, lightNeon, neonSunPosition, neonStars, neonWorldOn } from './neonlook';
 import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
@@ -427,7 +427,8 @@ interface Move {
 }
 type Timing = Pick<Move, 'start' | 'span' | 'fall' | 'lunge'>;
 
-/** How far round the hero the sun's shadow reaches, in cells: the camera's near footprint at the closest zooms (#1364). */
+/** How far round the hero the sun's shadow reaches at the closest zoom, in cells: the camera's near footprint (#1364). The footprint
+ * grows with the zoom, so the shadow's square, its sun and its far plane grow with it (`fitShadow`, #1478): the same map, a softer shadow. */
 const SHADOW_REACH = 14;
 
 export class OpenWorldView {
@@ -441,6 +442,8 @@ export class OpenWorldView {
   private level = 1;
   /** The zoom drawn at the current turn: `level` as followed, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
   private drawnLevel = 1;
+  /** The factor the sun's shadow square, its distance and its far plane are scaled by: the drawn zoom, never under 1 (#1478). */
+  private shadowScale = 1;
   /** The widest zoom on the screen's aspect, see `maxZoomFor`. */
   private limit = maxZoomFor(1);
   /** The chunk the loaded square is centred on: kept while the square covers the hero's ball, else the hero's chunk (#1046). */
@@ -1213,7 +1216,18 @@ export class OpenWorldView {
   /** The sun's soft shadow round the hero, on the high tier (#1364). */
   setShadows(on: boolean): void {
     aimSunShadow(this.sun, on, SHADOW_REACH);
+    if (on) this.fitShadow();
     if (on && this.neon) this.sun.shadow.intensity = WORLD_SHADOW;
+  }
+
+  /** Scales the shadow camera to the zoom, so its edge stays past the camera's footprint at every zoom (#1478). The sun stands back by
+   * the same factor: the ground toward it must stay in front of its near plane. */
+  private fitShadow(): void {
+    if (!this.sun.castShadow) return;
+    const reach = SHADOW_REACH * this.shadowScale;
+    const cam = this.sun.shadow.camera;
+    Object.assign(cam, { left: -reach, right: reach, top: reach, bottom: -reach, far: SUN_SHADOW.far * this.shadowScale });
+    cam.updateProjectionMatrix();
   }
 
   /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the planes of the camera with
@@ -1225,8 +1239,13 @@ export class OpenWorldView {
     this.stripe.value = stripeStrength(k);
     this.widen.value = gapFill(k);
     lookAtHero(this.camera, at, k, this.yawNow);
+    const scale = Math.max(1, k);
+    if (scale !== this.shadowScale) {
+      this.shadowScale = scale;
+      this.fitShadow();
+    }
     this.sun.target.position.copy(at);
-    this.sun.position.copy(at).add(this.sunAway.set(...(this.neon ? neonSunPosition() : sunPosition())));
+    this.sun.position.copy(at).add(this.sunAway.set(...(this.neon ? neonSunPosition(30 * scale) : sunPosition(30 * scale))));
     this.stars?.position.copy(this.camera.position);
     this.heroXZ.value.set(at.x, at.z);
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.

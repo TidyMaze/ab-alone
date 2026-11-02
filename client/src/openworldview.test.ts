@@ -239,6 +239,28 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     expect(sun.castShadow).toBe(false);
   });
 
+  it('widens the sun\'s shadow with the zoom, so its rectangle stays past the screen at every zoom, and the sun keeps behind it (#1478)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([2, 1]);
+    let sun!: THREE.DirectionalLight;
+    view.scene.traverse((o) => void ((o as THREE.DirectionalLight).isDirectionalLight && (sun = o as THREE.DirectionalLight)));
+    view.setShadows(true);
+    const cam = sun.shadow.camera;
+    expect([cam.right, cam.left, cam.top, cam.bottom, cam.far]).toEqual([14, -14, 14, -14, 90]); // the closest zoom is as sharp as before
+    zoomed(view, MAX_ZOOM);
+    const k = view.drawnZoom;
+    expect(k).toBeGreaterThan(5);
+    expect([cam.right, cam.left, cam.top, cam.bottom]).toEqual([14 * k, -14 * k, 14 * k, -14 * k]);
+    expect(cam.far).toBeCloseTo(90 * k);
+    expect(sun.position.clone().sub(view.focusPoint).length()).toBeCloseTo(30 * k); // the sun stands back so the near plane clips nothing
+    zoomed(view, 1 / MAX_ZOOM);
+    expect([cam.right, sun.position.clone().sub(view.focusPoint).length()]).toEqual([14, expect.closeTo(30)]);
+    view.setShadows(false);
+    zoomed(view, MAX_ZOOM);
+    view.setShadows(true); // switched on at a wide zoom: it starts wide
+    expect(cam.right).toBeCloseTo(14 * view.drawnZoom);
+  });
+
   it('casts the shadows of the hero, the props, the marbles and the towers, on the ground, and not the ground nor the sparks (#1364)', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([2, 1]);
