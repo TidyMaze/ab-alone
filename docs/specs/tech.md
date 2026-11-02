@@ -576,9 +576,15 @@ visit. No dependency: a hand-written service worker and a build step that lists 
   every cache of the app, newest first, then the network, and a good answer is kept in the current
   cache. No other site is touched (signaling, STUN, any other host).
 - **Update:** each load calls `registration.update()` (Chrome does not check by itself on a
-  reload). After a deploy, the next load still runs the cached build, whole; the new worker
-  installs and takes over, and the page shows **New version: reload**. The following load (that
-  button or any refresh) runs the new build, whole. Each cache holds one build and every JS, CSS
+  reload), and so does an open tab when it comes back to the foreground and every 15 minutes
+  (#1437); offline or refused, the game goes on. The new worker installs and takes over, and the
+  page shows **New version: reload**. Nothing at stake: the page then reloads by itself, once per
+  build (`sessionStorage` key `ab-alone-auto-reload` holds the build the page ran; no storage, no
+  automatic reload). At stake, the button stays and the reload comes at the first moment nothing
+  is (`client/src/autoreload.ts`): an online room, the ranked queue, a boss fight, daily or lair,
+  a Battle royale, a rogue-lite or Trainer run, a replay, the Open world, the lobby sheet, a text
+  field in use. A local hot-seat or bot game is not at stake: it is saved on every move and
+  resumes (#218). The reloaded page runs the new build, whole. Each cache holds one build and every JS, CSS
   and wasm name carries its content hash, so a page never runs old JS with new wasm or the
   reverse. A page that loaded just before the update still finds its own files in the kept
   previous cache.

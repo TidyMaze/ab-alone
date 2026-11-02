@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encodeMove, moveForClick, parseMoves, type Axial } from './board';
 import { generateKeys, signCoordinator, signHello, type Report, type Wire } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
@@ -543,7 +543,41 @@ describe('Copy diagnostics', () => {
 });
 
 describe('The service worker', () => {
-  function worker(controller: object | null, register: () => Promise<{ update(): void }>) {
+  const reload = vi.fn();
+  // The page's intervals, kept by their period and run by hand: the stub comes after boot, before the registration answers.
+  const ticks = new Map<unknown, () => void>();
+  const holdIntervals = (): void => {
+    vi.stubGlobal('setInterval', (fn: () => void, ms: number) => {
+      ticks.set(ms, fn);
+      return ms;
+    });
+    vi.stubGlobal('clearInterval', (id: unknown) => void ticks.delete(id));
+  };
+  const typingIn = document.createElement('input');
+  const visibility = (state: string): void => void Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+  beforeEach(() => {
+    reload.mockReset();
+    const real = window.location;
+    vi.stubGlobal(
+      'location',
+      new Proxy({} as Location, {
+        get: (_, key) => {
+          if (key === 'reload') return reload;
+          const value = Reflect.get(real, key, real);
+          return typeof value === 'function' ? value.bind(real) : value;
+        },
+      }),
+    );
+    sessionStorage.clear();
+    typingIn.type = 'text';
+    ticks.clear();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    visibility('visible');
+    typingIn.remove();
+  });
+  function worker(controller: object | null, register: () => Promise<{ update(): Promise<void> | void }>) {
     const listeners: Record<string, () => void> = {};
     const addEventListener = (type: string, fn: () => void): void => void (listeners[type] = fn);
     const sw = { controller, register: vi.fn(register), addEventListener };
@@ -553,7 +587,7 @@ describe('The service worker', () => {
   }
 
   it('is registered on a first visit, and taking control then offers no reload', async () => {
-    const update = vi.fn();
+    const update = vi.fn(async () => {});
     const { sw, change } = worker(null, async () => ({ update }));
     const game = await boot('?bot=off');
     await game.settle();
@@ -563,14 +597,76 @@ describe('The service worker', () => {
     expect(byId('update').hidden).toBe(true);
   });
 
-  it('checks for a new build on a later visit, and offers the reload when one takes over', async () => {
-    const update = vi.fn();
-    const { change } = worker({}, async () => ({ update }));
+  /** A later visit: the registration answers once the test holds the intervals. */
+  async function laterVisit(update: () => Promise<void>) {
+    let answer!: () => void;
+    const { change } = worker({}, () => new Promise((done) => (answer = () => done({ update }))));
     const game = await boot('?bot=off');
-    await game.settle();
+    holdIntervals();
+    document.body.append(typingIn);
+    answer();
+    await new Promise((done) => setTimeout(done));
+    return { change, game };
+  }
+
+  it('checks for a new build on a later visit, and offers the reload when one takes over', async () => {
+    const update = vi.fn(async () => {});
+    const { change } = await laterVisit(update);
     expect(update).toHaveBeenCalledOnce();
+    typingIn.focus(); // a field in use is at stake: the button shows and the reload waits
     change();
     expect(byId('update').hidden).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+    ticks.get(1000)!();
+    expect(reload).not.toHaveBeenCalled();
+    typingIn.blur();
+    ticks.get(1000)!();
+    expect(reload).toHaveBeenCalledOnce();
+    expect(ticks.has(1000)).toBe(false); // the wait ended
+  });
+
+  it('reloads at once when nothing is at stake, once per build', async () => {
+    const { change } = await laterVisit(async () => {});
+    change();
+    expect(reload).toHaveBeenCalledOnce();
+    change();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('does not reload a page that is still starting', async () => {
+    let change = (): void => {};
+    ({ change } = worker({}, () => {
+      change(); // the new build takes over before the start has ended
+      return Promise.resolve({ update: async () => {} });
+    }));
+    const game = await boot('?bot=off');
+    await game.settle();
+    expect(byId('update').hidden).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the button alone when the storage fails', async () => {
+    const { change } = await laterVisit(async () => {});
+    vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    change();
+    expect(byId('update').hidden).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('checks again when the tab comes back and every 15 minutes, and goes on when offline', async () => {
+    const update = vi.fn(() => Promise.reject(new Error('offline')));
+    await laterVisit(update);
+    update.mockClear();
+    visibility('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(update).not.toHaveBeenCalled();
+    visibility('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(update).toHaveBeenCalledOnce();
+    ticks.get(15 * 60_000)!();
+    expect(update).toHaveBeenCalledTimes(2);
   });
 
   it('lets the game go on when the registration is refused', async () => {

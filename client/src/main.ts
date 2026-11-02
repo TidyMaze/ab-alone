@@ -207,6 +207,7 @@ import { loadModels } from './openworldview';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
+import { atStake, claimReload } from './autoreload';
 import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
@@ -343,9 +344,19 @@ updateButton.addEventListener('click', () => location.reload());
 if (serviceWorker) {
   const updating = serviceWorker.controller !== null; // a first install takes control, it is no update
   serviceWorker.addEventListener('controllerchange', () => {
-    if (updating) updateButton.hidden = false;
+    if (!updating) return;
+    updateButton.hidden = false;
+    // The page reloads by itself as soon as nothing is at stake, once per build (#1437); the button stays meanwhile.
+    const reloadWhenFree = (): void => {
+      if (stakeNow()) return;
+      clearInterval(waiting);
+      if (claimReload(() => sessionStorage, __BUILD__)) location.reload();
+    };
+    const waiting = setInterval(reloadWhenFree, 1000);
+    reloadWhenFree();
   });
 }
+let stakeNow = (): boolean => true; // set at the end of the start, when the game's state exists: until then nothing reloads
 
 document.getElementById('boot-reload')!.addEventListener('click', () => location.reload());
 await init().catch(bootFailed);
@@ -6310,8 +6321,28 @@ copyButton.disabled = false; // listener ready (#146)
 if (serviceWorker) {
   serviceWorker
     .register(`${import.meta.env.BASE_URL}sw.js`)
-    .then((registration) => (serviceWorker.controller ? registration.update() : undefined))
+    .then((registration) => {
+      if (!serviceWorker.controller) return;
+      const check = (): void => void registration.update().catch(() => undefined);
+      check();
+      // An open tab learns of a new build when it comes back to the foreground and every 15 minutes (#1437).
+      document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+      setInterval(check, 15 * 60_000);
+    })
     .catch(() => undefined);
+  stakeNow = () =>
+    atStake({
+      online: online !== null,
+      ranked: rankedMode !== null,
+      fight: fight !== null,
+      royale: royale !== null,
+      run: run !== null,
+      trainer: trainer !== null,
+      replaying: replaying !== null,
+      openWorld: openWorld.active,
+      sheetOpen: lobbyOpen,
+      typing: document.activeElement instanceof HTMLTextAreaElement || (document.activeElement instanceof HTMLInputElement && !document.activeElement.readOnly && document.activeElement.type === 'text'),
+    });
 }
 
 refresh();

@@ -104,3 +104,26 @@ test('the dev server registers no service worker', async ({ page }) => {
   );
   expect(registered).toBe('none');
 });
+
+test('a new build reloads the idle page once, never twice (#1437)', async ({ page, context }) => {
+  await serveFonts(context);
+  await page.goto(process.env.E2E_PREVIEW_URL!);
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  await page.reload(); // now the page started under a controller: a takeover is an update
+  await page.locator('canvas').waitFor();
+  const takeover = () => page.evaluate(() => navigator.serviceWorker.dispatchEvent(new Event('controllerchange')));
+  const marker = () => page.evaluate(() => (window as any).__marker as string | undefined);
+
+  // Nothing at stake: the page reloads at once (a fresh window has no marker).
+  await page.evaluate(() => ((window as any).__marker = 'old'));
+  await Promise.all([page.waitForEvent('load'), takeover().catch(() => undefined)]); // the reload may cut the evaluate short
+  await page.locator('canvas').waitFor();
+  expect(await marker()).toBeUndefined();
+
+  // One reload per build: the second takeover of the same build keeps the page, the button stays.
+  await page.evaluate(() => ((window as any).__marker = 'old'));
+  await takeover();
+  await expect(page.locator('#update')).toHaveJSProperty('hidden', false); // in the Modes menu, shown once it opens
+  await page.waitForTimeout(1500);
+  expect(await marker()).toBe('old');
+});
