@@ -35,7 +35,8 @@ export interface MapNode {
  * the fight's board `[q, r, kind]`, `reward` is on while the reward of a won fight waits to be picked, and `event` while
  * the choice of an event node waits (#800). `best` is the most acts won in one run before this one, which unlocks its
  * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
- * `relic` is on while a relic offer waits to be taken (#1457). `rest` is on while a rest site's choice waits (#1458). */
+ * `relic` is on while a relic offer waits to be taken (#1457). `rest` is on while a rest site's choice waits (#1458).
+ * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). */
 export interface Run {
   seed: number;
   army: number;
@@ -51,6 +52,7 @@ export interface Run {
   relics: number[];
   relic: boolean;
   rest: boolean;
+  tactics: number[];
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -91,6 +93,24 @@ const has = (run: Run, relic: number): boolean => run.relics.includes(relic);
 export const relicMask = (run: Run): number => run.relics.reduce((mask, r) => mask | (1 << r), 0);
 /** The relics the run does not hold yet, by code: no relic twice in a run. */
 const unheld = (run: Run): number[] => RELICS.flatMap((_, code) => (has(run, code) ? [] : [code]));
+
+/** At most this many tactics held at once (#1460). */
+export const MAX_TACTICS = 3;
+/** The tactics (#1460, docs/specs/roguelite.md section 11) by their code less 1 on the bridge (Engine.play's tactic
+ * records): a name, a one-line rule and a glyph, an SVG path in a 24 unit square drawn as a line. */
+export const TACTICS: readonly { name: string; help: string; icon: string }[] = [
+  { name: 'Reinforce', help: 'a marble joins the first free cell of your back row', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 8v8M8 12h8' },
+  { name: 'Freeze', help: 'the bot skips its next turn', icon: 'M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9' },
+  { name: 'Swap', help: 'two of your marbles trade places, it costs your move', icon: 'M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4' },
+  { name: 'Fall back', help: 'undo your last move and the bot\'s answer', icon: 'M9 5L4 10l5 5M4 10h10a6 6 0 0 1 0 12h-3' },
+];
+/** The move record of tactic `code`; a Swap names its two cells. It starts with a 0, where a move has its marble count. */
+export const tacticRecord = (code: number, a: Axial = [0, 0], b: Axial = [0, 0]): number[] => [0, code, a[0], a[1], b[0], b[1], 0, 0];
+/** The run once one tactic `code` is used: it is gone. Unchanged when the run holds none. */
+export function useTactic(run: Run, code: number): Run {
+  const i = run.tactics.indexOf(code);
+  return i < 0 ? run : { ...run, tactics: run.tactics.filter((_, k) => k !== i) };
+}
 
 /** The `+` of an upgraded type's glyph (#1458): the shell's near-black, 3:1 on every glyph colour as they are on it. */
 export const PLUS_INK = SHELL.color;
@@ -169,6 +189,7 @@ export const newRun = (seed: number, best: number): Run => ({
   relics: [],
   relic: false,
   rest: false,
+  tactics: [],
 });
 
 /** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
@@ -277,7 +298,8 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
 }
 
 /** An event (#800): its title and text, and the trade it offers: `army` marbles more or less (up to START_ARMY), `gain`
- * special marbles of each type, and `lose` one special marble (in the order FALL). */
+ * special marbles of each type, `lose` one special marble (in the order FALL), and `tactic` one tactic (#1460), dealt by
+ * the run seed and the node: `{tactic}` in `take` is its name. */
 export interface RunEvent {
   title: string;
   text: string;
@@ -285,13 +307,15 @@ export interface RunEvent {
   army: number;
   gain: number[];
   lose: boolean;
+  tactic: boolean;
 }
 export const EVENTS: readonly RunEvent[] = [
-  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: [1, 0, 0, 0, 0, 0], lose: false },
-  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: [0, 1, 0, 0, 0, 0], lose: false },
-  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: [0, 0, 1, 0, 0, 0], lose: false },
-  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: [0, 0, 2, 0, 0, 0], lose: false },
-  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: [0, 0, 0, 0, 0, 0], lose: true },
+  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: [1, 0, 0, 0, 0, 0], lose: false, tactic: false },
+  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: [0, 1, 0, 0, 0, 0], lose: false, tactic: false },
+  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: [0, 0, 1, 0, 0, 0], lose: false, tactic: false },
+  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: [0, 0, 2, 0, 0, 0], lose: false, tactic: false },
+  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: [0, 0, 0, 0, 0, 0], lose: true, tactic: false },
+  { title: 'Field manual', text: 'A battered manual of old tricks lies open.', take: 'Learn {tactic} · lose 1 marble', army: -1, gain: [0, 0, 0, 0, 0, 0], lose: false, tactic: true },
 ];
 
 /** The event of the run's last node while its choice waits, seeded by the run seed and the node, else null. */
@@ -299,6 +323,9 @@ export function eventOf(run: Run): RunEvent | null {
   const pool = EVENTS.filter((e) => e.gain.every((g, k) => !g || kindOn(run, k + 1))); // the unlocked types only (#801)
   return run.event ? pool[hash(run.seed, run.path[run.path.length - 1]! * 8 + 4) % pool.length]! : null;
 }
+
+/** The tactic a Field manual teaches at the run's last node: a code, dealt by the run seed and the node. */
+const taught = (run: Run): number => 1 + (hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 7), 2) % TACTICS.length);
 
 /** The run once the trade of `e` is taken, or null when the army cannot pay it (below MIN_ARMY, no special marble to
  * lose, more special marbles than marbles) or would gain nothing. */
@@ -308,8 +335,10 @@ export function takeEvent(run: Run, e: RunEvent): Run | null {
   const lost = FALL.find((k) => e.lose && specials[k]! > 0);
   if (lost !== undefined) specials[lost]! -= 1;
   const paid = !e.lose || lost !== undefined;
-  const gained = army > run.army || sum(specials) > sum(run.specials);
-  return paid && gained && army >= MIN_ARMY && sum(specials) <= army ? { ...run, army, specials } : null;
+  const room = e.tactic && run.tactics.length < MAX_TACTICS;
+  const gained = army > run.army || sum(specials) > sum(run.specials) || room;
+  const tactics = room ? [...run.tactics, taught(run)] : run.tactics;
+  return paid && gained && army >= MIN_ARMY && sum(specials) <= army ? { ...run, army, specials, tactics } : null;
 }
 
 /** The run once its event is resolved: its trade `taken` (unchanged when it cannot be paid) or left. */
@@ -349,7 +378,7 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   }
   const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '' };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
-  return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 };
+  return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
 
 /** A 32-bit hash of two integers (murmur3's finaliser): the reward offers' only randomness. */
@@ -371,6 +400,18 @@ export function offers(run: Run): number[] {
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
   return pool.slice(0, has(run, Relic.LuckyCoin) ? 4 : 3);
+}
+
+/** The tactic a won fight also offers (#1460): its code, dealt by the run seed and the node, or 0 when no reward waits or
+ * the hand is full. The other offers are the same as before it. */
+export function tacticOffer(run: Run): number {
+  return run.reward && run.tactics.length < MAX_TACTICS ? 1 + (hash(run.seed, run.path[run.path.length - 1]! * 8 + 7) % TACTICS.length) : 0;
+}
+
+/** The run once the tactic offered is taken in place of the other rewards. */
+export function claimTactic(run: Run): Run {
+  const code = tacticOffer(run);
+  return code ? { ...run, tactics: [...run.tactics, code], reward: false } : run;
 }
 
 /** The relics a waiting offer holds (#1457): 3 after an act boss, 1 after an elite or in a treasure, of those the run
@@ -546,6 +587,8 @@ export function placeHtml(run: Run, armed: number): string {
 export function rewardHtml(map: MapNode[], run: Run): string {
   const label = (offer: number): string => (offer ? `${SPECIAL_LOOKS[offer - 1]!.name}: ${SPECIAL_LOOKS[offer - 1]!.help}` : 'One more marble');
   const buttons = offers(run).map((o) => `<button type="button" data-offer="${o}">${glyph(o)}${label(o)}</button>`);
+  const tactic = tacticOffer(run);
+  if (tactic) buttons.push(`<button type="button" data-tactic-offer="${tactic}">${lineGlyph(TACTICS[tactic - 1]!.icon)}${tacticText(tactic)}</button>`);
   const title = lastNode(map, run)?.kind === 'elite' ? `Elite beaten · up to ${ELITE_MARBLES} marbles back` : 'Fight won';
   return `<p class="run-line">${title} · pick a reward</p><div class="run-kinds">${buttons.join('')}</div>`;
 }
@@ -570,7 +613,8 @@ export function restHtml(run: Run): string {
 export function eventHtml(run: Run): string {
   const e = eventOf(run)!;
   const bargain = e.army < 0 && has(run, Relic.Bargain) ? ' · Bargain: 1 marble less' : '';
-  const take = `<button type="button" data-choice="1"${takeEvent(run, e) ? '' : ' disabled'}>${e.take}${bargain}</button>`;
+  const name = e.tactic ? TACTICS[taught(run) - 1]!.name : '';
+  const take = `<button type="button" data-choice="1"${takeEvent(run, e) ? '' : ' disabled'}>${e.take.replace('{tactic}', name)}${bargain}</button>`;
   return (
     `<p class="run-line">Event · ${e.title}</p><p class="run-help">${e.text}</p>` +
     `<div class="run-kinds">${take}<button type="button" data-choice="0">Leave</button></div>`
@@ -578,8 +622,10 @@ export function eventHtml(run: Run): string {
 }
 
 /** A relic's glyph: its icon drawn as a line in the text's colour. */
-const relicGlyph = (code: number): string =>
-  `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="${RELICS[code]!.icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const lineGlyph = (icon: string): string =>
+  `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const relicGlyph = (code: number): string => lineGlyph(RELICS[code]!.icon);
+const tacticText = (code: number): string => `${TACTICS[code - 1]!.name}: ${TACTICS[code - 1]!.help}`;
 const relicText = (code: number): string => `${RELICS[code]!.name}: ${RELICS[code]!.help}`;
 
 /** The relic screen (#1457): a treasure's relic, an elite's, or the act boss's 3 to pick from, a button each. */
@@ -595,6 +641,18 @@ export function relicHtml(map: MapNode[], run: Run): string {
 export function relicBarHtml(run: Run): string {
   const glyphs = run.relics.map((r) => `<span class="relic" role="img" tabindex="0" title="${relicText(r)}" aria-label="${relicText(r)}">${relicGlyph(r)}</span>`);
   return glyphs.length ? `<div class="relics" role="group" aria-label="Relics">${glyphs.join('')}</div>` : '';
+}
+
+/** The tactic bar (#1460), in the HUD of a fight: a glyph button per tactic held, its name and rule as its tooltip, disabled
+ * when `mask` (Engine.tactics, bit code - 1) says the engine cannot play it now; the Swap pressed while its cells are being
+ * picked (`swapping`). Nothing when none is held. */
+export function tacticBarHtml(run: Run, mask: number, swapping: boolean): string {
+  const buttons = run.tactics.map(
+    (code) =>
+      `<button type="button" class="tactic" data-tactic="${code}" title="${tacticText(code)}" aria-label="${tacticText(code)}" aria-pressed="${swapping && code === 3}"` +
+      `${mask & (1 << (code - 1)) ? '' : ' disabled'}>${lineGlyph(TACTICS[code - 1]!.icon)}</button>`,
+  );
+  return buttons.length ? `<div class="tactics" role="group" aria-label="Tactics">${buttons.join('')}</div>` : '';
 }
 
 /** The map screen: the run line, the unlocks and starting armies before the first pick, the nodes act by act from the
@@ -641,7 +699,7 @@ const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.l
  * upgrades (#1458) no upgraded special marble and no rest site waiting. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [] } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -660,9 +718,12 @@ function decodeRun(raw: unknown): Run | null {
     Array.isArray(relics) &&
     relics.every((r, i) => isInt(r, RELICS.length - 1) && relics.indexOf(r) === i) &&
     typeof relic === 'boolean' &&
-    typeof rest === 'boolean';
+    typeof rest === 'boolean' &&
+    Array.isArray(tactics) &&
+    tactics.length <= MAX_TACTICS &&
+    tactics.every((t) => isInt(t, TACTICS.length) && t > 0);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics }
     : null;
 }
 

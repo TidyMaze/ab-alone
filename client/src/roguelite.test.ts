@@ -913,7 +913,7 @@ describe('roguelite tactics', () => {
     const take = parse(eventHtml(event)).querySelector('button[data-choice="1"]')!;
     expect(take.textContent).toBe(`Learn ${TACTICS[code - 1]!.name} · lose 1 marble`);
     expect(parse(eventHtml({ ...event, tactics: [1, 1, 1] })).querySelector<HTMLButtonElement>('button[data-choice="1"]')!.disabled).toBe(true);
-    const codes = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].flatMap((n) => (eventOf({ ...run, seed: n })!.tactic ? [takeEvent({ ...run, seed: n }, manual)!.tactics[0]] : [])));
+    const codes = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => takeEvent({ ...run, seed: n }, manual)!.tactics[0]));
     expect(codes.size).toBeGreaterThan(1); // other seeds, other tactics
   });
 
@@ -935,7 +935,7 @@ describe('roguelite tactics', () => {
 
   it('the glyph of a tactic reads 3 to 1 on the HUD plate in both themes', () => {
     const ratio = (fg: string, bg: string): number => {
-      const rgb = (hex: string): RGB => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as RGB;
+      const rgb = (hex: string): RGB => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as unknown as RGB;
       return contrastRatio(rgb(fg), rgb(bg));
     };
     expect(ratio('#7fd6e8', '#161a1d')).toBeGreaterThanOrEqual(3); // --accent on --panel, dark
