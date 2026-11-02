@@ -15,7 +15,8 @@ The short version:
    through a PR and merge when green.
 3. Strict TDD: failing test first, then code. Unit tests cover 100 % of all code (lines and regions
    for Rust, decision #445). Unit and e2e tests.
-   Every e2e test passes in under 15 s and fails beyond (Playwright timeout 15 s); a slower one is
+   Every e2e test passes in under 15 s locally and fails beyond (Playwright timeout 15 s, 45 s on the
+   GPU-less CI runners, #1436); a slower one is
    made cheaper (test hook instead of clicking through) or its logic becomes a fast unit test.
    An e2e test loads the full game state it needs (test hook on the game file import) instead of
    replaying steps that other e2e tests already cover.

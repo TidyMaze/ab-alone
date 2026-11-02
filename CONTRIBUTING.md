@@ -394,7 +394,7 @@ use. Drive it like an e2e test: `game.click(q, r)`, the page hooks through `game
 |---|---|---|
 | Every push | The e2e specs of what changed, run locally before the push (section 13) | Builder |
 | Every hour | The full Playwright e2e suite on Chromium, in CI, when `main` moved (`.github/workflows/e2e-hourly.yml`, decision #1433, which replaces the "full suite before every merge" of #445). A red spec gets a `bug` issue the same day (AGENTS rule 14) | CI |
-| Every e2e test | Passes in **under 15 s**, and a test that runs longer **fails**: the Playwright test timeout is 15 s (#349). A slower test is made cheaper (reach the state through a test hook instead of clicking through, smaller setup) or its logic moves to a fast unit test, keeping one thin e2e for the browser wiring (#349). **A test loads the full game state it needs** (a position, a boss phase, a finished game) through one test hook built on the game file import (#219) instead of replaying steps that other e2e tests already cover | Author |
+| Every e2e test | Passes in **under 15 s** locally, and a test that runs longer **fails**: the Playwright test timeout is 15 s (45 s on CI, whose runners have no GPU, #1436) (#349). A slower test is made cheaper (reach the state through a test hook instead of clicking through, smaller setup) or its logic moves to a fast unit test, keeping one thin e2e for the browser wiring (#349). **A test loads the full game state it needs** (a position, a boss phase, a finished game) through one test hook built on the game file import (#219) instead of replaying steps that other e2e tests already cover | Author |
 | Before pushing a player-facing change | Open the build in a real browser, play the changed flow, note the result in the issue comment | The lead agent (Playwright) or an owner |
 | Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
 
@@ -512,7 +512,7 @@ network outage never holds a page load (bug #585). Start a new run to test a cha
 
 - The contrast checks (tag `@contrast`: `contrast.spec.ts` and the three ratio tests of `target-arrows.spec.ts`) are not in `bun run e2e`:
   the art director owns the ratios. `bun run e2e:contrast` (from `client/`) runs them as a report. A test that passes on its one
-  retry shows as flaky, not red; waits on a state get 10 s, a test still fails at 15 s (#1383).
+  retry shows as flaky, not red; waits on a state get 10 s, a test still fails at 15 s (#1383); on CI 30 s and 45 s (#1436).
 - The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:
 
   ```

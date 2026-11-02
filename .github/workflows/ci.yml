@@ -287,7 +287,7 @@ jobs:
   e2e:
     needs: wasm
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

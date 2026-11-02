@@ -47,12 +47,13 @@ export default defineConfig({
   workers: process.env.CI ? 1 : 4,
   // CI splits the suite across runners with --shard (#257), test by test (scripts/shard-reporter.ts, #333).
   fullyParallel: !!process.env.CI,
-  // Every e2e test passes in under 15 s, locally and on CI, and a slower one fails (CONTRIBUTING.md, #349).
+  // Every e2e test passes in under 15 s locally, and a slower one fails (CONTRIBUTING.md, #349).
   // No test.slow() or test.setTimeout() override: a test that needs more is made cheaper.
-  timeout: 15_000,
+  // CI runners have no GPU: an Open world page takes too long on software WebGL, 41 specs timed out at 15 s (#1436, owner: longer on CI).
+  timeout: process.env.CI ? 45_000 : 15_000,
   // A wait on a state (expect, expect.poll) gets 10 s instead of 5 s: under 4 workers a page took more than 5 s to build the Open world (#1383).
-  // The test itself still fails at 15 s.
-  expect: { timeout: 10_000 },
+  // The test itself still fails at 15 s locally.
+  expect: { timeout: process.env.CI ? 30_000 : 10_000 },
   // One retry, locally too: a test that passes on the retry is reported flaky, not red (#1383). The trace of the retried run is kept.
   retries: 1,
   // No service worker outside the offline spec: a cache left by one test must never serve another (#193).
