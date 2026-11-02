@@ -1828,6 +1828,9 @@ const armyGlyphs = [
   new THREE.TorusGeometry(0.07, 0.025, 8, 16),
   new THREE.BoxGeometry(0.13, 0.13, 0.13),
 ].map((glyph) => glyph.scale(neonTell.glyph, neonTell.glyph, neonTell.glyph));
+const armyHalos = armyGlyphs.map((glyph) => glyph.clone().scale(1.7, 1.7, 1.7)); // the Bone outline behind the neon look's near-black glyph
+const choirInk = new THREE.MeshBasicMaterial({ color: 0x15191c });
+const choirHalo = Object.assign(new THREE.MeshBasicMaterial({ side: THREE.BackSide, toneMapped: false }), { color: paleMaterial.color }); // the pale tell colour, shared: only the back faces of the larger shape show, an outline round the glyph
 // The Overseer (#635, game-design.md section 7.11): a dark hexagonal pedestal with a pale eye on the centre cell; a core
 // is a pale marble with a dark eye on top, a shape and not a colour; a vent wears a warm disc crossed by dark slots on
 // its cell. A burning marble sinks into its vent where it stands (overseer.ts).
@@ -3995,11 +3998,19 @@ function refresh(): void {
   });
   for (const { cell, army } of armies) {
     const p = axialTo3D(cell[0], cell[1]);
-    const glyph = new THREE.Mesh(armyGlyphs[army], paleMaterial);
+    // Under the neon look the glyph is near black over a Bone outline a third larger (the Chaplain's rule, #1374): it reads on the pale and the dark shell alike.
+    const glyph = new THREE.Mesh(armyGlyphs[army], neonLook ? choirInk : paleMaterial);
     glyph.position.set(p.x, 0.76, p.z);
     if (army === 1) glyph.rotation.x = Math.PI / 2; // the ring lies flat, read from above
     marbles.add(glyph);
     onMarble(cellIndex(cell[0], cell[1]), glyph);
+    if (neonLook) {
+      const halo = new THREE.Mesh(armyHalos[army], choirHalo);
+      halo.position.copy(glyph.position);
+      halo.rotation.copy(glyph.rotation);
+      marbles.add(halo);
+      onMarble(cellIndex(cell[0], cell[1]), halo);
+    }
     if (army !== next) continue;
     const ring = new THREE.Mesh(outlineGeometry, paleMaterial);
     ring.rotation.x = Math.PI / 2;

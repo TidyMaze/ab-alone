@@ -387,6 +387,11 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   :is(.setting-volume, .setting-lights) span { flex: none; }
   :is(.setting-volume, .setting-lights) input { width: auto; flex: 1 1 auto; min-width: 0; height: 2rem; }
 }
+/* Held upright, the volume page lays its four sliders two by two: two rows of 44 px reach the board's top row of cells no more (the bigger neon board, #1424). */
+@media (orientation: portrait) {
+  #settings-menu[data-page='volume'] { display: grid; grid-template-columns: 1fr 1fr; }
+  #settings-menu[data-page='volume'] > .setting-volume { grid-column: auto; min-width: 0; }
+}
 /* Held upright, or in a narrow or short window, each item is its icon only, a 44 px square, so every item fits without
    reaching the board (#414): the name is its aria-label and title. Roomy windows keep icon then label. */
 @media (orientation: portrait), (max-width: 1100px), (max-height: 500px) {

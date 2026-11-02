@@ -244,7 +244,7 @@ export const NEON_TELL = {
   /** The tube of the rings round a marble or on a cell (the game's is 0.025). */
   ringTube: 0.11,
   /** The Choir's glyphs and the Rail Yard's chevrons, drawn this much larger. */
-  glyph: 3.2,
+  glyph: 1,
   chevron: 2.4,
   /** The Alien's counter plate, drawn this much larger. */
   plate: 2.2,

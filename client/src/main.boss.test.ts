@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import * as THREE from 'three';
 import type { Axial } from './board';
 import { dailyFor, dailyTitle, utcDay } from './daily';
 import { CONVERTED_AT, EXPLODED_AT, SEED } from './test/chaplain-game';
@@ -608,6 +609,34 @@ describe('main.ts boss tells', () => {
     expect(byId('hud').querySelector('.boss .tell')!.textContent).toBe('Next army: Tenor');
     expect(cues(game)).toEqual(['choir', 'choir']); // once more for Tenor, not for the human move
   }, 60_000);
+
+  it.each([
+    ['', 18],
+    ['&look=terrace', 0],
+  ])('The Choir glyphs under the neon look are near black over a Bone outline 1.7 times larger (#1424), boot %s: %i', async (look, count) => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    const spy = vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene && !scene) scene = this;
+      return add.apply(this, objects);
+    });
+    onTestFinished(() => spy.mockRestore());
+    const game = await boot(`?bot=off${look}`, { reducedMotion: true });
+    gesture();
+    fightBoss(game, 'The Choir');
+    game.frame(100);
+    const meshes: THREE.Mesh[] = [];
+    scene!.traverse((o) => o instanceof THREE.Mesh && meshes.push(o));
+    const ink = meshes.filter((m) => (m.material as THREE.MeshBasicMaterial).color?.getHex() === 0x15191c && m.geometry.type !== 'ShapeGeometry');
+    const army = ink.filter((m) => ['ConeGeometry', 'TorusGeometry', 'BoxGeometry'].includes(m.geometry.type));
+    expect(army).toHaveLength(count);
+    if (count) {
+      const halos = meshes.filter((m) => army[0]!.geometry.type === m.geometry.type && (m.material as THREE.MeshBasicMaterial).color.getHex() !== 0x15191c && m.position.y === 0.76);
+      expect(halos.length).toBeGreaterThan(0);
+      const [a, h] = [army[0]!.geometry, halos[0]!.geometry].map((g) => (g.computeBoundingBox(), g.boundingBox!.max.y));
+      expect(h! / a!).toBeCloseTo(1.7, 5);
+    }
+  });
 
   it('The Choir sinks the army it removed after the push, a marble at a time (#747)', async () => {
     const game = await boot('?bot=off');
