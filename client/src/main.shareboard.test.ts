@@ -189,11 +189,17 @@ describe('shared board opt-in', () => {
       engine.play(mv);
       moves.push([...mv]);
     }
-    const result = (game: string, name: string, status: number): string =>
-      JSON.stringify({ v: 1, game, black: { pub: 'A', name }, white: { pub: 'B', name: 'Bob' }, moves, status, ejected: [engine.ejected(1), engine.ejected(2)], ts: 5 });
+    const { generateKeys } = await import('./moverecord');
+    const { signResult } = await import('./boardfeed');
+    const [ka, kb] = [await generateKeys(), await generateKeys()];
+    const result = async (game: string, name: string, status: number, signedBy = true): Promise<string> => {
+      const r = { v: 1 as const, game, black: { pub: ka.pub, name }, white: { pub: kb.pub, name: 'Bob' }, moves, status, ejected: [engine.ejected(1), engine.ejected(2)] as [number, number], ts: 5 };
+      return JSON.stringify({ ...r, sigs: signedBy ? { black: await signResult(ka, r), white: await signResult(kb, r) } : { black: 'x', white: 'y' } });
+    };
     const lie = engine.status() === 1 ? 2 : 1;
+    const contents = [await result('g1', '<i>Ann</i>', engine.status()), await result('g2', 'Liar', lie), await result('g3', 'Unsigned', engine.status(), false)];
     FakeSocket.serve = (s) => {
-      for (const content of [result('g1', '<i>Ann</i>', engine.status()), result('g2', 'Liar', lie)]) {
+      for (const content of contents) {
         s.emit('message', JSON.stringify(['EVENT', 'ab-board', { kind: 1, tags: [['t', 'ab-alone-ranked']], content }]));
       }
       s.emit('message', JSON.stringify(['EOSE', 'ab-board']));
@@ -216,6 +222,7 @@ describe('shared board opt-in', () => {
     expect(byId('board-shared').textContent).toContain('<i>Ann</i>'); // as text
     expect(byId('board-shared').innerHTML).toContain('&lt;i&gt;');
     expect(byId('board-shared').textContent).not.toContain('Liar');
+    expect(byId('board-shared').textContent).not.toContain('Unsigned');
     expect(byId('board-shared').hidden).toBe(false);
     for (const s of FakeSocket.all) expect(s.sent.map((m) => (JSON.parse(m) as string[])[0])).toEqual(['REQ', 'CLOSE']);
     // Opened again at once, only the last read is shown: the older answer comes back late and is dropped.
