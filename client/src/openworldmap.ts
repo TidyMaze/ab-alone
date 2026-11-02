@@ -1,10 +1,11 @@
 // The map of the Open world (#1411, docs/specs/openworld.md section 9): the cells discovered so far, full screen over the world, drawn by
 // the minimap's drawing (`drawMap`) on a canvas of the window's size. A drag pans it, the wheel and a pinch zoom it; the mode opens and
-// closes it, and hands it the data. A click on a cell goes to `pick`, for what a click on the map will do (the teleporters of #1412).
+// closes it, and hands it the data. A click on a cell goes to `pick`. Opened for the choice of a teleporter (#1412), it says so in a
+// caption and rings the teleporter nearest its middle, which the keys and the pad pick (`chosen`).
 import type { Axial } from './board';
 import { pinchScale, wheelScale } from './camera';
 import { cellAtPoint } from './openworld';
-import { drawMap, groundOffset, type MinimapData } from './openworldminimap';
+import { drawMap, groundOffset, screenOffset, type MinimapData } from './openworldminimap';
 
 /** The px a cell takes when the map opens, and the bounds of its zoom: the widest view keeps the cells to draw in the hundred thousands. */
 export const UNIT = 8;
@@ -21,6 +22,11 @@ export class WorldMap {
    * leaves the map alone. */
   private readonly root = document.createElement('div');
   private readonly canvas = document.createElement('canvas');
+  /** The line over the map in the choice of a teleporter: what to do, or why the pick was refused. */
+  private readonly caption = document.createElement('p');
+  /** Whether the map is open for the choice of a teleporter, and the one it would pick, nearest its middle. */
+  choosing = false;
+  private choice: Axial | null = null;
   /** The cell in the middle of the map, fractions allowed, the px a cell takes, and the camera's yaw the map was last drawn in. */
   private centre: Axial = [0, 0];
   private unit = UNIT;
@@ -28,14 +34,16 @@ export class WorldMap {
   private readonly pointers = new Map<number, { x: number; y: number }>();
   /** How far the press under way has moved, in px: past CLICK_PX it is no click. */
   private travel = 0;
-  /** A click on a cell of the map: nothing yet. */
+  /** A click on a cell of the map: nothing by default. */
   pick: (cell: Axial) => void = () => {};
 
   constructor(private readonly source: MapSource) {
     this.root.id = 'openworld-map';
     this.root.setAttribute('role', 'img');
     this.root.setAttribute('aria-label', 'Map of the Open world');
-    this.root.append(this.canvas);
+    this.caption.id = 'openworld-map-note';
+    this.caption.setAttribute('role', 'status');
+    this.root.append(this.canvas, this.caption);
     this.root.addEventListener('pointerdown', (e) => this.down(e));
     this.root.addEventListener('pointermove', (e) => this.move(e));
     this.root.addEventListener('pointerup', (e) => this.up(e));
@@ -54,12 +62,26 @@ export class WorldMap {
     return this.root.isConnected;
   }
 
-  /** Opens the map over the page, on `hero`, at the default zoom, on a `width` x `height` px canvas. */
-  open(hero: Axial, width: number, height: number): void {
+  /** Opens the map over the page, on `hero`, at the default zoom, on a `width` x `height` px canvas; `choose` for the choice of a
+   * teleporter. */
+  open(hero: Axial, width: number, height: number, choose = false): void {
     this.centre = [...hero];
     this.unit = UNIT;
+    this.choosing = choose;
+    this.caption.hidden = !choose;
+    this.caption.textContent = choose ? 'Choose a teleporter' : '';
     document.body.append(this.root);
     this.resize(width, height);
+  }
+
+  /** The teleporter the choice would pick: the one nearest the middle of the map, the hero's left out; none outside the choice. */
+  get chosen(): Axial | null {
+    return this.choice;
+  }
+
+  /** Writes `text` in the caption: why a pick was refused. */
+  note(text: string): void {
+    this.caption.textContent = text;
   }
 
   close(): void {
@@ -94,7 +116,10 @@ export class WorldMap {
     const radius = Math.ceil(Math.hypot(width, height) / 2 / this.unit / (Math.sqrt(3) / 2)) + 2; // the disc that holds the corners
     const data = this.source([Math.round(this.centre[0]) + 0, Math.round(this.centre[1]) + 0], radius);
     this.yaw = data.yaw;
-    drawMap(ctx, { width, height, centre: this.centre, unit: this.unit, round: false }, data);
+    const away = (cell: Axial): number => Math.hypot(...Object.values(screenOffset(this.centre, cell, 0)));
+    const others = data.teleporters.filter((t) => t[0] !== data.hero[0] || t[1] !== data.hero[1]);
+    this.choice = this.choosing ? (others.sort((a, b) => away(a) - away(b))[0] ?? null) : null;
+    drawMap(ctx, { width, height, centre: this.centre, unit: this.unit, round: false }, { ...data, chosen: this.choice });
   }
 
   /** The cell under the point `x`, `y` of the window. */

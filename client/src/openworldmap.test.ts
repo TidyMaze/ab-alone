@@ -24,7 +24,7 @@ function source(over: Partial<MinimapData> = {}) {
   const asked: { centre: Axial; radius: number }[] = [];
   const read = (centre: Axial, radius: number): MinimapData => {
     asked.push({ centre, radius });
-    return { cells: [[0, 0, 'sand']], hero: [0, 0], troop: [], enemies: [], lairs: [], yaw: 0, ...over };
+    return { cells: [[0, 0, 'sand']], hero: [0, 0], troop: [], enemies: [], lairs: [], teleporters: [], yaw: 0, ...over };
   };
   return { asked, read, last: () => asked[asked.length - 1]! };
 }
@@ -143,6 +143,32 @@ describe('WorldMap', () => {
     pointer('pointercancel', root, 10, 10);
     pointer('pointermove', root, 50, 50);
     expect(src.asked).toHaveLength(asks);
+  });
+
+  it('opens in the choice of a teleporter (#1412): a caption says so, and the teleporter nearest its middle, the hero\'s left out, is chosen', () => {
+    const { map, root, src } = opened({ teleporters: [[0, 0], [9, 0], [-20, 0]] });
+    const caption = root.querySelector<HTMLElement>('#openworld-map-note')!;
+    expect(caption.hidden).toBe(true);
+    expect([map.choosing, map.chosen]).toEqual([false, null]);
+    map.open([0, 0], W, H, true);
+    expect(caption.hidden).toBe(false);
+    expect(caption.textContent).toBe('Choose a teleporter');
+    expect(caption.getAttribute('role')).toBe('status');
+    expect([map.choosing, map.chosen]).toEqual([true, [9, 0]]);
+    map.pan(15 * UNIT, 0); // the middle moves 15 cells west
+    expect(map.chosen).toEqual([-20, 0]);
+    map.note('Not discovered yet');
+    expect(caption.textContent).toBe('Not discovered yet');
+    map.close();
+    map.open([0, 0], W, H);
+    expect([caption.hidden, map.choosing, map.chosen]).toEqual([true, false, null]);
+    expect(src.asked.length).toBeGreaterThan(0);
+  });
+
+  it('chooses nothing when no other teleporter is discovered', () => {
+    const { map } = opened({ teleporters: [[0, 0]] });
+    map.open([0, 0], W, H, true);
+    expect(map.chosen).toBeNull();
   });
 
   it('follows a new window size, and draws nothing while closed or without a 2D context', () => {

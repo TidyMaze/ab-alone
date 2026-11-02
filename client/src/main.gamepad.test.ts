@@ -7,7 +7,7 @@ import { boot, type Game } from './test/harness';
 // The gamepad on main.ts (#1252): it drives the keyboard's paths, the focus walk of the menus and the board's keys.
 
 type Move = { cells: Axial[]; dir: number };
-const A = 0, B = 1, LB = 4, RB = 5, LT = 6, RT = 7, VIEW = 8, START = 9, R3 = 11, DOWN = 13, LEFT = 14, RIGHT = 15;
+const A = 0, B = 1, Y = 3, LB = 4, RB = 5, LT = 6, RT = 7, VIEW = 8, START = 9, R3 = 11, DOWN = 13, LEFT = 14, RIGHT = 15;
 const canvas = (): HTMLCanvasElement => document.querySelector('canvas')!;
 const rings = (game: Game): Axial[] => game.hook<Axial[]>('__rings');
 const plies = (game: Game): number => game.hook<number>('__plies');
@@ -126,6 +126,24 @@ describe('the gamepad in the Open world', () => {
     pad.tap(VIEW);
     pad.tap(VIEW);
     expect(document.getElementById('openworld-map')).toBeNull();
+    pad.unplug();
+  });
+
+  it('on a teleporter Y opens the map in the choice of a teleporter, and A picks the ringed one (#1412)', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    const fixture = (hero: Axial): void => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero, troop: [], enemies: [] });
+    expect(data().openworldTeleporters).toBe('2,-1'); // only the spawn's is discovered
+    const [q, r] = (await import('abalone-wasm')).world_teleporters(7).slice(2, 4);
+    const target: Axial = [q!, r!];
+    fixture(target); // the hero goes there: it is discovered
+    fixture([2, -1]); // and back on the spawn's
+    pad.tap(Y);
+    expect(byId('openworld-map-note').textContent).toBe('Choose a teleporter');
+    pad.tap(A);
+    expect(document.getElementById('openworld-map')).toBeNull();
+    expect(data().openworldAt).toBe(target.join(','));
     pad.unplug();
   });
 

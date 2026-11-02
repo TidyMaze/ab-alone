@@ -76,7 +76,7 @@ function standBeside(codes: number[], keep?: (seed: number) => (q: number, r: nu
 describe('before a world is started', () => {
   test('every tool says there is no world', () => {
     const open = world();
-    for (const result of [open.state({}), open.step({ direction: 'E' }), open.walk({ q: 1, r: 0 }), open.save()]) {
+    for (const result of [open.state({}), open.step({ direction: 'E' }), open.walk({ q: 1, r: 0 }), open.teleport({ q: 2, r: -1 }), open.save()]) {
       expect(failure(result).code).toBe('no_world');
     }
   });
@@ -454,3 +454,34 @@ describe('the cells discovered', () => {
     expect(value(open.state({})).discovered).toBe(walked);
   });
 });
+
+describe('the teleporters (#1412)', () => {
+  const [q, r] = worldRules().world_teleporters(7).slice(2, 4) as unknown as [number, number];
+  const far = `(${q},${r})`;
+
+  test("world_state lists the teleporters discovered, the spawn's at first, with their distance from the hero", () => {
+    const open = world();
+    expect(value(open.newWorld({ seed: 7 })).teleporters).toEqual([{ cell: '(2,-1)', distance: 2 }]);
+  });
+
+  test('a teleport needs the hero on a teleporter and another one discovered, by the rules of the client', () => {
+    const open = world();
+    const save = value((open.newWorld({ seed: 7 }), open.save()));
+    expect(failure(open.teleport({ q: 2, r: -1 }))).toEqual({ code: 'blocked', message: 'the hero stands on no teleporter' });
+    value(open.walk({ q: 2, r: -1 }));
+    expect(failure(open.teleport({ q, r })).message).toBe(`the teleporter on ${far} is not discovered yet`);
+    expect(failure(open.teleport({ q: 3, r: -1 })).message).toBe('no teleporter on (3,-1)');
+    value(open.newWorld({ save: { ...save, hero: [q, r] } })); // the hero on the far one: it is discovered
+    expect(value(open.state({})).teleporters).toEqual([{ cell: '(2,-1)', distance: hex([q, r], [2, -1]) }, { cell: far, distance: 0 }]);
+    const moved = value(open.teleport({ q: 2, r: -1 }));
+    expect(moved.hero).toBe('(2,-1)');
+    expect(moved.troop).toHaveLength(6);
+    expect(moved.troop.slice(0, 2)).toEqual(['(1,-1)', '(1,0)']); // the free cells round it, the nearest first
+    expect(value(open.teleport({ q, r })).hero).toBe(far);
+  });
+});
+
+/** The axial distance between two cells. */
+function hex(a: [number, number], b: [number, number]): number {
+  return (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[0] - b[0] + a[1] - b[1])) / 2;
+}

@@ -21,6 +21,10 @@ export interface MinimapData {
   enemies: readonly Axial[];
   /** The boss lairs, in or out of the window, and whether each is beaten. */
   lairs: readonly { cell: Axial; beaten: boolean }[];
+  /** The teleporters to draw (#1412): the discovered ones. */
+  teleporters: readonly Axial[];
+  /** The teleporter the map's choice would pick (#1412), ringed; none outside the choice. */
+  chosen?: Axial | null;
   /** The camera's yaw, in radians (`OpenWorldView.yaw`). */
   yaw: number;
 }
@@ -32,6 +36,8 @@ export const COLOURS = {
   enemy: '#e0453b',
   lair: '#ffb020',
   lairBeaten: '#6f7a72',
+  teleporter: '#b36bff',
+  chosen: '#ffffff',
   back: '#0b0d0f',
   edge: '#0b0d0f',
 } as const;
@@ -93,6 +99,9 @@ const shape = (ctx: CanvasRenderingContext2D, points: readonly (readonly [number
   ctx.fill();
 };
 
+/** The corners of a teleporter's mark, 5 px out from its cell. */
+const HEXAGON = Array.from({ length: 6 }, (_, i) => [5 * Math.cos((i * Math.PI) / 3), 5 * Math.sin((i * Math.PI) / 3)] as const);
+
 /** Where a map is drawn: a canvas of `width` x `height` px with the cell `centre` (fractions allowed) in the middle, `unit` px a cell.
  * `round` is the minimap: a disc, its edge drawn, and an arrow on the edge for the lairs out of it. */
 export interface MapFrame {
@@ -109,7 +118,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
   drawMap(ctx, { width: size, height: size, centre: data.hero, unit: size / 2 / (RADIUS + 1), round: true }, data);
 }
 
-/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs, the enemies, the troop and the hero. */
+/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs, the teleporters, the enemies, the troop and the hero. */
 export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, unit, round }: MapFrame, data: MinimapData): void {
   const [midX, midY] = [width / 2, height / 2];
   const put = (cell: Axial): { x: number; y: number } => {
@@ -148,6 +157,19 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
     const [ux, uy] = [ox / dist, oy / dist]; // the arrow sits on the edge, its tip toward the lair
     const [px, py] = [midX + ux * edge, midY + uy * edge];
     shape(ctx, [[px + ux * 5, py + uy * 5], [px - ux * 5 - uy * 4, py - uy * 5 + ux * 4], [px - ux * 5 + uy * 4, py - uy * 5 - ux * 4]], colour);
+  }
+  for (const cell of data.teleporters) {
+    if (away(cell) > edge) continue; // the minimap draws the ones in its window only
+    const { x, y } = put(cell);
+    shape(ctx, HEXAGON.map(([dx, dy]) => [x + dx, y + dy] as const), COLOURS.teleporter);
+  }
+  if (data.chosen) {
+    const { x, y } = put(data.chosen);
+    ctx.strokeStyle = COLOURS.chosen;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 9, 0, 2 * Math.PI);
+    ctx.stroke();
   }
   for (const cell of data.enemies) {
     const { x, y } = put(cell);

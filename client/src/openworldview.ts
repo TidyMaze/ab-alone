@@ -296,6 +296,10 @@ export const MARBLE = 0.3;
 
 /** The landmark of a boss lair (#1170): a tall pillar on a flat plinth, gold while the lair is unbeaten, green once beaten. */
 export const LAIR_LOOK = { open: 0xffb020, beaten: 0x4caf6a, height: 5 };
+/** A teleporter (#1412): a flat glowing hex pad on its cell and a ring floating `ring` over it, in a violet none of the terrain nor the marbles has. */
+export const TELEPORTER_LOOK = { colour: 0xb36bff, ring: 1.1 };
+/** The most teleporters the widest loaded square holds: one a square of 4 x 4 chunks (abalone-core `TELEPORT_BLOCK`), 21 chunks across. */
+const TELEPORTER_CAPACITY = (Math.ceil((2 * MAX_REACH + 1) / 4) + 1) ** 2;
 /** The looks of the marbles (#1138): glossy, with the ring colours of the interface, cyan on the hero and the troop (the last move), amber
  * on the foes (revealed). The stripe is the ring that shows the roll. */
 export const MARBLE_LOOK = {
@@ -472,6 +476,10 @@ export class OpenWorldView {
   private readonly sun: THREE.DirectionalLight;
   private readonly sunAway = new THREE.Vector3();
   private foes: THREE.InstancedMesh;
+  /** The teleporters of the world (#1412), and their pads and rings, laid for the ones in the loaded chunks. */
+  private teleporterCells: readonly Axial[] = [];
+  private readonly pads: THREE.InstancedMesh;
+  private readonly rings: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
   private readonly dummy = new THREE.Object3D();
   /** Reused by every instance colour written, so a build allocates none. */
@@ -568,6 +576,9 @@ export class OpenWorldView {
     this.ejected.castShadow = true;
     this.ejected.visible = false;
     this.scene.add(this.ejected);
+    const glow = (): THREE.Material => new THREE.MeshStandardMaterial({ color: TELEPORTER_LOOK.colour, emissive: TELEPORTER_LOOK.colour, emissiveIntensity: 0.5, roughness: 0.4, flatShading: true });
+    this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, new THREE.CylinderGeometry(0.5, 0.56, 0.08, 6).translate(0, 0.04, 0), glow());
+    this.rings = this.instances('teleporter-ring', TELEPORTER_CAPACITY, new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0), glow());
     this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
   }
 
@@ -1354,6 +1365,33 @@ export class OpenWorldView {
     });
   }
 
+  /** The teleporters of the world (#1412): the ones in the loaded chunks are drawn, and the others when the chunks get to them. */
+  setTeleporters(cells: readonly Axial[]): void {
+    this.teleporterCells = cells;
+    this.placeTeleporters();
+  }
+
+  /** Lays a pad and a ring on the top of each teleporter of the loaded chunks. */
+  private placeTeleporters(): void {
+    const [cx, cy] = this.centre;
+    const reach = this.loadedReach;
+    const { dummy } = this;
+    dummy.scale.set(1, 1, 1);
+    let n = 0;
+    for (const [q, r] of this.teleporterCells) {
+      const [kx, ky] = chunkOf([q, r]);
+      if (Math.abs(kx - cx) > reach || Math.abs(ky - cy) > reach) continue;
+      const tile = this.world.tile(q, r)!;
+      const p = axialTo3D(q, r);
+      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
+      dummy.updateMatrix();
+      this.pads.setMatrixAt(n, dummy.matrix);
+      this.rings.setMatrixAt(n++, dummy.matrix);
+    }
+    this.pads.count = this.rings.count = n;
+    this.pads.instanceMatrix.needsUpdate = this.rings.instanceMatrix.needsUpdate = true;
+  }
+
   /** Lays the enemy marbles of the loaded chunks as the fight has them now: the generated ones not moved, and the pushed ones.
    * A push calls it again, the chunks stay as they are. */
   updateEnemies(): void {
@@ -1423,6 +1461,7 @@ export class OpenWorldView {
       }
     }
     if (terrain) this.updateEnemies();
+    if (terrain) this.placeTeleporters();
     for (const mesh of this.laid(terrain)) {
       mesh.count = counts.get(mesh) ?? 0;
       mesh.instanceMatrix.needsUpdate = true;

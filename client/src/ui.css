@@ -838,6 +838,11 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 body[data-openworld] #openworld-map-button { display: grid; }
 #openworld-map-button:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
 #openworld-map-button[aria-expanded="true"], #openworld-map-button:active { border-color: var(--plate-accent); }
+#openworld-teleport { display: none; position: fixed; z-index: 2; top: calc(16px + 2.75rem + 0.5rem + 9rem + 0.5rem + var(--target) + 0.5rem); right: 16px; min-width: var(--target); min-height: var(--target); place-items: center; padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--plate-accent); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; zoom: var(--ui-scale); }
+body[data-openworld] #openworld-teleport:not([hidden]) { display: grid; }
+#openworld-teleport:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
+#openworld-map-note { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); margin: 0; padding: 0.5rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1.3 var(--display); text-align: center; pointer-events: none; zoom: var(--ui-scale); }
+#openworld-map-note[hidden] { display: none; }
 #openworld-ship:active { border-color: var(--plate-accent); }
 /* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
 #openworld-hud p { margin: 0 0 0.5rem; }

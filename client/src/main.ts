@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -4484,6 +4484,8 @@ const pollPad = gamepad((action: PadAction) => {
       return;
     case 'map':
       return openWorld.toggleMap(); // the Open world's map (#1411)
+    case 'teleport':
+      return openWorld.teleport(); // the Open world's Teleport action, on a teleporter (#1412)
     case 'walk':
       if (openWorld.mapShown) return openWorld.panMap(-action.x * MAP_PAN_PX, -action.y * MAP_PAN_PX); // the stick looks round the map (#1411)
       // The stick walks the hero as the touch stick does, in the yaw of the camera; a rest lets go (#1252).
@@ -5719,12 +5721,18 @@ const openWorld = new OpenWorldMode(
   // each world entered leaked them (#1258).
   (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
   (seed, from, beaten, blocked, broken) => Int32Array.from(world_dungeon(seed, from[0], from[1], beaten, blocked, broken)), // the Dungeon button (#1291)
+  (seed) => Int32Array.from(world_teleporters(seed)), // the teleporters (#1412)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;
 mapButton.addEventListener('click', () => {
   openWorld.toggleMap(); // the map of the cells discovered (#1411)
   mapButton.blur(); // the keys and the pad go back to the world
+});
+const teleportButton = document.getElementById('openworld-teleport')!;
+teleportButton.addEventListener('click', () => {
+  openWorld.teleport(); // the choice of a teleporter on the map (#1412)
+  teleportButton.blur();
 });
 // The public world (#1305): one fixed seed where everybody lands by default, the only world with other heroes. It joins its room only
 // after the opt-in (consent.ts); Stay solo opens the same world offline. New world and any other seed stay private and offline. An
@@ -5786,6 +5794,7 @@ if (navigator.webdriver) {
   hooks.__openworldEnemies = () => openWorld.enemies();
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
+  hooks.__openworldTeleporters = (seed: number) => Array.from(world_teleporters(seed)); // every teleporter of a world, `q, r` pairs (#1412)
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {

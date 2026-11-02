@@ -256,6 +256,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 - **Window.** The hex disc of 24 cells round the hero (three chunks across), each cell a square in the colour the 3D view draws its terrain in (`terrainColour`: `LOOK`, `WATER`, `PROPS`, no palette of its own), read
   with `World.tile`: the same chunks as the 3D view, no second copy of the rules. The hero is in the middle (white), the troop (gold) and
   the enemies near the hero (red) are dots. Only the discovered cells (section 9) and the enemies on them are drawn; the rest stays dark.
+  A discovered teleporter in the window (section 10) is a violet hexagon.
 - **Turn.** The map is turned by the camera's yaw (`screenOffset`: the ground layout of `axialTo3D`, screen up `(-sin yaw, -cos yaw)`), so up
   on the map is up on screen, and Q, E, R and a drag turn it.
 - **Lairs.** A lair in the window is a purple diamond, a beaten one grey. A lair out of the window gets an arrow on the map's edge pointing to it only
@@ -275,11 +276,35 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   hero stays: the walk under way ends, the arrows held let go, and the arrows and camera keys do nothing.
 - **Look.** `#openworld-map`, full screen over the world, its HUD and the minimap, drawn by the minimap's drawing (`drawMap` of
   `openworldminimap.ts`, a frame of any size, centre and scale) on a canvas of the window's size: the discovered cells in their terrain
-  colour, the rest dark, the hero, the troop, the enemies near the hero on discovered cells, and every boss lair (a landmark seen from
-  afar: a diamond, a beaten one grey, as on the minimap). It is turned with the camera, as the minimap. It opens on the hero, 8 px a cell.
+  colour, the rest dark, the hero, the troop, the enemies near the hero on discovered cells, every boss lair (a landmark seen from
+  afar: a diamond, a beaten one grey, as on the minimap) and every discovered teleporter (a violet hexagon, section 10). It is turned with the camera, as the minimap. It opens on the hero, 8 px a cell.
 - **Pan and zoom.** A drag pans it (the ground follows the pointer), the wheel and a pinch zoom it between 3 and 32 px a cell, the pad's
   left stick pans it and the triggers zoom it. The box takes the pointer and its canvas does not, so the touch stick leaves it alone.
-- **Click.** A click on the map (a press that moves less than 6 px) hands the cell under it to `WorldMap.pick`, which does nothing yet:
-  the teleporters (#1412) will use it.
+- **Click.** A click on the map (a press that moves less than 6 px) hands the cell under it to `WorldMap.pick`: in the choice of a
+  teleporter it picks one (section 10), else it does nothing.
 - **Cost.** It is drawn when it opens, on a pan or a zoom, and on a `mark` while it is open, never on a frame; it reads the discovered
   cells of the disc that holds the screen's corners.
+
+## 10. Teleporters (#1412)
+
+- **Placement** is seeded world generation in Rust (`world::teleporters(seed, avoid)`, bridge `world_teleporters(seed)`, `q, r` pairs, the
+  spawn's first): one teleporter in each square of 4 x 4 chunks, the squares centred on the spawn's chunk (about 250 in a world). The
+  spawn's square has its own on `(2, -1)`, in the clearing. Any other square tries cells 2 or more inside its middle 2 x 2 chunks, from a
+  drawn one, 24 tries a chunk, and keeps the first whose cell and six neighbours are open ground, with no generated enemy within 2 cells
+  and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two teleporters are at least 32 cells apart. It
+  reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move and the saves keep loading.
+- **Look.** A flat violet hex pad on the cell and a violet ring floating over it (`TELEPORTER_LOOK`), drawn for the teleporters of the
+  loaded chunks (two instanced meshes, laid with the chunks); a violet hexagon on the minimap and the map.
+- **Discovery.** A teleporter is discovered once its cell is (section 9: within 10 cells of the hero), so the network grows as the
+  player explores. No save field of its own: the discovered cells hold it. `body[data-openworld-teleporters]` lists the discovered ones
+  (`q,r` separated by spaces).
+- **Teleport action.** Only while the hero stands on a teleporter: the Teleport button (`#openworld-teleport`, under the Map button,
+  hidden otherwise), T and the pad's Y open the map in the choice of a teleporter, with the caption "Choose a teleporter"
+  (`#openworld-map-note`); the same button, T, M, Escape and B close it. The discovered teleporter nearest the map's middle (the hero's
+  own left out) is ringed in white: Enter or the pad's A picks it. A click (a tap) picks the discovered teleporter within 2 cells of the
+  cell under it.
+- **Arrival.** The hero moves onto the teleporter picked, and the troop onto the free cells within 3 of it (open ground, no enemy, no
+  lair), the nearest first, at once: no glide and no push, so no fight on arrival, as at the spawn. A pick on no teleporter, the hero's
+  own, one not discovered, one with an enemy on it, or with no room for the whole troop is refused, the reason in the caption, and
+  nothing moves. The rules are `client/src/openworldteleport.ts`, which loads no engine, so the MCP server (`world_teleport`) runs the
+  same code.

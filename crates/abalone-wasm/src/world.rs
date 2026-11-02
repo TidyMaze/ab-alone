@@ -89,6 +89,16 @@ pub fn world_lairs(seed: u32) -> Vec<i32> {
         .collect()
 }
 
+/// The teleporters of the world `seed` (#1412, docs/specs/openworld.md section 10): `q, r` pairs, the spawn's first, kept off the lairs.
+#[wasm_bindgen]
+pub fn world_teleporters(seed: u32) -> Vec<i32> {
+    let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
+    world::teleporters(u64::from(seed), &lairs)
+        .into_iter()
+        .flat_map(|(q, r)| [q, r])
+        .collect()
+}
+
 /// The walk of the hero from `(from_q, from_r)` to `(to_q, to_r)` in the world `seed` (docs/specs/openworld.md section 4): `q, r`
 /// pairs, the start left out, empty when there is none. `blocked` holds the enemy cells and the lairs, `broken` the obstacles the
 /// hero has broken (#1154), both `q, r` pairs.
@@ -417,6 +427,20 @@ mod tests {
             flat,
             lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn the_teleporters_are_q_r_pairs_that_match_the_core_and_keep_off_the_lairs() {
+        let flat = world_teleporters(7);
+        let lairs = world::lairs(7, crate::encounter::boss_ids().len());
+        let cells = world::teleporters(7, &lairs);
+        assert_eq!(
+            flat,
+            cells.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
+        );
+        assert!(cells
+            .iter()
+            .all(|&t| lairs.iter().all(|&l| world::hex_distance(t, l) > 3)));
     }
 
     #[test]

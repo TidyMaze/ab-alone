@@ -50,8 +50,8 @@ First to eject 6 wins. On top of it, the ship:
 - **Hub**: walk five decks, a door per boss, a room per mode, lore terminals. New players land there,
   after a short illustrated guide to the rules and the controls of their device (Guide in the cog menu opens it again).
 - **Open world**: a generated hex map, a hero marble you walk and a troop that fights on its own,
-  with a minimap in the top right corner and a map of the world discovered round the hero (M, or the Map button)
-  ([spec](docs/specs/openworld.md)).
+  with a minimap in the top right corner, a map of the world discovered round the hero (M, or the Map button) and
+  teleporters to travel between the ones discovered (T, or the Teleport button, on a teleporter) ([spec](docs/specs/openworld.md)).
 - **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)).
 
 Rusted deck plates, cold light, fog at the rim. The camera orbits and zooms; a **Clear board**

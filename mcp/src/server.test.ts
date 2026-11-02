@@ -67,6 +67,8 @@ describe('the Open world tools', () => {
     expect(refused.isError).toBe(true);
     expect(JSON.parse(refused.text).code).toBe('no_path');
     expect((await call('world_step', { direction: 'UP' })).isError).toBe(true);
+    const teleport = await call('world_teleport', { q: 2, r: -1 }); // the hero stands on no teleporter
+    expect(JSON.parse(teleport.text).code).toBe('blocked');
   });
 
   test("save the world and resume it, in the client's save format, a bad save refused", async () => {
@@ -157,6 +159,7 @@ describe('the MCP server', () => {
       'save_world',
       'world_step',
       'world_walk',
+      'world_teleport',
       'join_world_room',
       'world_heroes',
       'world_visit',
