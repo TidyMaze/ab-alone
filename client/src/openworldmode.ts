@@ -3,7 +3,7 @@
 // untouched.
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
-import { chunkOf, Hero, neighbours, same, World } from './openworld';
+import { chunkOf, Hero, neighbours, same, WALKABLE, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
@@ -58,7 +58,6 @@ const MAP_KEYS = new Set(['m', 'M']);
 /** The keys of the Teleport action (#1412): on a teleporter they open the map in the choice of a teleporter, and close it again. */
 const TELEPORT_KEYS = new Set(['t', 'T']);
 /** The ground a marble can stand on: the troop arrives on it round a teleporter (#1412). */
-const OPEN = new Set(['sand', 'grass', 'rock']);
 
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
 export const twistOf = (prev: number, next: number): number => wrapPi(next - prev);
@@ -543,7 +542,7 @@ export class OpenWorldMode {
 
   /** Whether a marble can stand on `cell` now: open ground, no enemy, no lair (the troop's cells round a teleporter, #1412). */
   private readonly free = ([q, r]: Axial): boolean =>
-    OPEN.has(this.world!.tile(q, r)?.terrain ?? 'water') && !this.fight.occupied(this.world!, q, r) && !this.lairs.some((cell) => same(cell, [q, r]));
+    WALKABLE.has(this.world!.tile(q, r)?.terrain ?? 'water') && !this.fight.occupied(this.world!, q, r) && !this.lairs.some((cell) => same(cell, [q, r]));
 
   /** Shows the HUD's Teleport button while the hero stands on a teleporter. */
   private showTeleport(on: boolean): void {

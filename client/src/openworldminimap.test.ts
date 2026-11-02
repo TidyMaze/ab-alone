@@ -4,6 +4,7 @@ import type { Terrain } from './openworld';
 import { LOOK, PROPS, WATER } from './openworldview';
 import { contrastRatio, type RGB } from './contrast';
 import { setNeonWorldOn } from './neonlook';
+import { mapColour, WORLD } from './neonworld';
 import { WALKABLE } from './openworld';
 import { BOSS_COLOURS, ICON } from './openworldlairicon';
 import { COLOURS, drawMap, drawMinimap, groundOffset, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
@@ -68,6 +69,7 @@ describe('terrainColour', () => {
   });
 
   describe('the mountain you cannot cross (#1439)', () => {
+    const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
     const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
     const ratio = (a: string, b: string): number => contrastRatio(rgb(a), rgb(b));
 
@@ -80,11 +82,11 @@ describe('terrainColour', () => {
       expect(terrainColour('rock')).not.toBe(COLOURS.mountain);
     });
 
-    it('reads 3:1 against the walkable rock, in the plain look and in the neon one', () => {
-      for (const neon of [false, true]) {
-        setNeonWorldOn(neon);
-        expect(ratio(terrainColour('peak'), terrainColour('rock')), `neon ${neon}`).toBeGreaterThanOrEqual(3);
-      }
+    it('reads 3:1 against the walkable rock, in the plain look and in the neon one (its rock, lifted for the map)', () => {
+      expect(ratio(terrainColour('peak'), terrainColour('rock'))).toBeGreaterThanOrEqual(3);
+      expect(ratio(COLOURS.mountain, hex(mapColour(WORLD.rock)))).toBeGreaterThanOrEqual(3);
+      setNeonWorldOn(true);
+      expect(terrainColour('wall')).toBe(COLOURS.mountain); // the neon look keeps it
       setNeonWorldOn(false);
     });
 

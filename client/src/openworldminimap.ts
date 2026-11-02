@@ -40,6 +40,8 @@ export const COLOURS = {
   lair: '#ffb020',
   lairBeaten: '#6f7a72',
   teleporter: '#b36bff',
+  /** The mountain that cannot be crossed (the peak and the wall, #1439): pale, 3:1 over the walkable rock whatever the look. */
+  mountain: '#d5dbe0',
   chosen: '#ffffff',
   back: '#0b0d0f',
   edge: '#0b0d0f',
@@ -47,9 +49,10 @@ export const COLOURS = {
 
 const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
 
-/** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`), so the map has no palette of its own. */
+/** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`), except the mountain that cannot be crossed (#1439). */
 export function terrainColour(terrain: Terrain): string {
-  const own = terrain === 'water' ? WATER.shore : terrain === 'tree' || terrain === 'boulder' || terrain === 'wall' ? PROPS[terrain].color : LOOK[terrain].color;
+  if (terrain === 'peak' || terrain === 'wall') return COLOURS.mountain;
+  const own = terrain === 'water' ? WATER.shore : terrain === 'tree' || terrain === 'boulder' ? PROPS[terrain].color : LOOK[terrain].color;
   return hex(neonWorldOn() ? mapColour(own) : own); // the neon look's dark terrain is lifted for the map (#1424)
 }
 
@@ -90,6 +93,9 @@ const dot = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, 2 * Math.PI);
   ctx.fill();
+  ctx.strokeStyle = COLOURS.edge; // a dark outline, so the dot reads on the pale mountain (#1439)
+  ctx.lineWidth = 1;
+  ctx.stroke();
 };
 
 /** A closed shape through `points`, filled. */

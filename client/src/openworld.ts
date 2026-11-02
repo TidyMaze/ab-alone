@@ -12,6 +12,8 @@ export const SPAWN: Axial = [0, 0];
 /** The terrain codes of the bridge (`world_chunk`), by code. */
 export const TERRAINS = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall'] as const;
 export type Terrain = (typeof TERRAINS)[number];
+/** The terrains the hero can enter: the core's `Terrain::blocked` is the rest (water, peaks, boulders, trees, walls). */
+export const WALKABLE: ReadonlySet<Terrain> = new Set<Terrain>(['sand', 'grass', 'rock']);
 /** The biome codes of the bridge (`world_chunk`), by code: the order of `Biome` in the engine (openworld-terrain.md section 4). */
 export const BIOMES = ['meadow', 'forest', 'tundra', 'desert', 'badlands'] as const;
 export type Biome = (typeof BIOMES)[number];
