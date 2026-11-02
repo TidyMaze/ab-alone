@@ -512,7 +512,7 @@ export function runLine(map: MapNode[], run: Run): string {
   const node = run.fighting ? lastNode(map, run)! : null;
   const where = node ? `act ${node.act + 1} ${node.kind}` : '';
   const army = `army ${owned(run.army, run.specials)}`;
-  const rested = lastNode(map, run)?.kind === 'rest' ? 'rested · ' : '';
+  const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
   return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
 }
 
