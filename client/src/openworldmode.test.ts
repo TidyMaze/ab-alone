@@ -1954,7 +1954,7 @@ describe('the discovered cells and the map of the Open world (#1411, docs/specs/
   const withCanvas = (): string[] => {
     const fills: string[] = [];
     const ctx = { fillStyle: '' } as Record<string, unknown>;
-    for (const name of ['clearRect', 'save', 'restore', 'beginPath', 'arc', 'moveTo', 'lineTo', 'closePath', 'clip', 'stroke']) ctx[name] = () => {};
+    for (const name of ['clearRect', 'save', 'restore', 'beginPath', 'arc', 'moveTo', 'lineTo', 'closePath', 'clip', 'fillText', 'stroke']) ctx[name] = () => {};
     ctx.fill = ctx.fillRect = () => fills.push(ctx.fillStyle as string);
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
     return fills;

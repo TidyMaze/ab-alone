@@ -1156,6 +1156,11 @@ export class OpenWorldView {
     return this.yawGoal;
   }
 
+  /** The yaw the camera is drawn at, in radians: it follows `yaw` by a spring (`follow`); the minimap turns with it (#1448). */
+  get drawnYaw(): number {
+    return this.yawNow;
+  }
+
   /** Turns the goal of the camera's yaw by `by` radians round the hero; the camera follows it the shortest way round (`follow`). */
   turn(by: number): void {
     this.yawGoal = wrapPi(this.yawGoal + by);

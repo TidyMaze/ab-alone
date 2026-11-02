@@ -265,12 +265,15 @@ describe('north (#1448, docs/specs/openworld.md section 8)', () => {
   it('is the ground\'s -z at yaw 0, decreasing r: up on the screen, and it turns with the camera', () => {
     expect(northDirection(0).x).toBeCloseTo(0);
     expect(northDirection(0).y).toBeCloseTo(-1);
+    const [dq, dr] = groundOffset(northDirection(0).x, northDirection(0).y, 0);
+    expect(dr).toBeLessThan(0); // decreasing r, and straight along -z: dx = dq + dr / 2 is nil
+    expect(dq + dr / 2).toBeCloseTo(0);
     for (const yaw of [0, 0.7, -2.1, Math.PI / 2]) {
       const n = northDirection(yaw);
-      const off = screenOffset([0, 0], [0, -1000], yaw); // far north on the ground, as drawn
+      const [nq, nr] = groundOffset(n.x, n.y, yaw);
       expect(Math.hypot(n.x, n.y)).toBeCloseTo(1);
-      expect(off.x / Math.hypot(off.x, off.y)).toBeCloseTo(n.x, 1);
-      expect(off.y / Math.hypot(off.x, off.y)).toBeCloseTo(n.y, 1);
+      expect(nq + nr / 2).toBeCloseTo(0); // the same ground direction at every yaw
+      expect(nr).toBeLessThan(0);
     }
   });
 
@@ -294,13 +297,13 @@ describe('north (#1448, docs/specs/openworld.md section 8)', () => {
     expect(contrastRatio(rgb(COLOURS.north), rgb(COLOURS.northPlate))).toBeGreaterThanOrEqual(3);
   });
 
-  it('draws a compass in a corner of the map, not of the minimap: an arrow and an N toward the north', () => {
+  it('draws a compass in the top left corner of the map, not of the minimap: an arrow and an N toward the north', () => {
     const { ctx, fills } = fakeContext();
     const texts: [string, number, number][] = [];
     (ctx as unknown as { fillText: (t: string, x: number, y: number) => void }).fillText = (t, x, y) => texts.push([t, x, y]);
     drawMap(ctx, { width: 400, height: 200, centre: [0, 0], unit: 10, round: false }, data({ yaw: Math.PI / 2 }));
-    const c = compassPoints(Math.PI / 2, 400, 200);
-    expect(c.centre[0]).toBeGreaterThan(300);
+    const c = compassPoints(Math.PI / 2);
+    expect(c.centre[0]).toBeLessThan(100);
     expect(c.centre[1]).toBeLessThan(100);
     const n = texts.find(([t]) => t === 'N')!;
     expect([n[1], n[2]]).toEqual(c.label);
