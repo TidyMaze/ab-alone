@@ -30,7 +30,6 @@ for (const { name, viewport, touch } of sizes) {
         const apart = box.x + box.width <= other.x || other.x + other.width <= box.x || box.y + box.height <= other.y || other.y + other.height <= box.y;
         expect(apart, selector).toBe(true);
       }
-      await page.screenshot({ path: `test-results/minimap-${name.replaceAll(' ', '-')}.png` });
     });
   });
 }
