@@ -40,7 +40,7 @@ flowchart TD
   G --> H[CI on main, Pages deploy if green, full e2e every hour]
 ```
 
-Direct commits to `main` (decision #1433, trunk-based): no PR and no human review. The lead agent
+Direct commits to `main` (decision #1433, trunk-based): no PR and no human review. The lead agent, or a release agent it names,
 pushes after reading the builder's report. Quality comes from strict TDD, 100 % unit coverage of
 all code, the checks before the push, and the full e2e suite that CI runs every hour when `main`
 moved (#1433 replaces the "full suite locally before every merge" of decision #445). `main` red:
@@ -53,7 +53,7 @@ revert at once, then fix. Exception: Dependabot PRs still go through a PR and me
    linked (same feature or same files, rule 17), one `Closes #n` line each.
 2. **No Task without a parent.** Every Task is a sub-issue of a Feature, or of an Epic for
    non-player-facing work (tooling, CI, specs).
-3. **Only the lead agent pushes to `main`.** Direct commits, no PR (decision #1433, section 6.4),
+3. **Only the lead agent, or a release agent it names, pushes to `main`.** Direct commits, no PR (decision #1433, section 6.4),
    after reading the builder's report. Sub-agents never push to `main`. Dependabot PRs still merge
    through a PR when green.
 4. **Out of scope = new issue.** Anything found during a task that is not in its acceptance
@@ -240,7 +240,7 @@ a PR when CI is green.
 3. **Pull and rebase first**: `git pull --rebase origin main`. After a rebase without conflict,
    rerun only `bun run test` and `bunx tsc --noEmit` (rebuild the WASM first if `crates/` changed,
    section 13). A rebase with a conflict reruns every check.
-4. **The lead agent pushes** to `main`, after reading the report. An owner may push too. The commit
+4. **The lead agent, or a release agent it names, pushes** to `main`, after reading the report. An owner may push too. The commit
    message says `Closes #<task>` (one line per issue it closes, rule 17), or `Refs #<issue>` for a
    slice (AGENTS rule 12).
 5. **Proof goes in a comment on the issue**: the tests that ran, a screenshot, what was not done.
@@ -252,7 +252,7 @@ a PR when CI is green.
 6. **CI runs on every push to `main`** (the check `rust`). Pages deploys only after a green CI.
    **`main` red: revert at once, then fix.** No discussion first; the fix is a new commit with its
    own test.
-7. Docs-only commits (`**.md`, `docs/**`) skip CI. The lead agent pushes them after reading the diff.
+7. Docs-only commits (`**.md`, `docs/**`) skip CI. The lead agent, or a release agent it names, pushes them after reading the diff.
 8. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
 9. Work that cannot land whole goes behind a flag off by default (rule 19), for example the neon
    design behind `?look=neon` (#1424).
@@ -316,8 +316,8 @@ Two roles:
 
 | Role | Does | Never does |
 |---|---|---|
-| **Lead agent** (driven by an owner) | Writes issues, triages and sets `Priority` when an owner delegates, starts up to 4 sub-agents in parallel, checks their reports (tests, a real browser run for player-facing changes), pushes to `main` (section 6.4), reverts a red `main` | Closes a `Decision` without an owner, starts a 5th task, pushes a red or unchecked commit |
-| **Sub-agent** | One Task: own clone, own local branch, TDD, local checks, reports the commit on its branch, rebases when asked | Pushes to `main`, triages, sets `Priority`, works outside its Task |
+| **Lead agent** (driven by an owner) | Writes issues, triages and sets `Priority` when an owner delegates, starts up to 4 sub-agents in parallel, checks their reports (tests, a real browser run for player-facing changes), pushes to `main` (section 6.4) or names a release agent that does, reverts a red `main` | Closes a `Decision` without an owner, starts a 5th task, pushes a red or unchecked commit |
+| **Sub-agent** | One Task: own clone, own local branch, TDD, local checks, reports the commit on its branch, rebases when asked | Pushes to `main` (unless it is the release agent the lead agent named), triages, sets `Priority`, works outside its Task |
 
 Every agent follows the rules above, plus:
 - One agent, one clone, one local branch, one `In Progress` Task.

@@ -28,8 +28,8 @@ The short version:
    with proper description, context, and expected outcome.
 5. This repo is public: never commit or print a secret.
 6. Talk only through issue comments. Sub-agents never push to `main`, never triage, never
-   close a `Decision`: they report a commit on their local branch. The lead agent (driven by an owner)
-   may triage when an owner delegates and pushes to `main` after reading the report; no PR and no human
+   close a `Decision`: they report a commit on their local branch. Only the lead agent (driven by an owner), or a
+   release agent it names, pushes to `main`; the lead agent may triage when an owner delegates; the push comes after reading the report; no PR and no human
    review (CONTRIBUTING.md sections 0 and 6.4). `main` red: revert at once, then fix.
 7. At most 4 tasks in progress at once. While developing, run only the smallest scoped checks (the touched unit file via `bun run test:scoped <file>`, instant `bun run layout:check`, or single e2e spec via `bun run e2e:layout`, CONTRIBUTING 13).
    Before a push: `bun run test`, `tsc` and the e2e specs of what changed. The full e2e suite runs in CI every hour
@@ -47,7 +47,7 @@ The short version:
 9. Branch locally from an up-to-date `main`. Never base a branch on an unpushed branch. `main` is the
    only long-lived branch: no feature, preview or release branch, a local branch lives a day at most
    and never reaches the remote (CONTRIBUTING rule 19).
-10. Commit on your local branch after your checks are green, and report the commit. The lead agent pushes
+10. Commit on your local branch after your checks are green, and report the commit. The lead agent, or a release agent it names, pushes
     to `main` (CI runs on the push; Pages deploys only after a green CI). Pull and rebase first when
     `main` moved. Unfinished work lands behind a flag off by default, with an issue that removes it.
 11. Faster and cheaper (owner decision, 2026-10-29): no builds in parallel, one agent builds and
