@@ -26,8 +26,11 @@ export const BOSS_PROP_PIECES: readonly string[] = Object.values(BOSS_PROPS);
 
 /** The piece of fight `id` and where it stands, off the south-east edge of the board where a pulsar stands (a fight has one
  * boss, so the spots never meet); `null` for a boss with no piece here, or no fight. */
-export function bossProp(id: string | null | undefined): { piece: string; x: number; z: number } | null {
+export function bossProp(id: string | null | undefined, phone = false): { piece: string; x: number; z: number } | null {
   const piece = (BOSS_PROPS as Record<string, string>)[id ?? ''];
   if (!piece) return null;
-  return { piece, ...SPOT };
+  return { piece, ...(phone && id === 'magnetizer' ? PHONE_CRANE : SPOT) };
 }
+
+/** On a phone the board fills the width and the south-east edge is off screen: the crane, a tall piece, stands nearer the middle. */
+const PHONE_CRANE = { x: SPOT.x * 0.55, z: SPOT.z };

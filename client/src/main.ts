@@ -3814,7 +3814,7 @@ function refresh(): void {
   delete document.body.dataset.announceBlink;
   marbles.clear();
   marbleAt.clear();
-  const wears = sceneRenderer.terraceOn ? bossProp(fight?.id) : null; // one mesh of the kit, one draw call, only for this boss (#1374)
+  const wears = sceneRenderer.terraceOn ? bossProp(fight?.id, innerWidth < innerHeight) : null; // one mesh of the kit, one draw call, only for this boss (#1374)
   const piece = wears && bossPieces.get(wears.piece);
   if (wears && piece) {
     const mesh = Object.assign(new THREE.Mesh(piece.geometry, piece.material), { name: 'boss-prop', userData: { terrace: true } }); // a prop, not a marble
