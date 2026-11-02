@@ -185,7 +185,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { neonLookOn, neonPedestal, NEON } from './neonlook';
+import { neonLookOn, neonPedestal, neonTells, neonVeil, tellLook, NEON } from './neonlook';
 import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
@@ -591,6 +591,7 @@ if (plateNormal) {
 }
 
 const neonLook = neonLookOn(location.search); // `?look=neon` (#1424): the circuit slab, colours and light only; never stored
+const neonTell = tellLook(neonLook); // the sizes of the bosses' tells: the look's thick ones, or the game's own
 if (neonLook) applyNeonWorld(true, { LOOK, WATER, BIOME_LOOK, PROPS, MARBLE_LOOK: WORLD_MARBLES, LAIR_LOOK, TELEPORTER_LOOK, AMBIENT }); // the Open world's palette, the minimap's too
 const sceneRenderer = new SceneRenderer({
   renderer,
@@ -1665,7 +1666,7 @@ const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Stalker's rings, in both looks (#1138): the bot's last move in cyan, a marble it revealed in amber, not the palette's bone.
 const lastMaterial = new THREE.MeshBasicMaterial({ color: TONAL.last });
 const revealedMaterial = new THREE.MeshBasicMaterial({ color: TONAL.revealed });
-const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
+const outlineGeometry = new THREE.TorusGeometry(0.42, neonTell.ringTube, 8, 32);
 const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 // The Echo's tells (#859): a steady teal ring where a bonus move lands, on its ghost while a move is prepared and on the
@@ -1684,6 +1685,7 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 // rim and the board outline left as they are; a pale ring where the bot's last move landed in range.
 const fogMaterial = new THREE.MeshBasicMaterial({ color: tonal ? TONAL.veiled : 0x000000, transparent: true, opacity: tonal ? 1 : 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
+if (neonLook) neonVeil(fogMaterial, veil); // near black in a cyan outline, the shape of the cell
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
 // The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the evac
 // clock runs out the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
@@ -1748,7 +1750,7 @@ const armyGlyphs = [
   new THREE.ConeGeometry(0.08, 0.18, 4),
   new THREE.TorusGeometry(0.07, 0.025, 8, 16),
   new THREE.BoxGeometry(0.13, 0.13, 0.13),
-];
+].map((glyph) => glyph.scale(neonTell.glyph, neonTell.glyph, neonTell.glyph));
 // The Overseer (#635, game-design.md section 7.11): a dark hexagonal pedestal with a pale eye on the centre cell; a core
 // is a pale marble with a dark eye on top, a shape and not a colour; a vent wears a warm disc crossed by dark slots on
 // its cell. A burning marble sinks into its vent where it stands (overseer.ts).
@@ -1857,7 +1859,7 @@ function ventAt(p: { x: number; z: number }): THREE.Group {
 // The Alien tell (#588, game-design.md section 7.7): an egg on its cell and, above it, a counter of the player turns
 // left before it hatches: a sprite, so it always faces the camera, drawn over the marbles (alien.ts, 3:1 and more). On 1
 // a glow under the egg pulses once a second, held still under reduced motion (the animation loop sets it).
-const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).translate(0, 0.23, 0);
+const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).scale(neonTell.egg, neonTell.egg, neonTell.egg).translate(0, 0.23 * neonTell.egg, 0);
 const eggMaterial = new THREE.MeshStandardMaterial({ roughness: 0.55 });
 const eggGlowGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const eggGlowMaterial = new THREE.MeshBasicMaterial({ color: BONE, transparent: true, depthWrite: false });
@@ -1876,6 +1878,7 @@ eggShellMap.colorSpace = THREE.SRGBColorSpace;
 eggMaterial.map = eggShellMap;
 let eggShade = -1;
 function dressEggs(): void {
+  if (neonLook) return; // the look's egg is near black, not the shell skin's
   const c = marbleMaterials[1]!.color.getHex(); // the Alien is the shell side in a fight
   const shade = c === 0xffffff ? skinById(skin).color : c; // a mapped skin is white until its albedo: the mean colour stands for it
   if (shade === eggShade) return;
@@ -1893,6 +1896,7 @@ const chevronGeometry = new THREE.ShapeGeometry(
   new THREE.Shape(CHEVRON_SHAPE.map(([x, z]) => new THREE.Vector2(x, -z))),
 ).rotateX(-Math.PI / 2);
 const chevronMaterial = new THREE.MeshBasicMaterial({ color: CHEVRON_COLOR });
+if (neonLook) neonTells({ crack: crackMaterial, egg: eggMaterial, glow: eggGlowMaterial, chevron: chevronMaterial, arrival: arrivalMaterial, pale: paleMaterial }); // thick, solid, not tone mapped
 const railGeometry = new THREE.BoxGeometry(1, 0.03, 0.04);
 const sleeperGeometry = new THREE.BoxGeometry(0.08, 0.02, 0.6);
 const railMaterial = new THREE.MeshStandardMaterial({ color: 0x8a9096, metalness: 0.6, roughness: 0.4 });
@@ -1986,7 +1990,7 @@ const pulsarMaterials = PULSAR_PARTS.map(
 );
 const chargeMaterial = new THREE.MeshStandardMaterial({ color: PULSAR_PARTS[1]!.color, emissive: PULSAR_PARTS[1]!.color, emissiveIntensity: 1.6 });
 const pylonCharge = new THREE.MeshBasicMaterial({ color: 0xffc468, fog: false }); // the terrace's charging core: amber at full strength
-const shockGeometry = new THREE.RingGeometry(0.96, 1, 96).rotateX(-Math.PI / 2);
+const shockGeometry = new THREE.RingGeometry(neonTell.shockInner, 1, 96).rotateX(-Math.PI / 2);
 const shockMaterial = new THREE.MeshBasicMaterial({ color: SHOCK_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 let pulsarShown: Pulsar | null = null; // the next pulse of the last refresh
 // The pulsar that fires next turn loops small faint rings while the player thinks (#741, pulsar.ts rippleAt).
@@ -2109,7 +2113,8 @@ const plusGlyph = new THREE.ShapeGeometry(new THREE.Shape(PLUS_POINTS.map(([x, y
 );
 const plusInk = new THREE.MeshBasicMaterial({ color: PLUS_INK, side: THREE.DoubleSide });
 // The breach (#503): a cracked arena cell glows in the hazard colour under the Hull's crack decal and ticks.
-const breachGlow = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false });
+const breachTint = new THREE.Color(); // the look's tint of the glow, mixed in by `neonTell.breachMix`
+const breachGlow = new THREE.MeshBasicMaterial({ transparent: true, opacity: neonTell.breachOpacity, depthWrite: false });
 
 // Spaceship interior architecture (bulkhead arches, rear wall, airlock, pedestal, conduits) (#478)
 let wallTexture: THREE.Texture | null = null;
@@ -3154,7 +3159,7 @@ function animateDual(now: number): void {
 /** Draws the shockwave `elapsedMs` into the pulse, and takes it away once it is over. */
 function drawShock(elapsedMs: number): void {
   const at = shockAt(shock!.id, shock!.skipped ? Infinity : elapsedMs, shock!.reduced);
-  shock!.mesh.position.set(at.x, 0.05, at.z);
+  shock!.mesh.position.set(at.x, 0.05 + neonTell.lift, at.z);
   shock!.mesh.scale.setScalar(Math.max(at.radius, 0.01));
   shockMaterial.opacity = at.opacity;
   if (!at.done) return;
@@ -3986,7 +3991,7 @@ function refresh(): void {
     egg.position.set(p.x, 0, p.z);
     const counter = Object.assign(new THREE.Sprite(counterMaterials[left - 1]), { renderOrder: 2 });
     counter.position.set(p.x, 0.95, p.z);
-    counter.scale.setScalar(0.42);
+    counter.scale.setScalar(0.42 * neonTell.plate);
     marbles.add(egg, counter);
     if (left === 1) {
       const glow = Object.assign(new THREE.Mesh(eggGlowGeometry, eggGlowMaterial), { name: 'egg-glow' });
@@ -4088,7 +4093,7 @@ function drawTrack(train: Train): void {
     const chevron = Object.assign(new THREE.Mesh(chevronGeometry, chevronMaterial), { name: spot.edge ? 'edge-chevron' : 'chevron' });
     chevron.rotation.y = spot.yaw;
     chevron.position.set(spot.x, 0.03, spot.z);
-    chevron.scale.setScalar(spot.edge ? 1.5 : 1);
+    chevron.scale.setScalar((spot.edge ? 1.5 : 1) * neonTell.chevron);
     marbles.add(chevron);
   }
   const entry = chevronSpots(train)[0]!;
@@ -6114,7 +6119,7 @@ function drawRoyale(game: Royale): void {
   arena.visible = true;
   const { board, cracks, marked } = arenaView(game);
   const left = crackLeft(cracks, ARENA);
-  breachGlow.color.set(paletteById(palette).hazard);
+  breachGlow.color.set(paletteById(palette).hazard).lerp(breachTint.set(neonTell.breachTint), neonTell.breachMix);
   crackDecals = [];
   targets = reveal || !canOrder() ? [] : groupTargets(parseMoves(game.legal_orders(me())), selected);
   ringed = marked >= 0 ? ARENA.filter((_, i) => seatAt(board[i]!) === marked) : [...selected];
@@ -6126,17 +6131,17 @@ function drawRoyale(game: Royale): void {
     const rounds = left.get(i) ?? 0;
     if (rounds > 0) {
       const glow = new THREE.Mesh(crackGeometry, breachGlow);
-      glow.position.set(p.x, 0.002, p.z);
+      glow.position.set(p.x, 0.002 + neonTell.arenaLift, p.z);
       arenaMarbles.add(glow);
       if (crackDecal) {
         const decal = new THREE.Mesh(crackGeometry, crackMaterial);
-        decal.position.set(p.x, 0.003, p.z);
+        decal.position.set(p.x, 0.003 + neonTell.arenaLift, p.z);
         arenaMarbles.add(decal);
         crackDecals.push([q, r]);
       }
       for (const dx of tickOffsets(rounds)) {
         const tick = new THREE.Mesh(tickGeometry, tickMaterial); // one per round left, on the front edge
-        tick.position.set(p.x + dx, 0.01, p.z + 0.39);
+        tick.position.set(p.x + dx, 0.01 + neonTell.arenaLift, p.z + 0.39);
         arenaMarbles.add(tick);
       }
     }
@@ -6614,7 +6619,7 @@ renderer.setAnimationLoop((now) => {
   });
   if (!reducedMotion()) for (const core of pulsarCores) core.rotation.y = now / 600;
   animateParticles(now);
-  eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
+  eggGlowMaterial.opacity = Math.max(eggGlow(now / 1000, reducedMotion()), neonTell.glowFloor);
   if (Number.isNaN(lastMoveStart) && lastMovePlaying) lastMoveStart = now;
   lastMovePlaying = lastMovePlaying && now - lastMoveStart < SLIDE_MS + MOTION.base;
   const pulse = lastMovePulse(lastMovePlaying ? now - lastMoveStart : Infinity, reducedMotion());

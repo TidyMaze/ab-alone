@@ -88,7 +88,7 @@ export function neonStars(count = 1400, radius = 240): THREE.Mesh {
   geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3));
   const stars = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
-  stars.name = 'neon_stars';
+  stars.name = 'starfield';
   stars.frustumCulled = false;
   stars.renderOrder = -1;
   return stars;
@@ -232,4 +232,119 @@ export function neonGlow(posts: readonly THREE.Vector3[], rim: boolean): THREE.G
     group.add(band, tip);
   }
   return group;
+}
+
+/** The tells of the bosses under the look (#1424). Measured on the rendered game against a cell (about #5b6b8c), 3:1: a thin line is
+ * mostly anti-aliased pixels, so every tell is thick and solid, either near black (`ink`) or bright (`sodium`), and never tone mapped. */
+export const NEON_TELL = {
+  ink: 0x05060a,
+  /** The outline of a fogged cell: pale cyan (the cyan of the edge lines reads 1.6:1 on a cell once thin and anti-aliased). */
+  outline: 0xe6ffff,
+  sodium: 0xfff0c0,
+  /** The tube of the rings round a marble or on a cell (the game's is 0.025). */
+  ringTube: 0.11,
+  /** The Choir's glyphs and the Rail Yard's chevrons, drawn this much larger. */
+  glyph: 3.2,
+  chevron: 2,
+  /** The Alien's counter plate, drawn this much larger. */
+  plate: 1.8,
+  /** The inner radius of the Pulsar's shockwave ring, of 1 (the game's is 0.96). */
+  shockInner: 0.92,
+  /** The egg is drawn this much larger: a small egg is mostly anti-aliased pixels. */
+  egg: 1.3,
+  /** The shockwave of a Pulsar is drawn at 0.05, under the dish tops (0.1): this much higher. */
+  lift: 0.07,
+  /** The cracks of the battle royale are drawn at the arena's local 0.003, under the dish tops at 0.1 (the arena is half size): this much higher. */
+  arenaLift: 0.22,
+  /** The glow under an egg about to hatch never falls below this (it pulses with the game's own). */
+  glowFloor: 1,
+  /** The opacity of the Stalker's fog. */
+  fog: 0.97,
+  /** The glow of a cell about to void in the battle royale: sodium and opaque, the game's is the palette's hazard at 55 %. */
+  breachTint: 0xfff0c0,
+  breachMix: 1,
+  breachOpacity: 1,
+} as const;
+const GAME_TELL = { ringTube: 0.025, glyph: 1, chevron: 1, plate: 1, shockInner: 0.96, egg: 1, lift: 0, arenaLift: 0, glowFloor: 0, breachTint: 0, breachMix: 0, breachOpacity: 0.55 } as const;
+/** The sizes the tells are drawn with: the look's, or the game's own. */
+export const tellLook = (on: boolean): { readonly [K in keyof typeof GAME_TELL]: number } => (on ? NEON_TELL : GAME_TELL);
+
+/** The mask of a crack, a DataTexture of `size` pixels (plain bytes, no canvas): seven forking fissures from the middle, 15 % of the width thick. */
+export function neonCrackMap(size = 256): THREE.DataTexture {
+  const data = new Uint8Array(size * size * 4);
+  const segments: [number, number, number, number][] = [];
+  [0, 51, 103, 154, 206, 257, 309].forEach((deg, arm) => {
+    let [x, y, a] = [0, 0, (deg * Math.PI) / 180];
+    for (let k = 0; k < 3; k++) {
+      a += (((arm + k) % 3) - 1) * 0.28; // the fissure bends
+      const [nx, ny] = [x + Math.cos(a) * 0.16, y + Math.sin(a) * 0.16];
+      segments.push([x, y, nx, ny]);
+      [x, y] = [nx, ny];
+    }
+  });
+  const half = 0.075;
+  for (let j = 0; j < size; j++)
+    for (let i = 0; i < size; i++) {
+      const [px, py] = [(i + 0.5) / size - 0.5, (j + 0.5) / size - 0.5];
+      const near = segments.some(([ax, ay, bx, by]) => {
+        const [dx, dy] = [bx - ax, by - ay];
+        const t = THREE.MathUtils.clamp(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0, 1);
+        return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) <= half;
+      });
+      data.set([near ? 255 : 0, near ? 255 : 0, near ? 255 : 0, 255], (j * size + i) * 4);
+    }
+  const map = new THREE.DataTexture(data, size, size);
+  map.needsUpdate = true;
+  return map;
+}
+
+/** The materials the look dresses (main.ts): the Hull's crack, the Alien's egg and its glow, the Rail Yard's chevrons, the Swarm's marks, the pale tells of the Choir (their colour is the palette's, set at each draw: only the tone mapping is the look's). */
+export interface TellMaterials {
+  crack: THREE.MeshBasicMaterial;
+  egg: THREE.MeshStandardMaterial;
+  glow: THREE.MeshBasicMaterial;
+  chevron: THREE.MeshBasicMaterial;
+  arrival: THREE.MeshBasicMaterial;
+  pale: THREE.MeshBasicMaterial;
+}
+export function neonTells(m: TellMaterials): void {
+  m.crack.alphaMap = neonCrackMap();
+  m.crack.color.setHex(NEON_TELL.ink);
+  m.egg.map = null; // an unlit near-black egg: lit, its sheen came up to the cell's own light
+  m.egg.color.setHex(0);
+  m.egg.emissive.setHex(NEON_TELL.ink);
+  m.egg.roughness = 1;
+  m.egg.metalness = 0;
+  for (const sodium of [m.glow, m.chevron, m.arrival]) sodium.color.setHex(NEON_TELL.sodium);
+  for (const material of Object.values(m)) {
+    material.toneMapped = false;
+    material.needsUpdate = true;
+  }
+}
+
+/** The Stalker's veil: one cell's worth, a near-black hexagon in a cyan outline of the cell's own shape (vertex colours). */
+export function neonFogGeometry(): THREE.BufferGeometry {
+  const position: number[] = [];
+  const colour: number[] = [];
+  const at = (r: number, k: number, y: number): [number, number, number] => [Math.sin((k * Math.PI) / 3) * r, y, Math.cos((k * Math.PI) / 3) * r];
+  const paint = (hex: number, n: number): void => {
+    const c = linear(hex);
+    for (let i = 0; i < n; i++) colour.push(c.r, c.g, c.b);
+  };
+  for (let k = 0; k < 6; k++) position.push(0, 0, 0, ...at(0.5, k, 0), ...at(0.5, k + 1, 0));
+  paint(NEON_TELL.ink, 18);
+  for (let k = 0; k < 6; k++) position.push(...at(0.29, k, 0.002), ...at(0.52, k, 0.002), ...at(0.52, k + 1, 0.002), ...at(0.29, k, 0.002), ...at(0.52, k + 1, 0.002), ...at(0.29, k + 1, 0.002));
+  paint(NEON_TELL.outline, 36);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colour, 3));
+  return g;
+}
+export function neonVeil(material: THREE.MeshBasicMaterial, veil: THREE.InstancedMesh): void {
+  veil.geometry = neonFogGeometry();
+  material.vertexColors = true;
+  material.color.setHex(0xffffff);
+  material.opacity = NEON_TELL.fog;
+  material.toneMapped = false;
+  material.needsUpdate = true;
 }

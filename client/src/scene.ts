@@ -513,7 +513,7 @@ export class SceneRenderer {
     this.scene.background = new THREE.Color(NEON.sky);
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = NEON_LIGHT.exposure;
-    if (!this.terrace.getObjectByName('neon_stars')) this.terrace.add(neonStars());
+    if (!this.terrace.getObjectByName('starfield')) this.terrace.add(neonStars());
   }
 
   /** The sun's soft shadow, on the high tier only: the low tier draws none (#1364). */

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars } from './neonlook';
+import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook } from './neonlook';
 import { mergeByMaterial } from './tablezero';
+import { scalePower } from './lightpanel';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -75,7 +76,10 @@ describe('the neon look (#1424)', () => {
 
   it('draws fine stars above the horizon, one mesh', () => {
     const stars = neonStars(50);
-    expect(stars.name).toBe('neon_stars');
+    expect(stars.name).toBe('starfield');
+    const scene = new THREE.Scene(); // its name holds no 'neon': the light sliders scale the meshes called so, and the stars have no emissive power
+    scene.add(stars);
+    expect(() => scalePower(scene, { bloom: 100, lamps: 100, lights: 100 })).not.toThrow();
     expect(stars.geometry.attributes.position!.count).toBe(150);
     for (let i = 0; i < 150; i += 3) expect(stars.geometry.attributes.position!.getY(i)).toBeGreaterThan(0);
   });
@@ -144,5 +148,61 @@ describe('the neon look of the terrace file (#1424)', () => {
     root.add(piece('scene_cell_00'));
     const out = mergeByMaterial(root);
     expect(out.getObjectByName('terrace_edges')).toBeUndefined();
+  });
+});
+
+describe('the tells of the neon look (#1424)', () => {
+  it("is the game's own sizes without the look, thick and lifted with it", () => {
+    expect(tellLook(false)).toEqual({ ringTube: 0.025, glyph: 1, chevron: 1, plate: 1, shockInner: 0.96, egg: 1, lift: 0, arenaLift: 0, glowFloor: 0, breachTint: 0, breachMix: 0, breachOpacity: 0.55 });
+    expect(tellLook(true)).toBe(NEON_TELL);
+    expect(NEON_TELL.ringTube).toBeGreaterThan(0.025 * 2); // a thin line is mostly anti-aliased pixels
+    expect(NEON_TELL.lift).toBeGreaterThan(0.1 - 0.05); // the shock ring (0.05) clears the dish tops (0.1)
+    expect(NEON_TELL.arenaLift * 0.5).toBeGreaterThan(0.1); // the arena is drawn at half size
+    expect(NEON_TELL.glowFloor).toBe(1); // the glow under an egg on 1 is steady, never a flicker
+  });
+  it('draws the crack as a thick mask: lines from the middle, none in the corners', () => {
+    const map = neonCrackMap(64);
+    const data = map.image.data as Uint8Array;
+    const at = (x: number, y: number): number => data[(y * 64 + x) * 4 + 1]!;
+    expect(at(32, 32)).toBe(255); // the middle, where every crack meets
+    expect(at(0, 0)).toBe(0);
+    expect(at(63, 63)).toBe(0);
+    let lit = 0;
+    for (let i = 0; i < 64 * 64; i++) if (data[i * 4 + 1] === 255) lit++;
+    expect(lit / (64 * 64)).toBeGreaterThan(0.2); // thick: more than a hairline
+    expect(lit / (64 * 64)).toBeLessThan(0.6);
+    expect(map.wrapS).toBe(THREE.ClampToEdgeWrapping);
+  });
+  it('dresses the materials of the tells', () => {
+    const m = {
+      crack: new THREE.MeshBasicMaterial({ color: 0x777777 }),
+      egg: new THREE.MeshStandardMaterial({ map: new THREE.Texture(), roughness: 0.55 }),
+      glow: new THREE.MeshBasicMaterial({ color: 0x777777 }),
+      chevron: new THREE.MeshBasicMaterial({ color: 0xf0a830 }),
+      arrival: new THREE.MeshBasicMaterial({ color: 0xff7a3d }),
+      pale: new THREE.MeshBasicMaterial({ color: 0xd8d4c8 }),
+    };
+    neonTells(m);
+    expect(m.crack.color.getHex()).toBe(NEON_TELL.ink);
+    expect(m.crack.alphaMap).toBeInstanceOf(THREE.DataTexture);
+    expect(m.egg.map).toBeNull(); // no speckled shell: a near-black egg
+    expect(m.egg.color.getHex()).toBe(0);
+    expect(m.egg.emissive.getHex()).toBe(NEON_TELL.ink);
+    expect(m.egg.roughness).toBe(1);
+    for (const sodium of [m.glow, m.chevron, m.arrival]) expect(sodium.color.getHex()).toBe(NEON_TELL.sodium);
+    for (const material of Object.values(m)) expect(material.toneMapped).toBe(false); // the colour on the screen is the colour chosen
+  });
+  it('wears the fog as a near-opaque dark hexagon in a cyan outline, one geometry', () => {
+    const geometry = neonFogGeometry();
+    const colour = geometry.attributes.color!;
+    const hexes = new Set(Array.from({ length: colour.count }, (_, i) => new THREE.Color(colour.getX(i), colour.getY(i), colour.getZ(i)).getHex()));
+    expect([...hexes].sort()).toEqual([NEON_TELL.outline, NEON_TELL.ink].sort()); // the disc and its outline
+    const material = new THREE.MeshBasicMaterial({ opacity: 0.9, transparent: true });
+    const veil = new THREE.InstancedMesh(new THREE.CircleGeometry(0.46), material, 2);
+    neonVeil(material, veil);
+    expect(veil.geometry.attributes.color).toBeDefined();
+    expect(material.vertexColors).toBe(true);
+    expect(material.opacity).toBe(NEON_TELL.fog);
+    expect(material.toneMapped).toBe(false);
   });
 });

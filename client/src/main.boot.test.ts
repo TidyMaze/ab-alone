@@ -188,7 +188,7 @@ describe('the renderer and its textures', () => {
     const { scene } = await drawn(game);
     const terrace = scene.getObjectByName('terrace')!;
     expect((scene.background as THREE.Color).getHex()).toBe(0x04050c);
-    expect(terrace.getObjectByName('neon_stars')).toBeDefined();
+    expect(terrace.getObjectByName('starfield')).toBeDefined();
     expect(terrace.getObjectByName('terrace_edges')).toBeDefined();
     expect(materials(scene).some((m) => m.color.getHex() === 0x14161a)).toBe(true); // the black marble
     expect(materials(scene).some((m) => m.color.getHex() === 0xf2f0ea)).toBe(true); // the white one
@@ -211,7 +211,7 @@ describe('the renderer and its textures', () => {
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
     const { scene } = await drawn(game);
     const terrace = scene.getObjectByName('terrace')!;
-    expect(terrace.getObjectByName('neon_stars')).toBeUndefined();
+    expect(terrace.getObjectByName('starfield')).toBeUndefined();
     expect(terrace.getObjectByName('terrace_edges')).toBeUndefined();
     expect((scene.background as THREE.Color).getHex()).toBe(0x2c3438);
   });

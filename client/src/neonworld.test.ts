@@ -90,7 +90,7 @@ describe('the Open world view with the look (#1424)', () => {
     view.show([0, 0]);
     expect((view.scene.background as THREE.Color).getHex()).toBe(NEON.sky);
     expect((view.scene.fog as THREE.Fog).color.getHex()).toBe(NEON.sky);
-    const stars = view.scene.getObjectByName('neon_stars')!;
+    const stars = view.scene.getObjectByName('starfield')!;
     expect(stars.position.toArray()).toEqual(view.camera.position.toArray());
     expect(stars.position.length()).toBeGreaterThan(0);
     let sun!: THREE.DirectionalLight;
@@ -125,7 +125,7 @@ describe('the Open world view with the look (#1424)', () => {
   it('is the game as it was without the look: no stars, the ship black, the arena sun', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([0, 0]);
-    expect(view.scene.getObjectByName('neon_stars')).toBeUndefined();
+    expect(view.scene.getObjectByName('starfield')).toBeUndefined();
     expect((view.scene.background as THREE.Color).getHex()).not.toBe(NEON.sky);
     let sun!: THREE.DirectionalLight;
     view.scene.traverse((o) => void ((o as THREE.DirectionalLight).isDirectionalLight && (sun = o as THREE.DirectionalLight)));
