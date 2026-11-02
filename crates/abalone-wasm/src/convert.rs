@@ -5,7 +5,7 @@
 
 use abalone_core::board::{Board, Cell, Special, RADIUS};
 use abalone_core::encounter::PveResult;
-use abalone_core::game::{DrawReason, Outcome};
+use abalone_core::game::{DrawReason, Outcome, Tactic};
 use abalone_core::moves::{Direction, Move, Player};
 
 /// Integers per move record.
@@ -119,6 +119,21 @@ pub(crate) fn decode(record: &[i32]) -> Result<Move, String> {
         .map(|i| (record[2 + 2 * i], record[3 + 2 * i]))
         .collect();
     Ok(Move { cells, dir })
+}
+
+/// The tactic of a record `[0, code, q0, r0, q1, r1, 0, 0]`: `1` Reinforce, `2` Freeze, `3` Swap of
+/// `(q0, r0)` and `(q1, r1)`, `4` Fall back. The `0` where a move has its marble count tells it apart.
+pub(crate) fn decode_tactic(record: &[i32]) -> Result<Tactic, String> {
+    if record.len() != MOVE_STRIDE {
+        return Err(format!("tactic needs {MOVE_STRIDE} integers"));
+    }
+    match record[1] {
+        1 => Ok(Tactic::Reinforce),
+        2 => Ok(Tactic::Freeze),
+        3 => Ok(Tactic::Swap((record[2], record[3]), (record[4], record[5]))),
+        4 => Ok(Tactic::FallBack),
+        code => Err(format!("unknown tactic {code}")),
+    }
 }
 
 /// Board value of a cell a boss removed.

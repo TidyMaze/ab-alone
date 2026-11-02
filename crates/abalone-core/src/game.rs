@@ -1466,10 +1466,15 @@ mod tactic_tests {
         let mut game = army_game(14);
         game.place_special((0, 2), Special::Spark).unwrap();
         game.place_special((1, 3), Special::Anchor).unwrap();
+        game.place_special((-1, 4), Special::Heavy).unwrap();
         game.play_tactic(Tactic::Swap((1, 3), (0, 2))).unwrap();
         assert_eq!(
             game.board().specials(),
-            [((0, 2), Special::Anchor), ((1, 3), Special::Spark)]
+            [
+                ((-1, 4), Special::Heavy),
+                ((0, 2), Special::Anchor),
+                ((1, 3), Special::Spark)
+            ]
         );
     }
 

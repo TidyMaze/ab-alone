@@ -56,6 +56,10 @@
 //! - Move: 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]`, `n` in 1..=3 marbles, unused
 //!   coordinates are `0`. `dir`: `0` E, `1` W, `2` NE, `3` SW, `4` NW, `5` SE.
 //!   `legal_moves` returns the records back to back.
+//! - Tactic (a rogue-lite fight, `Engine::play`): 8 integers `[0, code, q0, r0, q1, r1, 0, 0]`, the `0`
+//!   where a move has its marble count. `code` `1` Reinforce, `2` Freeze, `3` Swap of `(q0, r0)` and
+//!   `(q1, r1)`, `4` Fall back (docs/specs/roguelite.md section 11). `Engine::tactics` is the mask of
+//!   those the army can play now, bit `code - 1`.
 //! - Score (the evaluation bar): the search score for the side to move, in centi-marbles (one
 //!   marble is 100). A won game scores 1 000 000 minus the plies to the win, a lost one the
 //!   opposite, a draw 0: beyond +/-500 000 the game is decided.

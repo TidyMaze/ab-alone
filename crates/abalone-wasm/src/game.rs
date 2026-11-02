@@ -1,8 +1,8 @@
 //! Standard 1v1 Abalone game instance exposed to WebAssembly.
 
 use crate::convert::{
-    board_bytes, decode, draw_reason_code, encode, player, side_code, special, special_code,
-    status_code,
+    board_bytes, decode, decode_tactic, draw_reason_code, encode, player, side_code, special,
+    special_code, status_code,
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
@@ -72,7 +72,11 @@ impl Engine {
 
     /// The tactics the army can play now, a bit mask (see the module docs).
     pub fn tactics(&self) -> u8 {
-        0
+        self.game
+            .tactics()
+            .iter()
+            .enumerate()
+            .fold(0, |mask, (i, &on)| mask | (u8::from(on) << i))
     }
 
     /// Side to move: `1` Black, `2` White.
@@ -92,8 +96,13 @@ impl Engine {
             .collect()
     }
 
-    /// Plays one move record. `Err` carries the reason, the game is left unchanged.
+    /// Plays one move record, or a tactic record (a `0` first, see the module docs). `Err` carries
+    /// the reason, the game is left unchanged.
     pub fn play(&mut self, mv: &[i32]) -> Result<(), String> {
+        if mv.first() == Some(&0) {
+            let tactic = decode_tactic(mv)?;
+            return self.game.play_tactic(tactic).map_err(|e| format!("{e:?}"));
+        }
         let mv = decode(mv)?;
         self.game.play(&mv).map_err(|e| format!("{e:?}"))
     }
