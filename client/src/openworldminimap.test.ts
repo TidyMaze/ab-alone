@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
 import { LOOK, PROPS, WATER } from './openworldview';
+import { contrastRatio, type RGB } from './contrast';
+import { setNeonWorldOn } from './neonlook';
+import { mapColour, WORLD } from './neonworld';
+import { WALKABLE } from './openworld';
+import { BOSS_COLOURS, ICON } from './openworldlairicon';
 import { COLOURS, drawMap, drawMinimap, groundOffset, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
 
 // The Open world's minimap (#1410, docs/specs/openworld.md section 8): a 2D canvas drawn from plain data.
@@ -24,6 +29,7 @@ function fakeContext() {
     lineTo: (x: number, y: number) => path.push(x, y),
     closePath: () => {},
     clip: () => log.push('clip'),
+    fillText: () => {},
     stroke() {
       log.push(this.strokeStyle === COLOURS.chosen ? 'stroke chosen' : 'stroke');
     },
@@ -57,11 +63,45 @@ describe('terrainColour', () => {
     expect(terrainColour('grass')).toBe(hex(LOOK.grass.color));
     expect(terrainColour('sand')).toBe(hex(LOOK.sand.color));
     expect(terrainColour('rock')).toBe(hex(LOOK.rock.color));
-    expect(terrainColour('peak')).toBe(hex(LOOK.peak.color));
     expect(terrainColour('water')).toBe(hex(WATER.shore));
     expect(terrainColour('tree')).toBe(hex(PROPS.tree.color));
     expect(terrainColour('boulder')).toBe(hex(PROPS.boulder.color));
-    expect(terrainColour('wall')).toBe(hex(PROPS.wall.color));
+  });
+
+  describe('the mountain you cannot cross (#1439)', () => {
+    const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
+    const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
+    const ratio = (a: string, b: string): number => contrastRatio(rgb(a), rgb(b));
+
+    it('is the peak and the wall, which the core blocks (the walkable terrains of openworld.ts), never the walkable rock', () => {
+      expect(WALKABLE.has('rock')).toBe(true);
+      for (const terrain of ['peak', 'wall'] as const) {
+        expect(WALKABLE.has(terrain)).toBe(false);
+        expect(terrainColour(terrain)).toBe(COLOURS.mountain);
+      }
+      expect(terrainColour('rock')).not.toBe(COLOURS.mountain);
+    });
+
+    it('reads 3:1 against the walkable rock, in the plain look and in the neon one (its rock, lifted for the map)', () => {
+      expect(ratio(terrainColour('peak'), terrainColour('rock'))).toBeGreaterThanOrEqual(3);
+      expect(ratio(COLOURS.mountain, hex(mapColour(WORLD.rock)))).toBeGreaterThanOrEqual(3);
+      setNeonWorldOn(true);
+      expect(terrainColour('wall')).toBe(COLOURS.mountain); // the neon look keeps it
+      setNeonWorldOn(false);
+    });
+
+    it('keeps the hero, the troop and the tower icons readable on the mountain and on the rock', () => {
+      for (const ground of [terrainColour('peak'), terrainColour('rock')]) {
+        for (const mark of [COLOURS.hero, COLOURS.troop]) expect(Math.max(ratio(mark, ground), ratio(COLOURS.edge, ground)), `${mark} on ${ground}`).toBeGreaterThanOrEqual(3);
+        expect(Math.max(ratio(ICON.rim, ground), ratio(ICON.halo, ground))).toBeGreaterThanOrEqual(3);
+      }
+    });
+
+    it('outlines the dots of the hero, the troop and the enemies in the dark, so they read on the pale mountain', () => {
+      const { ctx, log } = fakeContext();
+      drawMap(ctx, { width: 400, height: 200, centre: [0, 0], unit: 10, round: false }, data({ troop: [[1, 0]], enemies: [[2, 0]] }));
+      expect(log.filter((l) => l === 'stroke')).toHaveLength(3);
+    });
   });
 });
 
@@ -151,21 +191,27 @@ describe('drawMinimap', () => {
     expect(y).toBeLessThan(MIDDLE);
   });
 
-  it('draws a lair in the window, a beaten one in another colour', () => {
+  it('draws a lair in the window as the tower icon of its boss (#1438), a beaten one grey, and the minimap icon is smaller than the map one', () => {
     const { ctx, fills } = fakeContext();
-    drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [5, 0], beaten: false }, { cell: [-5, 0], beaten: true }] }));
-    expect(at(fills, COLOURS.lair)).toHaveLength(1);
-    expect(at(fills, COLOURS.lairBeaten)).toHaveLength(1);
-    expect(COLOURS.lair).not.toBe(COLOURS.lairBeaten);
+    drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [5, 0], beaten: false, boss: 'hull' }, { cell: [-5, 0], beaten: true, boss: 'echo' }] }));
+    expect(at(fills, BOSS_COLOURS.hull!)).toHaveLength(1);
+    expect(at(fills, ICON.done)).toHaveLength(1);
+    expect(at(fills, BOSS_COLOURS.echo!)).toHaveLength(0);
+    const span = (points: number[]): number => Math.max(...points.filter((_, i) => i % 2 === 0)) - Math.min(...points.filter((_, i) => i % 2 === 0));
+    const small = span(at(fills, BOSS_COLOURS.hull!)[0]!.at);
+    const big = fakeContext();
+    drawMap(big.ctx, { width: 400, height: 200, centre: [0, 0], unit: 10, round: false }, data({ lairs: [{ cell: [5, 0], beaten: false, boss: 'hull' }] }));
+    expect(small).toBeLessThan(span(at(big.fills, BOSS_COLOURS.hull!)[0]!.at));
   });
 
-  it('draws the teleporters given in the window as hexagons (#1412), none out of it, and rings the one chosen', () => {
+  it('draws the teleporters given in the window as portal icons (#1412, #1443), none out of it, the hero\'s own lit, and rings the one chosen', () => {
     const { ctx, fills, log } = fakeContext();
-    drawMinimap(ctx, SIZE, data({ teleporters: [[3, 0], [-2, 1], [200, 0]] }));
-    const drawn = at(fills, COLOURS.teleporter);
-    expect(drawn).toHaveLength(2);
-    expect(drawn[0]!.at).toHaveLength(12); // six points
-    expect(drawn[0]!.at[0]).toBeGreaterThan(MIDDLE);
+    drawMinimap(ctx, SIZE, data({ hero: [3, 0], teleporters: [[3, 0], [-2, 1], [200, 0]] }));
+    const drawn = at(fills, ICON.portal);
+    expect(drawn).toHaveLength(1); // the core of the one in the window the hero is not on
+    expect(drawn[0]!.at).toHaveLength(3); // a disc, not a tower
+    expect(drawn[0]!.at[0]).toBeLessThan(MIDDLE); // 5 cells left of the hero, who is in the middle
+    expect(at(fills, ICON.here)).toHaveLength(1); // the one the hero stands on
     expect(log).not.toContain('stroke chosen');
     drawMinimap(ctx, SIZE, data({ teleporters: [[3, 0]], chosen: [3, 0] }));
     expect(log).toContain('stroke chosen');
@@ -189,22 +235,22 @@ describe('drawMinimap', () => {
 describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, centre and scale', () => {
   const frame = { width: 400, height: 200, centre: [0, 0] as Axial, unit: 10, round: false };
 
-  it('fills the whole rectangle, with no circle, no edge and no arrow: every lair is a diamond where it is', () => {
+  it('fills the whole rectangle, with no circle, no edge and no arrow: every lair is its tower icon where it is', () => {
     const { ctx, log, fills } = fakeContext();
-    drawMap(ctx, frame, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [3, 0], beaten: true }] }));
+    drawMap(ctx, frame, data({ lairs: [{ cell: [200, 0], beaten: false, boss: 'hull' }, { cell: [3, 0], beaten: true, boss: 'hull' }] }));
     expect(log).not.toContain('clip');
-    expect(log).not.toContain('stroke');
     expect(at(fills, COLOURS.back)[0]!.at).toEqual([200, 100, 400, 200]);
-    const [far] = at(fills, COLOURS.lair);
-    expect(far!.at).toHaveLength(8); // a diamond: four points, off the canvas
-    expect(far!.at[0]).toBeCloseTo(200 + 200 * 10);
-    expect(at(fills, COLOURS.lairBeaten)).toHaveLength(1);
+    const [far] = at(fills, BOSS_COLOURS.hull!);
+    expect(far!.at.length).toBeGreaterThan(8); // the crenellated tower, off the canvas
+    expect(far!.at[0]).toBeGreaterThan(200 + 200 * 10 - 14);
+    expect(far!.at[0]).toBeLessThan(200 + 200 * 10 + 14);
+    expect(at(fills, ICON.done)).toHaveLength(1);
   });
 
   it('draws every teleporter given where it is, however far', () => {
     const { ctx, fills } = fakeContext();
     drawMap(ctx, frame, data({ teleporters: [[200, 0]] }));
-    expect(at(fills, COLOURS.teleporter)[0]!.at[0]).toBeCloseTo(200 + 200 * 10 + 5);
+    expect(at(fills, ICON.portal)[0]!.at[0]).toBeCloseTo(200 + 200 * 10);
   });
 
   it('puts the centre in the middle, the cells `unit` px apart, and the hero where it stands', () => {

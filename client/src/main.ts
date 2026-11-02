@@ -5748,6 +5748,7 @@ const openWorld = new OpenWorldMode(
   (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
   (seed, from, beaten, blocked, broken) => Int32Array.from(world_dungeon(seed, from[0], from[1], beaten, blocked, broken)), // the Dungeon button (#1291)
   (seed) => Int32Array.from(world_teleporters(seed)), // the teleporters (#1412)
+  () => boss_ids(), // lair k is boss k round the roster: the tower icons of the map (#1438)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;

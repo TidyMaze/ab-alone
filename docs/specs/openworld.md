@@ -256,10 +256,18 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 - **Window.** The hex disc of 24 cells round the hero (three chunks across), each cell a square in the colour the 3D view draws its terrain in (`terrainColour`: `LOOK`, `WATER`, `PROPS`, no palette of its own), read
   with `World.tile`: the same chunks as the 3D view, no second copy of the rules. The hero is in the middle (white), the troop (gold) and
   the enemies near the hero (red) are dots. Only the discovered cells (section 9) and the enemies on them are drawn; the rest stays dark.
-  A discovered teleporter in the window (section 10) is a violet hexagon.
+  A discovered teleporter in the window (section 10) is a portal icon (see Icons).
 - **Turn.** The map is turned by the camera's yaw (`screenOffset`: the ground layout of `axialTo3D`, screen up `(-sin yaw, -cos yaw)`), so up
   on the map is up on screen, and Q, E, R and a drag turn it.
-- **Lairs.** A lair in the window is a purple diamond, a beaten one grey. A lair out of the window gets an arrow on the map's edge pointing to it only
+- **Icons (#1438, #1443).** `openworldlairicon.ts` draws them with canvas paths, no image. A boss tower is a crenellated tower on a dark
+  square plate with a dark halo and a light rim, in the colour of its boss (`BOSS_COLOURS`, one per boss, lair k is boss k counted round the roster) and with the
+  boss's initial from 26 px; a beaten tower is grey with a check mark and no initial. A teleporter is a violet ring and core on a dark
+  round plate with the same outline, the core lit when the hero stands on it; it never looks like a tower (round plate, no crenels). The
+  minimap icon is 20 px; the map icon keeps at least 28 px when zoomed out and grows with the zoom (1.5 times the cell). The halo or the rim
+  reads 3:1 on every terrain colour (unit test). Hero, troop and enemy dots have a dark outline.
+- **Mountain (#1439).** The peak and the wall, which the core blocks (`Terrain::blocked`, the walkable set `WALKABLE` of `openworld.ts`
+  is the rest), are pale (`COLOURS.mountain`, 3:1 over the walkable rock) on the map and the minimap, in every look; the rock is dark.
+- **Lairs.** A lair in the window is its tower icon. A lair out of the window gets an arrow on the map's edge pointing to it only
   for the 3 nearest unbeaten ones; the others have none.
 - **Cost.** `openworldminimap.ts` draws from plain data (`drawMinimap`) and is redrawn by `mark`: when a world opens and on a step, a push, a
   broken obstacle or a camera turn, never on a frame.
@@ -277,7 +285,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 - **Look.** `#openworld-map`, full screen over the world, its HUD and the minimap, drawn by the minimap's drawing (`drawMap` of
   `openworldminimap.ts`, a frame of any size, centre and scale) on a canvas of the window's size: the discovered cells in their terrain
   colour, the rest dark, the hero, the troop, the enemies near the hero on discovered cells, every boss lair (a landmark seen from
-  afar: a diamond, a beaten one grey, as on the minimap) and every discovered teleporter (a violet hexagon, section 10). It is turned with the camera, as the minimap. It opens on the hero, 8 px a cell.
+  afar: its tower icon, a beaten one grey, as on the minimap) and every discovered teleporter (a portal icon, section 10). It is turned with the camera, as the minimap. It opens on the hero, 8 px a cell.
 - **Pan and zoom.** A drag pans it (the ground follows the pointer), the wheel and a pinch zoom it between 3 and 32 px a cell, the pad's
   left stick pans it and the triggers zoom it. The box takes the pointer and its canvas does not, so the touch stick leaves it alone.
 - **Click.** A click on the map (a press that moves less than 6 px) hands the cell under it to `WorldMap.pick`: in the choice of a
@@ -294,7 +302,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two teleporters are at least 32 cells apart. It
   reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move and the saves keep loading.
 - **Look.** A flat violet hex pad on the cell and a violet ring floating over it (`TELEPORTER_LOOK`), drawn for the teleporters of the
-  loaded chunks (two instanced meshes, laid with the chunks); a violet hexagon on the minimap and the map.
+  loaded chunks (two instanced meshes, laid with the chunks); a portal icon on the minimap and the map.
 - **Discovery.** A teleporter is discovered once its cell is (section 9: within 10 cells of the hero), so the network grows as the
   player explores. No save field of its own: the discovered cells hold it. `body[data-openworld-teleporters]` lists the discovered ones
   (`q,r` separated by spaces).

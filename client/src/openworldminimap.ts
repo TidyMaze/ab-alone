@@ -3,7 +3,8 @@
 // push or a camera turn changed it, and the map is redrawn then, never every frame. The full screen map (#1411, openworldmap.ts) is the
 // same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
-import type { Terrain } from './openworld';
+import { same, type Terrain } from './openworld';
+import { iconSize, lairIcon, portalIcon } from './openworldlairicon';
 import { LOOK, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
 import { mapColour } from './neonworld';
@@ -21,8 +22,8 @@ export interface MinimapData {
   hero: Axial;
   troop: readonly Axial[];
   enemies: readonly Axial[];
-  /** The boss lairs, in or out of the window, and whether each is beaten. */
-  lairs: readonly { cell: Axial; beaten: boolean }[];
+  /** The boss lairs, in or out of the window, whether each is beaten and the id of its boss (#1438). */
+  lairs: readonly { cell: Axial; beaten: boolean; boss?: string }[];
   /** The teleporters to draw (#1412): the discovered ones. */
   teleporters: readonly Axial[];
   /** The teleporter the map's choice would pick (#1412), ringed; none outside the choice. */
@@ -38,7 +39,8 @@ export const COLOURS = {
   enemy: '#e0453b',
   lair: '#ffb020',
   lairBeaten: '#6f7a72',
-  teleporter: '#b36bff',
+  /** The mountain that cannot be crossed (the peak and the wall, #1439): pale, 3:1 over the walkable rock whatever the look. */
+  mountain: '#d5dbe0',
   chosen: '#ffffff',
   back: '#0b0d0f',
   edge: '#0b0d0f',
@@ -46,9 +48,10 @@ export const COLOURS = {
 
 const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
 
-/** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`), so the map has no palette of its own. */
+/** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`), except the mountain that cannot be crossed (#1439). */
 export function terrainColour(terrain: Terrain): string {
-  const own = terrain === 'water' ? WATER.shore : terrain === 'tree' || terrain === 'boulder' || terrain === 'wall' ? PROPS[terrain].color : LOOK[terrain].color;
+  if (terrain === 'peak' || terrain === 'wall') return COLOURS.mountain;
+  const own = terrain === 'water' ? WATER.shore : terrain === 'tree' || terrain === 'boulder' ? PROPS[terrain].color : LOOK[terrain].color;
   return hex(neonWorldOn() ? mapColour(own) : own); // the neon look's dark terrain is lifted for the map (#1424)
 }
 
@@ -89,6 +92,9 @@ const dot = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, 2 * Math.PI);
   ctx.fill();
+  ctx.strokeStyle = COLOURS.edge; // a dark outline, so the dot reads on the pale mountain (#1439)
+  ctx.lineWidth = 1;
+  ctx.stroke();
 };
 
 /** A closed shape through `points`, filled. */
@@ -99,9 +105,6 @@ const shape = (ctx: CanvasRenderingContext2D, points: readonly (readonly [number
   ctx.closePath();
   ctx.fill();
 };
-
-/** The corners of a teleporter's mark, 5 px out from its cell. */
-const HEXAGON = Array.from({ length: 6 }, (_, i) => [5 * Math.cos((i * Math.PI) / 3), 5 * Math.sin((i * Math.PI) / 3)] as const);
 
 /** Where a map is drawn: a canvas of `width` x `height` px with the cell `centre` (fractions allowed) in the middle, `unit` px a cell.
  * `round` is the minimap: a disc, its edge drawn, and an arrow on the edge for the lairs out of it. */
@@ -119,7 +122,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
   drawMap(ctx, { width: size, height: size, centre: data.hero, unit: size / 2 / (RADIUS + 1), round: true }, data);
 }
 
-/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs, the teleporters, the enemies, the troop and the hero. */
+/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs (the tower icon of each boss), the teleporters, the enemies, the troop and the hero. */
 export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, unit, round }: MapFrame, data: MinimapData): void {
   const [midX, midY] = [width / 2, height / 2];
   const put = (cell: Axial): { x: number; y: number } => {
@@ -145,13 +148,13 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   const away = (cell: Axial): number => Math.hypot(put(cell).x - midX, put(cell).y - midY);
   const out = data.lairs.filter(({ cell, beaten }) => !beaten && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
   const arrows = new Set(out.slice(0, ARROWS).map((lair) => lair.cell));
-  for (const { cell, beaten } of data.lairs) {
+  for (const { cell, beaten, boss } of data.lairs) {
     const colour = beaten ? COLOURS.lairBeaten : COLOURS.lair;
     const { x, y } = put(cell);
     const [ox, oy] = [x - midX, y - midY];
     const dist = away(cell);
     if (dist <= edge) {
-      shape(ctx, [[x, y - 4], [x + 4, y], [x, y + 4], [x - 4, y]], colour);
+      lairIcon(ctx, x, y, iconSize(unit, round), boss, beaten); // the tower of its boss (#1438)
       continue;
     }
     if (!arrows.has(cell)) continue; // out of the window: an arrow for the nearest few only
@@ -162,14 +165,14 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   for (const cell of data.teleporters) {
     if (away(cell) > edge) continue; // the minimap draws the ones in its window only
     const { x, y } = put(cell);
-    shape(ctx, HEXAGON.map(([dx, dy]) => [x + dx, y + dy] as const), COLOURS.teleporter);
+    portalIcon(ctx, x, y, iconSize(unit, round), same(cell, data.hero)); // a portal, the core lit under the hero (#1443)
   }
   if (data.chosen) {
     const { x, y } = put(data.chosen);
     ctx.strokeStyle = COLOURS.chosen;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x, y, 9, 0, 2 * Math.PI);
+    ctx.arc(x, y, iconSize(unit, round) / 2 + 4, 0, 2 * Math.PI); // round the portal's icon
     ctx.stroke();
   }
   for (const cell of data.enemies) {

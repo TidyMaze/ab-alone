@@ -3,7 +3,7 @@
 // untouched.
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
-import { chunkOf, Hero, neighbours, same, World } from './openworld';
+import { chunkOf, Hero, neighbours, same, WALKABLE, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
@@ -58,7 +58,6 @@ const MAP_KEYS = new Set(['m', 'M']);
 /** The keys of the Teleport action (#1412): on a teleporter they open the map in the choice of a teleporter, and close it again. */
 const TELEPORT_KEYS = new Set(['t', 'T']);
 /** The ground a marble can stand on: the troop arrives on it round a teleporter (#1412). */
-const OPEN = new Set(['sand', 'grass', 'rock']);
 
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
 export const twistOf = (prev: number, next: number): number => wrapPi(next - prev);
@@ -134,6 +133,8 @@ export class OpenWorldMode {
     private readonly dungeonPath: DungeonPath = () => new Int32Array(),
     /** The teleporters of a seed's world: `q, r` pairs (the bridge's `world_teleporters`, #1412). */
     private readonly teleportersOf: (seed: number) => Int32Array = () => new Int32Array(),
+    /** The ids of the bosses round the roster: lair k is boss k, counted round (#1438). */
+    private readonly bossIds: () => readonly string[] = () => [],
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -541,7 +542,7 @@ export class OpenWorldMode {
 
   /** Whether a marble can stand on `cell` now: open ground, no enemy, no lair (the troop's cells round a teleporter, #1412). */
   private readonly free = ([q, r]: Axial): boolean =>
-    OPEN.has(this.world!.tile(q, r)?.terrain ?? 'water') && !this.fight.occupied(this.world!, q, r) && !this.lairs.some((cell) => same(cell, [q, r]));
+    WALKABLE.has(this.world!.tile(q, r)?.terrain ?? 'water') && !this.fight.occupied(this.world!, q, r) && !this.lairs.some((cell) => same(cell, [q, r]));
 
   /** Shows the HUD's Teleport button while the hero stands on a teleporter. */
   private showTeleport(on: boolean): void {
@@ -571,12 +572,13 @@ export class OpenWorldMode {
    * lairs, which are landmarks seen from afar. */
   private mapData(cells: MinimapCell[]): MinimapData {
     const { world, hero } = this;
+    const bosses = this.bossIds();
     return {
       cells,
       hero: hero!.at,
       troop: hero!.troop,
       enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
-      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
+      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), boss: bosses[i % bosses.length] })),
       teleporters: this.discoveredTeleporters(),
       yaw: this.view!.yaw,
     };
