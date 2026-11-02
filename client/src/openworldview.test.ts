@@ -1374,6 +1374,11 @@ describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
     expect(BIOME_LOOK.tundra.prop).toBe(0xdde8ee);
     expect(BIOME_LOOK.desert.prop).toBe(0xf0d4ae);
     expect(BIOME_LOOK.badlands.prop).toBe(0xe8aa90);
+    expect(BIOME_LOOK.archipelago.prop).toBe(0xffffff);
+  });
+
+  it('gives the islands of the archipelago a fresh green of their own (#1442)', () => {
+    expect(BIOME_LOOK.archipelago.ground).toBe(0x5c7d58);
   });
 
   it('paints the low ground and the props of each cell with its biome, one colour per instance', () => {

@@ -1169,9 +1169,10 @@ mod tests {
             Biome::Tundra,
             Biome::Desert,
             Biome::Badlands,
+            Biome::Archipelago,
         ]
         .map(|b| b as u8);
-        assert_eq!(codes, [0, 1, 2, 3, 4]);
+        assert_eq!(codes, [0, 1, 2, 3, 4, 5]);
     }
 
     #[test]
@@ -1180,13 +1181,7 @@ mod tests {
             .into_iter()
             .filter(|c| c.height >= 2)
             .collect();
-        for biome in [
-            Biome::Meadow,
-            Biome::Forest,
-            Biome::Tundra,
-            Biome::Desert,
-            Biome::Badlands,
-        ] {
+        for biome in SEXTANTS {
             assert!(
                 land.iter().any(|c| c.biome == biome),
                 "{biome:?} never appears"
@@ -1194,27 +1189,132 @@ mod tests {
         }
     }
 
+    /// The cell `reach` cells from the spawn at `angle` degrees, counter-clockwise from the east with the north up (the `r` of
+    /// the axial grid grows southward).
+    fn polar(angle: f64, reach: f64) -> (i32, i32) {
+        let (x, z) = (
+            reach * angle.to_radians().cos(),
+            -reach * angle.to_radians().sin(),
+        );
+        let r = (z / (3f64.sqrt() / 2.0)).round() as i32;
+        ((x - f64::from(r) / 2.0).round() as i32, r)
+    }
+
     #[test]
-    fn the_biome_shares_on_land_are_the_measured_ones() {
-        // Land is every cell above the water (heights 2 to 7), the 16 x 16 chunks around the spawn, seeds 1 to 4.
-        let land: Vec<Cell> = window_cells(1..=4)
-            .into_iter()
-            .filter(|c| c.height >= 2)
-            .collect();
-        let targets = [
-            (Biome::Meadow, 35.0),
-            (Biome::Forest, 25.0),
-            (Biome::Tundra, 15.0),
-            (Biome::Desert, 15.0),
-            (Biome::Badlands, 10.0),
-        ];
-        for (biome, target) in targets {
-            let share =
-                land.iter().filter(|c| c.biome == biome).count() as f64 * 100.0 / land.len() as f64;
+    fn the_six_sextants_round_the_spawn_are_meadow_forest_tundra_desert_badlands_and_archipelago() {
+        // The axial directions east, north-east, north-west, west, south-west and south-east, in that order (#1442).
+        assert_eq!(
+            SEXTANTS,
+            [
+                Biome::Meadow,
+                Biome::Forest,
+                Biome::Tundra,
+                Biome::Desert,
+                Biome::Badlands,
+                Biome::Archipelago,
+            ]
+        );
+        assert_eq!(polar(60.0, 100.0), (100, -100));
+        // The middle 40 degrees of each sextant, from 40 cells out to the edge: its own biome, on seeds 1 to 4.
+        for seed in 1..=4 {
+            for (k, &biome) in SEXTANTS.iter().enumerate() {
+                let (mut own, mut total) = (0, 0);
+                for reach in (40..440).step_by(8) {
+                    for turn in (-20..=20).step_by(4) {
+                        let (q, r) = polar(60.0 * k as f64 + f64::from(turn), f64::from(reach));
+                        total += 1;
+                        own += usize::from(cell(seed, q, r).unwrap().biome == biome);
+                    }
+                }
+                assert!(
+                    own * 100 >= total * 98,
+                    "seed {seed}: {biome:?} on {own} of {total} cells of its sextant"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_border_between_two_sextants_is_ragged_and_blends_over_a_few_cells() {
+        // Arcs across the border between the meadow and the forest (30 degrees), every 10 cells out: where each arc first
+        // turns forest moves from arc to arc (ragged), some arc turns more than once (blended), and none strays far.
+        let seed = 3;
+        let (mut offsets, mut mixed) = (Vec::new(), 0);
+        for reach in (100..=400).step_by(10) {
+            let reach = f64::from(reach);
+            let degree = 180.0 / std::f64::consts::PI / reach; // one cell along the arc, in degrees
+            let arc: Vec<Biome> = (-30..=30)
+                .map(|k| polar(30.0 + f64::from(k) * degree, reach))
+                .map(|(q, r)| cell(seed, q, r).unwrap().biome)
+                .collect();
             assert!(
-                (share - target).abs() <= 5.0,
-                "{biome:?}: {share:.1} % against {target} %"
+                arc[..10].iter().all(|&b| b == Biome::Meadow),
+                "{reach}: {arc:?}"
             );
+            assert!(
+                arc[51..].iter().all(|&b| b == Biome::Forest),
+                "{reach}: {arc:?}"
+            );
+            let first = arc.iter().position(|&b| b == Biome::Forest).unwrap() as i32 - 30;
+            offsets.push(first);
+            mixed += usize::from(arc.windows(2).filter(|w| w[0] != w[1]).count() > 1);
+        }
+        let spread = offsets.iter().max().unwrap() - offsets.iter().min().unwrap();
+        assert!(spread >= 6, "the border is a straight line: {offsets:?}");
+        assert!(mixed >= 10, "{mixed} arcs blend");
+    }
+
+    #[test]
+    fn the_archipelago_is_mostly_water_with_islands_of_sand_and_grass() {
+        // The middle 40 degrees of the south-east sextant, from 120 cells out, seeds 1 to 4: three quarters water, the
+        // islands sand and low grass (heights 2 to 4) with their trees, boulders and walls; no rock, no peak.
+        let cells: Vec<Cell> = (1..=4)
+            .flat_map(|seed| {
+                (120..440).step_by(4).flat_map(move |reach| {
+                    (-20..=20).map(move |turn| {
+                        let (q, r) = polar(300.0 + f64::from(turn), f64::from(reach));
+                        cell(seed, q, r).unwrap()
+                    })
+                })
+            })
+            .collect();
+        let water =
+            cells.iter().filter(|c| c.terrain == Terrain::Water).count() * 100 / cells.len();
+        assert!((65..=85).contains(&water), "{water} % water");
+        let land: Vec<&Cell> = cells
+            .iter()
+            .filter(|c| c.terrain != Terrain::Water)
+            .collect();
+        assert!(
+            land.iter().all(|c| (2..=4).contains(&c.height)),
+            "an island rises above the low ground"
+        );
+        for terrain in [Terrain::Sand, Terrain::Grass, Terrain::Tree] {
+            assert!(land.iter().any(|c| c.terrain == terrain), "no {terrain:?}");
+        }
+        assert!(land
+            .iter()
+            .all(|c| !matches!(c.terrain, Terrain::Rock | Terrain::Peak)));
+    }
+
+    #[test]
+    fn enemies_live_on_the_land_of_every_biome() {
+        let mut groups = HashMap::new();
+        for seed in 1..=2 {
+            for cx in -8..8 {
+                for cy in -8..8 {
+                    for group in enemy_groups(seed, cx, cy) {
+                        let (q, r) = group[0];
+                        *groups
+                            .entry(cell(seed, q, r).unwrap().biome as u8)
+                            .or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+        for biome in SEXTANTS {
+            let found = groups.get(&(biome as u8)).copied().unwrap_or(0);
+            assert!(found >= 10, "{biome:?}: {found} groups");
         }
     }
 
@@ -1229,6 +1329,7 @@ mod tests {
             (Biome::Tundra, 0.04, 25.0),
             (Biome::Desert, 0.0, 30.0),
             (Biome::Badlands, 0.0, 45.0),
+            (Biome::Archipelago, 0.05, 10.0),
         ];
         for (biome, tree, boulder) in table {
             let low: Vec<&Cell> = cells
@@ -1451,7 +1552,7 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             (WORLD_VERSION, world_digest()),
-            (3, 15_901_084_256_825_590_468),
+            (4, 15_901_084_256_825_590_468),
             "WORLD_VERSION and digest of the reference world"
         );
     }
@@ -1571,6 +1672,17 @@ mod tests {
     }
 
     #[test]
+    fn every_biome_holds_at_least_two_lairs_on_its_land() {
+        for seed in 0..60 {
+            let mut count = [0; 6];
+            for (q, r) in lairs(seed, ROSTER) {
+                count[cell(seed, q, r).unwrap().biome as usize] += 1;
+            }
+            assert!(count.iter().all(|&n| n >= 2), "seed {seed}: {count:?}");
+        }
+    }
+
+    #[test]
     fn the_lairs_of_seed_7_are_pinned() {
         assert_eq!(lairs(7, 3), vec![(139, 58), (-327, 233), (286, -172)]);
     }
@@ -1635,6 +1747,17 @@ mod tests {
         assert_eq!(moved.len(), free.len());
         assert!(hex_distance(moved[1], taken) > 3);
         assert_eq!(moved[2..], free[2..]);
+    }
+
+    #[test]
+    fn every_biome_holds_a_teleporter_on_its_land() {
+        for seed in 0..6 {
+            let mut count = [0; 6];
+            for (q, r) in teleporters(seed, &[]) {
+                count[cell(seed, q, r).unwrap().biome as usize] += 1;
+            }
+            assert!(count.iter().all(|&n| n >= 1), "seed {seed}: {count:?}");
+        }
     }
 
     #[test]

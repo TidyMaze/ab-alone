@@ -397,14 +397,14 @@ mod tests {
     }
 
     #[test]
-    fn the_biome_codes_are_the_five_biomes_of_the_table() {
+    fn the_biome_codes_are_the_six_biomes_of_the_table() {
         let biomes: std::collections::HashSet<u8> = (1..=4)
             .flat_map(|seed| {
                 (-8..8).flat_map(move |cx| (-8..8).map(move |cy| world_chunk(seed, cx, cy)))
             })
             .flat_map(|bytes| bytes.into_iter().skip(2).step_by(CELL_STRIDE))
             .collect();
-        assert_eq!(biomes, std::collections::HashSet::from([0, 1, 2, 3, 4]));
+        assert_eq!(biomes, std::collections::HashSet::from([0, 1, 2, 3, 4, 5]));
     }
 
     #[test]

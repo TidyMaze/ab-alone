@@ -35,7 +35,7 @@ describe('the neon palette of the Open world (#1424)', () => {
     applyNeonWorld(true, palette);
     expect(neonWorldOn()).toBe(true);
     expect([LOOK.grass.color, LOOK.sand.color, LOOK.rock.color, LOOK.peak.color]).toEqual([WORLD.meadow, WORLD.mesa, WORLD.rock, WORLD.rock]);
-    expect([BIOME_LOOK.meadow.ground, BIOME_LOOK.forest.ground, BIOME_LOOK.desert.ground, BIOME_LOOK.badlands.ground]).toEqual([WORLD.meadow, WORLD.meadow, WORLD.mesa, WORLD.mesa]);
+    expect([BIOME_LOOK.meadow.ground, BIOME_LOOK.forest.ground, BIOME_LOOK.desert.ground, BIOME_LOOK.badlands.ground, BIOME_LOOK.archipelago.ground]).toEqual([WORLD.meadow, WORLD.meadow, WORLD.mesa, WORLD.mesa, WORLD.meadow]);
     expect(Object.values(BIOME_LOOK).every((b) => b.prop === 0xffffff)).toBe(true);
     expect([LAIR_LOOK.open, LAIR_LOOK.beaten]).toEqual([NEON.violet, NEON.cyan]);
     expect(PROPS.boulder.color).toBe(WORLD.boulder);

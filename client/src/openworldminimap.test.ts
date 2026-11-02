@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
-import type { Terrain } from './openworld';
-import { LOOK, PROPS, WATER } from './openworldview';
+import type { Terrain, Tile } from './openworld';
+import { BIOME_LOOK, LOOK, PROPS, WATER } from './openworldview';
 import { contrastRatio, type RGB } from './contrast';
 import { setNeonWorldOn } from './neonlook';
 import { mapColour, WORLD } from './neonworld';
@@ -66,6 +66,12 @@ describe('terrainColour', () => {
     expect(terrainColour('water')).toBe(hex(WATER.shore));
     expect(terrainColour('tree')).toBe(hex(PROPS.tree.color));
     expect(terrainColour('boulder')).toBe(hex(PROPS.boulder.color));
+  });
+
+  it('paints the low grass of a biome in its ground, as the 3D view does (#1442)', () => {
+    expect(terrainColour('grass', 'tundra')).toBe(hex(BIOME_LOOK.tundra.ground));
+    expect(terrainColour('grass', 'archipelago')).toBe(hex(BIOME_LOOK.archipelago.ground));
+    expect(terrainColour('grass', 'meadow')).toBe(terrainColour('grass'));
   });
 
   describe('the mountain you cannot cross (#1439)', () => {
@@ -133,17 +139,24 @@ describe('groundOffset (#1411)', () => {
 });
 
 describe('windowCells', () => {
+  const tile = (terrain: Terrain, height = 3): Tile => ({ height, terrain, biome: 'forest' });
   it('reads the hex disc of RADIUS cells round the hero, skipping cells off the world', () => {
-    const all = windowCells(() => 'grass', [10, -4]);
+    const all = windowCells(() => tile('grass', 5), [10, -4]);
     expect(all).toHaveLength(3 * RADIUS * RADIUS + 3 * RADIUS + 1);
-    expect(all).toContainEqual([10, -4, 'grass']);
-    const cells = windowCells((q): Terrain | undefined => (q < 0 ? undefined : 'sand'), [0, 0]);
+    expect(all).toContainEqual([10, -4, 'grass', undefined]);
+    const cells = windowCells((q): Tile | undefined => (q < 0 ? undefined : tile('sand', 2)), [0, 0]);
     expect(cells.length).toBeLessThan(all.length);
     expect(cells.every(([q]) => q >= 0)).toBe(true);
   });
 
   it('reads a disc of another radius when asked, for the map (#1411)', () => {
-    expect(windowCells(() => 'grass', [0, 0], 2)).toHaveLength(19);
+    expect(windowCells(() => tile('grass'), [0, 0], 2)).toHaveLength(19);
+  });
+
+  it('keeps the biome of a low grass cell only, the one the 3D view tints (#1442)', () => {
+    expect(windowCells(() => tile('grass', 4), [0, 0], 0)).toEqual([[0, 0, 'grass', 'forest']]);
+    expect(windowCells(() => tile('grass', 5), [0, 0], 0)).toEqual([[0, 0, 'grass', undefined]]);
+    expect(windowCells(() => tile('tree', 3), [0, 0], 0)).toEqual([[0, 0, 'tree', undefined]]);
   });
 });
 
@@ -172,6 +185,12 @@ describe('drawMinimap', () => {
     expect(water).toHaveLength(1);
     expect(water[0]!.at[0]).toBeGreaterThan(MIDDLE);
     expect(at(fills, terrainColour('peak'))[0]!.at[0]).toBeLessThan(MIDDLE);
+  });
+
+  it('paints a low grass cell in the ground of its biome (#1442)', () => {
+    const { ctx, fills } = fakeContext();
+    drawMinimap(ctx, SIZE, data({ cells: [[3, 0, 'grass', 'badlands']] }));
+    expect(at(fills, terrainColour('grass', 'badlands'))).toHaveLength(1);
   });
 
   it('draws the cells turned with the yaw, so up is up on screen', () => {
