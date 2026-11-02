@@ -438,7 +438,8 @@ for a push that only rebases on `main` without conflict (section 6.4). It runs t
   new push to `main` still cancels the push run in progress, never a dispatched run (the group has
   the event name).
 - **e2e only on a dispatch**, never on a PR or a push. `.github/workflows/e2e-hourly.yml` dispatches
-  it every hour when the head of `main` differs from the last dispatched run (decision #1433,
+  about every hour (on a schedule, and after each green push CI) when the head of `main` differs
+  from the last dispatched run, which started over 60 minutes ago (decision #1433,
   which replaces the "full suite before every merge" of #445). To run it by hand, for example to
   check a flake on a clean runner: `gh workflow run ci.yml --ref main`. The WASM package is
   built once (job `wasm`, cached) and shared as an artifact, then the e2e suite runs in 4 shards,
