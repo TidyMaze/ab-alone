@@ -86,7 +86,7 @@ test('a click on the console screen opens the reader, a click off it leaves, and
   });
   await expect(page.locator('#hud')).toContainText('White to move');
   await expect(page.locator('body')).toHaveAttribute('data-reading', 'mess-house-rule');
-  await page.mouse.click(2, 700); // off the screen
+  await page.mouse.click(2, page.viewportSize()!.height - 20); // off the screen, near the bottom left corner of the window (700 is outside the 540 px window of CI, #1436)
   await expect(page.locator('body')).not.toHaveAttribute('data-reading');
   await page.getByRole('button', { name: 'Reset view' }).click();
   const cell = (q: number, r: number) =>

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openModes } from './modes';
+import { clickHud, openModes, showHud } from './modes';
 
 // #1305: the public Open world shows the other heroes. The page runs on the hook transport (?net=hook): the test plays the other
 // end of the room through window.__netPeer*, so nothing touches a relay. A far hero gets an arrow at the screen edge with its
@@ -98,6 +98,7 @@ test('a private seed has no room: no position leaves the page, #1305', async ({ 
 test('a public name goes out in the Hello and shows over a near hero, Hide leaves the room, an error is shown, #1305', async ({ page }) => {
   await enter(page, PUBLIC);
   await expect(page.locator('#openworld-net')).toHaveText('Online: nobody else here yet.');
+  await showHud(page, '#openworld-name');
   await page.locator('#openworld-name').fill('Ana');
   const hellos = () => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m[1] === 1));
   expect(await hellos()).toContainEqual([2, 1, 65, 110, 97]);
@@ -111,10 +112,10 @@ test('a public name goes out in the Hello and shows over a near hero, Hide leave
   await expect(page.locator('.peer-tag')).toHaveText('Bob');
   await expect(page.locator('#openworld-net')).toHaveText('Online: 1 other hero here.');
   await page.screenshot({ path: 'test-results/peers-named.png' });
-  await page.locator('#openworld-hide').click();
+  await clickHud(page, '#openworld-hide');
   await expect(page.locator('#openworld-net')).toContainText('Hidden');
   await expect(page.locator('.peer-tag')).toHaveCount(0);
-  await page.locator('#openworld-hide').click();
+  await clickHud(page, '#openworld-hide');
   await expect(page.locator('#openworld-hide')).toHaveText('Hide');
   await page.evaluate(() => (window as unknown as Hook & { __netPeerError: (m: string) => void }).__netPeerError('could not connect to peer p after exchanging SDP'));
   await expect(page.locator('#openworld-net')).toContainText('the direct connection failed');

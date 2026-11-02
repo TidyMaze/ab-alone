@@ -19,10 +19,21 @@ const hold = async (page: Page, buttons: number[], axes = [0, 0, 0, 0], values: 
   }, [buttons, axes, values] as const);
   await frames(page, n);
 };
-const tap = async (page: Page, button: number): Promise<void> => {
-  await hold(page, [button], [0, 0, 0, 0], {}, 1);
-  await hold(page, []);
-};
+// The press is set and released inside the page, in two consecutive frames: the game polls the pad once per frame, so it sees the
+// button down in exactly one poll whatever the frame time. A press held across a Playwright round trip lasted over 400 ms on a
+// software-GL runner (a frame costs about a second there) and the game repeated it: LB turned the camera 90 degrees, not 30 (#1436).
+const tap = (page: Page, button: number): Promise<unknown> =>
+  page.evaluate((button) => new Promise((done) => {
+    const pad = (window as any).__pad;
+    const set = (down: boolean): void => Object.assign(pad.buttons[button], { pressed: down, value: down ? 1 : 0 });
+    requestAnimationFrame(() => {
+      set(true);
+      requestAnimationFrame(() => {
+        set(false);
+        done(null);
+      });
+    });
+  }), button);
 
 test('a gamepad alone plays a move: Start and B, the D-pad to the board, RB, the stick, A', async ({ page }) => {
   await page.addInitScript(() => {

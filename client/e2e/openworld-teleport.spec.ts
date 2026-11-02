@@ -87,15 +87,17 @@ test('a click on the map picks the teleporter under it, the hero\'s own is refus
   await stand(page, [2, -1]);
   await page.locator('#openworld-teleport').click();
   await expect(page.locator('#openworld-map')).toBeVisible();
-  await page.mouse.click(640, 360); // the hero's own: refused, said in the caption
+  const view = page.viewportSize()!; // 1280x720 locally, 960x540 on CI: the map is centred on the hero in the middle of the window (#1436)
+  const [cx, cy] = [view.width / 2, view.height / 2];
+  await page.mouse.click(cx, cy); // the hero's own: refused, said in the caption
   await expect(page.locator('#openworld-map-note')).toHaveText('the hero stands on that teleporter');
-  await page.mouse.move(640, 360);
+  await page.mouse.move(cx, cy);
   for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 400); // out to 3 px a cell
   // Where the map draws `near`: the ground layout turned by the camera's yaw (`screenOffset` of openworldminimap.ts), 3 px a cell.
   const yaw = (Number(await page.locator('body').getAttribute('data-openworld-yaw')) * Math.PI) / 180;
   const [dq, dr] = [near[0]! - 2, near[1]! + 1];
   const [dx, dz] = [dq + dr / 2, (Math.sqrt(3) / 2) * dr];
-  await page.mouse.click(640 + 3 * (dx * Math.cos(yaw) - dz * Math.sin(yaw)), 360 + 3 * (dx * Math.sin(yaw) + dz * Math.cos(yaw)));
+  await page.mouse.click(cx + 3 * (dx * Math.cos(yaw) - dz * Math.sin(yaw)), cy + 3 * (dx * Math.sin(yaw) + dz * Math.cos(yaw)));
   await expect(page.locator('#openworld-map')).toBeHidden();
   await expect(page.locator('body')).toHaveAttribute('data-openworld-at', near.join(','));
 });

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openModes } from './modes';
+import { clickHud } from './modes';
 
 // #1291: the Dungeon button walks the hero to the nearest tower. The test hook stands the hero a few cells from a lair (no 150-cell
 // walk); the press walks the rest and the step onto the lair starts the boss fight.
@@ -15,7 +15,7 @@ test('the Dungeon button walks the hero to the nearest tower and the fight start
   );
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe(`${q - 4},${r}`);
   await page.screenshot({ path: process.env.DUNGEON_SHOT ?? 'test-results/dungeon.png' });
-  await page.locator('#openworld-dungeon').click();
+  await clickHud(page, '#openworld-dungeon');
   await expect(page.locator('#openworld-dungeon-note')).toHaveText('');
   await expect(page.locator('body')).toHaveAttribute('data-boss', /.+/);
 });
