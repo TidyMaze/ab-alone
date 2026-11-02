@@ -269,6 +269,7 @@ describe('shared board opt-in', () => {
     const spies = ['importKey', 'generateKey'].map((m) => vi.spyOn(crypto.subtle, m as 'importKey').mockRejectedValue(new Error('no key')));
     game.openModes();
     byId('leaderboard').click();
+    byId('leaderboard').click(); // opened again at once: the first read fails after the second began, and says nothing
     await vi.waitFor(() => expect(byId('board-shared').textContent).toBe('The relays could not be read.'));
     for (const spy of spies) spy.mockRestore();
     vi.unstubAllGlobals();
