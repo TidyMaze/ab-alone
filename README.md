@@ -9,6 +9,8 @@
 
 ### [▶ Play in your browser](https://tidymaze.github.io/ab-alone/)
 
+<img src="docs/screenshots/boss-pulsar.webp" alt="A boss fight against The Pulsar: a hexagonal board of 61 cells with pale and black marbles, the boss bar on top and a warning that the next pulse comes in 2 turns" width="800">
+
 No install, no account, no server. Just a board, the dark, and whatever is left of the crew.
 
 </div>
@@ -60,6 +62,13 @@ First to eject 6 wins. On top of it, the ship:
 
 Rusted deck plates, cold light, fog at the rim. The camera orbits and zooms; a **Clear board**
 setting (cog menu) drops the fog.
+
+<p align="center">
+  <img src="docs/screenshots/hub.webp" alt="The hub on the Mess deck: a door per boss, a room per mode, lore terminals and the lift shaft listing the five decks" width="49%">
+  <img src="docs/screenshots/battle-royale.webp" alt="Battle royale: six armies of different colours on a wide board, with the order log of the round" width="49%">
+  <img src="docs/screenshots/open-world.webp" alt="The open world: a hero marble and its troop on a meadow of hexagons, with the minimap and the Map button" width="49%">
+  <img src="docs/screenshots/phone.webp" alt="The same boss fight on a phone, with the controls at the bottom of the screen" width="24%">
+</p>
 
 ## Under the hull
 
