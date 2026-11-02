@@ -6008,7 +6008,7 @@ if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
   const hooks = window as unknown as Record<string, unknown>;
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
-  hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(Number.isFinite(openWorldFixedSeed) ? openWorldFixedSeed : PUBLIC_SEED, false)); // the world left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
+  hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
   hooks.__openworldEnemies = () => openWorld.enemies();
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
