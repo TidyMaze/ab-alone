@@ -59,6 +59,13 @@ import {
   relicMask,
   relicOffers,
   takeRelic,
+  claimTactic,
+  MAX_TACTICS,
+  tacticBarHtml,
+  tacticOffer,
+  tacticRecord,
+  TACTICS,
+  useTactic,
   type MapNode,
   type Run,
 } from './roguelite';
@@ -101,7 +108,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [] });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -177,7 +184,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual(fight);
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -214,6 +221,10 @@ describe('roguelite', () => {
     ['a relic twice', { ...newRun(1, 3), relics: [3, 3] }],
     ['relics that are no list', { ...newRun(1, 3), relics: 3 }],
     ['a bad relic flag', { ...newRun(1, 3), relic: 'yes' }],
+    ['an unknown tactic', { ...newRun(1, 3), tactics: [5] }],
+    ['tactic 0', { ...newRun(1, 3), tactics: [0] }],
+    ['four tactics', { ...newRun(1, 3), tactics: [1, 2, 3, 4] }],
+    ['tactics that are no list', { ...newRun(1, 3), tactics: 2 }],
   ])('drops a saved run with %s', async (_, raw) => {
     const store = memoryStore();
     await store.put(RUN_KEY, raw);
@@ -455,11 +466,11 @@ describe('roguelite', () => {
     const run = visit(ACT, { ...newRun(1, 3), path: [0] }, 3);
     expect(run).toMatchObject({ path: [0, 3], fighting: false, event: true });
     expect(choices(ACT, run)).toEqual([]);
-    expect(EVENTS).toHaveLength(5);
+    expect(EVENTS).toHaveLength(6);
     expect(EVENTS).toContain(eventOf(run));
     expect(eventOf(run)).toBe(eventOf({ ...run }));
     const seen = new Set(Array.from({ length: 60 }, (_, seed) => eventOf({ ...run, seed })));
-    expect(seen.size).toBe(5); // every event shows up
+    expect(seen.size).toBe(6); // every event shows up
     const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => eventOf({ ...run, seed }) !== eventOf({ ...run, seed, path: [0, 7] }));
     expect(nodes.length).toBeGreaterThan(0);
   });
@@ -569,7 +580,7 @@ describe('roguelite', () => {
       }),
     );
     expect([...gains]).toEqual([1]); // never an Anchor nor a Spark
-    expect(EVENTS.filter((e) => e.gain[0] || !e.gain.some(Boolean))).toHaveLength(2);
+    expect(EVENTS.filter((e) => e.gain[0] || !e.gain.some(Boolean))).toHaveLength(3); // the Heavy forge, the Cryo pods and the Field manual
   });
 
   it('counts the acts a run over won: its bosses beaten', () => {
@@ -813,5 +824,121 @@ describe('roguelite relics', () => {
     expect(nodes[4]!.textContent).toBe('Treasure');
     expect(nodes[4]!.className).toBe('node treasure');
     expect(nodes[4]!.getAttribute('aria-label')).toBe('Act 1, treasure');
+  });
+});
+
+// Tactics (#1460, docs/specs/roguelite.md section 11): one-use plays of a fight, up to 3 held.
+describe('roguelite tactics', () => {
+  // One act: a fight leads to an elite, a rest, an event (3) and a treasure, each to the boss.
+  const ACT_EVENT = parseMap([0, 0, 0, 0, 0b1111, 0, 1, 0, 2, 1, 0, 1, 1, 3, 1, 0, 1, 2, 4, 1, 0, 1, 3, 5, 1, 0, 2, 0, 1, 0]);
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const won = (state: Partial<Run> = {}): Run => fightOver(MAP, { ...pick(newRun(1, 3), 0), ...state }, true, 0);
+
+  it('four tactics by their code on the bridge, each a name, a one-line rule and its own glyph', () => {
+    expect(TACTICS.map((t) => t.name)).toEqual(['Reinforce', 'Freeze', 'Swap', 'Fall back']);
+    expect(new Set(TACTICS.map((t) => t.icon)).size).toBe(4);
+    for (const t of TACTICS) expect(t.help).toMatch(/^[^.]+$/);
+    expect(MAX_TACTICS).toBe(3);
+    expect(newRun(1, 3).tactics).toEqual([]); // only variety carries: a new run holds none
+  });
+
+  it('a tactic is a move record that starts with a 0, its cells for a Swap', () => {
+    expect(tacticRecord(2)).toEqual([0, 2, 0, 0, 0, 0, 0, 0]);
+    expect(tacticRecord(3, [0, 2], [1, 3])).toEqual([0, 3, 0, 2, 1, 3, 0, 0]);
+  });
+
+  it('a tactic used is gone, one of two alike leaves the other', () => {
+    const held = { ...newRun(1, 3), tactics: [2, 4, 2] };
+    expect(useTactic(held, 2).tactics).toEqual([4, 2]);
+    expect(useTactic(held, 4).tactics).toEqual([2, 2]);
+    expect(useTactic(held, 1)).toBe(held);
+  });
+
+  it('a won fight also offers one tactic, dealt by the run seed and the node, while fewer than 3 are held', () => {
+    const run = won();
+    const offer = tacticOffer(run);
+    expect(offer).toBeGreaterThanOrEqual(1);
+    expect(offer).toBeLessThanOrEqual(TACTICS.length);
+    expect(tacticOffer({ ...run })).toBe(offer);
+    const seen = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => tacticOffer({ ...run, seed })));
+    expect(seen.size).toBeGreaterThan(1);
+    const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => tacticOffer({ ...run, seed }) !== tacticOffer({ ...run, seed, path: [1] }));
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(tacticOffer({ ...run, tactics: [1, 1, 1] })).toBe(0); // the hand is full
+    expect(tacticOffer({ ...run, reward: false })).toBe(0); // no reward waits
+    expect(offers(run)).toHaveLength(3); // the other offers are the same as before
+  });
+
+  it('the reward is there for a tactic alone: a full army of special marbles', () => {
+    const full = won({ specials: [5, 5, 4, 0, 0, 0] });
+    expect(offers(full)).toEqual([]);
+    expect(full.reward).toBe(true);
+    expect(won({ specials: [5, 5, 4, 0, 0, 0], tactics: [1, 1, 1] }).reward).toBe(false);
+  });
+
+  it('a tactic offer claimed joins the hand and ends the reward', () => {
+    const run = won({ tactics: [3] });
+    const claimed = claimTactic(run);
+    expect(claimed).toEqual({ ...run, tactics: [3, tacticOffer(run)], reward: false });
+    expect(claimTactic(claimed)).toBe(claimed); // none waits
+  });
+
+  it('draws the reward screen with the tactic as its last button', () => {
+    const run = won();
+    const doc = parse(rewardHtml(MAP, run));
+    const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button')];
+    const last = buttons[buttons.length - 1]!;
+    const tactic = TACTICS[tacticOffer(run) - 1]!;
+    expect(last.dataset.tacticOffer).toBe(String(tacticOffer(run)));
+    expect(last.textContent).toBe(`${tactic.name}: ${tactic.help}`);
+    expect(last.querySelector('svg.glyph path')!.getAttribute('d')).toBe(tactic.icon);
+    expect(buttons.filter((b) => b.dataset.offer !== undefined)).toHaveLength(offers(run).length);
+    expect(parse(rewardHtml(MAP, won({ tactics: [1, 1, 1] }))).querySelector('[data-tactic-offer]')).toBeNull();
+  });
+
+  it('the Field manual event teaches one tactic for a marble, only while the hand has room', () => {
+    const manual = EVENTS[5]!;
+    expect(manual.title).toBe('Field manual');
+    const full = { ...newRun(1, 3), path: [0, 3] };
+    expect(takeEvent(full, manual)).toMatchObject({ army: 13, specials: [0, 0, 0, 0, 0, 0] });
+    expect(takeEvent(full, manual)!.tactics).toHaveLength(1);
+    expect(takeEvent({ ...full, tactics: [1, 1, 1] }, manual)).toBeNull();
+    expect(takeEvent({ ...full, army: MIN_ARMY }, manual)).toBeNull();
+    const run = visit(ACT_EVENT, { ...newRun(1, 3), path: [0] }, 3);
+    const seed = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].find((n) => eventOf({ ...run, seed: n })!.tactic)!;
+    const event = { ...run, seed };
+    const code = takeEvent(event, eventOf(event)!)!.tactics[0]!;
+    expect(takeEvent({ ...event }, eventOf(event)!)!.tactics).toEqual([code]); // deterministic
+    expect(resolve(event, true).tactics).toEqual([code]);
+    const take = parse(eventHtml(event)).querySelector('button[data-choice="1"]')!;
+    expect(take.textContent).toBe(`Learn ${TACTICS[code - 1]!.name} · lose 1 marble`);
+    expect(parse(eventHtml({ ...event, tactics: [1, 1, 1] })).querySelector<HTMLButtonElement>('button[data-choice="1"]')!.disabled).toBe(true);
+    const codes = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].flatMap((n) => (eventOf({ ...run, seed: n })!.tactic ? [takeEvent({ ...run, seed: n }, manual)!.tactics[0]] : [])));
+    expect(codes.size).toBeGreaterThan(1); // other seeds, other tactics
+  });
+
+  it('draws the tactic bar: a glyph button per tactic held, disabled when the engine cannot, nothing when none', () => {
+    const held = { ...newRun(1, 3), tactics: [2, 3, 1] };
+    expect(tacticBarHtml(newRun(1, 3), 0b1111, false)).toBe('');
+    const bar = parse(tacticBarHtml(held, 0b0101, false)).querySelector('.tactics')!;
+    expect(bar.getAttribute('aria-label')).toBe('Tactics');
+    const buttons = [...bar.querySelectorAll<HTMLButtonElement>('button')];
+    expect(buttons.map((b) => b.dataset.tactic)).toEqual(['2', '3', '1']);
+    expect(buttons.map((b) => b.disabled)).toEqual([true, false, false]); // bit code - 1 of the mask
+    expect(buttons.map((b) => b.title)).toEqual(TACTICS.slice(0, 3).map((t, i) => `${TACTICS[[1, 2, 0][i]!]!.name}: ${TACTICS[[1, 2, 0][i]!]!.help}`));
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(buttons.map((b) => b.title));
+    expect(buttons.every((b) => b.querySelector('svg path'))).toBe(true);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false']);
+    const swapping = [...parse(tacticBarHtml(held, 0b0111, true)).querySelectorAll<HTMLButtonElement>('button')];
+    expect(swapping.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']); // only the Swap
+  });
+
+  it('the glyph of a tactic reads 3 to 1 on the HUD plate in both themes', () => {
+    const ratio = (fg: string, bg: string): number => {
+      const rgb = (hex: string): RGB => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as RGB;
+      return contrastRatio(rgb(fg), rgb(bg));
+    };
+    expect(ratio('#7fd6e8', '#161a1d')).toBeGreaterThanOrEqual(3); // --accent on --panel, dark
+    expect(ratio('#0a5f73', '#f3f0e6')).toBeGreaterThanOrEqual(3); // light
   });
 });
