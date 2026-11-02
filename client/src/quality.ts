@@ -17,6 +17,8 @@ export interface Hints {
   cores?: number;
   memory?: number;
   reducedMotion: boolean;
+  /** The renderer draws in software (`isSoftwareRenderer`, #1483). */
+  software?: boolean;
 }
 export type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
@@ -42,8 +44,9 @@ const STEERING_KEY = 'ab-alone.steering';
 export const OPEN_WORLD_POINT_LIGHTS = 0;
 
 // The same rule on a phone as on a desktop (#882): only a weak device or reduced motion drops to the low tier.
-export function tierFromHints({ cores, memory, reducedMotion }: Hints): Tier {
-  if (reducedMotion) return 'low';
+// A renderer that draws in software takes the low tier too, until the player picks the other in the settings (#1483).
+export function tierFromHints({ cores, memory, reducedMotion, software }: Hints): Tier {
+  if (reducedMotion || software) return 'low';
   const weak = (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
   return weak ? 'low' : 'high';
 }
@@ -173,6 +176,28 @@ export const readPalette = (store: Store): Palette => {
 };
 export const writePalette = (store: Store, palette: Palette): void => write(store, PALETTE_KEY, palette);
 
+// Software rendering (#1483): a machine with no GPU runs the browser's own rasterizer. Its name shows in the renderer string of the
+// context (SwiftShader of Chrome, llvmpipe, softpipe and lavapipe of Mesa, WARP of Windows) or in the WebGPU adapter's description.
+export const isSoftwareRenderer = (name: string): boolean => /swiftshader|llvmpipe|softpipe|lavapipe|software|basic render|warp/i.test(name);
+interface Named {
+  gl?: { getExtension(name: 'WEBGL_debug_renderer_info'): { UNMASKED_RENDERER_WEBGL: number } | null; getParameter(p: number): unknown };
+  adapter?: { info?: { description?: string; device?: string }; isFallbackAdapter?: boolean };
+}
+/** The name of the GPU behind a three backend, '' when it tells none: the WebGL context's unmasked renderer, or the WebGPU adapter's. */
+export function rendererName(backend: unknown): string {
+  const { gl, adapter } = backend as Named;
+  const info = gl?.getExtension('WEBGL_debug_renderer_info');
+  if (gl && info) return String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+  if (adapter) return `${adapter.isFallbackAdapter ? 'software ' : ''}${adapter.info?.description ?? ''} ${adapter.info?.device ?? ''}`;
+  return '';
+}
+
+// The measured check (#1483): a renderer string can be masked. The first window of frames (a shader compile is in it) at a median of
+// over 100 ms, 10 FPS, is no GPU: a GPU draws these in a tenth of the time.
+const SOFTWARE_FRAME_MS = 100;
+export const looksSoftware = (frameMs: readonly number[]): boolean =>
+  frameMs.length > 0 && [...frameMs].sort((a, b) => a - b)[frameMs.length >> 1]! > SOFTWARE_FRAME_MS;
+
 // A tier is stored only when asked for (?quality): the detected one is not, so a later rule applies at once (#882).
 export function readTier(store: Store, hints: Hints): Tier {
   const stored = read(store, TIER_KEY);
@@ -250,6 +275,14 @@ const isSlow = (frameMs: readonly number[]): boolean => [...frameMs].sort((a, b)
 export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor: number): number {
   return isSlow(frameMs) ? Math.max(floor, ratio - RATIO_STEP) : ratio;
 }
+
+// The lowest pixel ratio the adaptive resolution steps down to: 1 on a GPU (a fast frame at a lower one only blurs), half of it on a
+// software renderer (#1483), where the cost of a frame is its pixels and a 1280 x 720 screen drawn at 0.5 still reads its cells and marbles.
+export const ratioFloor = (dpr: number, software: boolean): number => (software ? 0.5 : Math.min(dpr, 1));
+
+// The window of frames the adaptive resolution judges: 30, and 10 on a software renderer (#1483), where a window of 30 frames takes 3 s
+// at 10 FPS and the two steps down to the floor 6 s.
+export const ratioFrames = (software: boolean): number => (software ? 10 : 30);
 
 // The low tier offer (#849): after SLOW_RUNS slow windows in a row (about 4 s at 30 FPS) the high tier offers the low one,
 // once per page view, until the player answered. Never automatic: Accept or Dismiss, remembered.

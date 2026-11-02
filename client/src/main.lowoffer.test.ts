@@ -95,3 +95,29 @@ describe('the low tier offer (#849)', () => {
     expect(offer().hidden).toBe(true);
   });
 });
+
+// Software rendering (#1483): `?software=on` (the renderer's name in a real page) takes the low tier unless one is stored; a first window of
+// frames over 100 ms says it when the renderer does not.
+describe('a machine with no GPU (#1483)', () => {
+  it('is a GPU machine by default, on the high tier', async () => {
+    await boot('?bot=off');
+    expect([document.body.dataset.software, document.body.dataset.tier]).toEqual(['off', 'high']);
+  });
+
+  it('takes the low tier when the renderer is software, and a tier the player stored wins', async () => {
+    await boot('?bot=off&software=on');
+    expect([document.body.dataset.software, document.body.dataset.tier]).toEqual(['on', 'low']);
+    await boot('?bot=off&software=on&quality=high'); // stored by the link, as the settings store it
+    expect([document.body.dataset.software, document.body.dataset.tier]).toEqual(['on', 'high']);
+  });
+
+  it('is known by its frames when the renderer says nothing, not by a fast window', async () => {
+    const game = await boot('?bot=off');
+    game.hook('__slowWindow', 16);
+    expect(document.body.dataset.software).toBe('off');
+    game.hook('__slowWindow', 150);
+    expect(document.body.dataset.software).toBe('on');
+    game.hook('__slowWindow', 150); // already known
+    expect(document.body.dataset.software).toBe('on');
+  });
+});

@@ -170,12 +170,30 @@ export function maxZoomFor(aspect: number): number {
   return limit;
 }
 
-/** A copy of the hexagonal prism `prism` with its top face only (#1234): the 6 triangles of the top cap of a `CylinderGeometry`. */
+/** A copy of the hexagonal prism `prism` with its top face only (#1234): the 6 triangles of the top cap of a `CylinderGeometry`, held in
+ * the 7 vertices they use (a centre and 6 corners, #1483): a cylinder cap repeats its centre and corners, and a software renderer pays
+ * each vertex of each of the thousands of instances. */
 function topOnly(prism: THREE.CylinderGeometry): THREE.BufferGeometry {
   const top = prism.groups[1]!; // the groups of a cylinder: the sides, the top cap, the bottom cap
-  const flat = prism.clone();
-  flat.clearGroups();
-  flat.setIndex(Array.from(prism.index!.array.slice(top.start, top.start + top.count)));
+  const from = prism.index!.array.slice(top.start, top.start + top.count);
+  const keys = new Map<string, number>();
+  const kept: number[] = [];
+  const index = Array.from(from, (v) => {
+    const key = [0, 1, 2].map((k) => Math.round(prism.attributes.position!.array[v * 3 + k]! * 1e4) + 0).join() // + 0: a -0 is a 0;
+    if (!keys.has(key)) {
+      keys.set(key, kept.length);
+      kept.push(v);
+    }
+    return keys.get(key)!;
+  });
+  const flat = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'uv'] as const) {
+    const source = prism.attributes[name]!;
+    const array = new Float32Array(kept.length * source.itemSize);
+    kept.forEach((v, i) => array.set(Array.from({ length: source.itemSize }, (_, k) => source.array[v * source.itemSize + k]!), i * source.itemSize));
+    flat.setAttribute(name, new THREE.BufferAttribute(array, source.itemSize));
+  }
+  flat.setIndex(index);
   return flat;
 }
 
@@ -430,6 +448,11 @@ type Timing = Pick<Move, 'start' | 'span' | 'fall' | 'lunge'>;
 /** How far round the hero the sun's shadow reaches at the closest zoom, in cells: the camera's near footprint (#1364). The footprint
  * grows with the zoom, so the shadow's square, its sun and its far plane grow with it (`fitShadow`, #1478): the same map, a softer shadow. */
 const SHADOW_REACH = 14;
+/** `cullGround`: the margin round the footprint where ground is laid too (a tall column over its edge shows), and how far a corner of the
+ * footprint may drift from the laid one, in world units, before the ground is laid again: the margin always covers what the screen shows. */
+const VIEW_MARGIN = 4;
+const VIEW_LAG = 2;
+const CULLED_ROOM = 1600;
 
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
@@ -452,6 +475,9 @@ export class OpenWorldView {
    * the props depend on, so a step moves the props that switch between detailed and plain, and no others (#1034, #1054). */
   private drawnChunks = '';
   private drawnKey = '';
+  /** The footprint the ground was laid for with `cullGround`, empty until laid: the ground out of it (and its margin) is not laid (#1483). */
+  private laidView: THREE.Vector3[] = [];
+  private culling = false;
   private loadedReach = 0;
   private readonly grounds = {} as Record<Ground, THREE.InstancedMesh>;
   /** The low tier's flat tops (#1234): a ground cell no neighbour lies below shows no side, so it is drawn as its top alone (6 triangles
@@ -1252,6 +1278,10 @@ export class OpenWorldView {
     const corners = footprint(this.camera);
     const view = new THREE.Vector3();
     const depth = Math.max(...corners.map((p) => -view.copy(p).applyMatrix4(this.camera.matrixWorldInverse).z));
+    if (this.culling && (this.laidView.length === 0 || corners.some((c, i) => c.distanceTo(this.laidView[i]!) > VIEW_LAG))) {
+      this.laidView = corners.map((c) => c.clone());
+      this.drawnChunks = ''; // the screen moved past the margin: the ground is laid again for it
+    }
     this.fog.near = CAMERA_DISTANCE * k;
     this.fog.far = FOG_BEYOND * depth;
     this.camera.far = this.fog.far * 1.5; // the planes reach past the fog: no ground is clipped
@@ -1352,7 +1382,7 @@ export class OpenWorldView {
         this.world.chunk(kx, ky).forEach((tile, i) => {
           const q = kx * CHUNK + (i % CHUNK);
           const r = ky * CHUNK + Math.floor(i / CHUNK);
-          add(this.groundMesh(tile, q, r));
+          if (this.shows(q, r)) add(this.groundMesh(tile, q, r));
           this.stand(tile, q, r, NOWHERE, 0, lay, hexDistance([q, r], hero) <= HI_RADIUS);
         });
       }
@@ -1518,7 +1548,11 @@ export class OpenWorldView {
    * the enemies. With `terrain` false (a step within the same chunks) it lays the props alone. */
   private build(cx: number, cy: number, reach: number, hero: Axial, terrain: boolean): void {
     const need = this.need(cx, cy, reach, hero);
-    for (const mesh of this.laid(terrain)) this.fit(mesh, need.get(mesh) ?? 0); // every mesh holds what this build writes
+    // Every mesh holds what this build writes. With `cullGround` every ground mesh holds as many as the whole laid ground, so none is ever
+    // replaced when the cells in view change kind: a replaced mesh is a new shader program, a second of software compiling (#1483).
+    const grounds = this.culling && terrain ? this.groundMeshes() : [];
+    const room = grounds.reduce((sum, mesh) => sum + (need.get(mesh) ?? 0), 0);
+    for (const mesh of this.laid(terrain)) this.fit(mesh, grounds.includes(mesh) ? room : need.get(mesh) ?? 0);
     const counts = new Map<THREE.InstancedMesh, number>();
     const { dummy } = this;
     // Writes the next instance of `mesh` (it holds them all: `fit`).
@@ -1550,7 +1584,7 @@ export class OpenWorldView {
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height, q, r);
-          if (terrain) {
+          if (terrain && this.shows(q, r)) {
             const column = this.groundMesh(tile, q, r);
             put(column, p.x, top / 2, p.z, top, groundColour(tile, ground));
             if (ground === 'water') column.setColorAt(counts.get(column)! - 1, waterColor(this.world, q, r));
@@ -1563,11 +1597,43 @@ export class OpenWorldView {
     if (terrain) this.updateEnemies();
     if (terrain) this.placeTeleporters();
     for (const mesh of this.laid(terrain)) {
+      if (grounds.includes(mesh) && !counts.has(mesh)) put(mesh, 0, -100, 0, 1e-4, 0); // a ground out of view keeps one speck: a mesh drawn the first time is a shader to compile
       mesh.count = counts.get(mesh) ?? 0;
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceColor!.needsUpdate = true;
     }
     this.laidHero = hero;
+  }
+
+  /** Lays the ground of the screen and a margin only, not the whole loaded square (#1483): a software renderer pays for each instance
+   * it is given, seen or not, and 15 cells in 16 of the loaded chunks lie out of view. Off, the chunks are laid whole, as before. */
+  cullGround(on: boolean): void {
+    if (on === this.culling) return;
+    this.culling = on;
+    // The meshes hold what the chunks may bring (26 000 to 66 000 columns, 37 000 mountains), 18 MB a build uploads: they hold what is in
+    // view, a few hundred, instead, and grow past it when a wide screen needs more.
+    const grounds = this.groundMeshes();
+    if (on) for (const mesh of [...this.managed]) if (grounds.includes(mesh) || mesh.instanceMatrix.count > CULLED_ROOM) this.replace(mesh, mesh.geometry.clone(), CULLED_ROOM);
+    this.laidView = [];
+    this.drawnChunks = ''; // the ground is laid again
+  }
+
+  /** The ground meshes: a column and a flat top of each ground. */
+  private groundMeshes(): THREE.InstancedMesh[] {
+    return GROUNDS.flatMap((ground) => [this.grounds[ground], this.flats[ground]]);
+  }
+
+  /** Whether the ground of cell `(q, r)` is laid: always, or with `cullGround` when it lies inside the laid footprint and its margin. */
+  private shows(q: number, r: number): boolean {
+    if (!this.culling) return true;
+    const p = axialTo3D(q, r);
+    const quad = this.laidView;
+    return quad.every((a, i) => {
+      const b = quad[(i + 1) % 4]!;
+      const length = Math.hypot(b.x - a.x, b.z - a.z);
+      // The corners wind the same way at every turn (the screen's corners through a camera that looks down): inside is the negative side.
+      return (-((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x))) / length >= -VIEW_MARGIN;
+    });
   }
 
   /** Draws the ground as flat tops where a column shows no side (`useFlatTops`), at the next frame. */

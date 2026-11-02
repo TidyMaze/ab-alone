@@ -2421,6 +2421,19 @@ describe('the flat tops of the low tier (#1234)', () => {
     return view;
   };
 
+  it('holds a flat top in 7 vertices, a centre and 6 corners, on the plane of its column top: a software renderer pays each vertex of each instance', () => {
+    const view = lowView(stepped(new Map(), 1, 4));
+    view.show([0, 0]);
+    const top = mesh(view, 'terrain-grass-flat').geometry;
+    expect(top.attributes.position!.count).toBe(7);
+    expect(top.attributes.normal!.count).toBe(7);
+    expect(top.index!.count).toBe(18);
+    for (let i = 0; i < 7; i++) {
+      expect(top.attributes.normal!.getY(i)).toBeCloseTo(1);
+      expect(top.attributes.position!.getY(i)).toBeCloseTo(0.5);
+    }
+  });
+
   it('draws a cell no neighbour lies below as its top alone, and the other cells as columns', () => {
     const view = lowView(stepped(new Map([['0,0', 3]]), 1, 4));
     view.show([0, 0]);
@@ -2595,5 +2608,85 @@ describe('the camera follows the hero butter-smooth, on the frame clock (#1333)'
     run(view, 60, () => angles.push(Math.abs(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z))));
     expect(Math.min(...angles)).toBeGreaterThan(169 * DEG);
     expect(view.yaw).toBeCloseTo(-170 * DEG, 9);
+  });
+});
+
+describe('the ground in view only, on a software renderer (#1483)', () => {
+  // Software WebGL pays about 7 microseconds for each instance it draws, in view or not, and 15 in 16 of the loaded ground lies out of view.
+  const CELLS = 49 * CHUNK * CHUNK;
+  const laid = (view: OpenWorldView): Set<string> => {
+    const out = new Set<string>();
+    view.scene.traverse((o) => {
+      const m = o as THREE.InstancedMesh;
+      if (!m.isInstancedMesh || !m.name.startsWith('terrain-')) return;
+      for (let i = 0; i < m.count; i++) out.add(`${Math.round(m.instanceMatrix.array[i * 16 + 12]! * 100)},${Math.round(m.instanceMatrix.array[i * 16 + 14]! * 100)}`);
+    });
+    return out;
+  };
+  // Every cell of the 7 x 7 chunks around `centre` whose middle lies on the screen is laid: the number of them, or -1 when one is not.
+  const onScreenAreLaid = (view: OpenWorldView, centre: Axial): number => {
+    const have = laid(view);
+    view.camera.updateMatrixWorld();
+    const point = new THREE.Vector3();
+    let seen = 0;
+    for (let q = (centre[0] - 3) * CHUNK; q < (centre[0] + 4) * CHUNK; q++) {
+      for (let r = (centre[1] - 3) * CHUNK; r < (centre[1] + 4) * CHUNK; r++) {
+        const p = axialTo3D(q, r);
+        point.set(p.x, 0, p.z).project(view.camera);
+        if (Math.abs(point.x) > 1.02 || Math.abs(point.y) > 1.02 || point.z > 1) continue;
+        seen++;
+        if (!have.has(`${Math.round(p.x * 100)},${Math.round(p.z * 100)}`)) return -1;
+      }
+    }
+    return seen;
+  };
+  const cullView = (): OpenWorldView => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.cullGround(true);
+    return view;
+  };
+
+  it('lays the ground of the screen and a margin only, a fifth of the loaded chunks at most, and a view that does not ask for it lays them whole', () => {
+    const whole = new OpenWorldView(new World(grass));
+    whole.resize(1600, 900);
+    whole.show([0, 0]);
+    expect(laid(whole).size).toBe(CELLS);
+    const view = cullView();
+    view.show([0, 0]);
+    expect(laid(view).size).toBeLessThan(CELLS / 5);
+    expect(onScreenAreLaid(view, [0, 0])).toBeGreaterThan(500);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBeLessThan(3000); // not the 66 000 columns the chunks may bring: 18 MB of buffers a build uploads
+    expect(mesh(view, 'prop-mountain').instanceMatrix.count).toBeLessThan(3000);
+    expect(mesh(whole, 'terrain-grass').instanceMatrix.count).toBeGreaterThan(3000);
+  });
+
+  it('lays the ground again when the hero walks, the camera turns or the zoom moves, so what the screen shows is always laid', () => {
+    const view = cullView();
+    view.show([0, 0]);
+    view.show([20, 6]);
+    view.follow(0, true);
+    expect(onScreenAreLaid(view, chunkOf([20, 6]))).toBeGreaterThan(500);
+    view.turnTo(Math.PI / 2);
+    expect(onScreenAreLaid(view, chunkOf([20, 6]))).toBeGreaterThan(500);
+    zoomed(view, 1.5);
+    expect(onScreenAreLaid(view, chunkOf([20, 6]))).toBeGreaterThan(500);
+  });
+
+  it('keeps the laid ground while the screen moves less than the margin', () => {
+    const view = cullView();
+    view.show([0, 0]);
+    const version = mesh(view, 'terrain-grass').instanceMatrix.version;
+    view.follow(0.001, false);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+  });
+
+  it('lays the whole chunks again when it is switched off', () => {
+    const view = cullView();
+    view.show([0, 0]);
+    view.cullGround(false);
+    view.cullGround(false);
+    view.show([0, 0]);
+    expect(laid(view).size).toBe(CELLS);
   });
 });

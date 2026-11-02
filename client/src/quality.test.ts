@@ -4,6 +4,11 @@ import { DIST_MAX, DIST_MIN, POLAR_MAX, POLAR_MIN, resetView, viewPosition, type
 import { frameShape } from './frame';
 import {
   drawDue,
+  isSoftwareRenderer,
+  looksSoftware,
+  rendererName,
+  ratioFloor,
+  ratioFrames,
   drawWanted,
   timeDraw,
   fogSettings,
@@ -93,6 +98,37 @@ describe('tierFromHints', () => {
   });
   it('ignores hints the browser does not give', () => {
     expect(tierFromHints({ reducedMotion: false })).toBe('high');
+  });
+});
+
+describe('software rendering (#1483)', () => {
+  it('takes the low tier, and a stored choice still wins', () => {
+    expect(tierFromHints({ reducedMotion: false, software: true })).toBe('low');
+    expect(readTier({ getItem: () => 'high', setItem: () => {} }, { reducedMotion: false, software: true })).toBe('high');
+  });
+  it('knows the software renderers by their name, and a GPU is none', () => {
+    for (const name of ['ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)', 'llvmpipe (LLVM 15.0.7, 256 bits)', 'Mesa softpipe', 'Microsoft Basic Render Driver', 'ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11)', 'Software Rasterizer', 'lavapipe', 'ANGLE (Microsoft WARP)']) {
+      expect(isSoftwareRenderer(name), name).toBe(true);
+    }
+    for (const name of ['', 'ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)', 'NVIDIA GeForce RTX 4070']) expect(isSoftwareRenderer(name), name).toBe(false);
+  });
+  it('reads the name of the GPU of a WebGL backend, a WebGPU adapter, or nothing', () => {
+    const gl = (info: unknown) => ({ getExtension: () => info, getParameter: () => 'llvmpipe' });
+    expect(rendererName({ gl: gl({ UNMASKED_RENDERER_WEBGL: 37446 }) })).toBe('llvmpipe');
+    expect(isSoftwareRenderer(rendererName({ gl: gl(null), adapter: { info: { description: 'SwiftShader' } } }))).toBe(true); // no extension: the adapter
+    expect(rendererName({ adapter: { isFallbackAdapter: true } })).toContain('software');
+    expect(rendererName({ adapter: { info: { description: 'Apple', device: 'M2' } } })).toBe('Apple M2');
+    expect(rendererName({})).toBe('');
+    expect(rendererName({ gl: gl(null) })).toBe('');
+  });
+  it('lets the adaptive resolution go down to half a pixel ratio, where a GPU stops at 1', () => {
+    expect([ratioFloor(2, false), ratioFloor(0.75, false), ratioFloor(2, true), ratioFloor(1, true)]).toEqual([1, 0.75, 0.5, 0.5]);
+    expect([ratioFrames(false), ratioFrames(true)]).toEqual([30, 10]);
+  });
+  it('is measured: a first window of frames over 100 ms is no GPU, a window of 16 ms frames with one long frame is', () => {
+    expect(looksSoftware([])).toBe(false);
+    expect(looksSoftware([180, 150, 170, 140, 160])).toBe(true);
+    expect(looksSoftware([16, 16, 900, 16, 16])).toBe(false);
   });
 });
 

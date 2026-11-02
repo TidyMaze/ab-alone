@@ -166,6 +166,7 @@ export class OpenWorldMode {
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     const view = new OpenWorldView(world, this.fight, skins);
     view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
+    view.cullGround(document.body.dataset.software === 'on'); // a software renderer lays the ground in view only (#1483)
     view.setShadows(!this.lowTier()); // the sun's soft shadow round the hero, on the high tier only (#1364)
     this.hero = new Hero(world, this.fight);
     if (saved) {

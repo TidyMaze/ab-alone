@@ -216,6 +216,11 @@ import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type Term
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import {
   drawDue,
+  isSoftwareRenderer,
+  looksSoftware,
+  rendererName,
+  ratioFloor,
+  ratioFrames,
   drawWanted,
   timeDraw,
   type LastDraw,
@@ -486,6 +491,12 @@ const renderer = new THREE.WebGPURenderer({ antialias: matchMedia('(pointer: coa
 // which draws nothing, would read 0 draw calls: the counts are zeroed by hand before each real draw instead (#1245).
 renderer.info.autoReset = false;
 await renderer.init().catch(bootFailed);
+// A machine with no GPU (#1483): the renderer says so, or the first frames do (endWindow). It takes the low tier unless the player
+// stored one, and the Open world lays the ground in view only. `?software=on` or `off` forces it, for the browser checks.
+const softwareParam = new URLSearchParams(location.search).get('software');
+let software = softwareParam === null ? isSoftwareRenderer(rendererName(renderer.backend)) : softwareParam === 'on';
+document.body.dataset.software = software ? 'on' : 'off';
+tier = readTier(store, { cores: navigator.hardwareConcurrency, memory: (navigator as { deviceMemory?: number }).deviceMemory, reducedMotion: reducedMotion(), software });
 // The neon tubes' rows of short lights (neonlight.ts) cost little when each pixel only adds the lights that reach it:
 // clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
 // WebGL adds every light at every pixel, the same light at a higher cost (#882).
@@ -807,15 +818,19 @@ let lowRun = 0;
 let lowOfferShown = false;
 const lowOffer = document.getElementById('low-offer') as HTMLDivElement;
 function endWindow(): void {
+  if (!software && looksSoftware(frameTimes)) {
+    software = true; // the renderer did not say so, the frames do: the next world lays the ground in view only (#1483)
+    document.body.dataset.software = 'on';
+  }
   lowRun = slowRun(lowRun, frameTimes);
-  const next = nextPixelRatio(pixelRatio, frameTimes, Math.min(devicePixelRatio, 1));
+  const next = nextPixelRatio(pixelRatio, frameTimes, ratioFloor(devicePixelRatio, software));
   if (next !== pixelRatio) setPixelRatio(next);
   else frameTimes = [];
 }
 function adaptResolution(now: number): void {
   frameTimes.push(now - lastFrame);
   lastFrame = now;
-  if (frameTimes.length >= RATIO_FRAMES) endWindow();
+  if (frameTimes.length >= ratioFrames(software)) endWindow();
 }
 function offerLowTier(quiet: boolean): void {
   if (!quiet || online || royaleNet || !offersLowTier(tier, lowRun, readLowOffer(store), lowOfferShown)) return;
