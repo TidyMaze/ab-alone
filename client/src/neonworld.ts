@@ -5,9 +5,45 @@ import * as THREE from 'three';
 import { NEON, setNeonWorldOn } from './neonlook';
 
 /** The three ground tones of the three biomes (the mockup's `tones`): the meadow, the mesa and the rock. */
-export const WORLD = { meadow: 0x2f3b52, mesa: 0x3d3750, rock: 0x1f2634, shore: 0x234a66, deep: 0x142b44, wall: 0x171c2b, boulder: 0x2c3138, mountain: 0x2a3347 } as const;
-/** The ambient motes of the Open world: a dim cool grey-blue. */
-const MOTE = 0x5a7090;
+export const WORLD = { meadow: 0x1f283a, mesa: 0x28243c, rock: 0x131824, shore: 0x234a66, deep: 0x142b44, wall: 0x171c2b, boulder: 0x2c3138, mountain: 0x2a3347 } as const;
+/** The ambient motes of the Open world: a very dim cool grey-blue (half the brightness of the first slate). */
+const MOTE = 0x2b3648;
+/** The dark seam between the ground cells with the look: the band along an edge keeps 30 % of the colour (the game's own is 78 %). */
+export const WORLD_EDGE_GAIN = -0.7;
+
+/** A tile of circuit traces, 512 px, drawn with 1 px lines on a 16 px grid (axis and diagonal runs ending in a dot): the world ground repeats it, dim violet. Plain bytes, no canvas. */
+export function neonTraces(size = 512): THREE.DataTexture {
+  const data = new Uint8Array(size * size * 4);
+  const put = (x: number, y: number): void => {
+    const wrap = (v: number): number => ((v % size) + size) % size;
+    const i = (wrap(y) * size + wrap(x)) * 4;
+    data.set([255, 255, 255, 255], i);
+  };
+  let s = 9;
+  const rnd = (): number => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [1, -1]] as const;
+  const grid = 16;
+  for (let i = 0; i < 18; i++) {
+    let x = Math.floor((rnd() * size) / grid) * grid;
+    let y = Math.floor((rnd() * size) / grid) * grid;
+    for (let k = 0; k < 6; k++) {
+      const [dx, dy] = dirs[Math.floor(rnd() * dirs.length)]!;
+      const run = (2 + Math.floor(rnd() * 5)) * grid;
+      for (let t = 0; t < run; t++) put(x + dx * t, y + dy * t);
+      x += dx * run;
+      y += dy * run;
+    }
+    for (const [ox, oy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) put(x + ox!, y + oy!); // the node at the end of a trace
+  }
+  const tile = new THREE.DataTexture(data, size, size);
+  tile.wrapS = tile.wrapT = THREE.RepeatWrapping;
+  tile.generateMipmaps = true;
+  tile.minFilter = THREE.LinearMipmapLinearFilter;
+  tile.magFilter = THREE.LinearFilter;
+  tile.needsUpdate = true;
+  return tile;
+}
+
 /** The soft shadows of the Open world under the look: about 55 % dark, so the darkest floor stays above #0f1424. */
 export const WORLD_SHADOW = 0.55;
 
@@ -65,8 +101,8 @@ function neonPalette(base: WorldPalette): WorldPalette {
   return out;
 }
 
-/** The map is read on the ship's black, not in the 3D light: the dark terrain of the look is lifted (x6 in linear light) so the darkest, the rock, stays 3:1 over the map's back. */
-export const MAP_LIFT = 6;
+/** The map is read on the ship's black, not in the 3D light: the dark terrain of the look is lifted (x14 in linear light) so the darkest, the rock, stays 3:1 over the map's back. */
+export const MAP_LIFT = 14;
 export function mapColour(hex: number): number {
   const c = new THREE.Color(hex);
   c.setRGB(Math.min(1, c.r * MAP_LIFT), Math.min(1, c.g * MAP_LIFT), Math.min(1, c.b * MAP_LIFT));
