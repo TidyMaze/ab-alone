@@ -210,7 +210,7 @@ describe('drawMinimap', () => {
     const drawn = at(fills, ICON.portal);
     expect(drawn).toHaveLength(1); // the core of the one in the window the hero is not on
     expect(drawn[0]!.at).toHaveLength(3); // a disc, not a tower
-    expect(drawn[0]!.at[0]).toBeGreaterThan(MIDDLE);
+    expect(drawn[0]!.at[0]).toBeLessThan(MIDDLE); // 5 cells left of the hero, who is in the middle
     expect(at(fills, ICON.here)).toHaveLength(1); // the one the hero stands on
     expect(log).not.toContain('stroke chosen');
     drawMinimap(ctx, SIZE, data({ teleporters: [[3, 0]], chosen: [3, 0] }));

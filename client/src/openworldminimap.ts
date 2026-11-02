@@ -3,8 +3,8 @@
 // push or a camera turn changed it, and the map is redrawn then, never every frame. The full screen map (#1411, openworldmap.ts) is the
 // same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
-import type { Terrain } from './openworld';
-import { iconSize, lairIcon } from './openworldlairicon';
+import { same, type Terrain } from './openworld';
+import { iconSize, lairIcon, portalIcon } from './openworldlairicon';
 import { LOOK, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
 import { mapColour } from './neonworld';
@@ -39,7 +39,6 @@ export const COLOURS = {
   enemy: '#e0453b',
   lair: '#ffb020',
   lairBeaten: '#6f7a72',
-  teleporter: '#b36bff',
   /** The mountain that cannot be crossed (the peak and the wall, #1439): pale, 3:1 over the walkable rock whatever the look. */
   mountain: '#d5dbe0',
   chosen: '#ffffff',
@@ -107,9 +106,6 @@ const shape = (ctx: CanvasRenderingContext2D, points: readonly (readonly [number
   ctx.fill();
 };
 
-/** The corners of a teleporter's mark, 5 px out from its cell. */
-const HEXAGON = Array.from({ length: 6 }, (_, i) => [5 * Math.cos((i * Math.PI) / 3), 5 * Math.sin((i * Math.PI) / 3)] as const);
-
 /** Where a map is drawn: a canvas of `width` x `height` px with the cell `centre` (fractions allowed) in the middle, `unit` px a cell.
  * `round` is the minimap: a disc, its edge drawn, and an arrow on the edge for the lairs out of it. */
 export interface MapFrame {
@@ -169,14 +165,14 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   for (const cell of data.teleporters) {
     if (away(cell) > edge) continue; // the minimap draws the ones in its window only
     const { x, y } = put(cell);
-    shape(ctx, HEXAGON.map(([dx, dy]) => [x + dx, y + dy] as const), COLOURS.teleporter);
+    portalIcon(ctx, x, y, iconSize(unit, round), same(cell, data.hero)); // a portal, the core lit under the hero (#1443)
   }
   if (data.chosen) {
     const { x, y } = put(data.chosen);
     ctx.strokeStyle = COLOURS.chosen;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x, y, 9, 0, 2 * Math.PI);
+    ctx.arc(x, y, iconSize(unit, round) / 2 + 4, 0, 2 * Math.PI); // round the portal's icon
     ctx.stroke();
   }
   for (const cell of data.enemies) {

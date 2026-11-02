@@ -30,6 +30,8 @@ export const ICON = {
   unknown: '#ffb020',
   done: '#8d9792',
   check: '#ffffff',
+  portal: '#c58cff',
+  here: '#f0e4ff',
 } as const;
 
 /** The icon's side in px: on the map it keeps a minimum when zoomed out and grows with the zoom, on the minimap it is smaller and fixed. */
@@ -43,6 +45,17 @@ export const iconSize = (unit: number, round: boolean): number => (round ? MINIM
 const TOWER = [[-0.45, 0.7], [0.45, 0.7], [0.45, -0.6], [0.25, -0.6], [0.25, -0.4], [0.1, -0.4], [0.1, -0.6], [-0.1, -0.6], [-0.1, -0.4], [-0.25, -0.4], [-0.25, -0.6], [-0.45, -0.6]] as const;
 const CHECK = [[-0.28, 0.05], [-0.06, 0.3], [0.3, -0.25]] as const;
 
+/** Strokes the current path of a plate: the dark halo, then the light rim. */
+function outline(ctx: CanvasRenderingContext2D): void {
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ICON.halo;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.strokeStyle = ICON.rim;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
 /** Draws the icon of the lair of `boss` (an id, none or unknown for a plain tower) centred on `x, y`, `size` px across. */
 export function lairIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, boss: string | undefined, beaten: boolean): void {
   const h = size / 2;
@@ -55,13 +68,7 @@ export function lairIcon(ctx: CanvasRenderingContext2D, x: number, y: number, si
   ctx.closePath();
   ctx.fillStyle = ICON.plate;
   ctx.fill();
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = ICON.halo;
-  ctx.lineWidth = 5;
-  ctx.stroke();
-  ctx.strokeStyle = ICON.rim;
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  outline(ctx);
   const colour = BOSS_COLOURS[boss ?? ''];
   at(TOWER);
   ctx.closePath();
@@ -79,4 +86,24 @@ export function lairIcon(ctx: CanvasRenderingContext2D, x: number, y: number, si
     ctx.textBaseline = 'middle';
     ctx.fillText(boss!.charAt(0).toUpperCase(), x, y + h * 0.15);
   }
+}
+
+/** Draws the icon of a teleporter (#1443) centred on `x, y`, `size` px across: a round plate (the towers' is square) with a violet ring
+ * and a core, the core lit when the hero stands on it (`here`). */
+export function portalIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, here: boolean): void {
+  const h = size / 2;
+  ctx.beginPath();
+  ctx.arc(x, y, h, 0, 2 * Math.PI);
+  ctx.fillStyle = ICON.plate;
+  ctx.fill();
+  outline(ctx);
+  ctx.beginPath();
+  ctx.arc(x, y, h * 0.62, 0, 2 * Math.PI);
+  ctx.strokeStyle = ICON.portal;
+  ctx.lineWidth = Math.max(2, size / 7);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, h * 0.25, 0, 2 * Math.PI);
+  ctx.fillStyle = here ? ICON.here : ICON.portal;
+  ctx.fill();
 }
