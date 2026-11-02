@@ -3,7 +3,7 @@
 // push or a camera turn changed it, and the map is redrawn then, never every frame. The full screen map (#1411, openworldmap.ts) is the
 // same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
-import { type Biome, same, type Terrain, type Tile } from './openworld';
+import { type Biome, neighbours, same, type Terrain, type Tile } from './openworld';
 import { iconSize, lairIcon, portalIcon } from './openworldlairicon';
 import { BIOME_LOOK, LOOK, lowGround, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
@@ -16,8 +16,11 @@ const COMPASS_RADIUS = 22;
 /** The lairs out of the window that get an arrow on the edge: the nearest unbeaten ones. */
 const ARROWS = 3;
 
+/** What a cell of the window is: a terrain, or `void` for a cell off the world (#1453). */
+export type MapTerrain = Terrain | 'void';
+
 /** A cell of the window: `q, r`, its terrain and, for low grass, its biome (#1442). */
-export type MinimapCell = readonly [number, number, Terrain, Biome?];
+export type MinimapCell = readonly [number, number, MapTerrain, Biome?];
 
 export interface MinimapData {
   cells: readonly MinimapCell[];
@@ -45,6 +48,10 @@ export const COLOURS = {
   mountain: '#d5dbe0',
   chosen: '#ffffff',
   back: '#0b0d0f',
+  /** A cell off the world (#1453): a deep void blue, 3:1 over the undiscovered `back`. */
+  void: '#3a55c8',
+  /** The line along the world's edge: pale cyan, 3:1 over the void and over `back`. */
+  worldEdge: '#8fe3ff',
   edge: '#0b0d0f',
   /** The N of the north marker and the dark plate under it (#1448): 3:1 or more, whatever the terrain. */
   north: '#ffffff',
@@ -102,15 +109,16 @@ export function groundOffset(x: number, y: number, yaw: number): Axial {
   return [dx - dr / 2, dr];
 }
 
-/** The cells of the hex disc of `radius` (RADIUS: the minimap's window) round `hero`, read with `tile`; the cells off the world, or
- * hidden (not discovered, #1411), are left out. A low grass cell keeps its biome, whose ground it is drawn in. */
-export function windowCells(tile: (q: number, r: number) => Tile | undefined, hero: Axial, radius = RADIUS): MinimapCell[] {
+/** The cells of the hex disc of `radius` (RADIUS: the minimap's window) round `hero`, read with `tile`; the cells hidden (not
+ * discovered, #1411) are left out. A cell off the world is kept when `tile` says `void` (#1453). A low grass cell keeps its biome, whose ground it is drawn in. */
+export function windowCells(tile: (q: number, r: number) => Tile | 'void' | undefined, hero: Axial, radius = RADIUS): MinimapCell[] {
   const cells: MinimapCell[] = [];
   for (let dq = -radius; dq <= radius; dq++) {
     for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr++) {
       const [q, r] = [hero[0] + dq, hero[1] + dr];
       const found = tile(q, r);
-      if (found) cells.push([q, r, found.terrain, found.terrain === 'grass' && lowGround(found) ? found.biome : undefined]);
+      if (found === 'void') cells.push([q, r, 'void']);
+      else if (found) cells.push([q, r, found.terrain, found.terrain === 'grass' && lowGround(found) ? found.biome : undefined]);
     }
   }
   return cells;
@@ -181,9 +189,11 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   ctx.fillStyle = COLOURS.back;
   ctx.fillRect(0, 0, width, height);
   const side = unit * 1.3; // a little over a cell, so the turned squares leave no gap
+  const voids = new Set(data.cells.filter((cell) => cell[2] === 'void').map(([q, r]) => `${q},${r}`));
+  const onEdge = (q: number, r: number): boolean => neighbours([q, r]).some(([nq, nr]) => voids.has(`${nq},${nr}`));
   for (const [q, r, terrain, biome] of data.cells) {
     const { x, y } = put([q, r]);
-    ctx.fillStyle = terrainColour(terrain, biome);
+    ctx.fillStyle = terrain === 'void' ? COLOURS.void : onEdge(q, r) ? COLOURS.worldEdge : terrainColour(terrain, biome); // the land beside the void is the edge line (#1453)
     ctx.fillRect(x - side / 2, y - side / 2, side, side);
   }
   const edge = round ? midX - 8 : Infinity; // the full map has no edge: every lair is drawn where it is

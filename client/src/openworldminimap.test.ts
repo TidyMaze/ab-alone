@@ -149,6 +149,12 @@ describe('windowCells', () => {
     expect(cells.every(([q]) => q >= 0)).toBe(true);
   });
 
+  it('keeps the cells off the world, as void, apart from the ones not discovered', () => {
+    const cells = windowCells((q): Tile | 'void' | undefined => (q < 0 ? undefined : q === 0 ? 'void' : tile('sand')), [0, 0], 1);
+    expect(cells).toContainEqual([0, 0, 'void']);
+    expect(cells.every(([q]) => q >= 0)).toBe(true);
+  });
+
   it('reads a disc of another radius when asked, for the map (#1411)', () => {
     expect(windowCells(() => tile('grass'), [0, 0], 2)).toHaveLength(19);
   });
@@ -157,6 +163,29 @@ describe('windowCells', () => {
     expect(windowCells(() => tile('grass', 4), [0, 0], 0)).toEqual([[0, 0, 'grass', 'forest']]);
     expect(windowCells(() => tile('grass', 5), [0, 0], 0)).toEqual([[0, 0, 'grass', undefined]]);
     expect(windowCells(() => tile('tree', 3), [0, 0], 0)).toEqual([[0, 0, 'tree', undefined]]);
+  });
+});
+
+describe('the world edge (#1453)', () => {
+  const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
+  it('paints a cell off the world in its own colour, 3:1 from an undiscovered cell, and the edge line 3:1 from both', () => {
+    const { ctx, fills } = fakeContext();
+    drawMinimap(ctx, SIZE, data({ cells: [[3, 0, 'void'], [2, 0, 'grass']] }));
+    expect(at(fills, COLOURS.void)).toHaveLength(1);
+    expect(at(fills, terrainColour('grass'))).toHaveLength(0); // the grass beside the void is the edge line
+    expect(at(fills, COLOURS.worldEdge)).toHaveLength(1);
+    const ratio = (a: string, b: string): number => contrastRatio(rgb(a), rgb(b));
+    expect(ratio(COLOURS.void, COLOURS.back)).toBeGreaterThanOrEqual(3);
+    expect(ratio(COLOURS.worldEdge, COLOURS.void)).toBeGreaterThanOrEqual(3);
+    expect(ratio(COLOURS.worldEdge, COLOURS.back)).toBeGreaterThanOrEqual(3);
+    expect(ratio(COLOURS.hero, COLOURS.void)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps the terrain of a cell that is not next to the void', () => {
+    const { ctx, fills } = fakeContext();
+    drawMinimap(ctx, SIZE, data({ cells: [[3, 0, 'void'], [-3, 0, 'grass']] }));
+    expect(at(fills, terrainColour('grass'))).toHaveLength(1);
+    expect(at(fills, COLOURS.worldEdge)).toHaveLength(0);
   });
 });
 
