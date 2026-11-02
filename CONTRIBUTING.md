@@ -20,8 +20,8 @@ contributors in mind:
   lands. Delegation to an agent covers your own work, not the other owner's.
 - **Respect others' work.** Their assigned issues and open PRs are theirs (rules 13 and 14). Their
   decisions stand until changed in a `Decision` issue.
-- **Merge with care.** Before merging, check that your PR does not break or silently conflict with
-  someone else's open PR. If it will force them to rebase, say so in their PR.
+- **Push with care.** Before pushing to `main`, check that your commit does not break or silently
+  conflict with someone else's open work. If it will force them to rebase, say so in their issue.
 - **Leave the shared space clean.** Do not leave servers, branches or half-done work that others
   stumble on. Close what you open.
 - **Say what you do.** Comment on the issue when you start, block, change course or stop, so the
@@ -33,33 +33,36 @@ contributors in mind:
 flowchart TD
   A[Owner request or idea] --> B[Issue from a form, Inbox]
   B -->|owner, or lead agent on delegation| C[Ready, with Priority]
-  C -->|bugs first, max 4 in progress| D[Sub-agent: own clone, branch, TDD]
-  D --> E[Local checks: verify.sh, unit tests, full e2e suite]
-  E --> F[PR with Closes #issue]
-  F -->|CI rust green, conversations resolved| G[Squash-merge by owner or lead agent]
-  G --> H[main: coverage job, Pages deploy]
+  C -->|bugs first, max 4 in progress| D[Sub-agent: own clone, local branch, TDD]
+  D --> E[Local checks: unit tests, tsc, e2e specs of the change]
+  E --> F[Report with the commit and the proof]
+  F -->|lead agent reads it| G[Lead agent pushes to main, Closes #issue]
+  G --> H[CI on main, Pages deploy if green, full e2e every hour]
 ```
 
-No human review is required: a PR merges as soon as the required CI check `rust` is green and every
-conversation is resolved. Quality comes from strict TDD, 100 % unit coverage of all code and the
-full e2e suite run locally before every merge (decision #445).
+Direct commits to `main` (decision #1433, trunk-based): no PR and no human review. The lead agent
+pushes after reading the builder's report. Quality comes from strict TDD, 100 % unit coverage of
+all code, the checks before the push, and the full e2e suite that CI runs every hour when `main`
+moved (#1433 replaces the "full suite locally before every merge" of decision #445). `main` red:
+revert at once, then fix. Exception: Dependabot PRs still go through a PR and merge when CI is green.
 
 ## 1. The golden rules
 
-1. **No work without a `Ready` Task or Bug.** Every PR closes at least one `task` or `bug` issue
-   whose Status was `Ready` when work started. It may close several when they are linked (same
-   feature or same files, rule 17), one `Closes #n` line each.
+1. **No work without a `Ready` Task or Bug.** Every commit to `main` closes at least one `task` or
+   `bug` issue whose Status was `Ready` when work started. It may close several when they are
+   linked (same feature or same files, rule 17), one `Closes #n` line each.
 2. **No Task without a parent.** Every Task is a sub-issue of a Feature, or of an Epic for
    non-player-facing work (tooling, CI, specs).
-3. **No direct push to `main`.** Everything goes through a PR. It merges once the CI check `rust`
-   is green and conversations are resolved, with no review required (section 6.4).
+3. **Only the lead agent pushes to `main`.** Direct commits, no PR (decision #1433, section 6.4),
+   after reading the builder's report. Sub-agents never push to `main`. Dependabot PRs still merge
+   through a PR when green.
 4. **Out of scope = new issue.** Anything found during a task that is not in its acceptance
-   criteria becomes a new issue in `Inbox`. It never goes into the current PR.
+   criteria becomes a new issue in `Inbox`. It never goes into the current commit.
 5. **Decisions live in `Decision` issues**, never only in a PR thread, a commit or a chat.
 6. **Nothing outside the repo.** If it was said in a chat or a call, write it in the right issue
    or it does not count.
 7. **Finish before you start.** You may not start a new Task while one of yours is not `Done`
-   (`In Progress` or `In Review` both count as not finished). Blocked does not free you: get it
+   (`In Progress` counts as not finished). Blocked does not free you: get it
    unblocked, or ask an owner to move it back to `Ready` and unassign you. At most **4 tasks** are
    `In Progress` at the same time across all agents, one per agent.
 8. **Strict TDD, 100 % coverage.** No production code without a failing test first. Unit tests
@@ -69,44 +72,47 @@ full e2e suite run locally before every merge (decision #445).
     created from the form. See section 6.7.
 11. **Priority, mainly FIFO.** Tickets are taken by importance and age (section 6.3). An open bug
     is never below `P1`.
-12. **Test in a real browser regularly.** The full Playwright suite runs locally on every PR before
-    it merges (CI runs it only on a manual dispatch, decision #445), and a manual Chrome check before merging a
-    player-facing change. See section 11.
+12. **Test in a real browser regularly.** Before a push, the e2e specs of what changed run locally; CI
+    runs the full Playwright suite every hour when `main` moved (decision #1433, which replaces the
+    "full suite before every merge" of #445). A Chrome check before pushing a player-facing change.
+    See section 11.
 13. **Always assign yourself.** Before working on an issue or a PR, assign it to yourself (an agent
     assigns its driving owner and says so in a comment). Unassigned work does not exist.
 14. **Hands off what others hold.** Never work on, push to, rebase or take over an issue or PR
     assigned to someone else without their explicit consent, written in the issue or PR. Let them
-    finish until it is `Ready` or merged. If it blocks you, ask in a comment and wait.
-15. **No stacked branches.** Every branch starts from an up-to-date `main` and targets `main`.
-    Never base a branch on another unmerged branch. If your work needs another PR, wait until it is
-    merged, then branch from `main`.
-16. **Finish PRs properly, do not pile them up.** Prefer getting one PR ready, green and merged over
-    working on many PRs at the same time and merging none. Every open PR goes out of date each
-    time another one merges, and each rebase means a conflict to resolve, checks to rerun and a CI
-    wait: many open PRs mean rebase loops and wasted time. In practice: merge a ready PR before
-    you open another one; do not start a new Task while a PR of yours waits on a rebase, a red
-    check or a missing screenshot; PRs that touch the same files go one after the other, never in
-    parallel (the second branches from `main` after the first merges); the lead agent does not
-    launch a new sub-agent task while it can finish or merge an open PR instead.
-17. **Minimal, KISS.** Each issue, task and PR is minimal: **one thing, done well**, the simplest
+    finish until it is `Ready` or pushed. If it blocks you, ask in a comment and wait.
+15. **No stacked branches.** A builder's local branch starts from an up-to-date `main`. Never base
+    one on another unpushed branch. If your work needs another commit, wait until it is on `main`,
+    then branch from `main`.
+16. **Finish before piling up.** Prefer getting one commit onto `main` over holding many unpushed
+    ones. Each commit that lands makes the others out of date, and each rebase means a conflict to
+    resolve and checks to rerun. In practice: push a finished commit before you start another;
+    do not start a new Task while a commit of yours waits on a rebase, a red check or a missing
+    screenshot; work that touches the same files goes one after the other, never in parallel (the
+    second branches from `main` after the first lands); the lead agent does not launch a new
+    sub-agent task while it can finish or push a finished commit instead.
+17. **Minimal, KISS.** Each issue, task and commit is minimal: **one thing, done well**, the simplest
     way that works. No extra feature, no refactor on the side, no option nobody asked for, no
     abstraction for later. If a request holds several things, split it into several issues.
-    **Linked issues may share one PR** to go faster and avoid rebase loops: same feature, same
+    **Linked issues may share one commit** to go faster and avoid rebase loops: same feature, same
     files, or one needs the other (for example two settings in the same menu). Unrelated work
-    never shares a PR. Anything found on the way becomes a new issue, never a bigger PR. When two
+    never shares a commit. Anything found on the way becomes a new issue, never a bigger commit. When two
     solutions work, take the smaller one.
-    **Group small open issues.** When several small open issues look doable together in one PR
+    **Group small open issues.** When several small open issues look doable together in one commit
     (same feature or same files, a few lines each, or the same kind of fix such as several slow
-    tests), the one picking work groups them instead of doing them one by one: one branch, one
-    PR, one `Closes #n` line each, every issue assigned and `In Progress` together. A duplicate is
+    tests), the one picking work groups them instead of doing them one by one: one commit, one
+    `Closes #n` line each, every issue assigned and `In Progress` together. A duplicate is
     closed in favour of the older issue. Groups stay reviewable (rule 18); issues held by someone
     else join a group only with their holder's written consent (rule 14).
-18. **Reviewable size.** A reader must be able to review any issue, Decision or spec PR in one
+18. **Reviewable size.** A reader must be able to review any issue, Decision or spec commit in one
     sitting. A Decision asks **one question**, gives 2 or 3 options and a recommendation, and its
-    body reads in about 5 minutes (roughly 500 words at most). A spec PR covers **one topic** (one
+    body reads in about 5 minutes (roughly 500 words at most). A spec commit covers **one topic** (one
     file or one section) and stays around 300 changed lines at most. Detail that is not decided
     yet stays out, or goes in a later issue, instead of one large plan up front. Too long: split
     it before asking for a review (#361, after #313).
+19. **`main` is the only long-lived branch** (decision #1433). No feature, preview or release
+    branch. A builder's local branch lives a day at most and never reaches the remote. Unfinished
+    work lands behind a flag that is off by default, with an issue that removes the flag.
 
 ## 2. Where things live
 
@@ -115,7 +121,7 @@ full e2e suite run locally before every merge (decision #445).
 | **Discussions** | Raw ideas (`Ideas`), priority votes (`Polls`), open chat (`General`) | Work to do |
 | **Issues** | Epics, Features, Tasks, Decisions: the content of each work item | Brainstorming |
 | **Project** ([AB-ALONE](https://github.com/users/TidyMaze/projects/1)) | Status, priority and order of every issue: **the backlog** | Content (it stays in the issue) |
-| **Pull requests** | The change for one Task, and its review | New scope, decisions |
+| **Commits on `main`** | The change for one Task, with `Closes #n`; the proof is in the issue | New scope, decisions |
 
 ## 3. Work item types (label)
 
@@ -123,8 +129,8 @@ full e2e suite run locally before every merge (decision #445).
 |---|---|---|---|---|
 | `epic` | One phase of SPEC.md (Phase 0 to 5, one per milestone), plus the `Project setup` epic for specs, workflow and tooling | Weeks | none | All its children are done |
 | `feature` | Something a player can see or do. Named with a User Story: "As [role], I can [capability] because [value]". Contains US description, context, and expected outcome | Several Tasks | Epic | Owner verified every acceptance criterion |
-| `task` | One PR worth of work | 1 PR, ideally under a day | Feature or Epic | Its PR is merged |
-| `bug` | Something that works differently from its spec or acceptance criteria. Clear descriptive name, exact reproduction steps, screenshot/visual proof, and expected behaviour once fixed | 1 PR | The broken Feature, if known | Its PR is merged (with the reproducing test) |
+| `task` | One commit worth of work | 1 commit, ideally under a day | Feature or Epic | Its commit is on `main` |
+| `bug` | Something that works differently from its spec or acceptance criteria. Clear descriptive name, exact reproduction steps, screenshot/visual proof, and expected behaviour once fixed | 1 commit | The broken Feature, if known | Its commit is on `main` (with the reproducing test) |
 | `decision` | A choice between options | n/a | optional | An owner writes the chosen option and closes it |
 
 Parent links use GitHub **sub-issues** (issue page, "Create sub-issue" or "Add existing issue").
@@ -135,9 +141,7 @@ Parent links use GitHub **sub-issues** (issue page, "Create sub-issue" or "Add e
 flowchart LR
   I[Inbox] -->|owner triage| R[Ready]
   R -->|assignee starts| P[In Progress]
-  P -->|PR opened| V[In Review]
-  V -->|changes requested| P
-  V -->|PR merged| D[Done]
+  P -->|commit pushed to main| D[Done]
   I -->|rejected or duplicate| X[Closed, not planned]
 ```
 
@@ -146,8 +150,7 @@ flowchart LR
 | `Inbox` | New, not triaged yet | Whoever creates the issue | Issue created from a form |
 | `Ready` | Can be picked up | **Owners**, or the lead agent when an owner delegates | Definition of Ready (section 5) |
 | `In Progress` | Someone is on it | The assignee | Assigned, "taking it" comment |
-| `In Review` | PR open | The assignee | PR open with `Closes #<task>` |
-| `Done` | Finished | GitHub (PR merged / issue closed) | Definition of Done (section 5) |
+| `Done` | Finished | GitHub (commit with `Closes #<task>` on `main` / issue closed) | Definition of Done (section 5) |
 
 ## 5. Definitions of Ready and Done
 
@@ -170,18 +173,18 @@ flowchart LR
 **Task is Ready when:**
 - [ ] Parent Feature or Epic is set
 - [ ] One-sentence outcome and a done checklist are written
-- [ ] Fits in one PR
+- [ ] Fits in one commit
 - [ ] Open questions are answered (no linked open `Decision`)
 - [ ] `Priority` is set
 
 **Task is Done when:**
-- [ ] Its PR is merged into `main`
+- [ ] Its commit is on `main`
 - [ ] Every item of its done checklist is ticked
 - [ ] CI is green (once CI exists)
-- [ ] Code changes: TDD commit order visible in the PR, 100 % line and region coverage, e2e test
+- [ ] Code changes: TDD order proven (test commit before the code commit on the builder's branch, or the failing run in the report), 100 % line and region coverage, e2e test
       added or updated if a player flow changed (section 11)
 - [ ] No secret in the diff (section 12)
-- [ ] Specs or docs touched by the change are updated in the same PR
+- [ ] Specs or docs touched by the change are updated in the same commit
 
 **Feature is Done when** all its Tasks are Done and an owner ticked every acceptance criterion,
 then closed it.
@@ -217,59 +220,42 @@ the triager does exactly one of:
    (`@mention`, assignment, review request) on that issue or PR, in the same session (AGENTS rule 17).
    **WIP limit: one unfinished Task per contributor, at most 4 in progress overall** (rule 7; an
    agent counts as a contributor).
-3. Branch from `main`: `<issue number>-<short-slug>`, for example `23-board-model`.
+3. Branch locally from an up-to-date `main`: `<issue number>-<short-slug>`, for example `23-board-model`.
+   The branch lives a day at most and is never pushed (rule 19).
 4. Blocked: add the `blocked` label, comment what blocks and @mention who can unblock. Keep the
    Status.
 5. Scope changes mid-task: stop, comment on the Task, wait for an owner to update the Task before
    continuing.
 
-### 6.4 Pull request
+### 6.4 Push to main
 
-1. Open the PR from the template as a **draft** (`gh pr create --draft`). The body contains
-   one `Closes #<task>` line per issue it closes (one issue, or several linked ones, rule 17).
-   **A PR that changes the UI MUST include a screenshot in its
-   description** (before and after when it changes an existing screen), in the "Screenshot"
-   section of the template. A PR without one is not marked ready and not merged. Take it with
-   Playwright (`page.screenshot`) or in Chrome. To put it in the body, push the image to the
-   `pr-screenshots` branch (`pr-screenshots/<pr>-<name>.png`) and link it:
-   `![after](https://raw.githubusercontent.com/TidyMaze/ab-alone/pr-screenshots/<pr>-<name>.png)`.
-   A human can also drag the image into the description. No UI change: write "no UI change".
-2. Move the Task to `In Review`. A PR is **ready only when it is ready to merge**. While it is
-   unfinished, in conflict, out of date or its local checks are red, it stays a draft. **CI does
-   not run on drafts.** The order is: local checks green (`scripts/verify.sh`, unit tests, the
-   full e2e suite), mark the PR ready (`gh pr ready`), CI runs (the `ready_for_review` event starts it),
-   then merge. The author marks it ready; the lead agent does it for a sub-agent's PR after
-   checking its report.
-3. Review is **optional**. Anyone may comment; the author answers every comment in its thread and
-   pushes fixes to the same branch.
-4. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
-5. **Merge gate.** A PR is merged into `main` only when all of these hold:
-   - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, and the **full e2e suite**
-     green locally (`bun run e2e` from `client/`, on a random port, section 13). CI runs the e2e
-     suite only on a manual dispatch (decision #445): the local result goes in the PR body, as the template's line "Full
-     e2e suite run locally: N passed".
-     **After a rebase on `main` without conflict**, rerun only `bun run test` and
-     `bunx tsc --noEmit` in `client/` (rebuild the WASM first if `crates/` changed on main, section
-     13), not `scripts/verify.sh` nor the e2e run: CI runs `rust` (Rust checks plus client `tsc`
-     and unit tests) again on the rebased code, and main runs the Rust coverage after the merge
-     (decision #239). A rebase with a conflict reruns every local check, the full e2e suite
-     included.
-   - [ ] CI: the PR is ready (not a draft) and the required check `rust` is green (enforced by
-     branch protection, 0 approvals needed). GitHub counts a **skipped** required check as passing,
-     so the merger must confirm that the run on the head commit really concluded `success`, not
-     `skipped` (`gh run list --branch <branch>`). After a rebase, keep the PR a draft until the
-     push is done, wait a few seconds, then mark it ready (bug #179).
-   - [ ] A PR that changes the UI has its screenshot in the description (lead agent checks)
-   - [ ] Every conversation resolved (enforced by branch protection)
-   - [ ] Not required: the PR does not have to be up to date with `main` (decision #240, replaces
-     #161: a merge queue needs an organization). Two green PRs can break `main` together, so a red
-     `main` is the first bug to fix. Rebase your own PR when it conflicts, never someone else's
-     (rule 14).
-6. As soon as the gate passes, **an owner or the lead agent squash-merges into `main`**. Sub-agents
-   never merge. A green PR is never left open: the Task is not `Done` until it is merged. GitHub
-   closes the Task, the project sets `Done`, the branch is deleted.
-7. Docs-only PRs (`**.md`, `docs/**`) skip CI, so the `rust` check never reports on them. An owner
-   or the lead agent merges them with the admin bypass after reading the diff.
+Decision #1433: no PR, direct commits to `main`. Dependabot PRs are the exception: they merge through
+a PR when CI is green.
+
+1. The builder (sub-agent) commits on its local branch and reports the commit: what changed, the
+   checks it ran, the proof. It never pushes to `main`.
+2. **Pre-push checks**, all green: `bun run test`, `bunx tsc --noEmit` and the e2e specs of what
+   changed (section 13). Rust changes: `scripts/verify.sh`. The full e2e suite is not run by hand:
+   CI runs it every hour when `main` moved.
+3. **Pull and rebase first**: `git pull --rebase origin main`. After a rebase without conflict,
+   rerun only `bun run test` and `bunx tsc --noEmit` (rebuild the WASM first if `crates/` changed,
+   section 13). A rebase with a conflict reruns every check.
+4. **The lead agent pushes** to `main`, after reading the report. An owner may push too. The commit
+   message says `Closes #<task>` (one line per issue it closes, rule 17), or `Refs #<issue>` for a
+   slice (AGENTS rule 12).
+5. **Proof goes in a comment on the issue**: the tests that ran, a screenshot, what was not done.
+   **A change to the UI MUST have a screenshot** in that comment (before and after when it changes
+   an existing screen). Take it with Playwright (`page.screenshot`) or in Chrome. Push the image to
+   the `pr-screenshots` branch (`pr-screenshots/<issue>-<name>.png`) and link it:
+   `![after](https://raw.githubusercontent.com/TidyMaze/ab-alone/pr-screenshots/<issue>-<name>.png)`.
+   No UI change: write "no UI change". No screenshot, no push.
+6. **CI runs on every push to `main`** (the check `rust`). Pages deploys only after a green CI.
+   **`main` red: revert at once, then fix.** No discussion first; the fix is a new commit with its
+   own test.
+7. Docs-only commits (`**.md`, `docs/**`) skip CI. The lead agent pushes them after reading the diff.
+8. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
+9. Work that cannot land whole goes behind a flag off by default (rule 19), for example the neon
+   design behind `?look=neon` (#1424).
 
 ### 6.5 Decision
 
@@ -295,19 +281,19 @@ the triager does exactly one of:
    - **Screenshot or visual recording**: proof of the broken state (or terminal/console log if non-visual).
    - **Expected behaviour once fixed**: explicit description of how the system should behave after the fix.
    - **Environment**: browser, OS and commit.
-   A bug found during another task is filed too, never fixed inside that task's PR.
+   A bug found during another task is filed too, never fixed inside that task's commit.
 2. It lands in `Inbox`. An owner triages it within the next triage: confirm, set `Priority`
    (**`P0` if it breaks a game or loses data, never lower than `P1`**), link the broken Feature,
    move it to `Ready`. A bug that is not reproducible is closed with a comment.
 3. The fix follows 6.3 and 6.4. The first commit is a test that reproduces the bug and fails
-   (unit test, plus an e2e test if a player saw it). Then the fix. The PR says `Closes #<bug>`.
+   (unit test, plus an e2e test if a player saw it). Then the fix. The commit says `Closes #<bug>`.
 4. Bugs are picked before tasks (rule 11).
 
 ## 7. Project fields
 
 | Field | Values | Set by |
 |---|---|---|
-| `Status` | `Inbox`, `Ready`, `In Progress`, `In Review`, `Done` | Section 4 |
+| `Status` | `Inbox`, `Ready`, `In Progress`, `Done` | Section 4 |
 | `Priority` | `P0` to `P3` | Owners, or the lead agent on delegation |
 | `Votes` | Number of 👍 in the last vote | Owners only |
 | Milestone | `Phase 0` to `Phase 5` | Issue creator, checked at triage |
@@ -330,29 +316,30 @@ Two roles:
 
 | Role | Does | Never does |
 |---|---|---|
-| **Lead agent** (driven by an owner) | Writes issues, triages and sets `Priority` when an owner delegates, starts up to 4 sub-agents in parallel, checks their reports (CI, tests, a real browser run for player-facing changes), merges green PRs | Closes a `Decision` without an owner, starts a 5th task, merges a red PR |
-| **Sub-agent** | One Task: own clone, own branch, TDD, local checks, opens the PR, rebases when asked | Merges, triages, sets `Priority`, works outside its Task |
+| **Lead agent** (driven by an owner) | Writes issues, triages and sets `Priority` when an owner delegates, starts up to 4 sub-agents in parallel, checks their reports (tests, a real browser run for player-facing changes), pushes to `main` (section 6.4), reverts a red `main` | Closes a `Decision` without an owner, starts a 5th task, pushes a red or unchecked commit |
+| **Sub-agent** | One Task: own clone, own local branch, TDD, local checks, reports the commit on its branch, rebases when asked | Pushes to `main`, triages, sets `Priority`, works outside its Task |
 
 Every agent follows the rules above, plus:
-- One agent, one clone, one branch, one `In Progress` Task.
-- Agents talk to each other only through issue comments and PR reviews.
+- One agent, one clone, one local branch, one `In Progress` Task.
+- Agents talk to each other only through issue comments.
 - An agent kills the dev servers it started when it finishes (stray servers loaded the machine and
   made e2e runs flaky).
-- The PR body says which agent wrote it and which owner drives it.
+- The report and the issue comment say which agent wrote the commit and which owner drives it.
 
 ## 10. Forbidden
 
-- A PR without `Closes #<task>`, or closing more than one issue.
+- A commit to `main` without `Closes #<task>` or `Refs #<issue>`.
 - Working on an issue that is not `Ready`.
-- Pushing to `main`.
-- Adding something to a PR that is not in its Task.
-- Deciding in a PR thread, a commit message or a chat.
+- A sub-agent pushing to `main`, or any push to `main` with a red check or without the report read.
+- A feature, preview or release branch on the remote.
+- Adding something to a commit that is not in its Task.
+- Deciding in a commit message or a chat.
 - Blank issues: always use a form.
 - Working on an issue or PR without being assigned to it.
 - Touching an issue or PR assigned to someone else without their written consent.
-- A branch based on another unmerged branch, or a PR targeting anything but `main`.
-- Marking a PR ready while it is red, unfinished, in conflict or out of date. Keep it a draft.
-- Fixing a bug without a `bug` issue, or inside another task's PR.
+- A branch based on another unpushed branch.
+- Pushing to `main` unfinished, in conflict or out of date: pull and rebase first, or keep it local.
+- Fixing a bug without a `bug` issue, or inside another task's commit.
 - Starting a task while a `Ready` bug of the same or higher priority is waiting.
 
 ## 11. Testing: strict TDD, 100 % coverage
@@ -365,9 +352,10 @@ Applies to every line of production code (engine, client, networking, tools).
 2. **Green:** write the minimum production code that makes it pass. Run the whole suite.
 3. **Refactor:** clean up with all tests green. No new behaviour in this step.
 
-**Proof in the PR:** the test commit comes before the implementation commit (for example
-`test: sumito 3v2 pushes` then `feat: sumito`). The reviewer checks the commit order and may run
-the test commit alone to see it fail. The PR is squash-merged, the order lives in the PR.
+**Proof of the order:** the test commit comes before the implementation commit on the builder's local
+branch (for example `test: sumito 3v2 pushes` then `feat: sumito`), or the report shows the failing
+run. The lead agent checks it and may run the test commit alone to see it fail. Only the final
+commit reaches `main`, so the proof is in the report and the issue comment.
 
 **Required test levels:**
 
@@ -381,9 +369,9 @@ the test commit alone to see it fail. The PR is squash-merged, the order lives i
 **Coverage gate:** unit tests cover **100 % of all the code** (decision #445): every client source
 file (`client/src/**`, `client/scripts/**`, `main.ts` included), the MCP package (`mcp/src/**`,
 `main.ts` included) and the Rust crates. Rust: 100 % of lines and regions (not branches, owner
-decision), enforced by `scripts/verify.sh` locally and by the CI coverage job on main after merge.
+decision), enforced by `scripts/verify.sh` locally and by the CI coverage job on main after the push.
 Below 100 % fails the build. Commands: section 13. The client JS coverage (`bun run test`, vitest,
-100 % thresholds) and `tsc` run in the CI check `rust` on every ready PR and on main (#409). An exclusion
+100 % thresholds) and `tsc` run in the CI check `rust` on every push to `main` and Dependabot PR (#409). An exclusion
 needs a one-line comment saying why, and the reviewer must accept it (generated code,
 `unreachable!()`).
 
@@ -404,12 +392,13 @@ use. Drive it like an e2e test: `game.click(q, r)`, the page hooks through `game
 
 | When | What | Who |
 |---|---|---|
-| Every PR | The full Playwright e2e suite on Chromium, run locally before the PR merges with `bun run e2e` on a random port (section 13). Its result goes in the PR body ("Full e2e suite run locally: N passed"). CI runs it only on a manual dispatch (`gh workflow run ci.yml --ref <branch>`, decision #445) | Author |
+| Every push | The e2e specs of what changed, run locally before the push (section 13) | Builder |
+| Every hour | The full Playwright e2e suite on Chromium, in CI, when `main` moved (`.github/workflows/e2e-hourly.yml`, decision #1433, which replaces the "full suite before every merge" of #445). A red spec gets a `bug` issue the same day (AGENTS rule 14) | CI |
 | Every e2e test | Passes in **under 15 s**, and a test that runs longer **fails**: the Playwright test timeout is 15 s (#349). A slower test is made cheaper (reach the state through a test hook instead of clicking through, smaller setup) or its logic moves to a fast unit test, keeping one thin e2e for the browser wiring (#349). **A test loads the full game state it needs** (a position, a boss phase, a finished game) through one test hook built on the game file import (#219) instead of replaying steps that other e2e tests already cover | Author |
-| Before merging a player-facing PR | Open the PR build in a real browser, play the changed flow, note the result in the PR | The lead agent (Playwright) or an owner |
+| Before pushing a player-facing change | Open the build in a real browser, play the changed flow, note the result in the issue comment | The lead agent (Playwright) or an owner |
 | Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
 
-Specs and docs PRs have no code, so this section does not apply to them.
+Specs and docs commits have no code, so this section does not apply to them.
 
 ## 12. Public repo: no secrets, ever
 
@@ -428,8 +417,8 @@ forks keep it even after a revert).
 
 ## 13. Local setup and checks
 
-**Before every push:** run `scripts/verify.sh` from the repo root, except for a push that only
-rebases on `main` without conflict (section 6.4, merge gate). It runs the CI checks locally:
+**Before every push to `main`:** run `scripts/verify.sh` from the repo root when Rust changed, except
+for a push that only rebases on `main` without conflict (section 6.4). It runs the CI checks locally:
 
 - `cargo fmt --all --check`
 - `cargo clippy --all-targets --locked -- -D warnings`
@@ -437,28 +426,30 @@ rebases on `main` without conflict (section 6.4, merge gate). It runs the CI che
 
 **What CI runs** (`.github/workflows/ci.yml`):
 
-- On every **ready** PR (not on drafts), on open, push and `ready_for_review`, four jobs side by
+- On every push to `main` and on every Dependabot PR (not on drafts), four jobs side by
   side: `cargo` (fmt, clippy, `cargo test --all --locked`, optimised by `[profile.test]` in
   `Cargo.toml`), `client` (`bun run test`, vitest, 100 % coverage thresholds), `build`
   (`bunx tsc --noEmit`, the production build and its size budget) and `mcp`, the last three on a
   cached WASM build. The required `rust` check (#409) waits for the four and fails unless every
   one succeeded. A draft PR shows the `rust` check as skipped.
-- On push to main (after merge): the Rust job always runs. The coverage gate runs only when
+- On push to `main`: the Rust job always runs. The coverage gate runs only when
   `crates/`, `Cargo.*` or `ci.yml` changed (job `changes`: it diffs against the last successful CI
-  run on `main`, so a cancelled run never hides its commits; a manual dispatch runs everything). A
-  new push to `main` still cancels the run in progress.
-- **e2e only on a manual dispatch** (decision #445): never on a PR or a push, the full Playwright
-  suite runs locally before every merge (see **e2e** below). To run it on CI as well, for example to
-  check a flake on a clean runner: `gh workflow run ci.yml --ref <branch>`. The WASM package is
+  run on `main`, so a cancelled run never hides its commits; a dispatch runs everything). A
+  new push to `main` still cancels the push run in progress, never a dispatched run (the group has
+  the event name).
+- **e2e only on a dispatch**, never on a PR or a push. `.github/workflows/e2e-hourly.yml` dispatches
+  it every hour when the head of `main` differs from the last dispatched run (decision #1433,
+  which replaces the "full suite before every merge" of #445). To run it by hand, for example to
+  check a flake on a clean runner: `gh workflow run ci.yml --ref main`. The WASM package is
   built once (job `wasm`, cached) and shared as an artifact, then the e2e suite runs in 4 shards,
   one runner and one worker each (#257, #258). The tests are dealt to the shards back and forth, so
   the slow ones spread over all four (`client/scripts/shard-reporter.ts`, #333). A failed shard
   uploads its own `playwright-report-<n>` artifact. On CI the browser window is 960x540, not
   1280x720: software WebGL cost follows the pixels.
 
-- **Pages deploy** (`.github/workflows/pages.yml`): runs on a push to `main` that changes the built
-  game. The build always checks out the head of `main`, not the commit of the run, so a run that
-  finishes late still deploys the newest code (#1267). To redeploy the head of `main` by hand (for
+- **Pages deploy** (`.github/workflows/pages.yml`): runs after a CI run on `main` that ended green
+  (`workflow_run`, #1433). It builds the commit CI tested. A test-only commit redeploys too, so a
+  cancelled CI run never loses a deploy; the `pages` concurrency group keeps the newest (#1267). To redeploy the head of `main` by hand (for
   example after a failed run): `gh workflow run pages.yml --ref main`.
 
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
@@ -504,10 +495,10 @@ export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
 only the unit test file you touch with scoped coverage (`bun run test:scoped <file>` for instant 100 % coverage check, or `bun run test:unit src/<file>.test.ts` without coverage), instant layout geometry check (`bun run layout:check`), only the e2e spec you
 touch (`bun run e2e:layout` for UI layout, or `bunx playwright test e2e/<spec>.spec.ts`, one worker, `-g "<title>"` for one test),
 `bunx tsc --noEmit` when you change client types, `cargo test -p <crate> <name>` for one Rust test.
-**When:** while developing, run only the unit file you touch. Run the **full e2e suite once, at the
-moment the draft PR is ready to become ready** (just before `gh pr ready`), not after every edit,
-and write its result in the PR body ("Full e2e suite run locally: N passed"). CI runs it only on a
-manual dispatch (`gh workflow run ci.yml --ref <branch>`, decision #445). No full `scripts/verify.sh` while developing and no `--repeat-each` beyond what a
+**When:** while developing, run only the unit file you touch. Before the push, run the e2e specs of
+what changed, and write the result in the issue comment. The full suite is not run by hand: CI runs
+it every hour when `main` moved (decision #1433). A boot or renderer change may justify a full local
+run first, the lead agent decides. No full `scripts/verify.sh` while developing and no `--repeat-each` beyond what a
 flake needs.
 
 **e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright builds the page
@@ -534,7 +525,7 @@ network outage never holds a page load (bug #585). Start a new run to test a cha
   `vite build` then `vite preview` on a random port (`E2E_PREVIEW_PORT`, never reused) and stops it
   at the end. Every other spec runs with service workers blocked (docs/specs/tech.md section 9.1).
   It answers the Google Fonts requests itself, so it too never waits on the network (bug #649).
-- The manual CI run sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
+- The dispatched CI run sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
 - On a Mac, the local Chromium draws on the GPU, still with the WebGL2 backend (WebGPU is turned off). CI runners
   have no GPU and draw with SwiftShader, whose first draw of a page blocks it for seconds (bug #563).
@@ -551,6 +542,6 @@ meshes share a geometry (mutation of `retire` and `replace`); it stays green whe
 free is early (three recreates the buffers at the next draw), so a headless run does not catch everything. Before merging an
 Open world mesh or buffer change, run the game once in headed Chrome and check the console is empty. The default suite cannot see the
 WebGPU errors of #1015 and #1017: it runs the WebGL2 fallback. The check is not in the default run (`bun run e2e`, the
-CI e2e shards) and not in CI: CI runners have no GPU, so it would skip there, and a manual dispatch would not change that.
+CI e2e shards) and not in CI: CI runners have no GPU, so it would skip there, and a dispatch would not change that.
 Run it by hand before a change to the Open world's buffers, geometries or materials. Without a real adapter (no GPU, or
 the headless shell's SwiftShader software adapter) the test skips and reports it. The headless shell is not used.
