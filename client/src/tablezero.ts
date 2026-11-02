@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fitView, type View } from './camera';
-import { NEON_HIDDEN, NEON_CELL_SCALE, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
+import { NEON_HIDDEN, NEON_CELL_SCALE, neonVoidGeometry, neonVoidMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
 
 /** The palette the port must match (notes-round4.md). */
 export const PALETTE = {
@@ -161,19 +161,28 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
     const mesh = new THREE.InstancedMesh(geometry, material, dishes.length);
     const edges = neon ? new THREE.InstancedMesh(neonEdgeGeometry(), neonEdgeMaterial(), dishes.length) : null;
     if (edges) Object.assign(edges, { frustumCulled: false, name: 'terrace_edges' });
+    const voids = neon ? Object.assign(new THREE.InstancedMesh(neonVoidGeometry(), neonVoidMaterial(), dishes.length), { frustumCulled: false, name: 'terrace_voids' }) : null; // a pale outline where a cell is gone
     mesh.frustumCulled = false;
     mesh.name = 'terrace_dishes';
     mesh.castShadow = mesh.receiveShadow = true; // the lit board (#1364)
     const spot = new THREE.Vector3();
     mesh.userData.show = (shown: (x: number, z: number) => boolean): void => {
       let n = 0;
+      let gone = 0;
       for (const m of matrices) {
-        if (!shown(...(spot.setFromMatrixPosition(m).toArray().filter((_, i) => i !== 1) as [number, number]))) continue;
+        if (!shown(...(spot.setFromMatrixPosition(m).toArray().filter((_, i) => i !== 1) as [number, number]))) {
+          voids?.setMatrixAt(gone++, m);
+          continue;
+        }
         edges?.setMatrixAt(n, m);
         mesh.setMatrixAt(n++, m);
       }
       mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
+      if (voids) {
+        voids.count = gone;
+        voids.instanceMatrix.needsUpdate = true;
+      }
       if (edges) {
         edges.count = n;
         edges.instanceMatrix.needsUpdate = true;
@@ -182,6 +191,7 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
     mesh.userData.show(() => true);
     board.add(mesh);
     if (edges) board.add(edges);
+    if (voids) board.add(voids);
   }
   for (const bar of bars) {
     if (neon) bar.geometry = bar.geometry.clone();

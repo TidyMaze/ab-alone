@@ -185,7 +185,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { neonLookOn, neonPedestal, neonTells, neonVeil, tellLook, NEON } from './neonlook';
+import { neonBreachGeometry, neonEggGeometry, nextToSight, neonLookOn, neonPedestal, neonTells, neonVeil, tellLook, NEON } from './neonlook';
 import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
@@ -591,6 +591,7 @@ if (plateNormal) {
 }
 
 const neonLook = neonLookOn(location.search); // `?look=neon` (#1424): the circuit slab, colours and light only; never stored
+if (neonLook) document.body.dataset.look = 'neon'; // the style sheet's own hooks for the look
 const neonTell = tellLook(neonLook); // the sizes of the bosses' tells: the look's thick ones, or the game's own
 if (neonLook) applyNeonWorld(true, { LOOK, WATER, BIOME_LOOK, PROPS, MARBLE_LOOK: WORLD_MARBLES, LAIR_LOOK, TELEPORTER_LOOK, AMBIENT }); // the Open world's palette, the minimap's too
 const sceneRenderer = new SceneRenderer({
@@ -1666,7 +1667,7 @@ const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Stalker's rings, in both looks (#1138): the bot's last move in cyan, a marble it revealed in amber, not the palette's bone.
 const lastMaterial = new THREE.MeshBasicMaterial({ color: TONAL.last });
 const revealedMaterial = new THREE.MeshBasicMaterial({ color: TONAL.revealed });
-const outlineGeometry = new THREE.TorusGeometry(0.42, neonTell.ringTube, 8, 32);
+const outlineGeometry = new THREE.TorusGeometry(neonTell.ringRadius, neonTell.ringTube, 8, neonTell.ringSides);
 const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 // The Echo's tells (#859): a steady teal ring where a bonus move lands, on its ghost while a move is prepared and on the
@@ -1685,6 +1686,7 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 // rim and the board outline left as they are; a pale ring where the bot's last move landed in range.
 const fogMaterial = new THREE.MeshBasicMaterial({ color: tonal ? TONAL.veiled : 0x000000, transparent: true, opacity: tonal ? 1 : 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
+const veilTint = new THREE.Color();
 if (neonLook) neonVeil(fogMaterial, veil); // near black in a cyan outline, the shape of the cell
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
 // The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the evac
@@ -1859,7 +1861,8 @@ function ventAt(p: { x: number; z: number }): THREE.Group {
 // The Alien tell (#588, game-design.md section 7.7): an egg on its cell and, above it, a counter of the player turns
 // left before it hatches: a sprite, so it always faces the camera, drawn over the marbles (alien.ts, 3:1 and more). On 1
 // a glow under the egg pulses once a second, held still under reduced motion (the animation loop sets it).
-const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).scale(neonTell.egg, neonTell.egg, neonTell.egg).translate(0, 0.23 * neonTell.egg, 0);
+let eggGeometry: THREE.BufferGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).translate(0, 0.23, 0);
+if (neonLook) eggGeometry = neonEggGeometry(); // an ovoid with a bone collar
 const eggMaterial = new THREE.MeshStandardMaterial({ roughness: 0.55 });
 const eggGlowGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const eggGlowMaterial = new THREE.MeshBasicMaterial({ color: BONE, transparent: true, depthWrite: false });
@@ -2114,6 +2117,7 @@ const plusGlyph = new THREE.ShapeGeometry(new THREE.Shape(PLUS_POINTS.map(([x, y
 const plusInk = new THREE.MeshBasicMaterial({ color: PLUS_INK, side: THREE.DoubleSide });
 // The breach (#503): a cracked arena cell glows in the hazard colour under the Hull's crack decal and ticks.
 const breachTint = new THREE.Color(); // the look's tint of the glow, mixed in by `neonTell.breachMix`
+const breachGeometry = neonLook ? neonBreachGeometry() : crackGeometry; // a hexagon wider than the cell with the look: one band
 const breachGlow = new THREE.MeshBasicMaterial({ transparent: true, opacity: neonTell.breachOpacity, depthWrite: false });
 
 // Spaceship interior architecture (bulkhead arches, rear wall, airlock, pedestal, conduits) (#478)
@@ -3566,12 +3570,15 @@ function liftEvac(board: ArrayLike<number>, at: NonNullable<typeof evac>): void 
 /** Stalker's veil over the cells out of range and the rings of the bot's last move in range (#998). */
 function drawFog(board: ArrayLike<number>, fog: Set<number>, lit: Set<number>): NonNullable<typeof stalkerShown> {
   const dark = BOARD_CELLS.filter((_, i) => i < board.length && !fog.has(i));
+  veil.setColorAt(0, veilTint.setScalar(1)); // makes the instance colours: white leaves the veil as it is
   dark.forEach(([q, r], k) => {
     const p = axialTo3D(q, r);
     veil.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, 0.004, p.z)); // on the disc's top face, as the crack decal
+    veil.setColorAt(k, veilTint.setScalar(Math.max(nextToSight(q, r, (a, b) => fog.has(cellIndex(a, b))), neonTell.fogRings))); // the look outlines the sight edge only
   });
   veil.count = dark.length;
   veil.instanceMatrix.needsUpdate = true;
+  veil.instanceColor!.needsUpdate = true;
   marbles.add(veil);
   const last = replaying ? [] : lastLanding.filter(([q, r]) => fog.has(cellIndex(q, r)));
   for (const [q, r] of last) {
@@ -3990,7 +3997,7 @@ function refresh(): void {
     const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg' });
     egg.position.set(p.x, 0, p.z);
     const counter = Object.assign(new THREE.Sprite(counterMaterials[left - 1]), { renderOrder: 2 });
-    counter.position.set(p.x, 0.95, p.z);
+    counter.position.set(p.x, 0.95 + neonTell.plateLift, p.z);
     counter.scale.setScalar(0.42 * neonTell.plate);
     marbles.add(egg, counter);
     if (left === 1) {
@@ -6130,11 +6137,12 @@ function drawRoyale(game: Royale): void {
     const p = axialTo3D(q, r);
     const rounds = left.get(i) ?? 0;
     if (rounds > 0) {
-      const glow = new THREE.Mesh(crackGeometry, breachGlow);
+      const glow = new THREE.Mesh(breachGeometry, breachGlow);
       glow.position.set(p.x, 0.002 + neonTell.arenaLift, p.z);
       arenaMarbles.add(glow);
       if (crackDecal) {
         const decal = new THREE.Mesh(crackGeometry, crackMaterial);
+        decal.scale.setScalar(neonTell.arenaDecal); // the look draws the band alone
         decal.position.set(p.x, 0.003 + neonTell.arenaLift, p.z);
         arenaMarbles.add(decal);
         crackDecals.push([q, r]);

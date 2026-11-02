@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook } from './neonlook';
+import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 
@@ -136,6 +136,7 @@ describe('the neon look of the terrace file (#1424)', () => {
     expect(NEON_CELL_SCALE).toBeCloseTo(0.938, 3);
     dishes.userData.show((x: number) => x === 2);
     expect([dishes.count, edges.count]).toEqual([1, 1]); // a vanished cell loses its edge too
+    expect((out.getObjectByName('terrace_voids') as THREE.InstancedMesh).count).toBe(1); // and wears a pale outline
     const bar = out.children.find((c) => c.name === 'scene_turnbar_black') as THREE.Mesh;
     expect(bar.material).toBe(neonMaterial('scene_turnbar_black'));
     expect(out.getObjectByName('neon_glow')!.children).toHaveLength(3); // the rim channel, a band and a tip
@@ -153,7 +154,7 @@ describe('the neon look of the terrace file (#1424)', () => {
 
 describe('the tells of the neon look (#1424)', () => {
   it("is the game's own sizes without the look, thick and lifted with it", () => {
-    expect(tellLook(false)).toEqual({ ringTube: 0.025, glyph: 1, chevron: 1, plate: 1, shockInner: 0.96, egg: 1, lift: 0, arenaLift: 0, glowFloor: 0, breachTint: 0, breachMix: 0, breachOpacity: 0.55 });
+    expect(tellLook(false)).toEqual({ ringTube: 0.025, glyph: 1, chevron: 1, plate: 1, plateLift: 0, fogRings: 1, shockInner: 0.96, ringSides: 32, ringRadius: 0.42, arenaDecal: 1, egg: 1, lift: 0, arenaLift: 0, glowFloor: 0, breachTint: 0, breachMix: 0, breachOpacity: 0.55 });
     expect(tellLook(true)).toBe(NEON_TELL);
     expect(NEON_TELL.ringTube).toBeGreaterThan(0.025 * 2); // a thin line is mostly anti-aliased pixels
     expect(NEON_TELL.lift).toBeGreaterThan(0.1 - 0.05); // the shock ring (0.05) clears the dish tops (0.1)
@@ -170,7 +171,7 @@ describe('the tells of the neon look (#1424)', () => {
     let lit = 0;
     for (let i = 0; i < 64 * 64; i++) if (data[i * 4 + 1] === 255) lit++;
     expect(lit / (64 * 64)).toBeGreaterThan(0.2); // thick: more than a hairline
-    expect(lit / (64 * 64)).toBeLessThan(0.6);
+    expect(lit / (64 * 64)).toBeLessThan(0.7);
     expect(map.wrapS).toBe(THREE.ClampToEdgeWrapping);
   });
   it('dresses the materials of the tells', () => {
@@ -183,10 +184,11 @@ describe('the tells of the neon look (#1424)', () => {
       pale: new THREE.MeshBasicMaterial({ color: 0xd8d4c8 }),
     };
     neonTells(m);
-    expect(m.crack.color.getHex()).toBe(NEON_TELL.ink);
+    expect(m.crack.color.getHex()).toBe(NEON_TELL.sodium);
     expect(m.crack.alphaMap).toBeInstanceOf(THREE.DataTexture);
     expect(m.egg.map).toBeNull(); // no speckled shell: a near-black egg
-    expect(m.egg.color.getHex()).toBe(0);
+    expect(m.egg.color.getHex()).toBe(0xffffff);
+    expect(m.egg.vertexColors).toBe(true);
     expect(m.egg.emissive.getHex()).toBe(NEON_TELL.ink);
     expect(m.egg.roughness).toBe(1);
     for (const sodium of [m.glow, m.chevron, m.arrival]) expect(sodium.color.getHex()).toBe(NEON_TELL.sodium);
@@ -204,5 +206,20 @@ describe('the tells of the neon look (#1424)', () => {
     expect(material.vertexColors).toBe(true);
     expect(material.opacity).toBe(NEON_TELL.fog);
     expect(material.toneMapped).toBe(false);
+  });
+  it('gives the egg a bone collar on a near-black ovoid, the breach a hexagon wider than a cell, the void a pale outline', () => {
+    const egg = neonEggGeometry();
+    const colour = egg.attributes.color!;
+    const hexes = new Set(Array.from({ length: colour.count }, (_, i) => new THREE.Color(colour.getX(i), colour.getY(i), colour.getZ(i)).getHex()));
+    expect([...hexes].sort()).toEqual([0xffffff, NEON_TELL.ink].sort());
+    const breach = neonBreachGeometry();
+    breach.computeBoundingBox();
+    expect(breach.boundingBox!.max.z).toBeGreaterThan(0.5); // past the cell's own edge: the cells join
+    expect(neonVoidGeometry().attributes.position!.count).toBe(36);
+    expect(neonVoidMaterial().color.getHex()).toBe(0xe6ffff);
+    const seen = (q: number, r: number): boolean => q === 0 && r === 0;
+    expect(nextToSight(1, 0, seen)).toBe(1); // a cell touching the sight is on its edge
+    expect(nextToSight(2, 0, seen)).toBe(0); // one deeper in the fog is not
+    expect(NEON_TELL.fogRings).toBe(0);
   });
 });

@@ -1124,6 +1124,9 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 .hub-label[data-kind='world'] { --k: #748ffc; }
 .hub-label[data-kind='trainer'] { --k: #d8a47f; }
 .hub-label[data-mark='locked'] { border-style: dashed; }
+/* The neon look (#1424): red is for danger only, so the boss doors and the together room wear violet and cyan. */
+body[data-look='neon'] .hub-label[data-kind='boss'] { --k: #b79cff; }
+body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 .hub-label[data-mark='locked'] small { color: #ff8787; }
 .hub-label[data-mark='beaten'] small { color: #ffd43b; }
 .hub-label[data-here] { box-shadow: 0 0 0 2px #ffb000; }

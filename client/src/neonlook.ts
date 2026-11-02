@@ -245,9 +245,19 @@ export const NEON_TELL = {
   ringTube: 0.11,
   /** The Choir's glyphs and the Rail Yard's chevrons, drawn this much larger. */
   glyph: 3.2,
-  chevron: 2,
+  chevron: 2.4,
   /** The Alien's counter plate, drawn this much larger. */
-  plate: 1.8,
+  plate: 2.2,
+  /** The plate stands this much higher, clear of the egg. */
+  plateLift: 0.25,
+  /** The fog is outlined on every fogged cell (1, the game's own veil is unaffected) or on the sight edge only (0). */
+  fogRings: 0,
+  /** The sides of the rings: a hexagon, the shape of a cell, in place of the game's circle (the Choir's next army reads apart from its Tenor ring). */
+  ringSides: 6,
+  /** The radius of the rings: smaller, so that the rings of two neighbours do not join (the game's is 0.42). */
+  ringRadius: 0.42,
+  /** The cracks of the battle royale are one cream band: no decal on its cells. */
+  arenaDecal: 0,
   /** The inner radius of the Pulsar's shockwave ring, of 1 (the game's is 0.96). */
   shockInner: 0.92,
   /** The egg is drawn this much larger: a small egg is mostly anti-aliased pixels. */
@@ -265,11 +275,11 @@ export const NEON_TELL = {
   breachMix: 1,
   breachOpacity: 1,
 } as const;
-const GAME_TELL = { ringTube: 0.025, glyph: 1, chevron: 1, plate: 1, shockInner: 0.96, egg: 1, lift: 0, arenaLift: 0, glowFloor: 0, breachTint: 0, breachMix: 0, breachOpacity: 0.55 } as const;
+const GAME_TELL = { ringTube: 0.025, glyph: 1, chevron: 1, plate: 1, plateLift: 0, fogRings: 1, shockInner: 0.96, ringSides: 32, ringRadius: 0.42, arenaDecal: 1, egg: 1, lift: 0, arenaLift: 0, glowFloor: 0, breachTint: 0, breachMix: 0, breachOpacity: 0.55 } as const;
 /** The sizes the tells are drawn with: the look's, or the game's own. */
 export const tellLook = (on: boolean): { readonly [K in keyof typeof GAME_TELL]: number } => (on ? NEON_TELL : GAME_TELL);
 
-/** The mask of a crack, a DataTexture of `size` pixels (plain bytes, no canvas): seven forking fissures from the middle, 15 % of the width thick. */
+/** The mask of a crack, a DataTexture of `size` pixels (plain bytes, no canvas): seven forking fissures from the middle, 19 % of the width thick. */
 export function neonCrackMap(size = 256): THREE.DataTexture {
   const data = new Uint8Array(size * size * 4);
   const segments: [number, number, number, number][] = [];
@@ -282,7 +292,7 @@ export function neonCrackMap(size = 256): THREE.DataTexture {
       [x, y] = [nx, ny];
     }
   });
-  const half = 0.075;
+  const half = 0.095;
   for (let j = 0; j < size; j++)
     for (let i = 0; i < size; i++) {
       const [px, py] = [(i + 0.5) / size - 0.5, (j + 0.5) / size - 0.5];
@@ -309,9 +319,10 @@ export interface TellMaterials {
 }
 export function neonTells(m: TellMaterials): void {
   m.crack.alphaMap = neonCrackMap();
-  m.crack.color.setHex(NEON_TELL.ink);
+  m.crack.color.setHex(NEON_TELL.sodium); // cream on the slate, not black
   m.egg.map = null; // an unlit near-black egg: lit, its sheen came up to the cell's own light
-  m.egg.color.setHex(0);
+  m.egg.color.setHex(0xffffff); // the vertex colours decide: near black for the body, bone for the collar
+  m.egg.vertexColors = true;
   m.egg.emissive.setHex(NEON_TELL.ink);
   m.egg.roughness = 1;
   m.egg.metalness = 0;
@@ -333,7 +344,7 @@ export function neonFogGeometry(): THREE.BufferGeometry {
   };
   for (let k = 0; k < 6; k++) position.push(0, 0, 0, ...at(0.5, k, 0), ...at(0.5, k + 1, 0));
   paint(NEON_TELL.ink, 18);
-  for (let k = 0; k < 6; k++) position.push(...at(0.29, k, 0.002), ...at(0.52, k, 0.002), ...at(0.52, k + 1, 0.002), ...at(0.29, k, 0.002), ...at(0.52, k + 1, 0.002), ...at(0.29, k + 1, 0.002));
+  for (let k = 0; k < 6; k++) position.push(...at(0.24, k, 0.002), ...at(0.52, k, 0.002), ...at(0.52, k + 1, 0.002), ...at(0.24, k, 0.002), ...at(0.52, k + 1, 0.002), ...at(0.24, k + 1, 0.002));
   paint(NEON_TELL.outline, 36);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
@@ -348,3 +359,34 @@ export function neonVeil(material: THREE.MeshBasicMaterial, veil: THREE.Instance
   material.toneMapped = false;
   material.needsUpdate = true;
 }
+
+/** The Alien's egg: an ovoid near black with a bone collar ring round its middle, so it is no black marble. One geometry, vertex colours. */
+export function neonEggGeometry(scale = NEON_TELL.egg): THREE.BufferGeometry {
+  const body = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).scale(scale, scale, scale).translate(0, 0.23 * scale, 0).toNonIndexed();
+  const collar = new THREE.TorusGeometry(0.19 * scale, 0.06 * scale, 6, 24).rotateX(Math.PI / 2).translate(0, 0.23 * scale, 0).toNonIndexed();
+  const paint = (g: THREE.BufferGeometry, hex: number): THREE.BufferGeometry => {
+    const c = linear(hex);
+    g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position!.count }, () => c.toArray()).flat(), 3));
+    g.deleteAttribute('uv');
+    return g;
+  };
+  return mergeGeometries([paint(body, NEON_TELL.ink), paint(collar, 0xffffff)])!;
+}
+
+/** A hexagonal fill a little wider than a cell: the cells about to void in the battle royale make one continuous band. */
+export function neonBreachGeometry(): THREE.BufferGeometry {
+  const position: number[] = [];
+  const at = (k: number): [number, number, number] => [Math.sin((k * Math.PI) / 3) * 0.53, 0, Math.cos((k * Math.PI) / 3) * 0.53];
+  for (let k = 0; k < 6; k++) position.push(0, 0, 0, ...at(k), ...at(k + 1));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+  return g;
+}
+
+/** 1 when a cell of the board has a neighbour that `seen` says is in sight, else 0: the sight edge of the Stalker's fog. */
+export const nextToSight = (q: number, r: number, seen: (q: number, r: number) => boolean): number =>
+  Number([[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]].some(([a, b]) => seen(q + a!, r + b!)));
+
+/** The pale outline of a cell that is gone (a Hull void), over the dark floor. */
+export const neonVoidGeometry = (): THREE.BufferGeometry => neonEdgeGeometry(0.3, 0.52, 0.075);
+export const neonVoidMaterial = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ name: 'neon_void', color: 0xe6ffff, fog: false, toneMapped: false, side: THREE.DoubleSide });
