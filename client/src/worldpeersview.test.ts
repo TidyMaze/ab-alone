@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
-import { hexLift } from './openworldview';
+import { BOB_AMP, DRAFT } from './openworldboat';
+import { hexLift, topOf } from './openworldview';
 import { edgeSpot, peerColour, PeersLayer } from './worldpeersview';
 
 describe('edgeSpot', () => {
@@ -46,13 +47,13 @@ describe('edgeSpot', () => {
   });
 });
 
-function setup() {
+function setup(wet: (q: number, r: number) => boolean = () => false) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
   camera.position.set(0, 10, 10);
   camera.lookAt(0, 0, 0);
   const root = document.createElement('div');
-  const tile = (q: number, r: number) => (Math.abs(q) > 20 || Math.abs(r) > 20 ? undefined : { terrain: 'grass' as const, height: 1, biome: 'meadow' as const });
+  const tile = (q: number, r: number) => (Math.abs(q) > 20 || Math.abs(r) > 20 ? undefined : { terrain: wet(q, r) ? ('water' as const) : ('grass' as const), height: 1, biome: 'meadow' as const });
   const layer = new PeersLayer(scene, camera, { tile } as never, root);
   return { scene, camera, root, layer };
 }
@@ -218,4 +219,60 @@ describe('PeersLayer', () => {
     expect(layer.update([{ peer: 'a', cell: [1, 0], name: '', troop: [] }], [0, 0])).toBe(false);
     expect(layer.update([{ peer: 'a', cell: [2, 0], name: '', troop: [] }], [0, 0])).toBe(true);
   });
+
+  describe('boats', () => {
+    const wet = (q: number) => q >= 1;
+    const peer = (cell: [number, number], troop: [number, number][] = []) => [{ peer: 'a', cell, name: '', troop }];
+    const boats = (scene: THREE.Scene) => scene.getObjectByName('peer-boats') as THREE.InstancedMesh;
+    const at = (mesh: THREE.InstancedMesh, i: number) => {
+      const m = new THREE.Matrix4();
+      mesh.getMatrixAt(i, m);
+      return new THREE.Vector3().setFromMatrixPosition(m);
+    };
+
+    it('floats a boat under a hero and a troop marble on water, and none under one on land', () => {
+      const { scene, layer } = setup(wet);
+      layer.update(peer([1, 0], [[0, 0], [2, 0]]), [5, 5]);
+      expect(boats(scene).count).toBe(2);
+      const p = at(boats(scene), 0);
+      expect(p.x).toBeCloseTo(axialTo3D(1, 0).x, 5);
+      expect(p.y).toBeCloseTo(topOf('water', 0, 0, 0) - DRAFT, 5);
+      expect(at(boats(scene), 1).x).toBeCloseTo(axialTo3D(2, 0).x, 5);
+      layer.update(peer([0, 0]), [5, 5]);
+      expect(boats(scene).count).toBe(0);
+    });
+
+    it('bobs with the time given, and holds still without it', () => {
+      const { scene, layer } = setup(wet);
+      layer.update(peer([1, 0]), [5, 5], [5, 5], 650); // a quarter of the period 2600 ms: the top of the bob
+      expect(at(boats(scene), 0).y).toBeCloseTo(topOf('water', 0, 0, 0) - DRAFT + BOB_AMP, 3);
+      layer.update(peer([1, 0]), [5, 5], [5, 5], null);
+      expect(at(boats(scene), 0).y).toBeCloseTo(topOf('water', 0, 0, 0) - DRAFT, 5);
+    });
+
+    it('turns the boat to the way its hero went, and keeps it when the hero stays', () => {
+      const { scene, layer } = setup(wet);
+      const yaw = () => new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromRotationMatrix(rotationOf(boats(scene)))).y;
+      layer.update(peer([1, 0]), [5, 5]);
+      const first = yaw();
+      layer.update(peer([1, 1]), [5, 5]);
+      expect(yaw()).not.toBeCloseTo(first, 2);
+      const turned = yaw();
+      layer.update(peer([1, 1]), [5, 5]);
+      expect(yaw()).toBeCloseTo(turned, 5);
+    });
+
+    it('frees the boats on dispose', () => {
+      const { scene, layer } = setup(wet);
+      layer.update(peer([1, 0]), [5, 5]);
+      layer.dispose();
+      expect(boats(scene)).toBeUndefined();
+    });
+  });
 });
+
+function rotationOf(mesh: THREE.InstancedMesh): THREE.Matrix4 {
+  const m = new THREE.Matrix4();
+  mesh.getMatrixAt(0, m);
+  return new THREE.Matrix4().extractRotation(m);
+}
