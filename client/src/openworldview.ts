@@ -6,6 +6,7 @@ import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
+import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './openworldboat';
 import { CameraLife, Spring } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, gapFill, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
@@ -512,6 +513,12 @@ export class OpenWorldView {
   private readonly zoomNow = new Spring(1, TURN, 1e-4);
   /** The hero (the first marble) and the troop's marbles: where each is drawn, and the glide of a step under way (#1040). */
   private readonly marbles: Marble[] = [new Marble(MARBLE)];
+  /** The boats of the marbles on water (#1441): one instanced mesh, the boats in the order of their marbles; where the boat of each
+   * marble last turned; the time they bob at, `null` while they are held still (reduced motion, the low tier, past `ROLL_ZOOM`). */
+  private readonly boats: THREE.InstancedMesh;
+  private readonly wakes: Wake[] = [];
+  private readonly boatPose = new THREE.Object3D();
+  private bobNow: number | null = null;
   /** The strength of the marbles' stripe at the drawn zoom (openworldstripe.ts), one uniform for every marble material (#1043). */
   private readonly stripe = stripeFadeNode();
   /** The share the ground prisms widen by at the drawn zoom, closing the gap between them (openworldedge.ts, #1347): one uniform for every ground material. */
@@ -585,6 +592,7 @@ export class OpenWorldView {
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
     this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player));
     this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
+    this.boats = this.instances('boats', 1 + CAPACITY.troop, boatGeometry(MARBLE), boatMaterial());
     this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
     this.ejected.name = 'ejected';
     this.ejected.castShadow = true;
@@ -790,6 +798,9 @@ export class OpenWorldView {
     this.motionNow = now;
     if (!on) this.ripplePool.clear();
     writeRipples(this.ripplePool, u);
+    const bobbed = this.bobNow !== null;
+    this.bobNow = on ? now : null;
+    if (on || bobbed) this.drawMarbles(); // the boats bob with their marbles, and stand still again once the motion stops (#1441)
     this.motionKinds = [water && 'water', trees && 'trees', shimmer && 'shimmer'].filter(Boolean).join(',');
     const drawn = this.looping || this.motionKinds !== '';
     this.looping = this.motionKinds !== '';
@@ -831,7 +842,7 @@ export class OpenWorldView {
     this.landed = 0;
     this.marbleAt(0).place(this.standing(at));
     troop.forEach((cell, i) => this.marbleAt(i + 1).place(this.standing(cell)));
-    this.draw(0);
+    this.drawMarbles();
     const [x, y, z] = this.follows;
     const { position } = this.hero;
     x.place(position.x);
@@ -894,13 +905,15 @@ export class OpenWorldView {
       troop = true;
     }
     this.moving = hero || troop;
+    if (this.moving) this.sail();
     return this.moving;
   }
 
   /** Writes the drawn pose of marble `i` (0 the hero, then the troop) to its mesh: the hero itself, or the troop's instance. The camera
    * follows the hero's place (`follow`). */
   private draw(i: number): void {
-    const { x, y, z, q, sx, sy } = this.marbles[i]!.pose;
+    const { x, z, q, sx, sy } = this.marbles[i]!.pose;
+    const y = this.marbles[i]!.pose.y + (this.afloat(i) ? bob(this.bobNow, i) : 0); // a marble on water rides its boat (#1441)
     if (i === 0) {
       this.hero.position.set(x, y, z);
       this.hero.quaternion.copy(q);
@@ -914,6 +927,43 @@ export class OpenWorldView {
     drawnPose.updateMatrix();
     this.troop.setMatrixAt(i - 1, drawnPose.matrix);
     this.troop.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Draws the hero and every troop marble drawn, and their boats. */
+  private drawMarbles(): void {
+    for (let i = 0; i < this.shownMarbles(); i++) this.draw(i);
+    this.sail();
+  }
+
+  /** How many marbles are drawn: the hero and the troop's instances, no more than the boats hold. */
+  private shownMarbles(): number {
+    return Math.min(this.marbles.length, 1 + this.troop.count, this.boats.instanceMatrix.count);
+  }
+
+  /** Whether marble `i` is drawn over a water cell: it rides a boat (#1441). */
+  private afloat(i: number): boolean {
+    const { x, z } = this.marbles[i]!.pose;
+    const [q, r] = cellAtPoint(x, z);
+    return this.world.tile(q, r)?.terrain === 'water';
+  }
+
+  /** Puts a boat under each drawn marble on water (#1441), in the order of the marbles: on the water, bobbing with its marble, turned to
+   * the way the marble sails. A marble on land has none. */
+  private sail(): void {
+    const { boatPose } = this;
+    let n = 0;
+    for (let i = 0; i < this.shownMarbles(); i++) {
+      const { x, z } = this.marbles[i]!.pose;
+      const wake = (this.wakes[i] ??= { x, z, yaw: 0 });
+      steer(wake, x, z);
+      if (!this.afloat(i)) continue;
+      boatPose.position.set(x, topOf('water', 0, 0, 0) - DRAFT + bob(this.bobNow, i), z);
+      boatPose.rotation.set(0, wake.yaw, 0);
+      boatPose.updateMatrix();
+      this.boats.setMatrixAt(n++, boatPose.matrix);
+    }
+    this.boats.count = n;
+    this.boats.instanceMatrix.needsUpdate = true;
   }
 
   /** The height the camera looks at: the hero's column top, followed by `follow` (the browser checks and the tests read it). */
@@ -1021,6 +1071,7 @@ export class OpenWorldView {
   /** Writes every marble of the push at `now`: the camera follows the hero's drawn place (`follow`). */
   private play(now: number): void {
     for (const m of this.moves) this.write(m, now);
+    this.sail(); // the boats of the pushing line follow their marbles (#1441)
   }
 
   /** Writes one marble of a push at `now` (ms): its place between the cells, and its size and sinking when it falls. */

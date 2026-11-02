@@ -125,9 +125,14 @@ pub enum Terrain {
 }
 
 impl Terrain {
-    /// Water, peaks, boulders, trees and walls cannot be entered.
+    /// Water, peaks, boulders, trees and walls cannot be entered by an enemy, nor hold a lair, a teleporter or the spawn.
     pub fn blocked(self) -> bool {
         !matches!(self, Terrain::Sand | Terrain::Grass | Terrain::Rock)
+    }
+
+    /// Whether the hero and its troop can enter the cell (#1441): the open ground, and water, which they sail on boats.
+    pub fn open_to_hero(self) -> bool {
+        self == Terrain::Water || !self.blocked()
     }
 }
 
@@ -737,7 +742,7 @@ pub fn find_path_within(
 }
 
 /// The walk of the hero from `from` to `to` over the world `seed` (`find_path`): a cell is entered when it is on the world, not in
-/// `blocked` (the enemies), and open or an obstacle the hero breaks by rolling into it (a boulder, or a tree with no tree on its six
+/// `blocked` (the enemies), and open to the hero (water too, #1441) or an obstacle the hero breaks by rolling into it (a boulder, or a tree with no tree on its six
 /// neighbours, #1147). The cells of `broken` are plain ground.
 pub fn walk_path(
     seed: u64,
@@ -819,7 +824,7 @@ fn path_over(
             Some(Terrain::Tree) => STEPS
                 .iter()
                 .all(|&(dq, dr)| terrain(q + dq, r + dr) != Some(Terrain::Tree)),
-            Some(other) => !other.blocked(),
+            Some(other) => other.open_to_hero(),
             None => false,
         }
     };
@@ -1205,6 +1210,21 @@ mod tests {
         assert!(!Terrain::Sand.blocked() && !Terrain::Grass.blocked() && !Terrain::Rock.blocked());
     }
 
+    #[test]
+    fn the_hero_sails_water_and_is_stopped_by_the_other_blocked_cells() {
+        for t in [Terrain::Water, Terrain::Sand, Terrain::Grass, Terrain::Rock] {
+            assert!(t.open_to_hero(), "{t:?}");
+        }
+        for t in [
+            Terrain::Peak,
+            Terrain::Boulder,
+            Terrain::Tree,
+            Terrain::Wall,
+        ] {
+            assert!(!t.open_to_hero(), "{t:?}");
+        }
+    }
+
     fn all_groups() -> Vec<Vec<(i32, i32)>> {
         (-8..8)
             .flat_map(|cx| (-8..8).flat_map(move |cy| enemy_groups(5, cx, cy)))
@@ -1559,6 +1579,18 @@ mod tests {
     }
 
     #[test]
+    fn a_path_sails_onto_the_water() {
+        let lake = (-30..30)
+            .flat_map(|q| (-30..30).map(move |r| (q, r)))
+            .filter(|&(q, r)| cell(9, q, r).map(|c| c.terrain) == Some(Terrain::Water))
+            .min_by_key(|&at| hex_distance(at, (0, 0)))
+            .unwrap();
+        let path = walk_path(9, (0, 0), lake, &[], &[]);
+        assert_eq!(path.last(), Some(&lake));
+        assert!(walks((0, 0), &path, &[]));
+    }
+
+    #[test]
     fn a_search_that_runs_out_of_expansions_gives_no_path() {
         let mut open = |_q: i32, _r: i32| true;
         assert!(find_path((0, 0), (30, 0), 5, &mut open).is_empty());
@@ -1606,12 +1638,17 @@ mod tests {
     }
 
     #[test]
-    fn water_and_walls_are_never_entered() {
-        let water = (-60..60)
-            .flat_map(|q| (-60..60).map(move |r| (q, r)))
-            .find(|&(q, r)| cell(9, q, r).map(|c| c.terrain) == Some(Terrain::Water))
-            .unwrap();
-        assert!(walk_path(9, (water.0 - 1, water.1), water, &[], &[]).is_empty());
+    fn walls_and_peaks_are_never_entered() {
+        for kind in [Terrain::Wall, Terrain::Peak] {
+            let at = (-200..200)
+                .flat_map(|q| (-200..200).map(move |r| (q, r)))
+                .find(|&(q, r)| cell(9, q, r).map(|c| c.terrain) == Some(kind))
+                .unwrap();
+            assert!(
+                walk_path(9, (at.0 - 1, at.1), at, &[], &[]).is_empty(),
+                "{kind:?}"
+            );
+        }
     }
 
     #[test]
@@ -1642,8 +1679,16 @@ mod tests {
             .flat_map(|&l| STEPS.map(|(a, b)| (l.0 + a, l.1 + b)))
             .collect();
         assert!(dungeon_walk(9, (0, 0), &lairs, &[], &[], &walled).is_none());
-        // Seed 54: the towers' searches pass the budget before one finds a way.
-        let far = super::lairs(54, 15);
-        assert!(dungeon_walk(54, (0, 0), &far, &[], &[], &far).is_none());
+        // Every tower walled in but the farthest: the searches of the near ones pass the budget before it is tried.
+        let farthest = (0..15)
+            .max_by_key(|&k| hex_distance((0, 0), lairs[k]))
+            .unwrap();
+        let open = &lairs[farthest..=farthest];
+        assert!(dungeon_walk(9, (0, 0), open, &[], &[], open).is_some());
+        let others: Vec<(i32, i32)> = (0..15)
+            .filter(|&k| k != farthest)
+            .flat_map(|k| STEPS.map(|(a, b)| (lairs[k].0 + a, lairs[k].1 + b)))
+            .collect();
+        assert!(dungeon_walk(9, (0, 0), &lairs, &[], &[], &others).is_none());
     }
 }
