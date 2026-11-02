@@ -249,6 +249,8 @@ a PR when CI is green.
    the `pr-screenshots` branch (`pr-screenshots/<issue>-<name>.png`) and link it:
    `![after](https://raw.githubusercontent.com/TidyMaze/ab-alone/pr-screenshots/<issue>-<name>.png)`.
    No UI change: write "no UI change". No screenshot, no push.
+   The e2e specs save their pictures (`test-results/*.png`, `LAIR_SHOT`...) only when `E2E_SHOTS=1`
+   is set, as each one costs a frame of software WebGL on the CI runner (`client/e2e/shot.ts`).
 6. **CI runs on every push to `main`** (the check `rust`). Pages deploys only after a green CI.
    **`main` red: revert at once, then fix.** No discussion first; the fix is a new commit with its
    own test.
