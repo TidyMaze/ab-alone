@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 import { clickHud, openModes, showHud, lowTierOnCi } from './modes';
-import { shot } from './shot';
 
 lowTierOnCi();
 
@@ -50,13 +49,13 @@ test('a far hero shows as an arrow at the screen edge with its distance, a near 
   const view = page.viewportSize()!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(view.height); // inside the screen
-  await shot(page, { path: 'test-results/peers-far.png' });
+  await page.screenshot({ path: 'test-results/peers-far.png' });
 
   // The same hero walks next to ours: it is in view, so a marker in the scene and no arrow.
   await page.evaluate((near) => (window as unknown as Hook).__netPeerIn(near, 'p'), pos(1, 0, 1));
   await expect(edge).toHaveCount(0);
   await expect(page.locator('#openworld-peers')).toHaveAttribute('data-peers', '1');
-  await shot(page, { path: 'test-results/peers-near.png' });
+  await page.screenshot({ path: 'test-results/peers-near.png' });
 
   // It leaves: gone from the screen.
   await page.evaluate(() => (window as unknown as Hook).__netPeerLeave('p'));
@@ -79,7 +78,7 @@ test('on a phone screen the arrow stays inside the screen, whichever way the her
   expect(box.x + box.width).toBeLessThanOrEqual(390);
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(780);
-  await shot(page, { path: 'test-results/peers-phone.png' });
+  await page.screenshot({ path: 'test-results/peers-phone.png' });
 });
 
 test('the hero sends its position when it steps, and Escape leaves the room, #1305', async ({ page }) => {
@@ -114,7 +113,7 @@ test('a public name goes out in the Hello and shows over a near hero, Hide leave
   });
   await expect(page.locator('.peer-tag')).toHaveText('Bob');
   await expect(page.locator('#openworld-net')).toHaveText('Online: 1 other hero here.');
-  await shot(page, { path: 'test-results/peers-named.png' });
+  await page.screenshot({ path: 'test-results/peers-named.png' });
   await clickHud(page, '#openworld-hide');
   await expect(page.locator('#openworld-net')).toContainText('Hidden');
   await expect(page.locator('.peer-tag')).toHaveCount(0);
@@ -324,7 +323,7 @@ test('on a phone the name field and Hide are 44 px high and the plate leaves the
   expect(hide.height).toBeGreaterThanOrEqual(44);
   const plate = (await page.locator('#openworld-hud').boundingBox())!;
   console.log('plate', JSON.stringify(plate), 'field', JSON.stringify(field), 'hide', JSON.stringify(hide));
-  await shot(page, { path: 'test-results/peers-phone-hud.png' });
+  await page.screenshot({ path: 'test-results/peers-phone-hud.png' });
   expect(plate.y).toBeGreaterThanOrEqual(844 * 0.5); // the lower half only: the hero stands at the middle
 });
 
@@ -339,7 +338,7 @@ test('the army of another hero is drawn round it, and ours goes out as 15 bytes,
     w.__netPeerIn([2, 4, 6, 1, 0, 255, 0, 0, 1, 0, 255, 1, 255, 255, 1], 'p'); // a full troop: offsets (1,0) (-1,0) (0,1) (0,-1) (1,-1) (-1,1)
   });
   await expect(page.locator('#openworld-peers')).toHaveAttribute('data-peers', '1');
-  await shot(page, { path: 'test-results/peers-army.png' });
+  await page.screenshot({ path: 'test-results/peers-army.png' });
   const troops = () => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m[1] === 4));
   await expect.poll(async () => (await troops()).length).toBeGreaterThanOrEqual(1);
   expect((await troops())[0]).toHaveLength(15);
@@ -360,7 +359,7 @@ test('the hero of another player rides a boat on water and has none on land, #14
   );
   const peers = page.locator('#openworld-peers');
   await expect(peers).toHaveAttribute('data-boats', '1');
-  await shot(page, { path: 'test-results/peers-boat.png' });
+  await page.screenshot({ path: 'test-results/peers-boat.png' });
   await page.evaluate((land) => (window as unknown as Hook).__netPeerIn(land, 'p'), pos(24, 1, 1));
   await expect(peers).toHaveAttribute('data-boats', '0');
 });
