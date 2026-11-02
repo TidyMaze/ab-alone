@@ -13,6 +13,8 @@ import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './o
 import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
 import { SUN, aimSunShadow, sunPosition } from './tablezero';
+import { NEON, lightNeon, neonSunPosition, neonStars, neonWorldOn } from './neonlook';
+import { WORLD_SHADOW, neonProp } from './neonworld';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
@@ -217,8 +219,8 @@ export const groundColour = (tile: Tile, ground: Ground): number =>
   ground === 'grass' && (tile.height === 3 || tile.height === 4) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color;
 /** The red of a lone water cell and of a cell in the middle of a lake, as the instance colour holds them: the shore foam reads where on
  * that way a cell lies (#1101). */
-const SHORE_RED = new THREE.Color(WATER.shore).r;
-const DEEP_RED = new THREE.Color(WATER.deep).r;
+const shoreRed = (): number => new THREE.Color(WATER.shore).r; // read when a view is made: the neon look changes the lakes' colours
+const deepRed = (): number => new THREE.Color(WATER.deep).r;
 /** The colour of a water cell: the share of its six neighbours that are water sets how far it lies from the shore. */
 export function waterColor(world: World, q: number, r: number): THREE.Color {
   const wet = neighbours([q, r]).filter(([nq, nr]) => world.tile(nq, nr)?.terrain === 'water').length / 6;
@@ -428,7 +430,9 @@ const SHADOW_REACH = 14;
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
-  private readonly fog = new THREE.Fog(SHIP_BLACK);
+  private readonly neon = neonWorldOn(); // `?look=neon` (#1424): a black sky with stars, a cold sun, soft shadows at 55 %
+  private readonly fog = new THREE.Fog(neonWorldOn() ? NEON.sky : SHIP_BLACK);
+  private stars: THREE.Mesh | null = null;
   private level = 1;
   /** The zoom drawn at the current turn: `level` as followed, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
   private drawnLevel = 1;
@@ -537,12 +541,19 @@ export class OpenWorldView {
     skins?: MarbleSkins,
   ) {
     lifting = true; // a new view starts on the high tier (#1418)
-    this.scene.background = new THREE.Color(SHIP_BLACK);
+    this.scene.background = new THREE.Color(this.neon ? NEON.sky : SHIP_BLACK);
     this.scene.fog = this.fog;
-    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 0.9));
+    const hemisphere = new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 0.9);
+    this.scene.add(hemisphere);
     // The arena's sun (tablezero.ts, #1364): its colour and its direction, the hero's cell at its target; the shadow is the high tier's.
     this.sun = new THREE.DirectionalLight(SUN.colour, 3.2);
     this.scene.add(this.sun, this.sun.target);
+    if (this.neon) {
+      lightNeon(this.sun, hemisphere);
+      this.stars = Object.assign(neonStars(1400, 20), { renderOrder: -1000 }); // a sky box that follows the camera, inside its far plane
+      Object.assign(this.stars.material, { depthTest: false });
+      this.scene.add(this.stars);
+    }
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     const top = topOnly(prism);
     for (const ground of GROUNDS) {
@@ -550,7 +561,7 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen });
+      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, shoreRed(), deepRed()) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen });
       this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, material());
       this.managed.push(this.grounds[ground]);
       this.flats[ground] = this.instances(`terrain-${ground}-flat`, 1, top, material()); // grows on the first low build (`fit`)
@@ -602,16 +613,16 @@ export class OpenWorldView {
   useModels({ low, high }: PropModels): void {
     for (const prop of PROP_NAMES) {
       const geometry = low[prop];
-      if (geometry) this.paint(this.props[prop], geometry);
+      if (geometry) this.paint(this.props[prop], this.neon ? neonProp(prop, geometry) : geometry);
     }
     for (const prop of MODELLED) {
       const geometry = high[prop];
       if (!geometry) continue;
-      this.paint(this.detailed[prop]!, geometry);
+      this.paint(this.detailed[prop]!, this.neon ? neonProp(prop, geometry) : geometry);
       this.detailedReady.add(prop);
     }
     if (low.lair && low.lair_beaten) {
-      this.lairModels = { open: low.lair, beaten: low.lair_beaten };
+      this.lairModels = this.neon ? { open: neonProp('lair', low.lair), beaten: neonProp('lair_beaten', low.lair_beaten) } : { open: low.lair, beaten: low.lair_beaten };
       this.setLairs(this.lairCells, this.lairsBeaten); // the landmarks already stood are drawn again with the models
     }
     this.drawnKey = '';
@@ -1135,6 +1146,7 @@ export class OpenWorldView {
   /** The sun's soft shadow round the hero, on the high tier (#1364). */
   setShadows(on: boolean): void {
     aimSunShadow(this.sun, on, SHADOW_REACH);
+    if (on && this.neon) this.sun.shadow.intensity = WORLD_SHADOW;
   }
 
   /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the planes of the camera with
@@ -1147,7 +1159,8 @@ export class OpenWorldView {
     this.widen.value = gapFill(k);
     lookAtHero(this.camera, at, k, this.yawNow);
     this.sun.target.position.copy(at);
-    this.sun.position.copy(at).add(this.sunAway.set(...sunPosition()));
+    this.sun.position.copy(at).add(this.sunAway.set(...(this.neon ? neonSunPosition() : sunPosition())));
+    this.stars?.position.copy(this.camera.position);
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
     const view = new THREE.Vector3();

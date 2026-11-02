@@ -34,6 +34,13 @@ export const NEON_LIGHT = { sun: 0xe8f0ff, sunIntensity: 3.2, elevation: 24, azi
 /** The dishes are drawn this much smaller across: the gap between two cells (1 - the flat-to-flat of a 0.5 hexagon, 0.134) grows by 40 %, so the cyan line keeps its width and its dark floor at 390 px. */
 export const NEON_CELL_SCALE = (1 - (1 - Math.sqrt(3) / 2) * 1.4) / (Math.sqrt(3) / 2);
 
+/** Whether the Open world wears the look (set by `applyNeonWorld`, read by the world's view). */
+let worldOn = false;
+export const neonWorldOn = (): boolean => worldOn;
+export const setNeonWorldOn = (on: boolean): void => {
+  worldOn = on;
+};
+
 /** `?look=neon`, nothing else. */
 export function neonLookOn(search: string): boolean {
   return new URLSearchParams(search).get('look') === 'neon';
@@ -43,19 +50,23 @@ const luma = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * 
 const linear = (hex: number): THREE.Color => new THREE.Color(hex);
 
 /** The sun and the hemisphere of the neon look. */
+/** Where the sun stands, `distance` from what it lights: low on the left. */
+export function neonSunPosition(distance = 30): [number, number, number] {
+  const [el, az] = [(NEON_LIGHT.elevation * Math.PI) / 180, (NEON_LIGHT.azimuth * Math.PI) / 180];
+  return [-distance * Math.cos(el) * Math.sin(az), distance * Math.sin(el), distance * Math.cos(el) * Math.cos(az)];
+}
+
 export function lightNeon(sun: THREE.DirectionalLight, hemisphere: THREE.HemisphereLight): void {
-  const { elevation, azimuth } = NEON_LIGHT;
-  const [el, az] = [(elevation * Math.PI) / 180, (azimuth * Math.PI) / 180];
   sun.color.set(NEON_LIGHT.sun);
   sun.intensity = NEON_LIGHT.sunIntensity;
-  sun.position.set(-30 * Math.cos(el) * Math.sin(az), 30 * Math.sin(el), 30 * Math.cos(el) * Math.cos(az));
+  sun.position.set(...neonSunPosition());
   hemisphere.color.copy(linear(NEON_LIGHT.sky).lerp(linear(NEON_LIGHT.skyMix), NEON_LIGHT.skyAmount));
   hemisphere.groundColor.copy(linear(NEON_LIGHT.ground));
   hemisphere.intensity = NEON_LIGHT.hemisphere;
 }
 
 /** Fine stars on a black sky: one draw call, a tiny triangle each facing the board, no haze (a Points sprite is not drawn by this renderer). */
-export function neonStars(count = 1400): THREE.Mesh {
+export function neonStars(count = 1400, radius = 240): THREE.Mesh {
   const position = new Float32Array(count * 9);
   const colour = new Float32Array(count * 9);
   let s = 17;
@@ -67,8 +78,8 @@ export function neonStars(count = 1400): THREE.Mesh {
     centre.set(Math.cos(az) * r, y, Math.sin(az) * r);
     side.set(-Math.sin(az), 0, Math.cos(az));
     up.crossVectors(centre, side);
-    const size = 0.25 + rnd() * 0.25;
-    centre.multiplyScalar(240);
+    const size = (0.25 + rnd() * 0.25) * (radius / 240);
+    centre.multiplyScalar(radius);
     position.set([...centre.clone().addScaledVector(side, -size).toArray(), ...centre.clone().addScaledVector(side, size).toArray(), ...centre.clone().addScaledVector(up, size * 1.6).toArray()], i * 9);
     const k = 0.35 + rnd() * 0.65;
     for (let v = 0; v < 3; v++) colour.set([0.85 * k, 0.88 * k, k], i * 9 + v * 3);

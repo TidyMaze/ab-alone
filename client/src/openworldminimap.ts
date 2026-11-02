@@ -5,6 +5,8 @@
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
 import { LOOK, PROPS, WATER } from './openworldview';
+import { neonWorldOn } from './neonlook';
+import { mapColour } from './neonworld';
 
 /** The cells from the hero to the edge of the map: a window of three chunks across. */
 export const RADIUS = 24;
@@ -46,9 +48,8 @@ const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
 
 /** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`), so the map has no palette of its own. */
 export function terrainColour(terrain: Terrain): string {
-  if (terrain === 'water') return hex(WATER.shore);
-  if (terrain === 'tree' || terrain === 'boulder' || terrain === 'wall') return hex(PROPS[terrain].color);
-  return hex(LOOK[terrain].color);
+  const own = terrain === 'water' ? WATER.shore : terrain === 'tree' || terrain === 'boulder' || terrain === 'wall' ? PROPS[terrain].color : LOOK[terrain].color;
+  return hex(neonWorldOn() ? mapColour(own) : own); // the neon look's dark terrain is lifted for the map (#1424)
 }
 
 /** Where `cell` is from the hero on the map, in cells and canvas axes (y down): the ground layout of the 3D view (`axialTo3D`) turned by

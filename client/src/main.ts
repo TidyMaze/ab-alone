@@ -203,7 +203,9 @@ import { OpenWorldMode, twistOf } from './openworldmode';
 import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
 import { worldSaves } from './openworldsave';
-import { loadModels } from './openworldview';
+import { BIOME_LOOK, LAIR_LOOK, LOOK, MARBLE_LOOK as WORLD_MARBLES, PROPS, TELEPORTER_LOOK, WATER, loadModels } from './openworldview';
+import { applyNeonWorld } from './neonworld';
+import { AMBIENT } from './openworldparticles';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
@@ -573,6 +575,7 @@ if (plateNormal) {
 }
 
 const neonLook = neonLookOn(location.search); // `?look=neon` (#1424): the circuit slab, colours and light only; never stored
+if (neonLook) applyNeonWorld(true, { LOOK, WATER, BIOME_LOOK, PROPS, MARBLE_LOOK: WORLD_MARBLES, LAIR_LOOK, TELEPORTER_LOOK, AMBIENT }); // the Open world's palette, the minimap's too
 const sceneRenderer = new SceneRenderer({
   renderer,
   neon: neonLook,
