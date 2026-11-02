@@ -15,7 +15,7 @@ const look = (page: Page, id: string) =>
       border: `${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}`,
       radius: s.borderTopLeftRadius,
       padding: `${s.paddingTop} ${s.paddingRight} ${s.paddingBottom} ${s.paddingLeft}`,
-      height: el.getBoundingClientRect().height,
+      height: Math.round(el.getBoundingClientRect().height), // to the pixel: 47.99997 and 48 are the same height (a float rounding)
     };
   });
 
@@ -51,5 +51,5 @@ test('Copy looks like Reset view and is as tall as the link beside it, #839', as
   await expect(page.getByRole('button', { name: 'Copy', exact: true })).toBeVisible();
   // #1032: Reset view is a thumb dock button (its label is a short word there), so Copy is no longer compared to it.
   const copy = await look(page, 'invite-copy');
-  expect(copy.height).toBe((await page.locator('#invite').boundingBox())!.height);
+  expect(copy.height).toBeCloseTo((await page.locator('#invite').boundingBox())!.height, 0); // the same height to within half a pixel
 });
