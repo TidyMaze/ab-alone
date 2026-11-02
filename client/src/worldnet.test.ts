@@ -434,7 +434,7 @@ describe('WorldPeersHost', () => {
         first.host.lairWon(PUBLIC_SEED, [3, 0]);
         await until(() => savedCells(store).length === 3);
         first.host.leave(); // leaving does not wipe the saved set
-        expect(savedCells(store)).toEqual([1, 2, 3]);
+        expect([...savedCells(store)].sort()).toEqual([1, 2, 3]); // three signatures finish in any order: the set is a union, no order
         // the page reloads: a new host on the same store
         const again = setup(true, store);
         again.enter();
@@ -454,7 +454,7 @@ describe('WorldPeersHost', () => {
         const third = setup(true, store);
         third.enter();
         await until(() => third.applied.length === 1);
-        expect(savedCells(store)).toEqual([1, 2, 3]);
+        expect([...savedCells(store)].sort()).toEqual([1, 2, 3]);
       });
 
       it('drops a saved event that is forged, of another seed, or against the rules, and keeps going', async () => {
