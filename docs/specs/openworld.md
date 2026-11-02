@@ -29,8 +29,13 @@ A-light Explore (#720 to #725), which it does not touch.
 ## 2. The map
 
 - **Cells**: the axial hex grid, cut into **chunks** of 16 x 16 cells (a parallelogram tiles the
-  axial grid with no gap). The world is 64 x 64 chunks (1024 x 1024 cells) and a chunk is
-  generated only when the hero is within 2 chunks of it.
+  axial grid with no gap). The world is a regular hexagon of cells centred on the spawn `(0, 0)` (#1440): a cell is in the
+  world when its hex distance to the spawn is at most `WORLD_RADIUS` = 448, 603 457 cells (the square world before it,
+  64 x 64 chunks, held 1 048 576). `in_world` in `crates/abalone-core/src/world.rs` is the one test of the edge, for the
+  cells, the chunks, the enemies, the lairs and the teleporters. The chunks stay the storage unit: a chunk wholly past
+  the edge is off the world (empty on the bridge), and in a chunk the edge crosses the cells past it are off the world
+  (`[0, 255, 0]` on the bridge, a hole in the client's chunk), so the edge reads as today's: a cliff into the void in 3D,
+  no cell on the minimap and the map. A chunk is generated only when the hero is within 2 chunks of it.
 - **Loaded chunks** (the view, #976, #1046): the view draws a square of chunks around a centre chunk, `reach` chunks each
   side. The reach is the ground in view in cells (the hex distance to the farthest corner of the screen), rounded up to
   chunks, plus one chunk of margin, and never more than 10 (441 chunks). The centre is kept while the square still covers
@@ -238,7 +243,9 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 
 - **Placement** is seeded world generation in Rust (`world::lairs(seed, count)`, bridge `world_lairs(seed)` passes the roster size, `q, r` pairs, lair 0 first).
   Lair `k` is drawn in the `k`-th `count`-th of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
-  six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). It reads the terrain, never
+  six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). The count and the band are
+  kept for the hexagon (#1440): its corners are 448 ground units out and the middles of its sides about 388, so a draw past the edge
+  is drawn again and the lairs still spread over all of it. It reads the terrain, never
   changes it, so `WORLD_VERSION` does not move.
 - **Look.** A low-poly landmark made in Blender (`client/models/openworld-lair.glb`, vertex colours, under 72 triangles each) on
   the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
@@ -309,11 +316,14 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 ## 10. Teleporters (#1412)
 
 - **Placement** is seeded world generation in Rust (`world::teleporters(seed, avoid)`, bridge `world_teleporters(seed)`, `q, r` pairs, the
-  spawn's first): one teleporter in each square of 4 x 4 chunks, the squares centred on the spawn's chunk (about 250 in a world). The
-  spawn's square has its own on `(2, -1)`, in the clearing. Any other square tries cells 2 or more inside its middle 2 x 2 chunks, from a
-  drawn one, 24 tries a chunk, and keeps the first whose cell and six neighbours are open ground, with no generated enemy within 2 cells
-  and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two teleporters are at least 32 cells apart. It
-  reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move and the saves keep loading.
+  spawn's first): one teleporter in each square of 8 x 8 chunks (`TELEPORT_BLOCK`), the squares centred on the spawn's chunk (about 35
+  in a world). The spawn's square has its own on `(2, -1)`, in the clearing. Any other square tries cells 2 or more inside its middle
+  4 x 4 chunks (half its side), from a drawn one, 24 tries a chunk, and keeps the first whose cell and six neighbours are open ground,
+  with no generated enemy within 2 cells and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two
+  teleporters are at least 64 cells apart. A quarter as many as before #1444 (squares of 4 x 4 chunks, a middle of 2 x 2, 32 cells
+  apart): seed 7 holds 36 teleporters, against 137 in the same hexagon, and the public world 1305 holds 37, against 159. It
+  reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move and the saves keep loading. In the hexagon
+  (#1440) the squares run as far as their middle chunks reach it, and a try keeps its pad in the world.
 - **Look.** A flat violet hex pad on the cell and a violet ring floating over it (`TELEPORTER_LOOK`), drawn for the teleporters of the
   loaded chunks (two instanced meshes, laid with the chunks); a portal icon on the minimap and the map.
 - **Discovery.** A teleporter is discovered once its cell is (section 9: within 10 cells of the hero), so the network grows as the

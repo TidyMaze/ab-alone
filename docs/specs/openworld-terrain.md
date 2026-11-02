@@ -113,7 +113,7 @@ A biome is a region with its own ground, trees and boulders. Two slow fields and
   temperature is pulled to 0.395 and the moisture to 0.30 (the Meadow values), from 8 to 16 cells the pull falls
   by a smoothstep to nothing (no edge). Only the biome moves; terrain, heights and walls are unchanged by it. So
   the disc of axial radius 10 is Meadow on at least 80 % of its cells, on seeds 1 to 16 (seed 7 was a meadow
-  island in a desert). `WORLD_VERSION` is 2.
+  island in a desert). `WORLD_VERSION` is 3 since the hexagon world (#1440).
 - **Tests**: every biome appears in a 16 x 16 chunk window of several seeds; the land shares are within 5 points
   of the table; the obstacle densities of each biome hold on the low ground (trees within a fifth, boulders within a
   third); water, shore, uplands and peaks keep their terrains; the spawn clearing is Meadow and open; the order of
@@ -182,7 +182,7 @@ Client only, after #983 (it needs the eight heights).
 - **World version**: each task changes every world. Once the save of #968 stores a seed, it also stores a
   `WORLD_VERSION` (a constant bumped by each terrain task), so an old save is told apart, not misread.
   As built (#968): `WORLD_VERSION` is in `crates/abalone-core/src/world.rs`, with a comment above it (`1` until #1024,
-  `2` since). The digest test asserts `(WORLD_VERSION, world_digest())` against `(2, <digest>)` on one line, so a change of the generator forces an edit
+  `2` until #1440, `3` since). The digest test asserts `(WORLD_VERSION, world_digest())` against `(3, <digest>)` on one line, so a change of the generator forces an edit
   of that line: bump the version and repin the digest in the same commit. The bridge exports it as `world_version()`
   (`crates/abalone-wasm/src/world.rs`), and the client saves it with each world (`openworld.md` section 5): a save of another
   version is not loaded.

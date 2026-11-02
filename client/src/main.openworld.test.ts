@@ -742,6 +742,6 @@ describe('the teleporters of the Open world (#1412)', () => {
     await boot('?bot=off&openworld=7');
     const all = (window as unknown as { __openworldTeleporters: (seed: number) => number[] }).__openworldTeleporters(7);
     expect(all.slice(0, 2)).toEqual([2, -1]);
-    expect(all.length).toBeGreaterThan(400);
+    expect(all.length).toBe(2 * 36); // one a square of 8 x 8 chunks (#1444)
   });
 });

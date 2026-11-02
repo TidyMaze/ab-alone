@@ -2,7 +2,7 @@ import './test/openworldwasm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
+import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, OFF_WORLD, type Terrain, type Tile, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
@@ -100,6 +100,22 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
       wall: cells / 8,
       cap: cells / 8,
     });
+  });
+
+  it('draws no ground and no prop past the edge of a chunk the edge crosses (#1440)', () => {
+    // Every other cell is past the edge: the bridge's off-the-world byte.
+    const edged = (cx: number, cy: number): Uint8Array => {
+      const out = bytes(cx, cy);
+      for (let i = 1; i < out.length / 3; i += 2) out.set([0, OFF_WORLD, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(edged));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const cells = 49 * CHUNK * CHUNK;
+    // The cells left are the even ones, codes 0, 2, 4 and 6: water, grass (height 2), peak and tree (on grass).
+    expect(counts(view, 'terrain', GROUNDS)).toEqual({ water: cells / 8, sand: 0, grass: cells / 4, rock: 0, peak: cells / 8 });
+    expect(counts(view, 'prop', ['mountain', 'tree', 'boulder', 'wall'])).toEqual({ mountain: cells / 8, tree: cells / 8, boulder: 0, wall: 0 });
   });
 
   it('loads the chunks only when the hero leaves the loaded square, the chunks it has are kept (#1046)', () => {
