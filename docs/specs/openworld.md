@@ -331,7 +331,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   with no generated enemy within 2 cells and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two
   teleporters are at least 64 cells apart. A quarter as many as before #1444 (squares of 4 x 4 chunks, a middle of 2 x 2, 32 cells
   apart): seed 7 holds 34 teleporters (36 before the archipelago's sea of #1442, which leaves some squares with no island that
-  fits), against 137 in the same hexagon, and the public world 1305 holds 37, against 159; every biome holds some. It
+  fits), against 137 in the same hexagon, and the public world 1305 holds 36 (37 before #1442), against 159; every biome holds some. It
   reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move and the saves keep loading. In the hexagon
   (#1440) the squares run as far as their middle chunks reach it, and a try keeps its pad in the world.
 - **Look.** A flat violet hex pad on the cell and a violet ring floating over it (`TELEPORTER_LOOK`), drawn for the teleporters of the

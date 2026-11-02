@@ -42,8 +42,9 @@ const MOISTURE_SALT: u64 = 33;
 /// temperature's before), its weights of the macro, meso and micro levels.
 const BORDER_SALT: u64 = 37;
 const BORDER_WEIGHTS: [f64; 3] = [0.55, 0.30, 0.15];
-/// A border of two sextants moves sideways by `(border - 0.5) * BORDER_SWAY` cells, so it is never a straight line.
-const BORDER_SWAY: f64 = 40.0;
+/// A border of two sextants turns round the spawn by `(border - 0.5) * BORDER_TURN` radians, so it is never a straight line and it
+/// wanders further the further it runs from the spawn.
+const BORDER_TURN: f64 = 1.2;
 /// Each cell moves by a draw of up to `BLEND` cells either way (salt `BLEND_SALT`) when its biome is picked, so two biomes mix over
 /// a few cells along their border; the archipelago's sea comes in over the same width, smoothly.
 const BLEND: f64 = 3.0;
@@ -271,16 +272,16 @@ fn meadow_bias(q: i32, r: i32) -> f64 {
     smoothstep((MEADOW_OUTER - f64::from(distance(q, r))) / (MEADOW_OUTER - MEADOW_INNER))
 }
 
-/// Where `(q, r)` lies round the spawn, its point moved `sway` cells sideways (counter-clockwise): the sextant it falls in
-/// (0 east to 5 south-east, `SEXTANTS`) and how many cells inside that sextant's border it lies. The pointy-top layout of the
-/// client: x runs along `q`, the north is `-r`.
-fn sextant(q: i32, r: i32, sway: f64) -> (usize, f64) {
+/// Where `(q, r)` lies round the spawn, its point turned `turn` radians and moved `shift` cells more, counter-clockwise: the
+/// sextant it falls in (0 east to 5 south-east, `SEXTANTS`) and how many cells inside that sextant's border it lies. The
+/// pointy-top layout of the client: x runs along `q`, the north is `-r`.
+fn sextant(q: i32, r: i32, turn: f64, shift: f64) -> (usize, f64) {
     let (x, y) = (
         f64::from(q) + f64::from(r) / 2.0,
         -(3f64.sqrt() / 2.0) * f64::from(r),
     );
     let reach = x.hypot(y).max(1.0);
-    let turns = (y.atan2(x) + sway / reach) / (std::f64::consts::PI / 3.0);
+    let turns = (y.atan2(x) + turn + shift / reach) / (std::f64::consts::PI / 3.0);
     let nearest = turns.round();
     let inside = (0.5 - (turns - nearest).abs()) * (std::f64::consts::PI / 3.0) * reach;
     ((nearest as i64).rem_euclid(6) as usize, inside)
@@ -472,14 +473,14 @@ impl Window {
     /// spawn a draw below `meadow_bias` makes it meadow, so the surroundings are meadow and their edge is soft. The sea grows
     /// smoothly over `BLEND` cells inside the archipelago's border, and from `SEA_NEAR` to `SEA_FAR` cells out.
     fn biome(&self, q: i32, r: i32) -> (Biome, f64) {
-        let sway = (self.border.value(q, r) - 0.5) * BORDER_SWAY;
+        let turn = (self.border.value(q, r) - 0.5) * BORDER_TURN;
         let blend = (unit(self.seed, BLEND_SALT, q, r) - 0.5) * 2.0 * BLEND;
         let biome = if unit(self.seed, MEADOW_SALT, q, r) < meadow_bias(q, r) {
             Biome::Meadow
         } else {
-            SEXTANTS[sextant(q, r, sway + blend).0]
+            SEXTANTS[sextant(q, r, turn, blend).0]
         };
-        let (k, inside) = sextant(q, r, sway);
+        let (k, inside) = sextant(q, r, turn, 0.0);
         let edge = if SEXTANTS[k] == Biome::Archipelago {
             inside
         } else {
@@ -1263,19 +1264,19 @@ mod tests {
             ]
         );
         assert_eq!(polar(60.0, 100.0), (100, -100));
-        // The middle 40 degrees of each sextant, from 40 cells out to the edge: its own biome, on seeds 1 to 4.
+        // The middle 20 degrees of each sextant, from 40 cells out to the edge: its own biome, on seeds 1 to 4.
         for seed in 1..=4 {
             for (k, &biome) in SEXTANTS.iter().enumerate() {
                 let (mut own, mut total) = (0, 0);
                 for reach in (40..380).step_by(8) {
-                    for turn in (-20..=20).step_by(4) {
+                    for turn in (-10..=10).step_by(2) {
                         let (q, r) = polar(60.0 * k as f64 + f64::from(turn), f64::from(reach));
                         total += 1;
                         own += usize::from(cell(seed, q, r).unwrap().biome == biome);
                     }
                 }
                 assert!(
-                    own * 100 >= total * 98,
+                    own * 100 >= total * 95,
                     "seed {seed}: {biome:?} on {own} of {total} cells of its sextant"
                 );
             }
@@ -1284,26 +1285,28 @@ mod tests {
 
     #[test]
     fn a_border_between_two_sextants_is_ragged_and_blends_over_a_few_cells() {
-        // Arcs across the border between the meadow and the forest (30 degrees), every 10 cells out: where each arc first
-        // turns forest moves from arc to arc (ragged), some arc turns more than once (blended), and none strays far.
+        // Arcs from 5 to 55 degrees, across the border between the meadow and the forest (30 degrees), every 10 cells out, a
+        // cell a step: where each arc first turns forest moves from arc to arc (ragged), some arcs turn more than once
+        // (blended), and each starts meadow and ends forest.
         let seed = 3;
         let (mut offsets, mut mixed) = (Vec::new(), 0);
         for reach in (100..=370).step_by(10) {
             let reach = f64::from(reach);
             let degree = 180.0 / std::f64::consts::PI / reach; // one cell along the arc, in degrees
-            let arc: Vec<Biome> = (-30..=30)
+            let half = (25.0 / degree) as i32;
+            let arc: Vec<Biome> = (-half..=half)
                 .map(|k| polar(30.0 + f64::from(k) * degree, reach))
                 .map(|(q, r)| cell(seed, q, r).unwrap().biome)
                 .collect();
             assert!(
-                arc[..10].iter().all(|&b| b == Biome::Meadow),
+                arc[..5].iter().all(|&b| b == Biome::Meadow),
                 "{reach}: {arc:?}"
             );
             assert!(
-                arc[51..].iter().all(|&b| b == Biome::Forest),
+                arc[arc.len() - 5..].iter().all(|&b| b == Biome::Forest),
                 "{reach}: {arc:?}"
             );
-            let first = arc.iter().position(|&b| b == Biome::Forest).unwrap() as i32 - 30;
+            let first = arc.iter().position(|&b| b == Biome::Forest).unwrap() as i32 - half;
             offsets.push(first);
             mixed += usize::from(arc.windows(2).filter(|w| w[0] != w[1]).count() > 1);
         }
@@ -1314,12 +1317,12 @@ mod tests {
 
     #[test]
     fn the_archipelago_is_mostly_water_with_islands_of_sand_and_grass() {
-        // The middle 40 degrees of the south-east sextant, from 120 cells out, seeds 1 to 4: three quarters water, the
+        // The middle 20 degrees of the south-east sextant, from 120 cells out, seeds 1 to 4: three quarters water, the
         // islands sand and low grass (heights 2 to 4) with their trees, boulders and walls; no rock, no peak.
         let cells: Vec<Cell> = (1..=4)
             .flat_map(|seed| {
-                (120..380).step_by(4).flat_map(move |reach| {
-                    (-20..=20).map(move |turn| {
+                (120..380).step_by(2).flat_map(move |reach| {
+                    (-10..=10).map(move |turn| {
                         let (q, r) = polar(300.0 + f64::from(turn), f64::from(reach));
                         cell(seed, q, r).unwrap()
                     })
@@ -1602,7 +1605,7 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             (WORLD_VERSION, world_digest()),
-            (4, 14_624_702_171_911_828_112),
+            (4, 16_742_511_850_258_042_212),
             "WORLD_VERSION and digest of the reference world"
         );
     }

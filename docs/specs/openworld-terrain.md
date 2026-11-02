@@ -91,9 +91,10 @@ mixed five climate biomes everywhere (#984), so every direction looked alike.
 | South-west `(-1, 1)` | Badlands | dark red rock | none | 45 |
 | South-east `(0, 1)` | Archipelago (new) | fresh green `#5c7d58` | 5 % | 10 |
 
-- **Ragged borders**: the angle of a cell (the pointy-top layout of the client: x along `q`, the north is `-r`) is moved
-  sideways by `(border - 0.5) * 40` cells, `border` a field of section 2 (macro, meso and micro levels, the salts of the old
-  temperature), so a border wanders by up to some ten cells and is never a straight line.
+- **Ragged borders**: the angle of a cell round the spawn (the pointy-top layout of the client: x along `q`, the north is `-r`)
+  is turned by `(border - 0.5) * 1.2` radians (`BORDER_TURN`), `border` a field of section 2 (macro, meso and micro levels, the
+  salts of the old temperature), so a border is never a straight line and wanders further the further it runs from the spawn
+  (some 10 degrees either way).
 - **Blend**: each cell is moved again by a draw of up to 3 cells either way (`BLEND`) when its biome is picked, so two biomes
   mix over a few cells along their border.
 - **Spawn**: the clearing (radius 3) is Meadow grass at height 3. Around it a soft Meadow bias (#1024): a cell is Meadow when a
@@ -102,7 +103,8 @@ mixed five climate biomes everywhere (#984), so every direction looked alike.
 - **Archipelago**: mostly water, with islands of sand and low grass, crossed by boat (#1441). Its elevation is that of the meso
   and micro levels only (no continent), lowered by `SEA_DROP` 0.19, and its tops are cut at `ISLAND_TOP` (height 4): no rock, no
   peak. The sea comes in smoothly, by a smoothstep over the 3 cells of the blend inside its border and from 40 to 90 cells out
-  of the spawn, so the land round the spawn (section 2's ring) is kept. Its middle, from 120 cells out, is 65 to 85 % water.
+  of the spawn, so the land round the spawn (section 2's ring) is kept. Its middle 20 degrees, from 120 cells out, is 65 to 85 %
+  water over seeds 1 to 4.
 - **What a biome changes**: the ground tint of the low ground (levels 3 and 4) in the 3D view, the minimap and the map, and the
   density of the obstacles per open cell on the low ground. Elsewhere water, shore (level 2), uplands and peaks keep their
   terrain in every biome; the archipelago alone also changes the relief, as above.
@@ -113,24 +115,24 @@ mixed five climate biomes everywhere (#984), so every direction looked alike.
 - **Lairs and teleporters** (`openworld.md` sections 7 and 10): lair `k` is drawn in the sextant `k % 6` and kept only on the
   open ground of its biome, so each biome holds two lairs or more (15 bosses: three in the meadow, the forest and the tundra, two
   in the others). The teleporters keep their squares; an archipelago square with no island that fits has none (seed 7 holds 34,
-  36 before, at least four in every biome).
-- **Tests**: each sextant's middle 40 degrees is its biome (98 % of the cells, seeds 1 to 4); a border is ragged and blends;
+  36 before, and seed 1305 36, 37 before; at least four in every biome).
+- **Tests**: each sextant's middle 20 degrees is its biome (95 % of the cells, seeds 1 to 4); a border is ragged and blends;
   the archipelago is mostly water with islands of sand and grass, no rock nor peak; the obstacle densities of each biome hold on
   the low ground (trees within a fifth, boulders within a third); enemies, two lairs and a teleporter in every biome; the spawn
   clearing is Meadow and open; the order of visit does not matter. The eight-height shares and the far view's sea and range are
   measured out of the archipelago, whose sea is meant; the blocked share and the 32-seed flood fill of #987 still hold.
   `WORLD_VERSION` is 4 since #1442 (3 for the hexagon of #1440).
 
-**Measured (#1442)**, the 16 x 16 chunks around the spawn, seeds 1 to 4. Share of the window per biome: meadow 18.2 %, forest
-12.1 %, tundra 17.8 %, desert 19.9 %, badlands 12.6 %, archipelago 19.2 %. Low ground obstacles: meadow trees 1.9 % and 16.7
-boulders per mille, forest 25.1 % and 10.3, tundra 4.1 % and 26.4, desert 0 % and 28.8, badlands 0 % and 43.5, archipelago
-5.0 % and 8.6. Blocked share 36.3 % (bound 26 to 37), water 26.1 %. The middle of the archipelago is 66.3, 67.9, 82.9 and 64.7 %
+**Measured (#1442)**, the 16 x 16 chunks around the spawn, seeds 1 to 4. Share of the window per biome: meadow 15.3 %, forest
+11.8 %, tundra 16.6 %, desert 21.3 %, badlands 12.7 %, archipelago 22.2 %. Low ground obstacles: meadow trees 2.0 % and 16.4
+boulders per mille, forest 25.1 % and 10.6, tundra 4.1 % and 26.4, desert 0 % and 28.5, badlands 0 % and 45.0, archipelago
+4.8 % and 8.6. Blocked share 36.3 % (bound 26 to 37), water 26.5 %. The middle of the archipelago is 64.9, 76.3, 88.0 and 66.5 %
 water on seeds 1 to 4.
 
-**Digest**: the world digest moves to 14624702171911828112 (`WORLD_VERSION` 4).
+**Digest**: the world digest moves to 16742511850258042212 (`WORLD_VERSION` 4).
 
 **Cost** (`world_timing`, the minimum of three runs on a shared machine): the 2465 chunks of the hexagon 30.1 ms before and
-43.2 ms after (budget 117 ms): two angles and two draws more per cell.
+39.8 ms after (budget 117 ms): two angles and two draws more per cell.
 
 **Memory**: unchanged, the tint is the instance colour every ground and prop already carries (#984).
 
