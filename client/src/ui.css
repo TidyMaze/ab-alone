@@ -786,9 +786,10 @@ body[data-reading] #log { visibility: visible; }
   display: flex; flex-direction: column; gap: 0.5rem; align-items: center; padding: 0.75rem;
   color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: calc(0.875rem * var(--ui-scale))/1.3 var(--ui);
 }
-/* Held upright, the plate keeps below the HUD plate and the buttons under it (#227), the mode button among them. */
+/* Held upright, the plate keeps below the HUD plate and the buttons under it (#227), the mode button among them, and ends
+   8 px above the thumb dock (#1477; the dock is 16 px from the bottom and 66 px high). It scrolls inside itself. */
 @media (orientation: portrait) {
-  #run-map { top: auto; bottom: 16px; transform: translateX(-50%); max-height: 50dvh; }
+  #run-map { top: auto; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-height: 50dvh; }
 }
 #run-map[hidden] { display: none; }
 #run-map .run-line { margin: 0; text-align: center; font-family: var(--display); font-weight: 600; }
