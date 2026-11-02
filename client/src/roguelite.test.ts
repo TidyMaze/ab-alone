@@ -377,6 +377,7 @@ describe('roguelite', () => {
     const site = visit(ACT, { ...newRun(1, 3), army: 6, path: [0] }, 2);
     expect(site).toMatchObject({ army: 6, path: [0, 2], fighting: false, event: false, rest: true });
     expect(choices(ACT, site)).toEqual([]); // the map waits for the choice
+    expect(runLine(ACT, site)).toBe('Rogue-lite run · army 6 marbles · pick a fight'); // not rested yet
   });
 
   it('Rest brings the army back up to 14 and leads on', () => {
