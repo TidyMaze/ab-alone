@@ -68,8 +68,8 @@ test('a move played on page A shows up on page B over the signed move log', asyn
   await expect(b.locator('#hud')).toContainText('Joining as White...');
 
   // Before the connection is open a move is blocked, never applied on one side only.
-  await cell(a, 0, 2);
-  await cell(a, 0, 1);
+  await play(a, 0, 2);
+  await play(a, 0, 1);
   await expect(a.locator('#hud')).toContainText('waiting for opponent');
   await expect(a.locator('#hud')).toContainText('Black to move');
   expect(await plies(a)).toBe(0);
@@ -77,16 +77,16 @@ test('a move played on page A shows up on page B over the signed move log', asyn
   await open(a);
   await open(b);
   await seat(b, 'player');
-  await cell(a, 0, 2); // a Black marble
-  await cell(a, 0, 1); // its NW neighbour
+  await play(a, 0, 2); // a Black marble
+  await play(a, 0, 1); // its NW neighbour
   await expect(a.locator('#hud')).toContainText('White to move');
   await expect.poll(() => plies(b)).toBe(1);
   await expect(b.locator('#hud')).toContainText('White to move');
   expect(await plies(a)).toBe(1);
 
   // White answers on page B, Black sees it on page A.
-  await cell(b, 0, -2);
-  await cell(b, 0, -1);
+  await play(b, 0, -2);
+  await cell(b, 0, -1); // the one mouse click of the test
   await expect.poll(() => plies(a)).toBe(2);
   await expect(a.locator('#hud')).toContainText('Black to move');
   await expect(a.locator('#hud')).not.toContainText('refused');
@@ -128,10 +128,10 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await Promise.all([open(b), b.evaluate(() => {}).then(release)]);
   await seat(b, 'player');
 
-  await cell(a, 0, 2);
-  await cell(a, 0, 1);
+  await play(a, 0, 2);
+  await play(a, 0, 1);
   await expect.poll(() => plies(b)).toBe(1);
-  await cell(b, 0, -2);
+  await play(b, 0, -2);
   await cell(b, 0, -1);
   await expect.poll(() => plies(a)).toBe(2);
   await expect(a.locator('#hud')).not.toContainText('refused');
@@ -172,7 +172,7 @@ test('a third peer opening the link is not a player: room is full, its move chan
 
   // It is White's turn: C tries to play it.
   await play(c, 0, -2);
-  await cell(c, 0, -1);
+  await play(c, 0, -1);
   await expect(c.locator('#hud')).toContainText('Room is full, watching');
   expect(await plies(c)).toBe(1);
   expect(await plies(a)).toBe(1);
@@ -180,7 +180,7 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect(b.locator('#hud')).toContainText('White to move');
 
   // The real White still plays, everyone follows.
-  await cell(b, 0, -2);
+  await play(b, 0, -2);
   await cell(b, 0, -1);
   await expect.poll(() => plies(a)).toBe(2);
   await expect.poll(() => plies(c)).toBe(2);
@@ -281,7 +281,7 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await leave(b, 'c');
   await expect(status(a)).toHaveText('You are Black. White is disconnected.');
   await play(a, 0, 2);
-  await cell(a, 0, 1);
+  await play(a, 0, 1);
   await expect(a.locator('#hud')).toContainText('waiting for opponent');
   for (const page of [a, b, c]) expect(await plies(page)).toBe(0);
 
@@ -362,15 +362,15 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
 
   // The former Black cannot open the new game, the new Black (page B) does and page A sees it.
   await play(a, 0, -2);
-  await cell(a, 0, -1);
+  await play(a, 0, -1);
   expect(await plies(a)).toBe(0);
   await play(b, 0, 2);
-  await cell(b, 0, 1);
+  await play(b, 0, 1);
   await expect.poll(() => plies(a)).toBe(1);
   await expect(a.locator('#hud .turn')).toHaveText('White to move');
   await expect(b.locator('#hud .turn')).toHaveText('White to move');
   await play(a, 0, -2); // and the new White answers
-  await cell(a, 0, -1);
+  await play(a, 0, -1);
   await expect.poll(() => plies(b)).toBe(2);
   await expect(a.locator('#hud')).not.toContainText('refused');
   await expect(b.locator('#hud')).not.toContainText('refused');
@@ -427,7 +427,7 @@ test('a player back after a drop shows the same ply and side to move as the othe
   await expect(status(a)).toHaveText('You are Black. White is here.');
 
   // And the game goes on from there.
-  await cell(b, 0, -1);
+  await play(b, 0, -1);
   await cell(b, 0, -2);
   await expect.poll(() => plies(a)).toBe(4);
   for (const page of [a, b]) await expect(page.locator('#hud')).not.toContainText('refused');
@@ -519,9 +519,9 @@ test('Play online is disabled with a notice while offline and works again back o
 });
 
 // Issue #187: online games end by anti-stalling exactly like hot-seat (rules.md sections 9 and 10.2).
-// The move list of the rematch test above, one marble each there and back twice, is played first in
-// hot-seat on one page, then online between two pages: after every ply both online pages show the
-// turn and score lines the hot-seat page showed, the draw by threefold repetition at ply 8 included.
+// The move list of the rematch test above, one marble each there and back twice, is played online between two
+// pages: after every ply both pages show the turn and score lines hot-seat shows, the draw by threefold
+// repetition at ply 8 included.
 // The no-ejection cap needs 100 plies: src/antistalling.test.ts checks it on two real sessions.
 test('threefold repetition ends an online game as a draw on both pages, as in hot-seat, #187', async ({ browser }) => {
   const plays: [number, number, number, number][] = [
@@ -530,27 +530,11 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
     [0, 1, 0, 2],
     [0, -1, 0, -2],
   ];
-  const shown = (page: Page) => Promise.all(['.turn', '.score'].map((c) => page.locator(`#hud ${c}`).textContent()));
-
-  const hot = await (await browser.newContext()).newPage();
-  await calm(hot);
-  await hot.goto('./?bot=off');
-  await hot.locator('canvas').waitFor();
-  await expect(hot.locator('#hud')).toContainText('Black to move');
-  const hotSeat: (string | null)[][] = [];
-  for (let ply = 0; ply < 8; ply++) {
-    const [fq, fr, tq, tr] = plays[ply % 4]!;
-    const press = ply < 7 ? play : cell; // the last ply goes through the mouse
-    await press(hot, fq, fr);
-    await press(hot, tq, tr);
-    await expect.poll(() => plies(hot)).toBe(ply + 1);
-    hotSeat.push(await shown(hot));
-  }
-  expect(hotSeat[3]).toEqual(['Black to move', 'Black ejected 0/6 · White ejected 0/6']); // the start position twice: the game goes on
-  // Since #425 the score line no longer repeats the outcome: the reason is Tally's line.
-  expect(hotSeat[7]).toEqual(['Draw', 'Black ejected 0/6 · White ejected 0/6']);
-  await expect(hot.locator('#hud')).toContainText('Same position three times');
-  await hot.context().close();
+  // What hot-seat shows after each ply (resume.spec.ts and eject.spec.ts check the hot-seat HUD itself): the start position
+  // twice at ply 4 keeps the game going, the third time at ply 8 is a draw. No ejection in the cycle.
+  const noScore = 'Black ejected 0/6 · White ejected 0/6';
+  const hotSeat: string[][] = Array.from({ length: 8 }, (_, ply) => [ply % 2 === 0 ? 'White to move' : 'Black to move', noScore]);
+  hotSeat[7] = ['Draw', noScore];
 
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
@@ -603,16 +587,15 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await inviteLink(a)).hash;
-  await open(a);
-  // White first, so its join_seq is 2 and the spectator's 3.
-  const join = async (page: Page) => {
+  // White first, so its join_seq is 2 and the spectator's 3: the pages load together, they open in that order.
+  await Promise.all([b, c].map(async (page) => {
     await page.goto(`./?net=hook&beat=1200${hash}`);
     await page.locator('canvas').waitFor();
-    await open(page);
-  };
-  await join(b);
+  }));
+  await open(a);
+  await open(b);
   await seat(b, 'player');
-  await join(c);
+  await open(c);
   await seat(c, 'spectator');
   for (const page of [a, ...rest]) await expect(page.locator('body')).toHaveAttribute('data-coordinator', '1');
 
