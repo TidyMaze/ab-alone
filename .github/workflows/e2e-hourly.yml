@@ -2,7 +2,8 @@ name: E2E hourly
 # Runs the full CI (with e2e) when main moved since the last dispatched run (#1433).
 on:
   schedule:
-    - cron: '0 * * * *'
+    # Not on the hour: GitHub drops scheduled runs at its busiest minute, and 0 * * * * never fired in 10 h (#1436).
+    - cron: '23 * * * *'
   workflow_dispatch:
 permissions:
   actions: write
