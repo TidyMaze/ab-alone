@@ -16,11 +16,10 @@ test('textures are requested and the board still renders', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   const { origin } = new URL(page.url());
   expect(transcoder.sort()).toEqual([`200 ${origin} basis_transcoder.js`, `200 ${origin} basis_transcoder.wasm`]);
-  // Every texture ships as KTX2 (#700). The room's board, plate, default skin, bay, bulkhead and grate maps are not asked for on the terrace (#1370).
+  // Every texture ships as KTX2 (#700). The room's board, plate, backdrop, default skin, bay, bulkhead and grate maps are not asked for on the terrace (#1370).
   expect(loaded.sort()).toEqual([
     '200 arena.glb', // the terrace (#1314)
-    '200 backdrop.ktx2',
-    '200 crack-decal.ktx2',
+    '200 crack-decal.ktx2', // a cracked cell and a breached arena cell draw it on the terrace (#1370)
     '200 deck-albedo.ktx2',
     '200 deck-mess-normal.ktx2', // the cells' normal map of the Mess (#440)
     '200 deck-mess-roughness.ktx2',

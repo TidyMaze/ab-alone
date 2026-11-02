@@ -59,8 +59,13 @@ describe('the look (#1138)', () => {
       expect(loadsTexture('pbr', name, true)).toBe(true);
       expect(loadsTexture('pbr', name, false)).toBe(false);
     }
-    // The cells' deck maps stay: the terrace's discs are drawn with them when the terrace files fail (#1374).
-    for (const name of ['deck-albedo.ktx2', 'backdrop.ktx2', 'crack-decal.ktx2']) expect(loadsTexture('pbr', name, false)).toBe(true);
+    // The cells' deck maps stay: the terrace's discs are drawn with them when the terrace files fail (#1374). The crack decal stays:
+    // a cracked cell and a breached arena cell draw it on the terrace.
+    for (const name of ['deck-albedo.ktx2', 'crack-decal.ktx2']) expect(loadsTexture('pbr', name, false)).toBe(true);
+    // The backdrop is the room's background: the terrace replaces it with its own colour before the canvas shows (#1389).
+    expect(loadsTexture('pbr', 'backdrop.ktx2', true)).toBe(true);
+    expect(loadsTexture('pbr', 'backdrop.ktx2', false)).toBe(false);
+    expect(loadsTexture('tonal', 'backdrop.ktx2', false)).toBe(false);
   });
 
   it('asks for the maps of a skin on the terrace only when the skin is not a default one (#1370)', () => {
