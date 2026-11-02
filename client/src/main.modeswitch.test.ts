@@ -3,6 +3,7 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
+import css from './ui.css?raw';
 
 // One mode at a time (#1275, docs/specs/ui.md): a mode left for another leaves nothing behind, not a HUD block, a body data
 // key, a mesh of the scene, nor a timer. The clean base is the Hub, where every mode can be picked: each mode of the
@@ -189,6 +190,21 @@ describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
     byId('ship-back').click();
     await game.settle();
     expect(document.body.dataset.openworld).toBe('7');
+    // Nothing of the lost fight shows over the world. The e2e spec read computed styles; here the page holds what those styles
+    // follow: body[data-over] stays 'loss' on the world, body[data-openworld] is set, and ui.css hides the fight's controls,
+    // resets the canvas filter and drops the end light under body[data-openworld], after the rules of body[data-over] so that
+    // they win (the stylesheet is not applied in jsdom).
+    expect(document.body.dataset.over).toBe('loss');
+    expect(byId('hud').closest('#hud-dock'), 'the plate of the fight sits in the dock the world hides').not.toBeNull();
+    expect(css).toMatch(/body\[data-openworld\] :is\([^)]*#boss-bar[^)]*\) \{ display: none !important; \}/);
+    expect(css).toMatch(/body\[data-openworld\] :is\([^)]*#auto-reason[^)]*\) \{ display: none !important; \}/);
+    expect(css).toMatch(/body\[data-openworld\] :is\(#hud-dock,[^)]*\) \{ display: none !important; \}/);
+    expect(css).toContain('body[data-openworld] #openworld-hud { display: block; }'); // the world's own plate shows
+    expect(css).toContain('body[data-openworld] canvas { filter: none; }');
+    expect(css).toContain('body[data-openworld]::before { display: none; }');
+    const last = (rule: string): number => css.lastIndexOf(rule);
+    expect(last('body[data-openworld] canvas { filter: none; }')).toBeGreaterThan(last("body[data-over='loss'] canvas {"));
+    expect(last('body[data-openworld]::before { display: none; }')).toBeGreaterThan(last("body[data-over='loss']::before {"));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await ship(game);
     expect(snapshot(probe)).toEqual(base);
