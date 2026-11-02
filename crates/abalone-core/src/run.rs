@@ -833,6 +833,76 @@ mod special_marbles {
         assert_eq!(after.specials(), [((4, -4), Anchor)]);
     }
 
+    #[test]
+    fn a_heavy_plus_weighs_3_in_a_push_on_both_sides() {
+        use Special::HeavyPlus;
+        // A lone Heavy+ pushes 2 plain marbles, not 3 (a tie); Heavy+ + 1 (4) pushes 3.
+        let lone = mv(&[(0, 0)], E);
+        let b = board(&[(0, 0)], &[(1, 0), (2, 0)], &[((0, 0), HeavyPlus)]);
+        let after = black_plays(&b, &lone).unwrap();
+        assert_eq!(cells(&after, Cell::White), vec![(2, 0), (3, 0)]);
+        assert_eq!(after.specials(), [((1, 0), HeavyPlus)], "its mark moves");
+        let three = [(1, 0), (2, 0), (3, 0)];
+        let b = board(&[(0, 0)], &three, &[((0, 0), HeavyPlus)]);
+        assert_eq!(black_plays(&b, &lone), Err(MoveError::NotStrongEnough));
+        let pair = mv(&[(-1, 0), (0, 0)], E);
+        let b = board(&[(-1, 0), (0, 0)], &three, &[((-1, 0), HeavyPlus)]);
+        let after = black_plays(&b, &pair).unwrap();
+        assert_eq!(cells(&after, Cell::White), vec![(2, 0), (3, 0), (4, 0)]);
+        // 3 plain cannot push a White Heavy+ (3 against 3); a plain Heavy there they can.
+        let trio = mv(&[(-1, 0), (0, 0), (1, 0)], E);
+        let b = board(&[(-1, 0), (0, 0), (1, 0)], &[(2, 0)], &[((2, 0), HeavyPlus)]);
+        assert_eq!(black_plays(&b, &trio), Err(MoveError::NotStrongEnough));
+        let b = board(&[(-1, 0), (0, 0), (1, 0)], &[(2, 0)], &[((2, 0), Heavy)]);
+        assert!(black_plays(&b, &trio).is_ok());
+    }
+
+    #[test]
+    fn an_anchor_plus_also_keeps_the_marble_in_front_of_it_from_going_off() {
+        use Special::AnchorPlus;
+        // A plain Anchor on (3,0) lets the marble in front of it go off; an Anchor+ does not.
+        let trio = [(0, 0), (1, 0), (2, 0)];
+        let push = mv(&trio, E);
+        let plain = board(&trio, &[(3, 0), (4, 0)], &[((3, 0), Anchor)]);
+        assert!(legal_moves(&plain, Player::Black).contains(&push));
+        let shielded = board(&trio, &[(3, 0), (4, 0)], &[((3, 0), AnchorPlus)]);
+        assert!(!legal_moves(&shielded, Player::Black).contains(&push));
+        assert_eq!(black_plays(&shielded, &push), Err(MoveError::PushBlocked));
+        // It never goes off itself, and is pushed along the board with its mark.
+        let pair = mv(&[(2, 0), (3, 0)], E);
+        let rim = board(&[(2, 0), (3, 0)], &[(4, 0)], &[((4, 0), AnchorPlus)]);
+        assert_eq!(black_plays(&rim, &pair), Err(MoveError::PushBlocked));
+        let b = board(&[(1, 0), (2, 0)], &[(3, 0)], &[((3, 0), AnchorPlus)]);
+        let after = black_plays(&b, &mv(&[(1, 0), (2, 0)], E)).unwrap();
+        assert_eq!(after.specials(), [((4, 0), AnchorPlus)]);
+        // In the pushing group it shields nothing: the pushed marble goes off.
+        let b = board(&[(1, 0), (2, 0), (3, 0)], &[(4, 0)], &[((3, 0), AnchorPlus)]);
+        let (_, ejected) = apply(&b, Player::Black, &mv(&[(1, 0), (2, 0), (3, 0)], E)).unwrap();
+        assert!(ejected);
+        // A burst does not throw it off either.
+        let b = board(
+            &[(2, -3), (3, -3)],
+            &[(4, -3), (4, -4)],
+            &[((4, -3), Spark), ((4, -4), AnchorPlus)],
+        );
+        let after = black_plays(&b, &mv(&[(2, -3), (3, -3)], E)).unwrap();
+        assert_eq!(after.specials(), [((4, -4), AnchorPlus)]);
+    }
+
+    #[test]
+    fn the_bot_never_pushes_off_the_marble_an_anchor_plus_keeps() {
+        // Black needs one more ejection; the only push off the board is shielded by the Anchor+.
+        let b = board(
+            &[(1, 0), (2, 0), (0, 0), (-2, 2)],
+            &[(3, 0), (4, 0), (-4, 0)],
+            &[((3, 0), Special::AnchorPlus)],
+        );
+        let game = Game::from_position(b, Player::Black, [5, 0]);
+        let found = best_move(&game, 3000).unwrap();
+        assert_ne!(found, mv(&[(0, 0), (1, 0), (2, 0)], E));
+        assert!(legal_moves(game.board(), Player::Black).contains(&found));
+    }
+
     /// Black around White's pair on (2,0) and (3,0); (4,0) is the end of the row.
     const LOCK: [P; 9] = [
         (4, 0),
@@ -1191,6 +1261,31 @@ mod relics {
         );
         let (after, _) = apply(&b, Player::Black, &mv(&[(2, -2), (3, -2)], E)).unwrap();
         assert_eq!(cells(&after, Cell::White), vec![(2, 0), (4, -4)]);
+    }
+
+    #[test]
+    fn a_spark_plus_bursts_2_cells_and_3_with_the_detonator() {
+        let black = [(4, -2), (4, -3), (3, -1)];
+        let plus = [((4, -2), Special::SparkPlus)];
+        // As far as a Spark with the Detonator: (4,-3) slides off, the others 2 cells.
+        let two = burst_of(&[], &black, &plus);
+        assert_eq!(cells(&two, Cell::White), vec![(1, -2), (4, -2)]);
+        assert_eq!(cells(&two, Cell::Black), vec![(1, 1)]);
+        assert!(two.specials().is_empty(), "the Spark+'s mark is gone");
+        // The Detonator adds its cell: 3.
+        let three = burst_of(&[Relic::Detonator], &black, &plus);
+        assert_eq!(cells(&three, Cell::White), vec![(0, -2), (4, -2)]);
+        assert_eq!(cells(&three, Cell::Black), vec![(0, 2)]);
+        // The enemy's Spark+ bursts 2 cells too, the Detonator aside.
+        let b = board(
+            &[(2, -2), (3, -2)],
+            &[(4, -2), (4, -3), (3, -1)],
+            &[((4, -2), Special::SparkPlus)],
+            &[Relic::Detonator],
+        );
+        let (after, _) = apply(&b, Player::Black, &mv(&[(2, -2), (3, -2)], E)).unwrap();
+        assert_eq!(cells(&after, Cell::White), vec![(1, 1)]);
+        assert_eq!(cells(&after, Cell::Black), vec![(1, -2), (4, -2)]);
     }
 
     #[test]

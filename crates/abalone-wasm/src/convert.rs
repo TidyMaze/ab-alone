@@ -186,12 +186,15 @@ mod tests {
             (Special::Heavy, 1),
             (Special::Anchor, 2),
             (Special::Spark, 3),
+            (Special::HeavyPlus, 4),
+            (Special::AnchorPlus, 5),
+            (Special::SparkPlus, 6),
         ] {
             assert_eq!(special_code(kind), code);
             assert_eq!(special(code), Some(kind));
         }
         assert_eq!(special(0), None);
-        assert_eq!(special(4), None);
+        assert_eq!(special(7), None);
     }
 
     #[test]

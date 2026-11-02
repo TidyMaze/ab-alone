@@ -38,6 +38,11 @@ import {
   place,
   placeHtml,
   placing,
+  PLUS_INK,
+  rest,
+  restHtml,
+  upgradable,
+  upgrade,
   rewardHtml,
   RUN_KEY,
   runLine,
@@ -96,7 +101,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -132,7 +137,8 @@ describe('roguelite', () => {
     expect(runLine(MAP, { ...pick(newRun(1, 3), 5), army: 9 })).toBe('Rogue-lite run · act 2 boss · army 9 marbles');
     expect(runLine(MAP, { ...newRun(1, 3), army: 8, end: 'won' })).toBe('Run won with 8 marbles');
     expect(runLine(MAP, { ...newRun(1, 3), army: 3, end: 'lost' })).toBe('Run lost · 3 marbles left');
-    expect(runLine(MAP, { ...newRun(1, 3), specials: [2, 0, 1] })).toBe('Rogue-lite run · army 14 marbles, 2 Heavy, 1 Spark · pick a fight');
+    expect(runLine(MAP, { ...newRun(1, 3), specials: [2, 0, 1, 0, 0, 0] })).toBe('Rogue-lite run · army 14 marbles, 2 Heavy, 1 Spark · pick a fight');
+    expect(runLine(MAP, { ...newRun(1, 3), specials: [1, 0, 0, 1, 1, 0] })).toBe('Rogue-lite run · army 14 marbles, 1 Heavy, 1 Heavy+, 1 Anchor+ · pick a fight');
   });
 
   it('draws the map: the picks open, the path taken marked, its links drawn', () => {
@@ -167,13 +173,15 @@ describe('roguelite', () => {
     expect(loaded.state).toEqual(fight);
     expect(loaded.map).toBe(MAP);
     expect(loaded.engine).toMatchObject({ army: 9, placed: [], played: [1, 2] });
-    const placed = { ...pick({ ...newRun(1, 3), specials: [1, 0, 0] }, 1), placed: [[0, 4, 1]] };
+    const placed = { ...pick({ ...newRun(1, 3), specials: [1, 0, 0, 0, 0, 0] }, 1), placed: [[0, 4, 1]] };
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual(fight);
+    await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, specials: [1, 0, 2, 0, 0, 0] });
     await saveRun(store, at(newRun(1, 3), 0));
     expect(await loadRun(store, mapOf, engine)).toMatchObject({ engine: null });
     await saveRun(store, { ...newRun(1, 3), end: 'won' });
@@ -196,6 +204,8 @@ describe('roguelite', () => {
     ['a move the engine refuses', { ...pick(newRun(1, 3), 0), moves: [[9, ...MV.slice(1)]] }],
     ['a fight already over', { ...pick(newRun(1, 3), 0), moves: [[7, ...MV.slice(1)]] }],
     ['bad special counts', { ...newRun(1, 3), specials: [1, 2] }],
+    ['four special counts', { ...newRun(1, 3), specials: [1, 2, 0, 0] }],
+    ['a bad rest flag', { ...newRun(1, 3), rest: 1 }],
     ['a bad placement', { ...pick(newRun(1, 3), 0), placed: [[0, 4]] }],
     ['a bad reward flag', { ...newRun(1, 3), reward: 1 }],
     ['a bad event flag', { ...newRun(1, 3), event: 'x' }],
@@ -238,8 +248,9 @@ describe('roguelite', () => {
     expect(seen.size).toBeGreaterThan(1); // other seeds, other offers
     const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => offers({ ...short, seed }).join() !== offers({ ...short, seed, path: [1] }).join());
     expect(nodes.length).toBeGreaterThan(0); // the node, not only the step: two nodes of a row offer apart
-    expect(offers(won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1] }))).toEqual([0]); // all 4 marbles are special
-    expect(offers(won({ ...newRun(1, 3), specials: [5, 5, 4] }))).toEqual([]); // nothing left to offer
+    expect(offers(won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1, 0, 0, 0] }))).toEqual([0]); // all 4 marbles are special
+    expect(offers(won({ ...newRun(1, 3), specials: [5, 5, 4, 0, 0, 0] }))).toEqual([]); // nothing left to offer
+    expect(offers(won({ ...newRun(1, 3), army: 4, specials: [0, 0, 0, 2, 1, 1] }))).toEqual([0]); // upgraded ones are special too
     expect(offers({ ...short, reward: false })).toEqual([]);
   });
 
@@ -250,14 +261,14 @@ describe('roguelite', () => {
     expect(after.reward).toBe(false);
     expect(after.army + after.specials.reduce((a, b) => a + b)).toBe(13);
     expect(claim(after, first!)).toBe(after); // no reward pending
-    expect(claim(won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1] }), 3).reward).toBe(true); // not offered
-    expect(claim(won(newRun(1, 3)), 2).specials).toEqual([0, 1, 0]);
-    expect(claim(won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1] }), 0)).toMatchObject({ army: 5, reward: false });
+    expect(claim(won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1, 0, 0, 0] }), 3).reward).toBe(true); // not offered
+    expect(claim(won(newRun(1, 3)), 2).specials).toEqual([0, 1, 0, 0, 0, 0]);
+    expect(claim(won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1, 0, 0, 0] }), 0)).toMatchObject({ army: 5, reward: false });
     expect(choices(MAP, won(newRun(1, 3)))).toEqual([]); // the map waits for the reward
   });
 
   it('places up to the cap of each type owned on the fight board before its first move, a second press takes it back', () => {
-    const fight = pick({ ...newRun(1, 3), specials: [5, 1, 0] }, 0);
+    const fight = pick({ ...newRun(1, 3), specials: [5, 1, 0, 0, 0, 0] }, 0);
     expect(placing(fight)).toBe(true);
     expect(placing(pick(newRun(1, 3), 0))).toBe(false); // no special marble
     expect(placing({ ...fight, moves: [MV] })).toBe(false); // the fight is on
@@ -275,13 +286,17 @@ describe('roguelite', () => {
   });
 
   it('a fight over keeps the special marbles that stayed on the board, never more than the army', () => {
-    const fight = { ...pick({ ...newRun(1, 3), specials: [2, 1, 1] }, 0), placed: [[0, 4, 1], [1, 3, 3]] };
-    expect(fightOver(MAP, fight, true, 1, [0, 0, 1]).specials).toEqual([1, 1, 1]); // the Heavy went off
-    expect(fightOver(MAP, fight, true, 0).specials).toEqual([2, 1, 1]); // none lost
+    const fight = { ...pick({ ...newRun(1, 3), specials: [2, 1, 1, 0, 0, 0] }, 0), placed: [[0, 4, 1], [1, 3, 3]] };
+    expect(fightOver(MAP, fight, true, 1, [0, 0, 1, 0, 0, 0]).specials).toEqual([1, 1, 1, 0, 0, 0]); // the Heavy went off
+    expect(fightOver(MAP, fight, true, 0).specials).toEqual([2, 1, 1, 0, 0, 0]); // none lost
     expect(fightOver(MAP, fight, true, 0).placed).toEqual([]);
-    const small = { ...pick({ ...newRun(1, 3), army: 6, specials: [2, 2, 2] }, 0), placed: [] };
-    expect(fightOver(MAP, small, true, 2).specials).toEqual([2, 2, 0]); // 4 marbles: the Sparks go first
-    expect(fightOver(MAP, small, true, 1).specials).toEqual([2, 2, 1]);
+    const small = { ...pick({ ...newRun(1, 3), army: 6, specials: [2, 2, 2, 0, 0, 0] }, 0), placed: [] };
+    expect(fightOver(MAP, small, true, 2).specials).toEqual([2, 2, 0, 0, 0, 0]); // 4 marbles: the Sparks go first
+    expect(fightOver(MAP, small, true, 1).specials).toEqual([2, 2, 1, 0, 0, 0]);
+    // The upgraded ones (#1458) count apart and go after the plain ones, the Spark+ first.
+    const upgraded = { ...pick({ ...newRun(1, 3), army: 6, specials: [1, 0, 0, 2, 2, 1] }, 0), placed: [[0, 4, 4], [1, 3, 6]] };
+    expect(fightOver(MAP, upgraded, true, 2, [0, 0, 0, 1, 0, 1]).specials).toEqual([0, 0, 0, 2, 2, 0]);
+    expect(fightOver(MAP, upgraded, true, 1, [0, 0, 0, 0, 0, 1]).specials).toEqual([1, 0, 0, 1, 2, 1]); // the Heavy+ went off
   });
 
   it('parses the special marbles of the bridge', () => {
@@ -299,6 +314,7 @@ describe('roguelite', () => {
     const spark = [{ cell: [0, 4] as const, kind: 3 }];
     expect(sparkBurst(board, spark, down)).toEqual([0, 4]);
     expect(sparkBurst(board, [{ cell: [0, 4] as const, kind: 1 }], down)).toBeNull(); // a Heavy does not burst
+    expect(sparkBurst(board, [{ cell: [0, 4] as const, kind: 6 }], down)).toEqual([0, 4]); // a Spark+ does (#1458)
     expect(sparkBurst(board, spark, { cells: [[0, 3], [0, 2]], dir: 4 })).toBeNull(); // backward: no marble off
     expect(sparkBurst(board, spark, { cells: [[0, 2], [0, 3]], dir: 0 })).toBeNull(); // broadside: no push
     set(0, 4, 0);
@@ -308,8 +324,13 @@ describe('roguelite', () => {
 
   it('gives each type its own shape and a colour 3:1 on both marbles', () => {
     const rgb = (hex: number): RGB => [hex >> 16, (hex >> 8) & 0xff, hex & 0xff];
-    expect(SPECIAL_LOOKS.map((l) => l.name)).toEqual(['Heavy', 'Anchor', 'Spark']);
+    expect(SPECIAL_LOOKS.map((l) => l.name)).toEqual(['Heavy', 'Anchor', 'Spark', 'Heavy+', 'Anchor+', 'Spark+']);
     expect(new Set(SPECIAL_LOOKS.map((l) => l.points.length)).size).toBe(3); // square, triangle, star
+    // An upgraded type (#1458) keeps its type's shape and colour, and carries a `+` in the shell's ink, 3:1 on it.
+    expect(SPECIAL_LOOKS.map((l) => l.plus)).toEqual([false, false, false, true, true, true]);
+    for (const k of [0, 1, 2]) expect(SPECIAL_LOOKS[k + 3]).toMatchObject({ points: SPECIAL_LOOKS[k]!.points, color: SPECIAL_LOOKS[k]!.color });
+    expect(PLUS_INK).toBe(SHELL.color);
+    expect(SPECIAL_LOOKS.slice(3).map((l) => l.help)).toEqual(['weighs 3 in a push', 'never pushed off, nor the marble in front of it', 'bursts 2 cells']);
     for (const { color } of SPECIAL_LOOKS) {
       expect(contrastRatio(rgb(color), rgb(GLASS.color))).toBeGreaterThanOrEqual(3);
       expect(contrastRatio(rgb(color), rgb(SHELL.color))).toBeGreaterThanOrEqual(3);
@@ -317,7 +338,7 @@ describe('roguelite', () => {
   });
 
   it('draws the placement screen: the types owned, what is left of each, the one picked pressed', () => {
-    const fight = { ...pick({ ...newRun(1, 3), specials: [4, 0, 1] }, 0), placed: [[0, 4, 1]] };
+    const fight = { ...pick({ ...newRun(1, 3), specials: [4, 0, 1, 0, 0, 0] }, 0), placed: [[0, 4, 1]] };
     const doc = new DOMParser().parseFromString(placeHtml(fight, 1), 'text/html');
     const kinds = [...doc.querySelectorAll<HTMLButtonElement>('button[data-kind]')];
     expect(kinds.map((b) => b.textContent)).toEqual(['Heavy · 2 left', 'Spark · 1 left']);
@@ -325,6 +346,14 @@ describe('roguelite', () => {
     expect(kinds.map((b) => b.dataset.kind)).toEqual(['1', '3']);
     expect(doc.querySelectorAll('svg polygon')).toHaveLength(2);
     expect(doc.querySelector('.run-line')!.textContent).toBe('Place your special marbles');
+    // An upgraded type (#1458) is a type of its own, its glyph with a `+`, up to the cap.
+    const plus = { ...pick({ ...newRun(1, 3), specials: [0, 0, 0, 4, 0, 0] }, 0), placed: [[0, 4, 4]] };
+    const up = new DOMParser().parseFromString(placeHtml(plus, 4), 'text/html').querySelector<HTMLButtonElement>('button[data-kind]')!;
+    expect([up.dataset.kind, up.textContent]).toEqual(['4', 'Heavy+ · 2 left']);
+    expect(up.querySelector('svg .plus')).not.toBeNull();
+    expect(left(plus, 4)).toBe(2);
+    expect(place(plus, [0, 3], 4).placed).toEqual([[0, 4, 4], [0, 3, 4]]);
+    expect(place(plus, [0, 3], 1)).toBe(plus); // no plain Heavy owned
   });
 
   it('draws the reward screen: one button per offer', () => {
@@ -333,7 +362,7 @@ describe('roguelite', () => {
     const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-offer]')];
     expect(buttons.map((b) => Number(b.dataset.offer))).toEqual(offers(run));
     expect(doc.querySelector('.run-line')!.textContent).toBe('Fight won · pick a reward');
-    expect(rewardHtml(MAP, won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1] }))).toContain('One more marble');
+    expect(rewardHtml(MAP, won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1, 0, 0, 0] }))).toContain('One more marble');
     expect(rewardHtml(MAP, won(newRun(1, 3)))).toContain('Heavy: weighs 2 in a push');
     expect(rewardHtml(MAP, won(newRun(1, 3)))).toContain('Anchor: never pushed off');
     expect(rewardHtml(MAP, won(newRun(1, 3)))).toContain('Spark: bursts when pushed off');
@@ -343,11 +372,50 @@ describe('roguelite', () => {
   const ACT = parseMap([0, 0, 0, 0, 0b111, 0, 1, 0, 2, 1, 0, 1, 1, 3, 1, 0, 1, 2, 4, 1, 0, 2, 0, 1, 0]);
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
 
-  it('a rest brings the army back up to 14 and leads on, with no fight', () => {
-    const rested = visit(ACT, { ...newRun(1, 3), army: 6, path: [0] }, 2);
-    expect(rested).toMatchObject({ army: START_ARMY, path: [0, 2], fighting: false, event: false });
+  // The rest site (#1458): Rest or Upgrade one special marble.
+  it('a rest site waits for its choice, with no fight', () => {
+    const site = visit(ACT, { ...newRun(1, 3), army: 6, path: [0] }, 2);
+    expect(site).toMatchObject({ army: 6, path: [0, 2], fighting: false, event: false, rest: true });
+    expect(choices(ACT, site)).toEqual([]); // the map waits for the choice
+  });
+
+  it('Rest brings the army back up to 14 and leads on', () => {
+    const rested = rest(visit(ACT, { ...newRun(1, 3), army: 6, path: [0] }, 2));
+    expect(rested).toMatchObject({ army: START_ARMY, path: [0, 2], fighting: false, rest: false });
     expect(choices(ACT, rested)).toEqual([4]);
     expect(runLine(ACT, rested)).toBe('Rogue-lite run · rested · army 14 marbles · pick a fight');
+    expect(rest(newRun(1, 3))).toEqual(newRun(1, 3)); // no rest site waits
+  });
+
+  it('Upgrade makes one special marble of the type picked upgraded, the army as it was', () => {
+    const site = visit(ACT, { ...newRun(1, 3), army: 6, specials: [1, 0, 2, 0, 0, 0], path: [0] }, 2);
+    expect(upgradable(site)).toEqual([1, 3]);
+    const up = upgrade(site, 3);
+    expect(up).toMatchObject({ army: 6, specials: [1, 0, 1, 0, 0, 1], rest: false });
+    expect(choices(ACT, up)).toEqual([4]);
+    expect(upgrade(up, 1)).toBe(up); // no rest site waits
+    expect(upgrade(site, 2)).toBe(site); // no Anchor to upgrade
+    expect(upgrade(site, 4)).toBe(site); // a Heavy+ is upgraded already
+    expect(upgradable({ ...site, specials: [0, 0, 0, 1, 1, 1] })).toEqual([]); // nothing left to upgrade
+  });
+
+  it('draws the rest site: Rest, an Upgrade per type the army can upgrade, or Upgrade disabled with its reason', () => {
+    const site = visit(ACT, { ...newRun(1, 3), army: 6, specials: [1, 0, 2, 0, 0, 0], path: [0] }, 2);
+    const doc = parse(restHtml(site));
+    expect(doc.querySelector('.run-line')!.textContent).toBe('Rest site · rest or upgrade');
+    expect(doc.querySelector('button[data-rest]')!.textContent).toBe('Rest: back up to 14 marbles');
+    const ups = [...doc.querySelectorAll<HTMLButtonElement>('button[data-upgrade]')];
+    expect(ups.map((b) => [b.dataset.upgrade, b.textContent, b.disabled])).toEqual([
+      ['1', 'Upgrade a Heavy: Heavy+ weighs 3 in a push', false],
+      ['3', 'Upgrade a Spark: Spark+ bursts 2 cells', false],
+    ]);
+    expect(ups.map((b) => b.querySelector('svg .plus'))).not.toContain(null); // the upgraded glyph
+    expect(restHtml({ ...site, specials: [0, 1, 0, 0, 0, 0] })).toContain('Upgrade an Anchor: Anchor+ never pushed off, nor the marble in front of it');
+    const none = parse(restHtml({ ...site, specials: [0, 0, 0, 1, 0, 0] }));
+    const off = none.querySelector<HTMLButtonElement>('button[data-upgrade]')!;
+    expect([off.textContent, off.disabled]).toEqual(['Upgrade: no special marble left to upgrade', true]);
+    const bunks = parse(restHtml({ ...site, relics: [Relic.Bunks] }));
+    expect(bunks.querySelector('button[data-rest]')!.textContent).toBe('Rest: back up to 14 marbles · Bunks: a plain marble becomes a Heavy');
   });
 
   it('a fight, an elite or a boss starts its fight as a pick does', () => {
@@ -398,16 +466,18 @@ describe('roguelite', () => {
   it('each event trades marbles for special marbles or back, only when the army can pay and gains', () => {
     const [forge, clamps, wiring, drone, pods] = EVENTS;
     const full = newRun(1, 3);
-    expect(takeEvent(full, forge!)).toMatchObject({ army: 12, specials: [1, 0, 0] });
-    expect(takeEvent(full, clamps!)).toMatchObject({ army: 12, specials: [0, 1, 0] });
-    expect(takeEvent(full, wiring!)).toMatchObject({ army: 13, specials: [0, 0, 1] });
-    expect(takeEvent(full, drone!)).toMatchObject({ army: 11, specials: [0, 0, 2] });
-    expect(takeEvent({ ...full, army: 10, specials: [1, 1, 1] }, pods!)).toMatchObject({ army: 13, specials: [1, 1, 0] }); // a Spark first
-    expect(takeEvent({ ...full, army: 12, specials: [1, 0, 0] }, pods!)).toMatchObject({ army: 14, specials: [0, 0, 0] }); // up to 14
+    expect(takeEvent(full, forge!)).toMatchObject({ army: 12, specials: [1, 0, 0, 0, 0, 0] });
+    expect(takeEvent(full, clamps!)).toMatchObject({ army: 12, specials: [0, 1, 0, 0, 0, 0] });
+    expect(takeEvent(full, wiring!)).toMatchObject({ army: 13, specials: [0, 0, 1, 0, 0, 0] });
+    expect(takeEvent(full, drone!)).toMatchObject({ army: 11, specials: [0, 0, 2, 0, 0, 0] });
+    expect(takeEvent({ ...full, army: 10, specials: [1, 1, 1, 0, 0, 0] }, pods!)).toMatchObject({ army: 13, specials: [1, 1, 0, 0, 0, 0] }); // a Spark first
+    expect(takeEvent({ ...full, army: 12, specials: [1, 0, 0, 0, 0, 0] }, pods!)).toMatchObject({ army: 14, specials: [0, 0, 0, 0, 0, 0] }); // up to 14
+    expect(takeEvent({ ...full, army: 10, specials: [1, 0, 0, 0, 0, 1] }, pods!)).toMatchObject({ specials: [0, 0, 0, 0, 0, 1] }); // a plain one first
+    expect(takeEvent({ ...full, army: 10, specials: [0, 0, 0, 1, 1, 0] }, pods!)).toMatchObject({ specials: [0, 0, 0, 1, 0, 0] }); // then the Anchor+
     expect(takeEvent({ ...full, army: 10 }, pods!)).toBeNull(); // no special marble to give
-    expect(takeEvent({ ...full, specials: [1, 0, 0] }, pods!)).toBeNull(); // a full army gains nothing
+    expect(takeEvent({ ...full, specials: [1, 0, 0, 0, 0, 0] }, pods!)).toBeNull(); // a full army gains nothing
     expect(takeEvent({ ...full, army: 5 }, forge!)).toBeNull(); // 3 marbles left would end the run
-    expect(takeEvent({ ...full, army: 6, specials: [2, 1, 1] }, forge!)).toBeNull(); // no plain marble left to make special
+    expect(takeEvent({ ...full, army: 6, specials: [2, 1, 1, 0, 0, 0] }, forge!)).toBeNull(); // no plain marble left to make special
     for (const e of EVENTS) expect(e.title && e.text && e.take).toBeTruthy();
   });
 
@@ -462,28 +532,28 @@ describe('roguelite', () => {
   });
 
   it('a boss fight leaves the special marbles alone: none was placed', () => {
-    const fight = pick({ ...at(newRun(1, 3), 0), specials: [1, 0, 1] }, 2);
-    expect(fightOver(MAP, fight, true, 2)).toMatchObject({ army: 12, specials: [1, 0, 1], reward: true });
+    const fight = pick({ ...at(newRun(1, 3), 0), specials: [1, 0, 1, 0, 0, 0] }, 2);
+    expect(fightOver(MAP, fight, true, 2)).toMatchObject({ army: 12, specials: [1, 0, 1, 0, 0, 0], reward: true });
   });
 
   // Unlocks between runs and the run summary (#801): only variety carries over, never power.
   it('every starting army has 14 marbles, some special, and each is unlocked by the acts won in one run', () => {
     expect(ARMIES.map((a) => a.name)).toEqual(['Standard', 'Bulwark', 'Volatile', 'Ironclad']);
     expect(ARMIES.map((a) => a.acts)).toEqual([0, 1, 2, 3]);
-    expect(ARMIES.map((a) => a.specials)).toEqual([[0, 0, 0], [0, 2, 0], [0, 0, 2], [2, 0, 0]]);
+    expect(ARMIES.map((a) => a.specials)).toEqual([[0, 0, 0, 0, 0, 0], [0, 2, 0, 0, 0, 0], [0, 0, 2, 0, 0, 0], [2, 0, 0, 0, 0, 0]]);
     expect(KIND_ACTS).toEqual([0, 1, 2]); // Heavy from the start, Anchor after 1 act won, Spark after 2
-    expect(newRun(1, 3)).toMatchObject({ army: START_ARMY, specials: [0, 0, 0], best: 3 });
+    expect(newRun(1, 3)).toMatchObject({ army: START_ARMY, specials: [0, 0, 0, 0, 0, 0], best: 3 });
     expect(newRun(1, 0).best).toBe(0);
   });
 
   it('the starting army is picked on the map before the first node, only an unlocked one', () => {
     const run = newRun(1, 1);
-    expect(chooseArmy(run, 1)).toEqual({ ...run, specials: [0, 2, 0] });
+    expect(chooseArmy(run, 1)).toEqual({ ...run, specials: [0, 2, 0, 0, 0, 0] });
     expect(chooseArmy(chooseArmy(run, 1), 0)).toEqual(run);
     expect(chooseArmy(run, 2)).toBe(run); // locked
     expect(chooseArmy(run, 9)).toBe(run); // no such army
-    expect(chooseArmy(at(newRun(1, 3), 0), 1).specials).toEqual([0, 0, 0]); // the run is on
-    expect(chooseArmy({ ...newRun(1, 3), end: 'lost' }, 1).specials).toEqual([0, 0, 0]);
+    expect(chooseArmy(at(newRun(1, 3), 0), 1).specials).toEqual([0, 0, 0, 0, 0, 0]); // the run is on
+    expect(chooseArmy({ ...newRun(1, 3), end: 'lost' }, 1).specials).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
   it('a special marble type is offered as a reward and by events only once unlocked', () => {
@@ -559,7 +629,7 @@ describe('roguelite', () => {
   });
 
   it('draws the summary of a run over: the path, the fights, the army, the unlocks, and New run', () => {
-    const over = { ...at(newRun(1, 0), 0, 2, 3), army: 3, specials: [1, 0, 0], end: 'lost' as const };
+    const over = { ...at(newRun(1, 0), 0, 2, 3), army: 3, specials: [1, 0, 0, 0, 0, 0], end: 'lost' as const };
     const doc = parse(mapHtml(MAP, over));
     expect(doc.querySelector('.run-line')!.textContent).toBe('Run lost · 3 marbles left');
     expect([...doc.querySelectorAll('.run-help')].map((p) => p.textContent)).toEqual([
@@ -687,9 +757,10 @@ describe('roguelite relics', () => {
     expect(fightBudget(ACT, pick(run(jammed), 5), 1000)).toBe(1000);
   });
 
-  it('Bunks: a rest also makes a plain marble a Heavy', () => {
-    expect(visit(ACT, run({ army: 6, relics: [Relic.Bunks] }), 2)).toMatchObject({ army: START_ARMY, specials: [1, 0, 0] });
-    expect(visit(ACT, run({ specials: [5, 5, 4], relics: [Relic.Bunks] }), 2).specials).toEqual([5, 5, 4]); // no plain marble
+  it('Bunks: a rest also makes a plain marble a Heavy, an upgrade does not', () => {
+    expect(rest(visit(ACT, run({ army: 6, relics: [Relic.Bunks] }), 2))).toMatchObject({ army: START_ARMY, specials: [1, 0, 0, 0, 0, 0] });
+    expect(rest(visit(ACT, run({ specials: [5, 5, 0, 0, 0, 4], relics: [Relic.Bunks] }), 2)).specials).toEqual([5, 5, 0, 0, 0, 4]); // no plain marble
+    expect(upgrade(visit(ACT, run({ specials: [0, 1, 0, 0, 0, 0], relics: [Relic.Bunks] }), 2), 2).specials).toEqual([0, 0, 0, 0, 1, 0]);
   });
 
   it('Lucky coin: a reward offers 4 instead of 3', () => {
@@ -701,9 +772,9 @@ describe('roguelite relics', () => {
   it('Bargain: an event trade costs a marble less', () => {
     const [forge, , wiring, , pods] = EVENTS;
     const cheap = run({ relics: [Relic.Bargain] });
-    expect(takeEvent(cheap, forge!)).toMatchObject({ army: 13, specials: [1, 0, 0] });
-    expect(takeEvent(cheap, wiring!)).toMatchObject({ army: 14, specials: [0, 0, 1] }); // free
-    expect(takeEvent({ ...cheap, army: 10, specials: [1, 0, 0] }, pods!)).toMatchObject({ army: 13 }); // a gain, no marble paid
+    expect(takeEvent(cheap, forge!)).toMatchObject({ army: 13, specials: [1, 0, 0, 0, 0, 0] });
+    expect(takeEvent(cheap, wiring!)).toMatchObject({ army: 14, specials: [0, 0, 1, 0, 0, 0] }); // free
+    expect(takeEvent({ ...cheap, army: 10, specials: [1, 0, 0, 0, 0, 0] }, pods!)).toMatchObject({ army: 13 }); // a gain, no marble paid
     const event = { ...visit(ACT, cheap, 3), seed: [1, 2, 3, 4, 5, 6, 7, 8].find((seed) => eventOf({ ...visit(ACT, cheap, 3), seed })!.army < 0)! };
     expect(parse(eventHtml(event)).querySelector('button[data-choice="1"]')!.textContent).toBe(`${eventOf(event)!.take} · Bargain: 1 marble less`);
   });
@@ -727,7 +798,7 @@ describe('roguelite relics', () => {
   });
 
   it('Quartermaster: a fight holds 4 of each special marble type', () => {
-    const fight = pick({ ...newRun(1, 3), specials: [5, 0, 0], relics: [Relic.Quartermaster] }, 0);
+    const fight = pick({ ...newRun(1, 3), specials: [5, 0, 0, 0, 0, 0], relics: [Relic.Quartermaster] }, 0);
     expect(left(fight, 1)).toBe(FIGHT_CAP + 1);
     expect(left({ ...fight, relics: [] }, 1)).toBe(FIGHT_CAP);
   });

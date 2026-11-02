@@ -192,9 +192,12 @@ mod tests {
         assert_eq!(engine.place_special(-1, 4, 2), Ok(()));
         assert_eq!(engine.place_special(0, -4, 3), Ok(()));
         assert_eq!(engine.specials(), vec![-1, 4, 2, 0, -4, 3, 0, 4, 1]);
+        // The upgraded types (#1458): Heavy+ 4, Anchor+ 5, Spark+ 6.
+        assert_eq!(engine.place_special(1, 3, 6), Ok(()));
+        assert_eq!(engine.specials()[9..], [1, 3, 6]);
         assert_eq!(
-            engine.place_special(0, 4, 4),
-            Err("unknown kind 4".to_string())
+            engine.place_special(0, 4, 7),
+            Err("unknown kind 7".to_string())
         );
         assert_eq!(engine.place_special(0, 0, 1), Err("NoMarble".to_string()));
         let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();

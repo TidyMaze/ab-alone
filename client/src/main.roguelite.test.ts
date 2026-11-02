@@ -233,18 +233,45 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   // Elites, rests, events and act bosses (#800). Seed 3: node 0 leads to the elite 2, the fight 1 to the rest 3, the
   // treasure 4 (#1457) and the event 5.
   const node = (i: number): HTMLButtonElement => map().querySelector<HTMLButtonElement>(`button[data-node="${i}"]`)!;
-  it('a rest from the map brings the army back to 14 with no fight, saved with the run', async () => {
+  it('a rest site from the map waits for its choice, saved with the run; Rest brings the army back to 14 with no fight', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
     await game.hook('__run', { ...newRun(3, 3), army: 9, path: [1] });
     expect(node(3).getAttribute('aria-label')).toBe('Act 1, rest');
     expect(node(2).className).toBe('node elite');
     node(3).click();
+    expect(document.body.dataset.run).toBe('rest');
+    expect(line()).toBe('Rest site · rest or upgrade');
+    expect(map().querySelector<HTMLButtonElement>('button[data-upgrade]')!.disabled).toBe(true); // no special marble
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the choice waiting (#1458)
+    expect(document.body.dataset.run).toBe('rest');
+    map().querySelector<HTMLButtonElement>('button[data-rest]')!.click();
     expect(document.body.dataset.run).toBe('map');
     expect(line()).toBe('Rogue-lite run · rested · army 14 marbles · pick a fight');
     await game.settle();
     await boot('?bot=off', { indexedDB });
     expect(line()).toBe('Rogue-lite run · rested · army 14 marbles · pick a fight');
+  });
+
+  it('Upgrade at a rest site makes a special marble upgraded, placed with its own type and a + on its glyph, #1458', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...newRun(3, 3), army: 9, specials: [1, 0, 0], path: [1] });
+    node(3).click();
+    map().querySelector<HTMLButtonElement>('button[data-upgrade="1"]')!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(line()).toBe('Rogue-lite run · rested · army 9 marbles, 1 Heavy+ · pick a fight');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(line()).toBe('Rogue-lite run · rested · army 9 marbles, 1 Heavy+ · pick a fight');
+    node(6).click(); // the elite after the rest
+    expect(document.body.dataset.run).toBe('place');
+    const kind = map().querySelector<HTMLButtonElement>('button[data-kind]')!;
+    expect(kind.textContent).toBe('Heavy+ · 1 left');
+    kind.click();
+    game.click(0, 4);
+    expect(specials()).toBe('0,4,4');
   });
 
   it.each([['1', 'taken'], ['0', 'left']])('an event waits for its choice, %s: %s, then the map goes on', async (choice) => {

@@ -23,6 +23,8 @@ test('the rogue-lite run: elite, rest, event and boss nodes, an event, a rest an
 
   await hook(run);
   await map.locator('[data-node="3"]').click();
+  await expect(line).toHaveText('Rest site · rest or upgrade'); // the rest site's choice (#1458)
+  await map.locator('button[data-rest]').click();
   await expect(line).toHaveText('Rogue-lite run · rested · army 14 marbles · pick a fight');
   await page.screenshot({ path: testInfo.outputPath('roguelite-rest.png') });
 
