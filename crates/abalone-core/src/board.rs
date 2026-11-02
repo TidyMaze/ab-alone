@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use crate::moves::{Move, Player};
+use crate::run::Relic;
 
 /// Radius of the standard board: 61 cells. A cell `(q, r)` is on a board of radius `n` when
 /// `|q|`, `|r|` and `|q + r|` are all `<= n`.
@@ -113,6 +114,9 @@ pub struct Board {
     /// The special marbles of a rogue-lite fight, in `q` then `r` order. `Some` is the rogue-lite
     /// flag: it also turns on their rules (docs/specs/roguelite.md section 5).
     specials: Option<Vec<((i32, i32), Special)>>,
+    /// The army's relics in a rogue-lite fight, by their bit (`Relic::bit`); the Gyroscope's is
+    /// spent by the push it lets through.
+    relics: u32,
     /// The Choir's armies and turn order, only inside its search tree (#825).
     choir: Option<ChoirMarks>,
     /// The plies played, only inside The Magnetizer's search tree: its assignment clock (#916).
@@ -259,6 +263,7 @@ impl Board {
             dual: None,
             echoes: Vec::new(),
             specials: None,
+            relics: 0,
             choir: None,
             magnetizer_ply: None,
         }
@@ -455,6 +460,30 @@ impl Board {
         specials.push((cell, kind));
         specials.sort_by_key(|s| s.0);
         Ok(())
+    }
+
+    /// The army's relics, by their bit (`Relic::bit`), `0` without the rogue-lite flag.
+    pub fn relics(&self) -> u32 {
+        self.relics
+    }
+
+    /// Whether the army holds `relic` in this fight.
+    pub fn has_relic(&self, relic: Relic) -> bool {
+        self.relics & relic.bit() != 0
+    }
+
+    /// Gives the army `relics` for this fight, in place of any it had. Only on a rogue-lite board.
+    pub fn set_relics(&mut self, relics: &[Relic]) -> Result<(), PlaceError> {
+        if !self.rogue_lite() {
+            return Err(PlaceError::NotRogueLite);
+        }
+        self.relics = relics.iter().fold(0, |set, r| set | r.bit());
+        Ok(())
+    }
+
+    /// Takes `relic` from the army for the rest of the fight: the Gyroscope once its push is played.
+    pub(crate) fn spend_relic(&mut self, relic: Relic) {
+        self.relics &= !relic.bit();
     }
 
     /// Replaces the special marbles, after a ply moved them. Only on a rogue-lite board.

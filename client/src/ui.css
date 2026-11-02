@@ -429,6 +429,16 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #hud .score { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 #hud small { display: block; color: var(--muted); font-size: 0.8125rem; }
+/* The rogue-lite relic bar (#1457): a glyph per relic under the run line, on the map and in the fights. Its name and rule
+   are the native tooltip on hover, and show under the glyph once it has the focus (a tap or Tab), for touch and keys. */
+#hud .relics { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.375rem; pointer-events: auto; }
+#hud .relic { position: relative; display: inline-flex; padding: 0.125rem; color: var(--accent); border: 1px solid var(--edge); border-radius: 2px; cursor: help; }
+#hud .relic svg { width: 1.125rem; height: 1.125rem; }
+#hud .relic:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+#hud .relic:focus::after {
+  content: attr(aria-label); position: absolute; top: calc(100% + 0.25rem); left: 0; z-index: 1; width: max-content; max-width: 16rem;
+  padding: 0.25rem 0.5rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font-size: 0.8125rem;
+}
 /* Online status line. The words carry the state, the dot only repeats it. */
 #hud .presence { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; font-weight: 500; }
 #hud .presence::before { content: ''; flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--hazard); }
@@ -808,6 +818,7 @@ body[data-reading] #log { visibility: visible; }
 #run-map :is(.run-help, .run-tally) { margin: 0; text-align: center; color: var(--muted); }
 #run-map .run-tally { font-style: italic; }
 #run-map svg.glyph { position: static; width: 1em; height: 1em; flex: none; }
+#run-map button[data-relic] svg.glyph { width: 1.5em; height: 1.5em; color: var(--accent); } /* a relic's line icon (#1457) */
 /* The starting armies before the first pick (#801): two by two, so the map keeps its height on a 720 px window. */
 #run-map .run-armies { display: grid; grid-template-columns: 1fr 1fr; gap: 0.375rem; width: 100%; flex: none; }
 

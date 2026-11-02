@@ -15,11 +15,11 @@ const NODE_STRIDE = 5;
 /** Key of the run in the game store, next to the local game (savegame.ts). */
 export const RUN_KEY = 'run';
 
-/** What a node holds, by the bridge's kind code (#800). */
-const KINDS = ['fight', 'boss', 'elite', 'rest', 'event'] as const;
+/** What a node holds, by the bridge's kind code (#800, the treasure #1457). */
+const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure'] as const;
 export type NodeKind = (typeof KINDS)[number];
 
-/** One node of the map: a fight, an elite, a rest, an event, or the boss that ends its act. `links` are the columns of
+/** One node of the map: a fight, an elite, a rest, an event, a treasure, or the boss that ends its act. `links` are the columns of
  * the next row it leads to. */
 export interface MapNode {
   act: number;
@@ -33,7 +33,8 @@ export interface MapNode {
  * moves, and how it ended. `specials` counts the army's Heavy, Anchor and Spark marbles (#961), `placed` the ones on
  * the fight's board `[q, r, kind]`, `reward` is on while the reward of a won fight waits to be picked, and `event` while
  * the choice of an event node waits (#800). `best` is the most acts won in one run before this one, which unlocks its
- * special marble types and starting armies (#801). */
+ * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
+ * `relic` is on while a relic offer waits to be taken (#1457). */
 export interface Run {
   seed: number;
   army: number;
@@ -46,10 +47,48 @@ export interface Run {
   reward: boolean;
   event: boolean;
   best: number;
+  relics: number[];
+  relic: boolean;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
 export const FIGHT_CAP = 3;
+
+/** The relics (#1457, docs/specs/roguelite.md section 9) by their code on the bridge (crates/abalone-core run::Relic). */
+export const Relic = {
+  Gyroscope: 0,
+  HullPlating: 1,
+  SalvageMagnet: 2,
+  Jammer: 3,
+  Detonator: 4,
+  Bunks: 5,
+  LuckyCoin: 6,
+  Bargain: 7,
+  Saboteur: 8,
+  Dampener: 9,
+  WarChest: 10,
+  Quartermaster: 11,
+} as const;
+/** Each relic by its code: its name, its rule in one line, and its glyph, an SVG path in a 24 unit square drawn as a line. */
+export const RELICS: readonly { name: string; help: string; icon: string }[] = [
+  { name: 'Gyroscope', help: 'once per fight, your first push of a tie goes through', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c4 3 4 15 0 18' },
+  { name: 'Hull plating', help: 'the first marble you lose in each fight comes back after it', icon: 'M12 3l8 3v6c0 5-4 8-8 9c-4-1-8-4-8-9V6z' },
+  { name: 'Salvage magnet', help: 'a won elite gives 1 more marble back', icon: 'M6 4h4v8a2 2 0 0 0 4 0V4h4v8a6 6 0 0 1-12 0z' },
+  { name: 'Jammer', help: 'the bot searches 25 % fewer positions in fights and elites', icon: 'M4 8q4-4 8 0t8 0M4 16q4-4 8 0t8 0M5 5l14 14' },
+  { name: 'Detonator', help: 'your Sparks burst 2 cells', icon: 'M12 2l2 6 6-2-4 5 6 3-7 1 1 7-4-5-4 5 1-7-7-1 6-3-4-5 6 2z' },
+  { name: 'Bunks', help: 'a rest also makes a plain marble a Heavy', icon: 'M3 18V6M3 14h18v4M21 14v-3a3 3 0 0 0-3-3h-7v6M7 10h1' },
+  { name: 'Lucky coin', help: 'rewards offer 4 choices', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v10M15 9c-1-2-6-2-6 0s6 2 6 4-5 2-6 0' },
+  { name: 'Bargain', help: 'an event trade costs 1 marble less', icon: 'M3 12V3h9l9 9-9 9zM8 8h.01' },
+  { name: 'Saboteur', help: 'the bot has 1 marble fewer in fights and elites', icon: 'M14 6a4 4 0 1 0 4 4l-9 9a2 2 0 0 1-3-3l9-9' },
+  { name: 'Dampener', help: 'act bosses play at 75 % of their strength', icon: 'M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6' },
+  { name: 'War chest', help: 'an act boss beaten gives 2 marbles back', icon: 'M3 9h18v11H3zM3 9l2-5h14l2 5M10 13h4' },
+  { name: 'Quartermaster', help: 'a fight holds 4 of each special marble type', icon: 'M8 3h8v3H8zM6 4H4v17h16V4h-2M8 11h8M8 16h8' },
+];
+const has = (run: Run, relic: number): boolean => run.relics.includes(relic);
+/** The run's relics as the bridge's bit mask (Engine.set_relics): the engine plays the Gyroscope and the Detonator. */
+export const relicMask = (run: Run): number => run.relics.reduce((mask, r) => mask | (1 << r), 0);
+/** The relics the run does not hold yet, by code: no relic twice in a run. */
+const unheld = (run: Run): number[] => RELICS.flatMap((_, code) => (has(run, code) ? [] : [code]));
 
 /** The looks of the special marbles, by the bridge's kind less 1 (#961): a flat glyph over the marble, its own shape
  * and a colour 3:1 on both marbles, never the colour alone. Its outline in units of its radius, y up. */
@@ -108,6 +147,8 @@ export const newRun = (seed: number, best: number): Run => ({
   reward: false,
   event: false,
   best,
+  relics: [],
+  relic: false,
 });
 
 /** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
@@ -137,17 +178,22 @@ function next(map: MapNode[], path: number[]): number[] {
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
 export const choices = (map: MapNode[], run: Run): number[] =>
-  run.fighting || run.end || run.reward || run.event ? [] : next(map, run.path);
+  run.fighting || run.end || run.reward || run.event || run.relic ? [] : next(map, run.path);
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [] });
 
-/** The run once `node` of `map` is visited (#800): a rest brings the army back up to START_ARMY, an event waits for its
- * choice, any other node starts its fight. */
+/** The run once `node` of `map` is visited (#800): a rest brings the army back up to START_ARMY (with Bunks, a plain
+ * marble becomes a Heavy), an event waits for its choice, a treasure for its relic (#1457), any other node starts its
+ * fight. */
 export function visit(map: MapNode[], run: Run, node: number): Run {
   const path = [...run.path, node];
   const { kind } = map[node]!;
-  if (kind === 'rest') return { ...run, path, army: START_ARMY };
+  if (kind === 'rest') {
+    const bunk = Number(has(run, Relic.Bunks) && sum(run.specials) < START_ARMY);
+    return { ...run, path, army: START_ARMY, specials: [run.specials[0]! + bunk, ...run.specials.slice(1)] };
+  }
+  if (kind === 'treasure') return { ...run, path, relic: unheld(run).length > 0 };
   return kind === 'event' ? { ...run, path, event: true } : pick(run, node);
 }
 
@@ -157,17 +203,26 @@ const lastNode = (map: MapNode[], run: Run): MapNode | undefined => map[run.path
 /** The marbles of a fight node's bot (#1145): its standard layout less the 4 of its front row. */
 export const FIGHT_FOES = 10;
 
-/** The marbles of the bot in the run's fight: FIGHT_FOES against a fight node, the full START_ARMY against an elite. */
-export const foesOf = (map: MapNode[], run: Run): number => (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY);
+/** The marbles of the bot in the run's fight: FIGHT_FOES against a fight node, the full START_ARMY against an elite, one
+ * fewer with the Saboteur. */
+export const foesOf = (map: MapNode[], run: Run): number =>
+  (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY) - Number(has(run, Relic.Saboteur));
 
 /** An elite's bot searches this many times the positions of a fight's (#800). */
 export const ELITE_BUDGET = 2;
 /** Marbles back after a won elite, up to START_ARMY: its better reward (#800). */
 const ELITE_MARBLES = 2;
 
-/** The bot's search budget in the run's fight: `nodes`, or ELITE_BUDGET times it against an elite. */
-export const fightBudget = (map: MapNode[], run: Run, nodes: number): number =>
-  run.fighting && lastNode(map, run)?.kind === 'elite' ? nodes * ELITE_BUDGET : nodes;
+/** What the Jammer and the Dampener leave of the bot's search budget, and of an act boss's strength (#1457). */
+const JAMMED = 0.75;
+
+/** The bot's search budget in the run's fight: `nodes`, or ELITE_BUDGET times it against an elite, a quarter less in a
+ * fight or an elite with the Jammer. */
+export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
+  const kind = run.fighting ? lastNode(map, run)!.kind : null;
+  const budget = kind === 'elite' ? nodes * ELITE_BUDGET : nodes;
+  return (kind === 'fight' || kind === 'elite') && has(run, Relic.Jammer) ? Math.round(budget * JAMMED) : budget;
+}
 
 /** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, normal, hard. */
 export const ACT_PERCENT = [50, 100, 200];
@@ -182,7 +237,8 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
     const j = hash(run.seed, i) % (i + 1);
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
   }
-  return { id: dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: ACT_PERCENT[node.act]! };
+  const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1);
+  return { id: dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
 }
 
 /** An event (#800): its title and text, and the trade it offers: `army` marbles more or less (up to START_ARMY), `gain`
@@ -212,7 +268,7 @@ export function eventOf(run: Run): RunEvent | null {
 /** The run once the trade of `e` is taken, or null when the army cannot pay it (below MIN_ARMY, no special marble to
  * lose, more special marbles than marbles) or would gain nothing. */
 export function takeEvent(run: Run, e: RunEvent): Run | null {
-  const army = Math.min(START_ARMY, run.army + e.army);
+  const army = Math.min(START_ARMY, run.army + e.army + Number(e.army < 0 && has(run, Relic.Bargain)));
   const specials = run.specials.map((n, k) => n + e.gain[k]!);
   const lost = [2, 1, 0].find((k) => e.lose && specials[k]! > 0);
   if (lost !== undefined) specials[lost]! -= 1;
@@ -229,15 +285,25 @@ export function resolve(run: Run, taken: boolean): Run {
   return after ? { ...after, event: false } : run;
 }
 
+/** Marbles back after an act boss beaten with the War chest (#1457). */
+const CHEST_MARBLES = 2;
+
 /** The run after the fight of its last node, `won` or not, the army having lost `lost` marbles and kept `kept` of each
  * special marble type placed (all by default): a loss or an army below MIN_ARMY ends it, the boss of the last act wins
- * it, any other win offers a reward. The army never holds more special marbles than marbles: past that, the Sparks go
- * first, then the Anchors, then the Heavies. */
+ * it, any other win offers a reward, and an elite or an act boss a relic first (#1457). The army never holds more special
+ * marbles than marbles: past that, the Sparks go first, then the Anchors, then the Heavies. The relics act here: Hull
+ * plating brings one lost marble back, the Salvage magnet and the War chest more marbles after an elite and a boss. */
 export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, kept = countOf(run.placed)): Run {
   const node = lastNode(map, run)!;
-  const left = run.army - lost;
+  const left = run.army - Math.max(0, lost - Number(has(run, Relic.HullPlating)));
   const end = !won || left < MIN_ARMY ? 'lost' : node.kind === 'boss' && node.act === lastAct(map) ? 'won' : '';
-  const army = end === '' && node.kind === 'elite' ? Math.min(START_ARMY, left + ELITE_MARBLES) : left;
+  const back =
+    node.kind === 'elite'
+      ? ELITE_MARBLES + Number(has(run, Relic.SalvageMagnet))
+      : node.kind === 'boss' && has(run, Relic.WarChest)
+        ? CHEST_MARBLES
+        : 0;
+  const army = end === '' ? Math.min(START_ARMY, left + back) : left;
   const placed = countOf(run.placed);
   const specials = run.specials.map((n, k) => n - placed[k]! + kept[k]!);
   for (let k = 2, over = sum(specials) - army; k >= 0 && over > 0; k--) {
@@ -246,7 +312,8 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
     over -= drop;
   }
   const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '' };
-  return { ...after, reward: offers(after).length > 0 };
+  const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
+  return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 };
 }
 
 /** A 32-bit hash of two integers (murmur3's finaliser): the reward offers' only randomness. */
@@ -267,7 +334,25 @@ export function offers(run: Run): number[] {
     const j = hash(run.seed, run.path[run.path.length - 1]! * 8 + i) % (i + 1); // the node won, an index of the map
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
-  return pool.slice(0, 3);
+  return pool.slice(0, has(run, Relic.LuckyCoin) ? 4 : 3);
+}
+
+/** The relics a waiting offer holds (#1457): 3 after an act boss, 1 after an elite or in a treasure, of those the run
+ * does not hold, dealt by the run seed and the node, as the reward offers. */
+export function relicOffers(map: MapNode[], run: Run): number[] {
+  if (!run.relic) return [];
+  const node = run.path[run.path.length - 1]!;
+  const pool = unheld(run);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = hash(hash(run.seed, node * 8 + 6), i) % (i + 1);
+    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+  }
+  return pool.slice(0, map[node]!.kind === 'boss' ? 3 : 1);
+}
+
+/** The run once the offered relic `relic` is taken: it holds it for the rest of the run. */
+export function takeRelic(map: MapNode[], run: Run, relic: number): Run {
+  return relicOffers(map, run).includes(relic) ? { ...run, relics: [...run.relics, relic], relic: false } : run;
 }
 
 /** The run once the reward `offer` is picked: a marble more, or one of the army's marbles made special. */
@@ -280,8 +365,10 @@ export function claim(run: Run, offer: number): Run {
 /** Before the first move of a fight, the army's special marbles are placed on its board. */
 export const placing = (run: Run): boolean => run.fighting && run.moves.length === 0 && sum(run.specials) > 0;
 
-/** The special marbles of type `kind` left to place: the army's, at most FIGHT_CAP, less those placed. */
-export const left = (run: Run, kind: number): number => Math.min(run.specials[kind - 1]!, FIGHT_CAP) - countOf(run.placed)[kind - 1]!;
+/** The special marbles of type `kind` left to place: the army's, at most FIGHT_CAP (one more with the Quartermaster), less
+ * those placed. */
+export const left = (run: Run, kind: number): number =>
+  Math.min(run.specials[kind - 1]!, FIGHT_CAP + Number(has(run, Relic.Quartermaster))) - countOf(run.placed)[kind - 1]!;
 
 /** The run once a special marble of type `kind` is placed on the marble at `cell` (it replaces another type there), or
  * taken back when that marble is already one. Unchanged when none is left or the fight is on. */
@@ -426,11 +513,32 @@ export function rewardHtml(map: MapNode[], run: Run): string {
 /** The event screen: its title and text, its trade (disabled when it cannot be paid) and Leave. */
 export function eventHtml(run: Run): string {
   const e = eventOf(run)!;
-  const take = `<button type="button" data-choice="1"${takeEvent(run, e) ? '' : ' disabled'}>${e.take}</button>`;
+  const bargain = e.army < 0 && has(run, Relic.Bargain) ? ' · Bargain: 1 marble less' : '';
+  const take = `<button type="button" data-choice="1"${takeEvent(run, e) ? '' : ' disabled'}>${e.take}${bargain}</button>`;
   return (
     `<p class="run-line">Event · ${e.title}</p><p class="run-help">${e.text}</p>` +
     `<div class="run-kinds">${take}<button type="button" data-choice="0">Leave</button></div>`
   );
+}
+
+/** A relic's glyph: its icon drawn as a line in the text's colour. */
+const relicGlyph = (code: number): string =>
+  `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="${RELICS[code]!.icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const relicText = (code: number): string => `${RELICS[code]!.name}: ${RELICS[code]!.help}`;
+
+/** The relic screen (#1457): a treasure's relic, an elite's, or the act boss's 3 to pick from, a button each. */
+export function relicHtml(map: MapNode[], run: Run): string {
+  const kind = lastNode(map, run)!.kind;
+  const title = kind === 'treasure' ? 'Treasure · a chest holds a relic' : kind === 'elite' ? 'Elite beaten · take its relic' : 'Boss beaten · pick a relic';
+  const buttons = relicOffers(map, run).map((r) => `<button type="button" data-relic="${r}">${relicGlyph(r)}${relicText(r)}</button>`);
+  return `<p class="run-line">${title}</p><div class="run-kinds">${buttons.join('')}</div>`;
+}
+
+/** The relic bar (#1457), in the HUD on the map and in the fights: a glyph per relic the run holds, its name and rule
+ * as its tooltip; nothing before the first relic. */
+export function relicBarHtml(run: Run): string {
+  const glyphs = run.relics.map((r) => `<span class="relic" role="img" tabindex="0" title="${relicText(r)}" aria-label="${relicText(r)}">${relicGlyph(r)}</span>`);
+  return glyphs.length ? `<div class="relics" role="group" aria-label="Relics">${glyphs.join('')}</div>` : '';
 }
 
 /** The map screen: the run line, the unlocks and starting armies before the first pick, the nodes act by act from the
@@ -473,10 +581,11 @@ const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MO
 const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.length === n && v.every((x) => isInt(x, START_ARMY));
 
 /** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none, one
- * saved before the unlocks (#801) everything unlocked. */
+ * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS } = raw as Record<keyof Run, unknown>;
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false } =
+    raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
     isInt(army, START_ARMY) &&
@@ -490,9 +599,12 @@ function decodeRun(raw: unknown): Run | null {
     placed.every((p) => Array.isArray(p) && p.length === 3 && p.every((v) => Number.isInteger(v))) &&
     typeof reward === 'boolean' &&
     typeof event === 'boolean' &&
-    isInt(best, ALL_ACTS);
+    isInt(best, ALL_ACTS) &&
+    Array.isArray(relics) &&
+    relics.every((r, i) => isInt(r, RELICS.length - 1) && relics.indexOf(r) === i) &&
+    typeof relic === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials, placed: placed as number[][], reward, event, best }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials, placed: placed as number[][], reward, event, best, relics, relic }
     : null;
 }
 

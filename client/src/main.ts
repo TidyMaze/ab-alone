@@ -313,11 +313,15 @@ import {
   readBest,
   recordBest,
   resolve,
+  relicBarHtml,
+  relicHtml,
+  relicMask,
   rewardHtml,
   runLine,
   saveRun,
   sparkBurst,
   SPECIAL_LOOKS,
+  takeRelic,
   visit,
   type MapNode,
   type Run,
@@ -2393,7 +2397,7 @@ const saves = new LocalSaves(gameStore, navigator.storage);
 const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? new Encounter(boss.id, boss.seed) : new Engine()));
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
-const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesOf(map, state));
+const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesOf(map, state), undefined, relicMask(state));
 // The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
 const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
   const boss = actBoss(map, state, boss_ids());
@@ -2591,7 +2595,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed, run ? foesOf(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed, run ? foesOf(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined, run ? relicMask(run.state) : undefined),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
@@ -3343,6 +3347,7 @@ function drawHud(extra = ''): void {
           ? retryText(online.askedRematch(online.ourSeat), online.askedRematch(3 - online.ourSeat))
           : rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side), glassOf()),
   });
+  if (run) document.getElementById('hud')!.insertAdjacentHTML('beforeend', relicBarHtml(run.state)); // the relic bar (#1457)
   hudEjected = ejected; // the next render moves only the pips that are new (#1095)
   rematchButton.hidden = online?.role !== 'player' || status === 0 || duel; // spectators never see it, nor a duel yet (#1316)
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
@@ -5547,16 +5552,24 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
     refresh();
   }
 }
-// The run's panel: the reward of a won fight (#961), an event's choice (#800), the placement before a fight's first
+// The run's panel: a relic offer (#1457), the reward of a won fight (#961), an event's choice (#800), the placement before a fight's first
 // move (never in a boss fight: no special marble there), or the map.
 function showRun(): void {
   const { map, state } = run!;
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
   const placed = placing(state) && !(engine instanceof Encounter);
-  runPanel.innerHTML = state.reward ? rewardHtml(map, state) : state.event ? eventHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
+  runPanel.innerHTML = state.relic
+    ? relicHtml(map, state)
+    : state.reward
+      ? rewardHtml(map, state)
+      : state.event
+        ? eventHtml(state)
+        : placed
+          ? placeHtml(state, armed)
+          : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
-  const screen = state.reward ? 'reward' : state.event ? 'event' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
   hud();
 }
@@ -5616,7 +5629,11 @@ function resumeRun(saved: NonNullable<Awaited<ReturnType<typeof loadSavedRun>>>)
 runPanel.addEventListener('click', (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
   if (button?.id === 'run-new') beginRun();
-  else if (button?.dataset.offer) {
+  else if (button?.dataset.relic) {
+    run!.state = takeRelic(run!.map, run!.state, Number(button.dataset.relic));
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.offer) {
     run!.state = claim(run!.state, Number(button.dataset.offer));
     void saveRun(gameStore, run!.state);
     showRun();
@@ -5635,7 +5652,7 @@ runPanel.addEventListener('click', (e) => {
     run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
     void saveRun(gameStore, run!.state);
     if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));
-    else showRun(); // a rest or an event
+    else showRun(); // a rest, an event or a treasure
   }
 });
 runButton.addEventListener('click', beginRun);
@@ -5853,9 +5870,9 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => openWorld.release(e.key)); // a diagonal needs both arrows held (#977)
 addEventListener('blur', () => openWorld.release()); // no key stays held once the window is left
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
-// shows its summary (#801).
+// shows its summary (#801), what it leaves out taken from a new run, as a save is decoded (no relic before #1457).
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
-  if (state.end) return startRun(state, parseMap(run_map(state.seed)));
+  if (state.end) return startRun({ ...newRun(state.seed, state.best), ...state }, parseMap(run_map(state.seed)));
   await saveRun(gameStore, state);
   resumeRun((await loadSavedRun())!); // the browser checks load valid runs
 };

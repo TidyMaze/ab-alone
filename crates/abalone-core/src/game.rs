@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use crate::board::{Board, Cell, PlaceError, Special};
 use crate::encounter::marbles;
 use crate::moves::{apply, legal_moves, Move, MoveError, Player};
-use crate::run::credits;
+use crate::run::{credits, Relic};
 
 /// Ejections needed to win, for both sides unless a boss changes it (the Choir, Decision #131).
 pub const WIN_EJECTIONS: u8 = 6;
@@ -135,6 +135,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.specials().is_empty() {
         board.specials().hash(&mut hasher);
     }
+    if board.relics() != 0 {
+        board.relics().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -212,6 +215,17 @@ impl Game {
             return Err(PlaceError::Started);
         }
         self.board.place_special(cell, kind)?;
+        self.start_hash = position_hash(&self.board, self.to_move);
+        Ok(())
+    }
+
+    /// Gives the army its run's `relics`, before the first move of a rogue-lite fight
+    /// (docs/specs/roguelite.md section 9).
+    pub fn set_relics(&mut self, relics: &[Relic]) -> Result<(), PlaceError> {
+        if !self.history.is_empty() {
+            return Err(PlaceError::Started);
+        }
+        self.board.set_relics(relics)?;
         self.start_hash = position_hash(&self.board, self.to_move);
         Ok(())
     }

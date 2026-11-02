@@ -79,9 +79,13 @@
 //! - Special marbles of a rogue-lite fight (`Engine::specials`, `Engine::place_special`): records
 //!   of 3 integers `[q, r, kind]`, in `q` then `r` order. `kind` `1` Heavy, `2` Anchor, `3` Spark
 //!   (docs/specs/roguelite.md section 5).
+//! - Relics of a rogue-lite fight (`Engine::set_relics`): a bit mask, bit `code` set for each relic
+//!   the army holds. `code` `0` Gyroscope, `1` Hull plating, `2` Salvage magnet, `3` Jammer, `4`
+//!   Detonator, `5` Bunks, `6` Lucky coin, `7` Bargain, `8` Saboteur, `9` Dampener, `10` War chest,
+//!   `11` Quartermaster (docs/specs/roguelite.md section 9).
 //! - Rogue-lite map (`run_map`): records of 5 integers `[act, row, col, kind, links]` per node,
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
-//!   an act), `2` elite, `3` rest, `4` event. `links` is a bit mask of the columns of the next row of the same act the node leads
+//!   an act), `2` elite, `3` rest, `4` event, `5` treasure. `links` is a bit mask of the columns of the next row of the same act the node leads
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
 //! - Open world chunk (`world_chunk(seed, cx, cy)`): 3 bytes `[height, terrain, biome]` per cell of the
 //!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. The world is a hexagon (`WORLD_RADIUS`): in a

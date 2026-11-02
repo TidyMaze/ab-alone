@@ -25,6 +25,50 @@ pub enum NodeKind {
     Elite = 2,
     Rest = 3,
     Event = 4,
+    Treasure = 5,
+}
+
+/// A relic of a rogue-lite run (docs/specs/roguelite.md section 9): a passive effect for the rest of
+/// the run, its value its code on the bridge. The engine plays the two that act inside a fight, on
+/// the army's marbles (Black): the Gyroscope in a push and the Detonator in a Spark's burst. The
+/// page plays the others between and around the fights.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Relic {
+    Gyroscope = 0,
+    HullPlating = 1,
+    SalvageMagnet = 2,
+    Jammer = 3,
+    Detonator = 4,
+    Bunks = 5,
+    LuckyCoin = 6,
+    Bargain = 7,
+    Saboteur = 8,
+    Dampener = 9,
+    WarChest = 10,
+    Quartermaster = 11,
+}
+
+impl Relic {
+    /// Every relic, in the order of its code.
+    pub const ALL: [Relic; 12] = [
+        Relic::Gyroscope,
+        Relic::HullPlating,
+        Relic::SalvageMagnet,
+        Relic::Jammer,
+        Relic::Detonator,
+        Relic::Bunks,
+        Relic::LuckyCoin,
+        Relic::Bargain,
+        Relic::Saboteur,
+        Relic::Dampener,
+        Relic::WarChest,
+        Relic::Quartermaster,
+    ];
+
+    /// Its bit in a set of relics: `1` shifted by its code.
+    pub fn bit(self) -> u32 {
+        1 << self as u32
+    }
 }
 
 /// One node of the map. `links` are the columns of the next row of the same act it leads to,
@@ -64,13 +108,14 @@ fn links(from: usize, to: usize, state: &mut u64) -> Vec<Vec<usize>> {
     out
 }
 
-/// The kinds a node after the first row of an act draws from, equally likely.
+/// The kinds a node after the first row of an act draws from, equally likely. The Treasure took
+/// the place of a second Event (#1457), so a run saved before keeps its other kinds.
 const DRAWN: [NodeKind; 6] = [
     NodeKind::Fight,
     NodeKind::Fight,
     NodeKind::Elite,
     NodeKind::Event,
-    NodeKind::Event,
+    NodeKind::Treasure,
     NodeKind::Rest,
 ];
 
@@ -136,17 +181,25 @@ pub(crate) fn carry_specials(
         })
         .collect();
     if let Some(spark) = off.filter(|&c| board.special(c) == Some(Special::Spark)) {
-        burst(next, &mut specials, spark);
+        // The army's Detonator: its Sparks push 2 cells.
+        let army = board.get(spark.0, spark.1) == Some(Cell::Black);
+        let reach = 1 + i32::from(army && board.has_relic(Relic::Detonator));
+        burst(next, &mut specials, spark, reach);
     }
     specials.sort_by_key(|s| s.0);
     next.set_specials(specials);
 }
 
-/// A Spark's burst from its last cell: each marble next to it moves one cell straight away from
-/// it, stays when that cell holds a marble, and goes off the board when there is none, unless it
-/// is an Anchor. A Spark it throws off does not burst. The order, by cell, changes nothing: no
-/// two neighbours aim at the same cell.
-fn burst(next: &mut Board, specials: &mut Vec<((i32, i32), Special)>, (sq, sr): (i32, i32)) {
+/// A Spark's burst from its last cell: each marble next to it slides `reach` cells straight away
+/// from it, stops before a marble, and goes off the board past the rim, unless it is an Anchor, which
+/// stops on the rim. A Spark it throws off does not burst. The order, by cell, changes nothing: each
+/// neighbour slides along its own ray from the Spark.
+fn burst(
+    next: &mut Board,
+    specials: &mut Vec<((i32, i32), Special)>,
+    (sq, sr): (i32, i32),
+    reach: i32,
+) {
     let mut away = NEIGHBOURS;
     away.sort();
     for (dq, dr) in away {
@@ -155,22 +208,32 @@ fn burst(next: &mut Board, specials: &mut Vec<((i32, i32), Special)>, (sq, sr): 
             continue;
         };
         let mark = specials.iter().position(|s| s.0 == (q, r));
-        let to = (q + dq, r + dr);
-        match next.get(to.0, to.1) {
-            Some(Cell::Empty) => {
-                next.set(to.0, to.1, marble);
-                if let Some(i) = mark {
-                    specials[i].0 = to;
+        let anchor = mark.map(|i| specials[i].1) == Some(Special::Anchor);
+        let (mut to, mut off) = ((q, r), false);
+        for _ in 0..reach {
+            match next.get(to.0 + dq, to.1 + dr) {
+                Some(Cell::Empty) => to = (to.0 + dq, to.1 + dr),
+                None if !anchor => {
+                    off = true;
+                    break;
                 }
+                _ => break,
             }
-            None if mark.map(|i| specials[i].1) != Some(Special::Anchor) => {
-                if let Some(i) = mark {
-                    specials.remove(i);
-                }
-            }
-            _ => continue,
+        }
+        if !off && to == (q, r) {
+            continue;
         }
         next.set(q, r, Cell::Empty);
+        if off {
+            if let Some(i) = mark {
+                specials.remove(i);
+            }
+        } else {
+            next.set(to.0, to.1, marble);
+            if let Some(i) = mark {
+                specials[i].0 = to;
+            }
+        }
     }
 }
 

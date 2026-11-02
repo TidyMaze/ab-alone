@@ -184,6 +184,7 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
     let mut next = board.clone();
     // The cell of the marble the push throws off the board.
     let mut off = None;
+    let mut gyroscope = false;
     let mut moved: Vec<((i32, i32), Cell)> = group.iter().map(|&c| (c, own)).collect();
     if inline {
         let front = if d == v { group[n - 1] } else { group[0] };
@@ -202,9 +203,13 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
                 None => return Err(MoveError::OffBoard),
             }
         } else {
-            if weight(board, group.iter().copied())
-                <= weight(board, (0..run).map(|i| step(lead, d, i)))
-            {
+            let short = weight(board, (0..run).map(|i| step(lead, d, i)))
+                .checked_sub(weight(board, group.iter().copied()));
+            // The army's Gyroscope (a rogue-lite relic) lets one push of a tie through, once.
+            gyroscope = short == Some(0)
+                && own == Cell::Black
+                && board.has_relic(crate::run::Relic::Gyroscope);
+            if short.is_some() && !gyroscope {
                 return Err(MoveError::NotStrongEnough);
             }
             match behind {
@@ -243,6 +248,9 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
     if board.rogue_lite() {
         let moved: Vec<_> = moved.iter().map(|&(c, _)| c).collect();
         crate::run::carry_specials(board, &mut next, &moved, d, off);
+    }
+    if gyroscope {
+        next.spend_relic(crate::run::Relic::Gyroscope);
     }
     Ok((next, off.is_some()))
 }

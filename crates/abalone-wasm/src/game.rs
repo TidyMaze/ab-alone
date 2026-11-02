@@ -6,7 +6,7 @@ use crate::convert::{
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
-use abalone_core::run::{army_game_against, trainer_game};
+use abalone_core::run::{army_game_against, trainer_game, Relic};
 use abalone_core::search::{best_move, position_score};
 use wasm_bindgen::prelude::*;
 
@@ -48,6 +48,16 @@ impl Engine {
         self.game
             .place_special((q, r), kind)
             .map_err(|e| format!("{e:?}"))
+    }
+
+    /// Gives the army of a rogue-lite fight its run's relics, before its first move: `mask` holds
+    /// the bit of each relic's code (see the module docs); a bit no relic has is ignored.
+    pub fn set_relics(&mut self, mask: u32) -> Result<(), String> {
+        let relics: Vec<Relic> = Relic::ALL
+            .into_iter()
+            .filter(|r| mask & r.bit() != 0)
+            .collect();
+        self.game.set_relics(&relics).map_err(|e| format!("{e:?}"))
     }
 
     /// The special marbles, records of 3 integers `[q, r, kind]`, see the module docs.

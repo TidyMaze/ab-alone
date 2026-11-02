@@ -20,6 +20,8 @@ export interface BotRequest {
   placed?: number[][];
   /** With `army`: the marbles of the bot's army, 14 when unset (#1145). */
   foes?: number;
+  /** With `army`: the run's relics, the bit mask of their codes (#1457), none when unset. */
+  relics?: number;
   /** Set in a Trainer game (#1159): the worker replays the history on a wave of that many white marbles, with `left` marbles of the run's pool. */
   trainer?: TrainerRef;
 }
@@ -86,25 +88,27 @@ export function botBudget(search: string, automated: boolean): number {
 }
 
 /** The engine of a request: a plain game, or a rogue-lite fight of `army` marbles against `foes` with its special
- * marbles `placed` (#961, #1145), so the bot searches the board the page plays. */
-export function engineFor<E extends { place_special(q: number, r: number, kind: number): void }>(
+ * marbles `placed` and the run's `relics` (#961, #1145, #1457), so the bot searches the board the page plays. */
+export function engineFor<E extends { place_special(q: number, r: number, kind: number): void; set_relics(mask: number): void }>(
   make: { new (): E; with_army(army: number, foes: number): E; trainer(wave: number, left: number): E },
   army?: number,
   placed: number[][] = [],
   foes = 14,
   trainer?: TrainerRef,
+  relics = 0,
 ): E {
   if (trainer) return make.trainer(trainer.wave, trainer.left);
   if (army === undefined) return new make();
   const engine = make.with_army(army, foes);
   for (const [q, r, kind] of placed) engine.place_special(q!, r!, kind!);
+  engine.set_relics(relics);
   return engine;
 }
 
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
-  makeEngine: (army?: number, placed?: number[][], foes?: number, trainer?: TrainerRef) => EngineLike,
+  makeEngine: (army?: number, placed?: number[][], foes?: number, trainer?: TrainerRef, relics?: number) => EngineLike,
   makeEncounter: (id: string, seed: number) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
@@ -115,7 +119,7 @@ export function answer(
     for (const mv of req.history) fight.play(Int32Array.from(mv));
     return { id: req.id, move: Array.from(req.player ? fight.player_move() : fight.boss_move()) };
   }
-  const engine = makeEngine(req.army, req.placed, req.foes, req.trainer);
+  const engine = makeEngine(req.army, req.placed, req.foes, req.trainer, req.relics);
   for (const mv of req.history) engine.play(Int32Array.from(mv));
   if (req.evaluate) return { id: req.id, score: engine.evaluate(req.nodes) };
   return { id: req.id, move: Array.from(engine.best_move(req.nodes)) };
@@ -168,8 +172,9 @@ export async function askBot(
   placed?: number[][],
   foes?: number,
   trainer?: TrainerRef,
+  relics?: number,
 ): Promise<number[]> {
-  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army, placed, foes, trainer })).move;
+  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army, placed, foes, trainer, relics })).move;
 }
 
 /** Page side: the search score of the position after `history`, for the side to move. */

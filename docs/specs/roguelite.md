@@ -17,8 +17,8 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 - **Run**: 3 acts, each a branching map of nodes the player walks through, top to bottom. An act
   has 3 rows of nodes then its boss: 12 nodes on a path through a run, the bosses included.
 - **Nodes** (section 7): fight (the bot), elite (a stronger bot, a better reward), rest (marbles
-  back up to 14), event (a short text choice with a gain and a cost), boss (a boss of the roster
-  at the act's strength, ends the act). No shop and no currency.
+  back up to 14), event (a short text choice with a gain and a cost), treasure (a relic, section 9),
+  boss (a boss of the roster at the act's strength, ends the act). No shop and no currency.
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
   back row first; the bot has its 14 against an elite, 10 against a fight node (#1145): its
@@ -37,22 +37,24 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 
 Generated in the engine from the seed (`abalone-core` `run::run_map`, `run_map` on the bridge).
 A row has 2 to 4 nodes, the boss row one. The first row of an act is fights; each node of the
-two rows after it is a fight, an elite, an event or a rest (2, 1, 2 and 1 chances in 6), its own
-draw from the seed and its index in the map, apart from the links: the map's shape is the one of
-slice 1, so a run saved before the kinds still walks its map. Between two rows the links are a walk from the
+two rows after it is a fight, an elite, an event, a treasure or a rest (2, 1, 1, 1 and 1 chances in
+6), its own draw from the seed and its index in the map, apart from the links: the map's shape is the
+one of slice 1, so a run saved before the kinds still walks its map. The treasure (#1457) took the
+place of a second event in the draw: a run saved before it keeps its other kinds. Between two rows the links are a walk from the
 first pair of nodes to the last that steps one row, the other or both at random: every node leads
 on, every node of the next row is reached, and no two paths cross. A boss leads to every node of the
 next act's first row.
 
 The map screen shows the acts from the top, each node named by its kind (Fight, Elite, Rest,
-Event, Boss), the links under the nodes, the path taken in the
+Event, Treasure, Boss), the links under the nodes, the path taken in the
 accent colour, and enables only the nodes the player may pick: the first row of act 1, then the
 links of the last node.
 
 ## 3. Saving
 
-The run (seed, army, its special marbles, the nodes picked, the special marbles placed on the fight
-on and its moves, a reward waiting to be picked, and an event waiting for its choice) is saved in IndexedDB after
+The run (seed, army, its special marbles, its relics, the nodes picked, the special marbles placed on
+the fight on and its moves, a reward waiting to be picked, an event waiting for its choice, and a relic
+offer waiting to be taken) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -189,3 +191,53 @@ marbles, and an unlock only widens what a run may hold.
   path taken act by act, the fights won and lost (the run's last fight lost when it is lost), the
   army at the end with its special marbles, the unlocks this run earned (or No new unlock), and New
   run.
+
+## 9. Relics (#1457)
+
+A relic is a passive effect for the rest of the run (Slay the Spire's relics). The run holds each
+relic at most once, in the order taken, and starts with none: only variety carries between runs
+(Decision #934).
+
+- **Sources**: a won elite gives one relic, on top of its marbles and its reward; an act boss beaten
+  (not the last, which wins the run) offers 3 to pick 1 from; a **Treasure** node (section 2) holds
+  one, with no fight. The relic screen comes before the reward screen and must be taken; the map
+  waits for it. The relics offered are dealt from those the run does not hold by the run seed and
+  the node (a 32-bit hash, as the reward offers), so a reload offers the same ones; with none left, a
+  treasure is empty and an elite or a boss gives none.
+- **The 12 relics** and where each acts:
+
+  | Code | Relic | Rule | Where |
+  |---|---|---|---|
+  | 0 | Gyroscope | once per fight, your first push of a tie (2 against 2, for example) goes through | engine: a push |
+  | 1 | Hull plating | the first marble you lose in each fight comes back after it | the end of a fight |
+  | 2 | Salvage magnet | a won elite gives 1 more marble back (3, up to 14) | the end of an elite |
+  | 3 | Jammer | the bot searches 25 % fewer positions in fights and elites, not against a boss | the bot's budget |
+  | 4 | Detonator | your Sparks burst 2 cells | engine: a Spark's burst |
+  | 5 | Bunks | a rest also makes a plain marble a Heavy | a rest |
+  | 6 | Lucky coin | rewards offer 4 choices | the reward screen |
+  | 7 | Bargain | an event trade costs 1 marble less | an event |
+  | 8 | Saboteur | the bot has 1 marble fewer in fights and elites (9 and 13) | a fight's board |
+  | 9 | Dampener | act bosses play at 75 % of their act's strength (38, 75 and 150 %) | an act boss |
+  | 10 | War chest | an act boss beaten gives 2 marbles back (up to 14) | the end of a boss |
+  | 11 | Quartermaster | a fight holds 4 of each special marble type | the placement |
+
+  The issue's "rest heals up to 15" does not fit the 14 cells of the army's layout: Bunks gives a
+  Heavy instead.
+- **In the engine**: the Gyroscope and the Detonator act inside a fight, so the bot plays them in
+  its search. The army's relics are set on its fight's board before the first move
+  (`Game::set_relics`, `Engine::set_relics(mask)`, bit `code` per relic), behind the rogue-lite
+  flag like the special marbles (refused without it, `PlaceError::NotRogueLite`), and part of the
+  position. The Gyroscope lets the first push of the army (Black) that ties in weight through and
+  is spent by it; a push strong enough without it keeps it. With the Detonator, a burst of the
+  army's Spark slides each neighbour up to 2 cells away: it stops before a marble, goes off past the
+  rim, and an Anchor stops on the rim; the enemy's Sparks burst 1 cell. Every other mode plays bit
+  for bit as before (section 5's digest).
+- **On screen**: the relic bar, in the HUD on the map and in every fight of the run, shows a glyph
+  per relic (a line icon in the accent colour), its name and rule as its tooltip on hover, and
+  under it once it has the focus (a tap or Tab). The relic screen shows a button per relic offered,
+  its glyph, name and rule: "Treasure · a chest holds a relic", "Elite beaten · take its relic" or
+  "Boss beaten · pick a relic".
+- **Saving**: the relics and a waiting offer are saved with the run; a run saved before the relics
+  has none.
+- **Later relics** plug in by a code: the shop (#1459) sells relics the run does not hold, the
+  commanders (#1464) start with one, and boss relics (#1467) join a boss's offer.

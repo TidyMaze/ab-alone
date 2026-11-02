@@ -325,9 +325,9 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   });
 
   it('the army fights with its relics on its board, the bot too, and the bar stays in the HUD', async () => {
+    const game = await boot('?nodes=50');
     const { Engine } = await import('abalone-wasm');
     const taken = vi.spyOn(Engine.prototype, 'set_relics');
-    const game = await boot('?nodes=50');
     await game.hook('__run', pick({ ...newRun(3, 3), relics: [Relic.Gyroscope, Relic.Detonator] }, 0));
     expect(document.body.dataset.run).toBe('fight');
     expect(taken).toHaveBeenLastCalledWith(0b10001);
