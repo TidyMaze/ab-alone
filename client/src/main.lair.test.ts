@@ -118,6 +118,38 @@ describe("Tally's line in the Open world (#1171)", () => {
   });
 });
 
+describe("Tally's ending and ledger lines (#1175, #1315)", () => {
+  const fixture = (beaten: number[]): void =>
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [], enemies: [], beaten });
+
+  it("shows Tally's ending line once every lair is beaten, and nothing while one is left, #1175", async () => {
+    localStorage.setItem('ab-alone.tally0412', 'seen'); // the claim line is spent
+    await boot('?bot=off&openworld=7');
+    await settle();
+    expect(data().openworldAt).toBe('0,0');
+    const count = data().openworldLairs!.split(' ').length;
+    fixture(Array.from({ length: count - 1 }, (_, i) => i)); // all lairs but one
+    expect(byId('openworld-tally').textContent).toBe('');
+    fixture(Array.from({ length: count }, (_, i) => i));
+    expect(byId('openworld-tally').textContent).toBe('Variance noted. Clamp: open. Crew attached: 6.');
+  });
+
+  it('the ledger line counts the seats on file after the world is left and opened again, #1315', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await settle();
+    const count = data().openworldLairs!.split(' ').length;
+    fixture([0, 1, 2]);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); // leaving the world saves it
+    await settle();
+    expect(data().openworldSaved).toBe('1');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(data().openworld).toBe('7');
+    expect(byId('openworld-tally').textContent).toBe(`Seats on file: 3 of ${count}. Slag-glass remembers heat.`);
+  });
+});
+
 describe('the Dungeon button of the HUD (#1291)', () => {
   it('walks the hero toward the nearest tower through the wasm bridge', async () => {
     const game = await boot('?bot=off&openworld=7');

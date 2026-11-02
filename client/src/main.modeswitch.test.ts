@@ -203,6 +203,8 @@ describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
     expect(css).toContain('body[data-openworld] canvas { filter: none; }');
     expect(css).toContain('body[data-openworld]::before { display: none; }');
     const last = (rule: string): number => css.lastIndexOf(rule);
+    // The loss rule's end-dim animation runs 'forwards' and would keep its filter over 'filter: none': the world's own animation replaces it.
+    expect(last('body[data-openworld] canvas { animation: screen-in-world')).toBeGreaterThan(last("body[data-over='loss'] canvas {"));
     expect(last('body[data-openworld] canvas { filter: none; }')).toBeGreaterThan(last("body[data-over='loss'] canvas {"));
     expect(last('body[data-openworld]::before { display: none; }')).toBeGreaterThan(last("body[data-over='loss']::before {"));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
