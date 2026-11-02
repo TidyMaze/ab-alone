@@ -119,6 +119,7 @@ describe('main.ts The Rail Yard (#626)', () => {
     expect(named(scene(), 'rail')).toHaveLength(0);
     expect(body().ejecting).toBeUndefined();
     expect(document.getElementById('boss-bar')!.textContent).toContain('The Rail Yard');
+    expect([...byId('hud').querySelectorAll('.pips > span')].map((side) => side.querySelectorAll('.out').length)).toEqual([3, 3]); // 3 boss marbles for the player, 3 of the player's for the boss
     expect(activePhase()).toBe('P2'); // the 3 boss marbles count for the player: P2 after 3 ejections
     expect(game.hook<Move[]>('__legal').some((m) => String(m.cells) === '3,-3')).toBe(false); // gone from the line
   });

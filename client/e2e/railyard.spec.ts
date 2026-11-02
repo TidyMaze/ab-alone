@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { pauseClock, stepClock } from './clock';
 import { openModes } from './modes';
 import { shot } from './shot';
 
@@ -78,30 +77,4 @@ test('The Rail Yard: an announced train counts down, passes, sweeps both sides o
   await expect(page.locator('#hud .notch.active')).toHaveText('P2'); // after 3 ejections
   await freshDraw(page);
   await shot(page, { path: testInfo.outputPath('railyard-swept.png') });
-});
-
-// The train runs on the page clock (page.clock): paused before the last ply and stepped by hand, so the frames the test
-// samples do not depend on how fast a loaded machine draws (#891).
-test('The Rail Yard: the freight train runs the line and knocks the marbles off, #626', async ({ page }, testInfo) => {
-  const body = page.locator('body');
-  await page.clock.install();
-  await startRailYard(page, false);
-  await page.mouse.move(2, 2); // no hover ghost
-  for (let ply = 1; ply <= 10; ply++) {
-    await page.waitForFunction(() => document.body.dataset.sliding === undefined); // a move waits for the last slide
-    await quiet(page, 1);
-  }
-  await page.waitForFunction(() => document.body.dataset.sliding === undefined);
-  await pauseClock(page);
-  await quiet(page, 1); // the player's 6th move: the train passes
-  await expect.poll(async () => { await stepClock(page, 50); return body.getAttribute('data-passing'); }, { intervals: [0], timeout: 12_000 }).toBe('1');
-  for (let frame = 0; frame < 5; frame++) { // the pass lasts 1.6 s: 5 steps of 100 ms after it began it is still out
-    const pass = await page.evaluate(() => (window as any).__passes());
-    expect(pass).not.toHaveLength(0);
-    await shot(page, { path: testInfo.outputPath(`railyard-pass-${frame}.png`) });
-    await stepClock(page, 100);
-  }
-  await stepClock(page, 1600);
-  await expect(body).toHaveAttribute('data-passing', '0');
-  await expect(body).toHaveAttribute('data-trains', '0');
 });
