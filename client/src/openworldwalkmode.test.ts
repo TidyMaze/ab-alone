@@ -70,6 +70,29 @@ describe('a held arrow in the Open world, #1065', () => {
     expect(m.hero!.at[0]).toBeGreaterThanOrEqual(9);
   });
 
+  it('keeps the speed through the turns of a zigzag: ArrowUp walks up the hex grid, the path over windows of 6 frames varies under 30 % (the removed e2e)', () => {
+    setClock();
+    const m = make(false);
+    m.frame(vi.fn(), 0);
+    expect(m.key('ArrowUp')).toBe(true);
+    const hero = (m as unknown as { view: OpenWorldView }).view.scene.getObjectByName('hero')!;
+    const at: [number, number, number][] = [];
+    for (let t = 0; t <= 20 * GLIDE_MS; t += FRAME) {
+      clock = t;
+      m.frame(vi.fn(), t);
+      at.push([t, hero.position.x, hero.position.z]);
+    }
+    const walking = at.filter(([t]) => t > 900 && t < 20 * GLIDE_MS - 400); // past the speed-up to the cruise pace (#1290)
+    const speeds: number[] = [];
+    for (let i = 0; i + 6 < walking.length; i++) {
+      let path = 0; // the path walked, not the chord: a window that spans a turn would read slower by its chord
+      for (let j = i; j < i + 6; j++) path += Math.hypot(walking[j + 1]![1] - walking[j]![1], walking[j + 1]![2] - walking[j]![2]);
+      speeds.push(path / (walking[i + 6]![0] - walking[i]![0]));
+    }
+    expect(speeds.length).toBeGreaterThan(30);
+    expect(Math.max(...speeds) / Math.min(...speeds)).toBeLessThan(1.3);
+  });
+
   it('draws a step on the frame that begins it, not on the next one', () => {
     setClock();
     const m = make(false);
