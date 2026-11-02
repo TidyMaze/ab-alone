@@ -202,6 +202,7 @@ test('the widest zoom on a 32:9 screen shows no black background at its edges, #
 
 // #989: the props within 8 cells of the hero are drawn with their detailed models once those load, the low-poly ones beyond.
 test('the props near the hero are drawn detailed, the ones beyond low-poly, #989', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('ab-alone.tier', 'high')); // the detailed models are a high tier part: this spec keeps the tier it tests on CI too (#1436)
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
