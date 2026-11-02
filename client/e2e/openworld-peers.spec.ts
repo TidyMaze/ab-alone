@@ -324,3 +324,23 @@ test('the army of another hero is drawn round it, and ours goes out as 15 bytes,
   await expect.poll(async () => (await troops()).length).toBeGreaterThanOrEqual(1);
   expect((await troops())[0]).toHaveLength(15);
 });
+
+// #1447: the hero of another player on water rides a boat, as ours does. Seed 1305 has water on (25,0) and (25,1), sand on (24,0).
+test('the hero of another player rides a boat on water and has none on land, #1447', async ({ page }) => {
+  await enter(page, PUBLIC);
+  await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [26, 0], troop: [], enemies: [] }));
+  await page.evaluate(
+    ([hello, wet]) => {
+      const w = window as unknown as Hook;
+      w.__netPeerJoin('p');
+      w.__netPeerIn(hello!, 'p');
+      w.__netPeerIn(wet!, 'p');
+    },
+    [[2, 1], pos(25, 0, 0)],
+  );
+  const peers = page.locator('#openworld-peers');
+  await expect(peers).toHaveAttribute('data-boats', '1');
+  await page.screenshot({ path: 'test-results/peers-boat.png' });
+  await page.evaluate((land) => (window as unknown as Hook).__netPeerIn(land, 'p'), pos(24, 1, 1));
+  await expect(peers).toHaveAttribute('data-boats', '0');
+});

@@ -13,6 +13,7 @@ import { generateKeys } from './moverecord';
 import { signBeaten, signBreak, signLair } from './worldevents';
 import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
+import { PeersLayer } from './worldpeersview';
 
 class FakeNet implements PeerNet {
   sent: [Uint8Array, string | undefined][] = [];
@@ -112,7 +113,7 @@ describe('WorldPeersHost', () => {
     const update = vi.spyOn(PeersLayer.prototype, 'update');
     host.frame(10, [3, 1], [[3, 2]], 10);
     host.frame(20, [3, 1], [], null);
-    expect(update.mock.calls.map((call) => call[3])).toEqual([10, null]);
+    expect(update.mock.calls.map((call: unknown[]) => call[3])).toEqual([10, null]);
     update.mockRestore();
   });
 

@@ -231,9 +231,10 @@ describe('PeersLayer', () => {
     };
 
     it('floats a boat under a hero and a troop marble on water, and none under one on land', () => {
-      const { scene, layer } = setup(wet);
+      const { scene, root, layer } = setup(wet);
       layer.update(peer([1, 0], [[0, 0], [2, 0]]), [5, 5]);
       expect(boats(scene).count).toBe(2);
+      expect(root.dataset.boats).toBe('2'); // for the browser checks
       const p = at(boats(scene), 0);
       expect(p.x).toBeCloseTo(axialTo3D(1, 0).x, 5);
       expect(p.y).toBeCloseTo(topOf('water', 0, 0, 0) - DRAFT, 5);
@@ -244,9 +245,9 @@ describe('PeersLayer', () => {
 
     it('bobs with the time given, and holds still without it', () => {
       const { scene, layer } = setup(wet);
-      layer.update(peer([1, 0]), [5, 5], [5, 5], 650); // a quarter of the period 2600 ms: the top of the bob
+      layer.update(peer([1, 0]), [5, 5], [[5, 5]], 650); // a quarter of the period 2600 ms: the top of the bob
       expect(at(boats(scene), 0).y).toBeCloseTo(topOf('water', 0, 0, 0) - DRAFT + BOB_AMP, 3);
-      layer.update(peer([1, 0]), [5, 5], [5, 5], null);
+      layer.update(peer([1, 0]), [5, 5], [[5, 5]], null);
       expect(at(boats(scene), 0).y).toBeCloseTo(topOf('water', 0, 0, 0) - DRAFT, 5);
     });
 
@@ -263,10 +264,11 @@ describe('PeersLayer', () => {
     });
 
     it('frees the boats on dispose', () => {
-      const { scene, layer } = setup(wet);
+      const { scene, root, layer } = setup(wet);
       layer.update(peer([1, 0]), [5, 5]);
       layer.dispose();
       expect(boats(scene)).toBeUndefined();
+      expect(root.dataset.boats).toBeUndefined();
     });
   });
 });

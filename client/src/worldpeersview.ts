@@ -176,6 +176,7 @@ export class PeersLayer {
     this.root.hidden = out.length === 0 && named.length === 0;
     this.root.dataset.peers = String(this.heroes + out.length); // for the browser checks
     this.root.dataset.marbles = String(this.mesh.count); // for the browser checks
+    this.root.dataset.boats = String(this.boats.count); // for the browser checks
     this.root.dataset.armies = this.armies;
     this.root.dataset.edges = out.map(({ cell }) => hexDistance(hero, cell)).join(',');
   }
@@ -207,6 +208,7 @@ export class PeersLayer {
     delete this.root.dataset.peers;
     delete this.root.dataset.edges;
     delete this.root.dataset.marbles;
+    delete this.root.dataset.boats;
     delete this.root.dataset.armies;
   }
 }
