@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shot } from './shot';
 
 // The rogue-lite rest site (#1458, docs/specs/roguelite.md section 10), loaded through the test hook: Upgrade disabled with
 // its reason when the army has no special marble, an upgrade picked, and the upgraded marbles on the board with a `+`.
@@ -21,12 +22,12 @@ test('the rogue-lite rest site: rest or upgrade one special marble, #1458', asyn
   await expect(line).toHaveText('Rest site · rest or upgrade');
   await expect(panel.locator('button[data-upgrade]')).toBeDisabled();
   await expect(panel.locator('button[data-upgrade]')).toHaveText('Upgrade: no special marble left to upgrade');
-  await page.screenshot({ path: testInfo.outputPath('roguelite-rest-disabled.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-rest-disabled.png') });
 
   await hook(run({ specials: [1, 1, 1] }));
   await panel.locator('[data-node="3"]').click();
   await expect(panel.locator('button[data-upgrade]')).toHaveCount(3);
-  await page.screenshot({ path: testInfo.outputPath('roguelite-rest-choice.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-rest-choice.png') });
   await panel.getByRole('button', { name: /^Upgrade a Spark/ }).click();
   await expect(line).toHaveText('Rogue-lite run · rested · army 9 marbles, 1 Heavy, 1 Anchor, 1 Spark+ · pick a fight');
 
@@ -41,5 +42,5 @@ test('the rogue-lite rest site: rest or upgrade one special marble, #1458', asyn
   await expect(panel).toBeHidden();
   expect(await page.evaluate(() => document.body.dataset.specials)).toBe('-1,3,6 0,4,4 1,3,5');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('roguelite-upgraded.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-upgraded.png') });
 });

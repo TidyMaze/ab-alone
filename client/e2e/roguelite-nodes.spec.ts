@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { shot } from './shot';
 
 // Elites, rests, events and act bosses of the rogue-lite run (#800, docs/specs/roguelite.md section 7) in the browser.
 // Each step loads the run it needs through the test hook. Seed 3: the fight 1 leads to the rest 3, the treasure 4 (#1457)
@@ -12,12 +13,12 @@ test('the rogue-lite run: elite, rest, event and boss nodes, an event, a rest an
   await page.waitForFunction(() => typeof (window as any).__run === 'function'); // the page is ready
   await hook(run);
   for (const kind of ['elite', 'rest', 'event', 'boss']) await expect(map.getByRole('button', { name: `Act 1, ${kind}` }).first()).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('roguelite-map-nodes.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-map-nodes.png') });
 
   await hook({ ...run, specials: [0, 0, 1] }); // a Spark to give: every trade can be paid
   await map.locator('[data-node="5"]').click();
   await expect(line).toHaveText(/^Event · /);
-  await page.screenshot({ path: testInfo.outputPath('roguelite-event.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-event.png') });
   await map.getByRole('button', { name: 'Leave' }).click();
   await expect(line).toHaveText('Rogue-lite run · army 9 marbles, 1 Spark · pick a fight');
 
@@ -26,7 +27,7 @@ test('the rogue-lite run: elite, rest, event and boss nodes, an event, a rest an
   await expect(line).toHaveText('Rest site · rest or upgrade'); // the rest site's choice (#1458)
   await map.locator('button[data-rest]').click();
   await expect(line).toHaveText('Rogue-lite run · rested · army 14 marbles · pick a fight');
-  await page.screenshot({ path: testInfo.outputPath('roguelite-rest.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-rest.png') });
 
   await hook({ ...run, army: 14, path: [0, 2, 6, 9], fighting: true });
   await expect(page.locator('body')).toHaveAttribute('data-boss', /\w/);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shot } from './shot';
 
 // Relics of the rogue-lite run (#1457, docs/specs/roguelite.md section 9) in the browser, each step loaded through the
 // test hook: the relic bar in the HUD on the map, a treasure's relic taken into it, an act boss's offer of 3, and the bar
@@ -24,13 +25,13 @@ test('the rogue-lite relics: the bar, a treasure, a boss offer and a fight, #145
   await expect(bar).toHaveCount(3);
   await expect(page.locator('body')).toHaveAttribute('data-run', 'map');
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/roguelite-relic-bar.png' });
+  await shot(page, { path: 'test-results/roguelite-relic-bar.png' });
 
   await hook(run({ path: [0, 2, 6, 9], reward: true, relic: true, relics: [0, 4, 1] }));
   await expect(panel.locator('.run-line')).toHaveText('Boss beaten · pick a relic');
   await expect(panel.locator('button[data-relic]')).toHaveCount(3);
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/roguelite-relic-offer.png' });
+  await shot(page, { path: 'test-results/roguelite-relic-offer.png' });
   await panel.locator('button[data-relic]').first().click();
   await expect(panel.locator('.run-line')).toHaveText('Fight won · pick a reward');
   await expect(bar).toHaveCount(4);
@@ -39,7 +40,7 @@ test('the rogue-lite relics: the bar, a treasure, a boss offer and a fight, #145
   await expect(page.locator('body')).toHaveAttribute('data-run', 'fight');
   await expect(bar).toHaveCount(3);
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/roguelite-relic-fight.png' });
+  await shot(page, { path: 'test-results/roguelite-relic-fight.png' });
 });
 
 // Bug #1477: on a portrait phone the map plate ended under the bottom dock (View, Replay, Modes). It ends above the dock

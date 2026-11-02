@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shot } from './shot';
 
 const cellToScreen = (page: Page, q: number, r: number) =>
   page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }, [q, r]);
@@ -36,7 +37,7 @@ test('rotate and zoom, play a move at that angle, reset the view and play again'
   await page.mouse.wheel(0, -300);
   await expect.poll(() => fromCentre(page, 4, 0)).toBeGreaterThan(startSpan);
 
-  await page.screenshot({ path: testInfo.outputPath('rotated-view.jpg'), type: 'jpeg', quality: 70 });
+  await shot(page, { path: testInfo.outputPath('rotated-view.jpg'), type: 'jpeg', quality: 70 });
 
   // Select a marble and play a move in the rotated view.
   await click(page, 0, 2);

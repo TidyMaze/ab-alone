@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import { shot } from './shot';
 
 test.describe('Colorblind and high-contrast palettes (#381)', () => {
   test('the palette setting steps through the 5 palettes, updates accent and survives reload', async ({ page }) => {
@@ -58,7 +59,7 @@ test.describe('Colorblind and high-contrast palettes (#381)', () => {
       await page.addInitScript((p) => localStorage.setItem('ab-alone.palette', p), pal);
       await page.goto('./?bot=off');
       await page.locator('canvas').waitFor();
-      await page.screenshot({ path: `test-results/screenshots/palette-${pal}.png` });
+      await shot(page, { path: `test-results/screenshots/palette-${pal}.png` });
     }
   });
 });

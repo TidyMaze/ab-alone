@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { shot } from './shot';
 
 // The old room never shows at the start (#1389): the canvas stays hidden until the terrace is drawn, on a plain dark page.
 test('the canvas waits for the terrace files, then shows the terrace', async ({ page }) => {
@@ -12,7 +13,7 @@ test('the canvas waits for the terrace files, then shows the terrace', async ({ 
   await expect(page.locator('canvas')).toBeAttached();
   await expect(page.locator('body')).toHaveAttribute('data-scene', 'room'); // the terrace is still loading
   await page.waitForTimeout(500); // a few frames: the room would be drawn by now
-  await page.screenshot({ path: 'test-results/boot-veil-during.png' });
+  await shot(page, { path: 'test-results/boot-veil-during.png' });
   await expect(page.locator('canvas')).toHaveCSS('opacity', '0');
   release();
   await expect(page.locator('body')).toHaveAttribute('data-scene', 'table-zero');

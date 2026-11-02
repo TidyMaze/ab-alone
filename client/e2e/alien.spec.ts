@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Alien (#588, game-design.md section 7.7) from a fixture: fight seed 7 and ?bot=off, so the test plays both sides
 // with quiet forward moves through the click hook. They lay the first egg on (2, 1) at ply 4, within 3 cells of a Black
@@ -62,14 +63,14 @@ test('The Alien lays an egg whose counter goes down, then it hatches into an Ali
   expect(await eggs(page)).toEqual([{ cell: FIRST_EGG, left: 4, glow: false }]);
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('alien-egg.png') });
+  await shot(page, { path: testInfo.outputPath('alien-egg.png') });
   await quiet(page, 1);
   await expect(body).toHaveAttribute('data-egg-counters', '3'); // down after the player move
   await quiet(page, 5);
   await expect(body).toHaveAttribute('data-egg-counters', '1,3');
   expect((await eggs(page))[0]).toEqual({ cell: FIRST_EGG, left: 1, glow: true }); // the egg on 1 glows
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('alien-egg-on-1.png') });
+  await shot(page, { path: testInfo.outputPath('alien-egg-on-1.png') });
   await quiet(page, 1); // ply 11: the hatch
   await expect(body).toHaveAttribute('data-egg-counters', '2');
   const alien = (await page.evaluate(() => (window as any).__legal())) as Move[];
@@ -77,7 +78,7 @@ test('The Alien lays an egg whose counter goes down, then it hatches into an Ali
   // The phases count the player's ejections, not the brood: a hatch leaves the 2 notches to P2 lit (#621).
   expect(await page.evaluate(() => (window as any).__notches())).toEqual({ lit: 2, dark: 0, glyph: true });
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('alien-hatched.png') });
+  await shot(page, { path: testInfo.outputPath('alien-hatched.png') });
 });
 
 test('The Alien: a marble that ends its move on an egg crushes it, #588', async ({ page }, testInfo) => {
@@ -97,5 +98,5 @@ test('The Alien: a marble that ends its move on an egg crushes it, #588', async 
   await expect(page.locator('#hud .boss .tell')).toHaveCount(0);
   await page.mouse.move(2, 2);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('alien-crushed.png') });
+  await shot(page, { path: testInfo.outputPath('alien-crushed.png') });
 });

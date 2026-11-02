@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Unstable Core (#751, game-design.md section 7.13) from the fixtures of the core tests: fight seed 2 and ?bot=off, so
 // the test plays both sides through the click hook. PUSH: a pair walks up the centre column, charging, and pushes the boss
@@ -67,19 +68,19 @@ test('The Unstable Core: a charged pair pushes three boss marbles, #751', async 
   await startCore(page);
   await expect(tell).toHaveText('Charged marbles weigh more · 4 charges blow a marble off');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('unstable-start.png') });
+  await shot(page, { path: testInfo.outputPath('unstable-start.png') });
   await plies(page, PUSH, 0, 6);
   expect((await unstable(page)).pips).toEqual([{ cell: [0, -1], n: 3 }, { cell: [0, 0], n: 2 }]);
   const legal = await page.evaluate(() => (window as any).__legal() as { cells: Axial[]; dir: number }[]);
   expect(legal.some((m) => m.dir === NW && m.cells.length === 2 && m.cells.some(([q, r]) => q === 0 && r === -1))).toBe(true);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('unstable-pair.png') });
+  await shot(page, { path: testInfo.outputPath('unstable-pair.png') });
   await plies(page, PUSH, 6, 7);
   expect(await outPips(page)).toEqual([1, 0]); // the boss marble at the end of the column is off
   expect(await marbleAt(page, 0, -4)).toBe(true);
   expect(await marbleAt(page, 0, -2)).toBe(true); // the column moved up one
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('unstable-pushed.png') });
+  await shot(page, { path: testInfo.outputPath('unstable-pushed.png') });
 });
 
 test('The Unstable Core: a boss marble that stays on the core overloads and is ejected, #751', async ({ page }, testInfo) => {
@@ -87,13 +88,13 @@ test('The Unstable Core: a boss marble that stays on the core overloads and is e
   await plies(page, FULL, 0, 7);
   expect((await unstable(page)).pips.map((p: { n: number }) => p.n)).toEqual([3, 2]); // the boss marbles at 3 and 2
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('unstable-warn.png') });
+  await shot(page, { path: testInfo.outputPath('unstable-warn.png') });
   await plies(page, FULL, 7, 8);
   await expect(page.locator('body')).toHaveAttribute('data-bursts', '1');
   expect(await outPips(page)).toEqual([1, 0]);
   expect(await marbleAt(page, 0, -1)).toBe(false);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('unstable-overload.png') });
+  await shot(page, { path: testInfo.outputPath('unstable-overload.png') });
 });
 
 // The sweep and the falls play on the page clock (page.clock): the clock is paused before the last ply and stepped by hand,
@@ -114,7 +115,7 @@ test('The Unstable Core: the core collapses, then the wedge shockwave shoves the
   await expect(tell).toHaveText('Shockwave after your move: the glowing wedge');
   expect(await unstable(page)).toMatchObject({ wedge: 4, shockIn: 1 });
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('unstable-wedge.png') });
+  await shot(page, { path: testInfo.outputPath('unstable-wedge.png') });
   await plies(page, FULL, 15, 16);
   await page.emulateMedia({ reducedMotion: 'no-preference' }); // the last ply with the sweep
   await page.clock.pauseAt(new Date(Date.now() + 1000));
@@ -142,5 +143,5 @@ test('The Unstable Core: the core collapses, then the wedge shockwave shoves the
   const asked = await page.evaluate(() => (window as any).__drawNext() as number); // a paused clock draws only when stepped
   await page.clock.runFor(200);
   await page.waitForFunction((n) => (window as any).__draws() > n, asked);
-  await page.screenshot({ path: testInfo.outputPath('unstable-after.png') });
+  await shot(page, { path: testInfo.outputPath('unstable-after.png') });
 });

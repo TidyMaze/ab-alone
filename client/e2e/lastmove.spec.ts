@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shot } from './shot';
 
 // The last move wears a ring that flashes when the slide ends, a static mark under reduced motion (#1092).
 async function play(page: Page) {
@@ -25,7 +26,7 @@ test('the last move carries a ring that pulses once the marble lands', async ({ 
   await play(page);
   await expect.poll(() => page.evaluate(() => (window as any).__peak)).toBeGreaterThan(0.9);
   await expect.poll(() => page.evaluate(() => (window as any).__lastMoveRing().opacity)).toBeCloseTo(0.55, 2); // settles to the mark
-  await page.screenshot({ path: info.outputPath('last-move.png') });
+  await shot(page, { path: info.outputPath('last-move.png') });
 });
 
 test('reduced motion: the last move is a static mark, no pulse', async ({ page }, info) => {
@@ -34,5 +35,5 @@ test('reduced motion: the last move is a static mark, no pulse', async ({ page }
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => (window as any).__peak)).toBeCloseTo(0.55, 2);
   expect(await page.evaluate(() => (window as any).__lastMoveRing().scale)).toBe(1);
-  await page.screenshot({ path: info.outputPath('last-move-reduced.png') });
+  await shot(page, { path: info.outputPath('last-move-reduced.png') });
 });

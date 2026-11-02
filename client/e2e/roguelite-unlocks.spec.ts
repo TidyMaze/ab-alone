@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // Unlocks between runs and the run summary of the rogue-lite run (#801, docs/specs/roguelite.md section 8) in the
 // browser. The progress (an act won in an earlier run) is set in localStorage and the run over loaded through the test
@@ -15,7 +16,7 @@ test('the rogue-lite run: the start shows the unlocks, a run over its summary, #
   await map.getByRole('button', { name: /^Bulwark/ }).click();
   await expect(map.locator('.run-line')).toHaveText('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
   await expect(map.getByRole('button', { name: /^Volatile/ })).toBeDisabled();
-  await page.screenshot({ path: 'test-results/roguelite-start-unlocks.png' });
+  await shot(page, { path: 'test-results/roguelite-start-unlocks.png' });
 
   await page.evaluate(() => localStorage.removeItem('ab-alone.roguelite'));
   const over = { seed: 3, army: 3, path: [0, 2, 6, 9, 10], fighting: false, moves: [], end: 'lost', specials: [1, 0, 0], placed: [], reward: false, event: false, best: 0 };
@@ -29,5 +30,5 @@ test('the rogue-lite run: the start shows the unlocks, a run over its summary, #
   ]);
   await expect(map.locator('.run-tally')).toHaveText('Run voided. Audit reopened.');
   expect(await page.evaluate(() => localStorage.getItem('ab-alone.roguelite'))).toBe('1');
-  await page.screenshot({ path: 'test-results/roguelite-summary.png' });
+  await shot(page, { path: 'test-results/roguelite-summary.png' });
 });

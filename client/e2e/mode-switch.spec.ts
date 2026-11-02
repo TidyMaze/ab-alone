@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { loseByRepetition } from './fight-end';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // One mode at a time (#1275, docs/specs/ui.md): a mode left for another leaves nothing of itself on screen. The modes load
 // through the test hooks (a royale file, the Open world fixture); src/main.modeswitch.test.ts covers every mode.
@@ -29,7 +30,7 @@ test('a boss fight and a battle royale left for the Hub leave no control and no 
   expect(await page.evaluate(() => (window as unknown as { __seatGlyphs: () => number[] }).__seatGlyphs())).toEqual([0, 0, 0, 0, 0, 0]);
   const drawn = await page.evaluate(() => (window as never as { __drawNext: () => number }).__drawNext()); // under automation the loop draws when asked (#365)
   await expect.poll(() => page.evaluate(() => (window as never as { __draws: () => number }).__draws())).toBeGreaterThan(drawn);
-  await page.screenshot({ path: process.env.MODE_SWITCH_SHOT ?? 'test-results/mode-switch-hub.png' });
+  await shot(page, { path: process.env.MODE_SWITCH_SHOT ?? 'test-results/mode-switch-hub.png' });
 });
 
 test('an Open world lair fight lost, Back to the Open world: nothing of the fight shows over the world, #1275', async ({ page }) => {
@@ -54,5 +55,5 @@ test('an Open world lair fight lost, Back to the Open world: nothing of the figh
   // The lost fight's end light dims no world (body[data-over]).
   expect(await page.locator('canvas:not(#openworld-minimap)').evaluate((c) => getComputedStyle(c).filter)).toBe('none');
   expect(await page.evaluate(() => getComputedStyle(document.body, '::before').display)).toBe('none');
-  await page.screenshot({ path: process.env.MODE_SWITCH_WORLD_SHOT ?? 'test-results/mode-switch-world.png' });
+  await shot(page, { path: process.env.MODE_SWITCH_WORLD_SHOT ?? 'test-results/mode-switch-world.png' });
 });

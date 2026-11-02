@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { parseRecorded } from '../src/test/chaplain-game';
 import { BRIDGE_AT, RETURN_AT, RETURN_CELL, SEED } from '../src/test/dual-game';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Dual Room (#947, #955, game-design.md section 7.15) from the recorded fight of the wasm tests (fight seed 1,
 // ?bot=off): the state is loaded by the __playMoves hook, the plies that matter are played live. The two side-4 rooms
@@ -42,7 +43,7 @@ test('The Dual Room: two rooms split by a void, a return lands on its mark a ply
   await expect(tell).toHaveText('Ejected marbles come back in the other room · the bridge comes at 5');
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('dual-v2-rooms.png') });
+  await shot(page, { path: testInfo.outputPath('dual-v2-rooms.png') });
 
   await play(page, 0, RETURN_AT);
   expect((await dual(page)).mark).toEqual(RETURN_CELL);
@@ -50,7 +51,7 @@ test('The Dual Room: two rooms split by a void, a return lands on its mark a ply
   await expect(tell).toHaveText('Its marble comes back on the mark next turn · the bridge comes at 5');
   expect(await marbleAt(page, RETURN_CELL)).toBe(false);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('dual-return.png') });
+  await shot(page, { path: testInfo.outputPath('dual-return.png') });
   await play(page, RETURN_AT, RETURN_AT + 1);
   await expect(body).toHaveAttribute('data-returns', '1');
   expect(await marbleAt(page, RETURN_CELL)).toBe(true);
@@ -61,5 +62,5 @@ test('The Dual Room: two rooms split by a void, a return lands on its mark a ply
   await expect(tell).toHaveText('The bridge is up, ejected marbles are gone');
   expect((await page.evaluate(() => (window as any).__dual().bridge)) as number[]).toEqual([0, 0, 0, 0, 0]);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('dual-v2-bridge.png') });
+  await shot(page, { path: testInfo.outputPath('dual-v2-bridge.png') });
 });

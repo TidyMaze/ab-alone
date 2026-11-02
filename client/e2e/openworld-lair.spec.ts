@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // #1170, #1171: 14 landmark lairs in the Open world. The test hook stands the hero next to the first lair (no 150-cell walk); the step
 // onto the lair starts the normal boss fight.
@@ -17,7 +18,7 @@ test('walking onto a lair of the Open world starts a boss fight, #1170', async (
     [q, r],
   );
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe(`${q - 1},${r}`);
-  await page.screenshot({ path: process.env.LAIR_SHOT ?? 'test-results/lair.png' });
+  await shot(page, { path: process.env.LAIR_SHOT ?? 'test-results/lair.png' });
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('body')).toHaveAttribute('data-boss', /.+/);
   expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
@@ -36,7 +37,7 @@ test("Tally's ending line shows once every lair is beaten, #1175", async ({ page
   await expect(page.locator('#openworld-tally')).toHaveText('');
   await fixture(Array.from({ length: count }, (_, i) => i));
   await expect(page.locator('#openworld-tally')).toHaveText('Variance noted. Clamp: open. Crew attached: 6.');
-  await page.screenshot({ path: process.env.LAIR_SHOT ?? 'test-results/ending.png' });
+  await shot(page, { path: process.env.LAIR_SHOT ?? 'test-results/ending.png' });
 });
 
 // #1315: Tally's ledger line counts the seats on file while some lairs are beaten, on a phone-width HUD. The hook beats three lairs, then a
@@ -56,5 +57,5 @@ test('the ledger line counts the seats on file on a phone, #1315', async ({ page
   expect(hud!.x + hud!.width).toBeLessThanOrEqual(390);
   expect(hud!.y + hud!.height).toBeLessThanOrEqual(844);
   expect(line!.height).toBeLessThan(60); // the line wraps to two lines at most
-  await page.screenshot({ path: process.env.LEDGER_SHOT ?? 'test-results/ledger.png' });
+  await shot(page, { path: process.env.LEDGER_SHOT ?? 'test-results/ledger.png' });
 });

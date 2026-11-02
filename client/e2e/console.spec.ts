@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { TERMINAL } from '../src/terminal';
+import { shot } from './shot';
 
 // #511: the room's console screen shows its deck's lore entry (src/lore.ts), paged for the UI scale (src/terminal.ts),
 // once the web fonts are in. body[data-console] names the entry and the page shown.
@@ -50,7 +51,7 @@ for (const scale of [100, 200] as const) {
     // The text as tall on the window as the UI scale asks, 16 px at the least at 100 %.
     const textPx = ((TERMINAL.size * scale) / 100) * (shown.height / TERMINAL.height);
     expect(textPx).toBeGreaterThanOrEqual((16 * scale) / 100);
-    await page.screenshot({ path: testInfo.outputPath(`reader-${scale}.png`) });
+    await shot(page, { path: testInfo.outputPath(`reader-${scale}.png`) });
     const pages = Number(/\/(\d)$/.exec((await body.getAttribute('data-console'))!)![1]);
     for (let n = 2; n <= pages; n++) {
       await page.keyboard.press('ArrowRight');
@@ -114,7 +115,7 @@ test('the log archive rereads an entry read on another deck, #513', async ({ pag
   await page.getByRole('button', { name: 'Logs' }).click();
   const entry = page.getByRole('button', { name: 'Assay note, ore bay two' });
   await expect(entry).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('log-archive.png') });
+  await shot(page, { path: testInfo.outputPath('log-archive.png') });
   await entry.click();
   await expect(body).toHaveAttribute('data-reading', 'cargo-assay');
   await expect(page.locator('#reader')).toContainText('Assay note, ore bay two');

@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { ANNOUNCED_AT, CONVERTED_AT, EXPLODED_AT, SEED, parseRecorded } from '../src/test/chaplain-game';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // Waits for a draw that began after this call. It is asked of the page, so the draw throttle does not hold it (#435).
 const freshDraw = async (page: Page) => {
@@ -152,7 +153,7 @@ test('start The Echo, play a move, the boss replies, Retry resets the board', as
   await expect.poll(plies, { timeout: 30_000 }).toBe(2);
   await expect(hud).toContainText('White to move');
   await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
-  await page.screenshot({ path: 'test-results/boss-hud.png', clip: { x: 0, y: 0, width: 420, height: 260 } });
+  await shot(page, { path: 'test-results/boss-hud.png', clip: { x: 0, y: 0, width: 420, height: 260 } });
 
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect.poll(plies).toBe(0);
@@ -231,7 +232,7 @@ for (const tier of ['high', 'low']) {
     await expect(body).toHaveAttribute('data-cracks', '1');
     await expect(hud).toContainText('Cracks: 1 cell in 2 turns');
     expect(await tellCues(page)).toEqual(['crack']); // the crack appears
-    await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
+    await shot(page, { path: testInfo.outputPath('hull-cracked.png') });
 
     await advance(false);
     await expect.poll(plies, { timeout: 30_000 }).toBe(10);
@@ -245,7 +246,7 @@ for (const tier of ['high', 'low']) {
     await expect(body).toHaveAttribute('data-cracks', '0');
     await expect(hud).not.toContainText('Cracks:');
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });
+    await shot(page, { path: testInfo.outputPath('hull-vanished.png') });
   });
 
   test(`start The Hull (${tier} tier): the cracked cell wears the crack decal, 3:1 with Clear board on, #355`, async ({ page }, testInfo) => {
@@ -324,7 +325,7 @@ test('start The Chaplain: a hovered move shows the marbles it flips, #150', asyn
   await expect(hud).toContainText('Flips this turn');
   await page.mouse.move(t.x + 2, t.y + 2); // the same move still hovered: the same tell, no second cue
   expect(await flipCues()).toBe(heard + 1);
-  await page.screenshot({ path: testInfo.outputPath('chaplain-preview.png') });
+  await shot(page, { path: testInfo.outputPath('chaplain-preview.png') });
 });
 
 // The same fight, a converted marble keeps its own look (#326): half ridged shell, half glass (no hidden core since #886), under
@@ -355,11 +356,11 @@ test('The Chaplain: a martyr is announced, then explodes and counts as the 5th e
   await expect(body).not.toHaveAttribute('data-martyr', '');
   await expect(page.locator('#hud')).toContainText('Martyr marked');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('chaplain-martyr.png') });
+  await shot(page, { path: testInfo.outputPath('chaplain-martyr.png') });
   await playRecorded(page, ANNOUNCED_AT, EXPLODED_AT);
   await expect(body).toHaveAttribute('data-martyr', '');
   await expect(body).toHaveAttribute('data-explosions', '1');
-  await page.screenshot({ path: testInfo.outputPath('chaplain-explosion.png') }); // the flash and the shards
+  await shot(page, { path: testInfo.outputPath('chaplain-explosion.png') }); // the flash and the shards
   await expect(body).toHaveAttribute('data-martyr', '');
   await expect(page.locator('#hud')).toContainText('White ejected 5/6');
   expect(await page.evaluate(() => (window as any).__blast()?.shards)).toBe(8);
@@ -395,7 +396,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await expect(body).toHaveAttribute('data-armies', '18');
   await expect(body).toHaveAttribute('data-next-army', 'Alto');
   expect(await tellCues(page)).toEqual(['choir']); // the next-army tell appears
-  await page.screenshot({ path: testInfo.outputPath('choir-start.png') });
+  await shot(page, { path: testInfo.outputPath('choir-start.png') });
 
   const before = await armies();
   for (const c of await topContrasts(page, before.map((m) => m.cell), undefined, CHOIR_GLYPH_LIFT)) expect(c).toBeGreaterThanOrEqual(3); // #326
@@ -413,7 +414,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await expect(hud).toContainText('Next army: Tenor');
   await expect(body).toHaveAttribute('data-next-army', 'Tenor');
   expect(await tellCues(page)).toEqual(['choir', 'choir']); // once more for Tenor, not for the selection or the human move
-  await page.screenshot({ path: testInfo.outputPath('choir-tenor-next.png') });
+  await shot(page, { path: testInfo.outputPath('choir-tenor-next.png') });
 });
 
 // Task #377: the boss marks stay readable on other shell skins (a pale and a metal one): the Choir army glyphs at the
@@ -461,7 +462,7 @@ for (const [name, accent, stored] of [
     expect(worn).toHaveLength(14);
     expect(worn.every((w) => w.accent === accent)).toBe(true);
     await freshDraw(page);
-    await page.screenshot({ path: testInfo.outputPath(`accent-${accent}.png`) });
+    await shot(page, { path: testInfo.outputPath(`accent-${accent}.png`) });
   });
 }
 
@@ -484,7 +485,7 @@ test('start The Ballast Mind: its radius 5 board on the Bridge, its shells in th
   expect(worn.every((w) => w.accent === 'wire')).toBe(true);
   expect(worn.some((w) => Math.abs(w.cell[0]) === 5)).toBe(true); // ring 5 is drawn too
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('ballast-start.png') });
+  await shot(page, { path: testInfo.outputPath('ballast-start.png') });
 });
 
 // Task #573: The Ballast Mind default view and reset view frame its whole radius 5 board
@@ -522,7 +523,7 @@ test('The Ballast Mind radius 5 board frames in 1280x720 and phone upright, task
   expect(resetCells[1].y).toBeGreaterThan(30);
 
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('ballast-view-1280x720.png') });
+  await shot(page, { path: testInfo.outputPath('ballast-view-1280x720.png') });
 
   // On a phone held upright
   await page.setViewportSize({ width: 375, height: 812 });
@@ -534,5 +535,5 @@ test('The Ballast Mind radius 5 board frames in 1280x720 and phone upright, task
   expect(phoneCells[0].x).toBeGreaterThan(10);
   expect(phoneCells[1].x).toBeLessThan(365);
   expect(phoneCells[2].y).toBeLessThan(780);
-  await page.screenshot({ path: testInfo.outputPath('ballast-view-phone.png') });
+  await shot(page, { path: testInfo.outputPath('ballast-view-phone.png') });
 });

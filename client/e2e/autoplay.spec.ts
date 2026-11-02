@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // Auto-play (#792, docs/specs/ui.md section 4.3): the bot plays the player's side, stoppable, and a boss needs its medal.
 
@@ -12,7 +13,7 @@ test('the bot plays the player side of a bot game until Auto-play is turned off'
   await toggle(page).click();
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => plies(page)).toBeGreaterThanOrEqual(3);
-  await page.screenshot({ path: 'test-results/autoplay-on.png' });
+  await shot(page, { path: 'test-results/autoplay-on.png' });
   await toggle(page).click();
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#hint')).toBeEnabled(); // the bot is done thinking: the board answers clicks again
@@ -32,7 +33,7 @@ test('Auto-play is greyed with its reason against a boss without a medal, and pl
   await fight();
   await expect(toggle(page)).toBeDisabled();
   await expect(page.locator('#auto-reason')).toHaveText('Beat The Echo once to unlock Auto-play against it');
-  await page.screenshot({ path: 'test-results/autoplay-greyed.png' });
+  await shot(page, { path: 'test-results/autoplay-greyed.png' });
   await page.evaluate(() => localStorage.setItem('ab-alone.medals', JSON.stringify({ echo: 14 })));
   await fight();
   await expect(toggle(page)).toBeEnabled();

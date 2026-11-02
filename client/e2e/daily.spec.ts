@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { loseByRepetition, startDaily } from './fight-end';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // Daily challenge (#195): the UTC date gives the boss and the seed, the same for every load of the
 // day, and each start counts one attempt of the day in localStorage. The clock is fixed by page.clock.
@@ -43,7 +44,7 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
   expect(first.daily).toEqual({ day: '2027-03-30', attempt: 1 });
   await advance();
   const played = await history();
-  await page.screenshot({ path: testInfo.outputPath('daily-attempt-1.png') });
+  await shot(page, { path: testInfo.outputPath('daily-attempt-1.png') });
 
   // Retry counts one more attempt, and the same seed gives the same boss reply to the same move.
   await page.getByRole('button', { name: 'Retry' }).click();
@@ -67,7 +68,7 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
   const next = await fight();
   expect(next.seed).not.toBe(first.seed);
   expect(next.daily).toEqual({ day: '2027-03-31', attempt: 1 });
-  await page.screenshot({ path: testInfo.outputPath('daily-next-day.png') });
+  await shot(page, { path: testInfo.outputPath('daily-next-day.png') });
 });
 
 test('a plain boss fight shows no daily line and does not count a daily attempt, #195', async ({ page }) => {
@@ -99,9 +100,9 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await expect(goal).toHaveText(/^Goal: .+/); // before the first move the HUD line holds the goal
   await expect(control).toHaveAttribute('aria-expanded', 'false'); // the Goal sheet is shut (#1032)
   expect(await page.evaluate(() => (window as any).__history())).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('daily-goal-desktop.png') });
+  await shot(page, { path: testInfo.outputPath('daily-goal-desktop.png') });
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.screenshot({ path: testInfo.outputPath('daily-goal-phone.png') });
+  await shot(page, { path: testInfo.outputPath('daily-goal-phone.png') });
   expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await page.setViewportSize({ width: 1280, height: 720 });
 
@@ -115,7 +116,7 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(1);
   await expect(goal).toHaveCount(0);
   await expect(control).toHaveAttribute('aria-expanded', 'false');
-  await page.screenshot({ path: testInfo.outputPath('daily-goal-folded.png') });
+  await shot(page, { path: testInfo.outputPath('daily-goal-folded.png') });
 
   await control.focus();
   await page.keyboard.press('Enter'); // reachable from the keyboard: the Goal sheet opens above the dock (#1032)
@@ -141,7 +142,7 @@ test('a finished daily fight shows the result card, and Copy puts its text in th
   await loseByRepetition(page);
   await expect(page.locator('#daily-card')).toBeVisible();
   await expect(page.locator('#daily-result')).toHaveValue(card(name));
-  await page.screenshot({ path: testInfo.outputPath('daily-card.png') });
+  await shot(page, { path: testInfo.outputPath('daily-card.png') });
 
   // Nothing leaves the browser: Copy only writes the clipboard.
   const requests: string[] = [];

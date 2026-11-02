@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import { shot } from './shot';
 
 test.describe('Difficulty setting for AI and boss (#704)', () => {
   test('cycles through difficulty options and survives reload', async ({ page }) => {
@@ -14,7 +15,7 @@ test.describe('Difficulty setting for AI and boss (#704)', () => {
     await expect(diffBtn).toContainText('100%');
 
     mkdirSync('test-results/screenshots', { recursive: true });
-    await page.screenshot({ path: 'test-results/screenshots/704-difficulty-settings.png' });
+    await shot(page, { path: 'test-results/screenshots/704-difficulty-settings.png' });
 
     // Normal -> Hard (200%)
     await diffBtn.click();

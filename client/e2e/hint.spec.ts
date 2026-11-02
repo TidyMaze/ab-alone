@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // Hint (#192, docs/specs/ui.md section 4.2): a press shows the engine's best move for the side to move as a ghost,
 // and plays nothing. A second press, a new selection or the next move clears it. Local hot-seat and bot games only.
@@ -64,7 +65,7 @@ test('Hint shows the best move as a ghost and plays nothing; a second press clea
   await expect(body).toHaveAttribute('data-hint', 'shown', { timeout: 30_000 });
   expect(await ghosts(page)).toBeGreaterThan(0);
   expect(await position(page)).toEqual(start); // drawn, never played
-  await page.screenshot({ path: 'test-results/hint.png' });
+  await shot(page, { path: 'test-results/hint.png' });
 
   await hint.click(); // the second press clears it
   await expect(body).toHaveAttribute('data-hint', 'off');
@@ -114,7 +115,7 @@ test('on the start position the marbles the hint takes wear the selection ring, 
   const takes = Array.from({ length: move[0]! }, (_, i) => [move[2 + 2 * i], move[3 + 2 * i]]);
   expect(takes.length).toBeGreaterThan(0);
   expect(await rings()).toEqual(takes);
-  await page.screenshot({ path: 'test-results/hint-rings.png' });
+  await shot(page, { path: 'test-results/hint-rings.png' });
 
   await hint.click(); // a second press
   await expect(body).toHaveAttribute('data-hint', 'off');

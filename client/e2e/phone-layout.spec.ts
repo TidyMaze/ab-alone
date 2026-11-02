@@ -6,6 +6,7 @@ import { openModes } from './modes';
 import { logOf } from '../src/audiologs';
 import { dailyFor, dailyTitle, utcDay } from '../src/daily';
 import { BOSS_IDS } from '../src/tally';
+import { shot } from './shot';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -90,7 +91,7 @@ const tapCog = async (page: Page) => {
 
 const check = async (page: Page, testInfo: TestInfo, state: string) => {
   await frame(page);
-  await page.screenshot({ path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
+  await shot(page, { path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
   expect(await problems(page), state).toEqual([]);
   // The same check with the settings menu open (#277): the cog and the menu cover no cell, marble or target.
   await tapCog(page);

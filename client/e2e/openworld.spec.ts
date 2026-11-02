@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { BLACK_WINS } from './end-games';
 import { openModes, lowTierOnCi } from './modes';
+import { shot } from './shot';
 
 lowTierOnCi();
 
@@ -473,9 +474,9 @@ test('a step glides the hero onto the next cell: exact at once, drawn in between
   await page.keyboard.press('ArrowRight');
   expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldGlide)).toBeDefined();
-  await page.screenshot({ path: test.info().outputPath('glide-mid-step-1.png') });
+  await shot(page, { path: test.info().outputPath('glide-mid-step-1.png') });
   await page.waitForTimeout(500); // a second frame of the same glide, further along it
-  await page.screenshot({ path: test.info().outputPath('glide-mid-step-2.png') });
+  await shot(page, { path: test.info().outputPath('glide-mid-step-2.png') });
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldGlide), { timeout: 5000 }).toBeUndefined();
   expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
   expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined();
@@ -630,7 +631,7 @@ test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ 
   await fixture([[1, 0]]);
   await page.keyboard.press('ArrowRight');
   await expect.poll(at).toBe('0,1'); // round the rock by its south-east side at the default camera, no lean
-  await page.screenshot({ path: test.info().outputPath('steer.png') });
+  await shot(page, { path: test.info().outputPath('steer.png') });
   await fixture([[1, 0], [1, -1], [0, 1]]);
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(300);
@@ -650,7 +651,7 @@ test('a tap on a far cell walks the hero there, a key cancels, Steering off keep
   const far = { x: size.width / 2 + 220, y: size.height / 2 - 40 };
   await page.mouse.click(far.x, far.y);
   await expect.poll(route).not.toBe('0'); // a walk is on
-  await page.screenshot({ path: test.info().outputPath('tap-walk.png') });
+  await shot(page, { path: test.info().outputPath('tap-walk.png') });
   await page.keyboard.press('Shift'); // any key cancels
   await expect.poll(route).toBe('0');
   const stopped = await at();
@@ -682,16 +683,16 @@ test('the hero breaks the isolated boulder it rolls into, and it stays broken af
   const boulders = () => page.evaluate(() => (JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>)['prop-boulder']! + ((JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>)['prop-boulder-hi'] ?? 0));
   const before = await boulders();
   expect(before).toBeGreaterThan(0);
-  await page.screenshot({ path: test.info().outputPath('break-before.png') });
+  await shot(page, { path: test.info().outputPath('break-before.png') });
   await page.keyboard.press('ArrowRight');
   await expect.poll(at).toBe('4,2'); // it went through the boulder
   await page.waitForTimeout(220);
-  await page.screenshot({ path: test.info().outputPath('break-shards.png') });
+  await shot(page, { path: test.info().outputPath('break-shards.png') });
   expect(await boulders()).toBe(before - 1);
   expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBeDefined();
   await page.waitForTimeout(800);
-  await page.screenshot({ path: test.info().outputPath('break-after.png') });
+  await shot(page, { path: test.info().outputPath('break-after.png') });
   await page.reload();
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(at).toBe('4,2');
@@ -731,7 +732,7 @@ test('a push punches the camera in and back, without moving the chunk centre, #1
   }
   const punched = samples.filter((s) => s.camera.zoom !== base.zoom);
   expect(punched.at(-1)!.t - punched[0]!.t).toBeLessThanOrEqual(260); // at most 250 ms, a grid step of slack
-  await page.screenshot({ path: test.info().outputPath('camera-after.png') });
+  await shot(page, { path: test.info().outputPath('camera-after.png') });
 });
 
 // #1333: the camera follows a walk butter-smooth: from rest, up to the cruise pace (#1290) and back to rest, its speed never jumps from a

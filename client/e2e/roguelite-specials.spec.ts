@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shot } from './shot';
 
 // The rogue-lite special marbles on screen (#961, docs/specs/roguelite.md section 6), loaded through the test hook: the
 // placement screen places a Heavy that survives a reload, the three looks on the board, and the reward screen.
@@ -21,7 +22,7 @@ test('the rogue-lite special marbles: placement, looks and reward, #961', async 
   await expect(panel.getByRole('button', { name: /Heavy/ })).toHaveText('Heavy · 2 left');
   expect(await marks()).toBe('0,4,1');
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/roguelite-placement.png' });
+  await shot(page, { path: 'test-results/roguelite-placement.png' });
   await page.reload();
   await page.waitForFunction(() => (window as any).__run);
   await expect(panel.locator('.run-line')).toHaveText('Place your special marbles');
@@ -38,12 +39,12 @@ test('the rogue-lite special marbles: placement, looks and reward, #961', async 
   await expect(panel).toBeHidden();
   expect((await marks())!.split(' ')).toHaveLength(6);
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/roguelite-specials.png' });
+  await shot(page, { path: 'test-results/roguelite-specials.png' });
 
   await page.evaluate((state) => (window as any).__run(state), run({ army: 12, fighting: false, reward: true }));
   await expect(panel.locator('.run-line')).toHaveText('Fight won · pick a reward');
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/roguelite-reward.png' });
+  await shot(page, { path: 'test-results/roguelite-reward.png' });
   await panel.locator('button[data-offer]').first().click();
   await expect(panel.locator('.run-line')).toContainText('pick a fight');
 });

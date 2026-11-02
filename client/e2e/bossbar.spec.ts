@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { CONVERTED_AT, SEED, parseRecorded } from '../src/test/chaplain-game';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The boss health bar (#788): at the top centre of a boss fight, the name over one red fragment per ejection needed, one
 // emptying per ejection, covering no cell, no plate and no button.
@@ -55,7 +56,7 @@ for (const { name, viewport, mobile } of sizes) {
       await fight(page, 'The Hull');
       await expect(page.locator('#boss-bar .frag')).toHaveCount(6);
       expect(await covered(page)).toEqual([]);
-      await page.screenshot({ path: testInfo.outputPath('boss-bar.png') });
+      await shot(page, { path: testInfo.outputPath('boss-bar.png') });
     });
   });
 }
@@ -98,7 +99,7 @@ test('a player marble converted to the Chaplain fills a fragment back, #810', as
   await play(0, CONVERTED_AT - 1);
   const before = await empty.count();
   expect(before).toBeGreaterThan(0);
-  await page.screenshot({ path: testInfo.outputPath('refill-before.png') });
+  await shot(page, { path: testInfo.outputPath('refill-before.png') });
   await page.evaluate(() => {
     (window as any).__refilled = false;
     new MutationObserver(() => {
@@ -108,7 +109,7 @@ test('a player marble converted to the Chaplain fills a fragment back, #810', as
   await play(CONVERTED_AT - 1, CONVERTED_AT);
   expect(await empty.count()).toBe(before - 1);
   expect(await page.evaluate(() => (window as any).__refilled)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('refill-after.png') });
+  await shot(page, { path: testInfo.outputPath('refill-after.png') });
 });
 
 // The Choir's army chips (#816), from the recorded Choir win (crates/abalone-core/tests/fixtures/choir.txt): the chips in play
@@ -128,7 +129,7 @@ for (const { name, viewport, mobile } of sizes) {
     test('the chips cover no cell, no plate and no button, #816', async ({ page }, testInfo) => {
       await choirFight(page);
       await expect(page.locator('#boss-bar .chip')).toHaveCount(3);
-      await page.screenshot({ path: testInfo.outputPath('choir-chips.png') });
+      await shot(page, { path: testInfo.outputPath('choir-chips.png') });
       expect(await covered(page, '#boss-bar .chips')).toEqual([]);
     });
   });
@@ -155,7 +156,7 @@ test.describe('a 200 % UI scale, the Choir', () => {
     await choirFight(page);
     const box = (await page.locator('#boss-bar .chips').boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(1280); // all on screen
-    await page.screenshot({ path: testInfo.outputPath('choir-chips-200.png') });
+    await shot(page, { path: testInfo.outputPath('choir-chips-200.png') });
     expect(await covered(page, '#boss-bar .chips')).toEqual([]);
   });
 });
@@ -205,6 +206,6 @@ test('a fragment that breaks bursts once, #1096', async ({ page }, testInfo) => 
   });
   await page.evaluate((r) => (window as any).__playMoves(r), records.slice(0, 70));
   expect(await page.evaluate(() => (window as any).__broke)).toBeGreaterThan(0);
-  await page.screenshot({ path: testInfo.outputPath('boss-feedback.png') });
+  await shot(page, { path: testInfo.outputPath('boss-feedback.png') });
   await expect(page.locator('#boss-bar .frag.broke')).toHaveCount(0);
 });

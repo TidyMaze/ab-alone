@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { BLACK_WINS, WHITE_WINS } from './end-games';
 import { loseByRepetition, startDaily } from './fight-end';
+import { shot } from './shot';
 
 // End of the game (#282): a banner that says it is over, one animation id per outcome in body[data-over],
 // a locked board, and a plate that covers no cell. Finished games come from an imported file (end-games.ts).
@@ -64,7 +65,7 @@ test('a win against the bot: banner, warm animation id, locked board', async ({ 
   await tryToMove(page);
   expect(await plies(page)).toBe(before);
   await settled(page);
-  await page.screenshot({ path: 'test-results/end-win.png' });
+  await shot(page, { path: 'test-results/end-win.png' });
   // The next game takes the banner and the marker away.
   await page.locator('#new-game').click(); // a played game asks for a second press
   await page.getByRole('button', { name: 'Confirm new game' }).click();
@@ -80,7 +81,7 @@ test('a loss against the bot: banner, cold animation id, locked board', async ({
   await tryToMove(page);
   expect(await plies(page)).toBe(before);
   await settled(page);
-  await page.screenshot({ path: 'test-results/end-loss.png' });
+  await shot(page, { path: 'test-results/end-loss.png' });
 });
 
 test('a draw at the table: banner, still animation id, locked board', async ({ page }) => {
@@ -90,7 +91,7 @@ test('a draw at the table: banner, still animation id, locked board', async ({ p
   await tryToMove(page);
   expect(await plies(page)).toBe(9);
   await settled(page);
-  await page.screenshot({ path: 'test-results/end-draw.png' });
+  await shot(page, { path: 'test-results/end-draw.png' });
 });
 
 test('hot-seat: the colour that won is named', async ({ page }) => {
@@ -107,7 +108,7 @@ test('a draw against a boss is a defeat, and the daily result card stays reachab
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
   await expect(page.locator('#hud')).toContainText('Defeat');
   await settled(page);
-  await page.screenshot({ path: 'test-results/end-boss.png' });
+  await shot(page, { path: 'test-results/end-boss.png' });
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.locator('body')).not.toHaveAttribute('data-over', /.*/);
 });
@@ -174,6 +175,6 @@ test.describe('a phone held upright', () => {
     await load(page, true, BLACK_WINS);
     await expectOver(page, 'win', 'You win', 'The books balance.');
     await settled(page);
-    await page.screenshot({ path: 'test-results/end-phone-win.png' });
+    await shot(page, { path: 'test-results/end-phone-win.png' });
   });
 });

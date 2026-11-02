@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { pauseClock, stepClock } from './clock';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Rail Yard (#626, game-design.md section 7.8) from a fixture: fight seed 77 and ?bot=off, so the test plays both
 // sides with quiet moves through the click hook. The first train is announced at the end of the player's turn 1 on the diagonal q + r = 0,
@@ -59,7 +60,7 @@ test('The Rail Yard: an announced train counts down, passes, sweeps both sides o
   expect(await page.evaluate(() => (window as any).__trains().map((t: Train) => [t.line, t.cells[0]]))).toEqual([[22, [4, -4]]]);
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('railyard-announced.png') });
+  await shot(page, { path: testInfo.outputPath('railyard-announced.png') });
   await quiet(page, 1);
   await expect(body).toHaveAttribute('data-train-counters', '5'); // not after the boss move
   await quiet(page, 1);
@@ -69,14 +70,14 @@ test('The Rail Yard: an announced train counts down, passes, sweeps both sides o
   await expect(page.locator('#hud .notch.active')).toHaveText('P1');
   expect(await outPips(page)).toEqual([0, 0]);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('railyard-on-1.png') });
+  await shot(page, { path: testInfo.outputPath('railyard-on-1.png') });
   await quiet(page, 1); // the player's 6th move: the train passes
   await expect(body).toHaveAttribute('data-trains', '0');
   await expect(body).toHaveAttribute('data-passing', '0');
   expect(await outPips(page)).toEqual([3, 3]); // 3 boss marbles for the player, 3 of the player's for the boss
   await expect(page.locator('#hud .notch.active')).toHaveText('P2'); // after 3 ejections
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('railyard-swept.png') });
+  await shot(page, { path: testInfo.outputPath('railyard-swept.png') });
 });
 
 // The train runs on the page clock (page.clock): paused before the last ply and stepped by hand, so the frames the test
@@ -97,7 +98,7 @@ test('The Rail Yard: the freight train runs the line and knocks the marbles off,
   for (let frame = 0; frame < 5; frame++) { // the pass lasts 1.6 s: 5 steps of 100 ms after it began it is still out
     const pass = await page.evaluate(() => (window as any).__passes());
     expect(pass).not.toHaveLength(0);
-    await page.screenshot({ path: testInfo.outputPath(`railyard-pass-${frame}.png`) });
+    await shot(page, { path: testInfo.outputPath(`railyard-pass-${frame}.png`) });
     await stepClock(page, 100);
   }
   await stepClock(page, 1600);

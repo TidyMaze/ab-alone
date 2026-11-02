@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { lowTierOnCi } from './modes';
+import { shot } from './shot';
 
 lowTierOnCi();
 
@@ -44,10 +45,10 @@ for (const { name, viewport, touch } of sizes) {
       const button = page.locator('#openworld-teleport');
       await expect(button).toBeHidden();
       await stand(page, [1, -1]); // next to the spawn's teleporter: it is in view
-      await page.screenshot({ path: `test-results/teleporter-${name.replaceAll(' ', '-')}.png` });
+      await shot(page, { path: `test-results/teleporter-${name.replaceAll(' ', '-')}.png` });
       await stand(page, [2, -1]);
       await expect(button).toBeVisible();
-      await page.screenshot({ path: `test-results/teleport-button-${name.replaceAll(' ', '-')}.png` });
+      await shot(page, { path: `test-results/teleport-button-${name.replaceAll(' ', '-')}.png` });
       const box = (await button.boundingBox())!;
       const map = (await page.locator('#openworld-map-button').boundingBox())!;
       expect(box.y).toBeGreaterThanOrEqual(map.y + map.height);
@@ -64,7 +65,7 @@ for (const { name, viewport, touch } of sizes) {
       await expect(page.locator('#openworld-map-note')).toHaveText('Choose a teleporter');
       for (let i = 0; i < 4; i++) await page.locator('#openworld-map').dispatchEvent('wheel', { deltaY: 400 }); // out, both in view
       await page.locator('#openworld-map canvas').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished))); // the canvas fades in
-      await page.screenshot({ path: `test-results/teleport-choice-${name.replaceAll(' ', '-')}.png` });
+      await shot(page, { path: `test-results/teleport-choice-${name.replaceAll(' ', '-')}.png` });
     });
   });
 }

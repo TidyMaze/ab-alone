@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { BLACK_WINS } from './end-games';
+import { shot } from './shot';
 
 // Replay mode (#793, docs/specs/ui.md section 4.3): the bar and the Left and Right keys step through the move log of an
 // imported game, view only; Live returns to the current position. The game is loaded through the game file import.
@@ -27,7 +28,7 @@ test('Replay steps through an imported game, view only, and Live returns to the 
   await expect(page.locator('#replay-label')).toHaveText(`Move 0 of ${total}`);
   await page.locator('#replay-slider').fill('10');
   await expect(page.locator('#replay-label')).toHaveText(`Move 10 of ${total}`);
-  await page.screenshot({ path: info.outputPath('replay-bar.png') });
+  await shot(page, { path: info.outputPath('replay-bar.png') });
 
   const before = await plies(page);
   const mv = await page.evaluate(() => (window as any).__legal()[0].cells[0] as [number, number]);

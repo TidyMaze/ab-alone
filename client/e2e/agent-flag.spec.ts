@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { inviteLink, openModes } from './modes';
+import { shot } from './shot';
 
 // The opponent's Hello is signed here with Node's Ed25519, over the bytes helloPayload signs in the client.
 // The page receives it through the ?net=hook transport, so no peer and no public relay is involved (#255).
@@ -49,7 +50,7 @@ test('a human White seat is not marked as an agent (before)', async ({ browser }
   const { game, engine } = await creatorRoom(page);
   await page.evaluate((h) => (window as any).__netIn(h, 'human-peer'), signedHello(game, false, engine));
   await expect(status(page)).toHaveText('You are Black. White is here.');
-  await page.screenshot({ path: test.info().outputPath('presence-before.png') });
+  await shot(page, { path: test.info().outputPath('presence-before.png') });
 });
 
 test('an agent White seat is marked in the presence line (after)', async ({ browser }) => {
@@ -57,5 +58,5 @@ test('an agent White seat is marked in the presence line (after)', async ({ brow
   const { game, engine } = await creatorRoom(page);
   await page.evaluate((h) => (window as any).__netIn(h, 'agent-peer'), signedHello(game, true, engine));
   await expect(status(page)).toHaveText('You are Black. White (agent) is here.');
-  await page.screenshot({ path: test.info().outputPath('presence-after.png') });
+  await shot(page, { path: test.info().outputPath('presence-after.png') });
 });

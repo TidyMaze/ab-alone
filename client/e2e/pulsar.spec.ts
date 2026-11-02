@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { pauseClock, stepClock } from './clock';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Pulsar (#675, game-design.md section 7.10) from the fixture of the core tests: fight seed 2 and ?bot=off, so the
 // test plays both sides through the click hook. The first pulsar pushes NW, off the bottom corner. The pulse after
@@ -59,7 +60,7 @@ test('The Pulsar: a charging pulsar counts down, fires, throws a lone marble off
   await expect(tell).toHaveText('Pulse in 3 turns, force 2');
   await expect(body).toHaveAttribute('data-pulse-counter', '');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('pulsar-start.png') });
+  await shot(page, { path: testInfo.outputPath('pulsar-start.png') });
   await plies(page, 0, 1);
   await expect(body).toHaveAttribute('data-pulse-counter', '2'); // it charges: 2 turns ahead
   await plies(page, 1, 4);
@@ -67,7 +68,7 @@ test('The Pulsar: a charging pulsar counts down, fires, throws a lone marble off
   await expect(tell).toHaveText('Pulse in 1 turn, force 2');
   expect(await page.evaluate(() => (window as any).__pulsar())).toEqual({ id: NW, left: 1, force: 2, charging: true });
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('pulsar-before.png') });
+  await shot(page, { path: testInfo.outputPath('pulsar-before.png') });
   await plies(page, 4, 5); // the player's 3rd move: the pulse
   await expect(body).toHaveAttribute('data-pulses', '1');
   expect(await outPips(page)).toEqual([1, 0]); // the boss marble counts for the player
@@ -77,7 +78,7 @@ test('The Pulsar: a charging pulsar counts down, fires, throws a lone marble off
   await expect(body).toHaveAttribute('data-pulse-counter', '2'); // charging again
   await page.waitForFunction(() => (window as any).__shock() === null);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('pulsar-after.png') });
+  await shot(page, { path: testInfo.outputPath('pulsar-after.png') });
   await plies(page, 5, 13);
   await expect(body).toHaveAttribute('data-pulses', '3');
   expect(await outPips(page)).toEqual([3, 0]);
@@ -100,7 +101,7 @@ test('The Pulsar: the shockwave grows from the pulsar across the board, #675', a
     const shock = await page.evaluate(() => (window as any).__shock());
     expect(shock).not.toBeNull();
     radii.push(shock.radius);
-    await page.screenshot({ path: testInfo.outputPath(`pulsar-shock-${frame}.png`) });
+    await shot(page, { path: testInfo.outputPath(`pulsar-shock-${frame}.png`) });
     await stepClock(page, 100);
   }
   await stepClock(page, 700);
@@ -141,7 +142,7 @@ for (const { name, viewport, mobile } of sizes) {
       await plies(page, 0, 1);
       await expect(page.locator('body')).toHaveAttribute('data-pulse-counter', '2');
       const hidden = await hiddenPulsars(page, viewport);
-      await page.screenshot({ path: testInfo.outputPath('pulsars-on-screen.png') });
+      await shot(page, { path: testInfo.outputPath('pulsars-on-screen.png') });
       expect(hidden).toEqual([]);
     });
   });
@@ -158,7 +159,7 @@ test.describe('a phone turned upright', () => {
     const upright = { width: 375, height: 812 };
     await page.setViewportSize(upright);
     const hidden = await hiddenPulsars(page, upright);
-    await page.screenshot({ path: testInfo.outputPath('turned-upright.png') });
+    await shot(page, { path: testInfo.outputPath('turned-upright.png') });
     expect(hidden).toEqual([]);
   });
 });
@@ -172,7 +173,7 @@ test('The Pulsar: the pulsar that fires next turn loops faint small rings while 
   await expect(page.locator('#hud .boss .tell')).toHaveText('Pulse in 1 turn, force 2');
   await expect(body).toHaveAttribute('data-ripples', '2');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('pulsar-ripples.png') });
+  await shot(page, { path: testInfo.outputPath('pulsar-ripples.png') });
 });
 
 test('The Pulsar: with reduced motion the next pulsar wears one static faint ring, #741', async ({ page }, testInfo) => {
@@ -180,5 +181,5 @@ test('The Pulsar: with reduced motion the next pulsar wears one static faint rin
   await plies(page, 0, 4);
   await expect(page.locator('body')).toHaveAttribute('data-ripples', '1');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('pulsar-ripple-reduced.png') });
+  await shot(page, { path: testInfo.outputPath('pulsar-ripple-reduced.png') });
 });

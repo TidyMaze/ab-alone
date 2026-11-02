@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { inviteLink, openModes } from './modes';
+import { shot } from './shot';
 
 // #521: the Hub entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
 // marble, which rolls one cell at a time by a click on a neighbour or an arrow key. body[data-hub] names its deck and
@@ -88,7 +89,7 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
 
 test('the boss door starts the Echo, and Back to the hub after the defeat lands on the door, #522', async ({ page }, testInfo) => {
   await shipAt(page, './?bot=off', [1, 0]);
-  await page.screenshot({ path: testInfo.outputPath('hub-before-door.png') });
+  await shot(page, { path: testInfo.outputPath('hub-before-door.png') });
   await hookClick(page, 2, 0);
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-boss', 'echo');
@@ -105,7 +106,7 @@ test('the boss door starts the Echo, and Back to the hub after the defeat lands 
   await page.getByRole('button', { name: 'Lobby' }).click(); // Back to the hub sits in the lobby sheet (#1044)
   const back = page.getByRole('button', { name: 'Back to the hub' });
   await expect(back).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('back-to-the-ship.png') });
+  await shot(page, { path: testInfo.outputPath('back-to-the-ship.png') });
   await back.click();
   await expect(body).toHaveAttribute('data-hub', 'mess 2,0');
   await expect(page.locator('#hud')).toContainText('Boss door');
@@ -123,7 +124,7 @@ test('the evaluation bar and Hint are off in the hub and back once a new game le
   await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
   await expect(bar).toBeHidden();
   await expect(hint).toBeHidden();
-  await page.screenshot({ path: testInfo.outputPath('hub-no-eval.png') });
+  await shot(page, { path: testInfo.outputPath('hub-no-eval.png') });
   await page.locator('#new-game').click(); // no move played: one press starts over
   await expect(page.locator('body')).not.toHaveAttribute('data-hub');
   await expect(bar).toBeVisible();
@@ -142,7 +143,7 @@ test('Export game and Import game are off in the hub and back once a new game le
   await expect(menu.getByRole('button', { name: 'Clear board' })).toBeVisible();
   await expect(menu.getByRole('button', { name: 'Export game' })).toBeHidden();
   await expect(menu.getByRole('button', { name: 'Import game' })).toBeHidden();
-  await page.screenshot({ path: testInfo.outputPath('hub-settings.png') });
+  await shot(page, { path: testInfo.outputPath('hub-settings.png') });
   await page.keyboard.press('Escape');
   await page.locator('#new-game').click(); // no move played: one press starts over
   await expect(page.locator('body')).not.toHaveAttribute('data-hub');
@@ -183,7 +184,7 @@ test('the battle royale lobby door starts battle royale, and Back to the hub lan
   await expect(body).not.toHaveAttribute('data-hub');
   await expect(body).toHaveAttribute('data-royale', '1');
   await expect(page.locator('#hud')).toContainText('Battle royale');
-  await page.screenshot({ path: testInfo.outputPath('royale-arena.png') });
+  await shot(page, { path: testInfo.outputPath('royale-arena.png') });
   await page.evaluate(() => (window as any).__royale({
     seed: 7,
     rounds: [
@@ -208,7 +209,7 @@ test('the battle royale lobby door starts battle royale, and Back to the hub lan
   await back.click();
   await expect(body).toHaveAttribute('data-hub', 'mess -2,2');
   await expect(page.locator('#hud')).toContainText('Battle royale lobby');
-  await page.screenshot({ path: testInfo.outputPath('royale-after.png') });
+  await shot(page, { path: testInfo.outputPath('royale-after.png') });
 });
 
 /** The colour of the lift's arrow at the centre of `cell` and of the cage beside it, after a draw asked now: under
@@ -276,18 +277,18 @@ test('a terminal room opens its lore entry in the reader, and Esc gives the hub 
   await shipAt(page, './?bot=off', [0, 1]);
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-console', /^mess-house-rule /); // the console's web fonts are in
-  await page.screenshot({ path: testInfo.outputPath('terminal-before.png') });
+  await shot(page, { path: testInfo.outputPath('terminal-before.png') });
   await hookClick(page, 1, 1);
   await expect(body).toHaveAttribute('data-reading', 'mess-corner-table');
   await expect(page.locator('#reader')).toContainText('Galley log, unsigned');
   await expect(page.getByRole('button', { name: 'Play log' })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('terminal-reader.png') });
+  await shot(page, { path: testInfo.outputPath('terminal-reader.png') });
   await page.keyboard.press('Escape');
   await expect(body).not.toHaveAttribute('data-reading');
   await expect(page.locator('#reader')).toBeHidden();
   await expect(body).toHaveAttribute('data-hub', 'mess 1,1');
   await expect(page.locator('#hud')).toContainText('Terminal');
-  await page.screenshot({ path: testInfo.outputPath('terminal-after.png') });
+  await shot(page, { path: testInfo.outputPath('terminal-after.png') });
 });
 
 test('the Medal room lists every boss with its medal in the reader, and Esc gives the hub back, #812', async ({ page }, testInfo) => {
@@ -298,7 +299,7 @@ test('the Medal room lists every boss with its medal in the reader, and Esc give
   await hookClick(page, 0, 2);
   await expect(body).toHaveAttribute('data-reading', 'medal-room');
   await expect(page.locator('#reader')).toContainText('The Echo: 14 turns. The Hull: Not beaten.');
-  await page.screenshot({ path: testInfo.outputPath('medal-room.png') });
+  await shot(page, { path: testInfo.outputPath('medal-room.png') });
   await page.keyboard.press('Escape');
   await expect(page.locator('#reader')).toBeHidden();
   await expect(body).toHaveAttribute('data-hub', 'mess 0,2');
@@ -330,7 +331,7 @@ test('every room wears its label plate without a hover, and a hover still names 
   await expect(page.locator('#hub-labels [data-cell="1,-2"]')).toContainText('Lift ▲ Cargo');
   await expect(page.locator('#hub-labels .you')).toHaveText(/you/i);
   await expect(page.locator('#hub-pips')).toContainText('Bosses 0/5');
-  await page.screenshot({ path: testInfo.outputPath('1249-hub-plan.png') });
+  await shot(page, { path: testInfo.outputPath('1249-hub-plan.png') });
 
   // Hover over adjacent cell [1, 0]
   const p1 = await page.evaluate(() => (window as any).__cellToScreen(1, 0));
@@ -365,7 +366,7 @@ test('on a phone every plate and the rail fit the window, short labels only, #12
   }
   await expect(page.locator('#hub-labels [data-cell="2,0"] .short')).toBeVisible();
   await expect(page.locator('#hub-labels [data-cell="2,0"] b')).toBeHidden();
-  await page.screenshot({ path: testInfo.outputPath('1249-hub-plan-phone.png') });
+  await shot(page, { path: testInfo.outputPath('1249-hub-plan-phone.png') });
 });
 
 /** Ship, with the marble saved on `cell` of `deck` and the Echo beaten. */
@@ -383,7 +384,7 @@ test('a gallery boss door starts its own boss, and a mode room opens its mode, #
   const body = page.locator('body');
   await shipOn(page, 'cargo', [2, -2]);
   await expect(page.locator('#hub-labels [data-cell="3,-2"]')).toContainText('The Alien');
-  await page.screenshot({ path: testInfo.outputPath('1249-cargo-gallery.png') });
+  await shot(page, { path: testInfo.outputPath('1249-cargo-gallery.png') });
   await hookClick(page, 3, -2);
   await expect(body).not.toHaveAttribute('data-hub');
   await expect(body).toHaveAttribute('data-boss', 'alien');

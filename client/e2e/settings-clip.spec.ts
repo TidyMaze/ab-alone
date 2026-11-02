@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import { shot } from './shot';
 
 test.describe('Settings menu clipping (#458)', () => {
   test('every settings menu item is fully visible and not clipped or truncated on desktop', async ({ page }) => {
@@ -39,7 +40,7 @@ test.describe('Settings menu clipping (#458)', () => {
       expect(overflows, `button ${id} ("${text}") contents overflow: scrollWidth > clientWidth`).toBe(false);
     }
 
-    await page.screenshot({ path: 'test-results/screenshots/458-settings-desktop.png' });
+    await shot(page, { path: 'test-results/screenshots/458-settings-desktop.png' });
   });
 
   test('settings menu is fully visible and on-screen on phone landscape', async ({ page }) => {
@@ -59,6 +60,6 @@ test.describe('Settings menu clipping (#458)', () => {
     expect(menuBox!.x).toBeGreaterThanOrEqual(0);
     expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(844);
 
-    await page.screenshot({ path: 'test-results/screenshots/458-settings-phone.png' });
+    await shot(page, { path: 'test-results/screenshots/458-settings-phone.png' });
   });
 });

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The evaluation bar (#191): the engine's search score of the position, in local and bot games only.
 const click = async (page: Page, q: number, r: number) => {
@@ -33,7 +34,7 @@ test('the evaluation bar follows a local hot-seat game, #191', async ({ page }) 
   expect(share).toBeGreaterThan(0);
   expect(share).toBeLessThan(1);
   await expect(meter).toHaveAttribute('aria-valuenow', String(Math.round(share * 100)));
-  await page.screenshot({ path: 'test-results/eval-bar.png' });
+  await shot(page, { path: 'test-results/eval-bar.png' });
 });
 
 test('New game puts the bar back on the start position, #191 #230', async ({ page }) => {

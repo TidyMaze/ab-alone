@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Ballast Mind (#749, game-design.md section 7.5): every 2 turns it borrows an effect of another boss, named in the
 // HUD during the turn before. Fight seed 6 borrows the Pulsar's pulse at the end of turn 2, seed 3 the Swarm's wave. ?bot=off plays both sides
@@ -42,13 +43,13 @@ test('The Ballast Mind names its borrowed effect a turn ahead, then plays the Pu
   await expect(tell).toHaveText("Pulse in 1 turn, force 2 · Next turn: the Pulsar's pulse");
   await expect(page.locator('body')).toHaveAttribute('data-ripples', '1'); // the announced pulsar ripples (#838)
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('ballast-announce.png') });
+  await shot(page, { path: testInfo.outputPath('ballast-announce.png') });
   await plies(page, 2); // the player's 2nd move, the boss reply: the pulse
   await expect(page.locator('body')).toHaveAttribute('data-pulses', '1');
   await expect(tell).toHaveText("Fired: the Pulsar's pulse"); // until the next ply (#838)
   await expect(page.locator('body')).toHaveAttribute('data-ripples', '0');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('ballast-pulse.png') });
+  await shot(page, { path: testInfo.outputPath('ballast-pulse.png') });
 });
 
 test('The Ballast Mind lands the Swarm wave on the rim and marks the cell, #1197', async ({ page }, testInfo) => {
@@ -67,10 +68,10 @@ test('The Ballast Mind lands the Swarm wave on the rim and marks the cell, #1197
   await plies(page, 2);
   await expect(tell).toHaveText("Next turn: the Swarm's wave");
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('ballast-wave-announce.png') });
+  await shot(page, { path: testInfo.outputPath('ballast-wave-announce.png') });
   await plies(page, 2);
   await expect(tell).toHaveText("Fired: the Swarm's wave");
   await expect(page.locator('body')).toHaveAttribute('data-fired', '1');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('ballast-wave-fired.png') });
+  await shot(page, { path: testInfo.outputPath('ballast-wave-fired.png') });
 });

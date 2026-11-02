@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Assembly Line (#744, game-design.md section 7.12) from the fixture of the core tests: fight seed 1 and ?bot=off, so
 // the test plays both sides through the click hook. The centre belt first runs toward +q: a boss marble falls off its east
@@ -59,17 +60,17 @@ test('The Assembly Line: a boss marble is carried to the east end of the centre 
   await expect(page.locator('#hud .boss .tell')).toHaveText('Belts reverse in 5 turns');
   await expect(body).toHaveAttribute('data-belt-dirs', '1,0,0'); // only the centre belt runs, toward +q
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('assembly-start.png') });
+  await shot(page, { path: testInfo.outputPath('assembly-start.png') });
   await plies(page, 0, 6);
   expect(await marbleAt(page, 4, 0)).toBe(true); // a boss marble waits on the east end
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('assembly-before.png') });
+  await shot(page, { path: testInfo.outputPath('assembly-before.png') });
   await plies(page, 6, 7); // the player's 4th move: the belt carries the boss marble off the east end
   await expect(body).toHaveAttribute('data-belt-turns', '2');
   expect(await outPips(page)).toEqual([1, 0]); // the boss marble counts for the player
   expect(await marbleAt(page, 4, 0)).toBe(false);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('assembly-after.png') });
+  await shot(page, { path: testInfo.outputPath('assembly-after.png') });
 });
 
 test('The Assembly Line: the counter of the centre belt runs down to its reversal, then the chevrons turn, #744', async ({ page }, testInfo) => {
@@ -83,7 +84,7 @@ test('The Assembly Line: the counter of the centre belt runs down to its reversa
   await expect(body).toHaveAttribute('data-belt-counter', '5');
   await expect(body).toHaveAttribute('data-belt-dirs', '-1,0,0'); // reversed
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('assembly-reversed.png') });
+  await shot(page, { path: testInfo.outputPath('assembly-reversed.png') });
 });
 
 test('The Assembly Line: in P3 a press is announced, blinks a turn ahead on its slot and strikes the marble on it, #744', async ({ page }, testInfo) => {
@@ -95,7 +96,7 @@ test('The Assembly Line: in P3 a press is announced, blinks a turn ahead on its 
   await expect(page.locator('#hud .boss .tell')).toContainText('press strikes next turn');
   expect(await page.evaluate(() => (window as any).__belts().belts.map((b: { dir: number }) => b.dir))).toEqual([-1, 1, 1]);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('assembly-announced.png') });
+  await shot(page, { path: testInfo.outputPath('assembly-announced.png') });
   expect(await outPips(page)).toEqual([5, 0]);
   await plies(page, 31, 33); // the boss ply, then the player's marble on the lower belt, where the press strikes it
   await expect(body).toHaveAttribute('data-burns', '1');
@@ -103,5 +104,5 @@ test('The Assembly Line: in P3 a press is announced, blinks a turn ahead on its 
   expect(await marbleAt(page, -2, 1)).toBe(false);
   await expect(body).toHaveAttribute('data-belt-strikes', '-1,-1,-1');
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('assembly-struck.png') });
+  await shot(page, { path: testInfo.outputPath('assembly-struck.png') });
 });

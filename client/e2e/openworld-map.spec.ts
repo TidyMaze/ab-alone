@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { lowTierOnCi } from './modes';
+import { shot } from './shot';
 
 lowTierOnCi();
 
@@ -42,7 +43,7 @@ for (const { name, viewport, touch } of sizes) {
       expect(await map.boundingBox()).toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
       await expect(button).toBeVisible(); // over the map: it closes it
       await map.evaluate((el) => Promise.all(el.querySelector('canvas')!.getAnimations().map((a) => a.finished))); // the canvas fades in
-      await page.screenshot({ path: `test-results/map-${name.replaceAll(' ', '-')}.png` });
+      await shot(page, { path: `test-results/map-${name.replaceAll(' ', '-')}.png` });
       await button.click();
       await expect(map).toBeHidden();
     });
@@ -106,5 +107,5 @@ test('the map shows the world edge in void blue with a pale line, apart from the
   expect(counts.void).toBeGreaterThan(1000);
   expect(counts.edge).toBeGreaterThan(100);
   expect(counts.back).toBeGreaterThan(1000);
-  await page.screenshot({ path: process.env.SHOT ?? 'test-results/map-world-edge.png' });
+  await shot(page, { path: process.env.SHOT ?? 'test-results/map-world-edge.png' });
 });

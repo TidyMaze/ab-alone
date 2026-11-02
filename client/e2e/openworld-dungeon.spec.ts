@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { clickHud, lowTierOnCi } from './modes';
+import { shot } from './shot';
 
 lowTierOnCi();
 
@@ -16,7 +17,7 @@ test('the Dungeon button walks the hero to the nearest tower and the fight start
     [q, r],
   );
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe(`${q - 4},${r}`);
-  await page.screenshot({ path: process.env.DUNGEON_SHOT ?? 'test-results/dungeon.png' });
+  await shot(page, { path: process.env.DUNGEON_SHOT ?? 'test-results/dungeon.png' });
   await clickHud(page, '#openworld-dungeon');
   await expect(page.locator('#openworld-dungeon-note')).toHaveText('');
   await expect(page.locator('body')).toHaveAttribute('data-boss', /.+/);

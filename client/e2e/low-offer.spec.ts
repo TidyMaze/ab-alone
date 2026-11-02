@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { shot } from './shot';
 
 // Issue #849: a sustained slow frame rate offers the low tier, once, never taken without a press. Adaptation is skipped
 // under Playwright, so the hook __slowWindow feeds the slow windows (quality.ts SLOW_RUNS).
@@ -12,7 +13,7 @@ test('a sustained slow rate offers the low tier; Accept switches to it and a rel
   });
   await expect(offer).toBeVisible();
   await expect(page.locator('body')).toHaveAttribute('data-tier', 'high'); // nothing changed by itself
-  await page.screenshot({ path: test.info().outputPath('offer.png') });
+  await shot(page, { path: test.info().outputPath('offer.png') });
   await offer.getByRole('button', { name: 'Use low quality' }).click();
   await expect(offer).toBeHidden();
   await expect(page.locator('body')).toHaveAttribute('data-tier', 'low');
@@ -31,7 +32,7 @@ test('on a phone the offer fits the screen and leaves the dock free', async ({ p
   });
   const offer = page.locator('#low-offer');
   await expect(offer).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath('offer-phone.png') });
+  await shot(page, { path: test.info().outputPath('offer-phone.png') });
   const box = (await offer.boundingBox())!;
   const dock = (await page.locator('#dock').boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);

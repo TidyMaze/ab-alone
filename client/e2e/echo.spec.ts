@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Echo offers the player the mirror of its move as a free move (#958, game-design.md section 7.4). ?bot=off: the
 // test plays both sides through the click hook. Black steps up (its mirror is the Echo's bonus), White steps east: the
@@ -27,13 +28,13 @@ test('The Echo offers a free move: its marble ringed, a diamond on the selected 
   await expect(body).toHaveAttribute('data-echo-free', '1');
   await expect(tell).toHaveText('Free move: a ringed marble moves for free, any other move declines it');
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/echo-offer-ringed.png' });
+  await shot(page, { path: 'test-results/echo-offer-ringed.png' });
 
   await click(page, 0, 1);
   await expect(body).toHaveAttribute('data-echo-free-target', '1');
   await expect(tell).toHaveText('Free move: the diamond target is free, then you move again');
   await freshDraw(page);
-  await page.screenshot({ path: 'test-results/echo-offer-selected.png' });
+  await shot(page, { path: 'test-results/echo-offer-selected.png' });
 
   await click(page, -1, 1);
   await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(3);

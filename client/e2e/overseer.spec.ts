@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { pauseClock, stepClock } from './clock';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Overseer (#635, game-design.md section 7.11) from the fixture of the core tests
 // (crates/abalone-core/src/encounter/overseer.rs) and ?bot=off, so the test plays both sides through the click hook:
@@ -56,14 +57,14 @@ test('The Overseer: a core pushed next to a vent is pulled in and sinks, an ejec
   await page.emulateMedia({ reducedMotion: 'no-preference' }); // the burn plays
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-before.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-before.png') });
   await plies(page, 4, 5); // the pair pushes the core (1, 1) to (2, 1), next to the vent (3, 1), which pulls it in
   await expect(page.locator('body')).toHaveAttribute('data-burns', '1');
   await expect(page.locator('body')).toHaveAttribute('data-ejecting', 'tumble');
   await expect(page.locator('#hud')).toContainText('2/6');
   expect(await cores(page)).toBe(5);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-burn.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-burn.png') });
 });
 
 test('The Overseer: the boss pushing the 6th core in wins the fight for the player, #635', async ({ page }, testInfo) => {
@@ -73,7 +74,7 @@ test('The Overseer: the boss pushing the 6th core in wins the fight for the play
   await expect(page.locator('body')).toHaveAttribute('data-burns', '1');
   expect(await cores(page)).toBe(3);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-victory.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-victory.png') });
 });
 
 // The defeated Overseer (#789): its marble explodes, then its bubble types the farewell instead of an angry line.
@@ -87,11 +88,11 @@ test('The Overseer: on victory its marble explodes, then the bubble types the fa
   await expect(page.locator('body')).toHaveAttribute('data-exploding', '1');
   await expect(page.locator('#bubble')).toBeHidden(); // no angry line while it blows
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-explosion.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-explosion.png') });
   await expect(page.locator('#bubble-text')).toHaveText('Well done. You broke the last thing that cared about you.');
   await expect(page.locator('#bubble')).not.toHaveClass(/angry/);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-farewell.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-farewell.png') });
 });
 
 // The Overseer speaks and its vents turn toxic (#741, docs/specs/ui.md).
@@ -125,7 +126,7 @@ test('The Overseer: its taunt is typed in a bubble over its marble, with a flick
   expect(lengths[0]).toBeLessThan(lengths[2]!);
   expect(lengths[2]).toBeLessThan('Take your time. The neurotoxin will wait.'.length);
   await stepClock(page, 50);
-  await page.screenshot({ path: testInfo.outputPath('overseer-typing.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-typing.png') });
   await stepClock(page, 2500); // the rest of the line is typed
   await expect(page.locator('#bubble-text')).toHaveText('Take your time. The neurotoxin will wait.');
   const box = (await bubble.boundingBox())!;
@@ -134,7 +135,7 @@ test('The Overseer: its taunt is typed in a bubble over its marble, with a flick
   expect(box.x + box.width).toBeLessThan(view.width);
   expect(box.y).toBeGreaterThan(0);
   await stepClock(page, 50);
-  await page.screenshot({ path: testInfo.outputPath('overseer-taunt.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-taunt.png') });
   await stepClock(page, 3500); // 3 s after the last character, then the fade
   await expect(bubble).toBeHidden();
 });
@@ -151,7 +152,7 @@ test('The Overseer: a burnt core makes the bubble angry and shaking, and the ven
   await expect(bubble).toHaveClass(/angry/);
   await expect(bubble).not.toHaveClass(/still/);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-angry.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-angry.png') });
   await expect(page.locator('#bubble-text')).toHaveText(new RegExp(`^(${LINES.map((l) => l.replace(/[.?]/g, '\\$&')).join('|')})$`));
   await expect(page.locator('#hud .boss .tell')).toContainText('The vents now burn your marbles too.');
   await expect(page.locator('#hud .notch.active')).toHaveText('P2');
@@ -159,7 +160,7 @@ test('The Overseer: a burnt core makes the bubble angry and shaking, and the ven
   await page.clock.fastForward(5000); // the line is typed, held 1 s, then faded
   await expect(bubble).toBeHidden();
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-haze.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-haze.png') });
 });
 
 test('The Overseer: reduced motion shows the whole angry line at once and holds it still, #741', async ({ page }, testInfo) => {
@@ -169,7 +170,7 @@ test('The Overseer: reduced motion shows the whole angry line at once and holds 
   await expect(page.locator('#bubble-text')).toHaveText(new RegExp(`^(${LINES.map((l) => l.replace(/[.?]/g, '\\$&')).join('|')})$`));
   await page.mouse.move(2, 2);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('overseer-angry-reduced.png') });
+  await shot(page, { path: testInfo.outputPath('overseer-angry-reduced.png') });
 });
 
 test('A boss win earns a medal: a new record on the banner, the turns next to the boss in the menu, #791', async ({ page }, testInfo) => {
@@ -180,11 +181,11 @@ test('A boss win earns a medal: a new record on the banner, the turns next to th
   await plies(page, 0, 22); // the boss pushes the 6th core next to a vent at ply 22: 11 player turns
   await expect(page.locator('#hud')).toContainText('Victory');
   await expect(page.locator('#hud .end')).toContainText('New record: 11 turns.');
-  await page.screenshot({ path: testInfo.outputPath('medal-banner.png') });
+  await shot(page, { path: testInfo.outputPath('medal-banner.png') });
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ab-alone.medals')!))).toEqual({ echo: 14, overseer: 11 });
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await expect(page.locator('#boss-list .medal')).toHaveText(['Medal: 14 turns', 'Medal: 11 turns']);
   await expect(page.locator('#boss-list button', { hasText: 'The Overseer' })).toContainText('Medal: 11 turns');
-  await page.screenshot({ path: testInfo.outputPath('medal-menu.png') });
+  await shot(page, { path: testInfo.outputPath('medal-menu.png') });
 });

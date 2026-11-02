@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Magnetizer (#645, #671, game-design.md section 7.9) from the fixture of the core tests: fight seed 120 and ?bot=off,
 // so the test plays both sides through the click hook. Quiet boss moves on the right; the player walks the centre
@@ -69,7 +70,7 @@ test('The Magnetizer: the next polarity is announced over its marble a turn ahea
   expect(Math.abs(coming.sign)).toBe(1);
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('magnetizer-announce.png') });
+  await shot(page, { path: testInfo.outputPath('magnetizer-announce.png') });
   await plies(page, 2, 4);
   const [first] = await poles(page);
   expect(first!.sign).toBe(coming.sign);
@@ -85,14 +86,14 @@ test('The Magnetizer: a + moved next to a − repels and shoves a boss line of 3
   await page.emulateMedia({ reducedMotion: 'no-preference' }); // the repulsion plays
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('magnetizer-before.png') });
+  await shot(page, { path: testInfo.outputPath('magnetizer-before.png') });
   await plies(page, 10, 11); // the second marble steps next to the first
   await expect(page.locator('body')).toHaveAttribute('data-repulsions', '1');
   await expect(hud).toContainText('1/6');
   expect(await poles(page)).toEqual([]); // the pair is spent
   await page.waitForFunction(() => !document.body.dataset.ejecting); // the marble fell
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('magnetizer-after.png') });
+  await shot(page, { path: testInfo.outputPath('magnetizer-after.png') });
 });
 
 test('The Magnetizer: the phase changes after 3 ejections, #645', async ({ page }) => {
@@ -108,7 +109,7 @@ test('The Magnetizer: the announced marble blinks in opacity, with reduced motio
   await page.mouse.move(2, 2);
   await freshDraw(page);
   await expect(page.locator('body')).toHaveAttribute('data-announce-blink', '1.00'); // steady
-  await page.screenshot({ path: testInfo.outputPath('magnetizer-outline.png') });
+  await shot(page, { path: testInfo.outputPath('magnetizer-outline.png') });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const seen = await page.evaluate(async () => {
     const values: number[] = [];
@@ -122,5 +123,5 @@ test('The Magnetizer: the announced marble blinks in opacity, with reduced motio
   expect(Math.max(...seen)).toBeGreaterThan(0.9);
   await page.waitForFunction(() => Number(document.body.dataset.announceBlink) < 0.45);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('magnetizer-blink.png') });
+  await shot(page, { path: testInfo.outputPath('magnetizer-blink.png') });
 });

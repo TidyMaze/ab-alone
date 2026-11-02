@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { parseRecorded } from '../src/test/chaplain-game';
 import { openModes } from './modes';
+import { shot } from './shot';
 
 // The Swarm (#1008, #1266, game-design.md section 7.14) from the recorded win of the core tests (fight seed 0, ?bot=off):
 // the state is loaded by the __playMoves hook. The player starts in the centre, the first wave is announced on a ring, it
@@ -31,18 +32,18 @@ test('The Swarm: a wave announced on its mark lands there, the clock counts down
   const [mark] = marks;
   await expect(page.locator('body')).toHaveAttribute('data-swarm-marks', marks.map((c) => c.join(',')).join(' ')); // 3 a turn
   await page.mouse.move(2, 2); // no hover ghost
-  await page.screenshot({ path: testInfo.outputPath('swarm-announce.png') });
+  await shot(page, { path: testInfo.outputPath('swarm-announce.png') });
 
   await play(page, 0, 1);
   expect(await page.evaluate(([q, r]) => (window as any).__marbleTurn(q, r) !== null, mark!)).toBe(true); // it arrived
   await play(page, 1, 2);
   await expect(tell).toContainText('39 turns to the evac');
-  await page.screenshot({ path: testInfo.outputPath('swarm-arrival.png') });
+  await shot(page, { path: testInfo.outputPath('swarm-arrival.png') });
 
   await play(page, 2, plies.length);
   await expect(tell).toHaveText('The evac lifts you out');
   await expect(page.locator('#hud')).toContainText('Victory');
   expect(await swarm(page)).toMatchObject({ left: 0, evac: true });
   await expect.poll(async () => (await page.evaluate(() => (window as any).__swarm().glow)) as number).toBeGreaterThan(0.5);
-  await page.screenshot({ path: testInfo.outputPath('swarm-evac.png') });
+  await shot(page, { path: testInfo.outputPath('swarm-evac.png') });
 });

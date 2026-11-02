@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shot } from './shot';
 
 // The rogue-lite tactics (#1460, docs/specs/roguelite.md section 11), loaded through the test hook: the tactic bar in the
 // fight HUD, Reinforce putting a marble on the back row, Freeze making the bot skip its turn, and a reward offering a tactic.
@@ -24,14 +25,14 @@ test('the rogue-lite tactics: the bar, Reinforce, Freeze and a reward offering o
   await expect(bar.nth(0)).toBeEnabled();
   await expect(bar.nth(2)).toBeDisabled(); // nothing to fall back on yet
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('roguelite-tactics-hud.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-tactics-hud.png') });
 
   expect(await army()).toBe(12);
   await bar.nth(0).click(); // Reinforce
   expect(await army()).toBe(13);
   await expect(bar).toHaveCount(2);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('roguelite-tactics-reinforce.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-tactics-reinforce.png') });
 
   await bar.nth(0).click(); // Freeze
   await page.evaluate(() => {
@@ -48,7 +49,7 @@ test('the rogue-lite tactics: the bar, Reinforce, Freeze and a reward offering o
   await expect(page.locator('body')).toHaveAttribute('data-run', 'reward');
   await expect(panel.locator('button[data-tactic-offer]')).toHaveCount(1);
   await freshDraw(page);
-  await page.screenshot({ path: testInfo.outputPath('roguelite-tactics-reward.png') });
+  await shot(page, { path: testInfo.outputPath('roguelite-tactics-reward.png') });
   await panel.locator('button[data-tactic-offer]').click();
   await expect(page.locator('body')).toHaveAttribute('data-run', 'map');
   await expect(page.locator('body')).toHaveAttribute('data-tactics', /^1,[1-4]$/);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shot } from './shot';
 
 // Each marble starts turned its own way (#346) and rolls as it slides to its new cell (#345). __marbleTurn reads
 // the quaternion of the marble drawn on a cell. ?bot=off: both sides are played by hand.
@@ -44,7 +45,7 @@ test('a sliding marble rolls to its new cell, then rests', async ({ page }, test
   await expect(page.locator('body')).toHaveAttribute('data-sliding', '1');
   await page.clock.fastForward(100); // half time: one frame draws the slide there
   const mid = await turn(page, 0, 1);
-  await page.screenshot({ path: testInfo.outputPath('marble-mid-roll.png') });
+  await shot(page, { path: testInfo.outputPath('marble-mid-roll.png') });
   await page.clock.fastForward(300);
   await expect(page.locator('body')).not.toHaveAttribute('data-sliding', /.*/);
   const end = await turn(page, 0, 1);
