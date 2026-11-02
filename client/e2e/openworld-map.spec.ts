@@ -81,3 +81,30 @@ test('the cells discovered are saved with the world and come back on a reload', 
   await expect(page.locator('body')).toHaveAttribute('data-openworld', '7');
   await expect(page.locator('body')).toHaveAttribute('data-openworld-discovered', String(discovered));
 });
+
+// #1453: the world's edge is a void blue with a pale line along the land, not the dark of the undiscovered.
+test('the map shows the world edge in void blue with a pale line, apart from the undiscovered dark', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await open(page);
+  await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [442, 0], troop: [], enemies: [] }));
+  await page.locator('#openworld-map-button').click();
+  const map = page.locator('#openworld-map');
+  await expect(map).toBeVisible();
+  await map.evaluate((el) => Promise.all(el.querySelector('canvas')!.getAnimations().map((a) => a.finished)));
+  const counts = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('#openworld-map canvas')!;
+    const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+    const found = { void: 0, edge: 0, back: 0 };
+    for (let i = 0; i < data.length; i += 4) {
+      const key = `${data[i]},${data[i + 1]},${data[i + 2]}`;
+      if (key === '58,85,200') found.void++;
+      else if (key === '143,227,255') found.edge++;
+      else if (key === '11,13,15') found.back++;
+    }
+    return found;
+  });
+  expect(counts.void).toBeGreaterThan(1000);
+  expect(counts.edge).toBeGreaterThan(100);
+  expect(counts.back).toBeGreaterThan(1000);
+  await page.screenshot({ path: process.env.SHOT ?? 'test-results/map-world-edge.png' });
+});
