@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { lowTierOnCi } from './modes';
+
+lowTierOnCi();
 
 // #1412: the teleporters of the Open world. The test hook stands the hero on a far teleporter (no walk) so it is discovered, then
 // back on the spawn's; the Teleport action opens the map in the choice of a teleporter, and the pick moves the hero and the troop.

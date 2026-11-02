@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import { clickHud, openModes, showHud } from './modes';
+import { clickHud, openModes, showHud, lowTierOnCi } from './modes';
+
+lowTierOnCi();
 
 // #1305: the public Open world shows the other heroes. The page runs on the hook transport (?net=hook): the test plays the other
 // end of the room through window.__netPeer*, so nothing touches a relay. A far hero gets an arrow at the screen edge with its

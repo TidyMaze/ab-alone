@@ -455,6 +455,7 @@ for (const { name, viewport, scale } of [
 // #1032 (rewrites the #227 column): on a desktop the cog stays top right, and the main controls are a centred bar at
 // the bottom of the window, one row, the bar's bottom 16 px above the window's.
 test('on a desktop the cog is top right and the controls form a centred bar at the bottom, bugs #227 #1032', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 }); // a desktop window: CI's 960x540 is under the short-window layout (#1436)
   await page.goto('./?bot=off');
   await expect(page.locator('#hud')).toContainText('Black to move');
   const { width, height } = page.viewportSize()!;

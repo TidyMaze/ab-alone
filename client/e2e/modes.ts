@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 /** Opens the mode menu (#357), where Play online, Boss fight and Daily challenge live, unless it is open already. */
 export async function openModes(page: Page): Promise<void> {
@@ -27,4 +27,14 @@ export async function inviteLink(page: Page): Promise<string> {
   const invite = page.locator('#invite');
   await expect(invite).toHaveValue(/&key=[\w-]{8}$/);
   return invite.inputValue();
+}
+
+/** On CI the Open world pages draw on the low quality tier. CI runners have no GPU: on the high tier an idle Open world page ran at
+ * 4.6 animation frames a second (one every 220 ms) on SwiftShader, against 60 on the low tier (measured at 960x540, #1436), so the
+ * specs that sample frames got none and the ones that click waited seconds. A spec that needs a tier sets its own, which wins.
+ * Locally (a GPU) the tier stays the detected one. Call it at the top of a spec file. */
+export function lowTierOnCi(): void {
+  test.beforeEach(async ({ page }) => {
+    if (process.env.CI) await page.addInitScript(() => localStorage.setItem('ab-alone.tier', 'low'));
+  });
 }

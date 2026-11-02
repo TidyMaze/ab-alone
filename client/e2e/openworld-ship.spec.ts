@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { lowTierOnCi, showHud } from './modes';
+
+lowTierOnCi();
 
 // #1373: from the Open world on a phone, one visible 44 px Hub button leads to the hub, the world saved as with Esc.
 const viewports = [
@@ -29,6 +32,7 @@ for (const { name, viewport } of viewports) {
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
       expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
       expect(box.x).toBeGreaterThan(viewport.width / 2); // not in the stick's half
+      await showHud(page, '#openworld-hud .tap-hint'); // the plate folds 8 s after the entry, before a slow runner gets here (#1436)
       expect(await clearOf(page, '#openworld-hud')).toBe(true);
       expect(await clearOf(page, '#settings')).toBe(true);
       await expect(page.locator('#openworld-hud .tap-hint')).toBeVisible();

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { BLACK_WINS } from './end-games';
-import { openModes } from './modes';
+import { openModes, lowTierOnCi } from './modes';
+
+lowTierOnCi();
 
 // #962: the Open world mode, behind ?openworld=<seed>: the hero rolls over the generated world, an obstacle stops it, and
 // Escape leaves to the board. The blocked cell comes from the test hook, not from the terrain constants (#1002, #1137).

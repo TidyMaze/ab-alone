@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { lowTierOnCi } from './modes';
+
+lowTierOnCi();
 
 // #1411: the map of the Open world, full screen on the cells discovered round the hero, opened and closed by the Map button, M and
 // Escape, panned by a drag and zoomed by the wheel; the discovered cells are saved with the world.
