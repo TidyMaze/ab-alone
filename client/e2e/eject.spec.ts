@@ -32,8 +32,18 @@ type Seen = {
   spray?: Bloody[]; // the spatter in screen space at 0 to 850 ms, see the overlap checks (#278)
 };
 
-async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
+// Plies 1 to 4 of the push, as the game file records them: [marbles, direction, then the marbles' cells]; direction 1 is W, 3 is SW, 4 is NW.
+// 1. Black trio NW  2. White pair SW  3. Black trio NW  4. White pair W, into the Black column.
+const FOUR_PLIES = [
+  [3, 4, -2, 2, -2, 3, -2, 4],
+  [2, 3, 0, -3, 0, -2, 0, 0],
+  [3, 4, -2, 1, -2, 2, -2, 3],
+  [2, 1, -1, -2, -1, -1, 0, 0],
+];
+
+async function pushOffBoard(page: Page, skip?: 'key' | 'click', before?: () => Promise<void>) {
   const click = await open(page);
+  await before?.();
   await page.evaluate((skip) => {
     const w = window as any;
     w.__seen = null;
@@ -63,15 +73,13 @@ async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
     observer.observe(document.body, { attributes: true });
   }, skip);
   const hud = page.locator('#hud');
-  await click([-2, 2], [-2, 3], [-2, 4], [-2, 1]); // 1. Black trio NW
-  await expect(hud).toContainText('White to move');
-  await click([0, -3], [0, -2], [-1, -2]); // 2. White pair SW
-  await click([-2, 1], [-2, 2], [-2, 3], [-2, 0]); // 3. Black trio NW
-  await click([-1, -2], [-1, -1], [-2, -2]); // 4. White pair W, into the Black column
+  // Plies 1 to 4 are loaded through the game file import, not clicked: 16 clicks and their waits are 3 s of software WebGL frames, and the
+  // clicks of a move are covered by the other specs. Only the 5th ply, the push, is clicked.
+  await page.locator('#import-file').setInputFiles({ name: 'game.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: false, moves: FOUR_PLIES })) });
   await expect(hud).toContainText('Black to move');
-  await expect(page.locator('body')).not.toHaveAttribute('data-ejections', /.*/);
-  // The marble to leave, at rest: the clicks of plies 3 and 4 may still wait for a slide.
+  // The marble to leave, at rest.
   await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(4);
+  await expect(page.locator('body')).not.toHaveAttribute('data-ejections', /.*/);
   await expect(page.locator('body')).not.toHaveAttribute('data-sliding', /.*/);
   const turn = (await page.evaluate(() => (window as any).__marbleTurn(-2, -2))) as number[];
   await click([-2, 0], [-2, 1], [-2, 2], [-2, -1]); // 5. 3v2 push, the last White marble leaves
@@ -125,31 +133,27 @@ test('reduced motion: a plain fade, no tumble, no stretch, no spatter, the same 
 });
 
 // #379: the Reduced motion toggle of the settings menu follows the system setting until pressed, then keeps the
-// player's choice, saved locally: it survives a reload (pushOffBoard opens the page again).
+// player's choice, saved locally. One page: the press happens on the room's board and the push follows (no reload; that a stored
+// choice is applied at boot is the unit of main.boot.test.ts, #1481).
 async function pressReducedMotion(page: Page, before: boolean) {
-  await page.goto('./?bot=off');
-  await page.locator('canvas').waitFor();
   await page.getByRole('button', { name: 'Settings' }).click();
   const toggle = page.getByRole('button', { name: 'Reduced motion' });
   await expect(toggle).toHaveAttribute('aria-pressed', String(before));
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', String(!before));
+  await page.getByRole('button', { name: 'Settings' }).click(); // closes the menu
 }
 
-test('the Reduced motion setting: a plain fade while the system allows motion, kept after a reload', async ({ page }) => {
-  await pressReducedMotion(page, false);
-  const { seen } = await pushOffBoard(page);
+test('the Reduced motion setting: a plain fade while the system allows motion', async ({ page }) => {
+  const { seen } = await pushOffBoard(page, undefined, () => pressReducedMotion(page, false));
   expect(seen.kind).toBe('fade');
   expect(seen.blood).toBeUndefined();
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'reduced');
-  await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('button', { name: 'Reduced motion' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('the Reduced motion setting: on by default under the system setting, a press brings the tumble back', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await pressReducedMotion(page, true);
-  const { seen } = await pushOffBoard(page);
+  const { seen } = await pushOffBoard(page, undefined, () => pressReducedMotion(page, true));
   expect(seen.kind).toBe('tumble');
   expect(seen.blood).toBe('spatter');
   await expect(page.locator('html')).not.toHaveAttribute('data-motion', /.*/);

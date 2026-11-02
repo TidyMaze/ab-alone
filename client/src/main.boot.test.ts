@@ -667,6 +667,18 @@ describe('the settings toggles', () => {
     expect(localStorage.getItem('ab-alone.reduced-motion')).toBe('on');
   });
 
+  it('applies a stored Reduced motion choice at boot, whatever the system says, the unit of the reload e2e (#1481)', async () => {
+    await bootWith({ 'ab-alone.reduced-motion': 'on' });
+    expect(root.dataset.motion).toBe('reduced');
+    expect(row('reduced-motion').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('keeps motion on at boot when the player turned Reduced motion off under a system setting that asks for none', async () => {
+    await bootWith({ 'ab-alone.reduced-motion': 'off' }, '?bot=off', { reducedMotion: true });
+    expect(root.dataset.motion).toBeUndefined();
+    expect(row('reduced-motion').getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('starts with motion cut when the system asks for it', async () => {
     await boot('?bot=off', { reducedMotion: true });
     expect(root.dataset.motion).toBe('reduced');

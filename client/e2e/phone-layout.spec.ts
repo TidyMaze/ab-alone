@@ -361,6 +361,7 @@ for (const { name, viewport, mobile } of sizes) {
     // The same defeat as the plate check of bug #271 (the plate and the buttons cover no cell after a daily defeat): one
     // page load and one fight per window, the card checked upright, then the page turned around (a resize, no second fight).
     test('the daily result card covers neither the HUD nor the board, nor turned around, #196 #271', async ({ page }, testInfo) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' }); // the 7 moves of the defeat slide in no time: the layout is the same
       await startDaily(page);
       await loseByRepetition(page);
       await expect(page.locator('#daily-card')).toBeVisible();
@@ -476,6 +477,7 @@ for (const { name, viewport } of [
 
     test('the plate and the buttons cover no cell after a defeat, bug #271', async ({ page }, testInfo) => {
       const hud = page.locator('#hud');
+      await page.emulateMedia({ reducedMotion: 'reduce' }); // the 7 moves of the defeat slide in no time: the layout is the same
       await page.clock.setFixedTime(new Date('2027-03-30T08:00:00Z'));
       await page.goto('./?bot=off&net=hook');
       await openModes(page);
