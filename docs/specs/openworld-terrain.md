@@ -75,80 +75,64 @@ Smallest task, first in the order. Only constants of `cell`:
 - `openworld.md` section 2 states "about 6 %" and "about half": updated in the same PR (or in the pending
   spec PR #969 if it is still open).
 
-## 4. Biomes (#984)
+## 4. Biomes (#984, six sextants since #1442)
 
-A biome is a region with its own ground, trees and boulders. Two slow fields and the height decide it.
+A biome is a region with its own ground, trees and boulders. Since #1442 (owner, 2026-11-02: "6 biomes, one per zone of the
+hexagon") the biome of a cell is the **sextant** of the hexagon it lies in, seen from the spawn: the six wedges of 60 degrees
+centred on the six axial directions, each running out to a corner of the world. Before, a temperature and a moisture field
+mixed five climate biomes everywhere (#984), so every direction looked alike.
 
-- **Temperature** `T` and **moisture** `M`: `field` of section 2, with `T` lowered uphill
-  (`T -= 0.04 * (height - 3)`). Each threshold is moved by `(micro - 0.5) * 0.08` so a border is ragged, not a
-  straight line.
-- **Table** (thresholds measured, target shares of the land):
+| Sextant (axial direction) | Biome | Ground tint | Tree | Boulder (per mille) |
+|---|---|---|---|---|
+| East `(1, 0)`, the start | Meadow | green | 2 % | 15 |
+| North-east `(1, -1)` | Forest | deep green | 25 % | 15 |
+| North-west `(0, -1)` | Tundra | snow white | 4 % | 25 |
+| West `(-1, 0)` | Desert | warm sand | none | 30 |
+| South-west `(-1, 1)` | Badlands | dark red rock | none | 45 |
+| South-east `(0, 1)` | Archipelago (new) | fresh green `#5c7d58` | 5 % | 10 |
 
-| Biome | Condition | Land share |
-|---|---|---|
-| Tundra | `T < t_cold` | 15 % |
-| Desert | `T > t_hot` and `M < m_mid` | 15 % |
-| Badlands | `T > t_hot` and `M >= m_mid` | 10 % |
-| Forest | otherwise and `M >= m_wet` | 25 % |
-| Meadow | otherwise | 35 % |
+- **Ragged borders**: the angle of a cell (the pointy-top layout of the client: x along `q`, the north is `-r`) is moved
+  sideways by `(border - 0.5) * 40` cells, `border` a field of section 2 (macro, meso and micro levels, the salts of the old
+  temperature), so a border wanders by up to some ten cells and is never a straight line.
+- **Blend**: each cell is moved again by a draw of up to 3 cells either way (`BLEND`) when its biome is picked, so two biomes
+  mix over a few cells along their border.
+- **Spawn**: the clearing (radius 3) is Meadow grass at height 3. Around it a soft Meadow bias (#1024): a cell is Meadow when a
+  draw of its own falls below the bias, full within 8 cells of the spawn and falling by a smoothstep to nothing at 16. So the
+  disc of axial radius 10 is Meadow on at least 80 % of its cells, on seeds 1 to 16.
+- **Archipelago**: mostly water, with islands of sand and low grass, crossed by boat (#1441). Its elevation is that of the meso
+  and micro levels only (no continent), lowered by `SEA_DROP` 0.19, and its tops are cut at `ISLAND_TOP` (height 4): no rock, no
+  peak. The sea comes in smoothly, by a smoothstep over the 3 cells of the blend inside its border and from 40 to 90 cells out
+  of the spawn, so the land round the spawn (section 2's ring) is kept. Its middle, from 120 cells out, is 65 to 85 % water.
+- **What a biome changes**: the ground tint of the low ground (levels 3 and 4) in the 3D view, the minimap and the map, and the
+  density of the obstacles per open cell on the low ground. Elsewhere water, shore (level 2), uplands and peaks keep their
+  terrain in every biome; the archipelago alone also changes the relief, as above.
+- **No new `Terrain`**: the tint is a colour, not a terrain. The ground and the props are tinted per instance,
+  `LOOK[ground] x BIOME_TINT[biome]` (`setColorAt`), so no new mesh. The map paints a low grass cell in the same ground.
+- **Chunk bytes**: 3 per cell, `height, terrain, biome` (the biome code is the order of the `Biome` enum: `0` meadow to
+  `5` archipelago, `u8`). Enemies stand on the open land of every biome, never on water.
+- **Lairs and teleporters** (`openworld.md` sections 7 and 10): lair `k` is drawn in the sextant `k % 6` and kept only on the
+  open ground of its biome, so each biome holds two lairs or more (15 bosses: three in the meadow, the forest and the tundra, two
+  in the others). The teleporters keep their squares; an archipelago square with no island that fits has none (seed 7 holds 34,
+  36 before, at least four in every biome).
+- **Tests**: each sextant's middle 40 degrees is its biome (98 % of the cells, seeds 1 to 4); a border is ragged and blends;
+  the archipelago is mostly water with islands of sand and grass, no rock nor peak; the obstacle densities of each biome hold on
+  the low ground (trees within a fifth, boulders within a third); enemies, two lairs and a teleporter in every biome; the spawn
+  clearing is Meadow and open; the order of visit does not matter. The eight-height shares and the far view's sea and range are
+  measured out of the archipelago, whose sea is meant; the blocked share and the 32-seed flood fill of #987 still hold.
+  `WORLD_VERSION` is 4 since #1442 (3 for the hexagon of #1440).
 
-- **What a biome changes**: the ground tint of the low ground (levels 3 and 4), and the density of the
-  obstacles per open cell. Water, shore (level 2), uplands and peaks keep their terrain in every biome.
+**Measured (#1442)**, the 16 x 16 chunks around the spawn, seeds 1 to 4. Share of the window per biome: meadow 18.2 %, forest
+12.1 %, tundra 17.8 %, desert 19.9 %, badlands 12.6 %, archipelago 19.2 %. Low ground obstacles: meadow trees 1.9 % and 16.7
+boulders per mille, forest 25.1 % and 10.3, tundra 4.1 % and 26.4, desert 0 % and 28.8, badlands 0 % and 43.5, archipelago
+5.0 % and 8.6. Blocked share 36.3 % (bound 26 to 37), water 26.1 %. The middle of the archipelago is 66.3, 67.9, 82.9 and 64.7 %
+water on seeds 1 to 4.
 
-| Biome | Ground tint | Tree | Boulder (per mille) |
-|---|---|---|---|
-| Meadow | green | 2 % | 15 |
-| Forest | deep green | 25 % | 15 |
-| Tundra | snow white | 4 % | 25 |
-| Desert | warm sand | none | 30 |
-| Badlands | dark red rock | none | 45 |
+**Digest**: the world digest moves to 14624702171911828112 (`WORLD_VERSION` 4).
 
-  The averages stay near #987's figures: the blocked share test of #987 still holds (a tolerance of 20 %).
-- **No new `Terrain`**: the tint is a colour, not a terrain. The ground and the props are tinted per
-  instance, `LOOK[ground] x BIOME_TINT[biome]`, the same mechanism as the water's per-cell colour (`setColorAt`),
-  so no new mesh.
-- **Chunk bytes**: 3 per cell, `height, terrain, biome` (the biome code is the table's order, `u8`).
-  `world_chunk` returns `3 * 256` bytes, `parseChunk` reads a `biome` into `Tile`. Enemies are untouched.
-- **Spawn**: the clearing is Meadow. Around it, a soft Meadow bias (#1024): within 8 cells of the spawn the
-  temperature is pulled to 0.395 and the moisture to 0.30 (the Meadow values), from 8 to 16 cells the pull falls
-  by a smoothstep to nothing (no edge). Only the biome moves; terrain, heights and walls are unchanged by it. So
-  the disc of axial radius 10 is Meadow on at least 80 % of its cells, on seeds 1 to 16 (seed 7 was a meadow
-  island in a desert). `WORLD_VERSION` is 3 since the hexagon world (#1440).
-- **Tests**: every biome appears in a 16 x 16 chunk window of several seeds; the land shares are within 5 points
-  of the table; the obstacle densities of each biome hold on the low ground (trees within a fifth, boulders within a
-  third); water, shore, uplands and peaks keep their terrains; the spawn clearing is Meadow and open; the order of
-  visit does not matter. The eight-height shares and the flood fill of #987 still hold.
+**Cost** (`world_timing`, the minimum of three runs on a shared machine): the 2465 chunks of the hexagon 30.1 ms before and
+43.2 ms after (budget 117 ms): two angles and two draws more per cell.
 
-**Measured (#984, shipped).** "Land" is every cell above the water (heights 2 to 7) of the 16 x 16 chunks around the
-spawn, seeds 1 to 4. The thresholds are quantiles of the raw temperature (with the lapse) and moisture over that land,
-then checked against the real shares (the jitter moves a border by at most 0.04, so the shares land within 1 point):
-
-| Constant | Value | Quantile |
-|---|---|---|
-| `T_COLD` | 0.2896 | 15 % of the land is colder |
-| `T_HOT` | 0.5010 | 25 % of the land is hotter |
-| `M_HOT` | 0.4943 | 60 % of the hot land is drier (desert, the rest badlands) |
-| `M_WET` | 0.4632 | 42 % of the temperate land is wetter (forest, the rest meadow) |
-| `JITTER` | 0.08 | `(micro - 0.5) * 0.08` on every threshold, one micro sample of the temperature |
-
-Shares of the land per biome: meadow 35.9 %, forest 25.3 %, tundra 14.3 %, desert 15.0 %, badlands 9.6 %.
-Obstacles of the low ground, measured: meadow trees 2.0 % and 14.4 boulders per mille, forest 24.8 % and 11.6, tundra
-4.0 % and 29.9 (against 24 expected), desert 0 % and 30.1, badlands 0 % and 43.1.
-
-Terrain shares of the same window, before (#983) and after: grass 38.05 to 38.87 %, trees 3.39 to 2.45 %, boulders 1.43
-to 1.55 %, water 18.03 % and peaks 8.04 % unchanged, rock 19.23 %, sand 11.60 % unchanged, walls 0.23 % unchanged.
-Blocked share 31.1 to 30.3 % (the test bound 26 to 37 holds), and the 32-seed flood fill of #987 holds at 90 %.
-
-**Digest**: the world digest now hashes the biome, so its literal moves (4602184324818820941, was 4776182566584578878).
-No other digest value of the engine changed on purpose.
-
-**Cost** (`world_timing`, the machine is shared, so the minimum of the runs): one chunk 5.7 us before and 7.5 us after
-(budget 30 us); the 4096 chunks 23.7 ms before and 32.2 ms after (budget 117 ms). The biome costs one `temperature`
-lattice and a micro sample per cell, each lattice hashed once per chunk.
-
-**Memory** (client, `OpenWorldView` at rest, 234,674 instances): the matrices are 64 bytes an instance, 15.02 MB before;
-every ground, prop and detailed prop now also carries an instance colour (12 bytes an instance), so 2.82 MB more, 17.84 MB
-after (the troop and the enemies carry one too, 8 KB). A mesh that grows keeps the same ratio.
+**Memory**: unchanged, the tint is the instance colour every ground and prop already carries (#984).
 
 ## 5. Relief (#988)
 

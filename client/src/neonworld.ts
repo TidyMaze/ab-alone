@@ -87,7 +87,7 @@ function neonPalette(base: WorldPalette): WorldPalette {
   Object.assign(out.LOOK.rock!, { color: WORLD.rock });
   Object.assign(out.LOOK.peak!, { color: WORLD.rock });
   out.WATER = { shore: WORLD.shore, deep: WORLD.deep };
-  for (const [biome, ground] of Object.entries({ meadow: WORLD.meadow, forest: WORLD.meadow, tundra: WORLD.meadow, desert: WORLD.mesa, badlands: WORLD.mesa })) out.BIOME_LOOK[biome] = { ground, prop: 0xffffff };
+  for (const [biome, ground] of Object.entries({ meadow: WORLD.meadow, forest: WORLD.meadow, tundra: WORLD.meadow, desert: WORLD.mesa, badlands: WORLD.mesa, archipelago: WORLD.meadow })) out.BIOME_LOOK[biome] = { ground, prop: 0xffffff };
   Object.assign(out.PROPS.mountain!, { color: WORLD.mountain, emissive: 0 });
   Object.assign(out.PROPS.tree!, { color: NEON.crystal, emissive: 0 }); // calm: the quietest violet of the map
   Object.assign(out.PROPS.boulder!, { color: WORLD.boulder, emissive: 0 }); // no neon on a boulder

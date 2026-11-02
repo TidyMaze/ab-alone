@@ -213,11 +213,13 @@ export const BIOME_LOOK: Record<Biome, { ground: number; prop: number }> = {
   tundra: { ground: 0xc4d0d8, prop: 0xdde8ee },
   desert: { ground: 0xaa9469, prop: 0xf0d4ae },
   badlands: { ground: 0x643d35, prop: 0xe8aa90 },
+  archipelago: { ground: 0x5c7d58, prop: 0xffffff }, // the islands' fresh green (#1442)
 };
+/** Whether a tile is on the low ground (heights 3 and 4), whose grass takes the colour of its biome. */
+export const lowGround = (tile: Tile): boolean => tile.height === 3 || tile.height === 4;
 /** The colour of a cell's ground, per instance: the low grass by its biome, every other ground by `LOOK` (the water's colour
  * comes from `waterColor`). */
-export const groundColour = (tile: Tile, ground: Ground): number =>
-  ground === 'grass' && (tile.height === 3 || tile.height === 4) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color;
+export const groundColour = (tile: Tile, ground: Ground): number => (ground === 'grass' && lowGround(tile) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color);
 /** The red of a lone water cell and of a cell in the middle of a lake, as the instance colour holds them: the shore foam reads where on
  * that way a cell lies (#1101). */
 const shoreRed = (): number => new THREE.Color(WATER.shore).r; // read when a view is made: the neon look changes the lakes' colours
