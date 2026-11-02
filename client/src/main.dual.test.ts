@@ -5,6 +5,7 @@ import { BRIDGE, BRIDGE_HEIGHT, BRIDGE_MS, DROP_MS, DUAL_AZIMUTH, DUAL_POLAR, ty
 import { BLOOD_MS } from './blood';
 import { RIM_LIGHT } from './frame';
 import { SLIDE_MS } from './slide';
+import type { View } from './camera';
 import { boot, type Game } from './test/harness';
 import { BRIDGE_AT, RETURN_AT, RETURN_CELL, SEED } from './test/dual-game';
 import { dualGame } from './test/dual-fixture';
@@ -75,7 +76,7 @@ function clickPlies(game: Game, to: number): void {
 
 describe('main.ts The Dual Room (#947, #955)', () => {
   it('opens on its two rooms side by side, the void between them, on the Mess deck', async () => {
-    const game = await boot('?bot=off', { reducedMotion: true });
+    const game = await boot('?bot=off&scene=room', { reducedMotion: true });
     expect(dual(game).state).toBeNull();
     fightDual(game);
     expect(game.hook('__fight')).toMatchObject({ id: 'dual', seed: SEED });
@@ -294,5 +295,17 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     game.openModes();
     byId('battle-royale').click();
     expect(document.body.dataset.bridge).toBeUndefined();
+  });
+});
+
+describe('main.ts The Dual Room on the terrace (#1374)', () => {
+  it('opens from the Blender camera, drawn back until both rooms fit', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightDual(game);
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const view = game.hook<View>('__view');
+    expect(view.azimuth).toBe(0);
+    expect(view.polar).toBeCloseTo((40 * Math.PI) / 180);
+    expect(view.distance).toBeGreaterThanOrEqual(13.6);
   });
 });

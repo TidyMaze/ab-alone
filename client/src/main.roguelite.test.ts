@@ -3,6 +3,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial, Move } from './board';
 import { actBoss, newRun, parseMap, pick, visit, type MapNode, type Run } from './roguelite';
+import type { View } from './camera';
 import { boot, type Game } from './test/harness';
 
 // The rogue-lite run on the harness (#798, docs/specs/roguelite.md): Rogue-lite run in the mode menu shows the map of
@@ -399,5 +400,16 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     byId('run-new').click();
     expect(document.body.dataset.run).toBe('map');
     expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
+  });
+});
+
+describe('main.ts the rogue-lite run on the terrace (#1374)', () => {
+  it('a fight board is framed from the Blender camera', async () => {
+    const game = await startRun('?nodes=50');
+    open()[0]!.click();
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const view = game.hook<View>('__view');
+    expect(view.polar).toBeCloseTo((40 * Math.PI) / 180);
+    expect(view.distance).toBeGreaterThanOrEqual(13.6);
   });
 });
