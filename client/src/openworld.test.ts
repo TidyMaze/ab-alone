@@ -85,14 +85,19 @@ describe('the hero', () => {
     expect(hero.at).toEqual([1, 0]);
   });
 
-  it('does not roll two cells, onto water or off the world', () => {
+  it('does not roll two cells or off the world', () => {
     const hero = heroOn(new World(bytes));
     expect(hero.step([2, 0])).toBe(false); // not a neighbour of the spawn
-    const water = heroOn(new World(bytes));
-    expect(water.step([0, 1])).toBe(false);
-    expect(water.smashed).toBeNull();
     const edge = heroOn(new World(() => new Uint8Array()));
     expect(edge.step([1, 0])).toBe(false); // no tile there
+  });
+
+  it('sails onto water like onto open ground, the troop trailing it (#1441)', () => {
+    const water = heroOn(new World(bytes));
+    expect(water.step([0, 1])).toBe(true);
+    expect(water.at).toEqual([0, 1]);
+    expect(water.troop[0]).toEqual(SPAWN);
+    expect(water.smashed).toBeNull();
   });
 
   it('breaks the isolated boulder it rolls into: the move goes through and the cell turns to plain rock (#1147)', () => {

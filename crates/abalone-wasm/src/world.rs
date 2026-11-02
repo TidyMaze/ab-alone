@@ -511,7 +511,7 @@ mod tests {
         assert_eq!(world_enter(0, 0, 1, 0, 2, false, false), 1); // grass
         assert_eq!(world_enter(0, 0, 1, 0, 5, false, false), 2); // boulder
         assert_eq!(world_enter(0, 0, 1, 0, 6, false, true), 0); // tree in a grove
-        assert_eq!(world_enter(0, 0, 1, 0, 0, false, false), 0); // water
+        assert_eq!(world_enter(0, 0, 1, 0, 0, false, false), 1); // water, sailed
         assert_eq!(world_enter(0, 0, 1, 0, 2, true, false), 0); // enemy
         assert_eq!(world_enter(0, 0, 3, 0, 2, false, false), 0); // not a neighbour
         assert_eq!(world_enter(0, 0, 1, 0, -1, false, false), 0); // off the world
@@ -523,7 +523,7 @@ mod tests {
         let codes: Vec<i32> = (0..8)
             .map(|t| world_enter(0, 0, 1, 0, t, false, false))
             .collect();
-        assert_eq!(codes, vec![0, 1, 1, 1, 0, 2, 2, 0]);
+        assert_eq!(codes, vec![1, 1, 1, 1, 0, 2, 2, 0]);
     }
 
     #[test]

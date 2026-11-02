@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn a_neighbour_of_open_ground_free_of_enemies_is_rolled_onto() {
-        for terrain in [Terrain::Sand, Terrain::Grass, Terrain::Rock] {
+        for terrain in [Terrain::Sand, Terrain::Grass, Terrain::Rock, Terrain::Water] {
             assert_eq!(
                 entry((0, 0), (1, 0), Some(terrain), false, false),
                 Entry::Rolls
@@ -310,6 +310,10 @@ mod tests {
             entry((0, 0), (1, 0), Some(Terrain::Boulder), true, false),
             Entry::Refused
         );
+        assert_eq!(
+            entry((0, 0), (1, 0), Some(Terrain::Water), true, false),
+            Entry::Refused
+        );
     }
 
     #[test]
@@ -326,7 +330,7 @@ mod tests {
             entry((0, 0), (1, 0), Some(Terrain::Tree), false, true),
             Entry::Refused
         );
-        for terrain in [Terrain::Water, Terrain::Peak, Terrain::Wall] {
+        for terrain in [Terrain::Peak, Terrain::Wall] {
             assert_eq!(
                 entry((0, 0), (1, 0), Some(terrain), false, false),
                 Entry::Refused

@@ -367,6 +367,16 @@ function shore(seed: number): Axial {
   }
   throw new Error('no shore');
 }
+/** An open cell of the seed with an open cell to its east and four water cells to its west, found in the world itself. */
+function landing(seed: number): Axial {
+  for (let r = -60; r < 60; r++) {
+    for (let q = -60; q < 60; q++) {
+      const open = [q, q + 1].every((k) => [1, 2, 3].includes(terrainOf(seed, k, r)));
+      if (open && [1, 2, 3, 4].every((k) => terrainOf(seed, q - k, r) === 0)) return [q, r];
+    }
+  }
+  throw new Error('no landing');
+}
 const real = (seed: number, cx: number, cy: number): Uint8Array => world_chunk(seed, cx, cy);
 
 describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967)', () => {
@@ -414,6 +424,17 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     expect(body().openworldPush).toBe('1');
     expect(body().openworldEnemies).toBe('0');
     expect(m.enemies()).toEqual([]);
+  });
+
+  it('pushes from the boats: the troop sails on to the water and its line pushes an enemy on the shore (#1441)', () => {
+    const [lq, lr] = landing(1);
+    const m = mode(undefined, real, () => true, () => new Int32Array());
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [lq - 2, lr], troop: [[lq - 3, lr], [lq - 4, lr]], enemies: [[lq, lr]] });
+    tap(m, 'ArrowRight'); // the hero sails on to (lq - 1), the line of three boats pushes the enemy on to the land beyond
+    expect(m.hero!.at).toEqual([lq, lr]);
+    expect(m.enemies()).toEqual([[lq + 1, lr]]);
+    expect(body().openworldPush).toBe('1');
   });
 
   it('pushes after a diagonal step too', () => {

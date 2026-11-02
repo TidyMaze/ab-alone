@@ -1205,6 +1205,16 @@ mod tests {
         assert!(!Terrain::Sand.blocked() && !Terrain::Grass.blocked() && !Terrain::Rock.blocked());
     }
 
+    #[test]
+    fn the_hero_sails_water_and_is_stopped_by_the_other_blocked_cells() {
+        for t in [Terrain::Water, Terrain::Sand, Terrain::Grass, Terrain::Rock] {
+            assert!(t.open_to_hero(), "{t:?}");
+        }
+        for t in [Terrain::Peak, Terrain::Boulder, Terrain::Tree, Terrain::Wall] {
+            assert!(!t.open_to_hero(), "{t:?}");
+        }
+    }
+
     fn all_groups() -> Vec<Vec<(i32, i32)>> {
         (-8..8)
             .flat_map(|cx| (-8..8).flat_map(move |cy| enemy_groups(5, cx, cy)))
@@ -1556,6 +1566,18 @@ mod tests {
         let edge = WORLD_CHUNKS / 2 * CHUNK;
         assert!(walk_path(3, (edge - 1, 0), (edge, 0), &[], &[]).is_empty());
         assert!(walk_path(3, (0, 0), (PATH_RADIUS + 1, 0), &[], &[]).is_empty());
+    }
+
+    #[test]
+    fn a_path_sails_onto_the_water() {
+        let lake = (-30..30)
+            .flat_map(|q| (-30..30).map(move |r| (q, r)))
+            .filter(|&(q, r)| cell(9, q, r).map(|c| c.terrain) == Some(Terrain::Water))
+            .min_by_key(|&at| hex_distance(at, (0, 0)))
+            .unwrap();
+        let path = walk_path(9, (0, 0), lake, &[], &[]);
+        assert_eq!(path.last(), Some(&lake));
+        assert!(walks((0, 0), &path, &[]));
     }
 
     #[test]

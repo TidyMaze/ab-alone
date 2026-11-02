@@ -148,12 +148,22 @@ describe('a step', () => {
   });
 
   test('a cell the hero cannot enter refuses the step and changes nothing', () => {
-    const { open, spot } = standBeside([0, 4, 7]);
+    const { open, spot } = standBeside([4, 7]);
     const [q, r] = spot.at;
     const before = value(open.state({}));
     const error = failure(open.step({ direction: spot.dir as 'E' }));
     expect(error.code).toBe('blocked');
     expect(value(open.state({}))).toEqual(before);
+  });
+
+  test('the hero sails onto water like onto open ground, the troop trails it (#1441)', () => {
+    const { open, spot } = standBeside([0]);
+    const [q, r] = spot.at;
+    const [dq, dr] = STEPS[spot.dir]!;
+    const moved = value(open.step({ direction: spot.dir as 'E' }));
+    expect(moved.moved).toBe(true);
+    expect(moved.state.hero).toBe(`(${q + dq},${r + dr})`);
+    expect(moved.state.troop[0]).toBe(`(${q},${r})`);
   });
 
   test('a boulder is broken by rolling into it and the cell is rock after', () => {
@@ -245,6 +255,20 @@ describe('a walk', () => {
     })[0];
     expect(walked).toBeTruthy();
     expect(walked!.state.broken).toBeGreaterThanOrEqual(1);
+  });
+
+  test('sails to a water cell by the engine path (#1441)', () => {
+    const lake = SEEDS.flatMap((seed) => {
+      const spot = beside(seed, [0]);
+      if (!spot) return [];
+      const [dq, dr] = STEPS[spot.dir]!;
+      return [{ seed, to: [spot.at[0] + dq, spot.at[1] + dr] as const }];
+    })[0]!;
+    const open = world();
+    value(open.newWorld({ seed: lake.seed }));
+    const walked = value(open.walk({ q: lake.to[0], r: lake.to[1] }));
+    expect(walked.steps).toBeGreaterThan(0);
+    expect(code(lake.seed, ...lake.to)).toBe(0);
   });
 
   test('stays when the cell is the hero, a lair, an enemy, off the world or too far', () => {
