@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contrastRatio, type RGB } from './contrast';
 import { setNeonWorldOn } from './neonlook';
 import { TERRAINS } from './openworld';
-import { BOSS_COLOURS, ICON, iconSize, lairIcon } from './openworldlairicon';
+import { BOSS_COLOURS, ICON, iconSize, lairIcon, portalIcon } from './openworldlairicon';
 import { terrainColour } from './openworldminimap';
 
 // The icon of a boss tower on the Open world map and minimap (#1438): a tower on a dark plate, in the boss's colour.
@@ -27,6 +27,7 @@ function fakeContext() {
     beginPath: () => (path = []),
     moveTo: (x: number, y: number) => path.push(x, y),
     lineTo: (x: number, y: number) => path.push(x, y),
+    arc: (x: number, y: number, r: number) => path.push(x, y, r),
     closePath: () => {},
     fill() {
       fills.push({ colour: this.fillStyle, points: path });
@@ -52,6 +53,7 @@ describe('the boss colours', () => {
       expect(contrastRatio(rgb(colour), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
       expect(contrastRatio(rgb(colour), rgb(ICON.ink))).toBeGreaterThanOrEqual(3);
     }
+    for (const colour of [ICON.portal, ICON.here]) expect(contrastRatio(rgb(colour), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(ICON.done), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(ICON.check), rgb(ICON.done))).toBeGreaterThanOrEqual(3);
   });
@@ -124,5 +126,25 @@ describe('lairIcon', () => {
       expect(fills.some((f) => f.colour === ICON.unknown)).toBe(true);
       expect(texts).toEqual([]);
     }
+  });
+});
+
+describe('portalIcon (#1443)', () => {
+  it('draws a round plate with a halo and a rim, a violet ring and a core: no tower in it', () => {
+    const { ctx, fills, strokes } = fakeContext();
+    portalIcon(ctx, 100, 50, 30, false);
+    expect(fills[0]).toEqual({ colour: ICON.plate, points: [100, 50, 15] }); // a disc, the tower's plate is a square
+    expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
+    expect(strokes.some((s) => s.colour === ICON.portal)).toBe(true);
+    expect(fills.some((f) => f.colour === ICON.portal)).toBe(true);
+    for (const f of fills) expect(f.points).toHaveLength(3); // arcs only: no crenellated tower
+  });
+
+  it('lights the core when the hero stands on it', () => {
+    const [off, on] = [fakeContext(), fakeContext()];
+    portalIcon(off.ctx, 0, 0, 30, false);
+    portalIcon(on.ctx, 0, 0, 30, true);
+    expect(off.fills.some((f) => f.colour === ICON.here)).toBe(false);
+    expect(on.fills.some((f) => f.colour === ICON.here)).toBe(true);
   });
 });

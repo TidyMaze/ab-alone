@@ -204,13 +204,14 @@ describe('drawMinimap', () => {
     expect(small).toBeLessThan(span(at(big.fills, BOSS_COLOURS.hull!)[0]!.at));
   });
 
-  it('draws the teleporters given in the window as hexagons (#1412), none out of it, and rings the one chosen', () => {
+  it('draws the teleporters given in the window as portal icons (#1412, #1443), none out of it, the hero\'s own lit, and rings the one chosen', () => {
     const { ctx, fills, log } = fakeContext();
-    drawMinimap(ctx, SIZE, data({ teleporters: [[3, 0], [-2, 1], [200, 0]] }));
-    const drawn = at(fills, COLOURS.teleporter);
-    expect(drawn).toHaveLength(2);
-    expect(drawn[0]!.at).toHaveLength(12); // six points
+    drawMinimap(ctx, SIZE, data({ hero: [3, 0], teleporters: [[3, 0], [-2, 1], [200, 0]] }));
+    const drawn = at(fills, ICON.portal);
+    expect(drawn).toHaveLength(1); // the core of the one in the window the hero is not on
+    expect(drawn[0]!.at).toHaveLength(3); // a disc, not a tower
     expect(drawn[0]!.at[0]).toBeGreaterThan(MIDDLE);
+    expect(at(fills, ICON.here)).toHaveLength(1); // the one the hero stands on
     expect(log).not.toContain('stroke chosen');
     drawMinimap(ctx, SIZE, data({ teleporters: [[3, 0]], chosen: [3, 0] }));
     expect(log).toContain('stroke chosen');
@@ -249,7 +250,7 @@ describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, c
   it('draws every teleporter given where it is, however far', () => {
     const { ctx, fills } = fakeContext();
     drawMap(ctx, frame, data({ teleporters: [[200, 0]] }));
-    expect(at(fills, COLOURS.teleporter)[0]!.at[0]).toBeCloseTo(200 + 200 * 10 + 5);
+    expect(at(fills, ICON.portal)[0]!.at[0]).toBeCloseTo(200 + 200 * 10);
   });
 
   it('puts the centre in the middle, the cells `unit` px apart, and the hero where it stands', () => {
