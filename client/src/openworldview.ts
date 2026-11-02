@@ -2,6 +2,7 @@
 // prisms, lifted by their height and coloured by their terrain, with low-poly props on top (faceted mountains, wire
 // pines, boulders, gantry walls with a gold edge), the hero marble, and the camera that follows it. It has its own
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
+import { accentLights } from './neonfx';
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { axialTo3D, type Axial } from './board';
@@ -461,6 +462,8 @@ export class OpenWorldView {
   private readonly fog = new THREE.Fog(neonWorldOn() ? NEON.sky : SHIP_BLACK);
   private stars: THREE.Mesh | null = null;
   /** Where the hero stands (x, z) for the ground's shader: the neon grid is clear round it, quiet further out (#1424). */
+  /** The neon look's 2 accent lights (neonfx.ts), kept near the hero. */
+  private readonly accents = this.neon ? accentLights('openworld') : [];
   private readonly heroXZ = uniform(new THREE.Vector2());
   private level = 1;
   /** The zoom drawn at the current turn: `level` as followed, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
@@ -594,6 +597,7 @@ export class OpenWorldView {
       Object.assign(this.stars.material, { depthTest: false });
       this.scene.add(this.stars);
     }
+    if (this.neon) this.scene.add(...this.accents); // hidden until main.ts's `driveAccents` shows them: the high tier on a GPU
     const traces = this.neon ? neonTraces() : null;
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     const top = topOnly(prism);
@@ -1274,6 +1278,7 @@ export class OpenWorldView {
     this.sun.position.copy(at).add(this.sunAway.set(...(this.neon ? neonSunPosition(30 * scale) : sunPosition(30 * scale))));
     this.stars?.position.copy(this.camera.position);
     this.heroXZ.value.set(at.x, at.z);
+    this.accents.forEach((l, i) => l.position.set(at.x + (i ? 3 : -3), 2.5, at.z + (i ? -2 : 2)));
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
     const view = new THREE.Vector3();

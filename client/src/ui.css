@@ -1379,3 +1379,11 @@ body:not([data-openworld], [data-over]) canvas { animation: screen-in var(--moti
    motion: the tokens are 0ms and the rule above cuts the animation, so both appear at once. */
 body[data-openworld] #openworld-hud { animation: sheet-in var(--motion-base) var(--ease-out); }
 
+
+/* Neon glow on the screens (#1424): one cyan accent, a soft box-shadow on panel and button edges and a slow breathing on the
+   open menu button. Borders, text and fills keep their colours (contrast untouched). The low tier draws no glow; reduced motion stops the breathing. */
+body[data-look='neon'] { --glow: 0 0 6px rgba(25, 230, 255, 0.35), inset 0 0 8px rgba(25, 230, 255, 0.12); }
+body[data-look='neon']:not([data-tier='low']) :is(#hud, #eval, #hub-rail, #hub-pips, .hub-label:not([data-here])) { box-shadow: var(--glow); }
+body[data-look='neon']:not([data-tier='low']) :is(#modes, #new-game, #hint, #openworld, #ship, #daily, #roguelite, #trainer, #boss-fight, #play-online, #boss-list button, #coop-list button):is(:hover, :focus-visible) { box-shadow: 0 0 10px rgba(25, 230, 255, 0.6); }
+body[data-look='neon']:not([data-tier='low']) #modes[aria-expanded='true'] { box-shadow: 0 0 10px rgba(25, 230, 255, 0.55); animation: neon-breathe 4s ease-in-out infinite; }
+@keyframes neon-breathe { 50% { box-shadow: 0 0 5px rgba(25, 230, 255, 0.3); } }

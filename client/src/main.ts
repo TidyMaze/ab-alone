@@ -44,6 +44,7 @@ import { openInEditor } from './editorexport';
 import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './lightpanel';
 import { LIGHT_TUNING } from './lighttuning';
 import { tubeLights } from './neonlight';
+import { accentLights, accentOn, driveAccents } from './neonfx';
 import { ringLamp } from './ringlamp';
 import { CELL_LAYER, instanceCells, instanceMarbles } from './instancedcells';
 import sceneOverrides from './sceneoverrides.json';
@@ -2272,6 +2273,7 @@ const refreshLights = (): void => {
 };
 // What the last look made, disposed when the next replaces it (#846): a setting is a rebuild, never a leak.
 let propMeshes: THREE.Mesh[] = [];
+let roomAccents: THREE.PointLight[] = []; // the neon look's 2 accent lights (neonfx.ts), driven each draw
 drawProps = (): void => {
   for (const mesh of propMeshes) {
     mesh.geometry.dispose();
@@ -2398,6 +2400,8 @@ drawProps = (): void => {
   const lights = { viewportRimLight, kioskGreenLight };
   for (const [name, light] of Object.entries(lights)) light.name = name; // the ?lights sliders' names
   propsGroup.add(...Object.values(lights));
+  roomAccents = neonLook ? accentLights('room') : [];
+  propsGroup.add(...roomAccents);
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
@@ -6841,6 +6845,7 @@ renderer.setAnimationLoop((now) => {
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {
+      driveAccents(scene.children.filter((o): o is THREE.PointLight => o.name === 'neon accent'), accentOn(tier, software), now, reducedMotion());
       renderer.info.reset();
       sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
       renderer.render(scene, camera);
@@ -6863,6 +6868,7 @@ renderer.setAnimationLoop((now) => {
     lastFps = fpsOf(fpsStamps);
     fpsBox.textContent = `${lastFps} FPS`;
   }
+  driveAccents(roomAccents, accentOn(tier, software), now, reducedMotion());
   animateSlides(now);
   fadeGlyphs(now);
   fadeGhosts(now);
