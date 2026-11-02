@@ -344,3 +344,33 @@ jobs:
             client/playwright-report/
             client/test-results/
           retention-days: 7
+
+  # A red e2e on main must reach the owners (#1435): the hourly run is started by a bot, so nobody is notified by GitHub.
+  e2e-alert:
+    needs: e2e
+    if: failure() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          title='Bug: the full e2e suite is red on main'
+          open=$(gh issue list --state open --label bug --search "in:title \"$title\"" --json number --jq '.[0].number // ""')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Still red on $SHA: $RUN"
+          else
+            gh issue create --title "$title" --label bug --assignee TidyMaze,Varadiell --body "**Steps to reproduce**
+          The hourly full e2e run on \`main\`, commit $SHA: $RUN (the failed specs are in the run's report).
+
+          **What happens**
+          The suite is red on \`main\`.
+
+          **Expected once fixed**
+          Green. Rule: revert at once, then fix (CONTRIBUTING 6.4)."
+          fi
