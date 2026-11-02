@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
 import { LOOK, PROPS, WATER } from './openworldview';
+import { contrastRatio, type RGB } from './contrast';
+import { setNeonWorldOn } from './neonlook';
+import { WALKABLE } from './openworld';
 import { BOSS_COLOURS, ICON } from './openworldlairicon';
 import { COLOURS, drawMap, drawMinimap, groundOffset, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
 
@@ -64,6 +67,40 @@ describe('terrainColour', () => {
     expect(terrainColour('boulder')).toBe(hex(PROPS.boulder.color));
   });
 
+  describe('the mountain you cannot cross (#1439)', () => {
+    const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
+    const ratio = (a: string, b: string): number => contrastRatio(rgb(a), rgb(b));
+
+    it('is the peak and the wall, which the core blocks (the walkable terrains of openworld.ts), never the walkable rock', () => {
+      expect(WALKABLE.has('rock')).toBe(true);
+      for (const terrain of ['peak', 'wall'] as const) {
+        expect(WALKABLE.has(terrain)).toBe(false);
+        expect(terrainColour(terrain)).toBe(COLOURS.mountain);
+      }
+      expect(terrainColour('rock')).not.toBe(COLOURS.mountain);
+    });
+
+    it('reads 3:1 against the walkable rock, in the plain look and in the neon one', () => {
+      for (const neon of [false, true]) {
+        setNeonWorldOn(neon);
+        expect(ratio(terrainColour('peak'), terrainColour('rock')), `neon ${neon}`).toBeGreaterThanOrEqual(3);
+      }
+      setNeonWorldOn(false);
+    });
+
+    it('keeps the hero, the troop and the tower icons readable on the mountain and on the rock', () => {
+      for (const ground of [terrainColour('peak'), terrainColour('rock')]) {
+        for (const mark of [COLOURS.hero, COLOURS.troop]) expect(Math.max(ratio(mark, ground), ratio(COLOURS.edge, ground)), `${mark} on ${ground}`).toBeGreaterThanOrEqual(3);
+        expect(Math.max(ratio(ICON.rim, ground), ratio(ICON.halo, ground))).toBeGreaterThanOrEqual(3);
+      }
+    });
+
+    it('outlines the dots of the hero, the troop and the enemies in the dark, so they read on the pale mountain', () => {
+      const { ctx, log } = fakeContext();
+      drawMap(ctx, { width: 400, height: 200, centre: [0, 0], unit: 10, round: false }, data({ troop: [[1, 0]], enemies: [[2, 0]] }));
+      expect(log.filter((l) => l === 'stroke')).toHaveLength(3);
+    });
+  });
 });
 
 describe('screenOffset', () => {
