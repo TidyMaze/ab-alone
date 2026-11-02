@@ -28,7 +28,10 @@ test('the FPS readout is off by default, shows a rate once switched on, and surv
   expect(await page.evaluate(() => (window as any).__renderCost.calls)).toBeGreaterThan(0);
 });
 
+// Local, on a GPU only (owner's decision, #1436): the 60 ms frame limit of #777 cannot hold on the CI runner, which draws in software
+// (one frame took 850 ms in run 41485265392). The limit stays 60 ms; the test does not run on CI.
 test('marble selection preserves framerate and causes no frame time spikes, bug #777', async ({ page }) => {
+  test.skip(!!process.env.CI, 'needs a GPU: the CI runner draws in software (#777, #1436)');
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await page.waitForTimeout(500);
