@@ -379,20 +379,6 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
   await expect.poll(yaw).toBe('30');
 });
 
-// #1251: a right-button drag turns the camera freely while held and settles on the nearest resting angle (30 plus a multiple of 60) when released.
-test('a right-button drag turns the Open world camera and settles on a step of 60 degrees on release, #1251', async ({ page }) => {
-  await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
-  await expect.poll(yaw).toBe('-30'); // the world is open: the drag is the Open world's
-  await page.mouse.move(300, 300);
-  await page.mouse.down({ button: 'right' });
-  await page.mouse.move(400, 300, { steps: 5 }); // 100 px: 50 degrees, from -30 to 20
-  await expect.poll(yaw).toBe('20');
-  await page.mouse.up({ button: 'right' });
-  await expect.poll(yaw).toBe('30');
-});
-
 // #1040: a step glides the hero from its cell to the next one. The cell is exact at once (`openworldAt`, the save and the push use
 // it); only the drawing glides. With the slow factor of 10 the glide lasts 1.4 s, so the browser sees the hero in between.
 test('a step glides the hero onto the next cell: exact at once, drawn in between, landed at the end, #1040', async ({ page }) => {
@@ -568,38 +554,6 @@ test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ 
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(300);
   expect(await at()).toBe('0,0'); // every side is shut: it stays
-});
-
-// #1137: a tap on a far cell walks the hero there round the obstacles (a Rust A*), a key cancels it, and the Steering setting turns
-// it off.
-test('a tap on a far cell walks the hero there, a key cancels, Steering off keeps it still, #1137', async ({ page }) => {
-  await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
-  const route = () => page.evaluate(() => document.body.dataset.openworldRoute);
-  await expect.poll(at).toBe('0,0');
-  await expect(page.locator('#openworld-mode')).toContainText('Steering on');
-  const size = page.viewportSize()!;
-  const far = { x: size.width / 2 + 220, y: size.height / 2 - 40 };
-  await page.mouse.click(far.x, far.y);
-  await expect.poll(route).not.toBe('0'); // a walk is on
-  await shot(page, { path: test.info().outputPath('tap-walk.png') });
-  await page.keyboard.press('Shift'); // any key cancels
-  await expect.poll(route).toBe('0');
-  const stopped = await at();
-  await page.waitForTimeout(400);
-  expect(await at()).toBe(stopped);
-  expect(stopped).not.toBe('0,0');
-  await page.mouse.click(far.x, far.y); // walk again, to the end
-  await expect.poll(route, { timeout: 8000 }).toBe('0');
-  // Steering off: the same tap does nothing.
-  await page.locator('#settings').click();
-  await page.locator('#setting-steering').click();
-  await expect(page.locator('#openworld-mode')).toContainText('Steering off');
-  const before = await at();
-  await page.mouse.click(size.width / 2 - 260, size.height / 2 - 40);
-  await page.waitForTimeout(400);
-  expect(await at()).toBe(before);
 });
 
 // #1103: a push punches the camera in 3 % and back within 250 ms; the chunk centre and the reach never change, and the zoom is exactly

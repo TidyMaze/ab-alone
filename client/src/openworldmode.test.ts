@@ -768,6 +768,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     const saved = store.data.get('openworld:7') as WorldSave;
     expect(saved.hero).toEqual([2, 0]);
     expect(saved.fight.added).toEqual([[3, 0]]);
+    expect(saved.troop).toEqual([[1, 0], [0, 0], [-2, 0]]); // the troop the page marks as '1,0 0,0 -2,0' (the removed e2e read it after a reload)
   });
 
   it('leaving saves the final state at once, before any frame', async () => {
