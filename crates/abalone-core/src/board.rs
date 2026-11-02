@@ -494,6 +494,22 @@ impl Board {
         Ok(())
     }
 
+    /// The special marks of the marbles on `a` and `b` trade places (a Swap).
+    pub(crate) fn swap_specials(&mut self, a: (i32, i32), b: (i32, i32)) {
+        if let Some(specials) = self.specials.as_mut() {
+            for s in specials.iter_mut() {
+                s.0 = if s.0 == a {
+                    b
+                } else if s.0 == b {
+                    a
+                } else {
+                    s.0
+                };
+            }
+            specials.sort_by_key(|s| s.0);
+        }
+    }
+
     /// The army's relics, by their bit (`Relic::bit`), `0` without the rogue-lite flag.
     pub fn relics(&self) -> u32 {
         self.relics

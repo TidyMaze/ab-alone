@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::board::{Board, Cell, PlaceError, Special};
+use crate::board::{Board, Cell, PlaceError, Special, STANDARD_BLACK};
 use crate::encounter::marbles;
 use crate::moves::{apply, legal_moves, Move, MoveError, Player};
 use crate::run::{credits, Relic};
@@ -98,6 +98,21 @@ pub struct Game {
     draw_to: Option<Player>,
     /// The side whose turn passed after the last ply: it had marbles but no legal move.
     passed: Option<Player>,
+    /// A Freeze waits: the bot skips its next turn (rogue-lite tactics).
+    frozen: bool,
+    /// The fight as it stood before each move of the army, for Fall back (rogue-lite tactics).
+    turns: Vec<Turn>,
+}
+
+/// What Fall back brings back: the fight before one move of the army.
+#[derive(Clone, Debug)]
+struct Turn {
+    board: Board,
+    ejected: [u8; 2],
+    no_ejection_plies: u32,
+    plies: usize,
+    win: [u8; 2],
+    frozen: bool,
 }
 
 fn index(player: Player) -> usize {
@@ -196,6 +211,8 @@ impl Game {
             draws: true,
             draw_to: None,
             passed: None,
+            frozen: false,
+            turns: Vec::new(),
         }
     }
 
@@ -215,6 +232,8 @@ impl Game {
             draws: true,
             draw_to: None,
             passed: None,
+            frozen: false,
+            turns: Vec::new(),
         }
     }
 
@@ -249,14 +268,124 @@ impl Game {
         Ok(())
     }
 
-    /// Plays `tactic` for the army.
-    pub fn play_tactic(&mut self, _tactic: Tactic) -> Result<(), TacticError> {
-        Err(TacticError::NotRogueLite)
+    /// Why no tactic can be played now, if so.
+    fn closed(&self) -> Option<TacticError> {
+        if !self.board.rogue_lite() {
+            Some(TacticError::NotRogueLite)
+        } else if self.outcome.is_some() {
+            Some(TacticError::GameOver)
+        } else if self.to_move != Player::Black {
+            Some(TacticError::NotYourTurn)
+        } else {
+            None
+        }
     }
 
-    /// Whether Reinforce, Freeze, Swap and Fall back can be played now.
+    /// Why `tactic` cannot be played now, if it cannot.
+    fn refuse(&self, tactic: Tactic) -> Option<TacticError> {
+        self.closed().or(match tactic {
+            Tactic::Reinforce => self
+                .free_back_cell()
+                .is_none()
+                .then_some(TacticError::NoFreeCell),
+            Tactic::Freeze => self.frozen.then_some(TacticError::AlreadyFrozen),
+            Tactic::Swap(a, b) => (a == b || !self.swappable(a, b)).then_some(TacticError::BadSwap),
+            Tactic::FallBack => self.turns.is_empty().then_some(TacticError::NothingToUndo),
+        })
+    }
+
+    /// The first free cell of the army's back row, in the standard layout's order.
+    fn free_back_cell(&self) -> Option<(i32, i32)> {
+        STANDARD_BLACK[..5]
+            .iter()
+            .copied()
+            .find(|&(q, r)| self.board.get(q, r) == Some(Cell::Empty))
+    }
+
+    /// Whether `a` and `b` are two marbles of the army, one of them special.
+    fn swappable(&self, a: (i32, i32), b: (i32, i32)) -> bool {
+        let mine = |(q, r): (i32, i32)| self.board.get(q, r) == Some(Cell::Black);
+        mine(a) && mine(b) && (self.board.special(a).is_some() || self.board.special(b).is_some())
+    }
+
+    /// Whether Reinforce, Freeze, Swap and Fall back can be played now. A Swap needs a special
+    /// marble of the army and another marble of it.
     pub fn tactics(&self) -> [bool; 4] {
-        [false; 4]
+        let open = self.closed().is_none();
+        let specials = self
+            .board
+            .specials()
+            .iter()
+            .filter(|s| self.board.get(s.0 .0, s.0 .1) == Some(Cell::Black))
+            .count();
+        [
+            open && self.free_back_cell().is_some(),
+            open && !self.frozen,
+            open && specials > 0 && marbles(&self.board, Cell::Black) > 1,
+            open && !self.turns.is_empty(),
+        ]
+    }
+
+    /// Plays `tactic` for the army (Black), on its turn before a move: Reinforce and Freeze cost no
+    /// move, Swap does, Fall back gives the army its last move and the bot's answer back. Only in a
+    /// rogue-lite fight (docs/specs/roguelite.md section 11).
+    pub fn play_tactic(&mut self, tactic: Tactic) -> Result<(), TacticError> {
+        if let Some(error) = self.refuse(tactic) {
+            return Err(error);
+        }
+        match tactic {
+            Tactic::Reinforce => {
+                let (q, r) = self.free_back_cell().expect("refused otherwise");
+                self.board.set(q, r, Cell::Black);
+                // The army is still 3 marbles short of losing, within the usual cap.
+                self.win[1] = (self.win[1] + 1).min(WIN_EJECTIONS);
+                self.rehash();
+            }
+            Tactic::Freeze => self.frozen = true,
+            Tactic::Swap(a, b) => {
+                let turn = self.turn();
+                self.board.swap_specials(a, b);
+                self.turns.extend(turn);
+                self.to_move = Player::White;
+                self.passed = None;
+                self.no_ejection_plies += 1;
+                self.rehash();
+                self.skip_frozen();
+                self.pass_when_blocked();
+            }
+            Tactic::FallBack => {
+                let turn = self.turns.pop().expect("refused otherwise");
+                self.board = turn.board;
+                self.ejected = turn.ejected;
+                self.no_ejection_plies = turn.no_ejection_plies;
+                self.win = turn.win;
+                self.frozen = turn.frozen;
+                self.history.truncate(turn.plies);
+                self.passed = None;
+                self.rehash();
+            }
+        }
+        Ok(())
+    }
+
+    /// The fight as it stands, when the army is about to move in a rogue-lite fight.
+    fn turn(&self) -> Option<Turn> {
+        (self.board.rogue_lite() && self.to_move == Player::Black).then(|| Turn {
+            board: self.board.clone(),
+            ejected: self.ejected,
+            no_ejection_plies: self.no_ejection_plies,
+            plies: self.history.len(),
+            win: self.win,
+            frozen: self.frozen,
+        })
+    }
+
+    /// A Freeze waiting is spent: the bot's turn passes, as a blocked side's does.
+    fn skip_frozen(&mut self) {
+        if self.frozen && self.outcome.is_none() && self.to_move == Player::White {
+            self.pass_turn();
+        }
+        self.frozen = false;
     }
 
     /// Gives the army its run's `relics`, before the first move of a rogue-lite fight
@@ -343,12 +472,21 @@ impl Game {
     /// repetition sees the position the players actually face.
     pub(crate) fn replace_board(&mut self, board: Board) {
         self.board = board;
-        let hash = position_hash(&self.board, self.to_move);
-        self.history.last_mut().expect("called after a ply").hash = hash;
+        let hash = self.rehash();
         if self.draws && self.outcome.is_none() && self.seen(hash) >= REPETITION_LIMIT {
             self.outcome = Some(Outcome::Draw);
             self.draw_reason = Some(DrawReason::Repetition);
         }
+    }
+
+    /// Hashes the position as it stands in place of the last one (the start's before any ply).
+    fn rehash(&mut self) -> u64 {
+        let hash = position_hash(&self.board, self.to_move);
+        match self.history.last_mut() {
+            Some(last) => last.hash = hash,
+            None => self.start_hash = hash,
+        }
+        hash
     }
 
     /// Times the position `hash` has been seen in this game, the start included.
@@ -432,7 +570,10 @@ impl Game {
 
     /// Plays `mv` for the side to move. The next side passes when it has no legal move.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
+        let turn = self.turn();
         self.play_ply(mv)?;
+        self.turns.extend(turn);
+        self.skip_frozen();
         self.pass_when_blocked();
         Ok(())
     }
@@ -540,6 +681,8 @@ mod tests {
             draws: true,
             draw_to: None,
             passed: None,
+            frozen: false,
+            turns: Vec::new(),
         }
     }
 
@@ -1411,6 +1554,8 @@ mod tactic_tests {
         let reinforced = game.board().clone();
         let m = first(&game);
         game.play(&m).unwrap();
+        let reply = first(&game);
+        game.play(&reply).unwrap();
         game.play_tactic(Tactic::FallBack).unwrap();
         assert_eq!(game.board(), &reinforced);
         assert_eq!(game.win_ejections(Player::White), 5);
@@ -1418,6 +1563,8 @@ mod tactic_tests {
         let mut push = rogue(&[(0, 0), (1, 0), (2, 0)], &[(3, 0), (4, 0)], &[], [0, 0]);
         push.play(&mv(&[(0, 0), (1, 0), (2, 0)], E)).unwrap();
         assert_eq!(push.ejected(Player::Black), 1);
+        let reply = first(&push);
+        push.play(&reply).unwrap();
         push.play_tactic(Tactic::FallBack).unwrap();
         assert_eq!(push.ejected(Player::Black), 0);
         assert_eq!(count(&push, Cell::White), 2);
@@ -1429,6 +1576,8 @@ mod tactic_tests {
         game.place_special((0, 2), Special::Spark).unwrap();
         let start = game.board().clone();
         game.play_tactic(Tactic::Swap((0, 2), (1, 3))).unwrap();
+        let reply = first(&game);
+        game.play(&reply).unwrap();
         game.play_tactic(Tactic::FallBack).unwrap();
         assert_eq!(game.board(), &start);
         game.play_tactic(Tactic::Freeze).unwrap();
