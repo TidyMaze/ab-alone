@@ -53,7 +53,7 @@ test('the ranked entry asks first, joining and leaving the board are as easy, an
     consent: localStorage.getItem('ab-alone.board-consent'),
     retire: localStorage.getItem('ab-alone.board-retire'),
   }));
-  expect(JSON.parse(kept.consent!)).toEqual({ v: 1, choice: 'declined' });
+  expect(JSON.parse(kept.consent!)).toEqual({ v: 2, choice: 'declined' });
   expect(JSON.parse(kept.retire!).events[0].kind).toBe('retire');
   await expect.poll(() => new Set(sockets).size).toBe(3);
   expect([...new Set(sockets)].sort()).toEqual(['wss://nos.lol/', 'wss://relay.bitmacro.cloud/', 'wss://relay.piazza.today/']);

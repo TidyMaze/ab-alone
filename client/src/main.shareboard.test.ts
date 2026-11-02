@@ -31,7 +31,7 @@ describe('shared board opt-in', () => {
     byId('optin-yes').click();
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
     expect(shown()).toBe(false);
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 1, choice: 'joined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 2, choice: 'joined' });
     expect(localStorage.getItem('ab-alone.board-name')).toHaveLength(16);
   });
 
@@ -52,7 +52,7 @@ describe('shared board opt-in', () => {
     await game.settle();
     byId('optin-no').click();
     await game.settle();
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 1, choice: 'declined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 2, choice: 'declined' });
   });
 
   it('Keep ranked local stores a decline, and it is not asked again', async () => {
@@ -72,7 +72,7 @@ describe('shared board opt-in', () => {
       leave();
       await game.settle();
       expect(shown()).toBe(false);
-      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 1, choice: 'declined' });
+      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 2, choice: 'declined' });
       expect(localStorage.getItem('ab-alone.board-key')).toBeNull();
     }
     game.openModes();
@@ -230,13 +230,29 @@ describe('shared board opt-in', () => {
   it('without ?board nothing is read, even from a player who joined before', async () => {
     FakeSocket.all = [];
     vi.stubGlobal('WebSocket', FakeSocket);
-    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 1, choice: 'joined' }));
+    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 2, choice: 'joined' }));
     const game = await boot('?bot=off&net=hook');
     game.openModes();
     byId('leaderboard').click();
     await game.settle();
     expect(FakeSocket.all).toHaveLength(0);
     vi.unstubAllGlobals();
+  });
+
+  it('with ?board, no relay is contacted before a current opt-in: not asked, declined, an older answer, or garbage', async () => {
+    for (const saved of [null, { v: 2, choice: 'declined' }, { v: 1, choice: 'joined' }, 'garbage']) {
+      FakeSocket.all = [];
+      vi.stubGlobal('WebSocket', FakeSocket);
+      localStorage.clear();
+      if (saved) localStorage.setItem('ab-alone.board-consent', typeof saved === 'string' ? saved : JSON.stringify(saved));
+      const game = await boot('?bot=off&board&net=hook');
+      game.openModes();
+      byId('leaderboard').click();
+      await game.settle();
+      expect(FakeSocket.all).toHaveLength(0);
+      expect(byId('board-shared').hidden).toBe(true);
+      vi.unstubAllGlobals();
+    }
   });
 
   it('says so when the relays cannot be read, instead of waiting for ever', async () => {

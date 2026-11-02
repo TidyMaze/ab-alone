@@ -15,6 +15,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('the board opt-in (#1287)', () => {
   it('says what the law asks: public, permanent, third party relays, no deletion, a name that is not you, 16+', () => {
+    expect(BOARD_VERSION).toBe(2); // the answers given before the IP sentence are asked again
+    expect(BOARD_TEXT).toContain('Opening the board connects your browser to these relays, which see your IP address. It is public');
     for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'nos.lol']) {
       expect(BOARD_TEXT).toContain(word);
     }
