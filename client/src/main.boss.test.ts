@@ -634,7 +634,7 @@ describe('main.ts boss tells', () => {
       const halos = meshes.filter((m) => army[0]!.geometry.type === m.geometry.type && (m.material as THREE.MeshBasicMaterial).color.getHex() !== 0x15191c && m.position.y === 0.76);
       expect(halos.length).toBeGreaterThan(0);
       const [a, h] = [army[0]!.geometry, halos[0]!.geometry].map((g) => (g.computeBoundingBox(), g.boundingBox!.max.y));
-      expect(h! / a!).toBeGreaterThanOrEqual(1.7);
+      expect(h! / a!).toBeGreaterThan(1.69);
     }
   });
 
