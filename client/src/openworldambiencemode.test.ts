@@ -11,7 +11,7 @@ import { memoryStore } from './savegame';
 // (e2e/openworld-ambience.spec.ts): a frame cost seconds on the CI runner, and the mode draws the same on the real world here.
 const CELL = { forest: [29, -59], tundra: [-19, -44], desert: [-60, 30], meadow: [40, -20] } as const; // one a sextant (#1442)
 const body = () => document.body.dataset;
-const mode = () => new OpenWorldMode(world_chunk, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => false, worldSaves(memoryStore(), 1));
+const mode = (reduced = false) => new OpenWorldMode(world_chunk, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => reduced, worldSaves(memoryStore(), 1));
 const stand = (m: OpenWorldMode, cell: readonly [number, number], at: number): void => {
   m.fixture({ hero: [...cell], troop: [], enemies: [] });
   m.frame(vi.fn(), at);
@@ -47,5 +47,52 @@ describe('the ambience of the biomes of the Open world (#1104)', () => {
     expect(Number(body().openworldParticles ?? 0)).toBe(0);
     stand(m, CELL.desert, 4000);
     expect(body().openworldMotion ?? '').toBe('');
+  });
+});
+
+// #1101, #1102: seed 1 has a lake with a forest beside it at (26, 21): the shore foam and the trees move, with no extra draw. The
+// two-frames-differ pixel checks of the former e2e spec (e2e/openworld-motion.spec.ts) are the draws counted here: a frame is drawn
+// each time while something moves (and its time is set for the shaders), and a stilled loop draws once and rests.
+describe('the water and the trees of seed 1 move, reduced motion and the low tier move nothing (#1101, #1102)', () => {
+  const at = (m: OpenWorldMode): void => m.fixture({ hero: [26, 21], troop: [], enemies: [] });
+
+  it('marks the water and the trees, and draws every frame', () => {
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    const m = mode();
+    m.enter(1, 480, 270);
+    at(m);
+    const render = vi.fn();
+    m.frame(render, 1000);
+    m.frame(render, 1016);
+    m.frame(render, 1032);
+    expect(body().openworldMotion).toBe('water,trees');
+    expect(render).toHaveBeenCalledTimes(3);
+  });
+
+  it('moves nothing under reduced motion: no mark, and the frames after the first draw nothing', () => {
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    const m = mode(true);
+    m.enter(1, 480, 270);
+    at(m);
+    const render = vi.fn();
+    m.frame(render, 1000);
+    m.frame(render, 2500);
+    m.frame(render, 4000);
+    expect(body().openworldMotion).toBe('');
+    expect(render.mock.calls.length).toBeLessThanOrEqual(2); // the fixture's move is drawn once, then it rests
+    const drawn = render.mock.calls.length;
+    m.frame(render, 5500);
+    expect(render).toHaveBeenCalledTimes(drawn);
+  });
+
+  it('draws no foam, ripple or sway on the low tier', () => {
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    document.body.dataset.tier = 'low';
+    const m = mode();
+    m.enter(1, 480, 270);
+    at(m);
+    m.frame(vi.fn(), 1000);
+    m.frame(vi.fn(), 1016);
+    expect(body().openworldMotion).toBe('');
   });
 });
