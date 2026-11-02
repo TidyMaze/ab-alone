@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fitView, type View } from './camera';
-import { NEON_HIDDEN, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
+import { NEON_HIDDEN, NEON_CELL_SCALE, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
 
 /** The palette the port must match (notes-round4.md). */
 export const PALETTE = {
@@ -155,7 +155,7 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
   if (dishes.length) {
     const first = dishes[0]!;
     const material = neon ? neonMaterial('dish') : terraceMaterial(first.material as THREE.Material, first.geometry);
-    const matrices = dishes.map((d) => d.matrixWorld.clone());
+    const matrices = dishes.map((d) => (neon ? d.matrixWorld.clone().scale(new THREE.Vector3(NEON_CELL_SCALE, 1, NEON_CELL_SCALE)) : d.matrixWorld.clone()));
     const geometry = neon ? first.geometry.clone() : first.geometry;
     if (neon) neonPaint(first.name, geometry); // the dish takes the slate, its edge the cyan line in the gap
     const mesh = new THREE.InstancedMesh(geometry, material, dishes.length);

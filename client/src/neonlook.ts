@@ -31,6 +31,9 @@ export const NEON = {
 /** The mock's light: a cold sun low on the left, a violet-tinted hemisphere, ACES at 1.15. */
 export const NEON_LIGHT = { sun: 0xe8f0ff, sunIntensity: 3.2, elevation: 24, azimuth: 50, sky: 0x9a6bff, skyMix: 0xe8eeff, skyAmount: 1, ground: 0x2a3347, hemisphere: 2.9, exposure: 1 } as const;
 
+/** The dishes are drawn this much smaller across: the gap between two cells (1 - the flat-to-flat of a 0.5 hexagon, 0.134) grows by 40 %, so the cyan line keeps its width and its dark floor at 390 px. */
+export const NEON_CELL_SCALE = (1 - (1 - Math.sqrt(3) / 2) * 1.4) / (Math.sqrt(3) / 2);
+
 /** `?look=neon`, nothing else. */
 export function neonLookOn(search: string): boolean {
   return new URLSearchParams(search).get('look') === 'neon';
@@ -211,9 +214,9 @@ export function neonGlow(posts: readonly THREE.Vector3[], rim: boolean): THREE.G
   const violet = new THREE.MeshBasicMaterial({ name: 'neon_violet', color: new THREE.Color(NEON.violet).multiplyScalar(1.2), fog: false, side: THREE.DoubleSide });
   if (rim) group.add(new THREE.Mesh(neonEdgeGeometry(4.93, 4.98, 0.158, Math.PI / 6), violet)); // the rim's inner top edge (slab_arena: a flat-top hexagon of 4.9)
   for (const p of posts) {
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.05, 8, 1, true), violet);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.147, 0.147, 0.05, 8, 1, true), violet);
     band.position.set(p.x, p.y + 0.7, p.z);
-    const tip = new THREE.Mesh(new THREE.CircleGeometry(0.14, 8).rotateX(-Math.PI / 2), violet);
+    const tip = new THREE.Mesh(new THREE.CircleGeometry(0.098, 8).rotateX(-Math.PI / 2), violet);
     tip.position.set(p.x, p.y + 1.075, p.z);
     group.add(band, tip);
   }

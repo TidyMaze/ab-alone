@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars } from './neonlook';
+import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
@@ -125,6 +125,11 @@ describe('the neon look of the terrace file (#1424)', () => {
     expect(dishes.material).toBe(neonMaterial('dish'));
     expect(at(dishes.geometry, 0).getHex()).toBe(NEON.cell);
     expect([dishes.count, edges.count]).toEqual([2, 2]);
+    const first = new THREE.Matrix4();
+    dishes.getMatrixAt(0, first);
+    expect(new THREE.Vector3().setFromMatrixScale(first).x).toBeCloseTo(NEON_CELL_SCALE); // the gap is 40 % wider
+    expect(new THREE.Vector3().setFromMatrixPosition(first).x).toBe(0); // about its own centre
+    expect(NEON_CELL_SCALE).toBeCloseTo(0.938, 3);
     dishes.userData.show((x: number) => x === 2);
     expect([dishes.count, edges.count]).toEqual([1, 1]); // a vanished cell loses its edge too
     const bar = out.children.find((c) => c.name === 'scene_turnbar_black') as THREE.Mesh;
