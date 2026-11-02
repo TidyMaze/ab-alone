@@ -7,7 +7,7 @@ import { setNeonWorldOn } from './neonlook';
 import { mapColour, WORLD } from './neonworld';
 import { WALKABLE } from './openworld';
 import { BOSS_COLOURS, ICON } from './openworldlairicon';
-import { COLOURS, drawMap, drawMinimap, groundOffset, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
+import { COLOURS, compassPoints, drawMap, drawMinimap, groundOffset, northDirection, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
 
 // The Open world's minimap (#1410, docs/specs/openworld.md section 8): a 2D canvas drawn from plain data.
 
@@ -258,5 +258,53 @@ describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, c
     drawMap(ctx, { ...frame, centre: [2, 0] }, data({ hero: [0, 0], cells: [[3, 0, 'sand']] }));
     expect(at(fills, terrainColour('sand'))[0]!.at.slice(0, 2)).toEqual([210, 100]);
     expect(at(fills, COLOURS.hero)[0]!.at.slice(0, 2)).toEqual([180, 100]);
+  });
+});
+
+describe('north (#1448, docs/specs/openworld.md section 8)', () => {
+  it('is the ground\'s -z at yaw 0, decreasing r: up on the screen, and it turns with the camera', () => {
+    expect(northDirection(0).x).toBeCloseTo(0);
+    expect(northDirection(0).y).toBeCloseTo(-1);
+    for (const yaw of [0, 0.7, -2.1, Math.PI / 2]) {
+      const n = northDirection(yaw);
+      const off = screenOffset([0, 0], [0, -1000], yaw); // far north on the ground, as drawn
+      expect(Math.hypot(n.x, n.y)).toBeCloseTo(1);
+      expect(off.x / Math.hypot(off.x, off.y)).toBeCloseTo(n.x, 1);
+      expect(off.y / Math.hypot(off.x, off.y)).toBeCloseTo(n.y, 1);
+    }
+  });
+
+  it('puts the N on the rim of the minimap, on the north side, and turns it with the yaw', () => {
+    for (const yaw of [0, Math.PI / 2, Math.PI]) {
+      const { ctx, fills } = fakeContext();
+      const texts: [string, number, number][] = [];
+      (ctx as unknown as { fillText: (t: string, x: number, y: number) => void }).fillText = (t, x, y) => texts.push([t, x, y]);
+      drawMinimap(ctx, SIZE, data({ yaw }));
+      const n = texts.find(([t]) => t === 'N')!;
+      const dir = northDirection(yaw);
+      expect(Math.hypot(n[1] - MIDDLE, n[2] - MIDDLE)).toBeGreaterThan(MIDDLE - 14);
+      expect(Math.hypot(n[1] - MIDDLE, n[2] - MIDDLE)).toBeLessThan(MIDDLE);
+      expect((n[1] - MIDDLE) * dir.x + (n[2] - MIDDLE) * dir.y).toBeGreaterThan(MIDDLE - 14);
+      expect(at(fills, COLOURS.northPlate).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('reaches 3:1 against the plate under it', () => {
+    const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
+    expect(contrastRatio(rgb(COLOURS.north), rgb(COLOURS.northPlate))).toBeGreaterThanOrEqual(3);
+  });
+
+  it('draws a compass in a corner of the map, not of the minimap: an arrow and an N toward the north', () => {
+    const { ctx, fills } = fakeContext();
+    const texts: [string, number, number][] = [];
+    (ctx as unknown as { fillText: (t: string, x: number, y: number) => void }).fillText = (t, x, y) => texts.push([t, x, y]);
+    drawMap(ctx, { width: 400, height: 200, centre: [0, 0], unit: 10, round: false }, data({ yaw: Math.PI / 2 }));
+    const c = compassPoints(Math.PI / 2, 400, 200);
+    expect(c.centre[0]).toBeGreaterThan(300);
+    expect(c.centre[1]).toBeLessThan(100);
+    const n = texts.find(([t]) => t === 'N')!;
+    expect([n[1], n[2]]).toEqual(c.label);
+    expect(c.label[0]).toBeGreaterThan(c.centre[0]); // a quarter turn: north is to the right
+    expect(at(fills, COLOURS.north).length).toBeGreaterThan(0);
   });
 });

@@ -1649,6 +1649,23 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(-Math.PI / 2 + 0.1, 6);
   });
 
+  it('draws the yaw it has reached (#1448): behind the goal while it turns, on it once settled, at once with reduced motion', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.drawnYaw).toBe(0);
+    view.turn(1);
+    expect(view.drawnYaw).toBe(0); // the goal moved, the camera has not yet
+    view.follow(0.05, false);
+    expect(view.drawnYaw).toBeGreaterThan(0);
+    expect(view.drawnYaw).toBeLessThan(1);
+    while (view.follow(0.5, false));
+    expect(view.drawnYaw).toBeCloseTo(1, 6);
+    view.turn(1);
+    view.follow(0.016, true);
+    expect(view.drawnYaw).toBeCloseTo(2, 6);
+  });
+
   it('snaps to the goal at once with reduced motion, and a turn back to zero is the reset', () => {
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
