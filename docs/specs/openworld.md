@@ -296,6 +296,10 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   reads 3:1 on every terrain colour (unit test). Hero, troop and enemy dots have a dark outline.
 - **Mountain (#1439).** The peak and the wall, which the core blocks (`Terrain::blocked`, the walkable set `WALKABLE` of `openworld.ts`
   is the rest), are pale (`COLOURS.mountain`, 3:1 over the walkable rock) on the map and the minimap, in every look; the rock is dark.
+- **World edge (#1453).** A discovered cell off the world (`World.tile` has none: the bridge's off-world cell code, no second copy of
+  `in_world`) is a deep void blue (`COLOURS.void`), not the dark of an undiscovered cell (`COLOURS.back`), 3:1 from it (unit test). The land
+  cell beside it is drawn in a pale cyan line (`COLOURS.worldEdge`), 3:1 over the void and over `back`, so the hexagon's border shows
+  wherever the hero's sight (section 9) has reached it. The map (section 9) draws it the same way.
 - **Lairs.** A lair in the window is its tower icon. A lair out of the window gets an arrow on the map's edge pointing to it only
   for the 3 nearest unbeaten ones; the others have none.
 - **Cost.** `openworldminimap.ts` draws from plain data (`drawMinimap`) and is redrawn by `mark`: when a world opens and on a step, a push, a

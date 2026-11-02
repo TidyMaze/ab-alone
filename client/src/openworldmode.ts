@@ -3,7 +3,7 @@
 // untouched.
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
-import { chunkOf, Hero, neighbours, same, WALKABLE, World } from './openworld';
+import { chunkOf, Hero, neighbours, same, type Tile, WALKABLE, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
@@ -568,8 +568,9 @@ export class OpenWorldMode {
   /** The camera's yaw the minimap and the map were last drawn at (#1448). */
   private mapYaw = 0;
 
-  /** The tile of a discovered cell, none for a cell not discovered or off the world: the minimap and the map draw only these. */
-  private readonly seen = (q: number, r: number) => (this.discovered.has(q, r) ? this.world!.tile(q, r) : undefined);
+  /** The tile of a discovered cell, `void` when it is off the world (`World.tile` has none, #1453), none for a cell not discovered:
+   * the minimap and the map draw only these. */
+  private readonly seen = (q: number, r: number): Tile | 'void' | undefined => (this.discovered.has(q, r) ? (this.world!.tile(q, r) ?? 'void') : undefined);
 
   /** What the minimap and the map draw, with the `cells` given: the hero, the troop, the enemies near the hero on discovered cells and the
    * lairs, which are landmarks seen from afar. */

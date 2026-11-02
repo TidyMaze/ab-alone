@@ -150,7 +150,7 @@ describe('windowCells', () => {
   });
 
   it('keeps the cells off the world, as void, apart from the ones not discovered', () => {
-    const cells = windowCells((q) => (q < 0 ? undefined : q === 0 ? 'void' : 'sand'), [0, 0], 1);
+    const cells = windowCells((q): Tile | 'void' | undefined => (q < 0 ? undefined : q === 0 ? 'void' : tile('sand')), [0, 0], 1);
     expect(cells).toContainEqual([0, 0, 'void']);
     expect(cells.every(([q]) => q >= 0)).toBe(true);
   });
