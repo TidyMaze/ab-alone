@@ -35,9 +35,29 @@ describe('shared board opt-in', () => {
     expect(localStorage.getItem('ab-alone.board-name')).toHaveLength(16);
   });
 
-  it('Keep ranked local and Escape store a decline, and it is not asked again', async () => {
+  it('Escape leaves it unanswered and it asks again at the next entry; only Keep ranked local stores a decline', async () => {
     const game = await boot('?bot=off&board&net=hook');
-    for (const leave of [() => byId('optin-no').click(), () => key('Escape')]) {
+    for (let again = 0; again < 2; again++) {
+      game.openModes();
+      byId('ranked').click();
+      await game.settle();
+      expect(shown()).toBe(true);
+      key('Escape');
+      await game.settle();
+      expect(shown()).toBe(false);
+      expect(localStorage.getItem('ab-alone.board-consent')).toBeNull();
+    }
+    game.openModes();
+    byId('ranked').click();
+    await game.settle();
+    byId('optin-no').click();
+    await game.settle();
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 1, choice: 'declined' });
+  });
+
+  it('Keep ranked local stores a decline, and it is not asked again', async () => {
+    const game = await boot('?bot=off&board&net=hook');
+    for (const leave of [() => byId('optin-no').click()]) {
       localStorage.removeItem('ab-alone.board-consent');
       game.openModes();
       byId('ranked').click();
@@ -114,8 +134,8 @@ describe('shared board opt-in', () => {
     byId('board-leave').click();
     await vi.waitFor(() => expect(byId('board-share-state').textContent).toContain('not on the shared board'));
     const retires = JSON.parse(localStorage.getItem('ab-alone.board-retire')!) as { v: number; events: { kind: string }[] };
-    expect(retires.events).toHaveLength(1);
-    expect(retires.events[0]!.kind).toBe('retire');
+    expect(retires.events).toHaveLength(2); // New key retired the first key, Leave the second
+    expect(retires.events.map((e) => e.kind)).toEqual(["retire", "retire"]);
     expect((JSON.parse(localStorage.getItem('ab-alone.board-consent')!) as { choice: string }).choice).toBe('declined');
   });
 

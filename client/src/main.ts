@@ -1240,12 +1240,12 @@ function askBoard(): Promise<void> {
     optinName.value = readBoardName(store);
     optinBox.hidden = false;
     optinName.focus();
-    const answer = (yes: boolean): void => {
+    const answer = (yes: boolean | null): void => {
       optinBox.hidden = true;
       back?.focus();
       if (yes) void joinBoard(store, optinName.value).then(() => resolve());
       else {
-        writeChoice(store, 'declined');
+        if (yes === false) writeChoice(store, 'declined'); // Escape (null) leaves it unanswered: asked again at the next entry
         resolve();
       }
     };
@@ -1255,7 +1255,7 @@ function askBoard(): Promise<void> {
       e.stopPropagation();
       if (e.key === 'Escape') {
         e.preventDefault();
-        answer(false);
+        answer(null);
       } else if (e.key === 'Tab') {
         e.preventDefault();
         nextFocus(document.activeElement, e.shiftKey ? -1 : 1, optinBox).focus();
@@ -1276,7 +1276,7 @@ function showShare(): void {
 }
 document.getElementById('board-join')!.addEventListener('click', () => void askBoard().then(showShare));
 document.getElementById('board-leave')!.addEventListener('click', () => void leaveBoard(store, Date.now()).then(showShare));
-document.getElementById('board-newkey')!.addEventListener('click', () => void newKey(store));
+document.getElementById('board-newkey')!.addEventListener('click', () => void newKey(store, Date.now()));
 boardButton.addEventListener('click', () => {
   moveModes('outside');
   showShare();

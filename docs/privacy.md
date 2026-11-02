@@ -27,7 +27,7 @@ Best effort by the project's owners. Not reviewed by a lawyer.
 
 - **Basis.** Your consent (GDPR art. 6(1)(a)), a separate one from online play, versioned in your browser (`ab-alone.board-consent`). Declining keeps ranked play on your device, as today.
 - **Retention.** The relays are run by third parties. We promise no retention and no deletion: a relay keeps or drops events as it likes, and others may copy them.
-- **Leave, and a new key.** "Leave the board" builds a signed `retire` event for your key and clears your consent; the board ignores a retired key. "New key" makes a fresh random key. Both are as easy as joining.
+- **Leave, and a new key.** "Leave the board" builds a signed `retire` event for your key and clears your consent; the board ignores a retired key. "New key" first retires the old key the same way, then makes a fresh random key. Both are as easy as joining.
 - **Limit on erasure.** Events already on a relay or copied cannot be deleted, by you or by us. A `retire` event, and NIP-09 deletion requests, are only requests (GDPR art. 17 is limited). Your key is personal data even though it is random.
 - **Age.** 16 or more. The game asks you to confirm, and does not verify.
 - **Not reviewed by a lawyer.** This section is a best effort, like the rest of the notice.

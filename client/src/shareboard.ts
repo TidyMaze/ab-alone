@@ -85,21 +85,31 @@ export function readRetires(store: Store): RetireEvent[] {
 export async function joinBoard(store: Store, name: string): Promise<string> {
   write(store, NAME_KEY, cleanName(name));
   const keys = await boardKeys(store);
-  const pub = readRetires(store).some((e) => e.pub === keys.pub) ? (await newKey(store)).pub : keys.pub;
+  const pub = readRetires(store).some((e) => e.pub === keys.pub) ? (await freshKey(store)).pub : keys.pub;
   writeChoice(store, 'joined');
   return pub;
 }
 
 /** Leaves: builds and stores the signed `retire` for the current key (nothing is sent), then clears the consent. */
-export async function leaveBoard(store: Store, nowMs: number): Promise<RetireEvent> {
+async function retireCurrent(store: Store, nowMs: number): Promise<RetireEvent> {
   const event = await signRetire(await boardKeys(store), Math.floor(nowMs / 1000));
   write(store, RETIRE_KEY, JSON.stringify({ v: BOARD_VERSION, events: [...readRetires(store), event] }));
+  return event;
+}
+
+async function freshKey(store: Store): Promise<Keys> {
+  write(store, BOARD_KEY, '');
+  return boardKeys(store);
+}
+
+export async function leaveBoard(store: Store, nowMs: number): Promise<RetireEvent> {
+  const event = await retireCurrent(store, nowMs);
   writeChoice(store, 'declined');
   return event;
 }
 
-/** A fresh board key; the old one is dropped here (its events stay on the relays). */
-export async function newKey(store: Store): Promise<Keys> {
-  write(store, BOARD_KEY, '');
-  return boardKeys(store);
+/** A fresh board key. The old one is retired first, as Leave does (a signed `retire`, stored, not sent), so it can never be left behind unretired. */
+export async function newKey(store: Store, nowMs: number): Promise<Keys> {
+  await retireCurrent(store, nowMs);
+  return freshKey(store);
 }

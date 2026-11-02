@@ -85,9 +85,16 @@ describe('the board opt-in (#1287)', () => {
     await leaveBoard(store, 1000);
     const second = await joinBoard(store, 'a');
     expect(second).not.toBe(first);
-    expect((await newKey(store)).pub).not.toBe(second);
+    const third = (await newKey(store, 1_800_000_000_000)).pub;
+    expect(third).not.toBe(second);
+    // New key retires the old key first, as Leave does: it can never be retired afterwards
+    const retires = readRetires(store);
+    expect(retires.map((e) => e.pub)).toEqual([first, second]);
+    expect(await verifyRetire(retires[1]!)).toBe(true);
+    expect(retires[1]!.at).toBe(1_800_000_000);
+    expect(readChoice(store)).toBe("joined");
     await leaveBoard(store, 2000);
-    expect(readRetires(store)).toHaveLength(2);
+    expect(readRetires(store)).toHaveLength(3);
   });
 
   it('reads no retire from a broken record', () => {
@@ -109,7 +116,7 @@ describe('the board opt-in (#1287)', () => {
     const store = memory();
     await joinBoard(store, 'a');
     await leaveBoard(store, 5);
-    await newKey(store);
+    await newKey(store, 6);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(socket).not.toHaveBeenCalled();
     expect(beacon).not.toHaveBeenCalled();
