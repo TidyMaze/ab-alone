@@ -1603,15 +1603,15 @@ mod tests {
         for seed in 0..6 {
             let found = teleporters(seed, &[]);
             assert_eq!(teleporters(seed, &[]), found);
-            // 15 x 15 squares of 4 x 4 chunks, the hexagon covers some 147 of them: most of those hold one.
+            // 7 x 7 squares of 8 x 8 chunks, the hexagon covers some 37 of them: most of those hold one.
             let count = found.len();
-            assert!((120..=160).contains(&count), "seed {seed}: {count}");
-            // Spread over all of the hexagon, up to its edge.
+            assert!((30..=40).contains(&count), "seed {seed}: {count}");
+            // Spread over all of the hexagon, within one spacing of its edge.
             let far = found.iter().map(|&(q, r)| distance(q, r)).max();
-            assert!(far > Some(WORLD_RADIUS - 16), "seed {seed}: {far:?}");
+            assert!(far > Some(WORLD_RADIUS - 64), "seed {seed}: {far:?}");
             for (i, a) in found.iter().enumerate() {
                 for b in &found[i + 1..] {
-                    assert!(hex_distance(*a, *b) >= 32, "seed {seed}: {a:?} {b:?}");
+                    assert!(hex_distance(*a, *b) >= 64, "seed {seed}: {a:?} {b:?}");
                 }
             }
         }
@@ -1630,7 +1630,10 @@ mod tests {
 
     #[test]
     fn the_teleporters_of_seed_7_are_pinned() {
-        assert_eq!(teleporters(7, &[])[..3], [(2, -1), (-5, -441), (124, -437)]);
+        let found = teleporters(7, &[]);
+        // A quarter as many as one a square of 4 x 4 chunks, which gave 137 (#1444).
+        assert_eq!(found.len(), 36);
+        assert_eq!(found[..3], [(2, -1), (29, -382), (130, -355)]);
     }
 
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
