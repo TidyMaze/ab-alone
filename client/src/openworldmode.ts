@@ -134,6 +134,8 @@ export class OpenWorldMode {
     private readonly dungeonPath: DungeonPath = () => new Int32Array(),
     /** The teleporters of a seed's world: `q, r` pairs (the bridge's `world_teleporters`, #1412). */
     private readonly teleportersOf: (seed: number) => Int32Array = () => new Int32Array(),
+    /** The ids of the bosses round the roster: lair k is boss k, counted round (#1438). */
+    private readonly bossIds: () => readonly string[] = () => [],
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -571,12 +573,13 @@ export class OpenWorldMode {
    * lairs, which are landmarks seen from afar. */
   private mapData(cells: MinimapCell[]): MinimapData {
     const { world, hero } = this;
+    const bosses = this.bossIds();
     return {
       cells,
       hero: hero!.at,
       troop: hero!.troop,
       enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
-      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
+      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), boss: bosses[i % bosses.length] })),
       teleporters: this.discoveredTeleporters(),
       yaw: this.view!.yaw,
     };

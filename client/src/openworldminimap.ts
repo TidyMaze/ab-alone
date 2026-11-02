@@ -4,6 +4,7 @@
 // same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
+import { iconSize, lairIcon } from './openworldlairicon';
 import { LOOK, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
 import { mapColour } from './neonworld';
@@ -21,8 +22,8 @@ export interface MinimapData {
   hero: Axial;
   troop: readonly Axial[];
   enemies: readonly Axial[];
-  /** The boss lairs, in or out of the window, and whether each is beaten. */
-  lairs: readonly { cell: Axial; beaten: boolean }[];
+  /** The boss lairs, in or out of the window, whether each is beaten and the id of its boss (#1438). */
+  lairs: readonly { cell: Axial; beaten: boolean; boss?: string }[];
   /** The teleporters to draw (#1412): the discovered ones. */
   teleporters: readonly Axial[];
   /** The teleporter the map's choice would pick (#1412), ringed; none outside the choice. */
@@ -119,7 +120,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
   drawMap(ctx, { width: size, height: size, centre: data.hero, unit: size / 2 / (RADIUS + 1), round: true }, data);
 }
 
-/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs, the teleporters, the enemies, the troop and the hero. */
+/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs (the tower icon of each boss), the teleporters, the enemies, the troop and the hero. */
 export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, unit, round }: MapFrame, data: MinimapData): void {
   const [midX, midY] = [width / 2, height / 2];
   const put = (cell: Axial): { x: number; y: number } => {
@@ -145,13 +146,13 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   const away = (cell: Axial): number => Math.hypot(put(cell).x - midX, put(cell).y - midY);
   const out = data.lairs.filter(({ cell, beaten }) => !beaten && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
   const arrows = new Set(out.slice(0, ARROWS).map((lair) => lair.cell));
-  for (const { cell, beaten } of data.lairs) {
+  for (const { cell, beaten, boss } of data.lairs) {
     const colour = beaten ? COLOURS.lairBeaten : COLOURS.lair;
     const { x, y } = put(cell);
     const [ox, oy] = [x - midX, y - midY];
     const dist = away(cell);
     if (dist <= edge) {
-      shape(ctx, [[x, y - 4], [x + 4, y], [x, y + 4], [x - 4, y]], colour);
+      lairIcon(ctx, x, y, iconSize(unit, round), boss, beaten); // the tower of its boss (#1438)
       continue;
     }
     if (!arrows.has(cell)) continue; // out of the window: an arrow for the nearest few only

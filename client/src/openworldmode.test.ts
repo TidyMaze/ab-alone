@@ -1865,7 +1865,7 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     const ctx = withCanvas();
     const m = lairer(Int32Array.of(8, 0));
     m.enter(42, 800, 600, { version: 1, seed: 42, hero: [0, 0], troop: [[1, 0]], fight: { removed: [], added: [], beaten: 0 }, yaw: 0, broken: [], lairs: [0], discovered: [], savedAt: 1 });
-    expect(ctx.fills).toContain(COLOURS.lairBeaten);
+    expect(ctx.fills).toContain(ICON.done);
     expect(ctx.fills).not.toContain(COLOURS.lair);
   });
 
@@ -1957,11 +1957,9 @@ describe('the discovered cells and the map of the Open world (#1411, docs/specs/
 
   it('draws the tower of its boss on each lair (#1438): lair k is boss k counted round the roster, a lair without a roster is a plain tower', () => {
     const fills = withCanvas();
-    const bytes = new Uint8Array(CHUNK * CHUNK * 3);
-    for (let i = 0; i < CHUNK * CHUNK; i++) bytes.set([1, 2, 4], i * 3);
     const lairs = Int32Array.of(2, 0, 4, 0, 6, 0);
     const make = (roster?: () => string[]) =>
-      new OpenWorldMode((_s, cx, cy) => (cx === 0 && cy === 0 ? bytes : new Uint8Array()), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, roster);
+      new OpenWorldMode((_s, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, roster);
     make(() => ['hull', 'echo']).enter(42, 800, 600);
     expect(fills.filter((c) => c === BOSS_COLOURS.hull)).toHaveLength(2); // lairs 0 and 2
     expect(fills.filter((c) => c === BOSS_COLOURS.echo)).toHaveLength(1);

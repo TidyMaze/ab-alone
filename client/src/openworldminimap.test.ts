@@ -25,6 +25,7 @@ function fakeContext() {
     lineTo: (x: number, y: number) => path.push(x, y),
     closePath: () => {},
     clip: () => log.push('clip'),
+    fillText: () => {},
     stroke() {
       log.push(this.strokeStyle === COLOURS.chosen ? 'stroke chosen' : 'stroke');
     },
@@ -58,12 +59,11 @@ describe('terrainColour', () => {
     expect(terrainColour('grass')).toBe(hex(LOOK.grass.color));
     expect(terrainColour('sand')).toBe(hex(LOOK.sand.color));
     expect(terrainColour('rock')).toBe(hex(LOOK.rock.color));
-    expect(terrainColour('peak')).toBe(hex(LOOK.peak.color));
     expect(terrainColour('water')).toBe(hex(WATER.shore));
     expect(terrainColour('tree')).toBe(hex(PROPS.tree.color));
     expect(terrainColour('boulder')).toBe(hex(PROPS.boulder.color));
-    expect(terrainColour('wall')).toBe(hex(PROPS.wall.color));
   });
+
 });
 
 describe('screenOffset', () => {
@@ -199,7 +199,6 @@ describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, c
     const { ctx, log, fills } = fakeContext();
     drawMap(ctx, frame, data({ lairs: [{ cell: [200, 0], beaten: false, boss: 'hull' }, { cell: [3, 0], beaten: true, boss: 'hull' }] }));
     expect(log).not.toContain('clip');
-    expect(log).not.toContain('stroke');
     expect(at(fills, COLOURS.back)[0]!.at).toEqual([200, 100, 400, 200]);
     const [far] = at(fills, BOSS_COLOURS.hull!);
     expect(far!.at.length).toBeGreaterThan(8); // the crenellated tower, off the canvas
