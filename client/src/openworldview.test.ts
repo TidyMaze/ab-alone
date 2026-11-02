@@ -2206,6 +2206,15 @@ describe('the particles of the Open world (#1110)', () => {
       expect(moving.reach).toBe(rest.reach);
     });
 
+    it('draws the camera at a given time first when asked, as a frame at that time would, #1436', () => {
+      const view = lit();
+      const rest = view.probe();
+      view.punch(0);
+      expect(view.probe().zoom).toBe(rest.zoom); // no frame ran since the punch: the camera shows the last one
+      expect(view.probe(PUNCH_QUARTER).zoom).toBeLessThan(rest.zoom);
+      expect(view.probe(1000).zoom).toBe(rest.zoom); // the punch is over: exactly the base
+    });
+
     it('snaps to the base on a resize', () => {
       const view = lit();
       view.shake(0);

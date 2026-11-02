@@ -47,6 +47,16 @@ export default defineConfig(({ command, mode, isPreview }) => ({
             name: 'no-remote-fonts',
             transformIndexHtml: (html: string) => html.replace(/\s*<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>/g, ''),
           },
+          // The same faces the players get from Google Fonts, served from the build (#1436): without them a Linux CI
+          // runner lays the text out in its own fallback font and the layout specs fail there only.
+          {
+            name: 'local-fonts',
+            // 'pre': the tag is added before Vite reads the page's scripts, so the build bundles it.
+            transformIndexHtml: {
+              order: 'pre' as const,
+              handler: () => [{ tag: 'script', attrs: { type: 'module', src: '/e2e-fonts/fonts.ts' }, injectTo: 'head' as const }],
+            },
+          },
         ]
       : []),
   ],

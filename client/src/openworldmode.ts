@@ -280,8 +280,8 @@ export class OpenWorldMode {
   }
 
   /** What the camera draws now (the browser checks read it, #1103). */
-  camera(): ReturnType<OpenWorldView['probe']> {
-    return this.view!.probe();
+  camera(at?: number): ReturnType<OpenWorldView['probe']> {
+    return this.view!.probe(at);
   }
 
   /** The enemy marbles near the hero now, the pushed ones where they stand (the browser checks read them). */

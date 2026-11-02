@@ -99,24 +99,31 @@ test('two held arrows roll the hero on the diagonal, #977', async ({ page }) => 
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
-  await page.keyboard.down('ArrowUp');
-  await expect.poll(at).toBe('1,-1');
   // Up and Left held: the diagonal is the next step of the cadence (#1059), so the first move after the Left keydown is up-left.
-  // Read in the page as it is made: the walk goes on while both are held, and a poll could see a later cell.
-  const firstMove = page.evaluate(
+  // The whole sequence runs in the page: when the hero reaches (1, -1) the Left key goes down in the same task, before the next frame can
+  // step. A poll between the two keys saw a later cell on CI, where a frame takes 100 ms or more without a GPU and the walk goes on (#1436).
+  const firstMove = await page.evaluate(
     () =>
       new Promise<string>((done) => {
-        const from = document.body.dataset.openworldAt; // a mark of the same cell (the models arriving) is no move
+        const key = (type: string, name: string) => window.dispatchEvent(new KeyboardEvent(type, { key: name }));
+        let left = false;
         const observer = new MutationObserver(() => {
-          if (document.body.dataset.openworldAt === from) return;
+          const now = document.body.dataset.openworldAt!;
+          if (!left) {
+            if (now !== '1,-1') return;
+            left = true;
+            key('keydown', 'ArrowLeft');
+            return;
+          }
+          if (now === '1,-1') return; // a mark of the same cell (the models arriving) is no move
           observer.disconnect();
-          done(document.body.dataset.openworldAt!);
+          done(now);
         });
         observer.observe(document.body, { attributes: true, attributeFilter: ['data-openworld-at'] });
+        key('keydown', 'ArrowUp');
       }),
   );
-  await page.keyboard.down('ArrowLeft');
-  expect(await firstMove).toBe('1,-2');
+  expect(firstMove).toBe('1,-2');
   await page.keyboard.up('ArrowLeft');
   await page.keyboard.up('ArrowUp');
 });
@@ -693,14 +700,14 @@ test('the hero breaks the isolated boulder it rolls into, and it stays broken af
 });
 
 // #1103: a push punches the camera in 3 % and back within 250 ms; the chunk centre and the reach never change, and the zoom is exactly
-// the base one at the end. The page samples what the camera draws (`__openworldCamera`) on every frame for 700 ms after the press.
+// the base one at the end. The page reads what the camera draws (`__openworldCamera`, given the time to draw it at) every 4 ms for 700 ms after the press.
 test('a push punches the camera in and back, without moving the chunk centre, #1103', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
   type Camera = { zoom: number; shake: number; centre: number[]; reach: number };
   const result = await page.evaluate(async () => {
-    const w = window as unknown as { __openworldFixture: (f: object) => void; __openworldCamera: () => Camera };
+    const w = window as unknown as { __openworldFixture: (f: object) => void; __openworldCamera: (at?: number) => Camera };
     w.__openworldFixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
     await new Promise((done) => requestAnimationFrame(() => done(null)));
     const base = w.__openworldCamera();
@@ -708,15 +715,9 @@ test('a push punches the camera in and back, without moving the chunk centre, #1
     const start = performance.now();
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight' }));
-    await new Promise<void>((done) => {
-      const sample = (): void => {
-        const t = performance.now() - start;
-        samples.push({ t, camera: w.__openworldCamera() });
-        if (t < 700) requestAnimationFrame(sample);
-        else done();
-      };
-      sample();
-    });
+    // The camera is drawn at each time of a 4 ms grid (the hook draws it at the time it is given), not at the frames the page happens to get:
+    // on CI, without a GPU, a frame takes 100 ms or more and none fell inside the 250 ms punch (#1436).
+    for (let t = 0; t <= 700; t += 4) samples.push({ t, camera: w.__openworldCamera(start + t) });
     return { base, samples };
   });
   const { base, samples } = result;
@@ -729,7 +730,7 @@ test('a push punches the camera in and back, without moving the chunk centre, #1
     expect(camera.reach).toBe(base.reach);
   }
   const punched = samples.filter((s) => s.camera.zoom !== base.zoom);
-  expect(punched.at(-1)!.t - punched[0]!.t).toBeLessThanOrEqual(260); // at most 250 ms, a frame of slack
+  expect(punched.at(-1)!.t - punched[0]!.t).toBeLessThanOrEqual(260); // at most 250 ms, a grid step of slack
   await page.screenshot({ path: test.info().outputPath('camera-after.png') });
 });
 

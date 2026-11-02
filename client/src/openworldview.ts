@@ -697,8 +697,9 @@ export class OpenWorldView {
   }
 
   /** What the camera draws now, for the browser checks (#1103): the zoom with the punch, the image shake in pixels, the chunk centre,
-   * the reach loaded and where the camera is (`eye`, #1333). */
-  probe(): { zoom: number; shake: number; centre: Axial; reach: number; eye: number[] } {
+   * the reach loaded and where the camera is (`eye`, #1333). With `at` (ms) the offsets are drawn at that time first. */
+  probe(at?: number): { zoom: number; shake: number; centre: Axial; reach: number; eye: number[] } {
+    if (at !== undefined) this.offsets(at); // the camera at that time, as the frame at that time draws it (#1436: a frame costs 100 ms or more without a GPU)
     return { zoom: this.drawnLevel * this.life.zoom, shake: this.camera.view?.enabled ? -this.camera.view.offsetX : 0, centre: this.centre, reach: this.loadedReach, eye: this.camera.position.toArray() };
   }
 

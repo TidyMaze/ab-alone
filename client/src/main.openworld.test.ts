@@ -37,7 +37,7 @@ const release = (key: string): void => {
 
 // The test hooks of the Open world, on a webdriver page only (docs/specs/openworld.md section 6).
 type Cells = [number, number][];
-type Hooks = { __openworldFixture?: (f: { hero: [number, number]; troop: Cells; enemies: Cells }) => void; __openworldEnemies?: () => Cells; __openworldCamera?: () => { zoom: number; shake: number; centre: number[]; reach: number } };
+type Hooks = { __openworldFixture?: (f: { hero: [number, number]; troop: Cells; enemies: Cells }) => void; __openworldEnemies?: () => Cells; __openworldCamera?: (at?: number) => { zoom: number; shake: number; centre: number[]; reach: number } };
 const hooks = () => window as unknown as Hooks;
 
 describe('the Open world mode', () => {
@@ -63,6 +63,7 @@ describe('the Open world mode', () => {
     expect(camera.shake).toBe(0);
     expect(camera.zoom).toBeGreaterThan(0);
     expect(camera.centre).toHaveLength(2);
+    expect(hooks().__openworldCamera!(performance.now() + 5000).shake).toBe(0); // given a time, it draws the camera at it first (#1436)
   });
 
   it('counts the point lights of the scene it draws: none in the Open world, within the budget (#1234)', async () => {

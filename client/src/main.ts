@@ -5939,7 +5939,7 @@ if (navigator.webdriver) {
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldTeleporters = (seed: number) => Array.from(world_teleporters(seed)); // every teleporter of a world, `q, r` pairs (#1412)
   hooks.__openworldLairs = (seed: number) => lairCells(seed); // the boss lairs of a world as cells, for the peer tests (#1305)
-  hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
+  hooks.__openworldCamera = (at?: number) => openWorld.camera(at); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
