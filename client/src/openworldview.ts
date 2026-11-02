@@ -807,6 +807,11 @@ export class OpenWorldView {
     return drawn;
   }
 
+  /** The time the boats bob at, `null` while they are held still: the peers' boats follow it (#1447). */
+  get bobAt(): number | null {
+    return this.bobNow;
+  }
+
   /** What moves now, for the browser checks: `water`, `trees`, both, or nothing. */
   get alive(): string {
     return this.motionKinds;

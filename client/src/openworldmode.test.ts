@@ -1759,7 +1759,7 @@ describe('the Open world mode and the online peers (#1305)', () => {
     m.enter(42, 800, 600);
     const render = vi.fn();
     m.frame(render, 1000);
-    expect(peers.frame).toHaveBeenLastCalledWith(1000, [0, 0], expect.any(Array));
+    expect(peers.frame).toHaveBeenLastCalledWith(1000, [0, 0], expect.any(Array), null); // reduced motion: the boats of the peers are held still (#1447)
     m.frame(render, 1016);
     expect(render).toHaveBeenCalledTimes(1); // nothing changed
     peers.frame.mockReturnValueOnce(true);

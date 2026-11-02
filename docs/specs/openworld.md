@@ -139,6 +139,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   the boat and its marble bob together (3 hundredths of a cell over 2.6 s, each boat on its own phase), held still under reduced
   motion, on the low tier and past the roll zoom. A boat turns to the way its marble went once it went 0.3 cell, so the lean of a
   blocked step never turns it. On land the boat goes away, from the moment the marble's drawn place leaves the water cell.
+  The heroes of the other players and their troops ride the same boats on water, one instanced mesh of the peers' layer (`peer-boats`), bobbing and turning by the same rules.
 - **Steering setting** (#1137): the Settings item *Steering*, on by default (team decision), stored under `ab-alone.steering`.
   Off, a held direction takes only the straight step and leans when it is blocked (#1040), and a far tap does nothing; a tap next
   to the hero rolls it either way. The Open world HUD line `#openworld-mode` names the mode: "Steering on" or "Steering off".

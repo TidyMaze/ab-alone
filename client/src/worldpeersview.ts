@@ -4,6 +4,7 @@
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import type { World } from './openworld';
+import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './openworldboat';
 import { GROUND, MARBLE, topOf } from './openworldview';
 import { hexDistance, MAX_PEERS, TROOP_MAX } from './worldpeers';
 
@@ -51,9 +52,13 @@ export function edgeSpot(x: number, y: number, z: number, aspect: number): Spot 
 
 export class PeersLayer {
   private readonly mesh: THREE.InstancedMesh;
+  /** The boats of the marbles on water (#1447), as the hero's own (openworldboat.ts), and where each marble's boat last turned. */
+  private readonly boats: THREE.InstancedMesh;
+  private wakes = new Map<string, Wake>();
   private readonly edges: HTMLElement[] = [];
   private readonly tags: HTMLElement[] = [];
   private shown = '';
+  private readonly boatPose = new THREE.Object3D();
   private heroes = 0;
   private armies = '';
 
@@ -69,20 +74,28 @@ export class PeersLayer {
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
     this.scene.add(this.mesh);
+    this.boats = new THREE.InstancedMesh(boatGeometry(MARBLE), boatMaterial(), CAPACITY);
+    this.boats.name = 'peer-boats';
+    this.boats.count = 0;
+    this.boats.frustumCulled = false;
+    this.scene.add(this.boats);
   }
 
   /**
    * Draws `peers` for a hero standing on `hero` with its troop on `own` (the hero's cell and its troop's: a marble of another hero on
    * one of them is lifted above it): a marble for each hero and each troop marble in view on loaded ground, in the colour of its hero,
-   * and an edge indicator for each hero out of view. Returns whether anything drawn changed, so the page draws the scene again.
+   * and an edge indicator for each hero out of view. A marble on water rides a boat that bobs at `bobNow` (ms, `null`: held still).
+   * Returns whether anything drawn changed, so the page draws the scene again.
    */
-  update(peers: readonly { peer: string; cell: Axial; name: string; troop: readonly Axial[] }[], hero: Axial, own: readonly Axial[] = [hero]): boolean {
+  update(peers: readonly { peer: string; cell: Axial; name: string; troop: readonly Axial[] }[], hero: Axial, own: readonly Axial[] = [hero], bobNow: number | null = null): boolean {
     this.camera.updateMatrixWorld();
     const point = new THREE.Vector3();
     const matrix = new THREE.Matrix4();
     const out: { peer: string; cell: Axial; spot: Spot; name: string }[] = [];
     const named: { peer: string; spot: Spot; name: string }[] = [];
     let marbles = 0;
+    let afloat = 0;
+    const wakes = new Map<string, Wake>();
     let heroes = 0;
     for (const { peer, cell, name, troop } of peers) {
       const colour = peerColour(peer);
@@ -90,12 +103,22 @@ export class PeersLayer {
         const p = axialTo3D(at[0], at[1]);
         const tile = this.world.tile(at[0], at[1]);
         const lift = own.some((o) => o[0] === at[0] && o[1] === at[1]) ? LIFT : 0;
-        point.set(p.x, (tile ? topOf(GROUND[tile.terrain], tile.height, at[0], at[1]) + MARBLE : MARBLE) + lift, p.z);
+        const wet = tile?.terrain === 'water';
+        point.set(p.x, (tile ? topOf(GROUND[tile.terrain], tile.height, at[0], at[1]) + MARBLE : MARBLE) + lift + (wet ? bob(bobNow, marbles) : 0), p.z);
         this.mesh.setMatrixAt(marbles, matrix.setPosition(point));
         this.mesh.setColorAt(marbles, colour);
         const ndc = point.clone().project(this.camera);
         const spot = edgeSpot(ndc.x, ndc.y, ndc.z, this.camera.aspect);
         const drawn = spot.inside && tile;
+        if (drawn && wet) {
+          const wake = this.wakes.get(`${peer}:${i}`) ?? { x: p.x, z: p.z, yaw: 0 };
+          steer(wake, p.x, p.z);
+          wakes.set(`${peer}:${i}`, wake);
+          this.boatPose.position.set(p.x, topOf('water', 0, 0, 0) - DRAFT + bob(bobNow, marbles), p.z);
+          this.boatPose.rotation.set(0, wake.yaw, 0);
+          this.boatPose.updateMatrix();
+          this.boats.setMatrixAt(afloat++, this.boatPose.matrix);
+        }
         if (drawn) marbles++; // a marble not drawn is overwritten by the next one
         if (i > 0) continue; // the rest is for the hero: its tag and its indicator
         if (drawn) {
@@ -104,6 +127,9 @@ export class PeersLayer {
         } else out.push({ peer, cell, spot, name });
       }
     }
+    this.wakes = wakes;
+    this.boats.count = afloat;
+    this.boats.instanceMatrix.needsUpdate = true;
     this.mesh.count = marbles;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor!.needsUpdate = true;
@@ -150,6 +176,7 @@ export class PeersLayer {
     this.root.hidden = out.length === 0 && named.length === 0;
     this.root.dataset.peers = String(this.heroes + out.length); // for the browser checks
     this.root.dataset.marbles = String(this.mesh.count); // for the browser checks
+    this.root.dataset.boats = String(this.boats.count); // for the browser checks
     this.root.dataset.armies = this.armies;
     this.root.dataset.edges = out.map(({ cell }) => hexDistance(hero, cell)).join(',');
   }
@@ -170,6 +197,10 @@ export class PeersLayer {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
     this.mesh.dispose();
+    this.scene.remove(this.boats);
+    this.boats.geometry.dispose();
+    (this.boats.material as THREE.Material).dispose();
+    this.boats.dispose();
     this.edges.length = 0;
     this.tags.length = 0;
     this.root.replaceChildren();
@@ -177,6 +208,7 @@ export class PeersLayer {
     delete this.root.dataset.peers;
     delete this.root.dataset.edges;
     delete this.root.dataset.marbles;
+    delete this.root.dataset.boats;
     delete this.root.dataset.armies;
   }
 }

@@ -15,8 +15,8 @@ import { PeersLayer } from './worldpeersview';
 export interface PeerHost {
   /** A world was entered: joins the room when it is the public one. */
   enter(seed: number, scene: THREE.Scene, camera: THREE.PerspectiveCamera, world: Pick<World, 'tile'>): void;
-  /** Called every frame at `now` (ms) with the hero's cell and its troop's cells. Returns whether the scene must be drawn again. */
-  frame(now: number, hero: Axial, troop?: readonly Axial[]): boolean;
+  /** Called every frame at `now` (ms) with the hero's cell and its troop's cells, and the time the boats bob at (`null`: held still). Returns whether the scene must be drawn again. */
+  frame(now: number, hero: Axial, troop?: readonly Axial[], bobNow?: number | null): boolean;
   /** The world was left: stops sending and clears the screen. */
   leave(): void;
   /** The hero broke the obstacle on `cell`: told to the others, signed. */
@@ -205,7 +205,7 @@ export class WorldPeersHost implements PeerHost {
     this.running?.net.send(encodeHello(this.name()));
   }
 
-  frame(now: number, hero: Axial, troop: readonly Axial[] = []): boolean {
+  frame(now: number, hero: Axial, troop: readonly Axial[] = [], bobNow: number | null = null): boolean {
     const run = this.running;
     if (!run) return false;
     run.sender.set(hero[0], hero[1]);
@@ -224,7 +224,7 @@ export class WorldPeersHost implements PeerHost {
     const cells = run.peers.cells(hero);
     this.lastCount = cells.length;
     this.update();
-    return run.layer.update(cells, hero, [hero, ...troop]);
+    return run.layer.update(cells, hero, [hero, ...troop], bobNow);
   }
 
   /** Stops sending and receiving: peers drop this hero after 10 s, and it sees nobody. */
