@@ -1,7 +1,9 @@
 // The read side of the shared ranked board (#1287, docs/specs/multiplayer.md section 7). It only reads: one REQ per relay, never an EVENT.
 // A result is shown only if the Rust rules replay its move log to the same status and ejections (`replay_score`, crates/abalone-wasm);
-// ratings are derived from the valid results, never read. The Nostr signature of the event is not checked in this slice.
+// ratings are derived from the valid results, never read. A result also needs the signature of BOTH seats over the game (#1317),
+// proved with the seats' keys: the Nostr signature of the event proves nothing about who played, so it is not checked.
 import { DEFAULT_RATING, update1v1Elo } from './elo';
+import { b64, signedBy, type Keys } from './moverecord';
 import { cleanName } from './shareboard';
 
 export const RELAYS = ['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud'] as const;
@@ -32,6 +34,8 @@ export interface SharedResult {
   readonly ejected: [number, number];
   /** Seconds since 1970. */
   readonly ts: number;
+  /** Each seat's Ed25519 signature (base64url) of `resultPayload`: its key, the opponent's, the names, the log, the score and the time. */
+  readonly sigs: { readonly black: string; readonly white: string };
 }
 
 export interface SharedRow {
@@ -57,6 +61,26 @@ const isSide = (x: unknown): x is Side => {
 };
 const isMove = (m: unknown): m is number[] => Array.isArray(m) && m.length === STRIDE && m.every((n) => Number.isInteger(n));
 
+/** The bytes both seats sign: the game, both keys and names, a SHA-256 of the move log, the score and the time. A seat that signs this
+ * has agreed to be that key, under that name, in that game, with that outcome. A refusal to sign gives no result at all: an unsigned
+ * game is not rated and there is no forfeit (a one-sided claim of a refusal would let a winner invent one). */
+export async function resultPayload(r: Omit<SharedResult, 'sigs'>): Promise<Uint8Array<ArrayBuffer>> {
+  const log = new TextEncoder().encode(JSON.stringify(r.moves));
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', log)), (b) => b.toString(16).padStart(2, '0')).join('');
+  return new TextEncoder().encode(JSON.stringify(['result', r.v, r.game, r.black.pub, cleanName(r.black.name), r.white.pub, cleanName(r.white.name), hash, r.status, r.ejected, r.ts]));
+}
+
+/** One seat's signature of the result, base64url. */
+export async function signResult(keys: Keys, r: Omit<SharedResult, 'sigs'>): Promise<string> {
+  return b64(await crypto.subtle.sign({ name: 'Ed25519' }, keys.priv, await resultPayload(r)));
+}
+
+/** Whether black's key signed the result as black and white's key as white. Anything else is false. */
+export async function bothSigned(r: SharedResult): Promise<boolean> {
+  const bytes = await resultPayload(r);
+  return (await signedBy(r.black.pub, r.sigs.black, bytes)) && (await signedBy(r.white.pub, r.sigs.white, bytes));
+}
+
 /** A result from an event's content, or null when it is not a finished 1v1 result of this format. */
 export function parseResult(content: string): SharedResult | null {
   let x: Partial<SharedResult> | null;
@@ -70,21 +94,24 @@ export function parseResult(content: string): SharedResult | null {
   if (x.status !== 1 && x.status !== 2 && x.status !== 3) return null;
   if (!Array.isArray(x.ejected) || x.ejected.length !== 2 || !x.ejected.every((n) => Number.isInteger(n))) return null;
   if (typeof x.ts !== 'number' || !Number.isFinite(x.ts)) return null;
+  if (!x.sigs || typeof x.sigs.black !== 'string' || typeof x.sigs.white !== 'string') return null;
   return {
+    sigs: { black: x.sigs.black, white: x.sigs.white },
     v: 1, game: x.game, moves: x.moves, status: x.status, ejected: x.ejected as [number, number], ts: x.ts,
     black: { pub: x.black.pub, name: cleanName(x.black.name) },
     white: { pub: x.white.pub, name: cleanName(x.white.name) },
   };
 }
 
-/** The results whose log the rules replay to the claimed score, one per game (the first seen). The rest is not shown. */
-export function verifiedResults(contents: readonly string[], score: Score): SharedResult[] {
+/** The results both seats signed whose log the rules replay to the claimed score, one per game (the first seen). The rest is not shown.
+ * A result with a bad signature is dropped before the replay and does not use up its game id, so nobody can squat a game. */
+export async function verifiedResults(contents: readonly string[], score: Score): Promise<SharedResult[]> {
   const seen = new Set<string>(); // every game id met, a refused one too: a game is replayed once
   const kept: SharedResult[] = [];
   let budget = REPLAY_BUDGET;
   for (const content of contents) {
     const r = parseResult(content);
-    if (!r || seen.has(r.game) || r.moves.length > budget) continue;
+    if (!r || seen.has(r.game) || r.moves.length > budget || !(await bothSigned(r))) continue;
     seen.add(r.game);
     budget -= r.moves.length;
     const got = score(Int32Array.from(r.moves.flat()));
@@ -175,5 +202,5 @@ export function readRelay(open: (url: string) => Socket, nowS: number, url = '')
 /** The board: the three relays read, the results that replay kept, the ratings derived. Reads only. */
 export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS): Promise<SharedRow[]> {
   const all = await Promise.all(relays.map((url) => readRelay(open, nowS, url)));
-  return deriveBoard(verifiedResults(all.flat(), score));
+  return deriveBoard(await verifiedResults(all.flat(), score));
 }

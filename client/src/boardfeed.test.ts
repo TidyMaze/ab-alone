@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import init, { Engine, replay_score } from 'abalone-wasm';
-import { LIMIT, REPLAY_BUDGET, RELAYS, WINDOW_S, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import { LIMIT, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import { generateKeys, type Keys } from './moverecord';
 
 // The replay is the real rules engine (crates/abalone-wasm replay_score), as antistalling.test.ts: Node's fetch cannot read a file:// URL.
 const fs = 'node:fs/promises';
@@ -22,8 +23,14 @@ const ended = play(400);
 const short = play(6);
 const result = (over: Partial<SharedResult> = {}, from = ended): SharedResult => ({
   v: 1, game: 'g1', black: { pub: 'A', name: 'Ann' }, white: { pub: 'B', name: 'Bob' },
-  moves: from.moves, status: from.status, ejected: from.ejected, ts: 100, ...over,
+  moves: from.moves, status: from.status, ejected: from.ejected, ts: 100, sigs: { black: 'x', white: 'y' }, ...over,
 });
+// A result signed by two real seats (#1317): the keys are the pubs, each seat signs as its own colour.
+const [kA, kB, kC] = [await generateKeys(), await generateKeys(), await generateKeys()] as [Keys, Keys, Keys];
+const signed = async (over: Partial<SharedResult> = {}, from = ended, by: [Keys, Keys] = [kA, kB]): Promise<SharedResult> => {
+  const base = result({ black: { pub: kA.pub, name: 'Ann' }, white: { pub: kB.pub, name: 'Bob' }, ...over }, from);
+  return { ...base, sigs: { black: await signResult(by[0], base), white: await signResult(by[1], base) } };
+};
 const score = (flat: Int32Array): Uint8Array => replay_score(flat);
 
 describe('the shared board read side (#1287)', () => {
@@ -41,33 +48,59 @@ describe('the shared board read side (#1287)', () => {
       { ...ok, white: { pub: 'A', name: 'Bob' } },
       { ...ok, moves: 'x' }, { ...ok, moves: [[1, 2]] }, { ...ok, moves: [Array(8).fill(1.5)] }, { ...ok, moves: [Array(8).fill('a')] },
       { ...ok, moves: Array.from({ length: 1001 }, () => Array(8).fill(0)) },
+      { ...ok, sigs: undefined }, { ...ok, sigs: { black: 'x' } }, { ...ok, sigs: { black: 1, white: 'y' } }, { ...ok, sigs: { black: 'x', white: 2 } },
       { ...ok, status: 0 }, { ...ok, status: 4 }, { ...ok, ejected: [1] }, { ...ok, ejected: [1, 'x'] }, { ...ok, ts: 'x' },
     ];
     for (const b of bad) expect(parseResult(typeof b === 'string' ? b : JSON.stringify(b))).toBeNull();
   });
 
-  it('keeps a result only if the rules replay its log to the same status and ejections, once per game', () => {
-    const good = result();
-    const lies = [
-      result({ game: 'g2', status: ended.status === 1 ? 2 : 1 }),
-      result({ game: 'g3', ejected: [ended.ejected[0] + 1, ended.ejected[1]] }),
-      result({ game: 'g4', moves: [[1, 0, 0, 0, 0, 0, 0, 0]] }),
-      result({ game: 'g5', status: 1, ejected: [6, 0] }, short),
-    ];
-    const twice = result({ ts: 200 });
-    const kept = verifiedResults([JSON.stringify(good), ...lies.map((l) => JSON.stringify(l)), 'junk', JSON.stringify(twice)], score);
+  it('keeps a result only if both seats signed it and the rules replay its log to the same status and ejections, once per game', async () => {
+    const good = await signed();
+    const lies = await Promise.all([
+      signed({ game: 'g2', status: ended.status === 1 ? 2 : 1 }),
+      signed({ game: 'g3', ejected: [ended.ejected[0] + 1, ended.ejected[1]] }),
+      signed({ game: 'g4', moves: [[1, 0, 0, 0, 0, 0, 0, 0]] }),
+      signed({ game: 'g5', status: 1, ejected: [6, 0] }, short),
+    ]);
+    const twice = await signed({ ts: 200 });
+    const kept = await verifiedResults([JSON.stringify(good), ...lies.map((l) => JSON.stringify(l)), 'junk', JSON.stringify(twice)], score);
     expect(kept).toEqual([good]);
   });
 
-  it('replays a game once even when it is refused, and stops at the budget of plies', () => {
+  it('refuses a result a seat did not sign: one seat, swapped seats, an outsider, a changed field, a borrowed key (#1317)', async () => {
+    const good = await signed();
+    expect(await bothSigned(good)).toBe(true);
+    const other = await signed({ game: 'other' });
+    const forged: SharedResult[] = [
+      { ...good, sigs: { black: good.sigs.black, white: 'AAAA' } }, // the loser never signed
+      { ...good, sigs: { black: 'not base64 !', white: good.sigs.white } },
+      { ...good, sigs: { black: good.sigs.white, white: good.sigs.black } }, // seats swapped
+      { ...good, sigs: { black: good.sigs.black, white: other.sigs.white } }, // a signature of another game
+      await signed({}, ended, [kA, kC]), // an outsider signs for white
+      { ...good, status: good.status === 1 ? 2 : 1 }, // outcome changed after signing
+      { ...good, black: { pub: good.black.pub, name: 'Mallory' } }, // renamed
+      { ...good, moves: [...good.moves].reverse() },
+      { ...good, ts: good.ts + 1 },
+      { ...good, game: 'moved' },
+    ];
+    // Anyone can credit a game to a victim's key, but cannot sign for it: black = the victim kC, signatures by the attacker's keys.
+    const victim = await signed({ black: { pub: kC.pub, name: 'Carl' }, white: { pub: kB.pub, name: 'Bob' } });
+    forged.push(victim);
+    for (const f of forged) expect(await bothSigned(f)).toBe(false);
+    expect(await verifiedResults(forged.map((f) => JSON.stringify(f)), score)).toEqual([]);
+    // A forged event does not squat the game id: the real result with the same id still counts.
+    expect(await verifiedResults([JSON.stringify(forged[0]), JSON.stringify(good)], score)).toEqual([good]);
+  });
+
+  it('replays a game once even when it is refused, and stops at the budget of plies', async () => {
     const calls: number[] = [];
     const counting = (flat: Int32Array): Uint8Array => (calls.push(flat.length / 8), new Uint8Array());
-    const bad = JSON.stringify(result({ game: 'dup', status: 1 }));
-    verifiedResults([bad, bad, bad], counting);
+    const bad = JSON.stringify(await signed({ game: 'dup', status: 1 }));
+    await verifiedResults([bad, bad, bad], counting);
     expect(calls).toHaveLength(1);
     calls.length = 0;
-    const big = (game: string): string => JSON.stringify(result({ game, moves: Array.from({ length: 1000 }, () => Array(8).fill(0)) }));
-    verifiedResults(Array.from({ length: 30 }, (_, i) => big(`b${i}`)), counting);
+    const big = (game: string): Promise<string> => signed({ game, moves: Array.from({ length: 1000 }, () => Array(8).fill(0)) }).then((r) => JSON.stringify(r));
+    await verifiedResults(await Promise.all(Array.from({ length: 30 }, (_, i) => big(`b${i}`))), counting);
     expect(calls).toHaveLength(REPLAY_BUDGET / 1000);
     expect(parseResult(JSON.stringify(result()).replace('"ts":100', '"ts":1e999'))).toBeNull();
   });
@@ -172,13 +205,15 @@ describe('reading the relays (#1287, read only)', () => {
   it('reads the three chosen relays, keeps what replays, and sends no event', async () => {
     expect(RELAYS).toEqual(['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
     const socks: Fake[] = [];
+    const good = JSON.stringify(await signed());
     const open = (url: string): Socket => {
       const s = new Fake(url);
       socks.push(s);
       queueMicrotask(() => {
         s.emit('open');
-        s.emit('message', event(JSON.stringify(result())));
+        s.emit('message', event(good));
         s.emit('message', event(JSON.stringify(result({ game: 'bad', status: 0 }))));
+        s.emit('message', event(JSON.stringify(result({ game: 'unsigned' }))));
         s.emit('message', JSON.stringify(['EOSE', 'ab-board']));
       });
       return s;
