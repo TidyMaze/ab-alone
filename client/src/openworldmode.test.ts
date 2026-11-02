@@ -1834,7 +1834,7 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     const ctx: Ctx = { fillStyle: '', clearRect: vi.fn(), fills };
     const blank = () => {};
     Object.assign(ctx, {
-      save: blank, restore: blank, beginPath: blank, arc: blank, moveTo: blank, lineTo: blank, closePath: blank, clip: blank, stroke: blank,
+      save: blank, restore: blank, fillText: blank, beginPath: blank, arc: blank, moveTo: blank, lineTo: blank, closePath: blank, clip: blank, stroke: blank,
       fill() { fills.push(ctx.fillStyle); },
       fillRect() { fills.push(ctx.fillStyle); },
     });
@@ -1868,6 +1868,35 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     expect(ctx.clearRect).toHaveBeenCalledTimes(1);
     m.turn(TURN_STEP);
     expect(ctx.clearRect).toHaveBeenCalledTimes(2);
+  });
+
+  it('turns with the camera\'s drawn yaw (#1448): redrawn on the frames of a turn, not at rest, and at once with reduced motion', () => {
+    const ctx = withCanvas();
+    const m = mode(undefined, undefined, () => false);
+    m.enter(42, 800, 600);
+    const render = vi.fn();
+    let now = 0;
+    m.frame(render, now);
+    for (let i = 0; i < 90; i++) m.frame(render, (now += 16)); // settle the camera
+    m.turn(TURN_STEP);
+    ctx.clearRect.mockClear();
+    m.frame(render, (now += 16));
+    m.frame(render, (now += 16));
+    expect(ctx.clearRect).toHaveBeenCalledTimes(2); // one redraw a frame while the yaw changes
+    for (let i = 0; i < 90; i++) m.frame(render, (now += 16));
+    ctx.clearRect.mockClear();
+    m.frame(render, (now += 16));
+    m.frame(render, (now += 16));
+    expect(ctx.clearRect).not.toHaveBeenCalled(); // at rest: none
+    const reduced = mode();
+    reduced.enter(42, 800, 600);
+    reduced.frame(render, 0);
+    reduced.turn(TURN_STEP);
+    ctx.clearRect.mockClear();
+    reduced.frame(render, 16);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(1); // at once: the drawn yaw is the goal after one frame
+    reduced.frame(render, 32);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(1);
   });
 
   it('a lair another hero took (#1305) is shown beaten, once, and a cell with no lair does nothing', () => {
@@ -1925,7 +1954,7 @@ describe('the discovered cells and the map of the Open world (#1411, docs/specs/
   const withCanvas = (): string[] => {
     const fills: string[] = [];
     const ctx = { fillStyle: '' } as Record<string, unknown>;
-    for (const name of ['clearRect', 'save', 'restore', 'beginPath', 'arc', 'moveTo', 'lineTo', 'closePath', 'clip', 'stroke']) ctx[name] = () => {};
+    for (const name of ['clearRect', 'save', 'restore', 'beginPath', 'arc', 'moveTo', 'lineTo', 'closePath', 'clip', 'fillText', 'stroke']) ctx[name] = () => {};
     ctx.fill = ctx.fillRect = () => fills.push(ctx.fillStyle as string);
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
     return fills;

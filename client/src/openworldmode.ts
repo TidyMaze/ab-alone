@@ -565,6 +565,9 @@ export class OpenWorldMode {
     document.getElementById('openworld-map-button')?.setAttribute('aria-expanded', 'false');
   }
 
+  /** The camera's yaw the minimap and the map were last drawn at (#1448). */
+  private mapYaw = 0;
+
   /** The terrain of a discovered cell, none for a cell not discovered or off the world: the minimap and the map draw only these. */
   private readonly seen = (q: number, r: number) => (this.discovered.has(q, r) ? this.world!.tile(q, r)?.terrain : undefined);
 
@@ -580,7 +583,7 @@ export class OpenWorldMode {
       enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
       lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), boss: bosses[i % bosses.length] })),
       teleporters: this.discoveredTeleporters(),
-      yaw: this.view!.yaw,
+      yaw: (this.mapYaw = this.view!.drawnYaw), // the camera's drawn yaw: the map turns with it (#1448)
     };
   }
 
@@ -604,6 +607,7 @@ export class OpenWorldMode {
     this.clock = now;
     const reduced = this.reduced();
     if (this.view!.follow(seconds, reduced)) this.dirty = true; // the camera follows the hero, its turn and its zoom (#988, #1026, #1333)
+    if (this.view!.drawnYaw !== this.mapYaw) this.drawMap(); // the minimap and the map turn with the camera, only while it turns (#1448)
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
     if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)

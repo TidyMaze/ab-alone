@@ -278,7 +278,12 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   the enemies near the hero (red) are dots. Only the discovered cells (section 9) and the enemies on them are drawn; the rest stays dark.
   A discovered teleporter in the window (section 10) is a portal icon (see Icons).
 - **Turn.** The map is turned by the camera's yaw (`screenOffset`: the ground layout of `axialTo3D`, screen up `(-sin yaw, -cos yaw)`), so up
-  on the map is up on screen, and Q, E, R and a drag turn it.
+  on the map is up on screen, and Q, E, R and a drag turn it. It turns with the camera's drawn yaw (`OpenWorldView.drawnYaw`, the spring
+  of #1333), so the minimap and the 3D view turn together and end together; under reduced motion it turns at once. It is redrawn on the
+  frames where that yaw changed, never at rest.
+- **North (#1448).** North is the ground's -z at yaw 0 (decreasing axial `r`), the same for every world. An N on a dark round plate
+  (white on `#0b0d0f`, over 3:1, unit test) sits on the minimap's rim, on the north side (`northDirection`), and turns with the map. The
+  full map (section 9) has a small compass in its top left corner: a plate, an arrow and an N toward the north, as the map is drawn.
 - **Icons (#1438, #1443).** `openworldlairicon.ts` draws them with canvas paths, no image. A boss tower is a crenellated tower on a dark
   square plate with a dark halo and a light rim, in the colour of its boss (`BOSS_COLOURS`, one per boss, lair k is boss k counted round the roster) and with the
   boss's initial from 26 px; a beaten tower is grey with a check mark and no initial. A teleporter is a violet ring and core on a dark
@@ -290,7 +295,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 - **Lairs.** A lair in the window is its tower icon. A lair out of the window gets an arrow on the map's edge pointing to it only
   for the 3 nearest unbeaten ones; the others have none.
 - **Cost.** `openworldminimap.ts` draws from plain data (`drawMinimap`) and is redrawn by `mark`: when a world opens and on a step, a push, a
-  broken obstacle or a camera turn, never on a frame.
+  broken obstacle or a camera turn, and by `frame` only while the drawn yaw changes, never at rest.
 
 ## 9. Map (#1411)
 

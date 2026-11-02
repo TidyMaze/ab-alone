@@ -11,6 +11,8 @@ import { mapColour } from './neonworld';
 
 /** The cells from the hero to the edge of the map: a window of three chunks across. */
 export const RADIUS = 24;
+/** The radius of the map's compass, in px. */
+const COMPASS_RADIUS = 22;
 /** The lairs out of the window that get an arrow on the edge: the nearest unbeaten ones. */
 const ARROWS = 3;
 
@@ -44,6 +46,9 @@ export const COLOURS = {
   chosen: '#ffffff',
   back: '#0b0d0f',
   edge: '#0b0d0f',
+  /** The N of the north marker and the dark plate under it (#1448): 3:1 or more, whatever the terrain. */
+  north: '#ffffff',
+  northPlate: '#0b0d0f',
 } as const;
 
 const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
@@ -63,6 +68,29 @@ export function screenOffset(hero: Axial, cell: Axial, yaw: number): { x: number
   const dx = dq + dr / 2;
   const dz = (Math.sqrt(3) / 2) * dr;
   return { x: dx * Math.cos(yaw) - dz * Math.sin(yaw), y: dx * Math.sin(yaw) + dz * Math.cos(yaw) };
+}
+
+/** Where north is on the canvas, a unit vector (y down): north is the ground's -z at yaw 0, decreasing axial `r`, fixed for every
+ * world (#1448). It turns with the camera as the cells do (`screenOffset`). */
+export function northDirection(yaw: number): { x: number; y: number } {
+  return { x: Math.sin(yaw), y: -Math.cos(yaw) };
+}
+
+/** The compass of the map (#1448): in the top left corner, a plate of `radius` px round `centre`, a small arrow from its middle toward
+ * the north (`tip`, `left`, `right`) and the N (`label`) beyond the arrow. */
+export function compassPoints(yaw: number): {
+  centre: readonly [number, number];
+  radius: number;
+  tip: readonly [number, number];
+  left: readonly [number, number];
+  right: readonly [number, number];
+  label: readonly [number, number];
+} {
+  const radius = COMPASS_RADIUS;
+  const centre: readonly [number, number] = [radius + 16, radius + 16];
+  const { x, y } = northDirection(yaw);
+  const at = (along: number, across: number): readonly [number, number] => [centre[0] + x * along - y * across, centre[1] + y * along + x * across];
+  return { centre, radius, tip: at(radius * 0.4, 0), left: at(-radius * 0.15, -radius * 0.2), right: at(-radius * 0.15, radius * 0.2), label: at(radius * 0.68, 0) };
 }
 
 /** The offset in cells (`dq, dr`) of the point `x, y` cells from the middle of the map, in canvas axes: `screenOffset` undone. */
@@ -104,6 +132,19 @@ const shape = (ctx: CanvasRenderingContext2D, points: readonly (readonly [number
   points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
   ctx.closePath();
   ctx.fill();
+};
+
+/** An N centred on `x, y`, on a round dark plate of `radius` px, so it reads over any terrain (#1448). */
+const northMark = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number): void => {
+  ctx.fillStyle = COLOURS.northPlate;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.fillStyle = COLOURS.north;
+  ctx.font = `bold ${Math.round(radius * 1.2)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('N', x, y);
 };
 
 /** Where a map is drawn: a canvas of `width` x `height` px with the cell `centre` (fractions allowed) in the middle, `unit` px a cell.
@@ -186,10 +227,30 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   const hero = put(data.hero);
   dot(ctx, hero.x, hero.y, 3, COLOURS.hero);
   ctx.restore();
-  if (!round) return;
+  if (!round) {
+    const c = compassPoints(data.yaw); // the map's compass (#1448)
+    ctx.fillStyle = COLOURS.northPlate;
+    ctx.beginPath();
+    ctx.arc(c.centre[0], c.centre[1], c.radius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = COLOURS.north; // a light ring, the plate is as dark as the map's background
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    shape(ctx, [c.tip, c.left, c.right], COLOURS.north);
+    ctx.fillStyle = COLOURS.north;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('N', c.label[0], c.label[1]);
+    return;
+  }
   ctx.strokeStyle = COLOURS.edge;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(midX, midY, midX - 1, 0, 2 * Math.PI);
   ctx.stroke();
+  const north = northDirection(data.yaw); // the N on the rim, on the north side (#1448)
+  const plate = midX * 0.11; // a share of the minimap, so it reads at any size it is shown at
+  const rim = midX - 1 - plate;
+  northMark(ctx, midX + north.x * rim, midY + north.y * rim, plate);
 }

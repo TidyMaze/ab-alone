@@ -51,7 +51,7 @@ const click = (m: OpenWorldMode, dq: number): void => {
 beforeEach(() => {
   // A 2D context that draws nothing: the map draws, so it knows the camera's turn and the teleporter it rings.
   const ctx: Record<string, unknown> = {};
-  for (const name of ['clearRect', 'save', 'restore', 'beginPath', 'arc', 'moveTo', 'lineTo', 'closePath', 'clip', 'stroke', 'fill', 'fillRect']) ctx[name] = () => {};
+  for (const name of ['clearRect', 'save', 'restore', 'beginPath', 'arc', 'moveTo', 'lineTo', 'closePath', 'clip', 'fillText', 'stroke', 'fill', 'fillRect']) ctx[name] = () => {};
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
 });
 afterEach(() => {
