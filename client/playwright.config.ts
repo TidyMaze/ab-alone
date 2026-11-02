@@ -1,7 +1,9 @@
 import { defineConfig, type ReporterDescription } from '@playwright/test';
 
-// E2E_PORT lets parallel checkouts each run their own dev server.
-const port = process.env.E2E_PORT ?? '5173';
+// E2E_PORT pins the dev server's port. Left out, it is a random one (kept in the environment for the workers, like the ports below) and
+// the server is always started fresh: a stale vite of another checkout on 5173 must never serve the suite (#1436).
+process.env.E2E_PORT ??= String(20_000 + Math.floor(Math.random() * 40_000));
+const port = process.env.E2E_PORT;
 // The dev server serves the few specs that test the dev server itself (dev-server, lights-panel).
 process.env.E2E_DEV_URL ??= `http://localhost:${port}/`;
 // The other specs run on a build of the page (`vite build --mode e2e`, no remote fonts, 2 to 3 s) served by `vite preview`:
@@ -98,7 +100,7 @@ export default defineConfig({
           // E2E_SKIP_WASM_BUILD (CI shards): the package is already there, `bun run dev` would rebuild it with wasm-pack.
           command: `${process.env.E2E_SKIP_WASM_BUILD ? 'bunx vite' : 'bun run dev'} --port ${port} --strictPort --mode e2e`,
           url: `http://localhost:${port}`,
-          reuseExistingServer: true,
+          reuseExistingServer: false,
           timeout: 120_000,
         },
         ...(onDev

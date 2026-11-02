@@ -514,7 +514,7 @@ network outage never holds a page load (bug #585). Start a new run to test a cha
 - The contrast checks (tag `@contrast`: `contrast.spec.ts` and the three ratio tests of `target-arrows.spec.ts`) are not in `bun run e2e`:
   the art director owns the ratios. `bun run e2e:contrast` (from `client/`) runs them as a report. A test that passes on its one
   retry shows as flaky, not red; waits on a state get 10 s, a test still fails at 15 s (#1383); on CI 30 s and 45 s (#1436).
-- The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:
+- The port comes from `E2E_PORT`, a random free one when it is not set; the dev server is always started fresh, never reused (#1436). To pin it:
 
   ```
   E2E_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])') bun run e2e
