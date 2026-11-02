@@ -54,6 +54,34 @@ describe('the Open world mode', () => {
     expect(hooks().__openworldEnemies!()).toEqual([[3, 0]]);
   });
 
+  it('the fresh hook opens the world again from the spawn, reads no save and unfolds the plate, so a spec can share one page (#1481)', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const fresh = (): Promise<void> => (window as unknown as { __openworldFresh: () => Promise<void> }).__openworldFresh();
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    hooks().__openworldFixture!({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    press('ArrowRight');
+    expect(data().openworldAt).toBe('2,0');
+    press('Escape'); // leaving saves the world at 2,0
+    await settle();
+    await fresh(); // the world is not active: it is entered
+    await settle();
+    expect(data().openworld).toBe('7');
+    expect(data().openworldAt).toBe('0,0'); // the spawn, not the saved 2,0
+    expect(hooks().__openworldEnemies!()).not.toEqual([[3, 0]]);
+    for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowRight']) {
+      press(key);
+      release(key);
+      await settle();
+    }
+    expect(byId('openworld-hud').dataset.folded).toBe('1'); // 3 steps folded the plate
+    await fresh(); // the world is active: it is left, then entered
+    await settle();
+    expect(data().openworldAt).toBe('0,0');
+    expect(byId('openworld-hud').dataset.folded).toBeUndefined(); // the plate is shown again
+  });
+
   it('reads what the camera draws through a test hook, at rest: the shake is 0, #1103', async () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();
