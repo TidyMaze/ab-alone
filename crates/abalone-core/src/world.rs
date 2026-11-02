@@ -10,11 +10,11 @@ use std::sync::{Mutex, PoisonError};
 
 /// The version of the generated world, saved with each Open world save (#968): bump it with every change of the generator, the
 /// same moment the pinned digest of the tests changes (the line of `the_generated_world_is_pinned_by_a_digest`).
-pub const WORLD_VERSION: u32 = 2;
+pub const WORLD_VERSION: u32 = 3;
 /// A chunk is `CHUNK` x `CHUNK` cells of the axial grid.
 pub const CHUNK: i32 = 16;
-/// The world is `WORLD_CHUNKS` x `WORLD_CHUNKS` chunks, centred on the spawn chunk.
-pub const WORLD_CHUNKS: i32 = 64;
+/// The world is a hexagon of cells round the spawn `(0, 0)`: the cells within `WORLD_RADIUS` of it (#1440).
+pub const WORLD_RADIUS: i32 = 448;
 /// Cells within this distance of the spawn cell `(0, 0)` are open grass.
 pub const CLEARING: i32 = 3;
 /// Boulders on the open ground that is not low (heights 2, 5 and 6), in thousandths: the same in every biome. The low
@@ -308,9 +308,23 @@ fn search_shift(seed: u64) -> (i32, i32) {
         .map_or((0, 0), |(_, shift)| shift)
 }
 
-/// Whether the chunk coordinate is inside the world.
-fn in_world(c: i32) -> bool {
-    (-WORLD_CHUNKS / 2..WORLD_CHUNKS / 2).contains(&c)
+/// Whether the cell `(q, r)` is in the world: the one test of the edge, for the cells, the chunks, the enemies, the lairs and
+/// the teleporters.
+fn in_world(q: i32, r: i32) -> bool {
+    distance(q, r) <= WORLD_RADIUS
+}
+
+/// Whether some cell of chunk `(cx, cy)` is in the world: its cell nearest the spawn is. A chunk never straddles an axis, and on
+/// one side of both axes the distance grows with `|q|` and with `|r|`, so that cell has the coordinates nearest 0.
+fn chunk_in_world(cx: i32, cy: i32) -> bool {
+    let near = |c: i32| {
+        if c < 0 {
+            c * CHUNK + CHUNK - 1
+        } else {
+            c * CHUNK
+        }
+    };
+    in_world(near(cx), near(cy))
 }
 
 /// The ruined wall of the square `(x, y)` of the `WALL_BLOCK` grid: its first cell, its step and its
@@ -497,23 +511,24 @@ impl Window {
 
 /// The cell at `(q, r)` of the world of `seed`, `None` off the world.
 pub fn cell(seed: u64, q: i32, r: i32) -> Option<Cell> {
-    if !in_world(q.div_euclid(CHUNK)) || !in_world(r.div_euclid(CHUNK)) {
+    if !in_world(q, r) {
         return None;
     }
     Some(Window::new(seed, q.div_euclid(CHUNK), r.div_euclid(CHUNK)).cell(q, r))
 }
 
 /// The `CHUNK` x `CHUNK` cells of chunk `(cx, cy)`, row by row (`r` then `q` ascending), `None`
-/// off the world.
-pub fn chunk(seed: u64, cx: i32, cy: i32) -> Option<Vec<Cell>> {
-    if !in_world(cx) || !in_world(cy) {
+/// off the world. In a chunk the edge crosses, the cells past it are `None`.
+pub fn chunk(seed: u64, cx: i32, cy: i32) -> Option<Vec<Option<Cell>>> {
+    if !chunk_in_world(cx, cy) {
         return None;
     }
     let window = Window::new(seed, cx, cy);
     let mut cells = Vec::with_capacity((CHUNK * CHUNK) as usize);
     for dr in 0..CHUNK {
         for dq in 0..CHUNK {
-            cells.push(window.cell(cx * CHUNK + dq, cy * CHUNK + dr));
+            let (q, r) = (cx * CHUNK + dq, cy * CHUNK + dr);
+            cells.push(in_world(q, r).then(|| window.cell(q, r)));
         }
     }
     Some(cells)
@@ -521,10 +536,10 @@ pub fn chunk(seed: u64, cx: i32, cy: i32) -> Option<Vec<Cell>> {
 
 /// The enemy groups that start in chunk `(cx, cy)` (docs/specs/openworld.md section 3): up to `TRIES` groups
 /// of 1 to 3 marbles in a line on three axes, from the seed and the chunk alone. A group is placed only
-/// when every one of its cells is in this chunk, open, off the spawn's `SAFE` radius and shared with no
+/// when every one of its cells is in this chunk and in the world, open, off the spawn's `SAFE` radius and shared with no
 /// group placed before it in the chunk; the others are dropped.
 pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
-    if !in_world(cx) || !in_world(cy) {
+    if !chunk_in_world(cx, cy) {
         return vec![];
     }
     let window = Window::new(seed, cx, cy);
@@ -542,6 +557,7 @@ pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
         let free = group.iter().all(|&(q, r)| {
             q.div_euclid(CHUNK) == cx
                 && r.div_euclid(CHUNK) == cy
+                && in_world(q, r)
                 && distance(q, r) > SAFE
                 && !window.cell(q, r).terrain.blocked()
                 && !placed.iter().flatten().any(|&taken| taken == (q, r))
@@ -557,7 +573,8 @@ pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
 pub const LAIR_MIN: i32 = 150;
 /// The salt of the lair draws (the terrain uses 30 to 39, the enemies 12 to 21).
 const LAIR_SALT: u64 = 40;
-/// The distance of a lair from the spawn is drawn in ground units between these two (the corners of the map are about 512 away).
+/// The distance of a lair from the spawn is drawn in ground units between these two (the corners of the hexagon are `WORLD_RADIUS`
+/// away, the middles of its sides about 388): a draw off the world is drawn again.
 const LAIR_NEAR: f64 = 160.0;
 const LAIR_FAR: f64 = 420.0;
 
@@ -607,7 +624,8 @@ const TELEPORT_PAD: [(i32, i32); 7] = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1),
 /// within 2 cells and no cell of `avoid` (the lairs) within 3. A square with no fit try has none. From the seed alone: it reads the
 /// terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
 pub fn teleporters(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
-    let span = WORLD_CHUNKS / TELEPORT_BLOCK / 2;
+    // The farthest square whose middle chunks reach the hexagon along an axis.
+    let span = (WORLD_RADIUS / CHUNK + 1) / TELEPORT_BLOCK;
     let squares = (-span..=span).flat_map(|by| (-span..=span).map(move |bx| (bx, by)));
     let drawn = squares
         .filter(|&square| square != (0, 0))
@@ -625,7 +643,7 @@ pub fn teleporters(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
 /// The first fit try of a teleporter in chunk `(cx, cy)`, `None` off the world or when none fits. A try lies 2 cells or more inside
 /// the chunk, so its pad and the cells round it within 2 are the chunk's own.
 fn teleporter_in(seed: u64, cx: i32, cy: i32, avoid: &[(i32, i32)]) -> Option<(i32, i32)> {
-    if !in_world(cx) || !in_world(cy) {
+    if !chunk_in_world(cx, cy) {
         return None;
     }
     let window = Window::new(seed, cx, cy);
@@ -637,10 +655,10 @@ fn teleporter_in(seed: u64, cx: i32, cy: i32, avoid: &[(i32, i32)]) -> Option<(i
             cx * CHUNK + draw(TELEPORT_SALT + 1),
             cy * CHUNK + draw(TELEPORT_SALT + 2),
         );
-        let fit = TELEPORT_PAD
-            .iter()
-            .all(|&(dq, dr)| !window.cell(at.0 + dq, at.1 + dr).terrain.blocked())
-            && enemies.iter().all(|&enemy| hex_distance(enemy, at) > 2)
+        let fit = TELEPORT_PAD.iter().all(|&(dq, dr)| {
+            let (q, r) = (at.0 + dq, at.1 + dr);
+            in_world(q, r) && !window.cell(q, r).terrain.blocked()
+        }) && enemies.iter().all(|&enemy| hex_distance(enemy, at) > 2)
             && avoid.iter().all(|&cell| hex_distance(cell, at) > 3);
         fit.then_some(at)
     })
@@ -790,7 +808,7 @@ pub fn dungeon_walk(
 }
 
 /// The chunks made and the cells looked at, shared by the searches of one press.
-type Seen = (HashMap<(i32, i32), Option<Vec<Cell>>>, usize);
+type Seen = (HashMap<(i32, i32), Option<Vec<Option<Cell>>>>, usize);
 
 /// `walk_path` with its reach `(radius, expansions)`.
 fn path_over(
@@ -807,7 +825,8 @@ fn path_over(
         let cells = chunks
             .entry((cq, cr))
             .or_insert_with(|| chunk(seed, cq, cr));
-        let found = cells.as_ref()?[((r - cr * CHUNK) * CHUNK + (q - cq * CHUNK)) as usize].terrain;
+        let found =
+            cells.as_ref()?[((r - cr * CHUNK) * CHUNK + (q - cq * CHUNK)) as usize]?.terrain;
         Some(match found {
             Terrain::Boulder if broken.contains(&(q, r)) => Terrain::Rock,
             Terrain::Tree if broken.contains(&(q, r)) => Terrain::Grass,

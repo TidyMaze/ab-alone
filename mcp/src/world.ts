@@ -164,6 +164,8 @@ const OPEN = [1, GRASS, ROCK];
 /** The answers of `world_enter`. */
 const REFUSED = 0;
 const BREAKS = 2;
+/** The terrain byte of a cell past the edge, in a chunk the edge crosses (`OFF_WORLD` of the bridge, #1440). */
+const OFF_WORLD = 255;
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 const fail = (code: ErrorCode, message: string): Result<never> => ({ ok: false, error: { code, message } });
@@ -367,7 +369,7 @@ export class OpenWorld {
     let cells = this.chunks.get(key);
     if (!cells) this.chunks.set(key, (cells = this.rules.world_chunk(this.play!.seed, cx, cy)));
     const code = cells[((r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)) * 3 + 1];
-    if (code === undefined) return undefined;
+    if (code === undefined || code === OFF_WORLD) return undefined;
     // Only a boulder or a tree is ever broken: it is the ground it stood on now (client/src/openworld.ts `LEFT`).
     if (!this.play!.broken.some((cell) => same(cell, [q, r]))) return code;
     return code === BOULDER ? ROCK : GRASS;

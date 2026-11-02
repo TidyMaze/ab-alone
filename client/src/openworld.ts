@@ -4,9 +4,8 @@ import { DIRECTIONS, type Axial } from './board';
 import type { FightState } from './openworldfight';
 import { enter, trail } from './openworldstep';
 
-/** A chunk is CHUNK x CHUNK cells; the world is WORLD_CHUNKS x WORLD_CHUNKS chunks centred on the spawn. */
+/** A chunk is CHUNK x CHUNK cells; the world is a hexagon of cells round the spawn (`WORLD_RADIUS` of the engine, #1440). */
 export const CHUNK = 16;
-export const WORLD_CHUNKS = 64;
 export const SPAWN: Axial = [0, 0];
 
 /** The terrain codes of the bridge (`world_chunk`), by code. */
@@ -30,11 +29,16 @@ const LEFT: Partial<Record<Terrain, Terrain>> = { boulder: 'rock', tree: 'grass'
 /** The chunk a cell is in. */
 export const chunkOf = ([q, r]: Axial): Axial => [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
 
-/** The tiles of a chunk the bridge returned, three bytes a cell (height, terrain, biome) row by row, `[]` off the world. */
+/** The terrain byte of a cell past the world's edge, in a chunk the edge crosses (`OFF_WORLD` of the bridge). */
+export const OFF_WORLD = 255;
+
+/** The tiles of a chunk the bridge returned, three bytes a cell (height, terrain, biome) row by row, `[]` off the world. A cell past
+ * the edge is a hole of the array: no tile, and `forEach` skips it, so the edge of a chunk the edge crosses is drawn as the world's. */
 export function parseChunk(bytes: Uint8Array): Tile[] {
-  const tiles: Tile[] = [];
+  const tiles: Tile[] = new Array<Tile>(bytes.length / 3);
   for (let i = 0; i < bytes.length; i += 3) {
-    tiles.push({ height: bytes[i]!, terrain: TERRAINS[bytes[i + 1]!]!, biome: BIOMES[bytes[i + 2]!]! });
+    if (bytes[i + 1] === OFF_WORLD) continue;
+    tiles[i / 3] = { height: bytes[i]!, terrain: TERRAINS[bytes[i + 1]!]!, biome: BIOMES[bytes[i + 2]!]! };
   }
   return tiles;
 }

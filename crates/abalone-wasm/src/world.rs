@@ -8,6 +8,8 @@ use wasm_bindgen::prelude::*;
 
 /// Bytes per cell: `[height, terrain, biome]`.
 pub const CELL_STRIDE: usize = 3;
+/// The terrain byte of a cell past the edge, in a chunk the edge crosses (#1440): the byte of `-1`, off the world.
+pub const OFF_WORLD: u8 = 255;
 
 /// The code of a terrain on the bridge: `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall.
 fn terrain_code(terrain: Terrain) -> u8 {
@@ -46,13 +48,17 @@ pub fn world_version() -> u32 {
 }
 
 /// The cells of chunk `(cx, cy)` of the world `seed`, `CELL_STRIDE` bytes per cell, row by row;
-/// empty off the world.
+/// empty off the world, `[0, OFF_WORLD, 0]` for a cell past the edge.
 #[wasm_bindgen]
 pub fn world_chunk(seed: u32, cx: i32, cy: i32) -> Vec<u8> {
     world::chunk(u64::from(seed), cx, cy)
         .unwrap_or_default()
         .iter()
-        .flat_map(|cell| [cell.height, terrain_code(cell.terrain), cell.biome as u8])
+        .flat_map(|cell| {
+            cell.map_or([0, OFF_WORLD, 0], |cell| {
+                [cell.height, terrain_code(cell.terrain), cell.biome as u8]
+            })
+        })
         .collect()
 }
 

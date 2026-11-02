@@ -84,7 +84,8 @@
 //!   an act), `2` elite, `3` rest, `4` event. `links` is a bit mask of the columns of the next row of the same act the node leads
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
 //! - Open world chunk (`world_chunk(seed, cx, cy)`): 3 bytes `[height, terrain, biome]` per cell of the
-//!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `7`;
+//!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. The world is a hexagon (`WORLD_RADIUS`): in a
+//!   chunk its edge crosses, a cell past the edge is `[0, 255, 0]`, `255` off the world. `height` `0` to `7`;
 //!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall;
 //!   all but sand, grass and rock are blocked; `biome` `0` meadow, `1` forest, `2` tundra, `3` desert,
 //!   `4` badlands (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
