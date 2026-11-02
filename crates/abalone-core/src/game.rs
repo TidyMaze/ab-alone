@@ -42,6 +42,36 @@ pub enum GameError {
     OtherRoom,
 }
 
+/// A one-use tactic of a rogue-lite fight, played by the army (Black) on its turn before a move
+/// (docs/specs/roguelite.md section 11).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tactic {
+    /// A marble joins the first free cell of the army's back row.
+    Reinforce,
+    /// The bot skips its next turn.
+    Freeze,
+    /// Two of the army's marbles trade places: it costs the move.
+    Swap((i32, i32), (i32, i32)),
+    /// Undoes the army's last move and the bot's answer.
+    FallBack,
+}
+
+/// Why `Game::play_tactic` refused a tactic.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TacticError {
+    NotRogueLite,
+    GameOver,
+    NotYourTurn,
+    /// Reinforce: the back row is full.
+    NoFreeCell,
+    /// Freeze: the bot already skips its next turn.
+    AlreadyFrozen,
+    /// Swap: not two different marbles of the army, one of them special.
+    BadSwap,
+    /// Fall back: the army has not moved yet.
+    NothingToUndo,
+}
+
 /// A move played, with the hash of the position it produced.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Played {
@@ -217,6 +247,16 @@ impl Game {
         self.board.place_special(cell, kind)?;
         self.start_hash = position_hash(&self.board, self.to_move);
         Ok(())
+    }
+
+    /// Plays `tactic` for the army.
+    pub fn play_tactic(&mut self, _tactic: Tactic) -> Result<(), TacticError> {
+        Err(TacticError::NotRogueLite)
+    }
+
+    /// Whether Reinforce, Freeze, Swap and Fall back can be played now.
+    pub fn tactics(&self) -> [bool; 4] {
+        [false; 4]
     }
 
     /// Gives the army its run's `relics`, before the first move of a rogue-lite fight
@@ -1129,5 +1169,321 @@ mod tests {
         );
         game.play(&mv(&[(1, 0)], E)).unwrap();
         assert_eq!(game.history().len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod tactic_tests {
+    use super::*;
+    use crate::moves::Direction::*;
+    use crate::moves::{legal_moves, Direction};
+    use crate::run::{army_game, army_game_against};
+
+    type P = (i32, i32);
+
+    fn mv(cells: &[P], dir: Direction) -> Move {
+        Move {
+            cells: cells.to_vec(),
+            dir,
+        }
+    }
+
+    fn count(game: &Game, cell: Cell) -> usize {
+        (-4..=4)
+            .flat_map(|q| (-4..=4).map(move |r| (q, r)))
+            .filter(|&(q, r)| game.board().get(q, r) == Some(cell))
+            .count()
+    }
+
+    /// A rogue-lite game on a hand-made position, Black to move.
+    fn rogue(black: &[P], white: &[P], specials: &[(P, Special)], ejected: [u8; 2]) -> Game {
+        let mut board = Board::empty();
+        board.set_rogue_lite();
+        for &(q, r) in black {
+            board.set(q, r, Cell::Black);
+        }
+        for &(q, r) in white {
+            board.set(q, r, Cell::White);
+        }
+        for &(cell, kind) in specials {
+            board.place_special(cell, kind).unwrap();
+        }
+        Game::from_position(board, Player::Black, ejected)
+    }
+
+    /// The first legal move of the side to move.
+    fn first(game: &Game) -> Move {
+        legal_moves(game.board(), game.to_move())[0].clone()
+    }
+
+    #[test]
+    fn a_tactic_needs_a_rogue_lite_fight_and_the_armys_turn() {
+        for tactic in [Tactic::Reinforce, Tactic::Freeze, Tactic::FallBack] {
+            assert_eq!(
+                Game::new().play_tactic(tactic),
+                Err(TacticError::NotRogueLite)
+            );
+        }
+        let mut game = army_game(9);
+        game.play(&first(&game.clone())).unwrap();
+        assert_eq!(game.to_move(), Player::White);
+        assert_eq!(
+            game.play_tactic(Tactic::Freeze),
+            Err(TacticError::NotYourTurn)
+        );
+        let mut over = rogue(&[(0, 0), (1, 0)], &[(2, 0)], &[], [6, 0]);
+        assert_eq!(over.play_tactic(Tactic::Freeze), Err(TacticError::GameOver));
+    }
+
+    #[test]
+    fn reinforce_puts_a_marble_on_the_first_free_cell_of_the_back_row() {
+        let mut game = army_game(7);
+        assert_eq!(count(&game, Cell::Black), 7);
+        assert_eq!(game.win_ejections(Player::White), 4);
+        assert_eq!(game.play_tactic(Tactic::Reinforce), Ok(()));
+        assert_eq!(game.board().get(-4, 4), Some(Cell::Black));
+        assert_eq!(game.board().get(-3, 4), Some(Cell::Empty));
+        assert_eq!(count(&game, Cell::Black), 8);
+        assert_eq!(
+            game.win_ejections(Player::White),
+            5,
+            "the army is still 3 short of losing"
+        );
+        assert_eq!(game.to_move(), Player::Black, "it costs no move");
+        assert_eq!(game.play_tactic(Tactic::Reinforce), Ok(()));
+        assert_eq!(game.board().get(-3, 4), Some(Cell::Black));
+        // The cell is a function of the board: the same fight reinforces the same way.
+        let mut twin = army_game(7);
+        twin.play_tactic(Tactic::Reinforce).unwrap();
+        twin.play_tactic(Tactic::Reinforce).unwrap();
+        assert_eq!(twin.board(), game.board());
+        // A full army has no free cell; a loss at 6 stays the cap.
+        assert_eq!(
+            army_game(14).play_tactic(Tactic::Reinforce),
+            Err(TacticError::NoFreeCell)
+        );
+        let mut nine = army_game(9);
+        nine.play_tactic(Tactic::Reinforce).unwrap();
+        assert_eq!(nine.win_ejections(Player::White), 6);
+    }
+
+    #[test]
+    fn reinforce_after_a_move_is_part_of_the_position() {
+        let mut game = army_game(9);
+        let m = first(&game);
+        game.play(&m).unwrap();
+        let reply = first(&game);
+        game.play(&reply).unwrap();
+        let before = game.history().last().unwrap().hash;
+        game.play_tactic(Tactic::Reinforce).unwrap();
+        assert_ne!(game.history().last().unwrap().hash, before);
+    }
+
+    #[test]
+    fn freeze_makes_the_bot_skip_its_next_turn_as_a_blocked_side_does() {
+        let mut game = army_game(14);
+        assert_eq!(game.play_tactic(Tactic::Freeze), Ok(()));
+        assert_eq!(
+            game.play_tactic(Tactic::Freeze),
+            Err(TacticError::AlreadyFrozen)
+        );
+        assert_eq!(game.to_move(), Player::Black, "it costs no move");
+        let m = first(&game);
+        game.play(&m).unwrap();
+        assert_eq!(game.to_move(), Player::Black);
+        assert_eq!(game.passed(), Some(Player::White));
+        let m = first(&game);
+        game.play(&m).unwrap();
+        assert_eq!(game.to_move(), Player::White, "one turn only");
+        assert_eq!(game.passed(), None);
+    }
+
+    #[test]
+    fn a_freeze_does_not_outlive_the_fight() {
+        let mut game = rogue(&[(0, 0), (1, 0), (2, 0)], &[(3, 0), (4, 0)], &[], [5, 0]);
+        game.play_tactic(Tactic::Freeze).unwrap();
+        game.play(&mv(&[(0, 0), (1, 0), (2, 0)], E)).unwrap();
+        assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
+        assert_eq!(game.passed(), None);
+    }
+
+    #[test]
+    fn swap_trades_a_special_marble_with_another_and_costs_the_move() {
+        let mut game = army_game(14);
+        game.place_special((0, 2), Special::Spark).unwrap();
+        assert_eq!(game.play_tactic(Tactic::Swap((0, 2), (1, 3))), Ok(()));
+        assert_eq!(game.board().specials(), [((1, 3), Special::Spark)]);
+        assert_eq!(game.to_move(), Player::White);
+        assert_eq!(count(&game, Cell::Black), 14);
+        assert!(
+            game.history().is_empty(),
+            "a swap is not a move of the list"
+        );
+        // Two specials trade their types.
+        let mut game = army_game(14);
+        game.place_special((0, 2), Special::Spark).unwrap();
+        game.place_special((1, 3), Special::Anchor).unwrap();
+        game.play_tactic(Tactic::Swap((1, 3), (0, 2))).unwrap();
+        assert_eq!(
+            game.board().specials(),
+            [((0, 2), Special::Anchor), ((1, 3), Special::Spark)]
+        );
+    }
+
+    #[test]
+    fn swap_needs_two_different_marbles_of_the_army_one_of_them_special() {
+        let mut game = army_game(14);
+        game.place_special((0, 2), Special::Spark).unwrap();
+        for (a, b) in [
+            ((0, 2), (0, 2)),  // the same marble
+            ((0, 2), (0, -2)), // a marble of the bot
+            ((0, 2), (3, 0)),  // an empty cell
+            ((1, 3), (0, 3)),  // two plain marbles
+            ((9, 9), (0, 2)),  // off the board
+        ] {
+            assert_eq!(
+                game.play_tactic(Tactic::Swap(a, b)),
+                Err(TacticError::BadSwap),
+                "{a:?} {b:?}"
+            );
+        }
+        assert_eq!(game.to_move(), Player::Black);
+        let plain = army_game(14);
+        assert_eq!(plain.tactics(), [false, true, false, false]);
+        assert_eq!(game.tactics(), [false, true, true, false]);
+        assert_eq!(army_game(7).tactics(), [true, true, false, false]);
+        let lone = rogue(&[(0, 0)], &[(2, 0)], &[((0, 0), Special::Heavy)], [0, 0]);
+        assert_eq!(lone.tactics(), [true, true, false, false]);
+    }
+
+    #[test]
+    fn a_swap_then_a_freeze_skips_the_bots_turn() {
+        let mut game = army_game(14);
+        game.place_special((0, 2), Special::Spark).unwrap();
+        game.play_tactic(Tactic::Freeze).unwrap();
+        game.play_tactic(Tactic::Swap((0, 2), (1, 3))).unwrap();
+        assert_eq!(
+            (game.to_move(), game.passed()),
+            (Player::Black, Some(Player::White))
+        );
+    }
+
+    #[test]
+    fn fall_back_undoes_the_last_move_and_the_bots_answer_one_turn_at_a_time() {
+        let mut game = army_game(14);
+        assert_eq!(
+            game.play_tactic(Tactic::FallBack),
+            Err(TacticError::NothingToUndo)
+        );
+        let start = game.board().clone();
+        let m = first(&game);
+        game.play(&m).unwrap();
+        let after_one = game.board().clone();
+        let reply = first(&game);
+        game.play(&reply).unwrap();
+        let m = first(&game);
+        game.play(&m).unwrap();
+        let reply = first(&game);
+        game.play(&reply).unwrap();
+        assert_eq!(game.history().len(), 4);
+        assert_eq!(game.play_tactic(Tactic::FallBack), Ok(()));
+        assert_eq!(game.history().len(), 2);
+        assert_eq!(game.to_move(), Player::Black);
+        assert_eq!(game.passed(), None);
+        assert_eq!(game.play_tactic(Tactic::FallBack), Ok(()));
+        assert!(game.history().is_empty());
+        assert_eq!(game.board(), &start);
+        assert_ne!(&start, &after_one);
+        assert_eq!(
+            game.play_tactic(Tactic::FallBack),
+            Err(TacticError::NothingToUndo)
+        );
+        // The fight goes on from the restored position.
+        let m = first(&game);
+        game.play(&m).unwrap();
+        assert_eq!(game.board(), &after_one);
+    }
+
+    #[test]
+    fn fall_back_keeps_a_reinforcement_made_before_the_undone_move_and_the_ejections() {
+        let mut game = army_game_against(7, 14);
+        game.play_tactic(Tactic::Reinforce).unwrap();
+        let reinforced = game.board().clone();
+        let m = first(&game);
+        game.play(&m).unwrap();
+        game.play_tactic(Tactic::FallBack).unwrap();
+        assert_eq!(game.board(), &reinforced);
+        assert_eq!(game.win_ejections(Player::White), 5);
+        // A push that ejects: undone, the count goes back.
+        let mut push = rogue(&[(0, 0), (1, 0), (2, 0)], &[(3, 0), (4, 0)], &[], [0, 0]);
+        push.play(&mv(&[(0, 0), (1, 0), (2, 0)], E)).unwrap();
+        assert_eq!(push.ejected(Player::Black), 1);
+        push.play_tactic(Tactic::FallBack).unwrap();
+        assert_eq!(push.ejected(Player::Black), 0);
+        assert_eq!(count(&push, Cell::White), 2);
+    }
+
+    #[test]
+    fn fall_back_after_a_swap_or_a_frozen_bot_returns_to_before_that_turn() {
+        let mut game = army_game(14);
+        game.place_special((0, 2), Special::Spark).unwrap();
+        let start = game.board().clone();
+        game.play_tactic(Tactic::Swap((0, 2), (1, 3))).unwrap();
+        game.play_tactic(Tactic::FallBack).unwrap();
+        assert_eq!(game.board(), &start);
+        game.play_tactic(Tactic::Freeze).unwrap();
+        let m = first(&game);
+        game.play(&m).unwrap();
+        assert_eq!(game.passed(), Some(Player::White));
+        game.play_tactic(Tactic::FallBack).unwrap();
+        assert_eq!(game.board(), &start);
+        assert_eq!(game.passed(), None);
+        // The freeze was already played before that move: it still holds.
+        let m = first(&game);
+        game.play(&m).unwrap();
+        assert_eq!(game.to_move(), Player::Black);
+    }
+
+    #[test]
+    fn a_fall_back_is_refused_once_the_game_is_over() {
+        let mut game = rogue(&[(0, 0), (1, 0), (2, 0)], &[(3, 0), (4, 0)], &[], [5, 0]);
+        game.play(&mv(&[(0, 0), (1, 0), (2, 0)], E)).unwrap();
+        assert_eq!(
+            game.play_tactic(Tactic::FallBack),
+            Err(TacticError::GameOver)
+        );
+    }
+
+    #[test]
+    fn a_blocked_bot_after_a_swap_passes() {
+        let mut game = rogue(
+            &[(3, -4), (3, -3), (4, -3)],
+            &[(4, -4)],
+            &[((4, -3), Special::Heavy)],
+            [0, 0],
+        );
+        game.play_tactic(Tactic::Swap((4, -3), (3, -3))).unwrap();
+        assert_eq!(game.passed(), Some(Player::White));
+        assert_eq!(game.to_move(), Player::Black);
+    }
+
+    #[test]
+    fn the_tactics_of_a_fight_replay_to_the_same_position() {
+        let run = |game: &mut Game| {
+            game.place_special((0, 2), Special::Heavy).unwrap();
+            game.play_tactic(Tactic::Reinforce).unwrap();
+            game.play_tactic(Tactic::Freeze).unwrap();
+            let m = first(game);
+            game.play(&m).unwrap();
+            game.play_tactic(Tactic::FallBack).unwrap();
+            game.play_tactic(Tactic::Swap((0, 2), (1, 3))).unwrap();
+            let reply = first(game);
+            game.play(&reply).unwrap();
+        };
+        let (mut a, mut b) = (army_game(12), army_game(12));
+        run(&mut a);
+        run(&mut b);
+        assert_eq!(a.board(), b.board());
+        assert_eq!(a.history(), b.history());
     }
 }
