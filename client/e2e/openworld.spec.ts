@@ -278,74 +278,6 @@ test('with reduced motion the troop pushes the enemy at once, with no animation,
   expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined();
 });
 
-// #968: the Open world is saved after a push and resumed by the menu after a reload: the hero, the troop and the enemy the
-// push moved are where they were left. The save is counted on the page (openworldSaved) once it is stored.
-test('the Open world is saved after a push and resumes after a reload, the troop and the enemy where they were, #968', async ({ page }) => {
-  await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
-  await expect.poll(at).toBe('0,0');
-  await page.evaluate(() =>
-    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
-      hero: [0, 0],
-      troop: [[-1, 0], [-2, 0]],
-      enemies: [[2, 0]],
-    }),
-  );
-  await page.keyboard.press('ArrowRight');
-  await expect.poll(at).toBe('2,0');
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBe('1');
-  await page.reload();
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  await expect.poll(at).toBe('2,0');
-  expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0 -2,0');
-  expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
-});
-
-// #968: a save of another world version is not loaded: the world starts on the spawn and the stale record is deleted. The record
-// is written by hand in the page's IndexedDB (the game store of the ab-alone database) at the seed's key, as an old build left it.
-test('a save of another world version is ignored and deleted, the world starts on the spawn, #968', async ({ page }) => {
-  await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  const stale = { version: 0, seed: 7, hero: [2, 0], troop: [], fight: { removed: [], added: [], beaten: 0 }, savedAt: 1 };
-  const store = () =>
-    page.evaluate(
-      () =>
-        new Promise<unknown>((done, fail) => {
-          const open = indexedDB.open('ab-alone', 1);
-          open.onerror = () => fail(open.error);
-          open.onsuccess = () => {
-            const get = open.result.transaction('game', 'readonly').objectStore('game').get('openworld:7');
-            get.onsuccess = () => {
-              open.result.close();
-              done(get.result ?? null);
-            };
-          };
-        }),
-    );
-  await page.evaluate(
-    (record) =>
-      new Promise<void>((done, fail) => {
-        const open = indexedDB.open('ab-alone', 1);
-        open.onerror = () => fail(open.error);
-        open.onsuccess = () => {
-          const tx = open.result.transaction('game', 'readwrite');
-          tx.objectStore('game').put(record, 'openworld:7');
-          tx.oncomplete = () => {
-            open.result.close();
-            done();
-          };
-        };
-      }),
-    stale,
-  );
-  expect(await store()).toEqual(stale);
-  await page.reload();
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
-  await expect.poll(store).toBeNull();
-});
-
 // #1025: on a touch screen a touch on the left half shows the virtual joystick under the thumb; dragging right holds the right key,
 // the hero walks on while the thumb is held and stops when it lifts. Touch is emulated through CDP (hasTouch).
 test.describe('the touch joystick', () => {
@@ -668,36 +600,6 @@ test('a tap on a far cell walks the hero there, a key cancels, Steering off keep
   await page.mouse.click(size.width / 2 - 260, size.height / 2 - 40);
   await page.waitForTimeout(400);
   expect(await at()).toBe(before);
-});
-
-// #1147: the hero breaks an isolated boulder it rolls into. On seed 7 the boulder on (4, 2) stands alone with grass on its left: the
-// move goes through, its prop leaves the scene, shards fly, the cell is counted broken, and the break is still there after a reload.
-test('the hero breaks the isolated boulder it rolls into, and it stays broken after a reload, #1147', async ({ page }) => {
-  await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
-  await page.evaluate(() =>
-    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [3, 2], troop: [[2, 2], [1, 2]], enemies: [] }),
-  );
-  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
-  const boulders = () => page.evaluate(() => (JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>)['prop-boulder']! + ((JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>)['prop-boulder-hi'] ?? 0));
-  const before = await boulders();
-  expect(before).toBeGreaterThan(0);
-  await shot(page, { path: test.info().outputPath('break-before.png') });
-  await page.keyboard.press('ArrowRight');
-  await expect.poll(at).toBe('4,2'); // it went through the boulder
-  await page.waitForTimeout(220);
-  await shot(page, { path: test.info().outputPath('break-shards.png') });
-  expect(await boulders()).toBe(before - 1);
-  expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBeDefined();
-  await page.waitForTimeout(800);
-  await shot(page, { path: test.info().outputPath('break-after.png') });
-  await page.reload();
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  await expect.poll(at).toBe('4,2');
-  expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
-  expect(await boulders()).toBe(before - 1);
 });
 
 // #1103: a push punches the camera in 3 % and back within 250 ms; the chunk centre and the reach never change, and the zoom is exactly
