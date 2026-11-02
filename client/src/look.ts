@@ -52,9 +52,13 @@ export const MARBLE_LOOK = { roughness: 0.4, metalness: 0 } as const;
  * only the backdrop and the crack decal, which carry the room and a boss tell. */
 /** The board's and the plate's maps: the room's, hidden on the terrace (#1370). */
 const ROOM_PLATE = /^pbr\/(board|plate)-/;
-/** Whether a texture file loads in this look, on the room (`room`) or on the terrace (#1370): the terrace draws no board or plate. */
-export const loadsTexture = (look: Look, name: string, room = true): boolean =>
-  (look === 'pbr' || name === 'backdrop.ktx2' || name === 'crack-decal.ktx2') && (room || !ROOM_PLATE.test(name));
+/** Whether a texture file loads in this look, on the room (`room`) or on the terrace (#1370). The terrace draws no board or plate,
+ * and no backdrop: its background is its own colour, and the canvas stays hidden until the terrace is drawn (#1389). */
+export const loadsTexture = (look: Look, name: string, room = true): boolean => {
+  if (name === 'backdrop.ktx2') return room;
+  if (name === 'crack-decal.ktx2') return true;
+  return look === 'pbr' && (room || !ROOM_PLATE.test(name));
+};
 
 /** Whether a skin's maps are asked for (#1370): the terrace draws its default skins with its own marbles, so their maps wait for
  * the room, and a skin the player picked always has them. */
