@@ -81,6 +81,19 @@ describe('the board opt-in (#1287)', () => {
     expect(readChoice(store)).toBe('declined');
   });
 
+  it('a retire record kept under the first board version still counts: its key is never reused and Leave keeps it', async () => {
+    const store = memory();
+    const keys = await boardKeys(store);
+    const old = await signRetire(keys, 1_800_000_000);
+    store.setItem('ab-alone.board-retire', JSON.stringify({ v: 1, events: [old] })); // written before BOARD_VERSION became 2
+    expect(readRetires(store)).toEqual([old]);
+    const pub = await joinBoard(store, 'a');
+    expect(pub).not.toBe(keys.pub);
+    await leaveBoard(store, 1_800_000_001_000);
+    expect(readRetires(store)[0]).toEqual(old);
+    expect(readRetires(store)).toHaveLength(2);
+  });
+
   it('never rejoins with a retired key, and New key makes a fresh one', async () => {
     const store = memory();
     const first = await joinBoard(store, 'a');

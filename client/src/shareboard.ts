@@ -11,6 +11,8 @@ const NAME_KEY = 'ab-alone.board-name';
 const RETIRE_KEY = 'ab-alone.board-retire';
 /** Raise it when the text below changes: an older answer then counts for nothing and the box is asked again. */
 export const BOARD_VERSION = 2;
+/** The retire record has its own version: a text change must never hide a retire already signed. */
+const RETIRE_VERSION = 1;
 export const NAME_MAX = 16;
 
 /** The text decided by the legal role on #1287: public, permanent, third party relays, no erasure, a name that is not you, 16+. */
@@ -75,7 +77,7 @@ export const verifyRetire = (e: RetireEvent): Promise<boolean> => signedBy(e.pub
 export function readRetires(store: Store): RetireEvent[] {
   try {
     const saved = JSON.parse(read(store, RETIRE_KEY) ?? '') as { v?: number; events?: RetireEvent[] };
-    if (saved.v === BOARD_VERSION && Array.isArray(saved.events)) return saved.events;
+    if (saved.v === RETIRE_VERSION && Array.isArray(saved.events)) return saved.events;
   } catch {
     // none
   }
@@ -94,7 +96,7 @@ export async function joinBoard(store: Store, name: string): Promise<string> {
 /** Leaves: builds and stores the signed `retire` for the current key (nothing is sent), then clears the consent. */
 async function retireCurrent(store: Store, nowMs: number): Promise<RetireEvent> {
   const event = await signRetire(await boardKeys(store), Math.floor(nowMs / 1000));
-  write(store, RETIRE_KEY, JSON.stringify({ v: BOARD_VERSION, events: [...readRetires(store), event] }));
+  write(store, RETIRE_KEY, JSON.stringify({ v: RETIRE_VERSION, events: [...readRetires(store), event] }));
   return event;
 }
 
