@@ -6604,6 +6604,7 @@ renderer.setAnimationLoop((now) => {
       renderer.render(scene, camera);
     }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
     unveil();
+    if (software && !navigator.webdriver) adaptResolution(now); // the Open world steps its resolution down on a software renderer only (#1483)
     if (fpsOn) {
       // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
       if (drew) stampDrawn(fpsStamps, now);

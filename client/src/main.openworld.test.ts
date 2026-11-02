@@ -774,3 +774,27 @@ describe('the teleporters of the Open world (#1412)', () => {
     expect(all.length).toBe(2 * 34); // one a square of 8 x 8 chunks (#1444) that has an island in the archipelago (#1442)
   });
 });
+
+describe('the Open world on a machine with no GPU (#1483)', () => {
+  // A player's page (webdriver off after the boot): the resolution steps down while the Open world's frames are slow, on a software
+  // renderer only, a GPU page keeps its ratio.
+  const slowWalk = async (software: string): Promise<string | undefined> => {
+    const game = await boot(`?bot=off&openworld=7&software=${software}`);
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    Object.defineProperty(navigator, 'webdriver', { value: false, configurable: true });
+    window.dispatchEvent(new Event('resize'));
+    expect(data().ratio).toBe('1');
+    for (let i = 0; i < 30; i++) game.frame(100);
+    return data().ratio;
+  };
+
+  it('steps its resolution down on slow frames when the renderer is software, to half', async () => {
+    expect(await slowWalk('on')).toBe('0.5');
+  });
+
+  it('keeps the resolution of a GPU page, slow frames or not', async () => {
+    expect(await slowWalk('off')).toBe('1');
+  });
+});
