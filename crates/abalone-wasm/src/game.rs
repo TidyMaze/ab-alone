@@ -70,6 +70,11 @@ impl Engine {
             .collect()
     }
 
+    /// The tactics the army can play now, a bit mask (see the module docs).
+    pub fn tactics(&self) -> u8 {
+        0
+    }
+
     /// Side to move: `1` Black, `2` White.
     pub fn to_move(&self) -> u8 {
         side_code(self.game.to_move())
@@ -404,6 +409,56 @@ mod tests {
         engine.play(&[1, 4, 4, -2, 0, 0, 0, 0]).unwrap();
         assert_eq!((engine.to_move(), engine.passed()), (1, 2));
         assert_eq!(engine.status(), 0);
+    }
+
+    #[test]
+    fn a_tactic_record_plays_in_a_rogue_lite_fight_and_the_mask_says_which_can() {
+        let mut engine = Engine::with_army(7, 14);
+        engine.place_special(0, 2, 1).unwrap();
+        assert_eq!(engine.tactics(), 0b0111); // Reinforce, Freeze, Swap; nothing to fall back on
+        engine.play(&[0, 1, 0, 0, 0, 0, 0, 0]).unwrap(); // Reinforce
+        assert_eq!(engine.board().iter().filter(|&&c| c == 1).count(), 8);
+        assert_eq!(engine.win_ejections(2), 5);
+        engine.play(&[0, 2, 0, 0, 0, 0, 0, 0]).unwrap(); // Freeze
+        assert_eq!(engine.tactics(), 0b0101);
+        let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&first).unwrap();
+        assert_eq!((engine.to_move(), engine.passed()), (1, 2));
+        assert_eq!(engine.tactics(), 0b1111);
+        engine.play(&[0, 3, 0, 2, 1, 3, 0, 0]).unwrap(); // Swap (0, 2) with (1, 3)
+        assert_eq!(engine.specials(), vec![1, 3, 1]);
+        assert_eq!(engine.to_move(), 2);
+        assert_eq!(engine.tactics(), 0);
+        let reply = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&reply).unwrap();
+        engine.play(&[0, 4, 0, 0, 0, 0, 0, 0]).unwrap(); // Fall back
+        assert_eq!(engine.specials(), vec![0, 2, 1]);
+    }
+
+    #[test]
+    fn a_tactic_record_the_engine_refuses_is_an_error_and_changes_nothing() {
+        let mut plain = Engine::new();
+        assert_eq!(plain.tactics(), 0);
+        assert!(plain
+            .play(&[0, 2, 0, 0, 0, 0, 0, 0])
+            .unwrap_err()
+            .contains("NotRogueLite"));
+        let mut engine = Engine::with_army(14, 14);
+        let board = engine.board();
+        assert!(engine
+            .play(&[0, 1, 0, 0, 0, 0, 0, 0])
+            .unwrap_err()
+            .contains("NoFreeCell"));
+        assert!(engine
+            .play(&[0, 9, 0, 0, 0, 0, 0, 0])
+            .unwrap_err()
+            .contains("tactic"));
+        assert!(engine
+            .play(&[0, 2, 0, 0])
+            .unwrap_err()
+            .contains("8 integers"));
+        assert_eq!(engine.board(), board);
+        assert_eq!(engine.to_move(), 1);
     }
 
     #[test]
