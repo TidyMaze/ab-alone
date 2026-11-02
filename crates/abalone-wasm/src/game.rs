@@ -2,7 +2,7 @@
 
 use crate::convert::{
     board_bytes, decode, decode_tactic, draw_reason_code, encode, player, side_code, special,
-    special_code, status_code,
+    special_code, status_code, MOVE_STRIDE,
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
@@ -152,6 +152,23 @@ impl Engine {
     }
 }
 
+/// Replays a ranked 1v1 move log (move records back to back, `MOVE_STRIDE` integers each) on a new standard game and returns
+/// `[status, black ejections, white ejections]`: the score the rules give it (#1287). Empty when the log is cut inside a record, a
+/// move is not legal, or a move comes after the game ended: a log that does not replay has no score.
+#[wasm_bindgen]
+pub fn replay_score(moves: &[i32]) -> Vec<u8> {
+    let mut engine = Engine::new();
+    if moves.len() % MOVE_STRIDE != 0 {
+        return Vec::new();
+    }
+    for mv in moves.chunks(MOVE_STRIDE) {
+        if engine.status() != 0 || engine.play(mv).is_err() {
+            return Vec::new();
+        }
+    }
+    vec![engine.status(), engine.ejected(1), engine.ejected(2)]
+}
+
 impl Default for Engine {
     fn default() -> Self {
         Self::new()
@@ -161,12 +178,38 @@ impl Default for Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::convert::MOVE_STRIDE;
     use abalone_core::board::Board;
     use abalone_core::moves::Player;
 
     fn count(cells: &[u8], value: u8) -> usize {
         cells.iter().filter(|&&c| c == value).count()
+    }
+
+    #[test]
+    fn replay_score_replays_a_log_to_status_and_ejections_or_refuses_it() {
+        let mut engine = Engine::new();
+        let mut log: Vec<i32> = Vec::new();
+        assert_eq!(replay_score(&log), vec![0, 0, 0]);
+        for _ in 0..300 {
+            let mv = engine.best_move(20);
+            if mv.is_empty() {
+                break;
+            }
+            engine.play(&mv).unwrap();
+            log.extend(mv);
+        }
+        assert_eq!(
+            replay_score(&log),
+            vec![engine.status(), engine.ejected(1), engine.ejected(2)]
+        );
+        // An illegal move, a log cut inside a record, a tactic record and a move past the end of the game: no score.
+        assert!(replay_score(&[1, 0, 0, 0, 0, 0, 0, 0]).is_empty());
+        assert!(replay_score(&log[..MOVE_STRIDE + 3]).is_empty());
+        assert!(replay_score(&[0, 1, 0, 0, 0, 0, 0, 0]).is_empty());
+        let mut past = log.clone();
+        past.extend_from_slice(&log[..MOVE_STRIDE]);
+        assert_ne!(engine.status(), 0);
+        assert!(replay_score(&past).is_empty());
     }
 
     #[test]

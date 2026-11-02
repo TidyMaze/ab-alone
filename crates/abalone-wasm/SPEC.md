@@ -12,7 +12,7 @@ depends-on: [abalone-core]
 ## Responsibility
 
 A thin `wasm-bindgen` wrapper that exposes `abalone-core` to JS: `Engine` (a plain game),
-`Encounter` (a boss fight), `Royale`, plus the engine version and boss list. It is built twice
+`Encounter` (a boss fight), `Royale`, `replay_score` (a ranked 1v1 move log replayed to its status and ejections, or refused; the shared board counts a result only if it matches, #1287), plus the engine version and boss list. It is built twice
 from the same source, `--target web` for `client/` and `--target nodejs` for `mcp/`.
 
 ## Boundary

@@ -60,6 +60,9 @@
 //!   where a move has its marble count. `code` `1` Reinforce, `2` Freeze, `3` Swap of `(q0, r0)` and
 //!   `(q1, r1)`, `4` Fall back (docs/specs/roguelite.md section 11). `Engine::tactics` is the mask of
 //!   those the army can play now, bit `code - 1`.
+//! - Replay score (`replay_score(moves)`, a ranked 1v1 log read from a relay, #1287): the move records of a standard game back to back,
+//!   answered by `[status, black ejections, white ejections]`, or empty when the log is cut inside a record, has an illegal move,
+//!   or goes on after the game ended: a log that does not replay has no score.
 //! - Score (the evaluation bar): the search score for the side to move, in centi-marbles (one
 //!   marble is 100). A won game scores 1 000 000 minus the plies to the win, a lost one the
 //!   opposite, a draw 0: beyond +/-500 000 the game is decided.
@@ -118,7 +121,7 @@ pub mod world;
 
 pub use convert::{draw_reason_code, result_code, status_code, MOVE_STRIDE};
 pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
-pub use game::Engine;
+pub use game::{replay_score, Engine};
 pub use royale::Royale;
 pub use run::run_map;
 pub use world::{world_chunk, world_lairs, world_teleporters, world_version};
