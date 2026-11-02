@@ -52,7 +52,9 @@ The short version:
     `main` moved. Unfinished work lands behind a flag off by default, with an issue that removes it.
 11. Faster and cheaper (owner decision, 2026-10-29): no builds in parallel, one agent builds and
     changes the code at a time, so the changes do not conflict. No model above Sonnet, no
-    reasoning effort above medium, for the lead agent and every sub-agent.
+    reasoning effort above medium, for the lead agent and every sub-agent, by default. An owner
+    may raise the model and the effort of his own agents for a named hard task, noted in that
+    task's issue (Decision #931).
 12. A partial commit says `Refs #<issue>`, never `Closes`: the issue stays open with the numbers in a
     comment (#925: reordering the texture requests gained nothing measurable).
 13. Screenshots go to the `pr-screenshots` branch (the one branch besides `main`) with `gh api -X PUT .../contents/... --input
