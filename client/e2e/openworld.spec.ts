@@ -161,9 +161,13 @@ shared('the wheel zooms the Open world out far and back, and the hero still roll
 
 // #976: the loaded chunks cover the ground in view at every zoom, so the edge of the loaded area never shows: on a 32:9 screen
 // at the widest zoom, the four edge strips of a screenshot have no pixel of the background colour (the neon look's sky, #04050c, #1424).
-test('the widest zoom on a 32:9 screen shows no black background at its edges, #976', async ({ page }) => {
+for (const [look, query, [br, bg, bb], allowed] of [
+  ['neon', '', [4, 5, 12], 3],
+  ['terrace', '&look=terrace', [11, 18, 32], 0],
+] as const)
+test(`the widest zoom on a 32:9 screen shows no black background at its edges in the ${look} look, #976`, async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 540 });
-  await page.goto('./?bot=off&openworld=7');
+  await page.goto(`./?bot=off&openworld=7${query}`);
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const box = (await page.locator('canvas:not(#openworld-minimap)').boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -176,7 +180,7 @@ test('the widest zoom on a 32:9 screen shows no black background at its edges, #
   // a 32:9 screen stops before the 16:9 widest zoom (6): its reach would pass MAX_REACH further out
   expect(Number(await page.evaluate(() => document.body.dataset.openworldZoom))).toBeLessThan(6);
   const png = await page.screenshot();
-  const background = await page.evaluate(async (base64) => {
+  const background = await page.evaluate(async ([base64, [br, bg, bb]]) => {
     const img = new Image();
     img.src = `data:image/png;base64,${base64}`;
     await img.decode();
@@ -193,8 +197,9 @@ test('the widest zoom on a 32:9 screen shows no black background at its edges, #
     };
     const { width: w, height: h } = canvas;
     return { top: strip(0, 0, w, 6), bottom: strip(0, h - 6, w, 6), left: strip(0, 0, 6, h), right: strip(w - 6, 0, 6, h) };
-  }, png.toString('base64'));
-  expect(background).toEqual({ top: 0, bottom: 0, left: 0, right: 0 });
+  }, [png.toString('base64'), [br, bg, bb]] as const);
+  // Owner decision (#1424): the neon look tolerates 3 px at most of dark ground at the edges (its ground fades to near the sky colour); the terrace stays at 0.
+  expect(background.top + background.bottom + background.left + background.right).toBeLessThanOrEqual(allowed);
 });
 
 // #989: the props within 8 cells of the hero are drawn with their detailed models once those load, the low-poly ones beyond.
