@@ -3594,7 +3594,7 @@ function syncTableZero(): void {
   terraceMarbles(on);
   showBoard();
   if (on && !(run !== null && !fight) && isDefaultView(view, resetView(4))) {
-    view = innerWidth < innerHeight ? { ...TERRACE_VIEW, polar: PHONE_POLAR, distance: 18 } : { ...TERRACE_VIEW }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
+    view = innerWidth < innerHeight ? { ...TERRACE_VIEW, polar: PHONE_POLAR, distance: neonLook ? 13.8 : 18 } : { ...TERRACE_VIEW }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
     applyView();
   }
   if (on === sceneRenderer.terraceOn) return;

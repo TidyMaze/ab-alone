@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars } from './neonlook';
+import { NEON, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
@@ -85,12 +85,27 @@ describe('the neon look (#1424)', () => {
     expect(neonEdgeMaterial().color.b).toBeGreaterThan(1);
   });
 
-  it('copies the pedestal in slate and leaves the file mesh as it was', () => {
-    const file = Object.assign(new THREE.Mesh(painted(0xd8d4c8, 0xd8d4c8), new THREE.MeshStandardMaterial()), { name: 'kit_pedestal_flat' });
+  it('copies the pedestal in slate with a thin cyan ring, and leaves the file mesh as it was', () => {
+    const geometry = painted(0xd8d4c8, 0xd8d4c8, 0xd8d4c8);
+    geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(9), 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(6), 2)); // dropped
+    const file = Object.assign(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial()), { name: 'kit_pedestal_flat' });
     const copy = neonPedestal(file);
     expect(at(copy.geometry, 0).getHex()).toBe(NEON.plateau);
+    const colours = copy.geometry.attributes.color!;
+    expect(colours.count).toBeGreaterThan(3); // the disc and its ring
+    expect(at(copy.geometry, colours.count - 1).b).toBeGreaterThan(at(copy.geometry, 0).b); // the ring is bluer than the slate
+    expect(copy.geometry.attributes.uv).toBeUndefined();
     expect(at(file.geometry, 0).getHex()).toBe(0xd8d4c8);
     expect(copy.material).toBe(neonMaterial('slate'));
+  });
+
+  it('glows: a violet channel on the rim and a band and a tip on each post, unlit above 1', () => {
+    const glow = neonGlow([new THREE.Vector3(1, 0, 2), new THREE.Vector3(-1, 0, 2)], true);
+    expect(glow.children).toHaveLength(5);
+    expect(((glow.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.b).toBeGreaterThan(1);
+    expect(glow.children[1]!.position.toArray()).toEqual([1, 0.7, 2]);
+    expect(neonGlow([], false).children).toHaveLength(0);
   });
 });
 
@@ -103,7 +118,7 @@ describe('the neon look of the terrace file (#1424)', () => {
   };
   it('paints, hides the sky, gives the dishes their edges and the bars their own material', () => {
     const root = new THREE.Group();
-    root.add(piece('scene_cell_00'), piece('scene_cell_01', 2), piece('scene_sky_dome'), piece('scene_slab_arena'), piece('scene_turnbar_black'));
+    root.add(piece('scene_cell_00'), piece('scene_cell_01', 2), piece('scene_sky_dome'), piece('scene_slab_arena'), piece('scene_turnbar_black'), piece('scene_post_0', 5));
     const out = mergeByMaterial(root, false, true);
     const dishes = out.getObjectByName('terrace_dishes') as THREE.InstancedMesh;
     const edges = out.getObjectByName('terrace_edges') as THREE.InstancedMesh;
@@ -114,9 +129,10 @@ describe('the neon look of the terrace file (#1424)', () => {
     expect([dishes.count, edges.count]).toEqual([1, 1]); // a vanished cell loses its edge too
     const bar = out.children.find((c) => c.name === 'scene_turnbar_black') as THREE.Mesh;
     expect(bar.material).toBe(neonMaterial('scene_turnbar_black'));
-    expect(out.children.length).toBeGreaterThan(0);
+    expect(out.getObjectByName('neon_glow')!.children).toHaveLength(3); // the rim channel, a band and a tip
+    expect(out.getObjectByName('neon_glow')!.parent).toBe(out); // not split: the board is the file itself
     // the sky mesh is not merged: only the slab (lit) is
-    expect((out.children as THREE.Mesh[]).filter((m) => m.geometry && m.isMesh && m.name === '').length).toBe(1);
+    expect((out.children as THREE.Mesh[]).filter((m) => m.isMesh && m.name === '').length).toBe(1);
   });
   it('leaves the dish alone without the look', () => {
     const root = new THREE.Group();

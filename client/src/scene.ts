@@ -511,7 +511,7 @@ export class SceneRenderer {
   setNeon(): void {
     lightNeon(this.sun, this.hemisphere);
     this.scene.background = new THREE.Color(NEON.sky);
-    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = NEON_LIGHT.exposure;
     if (!this.terrace.getObjectByName('neon_stars')) this.terrace.add(neonStars());
   }

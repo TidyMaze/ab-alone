@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fitView, type View } from './camera';
-import { NEON_HIDDEN, neonEdgeGeometry, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
+import { NEON_HIDDEN, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
 
 /** The palette the port must match (notes-round4.md). */
 export const PALETTE = {
@@ -109,9 +109,13 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
   const ofBoard = new Map<THREE.Material, THREE.BufferGeometry[]>();
   const bars: THREE.Mesh[] = [];
   const dishes: THREE.Mesh[] = [];
+  const posts: THREE.Vector3[] = [];
+  let arenaSlab = false;
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || GAME_DRAWN.test(o.name) || (neon && NEON_HIDDEN.test(o.name))) return;
+    if (neon && /^scene_post_?\d+$/.test(o.name)) posts.push(new THREE.Vector3().setFromMatrixPosition(mesh.matrixWorld));
+    if (neon && o.name === 'scene_slab_arena') arenaSlab = true;
     if (TURN_BAR.test(o.name)) return void bars.push(mesh);
     if (DISH.test(o.name)) return void dishes.push(mesh);
     const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
@@ -186,6 +190,7 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
     bar.matrix.copy(bar.matrixWorld).decompose(bar.position, bar.quaternion, bar.scale);
     board.add(bar);
   }
+  if (neon && (posts.length || arenaSlab)) board.add(neonGlow(posts, arenaSlab)); // the violet channel of the rim and the posts' glow
   return out;
 }
 

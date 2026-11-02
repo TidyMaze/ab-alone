@@ -568,7 +568,7 @@ describe('SceneRenderer (#632)', () => {
     sr.setNeon(); // asked again: one set of stars
     expect((sr.scene.background as THREE.Color).getHex()).toBe(NEON.sky);
     expect(sr.terrace.children.filter((c) => c.name === 'neon_stars')).toHaveLength(1);
-    expect([sr.renderer.toneMapping, sr.renderer.toneMappingExposure, sr.sun.intensity]).toEqual([THREE.NeutralToneMapping, NEON_LIGHT.exposure, NEON_LIGHT.sunIntensity]);
+    expect([sr.renderer.toneMapping, sr.renderer.toneMappingExposure, sr.sun.intensity]).toEqual([THREE.NoToneMapping, NEON_LIGHT.exposure, NEON_LIGHT.sunIntensity]);
     const plain = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
     expect(plain.sun.intensity).not.toBe(NEON_LIGHT.sunIntensity); // nothing changes without the look
   });

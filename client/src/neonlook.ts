@@ -2,6 +2,7 @@
 // edges only. Colours, materials, light and sky: the same board, geometry, rules and camera. Off unless the address says `?look=neon`;
 // it is never stored, so a player who did not ask for it never sees it.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /** The approved numbers (mock/mock.js, directions.json). Neon is on edges, lines and lamps, never on a cell top. */
 export const NEON = {
@@ -10,22 +11,25 @@ export const NEON = {
   gap: 0x0a0e18,
   /** The albedo of the gap floor: the hemisphere lights it up about three times, so it reads near `gap` on the screen. */
   gapFloor: 0x020307,
-  ground: 0x12182a,
-  plateau: 0x1c2436,
-  rim: 0x1f2a44,
+  /** The ground, lit about as it is painted: near the board and far from it, darker than a cell top and lighter than the rim. */
+  ground: 0x1d2433,
+  groundFar: 0x131824,
+  plateau: 0x1d2433,
+  rim: 0x0f1320,
   rimLight: 0x39466a,
   slab: 0x171c2b,
   cyan: 0x19e6ff,
   violet: 0x9a6bff,
   turn: 0x5fd0e6,
-  crystal: 0x7a62d8,
+  crystal: 0x6a609f, // 30 % less saturated than the mockup's #7a62d8: never the loudest object
+  pedestalRing: 0x7fd6e8,
   boulder: 0x2c2f36,
   blackMarble: 0x14161a,
   whiteMarble: 0xf2f0ea,
 } as const;
 
 /** The mock's light: a cold sun low on the left, a violet-tinted hemisphere, ACES at 1.15. */
-export const NEON_LIGHT = { sun: 0xe8f0ff, sunIntensity: 4, elevation: 24, azimuth: 50, sky: 0x9a6bff, skyMix: 0xe8eeff, skyAmount: 1, ground: 0x2a3347, hemisphere: 3.6, exposure: 1 } as const;
+export const NEON_LIGHT = { sun: 0xe8f0ff, sunIntensity: 3.2, elevation: 24, azimuth: 50, sky: 0x9a6bff, skyMix: 0xe8eeff, skyAmount: 1, ground: 0x2a3347, hemisphere: 2.9, exposure: 1 } as const;
 
 /** `?look=neon`, nothing else. */
 export function neonLookOn(search: string): boolean {
@@ -108,6 +112,21 @@ const ramp =
     eachColour(g, (v) => d.clone().lerp(l, THREE.MathUtils.clamp((luma(v.x, v.y, v.z) - a) / (b - a), 0, 1)));
   };
 
+/** Like `tone`, with the colour going from `near` (round the board) to `far` (the plain), by distance from the board's centre. */
+const distanceTone =
+  (near: number, far: number, ref: number): Paint =>
+  (g) => {
+    const [a, b, r] = [linear(near), linear(far), linear(ref)];
+    const k = luma(r.r, r.g, r.b);
+    const p = g.attributes.position!;
+    const c = g.attributes.color!;
+    for (let i = 0; i < c.count; i++) {
+      const t = THREE.MathUtils.clamp((Math.hypot(p.getX(i), p.getZ(i)) - 12) / 30, 0, 1);
+      const out = a.clone().lerp(b, t).multiplyScalar(luma(c.getX(i), c.getY(i), c.getZ(i)) / k);
+      c.setXYZ(i, out.r, out.g, out.b);
+    }
+  };
+
 /** One flat colour, whatever the file had. */
 const flatColour =
   (hex: number): Paint =>
@@ -121,8 +140,8 @@ const RULES: [RegExp, Paint][] = [
   [/^scene_(cell|ballast_cell|dual_cell|dual_cell_n|hub_cell|royale_cell)_?\d+$/, tone(NEON.cell, 0xb3a98a)],
   [/^scene_(slab_arena|ballast_slab|dual_slab_[ns]|slab_hub|royale_slab)$/, ramp(NEON.gapFloor, NEON.rim, 0x2a3540, 0xa29e9a)],
   [/^scene_post/, ramp(NEON.slab, NEON.rimLight, 0x3b3b3d, 0xd8d4c8)],
-  [/^scene_col_map_b/, tone(NEON.ground, 0x818d8d)],
-  [/^scene_col_plateau/, tone(NEON.plateau, 0x746d59)],
+  [/^scene_col_map_b/, distanceTone(NEON.ground, NEON.groundFar, 0x818d8d)],
+  [/^scene_col_plateau/, distanceTone(NEON.plateau, NEON.groundFar, 0x746d59)],
   [/^scene_(cairn|crew)/, tone(NEON.boulder, 0x918f89)],
   [/^scene_outcrop/, tone(NEON.crystal, 0x38938b)],
   [/^scene_tower_body/, ramp(NEON.gapFloor, NEON.rim, 0x35383b, 0x797a78)],
@@ -154,22 +173,49 @@ export function neonMaterial(name: string): THREE.Material {
 }
 
 /** The thin cyan hexagon of a cell, drawn in its gap: the brightest line of the board. One instance per cell. */
-export function neonEdgeGeometry(inner = 0.53, outer = 0.56, y = 0.07): THREE.BufferGeometry {
+export function neonEdgeGeometry(inner = 0.53, outer = 0.56, y = 0.07, turn = 0): THREE.BufferGeometry {
   const position: number[] = [];
-  const at = (r: number, k: number): [number, number, number] => [Math.sin((k * Math.PI) / 3) * r, y, Math.cos((k * Math.PI) / 3) * r];
+  const at = (r: number, k: number): [number, number, number] => [Math.sin((k * Math.PI) / 3 + turn) * r, y, Math.cos((k * Math.PI) / 3 + turn) * r];
   for (let k = 0; k < 6; k++) position.push(...at(inner, k), ...at(outer, k), ...at(outer, k + 1), ...at(inner, k), ...at(outer, k + 1), ...at(inner, k + 1));
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
   return g;
 }
 
-export const neonEdgeMaterial = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ name: 'neon_edge', color: new THREE.Color(NEON.cyan).multiplyScalar(1.25), fog: false, side: THREE.DoubleSide });
+export const neonEdgeMaterial = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ name: 'neon_edge', color: new THREE.Color(NEON.cyan).multiplyScalar(1.4), fog: false, side: THREE.DoubleSide });
 
-/** The kit's pedestal under a marble, in slate: a copy, the file's own stays as it is. */
+/** The kit's pedestal under a marble, in slate with a thin cyan ring on its rim (60 % cyan): a copy, the file's own stays as it is. */
 export function neonPedestal(pedestal: THREE.Mesh): THREE.Mesh {
   const copy = pedestal.clone();
-  copy.geometry = pedestal.geometry.clone();
-  neonPaint(pedestal.name, copy.geometry);
+  const disc = pedestal.geometry.clone();
+  const source = disc.attributes.color!;
+  disc.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: source.count }, (_, i) => [source.getX(i), source.getY(i), source.getZ(i)]).flat(), 3)); // the file's may be 8 bit or have an alpha
+  neonPaint(pedestal.name, disc);
+  const ring = new THREE.RingGeometry(0.345, 0.37, 36).rotateX(-Math.PI / 2).translate(0, 0.1125, 0);
+  const ringColour = linear(NEON.plateau).lerp(linear(NEON.pedestalRing), 0.6);
+  ring.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: ring.attributes.position!.count }, () => ringColour.toArray()).flat(), 3));
+  const parts = [disc, ring].map((g) => {
+    const flat = g.index ? g.toNonIndexed() : g;
+    for (const name of Object.keys(flat.attributes)) if (!['position', 'normal', 'color'].includes(name)) flat.deleteAttribute(name);
+    return flat;
+  });
+  copy.geometry = mergeGeometries(parts, false);
   copy.material = neonMaterial('slate');
   return copy;
+}
+
+/** The violet channel along the inner top edge of the slab's rim (about 0.05 of a cell wide) and a glowing band and tip on each post, unlit at 1.2. */
+export function neonGlow(posts: readonly THREE.Vector3[], rim: boolean): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'neon_glow';
+  const violet = new THREE.MeshBasicMaterial({ name: 'neon_violet', color: new THREE.Color(NEON.violet).multiplyScalar(1.2), fog: false, side: THREE.DoubleSide });
+  if (rim) group.add(new THREE.Mesh(neonEdgeGeometry(4.93, 4.98, 0.158, Math.PI / 6), violet)); // the rim's inner top edge (slab_arena: a flat-top hexagon of 4.9)
+  for (const p of posts) {
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.05, 8, 1, true), violet);
+    band.position.set(p.x, p.y + 0.7, p.z);
+    const tip = new THREE.Mesh(new THREE.CircleGeometry(0.14, 8).rotateX(-Math.PI / 2), violet);
+    tip.position.set(p.x, p.y + 1.075, p.z);
+    group.add(band, tip);
+  }
+  return group;
 }

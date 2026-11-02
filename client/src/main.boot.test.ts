@@ -194,6 +194,18 @@ describe('the renderer and its textures', () => {
     expect(materials(scene).some((m) => m.color.getHex() === 0xf2f0ea)).toBe(true); // the white one
   });
 
+  it('draws the board closer on a phone with ?look=neon: about 85 % of the width, not 65 % (#1424)', async () => {
+    const distance = async (search: string): Promise<number> => {
+      vi.stubGlobal('innerWidth', 390);
+      vi.stubGlobal('innerHeight', 844);
+      const game = await boot(search);
+      await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+      return (game.hook('__view') as { distance: number }).distance;
+    };
+    expect(await distance('?bot=off')).toBe(18);
+    expect(await distance('?bot=off&look=neon')).toBe(13.8);
+  });
+
   it('leaves the terrace as it was without ?look=neon (#1424)', async () => {
     const game = await boot('?bot=off');
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
