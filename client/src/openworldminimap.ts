@@ -11,9 +11,8 @@ import { mapColour } from './neonworld';
 
 /** The cells from the hero to the edge of the map: a window of three chunks across. */
 export const RADIUS = 24;
-/** The radius of the map's compass, and of the N plate on the minimap's rim, in px. */
+/** The radius of the map's compass, in px. */
 const COMPASS_RADIUS = 22;
-const PLATE = 8;
 /** The lairs out of the window that get an arrow on the edge: the nearest unbeaten ones. */
 const ARROWS = 3;
 
@@ -234,6 +233,9 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
     ctx.beginPath();
     ctx.arc(c.centre[0], c.centre[1], c.radius, 0, 2 * Math.PI);
     ctx.fill();
+    ctx.strokeStyle = COLOURS.north; // a light ring, the plate is as dark as the map's background
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
     shape(ctx, [c.tip, c.left, c.right], COLOURS.north);
     ctx.fillStyle = COLOURS.north;
     ctx.font = 'bold 12px sans-serif';
@@ -248,6 +250,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   ctx.arc(midX, midY, midX - 1, 0, 2 * Math.PI);
   ctx.stroke();
   const north = northDirection(data.yaw); // the N on the rim, on the north side (#1448)
-  const rim = midX - 1 - PLATE;
-  northMark(ctx, midX + north.x * rim, midY + north.y * rim, PLATE);
+  const plate = midX * 0.11; // a share of the minimap, so it reads at any size it is shown at
+  const rim = midX - 1 - plate;
+  northMark(ctx, midX + north.x * rim, midY + north.y * rim, plate);
 }
