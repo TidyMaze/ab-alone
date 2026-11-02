@@ -315,10 +315,12 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 ## 10. Teleporters (#1412)
 
 - **Placement** is seeded world generation in Rust (`world::teleporters(seed, avoid)`, bridge `world_teleporters(seed)`, `q, r` pairs, the
-  spawn's first): one teleporter in each square of 4 x 4 chunks, the squares centred on the spawn's chunk (about 250 in a world). The
-  spawn's square has its own on `(2, -1)`, in the clearing. Any other square tries cells 2 or more inside its middle 2 x 2 chunks, from a
-  drawn one, 24 tries a chunk, and keeps the first whose cell and six neighbours are open ground, with no generated enemy within 2 cells
-  and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two teleporters are at least 32 cells apart. It
+  spawn's first): one teleporter in each square of 8 x 8 chunks (`TELEPORT_BLOCK`), the squares centred on the spawn's chunk (about 35
+  in a world). The spawn's square has its own on `(2, -1)`, in the clearing. Any other square tries cells 2 or more inside its middle
+  4 x 4 chunks (half its side), from a drawn one, 24 tries a chunk, and keeps the first whose cell and six neighbours are open ground,
+  with no generated enemy within 2 cells and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two
+  teleporters are at least 64 cells apart. A quarter as many as before #1444 (squares of 4 x 4 chunks, a middle of 2 x 2, 32 cells
+  apart): seed 7 holds 36 teleporters, against 137 in the same hexagon, and the public world 1305 holds 37, against 159. It
   reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move and the saves keep loading. In the hexagon
   (#1440) the squares run as far as their middle chunks reach it, and a try keeps its pad in the world.
 - **Look.** A flat violet hex pad on the cell and a violet ring floating over it (`TELEPORTER_LOOK`), drawn for the teleporters of the

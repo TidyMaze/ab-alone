@@ -609,8 +609,12 @@ fn lair_try(seed: u64, count: usize, k: i32, n: i32) -> Option<(i32, i32)> {
 }
 
 /// The teleporters (#1412, docs/specs/openworld.md section 10): one in each square of `TELEPORT_BLOCK` x `TELEPORT_BLOCK` chunks, the
-/// squares centred on the spawn's, whose own teleporter is `SPAWN_TELEPORTER`, in the clearing.
-pub const TELEPORT_BLOCK: i32 = 4;
+/// squares centred on the spawn's, whose own teleporter is `SPAWN_TELEPORTER`, in the clearing. 8 since #1444 (4 before): a quarter as
+/// many.
+pub const TELEPORT_BLOCK: i32 = 8;
+/// The middle of a square, `TELEPORT_MIDDLE` x `TELEPORT_MIDDLE` chunks, where its teleporter is drawn: half its side, so two
+/// teleporters are at least half a square apart, 64 cells.
+const TELEPORT_MIDDLE: i32 = TELEPORT_BLOCK / 2;
 pub const SPAWN_TELEPORTER: (i32, i32) = (2, -1);
 /// The salts of the teleporter draws: the chunk of the square, then the `q` and the `r` of a try.
 const TELEPORT_SALT: u64 = 42;
@@ -620,20 +624,25 @@ const TELEPORT_TRIES: i32 = 24;
 const TELEPORT_PAD: [(i32, i32); 7] = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)];
 
 /// The teleporters of the world `seed`, the spawn's first, then a square after the other, row by row: a square's teleporter is the
-/// first try of its middle 2 x 2 chunks (from a drawn one) whose cell and six neighbours are open ground, with no generated enemy
-/// within 2 cells and no cell of `avoid` (the lairs) within 3. A square with no fit try has none. From the seed alone: it reads the
-/// terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
+/// first try of its middle `TELEPORT_MIDDLE` x `TELEPORT_MIDDLE` chunks (from a drawn one) whose cell and six neighbours are open
+/// ground in the world, with no generated enemy within 2 cells and no cell of `avoid` (the lairs) within 3. A square with no fit try
+/// has none. From the seed alone: it reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
 pub fn teleporters(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
     // The farthest square whose middle chunks reach the hexagon along an axis.
-    let span = (WORLD_RADIUS / CHUNK + 1) / TELEPORT_BLOCK;
+    let (middle, half) = (TELEPORT_MIDDLE, TELEPORT_MIDDLE / 2);
+    let span = (WORLD_RADIUS / CHUNK + half) / TELEPORT_BLOCK;
     let squares = (-span..=span).flat_map(|by| (-span..=span).map(move |bx| (bx, by)));
     let drawn = squares
         .filter(|&square| square != (0, 0))
         .filter_map(|(bx, by)| {
-            let first = (unit(seed, TELEPORT_SALT, bx, by) * 4.0) as i32;
-            (first..first + 4).find_map(|k| {
-                let (dx, dy) = (k % 2, k / 2 % 2);
-                let (cx, cy) = (bx * TELEPORT_BLOCK - 1 + dx, by * TELEPORT_BLOCK - 1 + dy);
+            let chunks = middle * middle;
+            let first = (unit(seed, TELEPORT_SALT, bx, by) * f64::from(chunks)) as i32;
+            (first..first + chunks).find_map(|k| {
+                let (dx, dy) = (k % middle, k / middle % middle);
+                let (cx, cy) = (
+                    bx * TELEPORT_BLOCK - half + dx,
+                    by * TELEPORT_BLOCK - half + dy,
+                );
                 teleporter_in(seed, cx, cy, avoid)
             })
         });
