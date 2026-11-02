@@ -835,6 +835,15 @@ fn path_over(
 mod tests {
     use super::*;
 
+    /// The cells of a chunk that lies whole in the world.
+    fn full(seed: u64, cx: i32, cy: i32) -> Vec<Cell> {
+        chunk(seed, cx, cy)
+            .unwrap()
+            .into_iter()
+            .map(Option::unwrap)
+            .collect()
+    }
+
     #[test]
     fn only_a_boulder_or_a_tree_of_the_generated_world_can_break() {
         let mut seen = Vec::new();
@@ -858,17 +867,16 @@ mod tests {
 
     #[test]
     fn a_cell_off_the_world_cannot_break() {
-        let edge = WORLD_CHUNKS / 2 * CHUNK;
-        assert!(!can_break(5, edge, 0));
-        assert!(!can_break(5, 0, -edge - 1));
+        assert!(!can_break(5, WORLD_RADIUS + 1, 0));
+        assert!(!can_break(5, 0, -WORLD_RADIUS - 1));
     }
 
     #[test]
     fn a_chunk_holds_every_cell_of_its_square_in_any_order_of_visit() {
-        let a = chunk(7, 3, -2).unwrap();
+        let a = full(7, 3, -2);
         assert_eq!(a.len(), (CHUNK * CHUNK) as usize);
         let _elsewhere = chunk(7, -9, 5).unwrap();
-        assert_eq!(chunk(7, 3, -2).unwrap(), a);
+        assert_eq!(full(7, 3, -2), a);
         assert_eq!(
             a[(2 * CHUNK + 5) as usize],
             cell(7, 3 * CHUNK + 5, -2 * CHUNK + 2).unwrap()
@@ -881,14 +889,84 @@ mod tests {
     }
 
     #[test]
-    fn the_world_ends_at_its_edge() {
-        let edge = WORLD_CHUNKS / 2;
-        assert!(chunk(1, edge - 1, -edge).is_some());
-        assert!(chunk(1, edge, 0).is_none());
-        assert!(chunk(1, 0, -edge - 1).is_none());
-        assert!(cell(1, edge * CHUNK, 0).is_none());
-        assert!(cell(1, 0, -edge * CHUNK - 1).is_none());
-        assert!(cell(1, edge * CHUNK - 1, -edge * CHUNK).is_some());
+    fn the_world_is_a_hexagon_of_cells_round_the_spawn() {
+        let w = WORLD_RADIUS;
+        assert_eq!(w, 448);
+        // The six corners are in the world, a step past each is not.
+        for (q, r) in [(w, 0), (0, w), (-w, w), (-w, 0), (0, -w), (w, -w)] {
+            assert!(cell(1, q, r).is_some(), "corner {q},{r}");
+            let (dq, dr) = (q.signum(), r.signum());
+            assert!(cell(1, q + dq, r + dr).is_none(), "past {q},{r}");
+        }
+        // The middle of a side, and the cell past it.
+        assert!(cell(1, w / 2, w / 2).is_some());
+        assert!(cell(1, w / 2 + 1, w / 2).is_none());
+        assert!(cell(1, -w / 2, -w / 2 - 1).is_none());
+        // Some 600 000 cells (1 048 576 in the square world before #1440).
+        let count = (-w - 1..=w + 1)
+            .flat_map(|q| (-w - 1..=w + 1).map(move |r| (q, r)))
+            .filter(|&(q, r)| in_world(q, r))
+            .count();
+        assert_eq!(count, 603_457);
+    }
+
+    #[test]
+    fn a_chunk_the_edge_crosses_holds_its_cells_up_to_the_edge() {
+        // Chunk (28, 0) starts on the east corner (448, 0): its first cell is the only one in the world.
+        let east = chunk(1, 28, 0).unwrap();
+        assert_eq!(east.len(), (CHUNK * CHUNK) as usize);
+        assert_eq!(east[0], cell(1, 448, 0));
+        assert!(east[0].is_some());
+        assert!(east[1..].iter().all(Option::is_none));
+        // Chunk (14, 13) crosses the north-east side: the cells within the radius are there, the others not.
+        let side = chunk(3, 14, 13).unwrap();
+        for (i, found) in side.iter().enumerate() {
+            let (q, r) = (14 * CHUNK + i as i32 % CHUNK, 13 * CHUNK + i as i32 / CHUNK);
+            assert_eq!(found.is_some(), q + r <= WORLD_RADIUS, "{q},{r}");
+            assert_eq!(*found, cell(3, q, r));
+        }
+        assert!(side.iter().any(Option::is_some) && side.iter().any(Option::is_none));
+        // Past the edge, no chunk: on each side of both axes.
+        for (cx, cy) in [
+            (29, 0),
+            (0, 29),
+            (-29, 0),
+            (0, -29),
+            (15, 14),
+            (-15, -15),
+            (28, -29),
+            (-29, 28),
+        ] {
+            assert!(chunk(1, cx, cy).is_none(), "chunk {cx},{cy}");
+        }
+        for (cx, cy) in [(28, -1), (-28, 0), (0, 28), (0, -28), (14, 14), (-14, -15)] {
+            assert!(chunk(1, cx, cy).is_some(), "chunk {cx},{cy}");
+        }
+    }
+
+    #[test]
+    fn the_enemies_of_a_chunk_the_edge_crosses_stand_in_the_world() {
+        let mut groups = 0;
+        for seed in 1..=3 {
+            for cx in -30..30 {
+                for cy in -30..30 {
+                    let cells = chunk(seed, cx, cy);
+                    let crossed = cells
+                        .as_ref()
+                        .is_some_and(|c| c.iter().any(Option::is_none));
+                    if !crossed {
+                        continue;
+                    }
+                    for group in enemy_groups(seed, cx, cy) {
+                        groups += 1;
+                        for (q, r) in group {
+                            assert!(cell(seed, q, r).is_some(), "seed {seed}: {q},{r}");
+                        }
+                    }
+                }
+            }
+        }
+        assert!(groups > 20, "{groups} groups");
     }
 
     #[test]
@@ -969,7 +1047,7 @@ mod tests {
         for seed in 11..15 {
             for cx in -8..8 {
                 for cy in -8..8 {
-                    for c in chunk(seed, cx, cy).unwrap() {
+                    for c in full(seed, cx, cy) {
                         assert!(c.height <= 7);
                         match c.terrain {
                             Terrain::Water => assert!(c.height <= 1),
@@ -993,7 +1071,7 @@ mod tests {
         // Four seeds over 16 x 16 chunks: one seed's window is dominated by its few continents.
         let cells: Vec<Cell> = (1..=4)
             .flat_map(|seed| {
-                (-8..8).flat_map(move |cx| (-8..8).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+                (-8..8).flat_map(move |cx| (-8..8).flat_map(move |cy| full(seed, cx, cy)))
             })
             .collect();
         for terrain in [
@@ -1029,7 +1107,7 @@ mod tests {
         for seed in 1..=4 {
             for cx in -8..8 {
                 for cy in -8..8 {
-                    for c in chunk(seed, cx, cy).unwrap() {
+                    for c in full(seed, cx, cy) {
                         counts[c.height as usize] += 1;
                     }
                 }
@@ -1050,7 +1128,7 @@ mod tests {
     fn window_cells(seeds: std::ops::RangeInclusive<u64>) -> Vec<Cell> {
         seeds
             .flat_map(|seed| {
-                (-8..8).flat_map(move |cx| (-8..8).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+                (-8..8).flat_map(move |cx| (-8..8).flat_map(move |cy| full(seed, cx, cy)))
             })
             .collect()
     }
@@ -1174,7 +1252,7 @@ mod tests {
         // The widest zoom sees about 21 x 21 chunks around the spawn: each of seeds 1 to 8 shows water, and rock or peak.
         for seed in 1..=8 {
             let cells: Vec<Cell> = (-10..=10)
-                .flat_map(|cx| (-10..=10).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+                .flat_map(|cx| (-10..=10).flat_map(move |cy| full(seed, cx, cy)))
                 .collect();
             let total = cells.len() as f64;
             let water =
@@ -1295,8 +1373,8 @@ mod tests {
         }
     }
 
-    /// FNV-1a over the bytes of the chunks and the enemy groups of a few seeds and chunks: any change
-    /// of the generated world changes it.
+    /// FNV-1a over the bytes of the chunks and the enemy groups of a few seeds and chunks, four of them on the edge of the
+    /// hexagon: any change of the generated world changes it.
     fn world_digest() -> u64 {
         let fnv =
             |hash: u64, byte: u8| (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3);
@@ -1307,17 +1385,23 @@ mod tests {
             (3, -2),
             (5, 5),
             (-8, 7),
-            (31, -32),
-            (-32, 31),
+            (28, 0),
+            (14, 13),
+            (-14, -15),
+            (28, -28),
             (12, 9),
             (-4, -4),
             (17, 1),
             (2, 20),
-            (-20, -11),
+            (-17, -9),
         ];
         for seed in [1u64, 7, 42] {
             for &(cx, cy) in &coords {
                 for cell in chunk(seed, cx, cy).unwrap() {
+                    let Some(cell) = cell else {
+                        hash = fnv(hash, 0xFE); // past the edge
+                        continue;
+                    };
                     hash = fnv(hash, cell.height);
                     hash = fnv(hash, cell.terrain as u8);
                     hash = fnv(hash, cell.biome as u8);
@@ -1339,15 +1423,15 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             (WORLD_VERSION, world_digest()),
-            (2, 8_603_978_012_532_690_763),
+            (3, 15_901_084_256_825_590_468),
             "WORLD_VERSION and digest of the reference world"
         );
     }
 
     #[test]
     fn the_spawn_chunks_and_the_edge_of_the_world_hold_no_group_in_the_clearing() {
-        assert!(enemy_groups(1, WORLD_CHUNKS / 2, 0).is_empty());
-        assert!(enemy_groups(1, 0, -WORLD_CHUNKS / 2 - 1).is_empty());
+        assert!(enemy_groups(1, 29, 0).is_empty());
+        assert!(enemy_groups(1, 0, -29).is_empty());
         for seed in 0..60 {
             for g in enemy_groups(seed, 0, 0) {
                 assert!(g.iter().all(|&(q, r)| distance(q, r) > SAFE));
@@ -1362,12 +1446,13 @@ mod tests {
             .flatten()
             .next()
             .or_else(|| {
-                (0..WORLD_CHUNKS).find_map(|cx| enemy_groups(5, cx, 0).into_iter().flatten().next())
+                (0..WORLD_RADIUS / CHUNK)
+                    .find_map(|cx| enemy_groups(5, cx, 0).into_iter().flatten().next())
             })
             .expect("seed 5 holds an enemy");
         assert!(is_enemy(5, first.0, first.1));
         assert!(!is_enemy(5, 0, 0)); // the spawn clearing
-        assert!(!is_enemy(5, WORLD_CHUNKS * CHUNK, 0)); // off the world
+        assert!(!is_enemy(5, WORLD_RADIUS + 1, 0)); // off the world
     }
 
     /// The 5 x 5 chunks around the spawn chunk, as cell coordinates `[-2 * CHUNK, 3 * CHUNK)`.
@@ -1499,9 +1584,12 @@ mod tests {
         for seed in 0..6 {
             let found = teleporters(seed, &[]);
             assert_eq!(teleporters(seed, &[]), found);
-            // 17 x 17 squares of 4 x 4 chunks, the edge ones half off the world: most of them hold one.
+            // 15 x 15 squares of 4 x 4 chunks, the hexagon covers some 147 of them: most of those hold one.
             let count = found.len();
-            assert!((200..=289).contains(&count), "seed {seed}: {count}");
+            assert!((120..=160).contains(&count), "seed {seed}: {count}");
+            // Spread over all of the hexagon, up to its edge.
+            let far = found.iter().map(|&(q, r)| distance(q, r)).max();
+            assert!(far > Some(WORLD_RADIUS - 16), "seed {seed}: {far:?}");
             for (i, a) in found.iter().enumerate() {
                 for b in &found[i + 1..] {
                     assert!(hex_distance(*a, *b) >= 32, "seed {seed}: {a:?} {b:?}");
@@ -1523,10 +1611,7 @@ mod tests {
 
     #[test]
     fn the_teleporters_of_seed_7_are_pinned() {
-        assert_eq!(
-            teleporters(7, &[])[..3],
-            [(2, -1), (-501, -505), (-453, -507)]
-        );
+        assert_eq!(teleporters(7, &[])[..3], [(2, -1), (-5, -441), (124, -437)]);
     }
 
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
@@ -1573,8 +1658,9 @@ mod tests {
     fn no_path_to_the_start_a_blocked_cell_the_world_edge_or_beyond_the_radius() {
         assert!(walk_path(3, (0, 0), (0, 0), &[], &[]).is_empty());
         assert!(walk_path(3, (0, 0), (2, 0), &[], &[(2, 0)]).is_empty());
-        let edge = WORLD_CHUNKS / 2 * CHUNK;
-        assert!(walk_path(3, (edge - 1, 0), (edge, 0), &[], &[]).is_empty());
+        let edge = WORLD_RADIUS;
+        assert!(walk_path(3, (edge, 0), (edge + 1, 0), &[], &[]).is_empty()); // in a chunk the edge crosses
+        assert!(walk_path(3, (0, -edge), (0, -edge - 1), &[], &[]).is_empty()); // in a chunk past the edge
         assert!(walk_path(3, (0, 0), (PATH_RADIUS + 1, 0), &[], &[]).is_empty());
     }
 

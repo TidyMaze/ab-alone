@@ -1,7 +1,7 @@
 import './test/openworldwasm';
 import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
-import { BIOMES, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { BIOMES, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, OFF_WORLD, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
 import { enter, type Entry } from './openworldstep';
 
@@ -54,6 +54,22 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
     const world = new World(bytes);
     expect(world.tile(5 * CHUNK, 0)).toBeUndefined();
     expect(world.chunk(9, 9)).toEqual([]);
+  });
+
+  it('has no tile past the edge in a chunk the edge crosses (#1440)', () => {
+    const tiles = parseChunk(new Uint8Array([3, 2, 0, 0, OFF_WORLD, 0, 2, 1, 1]));
+    expect(OFF_WORLD).toBe(255);
+    expect(tiles).toHaveLength(3);
+    expect(tiles[0]).toEqual({ height: 3, terrain: 'grass', biome: 'meadow' });
+    expect(1 in tiles).toBe(false);
+    expect(tiles[2]).toEqual({ height: 2, terrain: 'sand', biome: 'forest' });
+    const visited: number[] = [];
+    tiles.forEach((_, i) => visited.push(i));
+    expect(visited).toEqual([0, 2]);
+    const edge = new Uint8Array(CHUNK * CHUNK * 3).fill(2);
+    edge.set([0, OFF_WORLD, 0], 3);
+    expect(new World(() => edge).tile(1, 0)).toBeUndefined();
+    expect(new World(() => edge).tile(0, 0)).toEqual({ height: 2, terrain: 'grass', biome: 'tundra' });
   });
 
   it('knows the six neighbours and when two cells are the same', () => {

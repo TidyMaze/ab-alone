@@ -132,6 +132,17 @@ describe('a new world', () => {
     const rows = value(open.newWorld({ seed: 0 })).window.rows;
     expect(rows[3]!.cells).toBe('??TH' + 'Tgg');
   });
+
+  test('a cell past the edge, in a chunk the edge crosses, is a question mark (#1440)', () => {
+    // The chunks west of the spawn hold only cells past the edge: the bridge's off-the-world byte, 255.
+    const edge = new Uint8Array(16 * 16 * 3).map((_, i) => (i % 3 === 1 ? 255 : 0));
+    const rules: WorldRules = { ...worldRules(), world_chunk: (seed, cx, cy) => (cx < 0 ? edge : worldRules().world_chunk(seed, cx, cy)) };
+    const open = new OpenWorld(rules, bossIds);
+    const rows = value(open.newWorld({ seed: 0 })).window.rows;
+    expect(rows[3]!.cells).toBe('??TH' + 'Tgg');
+    const error = failure(open.step({ direction: 'W' }));
+    expect(error.message).toContain('off the world');
+  });
 });
 
 describe('a step', () => {
