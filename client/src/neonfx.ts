@@ -45,3 +45,38 @@ export function driveAccents(lights: readonly THREE.PointLight[], on: boolean, n
     light.intensity = base * accentPulse(now, reduced);
   }
 }
+
+/** The neon look's bloom on the high tier: a real halo on the lit edges and tubes (the terrace keeps its tuned, nearly off one). */
+export const NEON_BLOOM = { strength: 0.35, radius: 0.2, threshold: 0.6 } as const;
+export function setNeonBloom(bloom: { strength: { value: number }; radius: { value: number }; threshold: { value: number } } | null | undefined): void {
+  if (!bloom) return; // the low tier has no bloom pass
+  bloom.strength.value = NEON_BLOOM.strength;
+  bloom.radius.value = NEON_BLOOM.radius;
+  bloom.threshold.value = NEON_BLOOM.threshold;
+}
+
+/** A violet and cyan glow low on the horizon: an open cylinder round the scene, additive, black at the top. One draw call, hidden with the accents. */
+export function neonSkyGlow(radius = 150): THREE.Mesh {
+  const geometry = new THREE.CylinderGeometry(radius, radius, radius * 0.5, 48, 1, true);
+  const position = geometry.attributes.position!;
+  const colour = new Float32Array(position.count * 3);
+  for (let i = 0; i < position.count; i++) {
+    const low = position.getY(i) < 0;
+    const mix = (Math.atan2(position.getX(i), position.getZ(i)) / Math.PI + 1) / 2; // violet to cyan round the circle
+    if (low) colour.set([0.1 + 0.2 * (1 - mix), 0.12 + 0.3 * mix, 0.35 + 0.3 * mix], i * 3);
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3));
+  const glow = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+  glow.name = 'sky-glow';
+  glow.position.y = radius * 0.25 - 4;
+  glow.frustumCulled = false;
+  glow.renderOrder = -1;
+  glow.visible = false;
+  return glow;
+}
+
+/** Shows or hides the sky glow of `scene`, with the accents: the high tier of a GPU only. */
+export function driveSkyGlow(scene: THREE.Object3D, on: boolean): void {
+  const glow = scene.getObjectByName('sky-glow');
+  if (glow) glow.visible = on;
+}

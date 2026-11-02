@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { ACCENT_PULSE, NEON_OPEN_WORLD_POINT_LIGHTS, NEON_ROOM_POINT_LIGHTS, accentLights, accentOn, accentPulse, driveAccents } from './neonfx';
+import { ACCENT_PULSE, NEON_OPEN_WORLD_POINT_LIGHTS, NEON_ROOM_POINT_LIGHTS, accentLights, accentOn, accentPulse, driveAccents, driveSkyGlow, neonSkyGlow, NEON_BLOOM, setNeonBloom } from './neonfx';
 
 describe('the neon accent lights (#1424)', () => {
   it('has 2 lights in the room and 2 in the Open world, on the high tier of a real GPU only', () => {
@@ -36,5 +36,24 @@ describe('the neon accent lights (#1424)', () => {
     driveAccents(lights, true, 1000, true);
     expect(lights[0]!.intensity).toBeCloseTo(base);
     expect(lights[0]).toBeInstanceOf(THREE.PointLight);
+  });
+  it('sets the bloom of the neon look, and leaves a missing pass alone (low tier)', () => {
+    const b = { strength: { value: 0 }, radius: { value: 0 }, threshold: { value: 0 } };
+    setNeonBloom(b);
+    expect([b.strength.value, b.radius.value, b.threshold.value]).toEqual([NEON_BLOOM.strength, NEON_BLOOM.radius, NEON_BLOOM.threshold]);
+    setNeonBloom(null);
+  });
+  it('has a sky glow, hidden at first, black at the top, shown and hidden by driveSkyGlow', () => {
+    const glow = neonSkyGlow();
+    const scene = new THREE.Group().add(glow);
+    expect(glow.visible).toBe(false);
+    const c = glow.geometry.attributes.color!;
+    const p = glow.geometry.attributes.position!;
+    for (let i = 0; i < p.count; i++) expect(p.getY(i) > 0 ? c.getX(i) + c.getY(i) + c.getZ(i) : 1).toBe(p.getY(i) > 0 ? 0 : 1);
+    driveSkyGlow(scene, true);
+    expect(glow.visible).toBe(true);
+    driveSkyGlow(scene, false);
+    expect(glow.visible).toBe(false);
+    driveSkyGlow(new THREE.Group(), true);
   });
 });

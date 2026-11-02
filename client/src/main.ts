@@ -44,7 +44,7 @@ import { openInEditor } from './editorexport';
 import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './lightpanel';
 import { LIGHT_TUNING } from './lighttuning';
 import { tubeLights } from './neonlight';
-import { accentLights, accentOn, driveAccents } from './neonfx';
+import { accentLights, accentOn, driveAccents, driveSkyGlow, neonSkyGlow, setNeonBloom } from './neonfx';
 import { ringLamp } from './ringlamp';
 import { CELL_LAYER, instanceCells, instanceMarbles } from './instancedcells';
 import sceneOverrides from './sceneoverrides.json';
@@ -2259,6 +2259,7 @@ const saveOverrides = import.meta.env.DEV
 const refreshLights = (): void => {
   applyTuning(sceneRenderer.scene, LIGHT_TUNING, bloomKnobs);
   applyTuning(sceneRenderer.scene, sceneOverrides.power, bloomKnobs);
+  if (neonLook) [sceneRenderer.pipeline, sceneRenderer.flatPipeline].forEach((p) => setNeonBloom(p?.bloom)); // a real halo, high tier only (no pass on the low tier)
   scaleLights();
   if (lightsPanel)
     lightPanel(
@@ -3832,6 +3833,7 @@ function syncTableZero(): void {
   if (on === sceneRenderer.terraceOn) return;
   sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364); the room never comes back once the terrace is on (#1374)
   if (neonLook) sceneRenderer.setNeon(); // #1424
+  if (neonLook && !sceneRenderer.scene.getObjectByName('sky-glow')) sceneRenderer.scene.add(neonSkyGlow());
   for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = TERRACE_LIFT; // the marbles stand on their pedestals, 0.11 over the board plane
   if ((hub || royale || blenderBoard()) && view === fitted) {
@@ -6845,6 +6847,7 @@ renderer.setAnimationLoop((now) => {
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {
+      driveSkyGlow(scene, accentOn(tier, software));
       driveAccents(scene.children.filter((o): o is THREE.PointLight => o.name === 'neon accent'), accentOn(tier, software), now, reducedMotion());
       renderer.info.reset();
       sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
@@ -6869,6 +6872,7 @@ renderer.setAnimationLoop((now) => {
     fpsBox.textContent = `${lastFps} FPS`;
   }
   driveAccents(roomAccents, accentOn(tier, software), now, reducedMotion());
+  driveSkyGlow(sceneRenderer.scene, accentOn(tier, software));
   animateSlides(now);
   fadeGlyphs(now);
   fadeGhosts(now);
