@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, replay_score, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -25,7 +25,8 @@ import { keyTip } from './touchwording';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
-import { BOARD_TEXT, boardAskNeeded, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
+import { readBoard, sharedHtml } from './boardfeed';
+import { BOARD_TEXT, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -1295,9 +1296,25 @@ function showShare(): void {
 document.getElementById('board-join')!.addEventListener('click', () => void askBoard().then(showShare));
 document.getElementById('board-leave')!.addEventListener('click', () => void leaveBoard(store, Date.now()).then(showShare));
 document.getElementById('board-newkey')!.addEventListener('click', () => void newKey(store, Date.now()));
+// The shared board, read side (#1287): behind ?board and after the opt-in, the three relays are read and the results the Rust rules replay
+// are shown. Nothing is published. A reopened board drops an older read that comes back late.
+let sharedRead = 0;
+function showShared(): void {
+  const box = document.getElementById('board-shared')!;
+  box.hidden = !(boardFlag(location.search) && shareJoined());
+  if (box.hidden) return;
+  const read = ++sharedRead;
+  box.textContent = 'Reading the relays...';
+  void Promise.all([readBoard((url) => new WebSocket(url), Math.floor(Date.now() / 1000), replay_score), boardKeys(store)]).then(([rows, keys]) => {
+    if (read === sharedRead) box.innerHTML = sharedHtml(rows, keys.pub);
+  }).catch(() => {
+    if (read === sharedRead) box.textContent = 'The relays could not be read.';
+  });
+}
 boardButton.addEventListener('click', () => {
   moveModes('outside');
   showShare();
+  showShared();
   const profile = loadRankedProfile(store);
   const rows = buildBoard(profile.rating1v1, loadRivals(store));
   document.getElementById('board-body')!.innerHTML = boardHtml(rows, ratingHistory(profile.matches), visitBoard(store, rows));

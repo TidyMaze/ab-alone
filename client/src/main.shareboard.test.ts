@@ -139,7 +139,7 @@ describe('shared board opt-in', () => {
     expect((JSON.parse(localStorage.getItem('ab-alone.board-consent')!) as { choice: string }).choice).toBe('declined');
   });
 
-  it('sends nothing to a relay', async () => {
+  it('joining, New key and Leave the board open no socket', async () => {
     const sockets = vi.fn();
     vi.stubGlobal('WebSocket', sockets);
     const game = await boot('?bot=off&board&net=hook');
@@ -149,10 +149,112 @@ describe('shared board opt-in', () => {
     tick();
     byId('optin-yes').click();
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
-    byId('leaderboard').click();
     byId('board-leave').click();
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-retire')).not.toBeNull());
     expect(sockets).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+  // The read side (#1287): behind ?board and after the opt-in, the board reads the three relays and shows the results the rules replay.
+  class FakeSocket {
+    static all: FakeSocket[] = [];
+    sent: string[] = [];
+    private on = new Map<string, ((e: { data?: string }) => void)[]>();
+    constructor(readonly url: string) {
+      FakeSocket.all.push(this);
+      queueMicrotask(() => this.emit('open'));
+    }
+    addEventListener(type: string, fn: (e: { data?: string }) => void): void {
+      this.on.set(type, [...(this.on.get(type) ?? []), fn]);
+    }
+    send(data: string): void {
+      this.sent.push(data);
+      if (data.startsWith('["REQ"')) queueMicrotask(() => FakeSocket.serve(this));
+    }
+    close(): void {}
+    emit(type: string, data?: string): void {
+      for (const fn of this.on.get(type) ?? []) fn({ data });
+    }
+    static serve: (s: FakeSocket) => void = () => {};
+  }
+
+  it('reads the three relays after the opt-in, shows the results the rules replay and drops the others, publishes nothing', async () => {
+    FakeSocket.all = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const game = await boot('?bot=off&board&net=hook');
+    const { Engine } = await import('abalone-wasm');
+    const engine = new Engine();
+    const moves: number[][] = [];
+    for (let i = 0; i < 400 && engine.status() === 0; i++) {
+      const mv = engine.best_move(20);
+      engine.play(mv);
+      moves.push([...mv]);
+    }
+    const result = (game: string, name: string, status: number): string =>
+      JSON.stringify({ v: 1, game, black: { pub: 'A', name }, white: { pub: 'B', name: 'Bob' }, moves, status, ejected: [engine.ejected(1), engine.ejected(2)], ts: 5 });
+    const lie = engine.status() === 1 ? 2 : 1;
+    FakeSocket.serve = (s) => {
+      for (const content of [result('g1', '<i>Ann</i>', engine.status()), result('g2', 'Liar', lie)]) {
+        s.emit('message', JSON.stringify(['EVENT', 'ab-board', { kind: 1, tags: [['t', 'ab-alone-ranked']], content }]));
+      }
+      s.emit('message', JSON.stringify(['EOSE', 'ab-board']));
+    };
+    game.openModes();
+    byId('leaderboard').click();
+    expect(FakeSocket.all).toHaveLength(0); // not joined: nothing is read
+    expect(byId('board-shared').hidden).toBe(true);
+    byId('board-close').click();
+    game.openModes();
+    byId('ranked').click();
+    await game.settle();
+    tick();
+    byId('optin-yes').click();
+    await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
+    game.openModes();
+    byId('leaderboard').click();
+    await vi.waitFor(() => expect(byId('board-shared').textContent).toContain('Bob'));
+    expect(FakeSocket.all.map((s) => s.url)).toEqual(['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
+    expect(byId('board-shared').textContent).toContain('<i>Ann</i>'); // as text
+    expect(byId('board-shared').innerHTML).toContain('&lt;i&gt;');
+    expect(byId('board-shared').textContent).not.toContain('Liar');
+    expect(byId('board-shared').hidden).toBe(false);
+    for (const s of FakeSocket.all) expect(s.sent.map((m) => (JSON.parse(m) as string[])[0])).toEqual(['REQ', 'CLOSE']);
+    // Opened again at once, only the last read is shown: the older answer comes back late and is dropped.
+    byId('board-shared').textContent = '';
+    byId('leaderboard').click();
+    byId('leaderboard').click();
+    await vi.waitFor(() => expect(byId('board-shared').textContent).toContain('Bob'));
+    expect(byId('board-shared').querySelectorAll('tbody tr')).toHaveLength(2);
+    vi.unstubAllGlobals();
+  });
+
+  it('without ?board nothing is read, even from a player who joined before', async () => {
+    FakeSocket.all = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 1, choice: 'joined' }));
+    const game = await boot('?bot=off&net=hook');
+    game.openModes();
+    byId('leaderboard').click();
+    await game.settle();
+    expect(FakeSocket.all).toHaveLength(0);
+    vi.unstubAllGlobals();
+  });
+
+  it('says so when the relays cannot be read, instead of waiting for ever', async () => {
+    FakeSocket.all = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    FakeSocket.serve = (s) => s.emit('message', JSON.stringify(['EOSE', 'ab-board']));
+    const game = await boot('?bot=off&board&net=hook');
+    game.openModes();
+    byId('ranked').click();
+    await game.settle();
+    tick();
+    byId('optin-yes').click();
+    await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
+    const spies = ['importKey', 'generateKey'].map((m) => vi.spyOn(crypto.subtle, m as 'importKey').mockRejectedValue(new Error('no key')));
+    game.openModes();
+    byId('leaderboard').click();
+    await vi.waitFor(() => expect(byId('board-shared').textContent).toBe('The relays could not be read.'));
+    for (const spy of spies) spy.mockRestore();
     vi.unstubAllGlobals();
   });
 });
