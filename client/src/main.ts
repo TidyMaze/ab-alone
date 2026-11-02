@@ -25,6 +25,7 @@ import { keyTip } from './touchwording';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
+import { BOARD_TEXT, boardAskNeeded, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -1218,8 +1219,65 @@ const closeBoard = (): void => {
   boardBox.hidden = true;
   boardButton.focus();
 };
+// The shared board opt-in (#1287, shareboard.ts): asked once at the first ranked entry, its own purpose and unticked. Nothing is sent
+// in this slice: joining keeps a choice, a name and a key here; Leave the board stores a signed retire here.
+const optinBox = document.getElementById('board-optin')!;
+const optinTick = document.getElementById('optin-box') as HTMLInputElement;
+const optinName = document.getElementById('optin-name') as HTMLInputElement;
+const optinYes = document.getElementById('optin-yes') as HTMLButtonElement;
+document.getElementById('optin-text')!.textContent = BOARD_TEXT;
+(document.getElementById('optin-notice') as HTMLAnchorElement).href = PRIVACY_URL;
+optinTick.addEventListener('change', () => {
+  optinYes.disabled = !optinTick.checked;
+});
+function askBoard(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const back = document.activeElement as HTMLElement | null;
+    optinTick.checked = false;
+    optinYes.disabled = true;
+    optinName.value = readBoardName(store);
+    optinBox.hidden = false;
+    optinName.focus();
+    const answer = (yes: boolean): void => {
+      optinBox.hidden = true;
+      back?.focus();
+      if (yes) void joinBoard(store, optinName.value).then(() => resolve());
+      else {
+        writeChoice(store, 'declined');
+        resolve();
+      }
+    };
+    optinYes.onclick = () => answer(true);
+    document.getElementById('optin-no')!.onclick = () => answer(false);
+    optinBox.onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        answer(false);
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        nextFocus(document.activeElement, e.shiftKey ? -1 : 1, optinBox).focus();
+      }
+    };
+  });
+}
+const shareJoined = (): boolean => readChoice(store) === 'joined';
+function showShare(): void {
+  document.getElementById('board-share')!.hidden = !boardFlag(location.search);
+  const joined = shareJoined();
+  document.getElementById('board-share-state')!.textContent = joined
+    ? `You are on the shared board as "${readBoardName(store)}". Nothing is published yet.`
+    : 'You are not on the shared board. Ranked play stays on this device.';
+  document.getElementById('board-join')!.hidden = joined;
+  document.getElementById('board-leave')!.hidden = !joined;
+  document.getElementById('board-newkey')!.hidden = !joined;
+}
+document.getElementById('board-join')!.addEventListener('click', () => void askBoard().then(showShare));
+document.getElementById('board-leave')!.addEventListener('click', () => void leaveBoard(store, Date.now()).then(showShare));
+document.getElementById('board-newkey')!.addEventListener('click', () => void newKey(store));
 boardButton.addEventListener('click', () => {
   moveModes('outside');
+  showShare();
   const profile = loadRankedProfile(store);
   const rows = buildBoard(profile.rating1v1, loadRivals(store));
   document.getElementById('board-body')!.innerHTML = boardHtml(rows, ratingHistory(profile.matches), visitBoard(store, rows));
@@ -1234,11 +1292,11 @@ boardBox.addEventListener('keydown', (e) => {
     closeBoard();
   } else if (e.key === 'Tab') {
     e.preventDefault();
-    document.getElementById('board-close')!.focus(); // the close button is the only stop
+    nextFocus(document.activeElement, e.shiftKey ? -1 : 1, boardBox).focus();
   }
 });
 // Where the pad walks the focus: in the guide or the opt-in while one is open.
-const padScope = (): ParentNode => (!consentBox.hidden ? consentBox : guideBox.hidden ? document : guideBox);
+const padScope = (): ParentNode => (!optinBox.hidden ? optinBox : !consentBox.hidden ? consentBox : guideBox.hidden ? document : guideBox);
 if (guideDue(store, location.search, navigator.webdriver)) openGuide(null);
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
 // closed like the settings menu. Starting a mode closes it (startBoss, Play online).
@@ -4532,7 +4590,7 @@ const pollPad = gamepad((action: PadAction) => {
     case 'back':
       return void padKey('Escape');
     case 'menu':
-      if (!guideBox.hidden || !consentBox.hidden) return; // the settings stay shut under the guide
+      if (!guideBox.hidden || !consentBox.hidden || !optinBox.hidden) return; // the settings stay shut under the guide
       cog.click();
       return cog.focus();
     case 'prev':
@@ -5475,6 +5533,10 @@ function playOnline(coop?: CoopFight, asDuel = false): void {
 document.getElementById('play-online')!.addEventListener('click', () => playOnline());
 const rankedButton = document.getElementById('ranked') as HTMLButtonElement;
 rankedButton.addEventListener('click', () => {
+  if (boardAskNeeded(store, location.search)) void askBoard().then(startRanked);
+  else startRanked();
+});
+function startRanked(): void {
   rankedDelta = undefined;
   rankedDone = false;
   rankedSent = false;
@@ -5490,7 +5552,7 @@ rankedButton.addEventListener('click', () => {
   playOnline();
   rankedMode = '1v1';
   hud();
-});
+}
 // Fight together (#530): the mode menu lists the bosses again, under it; picking one opens a co-op room against that
 // boss with a random seed, the creator in seat 1.
 const coopButton = document.getElementById('fight-together') as HTMLButtonElement;

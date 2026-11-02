@@ -17,7 +17,20 @@ Best effort by the project's owners. Not reviewed by a lawyer.
 
 **Basis.** Your consent (GDPR art. 6(1)(a)), given by the opt-in. You can withdraw it by leaving online play.
 
-**Retention.** We store nothing on a server. Your browser keeps the Open world's signed events (cells and public keys) until you clear the site data. Relays are asked for ephemeral events (kinds 20000-29999), which the protocol says relays are not expected to store; a relay may still log. Other players keep what they received (moves, names, results) as long as they like. Relay and STUN operators have their own policies, which we do not control.
+**Retention.** We store nothing on a server, except for the ranked board below once it ships. Your browser keeps the Open world's signed events (cells and public keys) until you clear the site data. Relays are asked for ephemeral events (kinds 20000-29999), which the protocol says relays are not expected to store; a relay may still log. Other players keep what they received (moves, names, results) as long as they like. Relay and STUN operators have their own policies, which we do not control.
+
+**Shared ranked board (opt-in).** This section applies only once publishing ships. Today the feature is off for players: nothing is asked, no key is made and nothing is sent. It describes what publishing will do. Ranked play stays local unless you tick a separate, unticked box at your first ranked entry.
+
+| What | Who sees it | Why |
+|---|---|---|
+| A random board key (its private part stays in your browser, `ab-alone.board-key`, and is never sent), the name you pick (16 characters at most, pick one that does not identify you), your signed ranked results and a rating derived from them | Anyone, on the public Nostr relays `wss://nos.lol`, `wss://relay.piazza.today` and `wss://relay.bitmacro.cloud`, and anyone who reads them | A shared ranked board that anyone can check |
+
+- **Basis.** Your consent (GDPR art. 6(1)(a)), a separate one from online play, versioned in your browser (`ab-alone.board-consent`). Declining keeps ranked play on your device, as today.
+- **Retention.** The relays are run by third parties. We promise no retention and no deletion: a relay keeps or drops events as it likes, and others may copy them.
+- **Leave, and a new key.** "Leave the board" builds a signed `retire` event for your key and clears your consent; the board ignores a retired key. "New key" makes a fresh random key. Both are as easy as joining.
+- **Limit on erasure.** Events already on a relay or copied cannot be deleted, by you or by us. A `retire` event, and NIP-09 deletion requests, are only requests (GDPR art. 17 is limited). Your key is personal data even though it is random.
+- **Age.** 16 or more. The game asks you to confirm, and does not verify.
+- **Not reviewed by a lawyer.** This section is a best effort, like the rest of the notice.
 
 **Leave.** In the public Open world use Hide (it leaves the room at once) or Esc, in a game use Leave, or close the tab: you stop sending, and peers drop you after about 10 s. Clearing the site data deletes your key and saves, and the next visit gets a new key.
 

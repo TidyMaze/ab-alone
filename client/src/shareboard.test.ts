@@ -1,0 +1,118 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { generateKeys } from './moverecord';
+import {
+  BOARD_TEXT, BOARD_VERSION, boardAskNeeded, boardKeys, cleanName, joinBoard, leaveBoard, newKey, readChoice, readBoardName, readRetires,
+  signRetire, verifyRetire, writeChoice,
+} from './shareboard';
+import { worldKeys } from './worldevents';
+
+const memory = (): Storage => {
+  const m = new Map<string, string>();
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v) } as Storage;
+};
+afterEach(() => vi.unstubAllGlobals());
+
+describe('the board opt-in (#1287)', () => {
+  it('says what the law asks: public, permanent, third party relays, no deletion, a name that is not you, 16+', () => {
+    for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'nos.lol']) {
+      expect(BOARD_TEXT).toContain(word);
+    }
+  });
+
+  it('is asked until answered, and an answer of another version counts for nothing', () => {
+    const store = memory();
+    expect(readChoice(store)).toBeNull();
+    expect(boardAskNeeded(store, '?board')).toBe(true);
+    writeChoice(store, 'declined');
+    expect(readChoice(store)).toBe('declined');
+    expect(boardAskNeeded(store, '?board')).toBe(false);
+    store.setItem('ab-alone.board-consent', JSON.stringify({ v: BOARD_VERSION + 1, choice: 'joined' }));
+    expect(readChoice(store)).toBeNull();
+    store.setItem('ab-alone.board-consent', JSON.stringify({ v: BOARD_VERSION, choice: 'maybe' }));
+    expect(readChoice(store)).toBeNull();
+    store.setItem('ab-alone.board-consent', 'garbage');
+    expect(readChoice(store)).toBeNull();
+  });
+
+  it('is off without ?board, for everyone', () => {
+    expect(boardAskNeeded(memory(), '?bot=off')).toBe(false);
+    expect(boardAskNeeded(memory(), '?board')).toBe(true);
+  });
+
+  it('cuts a pseudonym to 16 characters, without control characters or runs of spaces', () => {
+    expect(cleanName('  a\u0000b \n  c  ')).toBe('a b c');
+    expect(cleanName('x'.repeat(40))).toHaveLength(16);
+    expect(cleanName('😀'.repeat(20))).toBe('😀'.repeat(16));
+    expect(readBoardName(memory())).toBe('');
+  });
+
+  it('makes a board key of its own, kept, and never the world key', async () => {
+    const store = memory();
+    const board = await boardKeys(store);
+    expect((await boardKeys(store)).pub).toBe(board.pub);
+    expect((await worldKeys(store)).pub).not.toBe(board.pub);
+    expect(store.getItem('ab-alone.world-key')).not.toBe(store.getItem('ab-alone.board-key'));
+  });
+
+  it('signs a retire that verifies, and fails once the key, the time or the signature is changed', async () => {
+    const keys = await generateKeys();
+    const e = await signRetire(keys, 1_800_000_000);
+    expect(e).toMatchObject({ v: 1, kind: 'retire', pub: keys.pub, at: 1_800_000_000 });
+    expect(await verifyRetire(e)).toBe(true);
+    expect(await verifyRetire({ ...e, at: e.at + 1 })).toBe(false);
+    expect(await verifyRetire({ ...e, pub: (await generateKeys()).pub })).toBe(false);
+    expect(await verifyRetire({ ...e, sig: 'x' })).toBe(false);
+  });
+
+  it('joins with a cleaned name, leaves with a stored signed retire, and clears the consent', async () => {
+    const store = memory();
+    const pub = await joinBoard(store, 'Ada  Lovelace the very first');
+    expect(readChoice(store)).toBe('joined');
+    expect(readBoardName(store)).toHaveLength(16);
+    expect(readRetires(store)).toEqual([]);
+    const retire = await leaveBoard(store, 1_800_000_000_999);
+    expect(retire.pub).toBe(pub);
+    expect(retire.at).toBe(1_800_000_000);
+    expect(await verifyRetire(retire)).toBe(true);
+    expect(readRetires(store)).toEqual([retire]);
+    expect(readChoice(store)).toBe('declined');
+  });
+
+  it('never rejoins with a retired key, and New key makes a fresh one', async () => {
+    const store = memory();
+    const first = await joinBoard(store, 'a');
+    await leaveBoard(store, 1000);
+    const second = await joinBoard(store, 'a');
+    expect(second).not.toBe(first);
+    expect((await newKey(store)).pub).not.toBe(second);
+    await leaveBoard(store, 2000);
+    expect(readRetires(store)).toHaveLength(2);
+  });
+
+  it('reads no retire from a broken record', () => {
+    const store = memory();
+    store.setItem('ab-alone.board-retire', 'x');
+    expect(readRetires(store)).toEqual([]);
+    store.setItem('ab-alone.board-retire', JSON.stringify({ v: 9, events: [] }));
+    expect(readRetires(store)).toEqual([]);
+  });
+
+  it('sends nothing: no fetch, no socket, no beacon', async () => {
+    const fetchSpy = vi.fn();
+    const socket = vi.fn();
+    const beacon = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    vi.stubGlobal('WebSocket', socket);
+    vi.stubGlobal('XMLHttpRequest', socket);
+    Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true });
+    const store = memory();
+    await joinBoard(store, 'a');
+    await leaveBoard(store, 5);
+    await newKey(store);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(socket).not.toHaveBeenCalled();
+    expect(beacon).not.toHaveBeenCalled();
+    Reflect.deleteProperty(navigator, 'sendBeacon');
+  });
+});

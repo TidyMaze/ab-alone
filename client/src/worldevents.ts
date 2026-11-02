@@ -44,9 +44,12 @@ export const verifyBreak = (e: BreakEvent): Promise<boolean> => signedBy(e.pub, 
  * The player's key for the public world: read from the store, else made and kept there. The private part stays in this browser's
  * localStorage and is never sent or logged. A stored key that does not load is replaced; with no store a key lasts the visit.
  */
-export async function worldKeys(store: Store): Promise<Keys> {
+export const worldKeys = (store: Store): Promise<Keys> => storedKeys(store, KEY);
+
+/** The same, under another storage key: the ranked board's key (shareboard.ts) is made by this code and never shares the world's. */
+export async function storedKeys(store: Store, key: string): Promise<Keys> {
   try {
-    const saved = JSON.parse(read(store, KEY) ?? '') as { priv: string; pub: string };
+    const saved = JSON.parse(read(store, key) ?? '') as { priv: string; pub: string };
     const priv = await crypto.subtle.importKey('pkcs8', unb64(saved.priv), ED, false, ['sign']);
     const keys = { priv, pub: saved.pub };
     // The key must be the pair of the public key it claims: a signature that does not verify means the record is not ours.
@@ -55,7 +58,7 @@ export async function worldKeys(store: Store): Promise<Keys> {
     // no record, or one that does not load: a new key below
   }
   const fresh = await generateKeys();
-  write(store, KEY, JSON.stringify({ priv: b64(await crypto.subtle.exportKey('pkcs8', fresh.priv)), pub: fresh.pub }));
+  write(store, key, JSON.stringify({ priv: b64(await crypto.subtle.exportKey('pkcs8', fresh.priv)), pub: fresh.pub }));
   return fresh;
 }
 

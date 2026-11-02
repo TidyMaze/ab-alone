@@ -46,6 +46,8 @@ describe('ranked leaderboard dialog', () => {
     expect(byId('board-body').textContent).toContain('Play a ranked match');
     key('Tab');
     expect(document.activeElement).toBe(byId('board-close'));
+    key('Tab', true);
+    expect(document.activeElement).toBe(byId('board-close'));
     key('a');
     expect(byId('board').hidden).toBe(false);
     key('Escape');

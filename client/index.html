@@ -193,12 +193,35 @@
         </div>
       </div>
     </div>
+    <!-- The opt-in for the shared ranked board (#1287): asked at the first ranked entry, unticked, its own purpose. -->
+    <div id="board-optin" role="dialog" aria-modal="true" aria-labelledby="optin-title" aria-describedby="optin-text" tabindex="-1" hidden>
+      <div class="card">
+        <h2 id="optin-title">Shared ranked board</h2>
+        <p id="optin-text"></p>
+        <label id="optin-name-label">Name (16 characters at most)<input id="optin-name" type="text" maxlength="16" autocomplete="off" spellcheck="false" /></label>
+        <label id="optin-tick"><input id="optin-box" type="checkbox" /> <span>I understand and I am 16 or older.</span></label>
+        <a id="optin-notice" target="_blank" rel="noopener noreferrer">Privacy notice</a>
+        <div class="actions">
+          <button id="optin-no" type="button">Keep ranked local</button>
+          <button id="optin-yes" type="button" disabled>Join the board</button>
+        </div>
+      </div>
+    </div>
     <!-- The ranked leaderboard (#1287): you among the opponents you met in settled 1v1 matches. -->
     <div id="board" role="dialog" aria-modal="true" aria-labelledby="board-title" tabindex="-1" hidden>
       <div class="card">
         <h2 id="board-title">Ranked 1v1</h2>
         <div id="board-body"></div>
         <p id="board-note">Opponents you settled a ranked match with, at the rating they signed then.</p>
+        <!-- The shared board (#1287): off until the player opts in; nothing is published yet. -->
+        <div id="board-share" hidden>
+          <p id="board-share-state"></p>
+          <div class="actions">
+            <button id="board-join" type="button">Join the shared board</button>
+            <button id="board-leave" type="button">Leave the board</button>
+            <button id="board-newkey" type="button">New key</button>
+          </div>
+        </div>
         <div class="actions"><button id="board-close" type="button">Close</button></div>
       </div>
     </div>
