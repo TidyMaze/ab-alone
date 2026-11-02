@@ -157,6 +157,7 @@ import {
   roomTurn,
   type DualState,
 } from './dual';
+import { BOSS_PROP_PIECES, bossProp } from './bossprops';
 import { SWARM_TURNS, evacAt, parseSwarm, swarmText, type SwarmState } from './swarm';
 import { ballastText, firedText, parseFired, type Fired } from './ballast';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
@@ -3673,6 +3674,8 @@ const showBoard = (): void => {
 /** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
 let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;
 const terraceProp = (name: keyof NonNullable<typeof bossKit>): THREE.Mesh | null => (sceneRenderer.terraceOn && bossKit ? bossKit[name] : null);
+/** The other pieces of the boss kit, one per boss row (bossprops.ts): the fight wears its own, off the dish (#1374). */
+const bossPieces = new Map<string, THREE.Mesh>();
 let terraceFailed = false; // the arena files did not load: the board stands on a plain background, the discs drawn as they are
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
@@ -3705,6 +3708,7 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
       return mesh;
     };
     bossKit = { pylon: prop('kit_prop_pylon'), core: prop('kit_prop_pylon_core'), press: prop('kit_prop_press_gantry'), buffer: prop('kit_prop_buffer_stop') };
+    for (const piece of BOSS_PROP_PIECES) bossPieces.set(piece, prop(piece));
     // The black marbles reflect a sky with a window of light and a cool rim, not the room's lamps.
     if (hasReflections(tier, navigator.webdriver)) {
       const pmrem = new THREE.PMREMGenerator(renderer);
@@ -3810,6 +3814,13 @@ function refresh(): void {
   delete document.body.dataset.announceBlink;
   marbles.clear();
   marbleAt.clear();
+  const wears = sceneRenderer.terraceOn ? bossProp(fight?.id) : null; // one mesh of the kit, one draw call, only for this boss (#1374)
+  const piece = wears && bossPieces.get(wears.piece);
+  if (wears && piece) {
+    const mesh = Object.assign(new THREE.Mesh(piece.geometry, piece.material), { name: 'boss-prop', userData: { terrace: true } }); // a prop, not a marble
+    mesh.position.set(wears.x, 0, wears.z);
+    marbles.add(mesh);
+  }
   crackDecals = [];
   const vents = engine instanceof Encounter ? parseCells(engine.incinerators()) : [];
   overseerDrawn = { overseer: null, cores: [], vents };

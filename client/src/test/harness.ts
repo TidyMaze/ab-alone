@@ -7,6 +7,7 @@
 // Everything is undone when the test ends.
 import { IDBFactory } from 'fake-indexeddb';
 import { onTestFinished, vi } from 'vitest';
+import { BOSS_PROP_PIECES } from '../bossprops';
 import page from '../../index.html?raw';
 import type { BotRequest, BotResponse } from '../bot';
 import type { PeerNet } from '../p2p';
@@ -276,7 +277,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
               }
             }
           }
-          if (url.endsWith('kit-boss.glb')) scene.add(...['kit_prop_pylon', 'kit_prop_pylon_core', 'kit_prop_press_gantry', 'kit_prop_buffer_stop'].map(piece));
+          if (url.endsWith('kit-boss.glb')) scene.add(...['kit_prop_pylon', 'kit_prop_pylon_core', 'kit_prop_press_gantry', 'kit_prop_buffer_stop', ...BOSS_PROP_PIECES].map(piece));
           if (url.endsWith('slab-ballast.glb')) scene.add(piece('scene_ballast_slab'), piece('scene_ballast_cell_000'));
           if (url.endsWith('slab-hub.glb')) scene.add(piece('scene_slab_hub'), piece('scene_hub_cell_00'), ...['scene_hub_prop_door', 'scene_hub_ring_door', 'scene_hub_prop_lift', 'scene_row21_lockbar'].map(piece)); // the props the game puts on its rooms (#1374)
           if (url.endsWith('slab-royale.glb')) scene.add(piece('scene_royale_slab'), piece('scene_royale_cell_000'));
