@@ -10,7 +10,7 @@ use std::sync::{Mutex, PoisonError};
 
 /// The version of the generated world, saved with each Open world save (#968): bump it with every change of the generator, the
 /// same moment the pinned digest of the tests changes (the line of `the_generated_world_is_pinned_by_a_digest`).
-pub const WORLD_VERSION: u32 = 3;
+pub const WORLD_VERSION: u32 = 4;
 /// A chunk is `CHUNK` x `CHUNK` cells of the axial grid.
 pub const CHUNK: i32 = 16;
 /// The world is a hexagon of cells round the spawn `(0, 0)`: the cells within `WORLD_RADIUS` of it (#1440).
@@ -38,21 +38,36 @@ const MOISTURE_WEIGHTS: [f64; 3] = [0.45, 0.35, 0.20];
 /// enemy draws already use the salts 12 to 21, so these start after them.
 const HEIGHT_SALT: u64 = 30;
 const MOISTURE_SALT: u64 = 33;
-/// The temperature field: its salts are `TEMPERATURE_SALT` to `+ 2`, its weights of the macro, meso and micro levels.
-const TEMPERATURE_SALT: u64 = 37;
-const TEMPERATURE_WEIGHTS: [f64; 3] = [0.55, 0.30, 0.15];
-/// The temperature falls by this much per height above the low ground (height 3): the peaks are cold.
-const LAPSE: f64 = 0.04;
-/// Each threshold of the biomes moves by `(micro - 0.5) * JITTER` of a micro-level sample, so a border is ragged.
-const JITTER: f64 = 0.08;
-/// The thresholds of the biomes, measured: the quantiles of the temperature and of the moisture over the land (heights 2
-/// to 7) of the 16 x 16 chunks around the spawn, seeds 1 to 4, that give the shares of the table (`openworld-terrain.md`
-/// section 4). `T_COLD` the 15 % coldest, `T_HOT` the 25 % hottest, `M_HOT` the 60 % driest of the hot land (desert, the
-/// rest badlands), `M_WET` the 42 % wettest of the temperate land (forest, the rest meadow).
-const T_COLD: f64 = 0.2896;
-const T_HOT: f64 = 0.5010;
-const M_HOT: f64 = 0.4943;
-const M_WET: f64 = 0.4632;
+/// The border field, which makes the borders of the sextants ragged (#1442): its salts are `BORDER_SALT` to `+ 2` (the
+/// temperature's before), its weights of the macro, meso and micro levels.
+const BORDER_SALT: u64 = 37;
+const BORDER_WEIGHTS: [f64; 3] = [0.55, 0.30, 0.15];
+/// A border of two sextants turns round the spawn by `(border - 0.5) * BORDER_TURN` radians, so it is never a straight line and it
+/// wanders further the further it runs from the spawn.
+const BORDER_TURN: f64 = 1.2;
+/// Each cell moves by a draw of up to `BLEND` cells either way (salt `BLEND_SALT`) when its biome is picked, so two biomes mix over
+/// a few cells along their border; the archipelago's sea comes in over the same width, smoothly.
+const BLEND: f64 = 3.0;
+const BLEND_SALT: u64 = 45;
+/// The draw of a cell against `meadow_bias` (salt `MEADOW_SALT`): below the bias it is meadow.
+const MEADOW_SALT: u64 = 46;
+/// The biome of each sextant round the spawn, by the axial direction it is centred on: east, north-east, north-west, west,
+/// south-west and south-east (`openworld-terrain.md` section 4).
+pub const SEXTANTS: [Biome; 6] = [
+    Biome::Meadow,
+    Biome::Forest,
+    Biome::Tundra,
+    Biome::Desert,
+    Biome::Badlands,
+    Biome::Archipelago,
+];
+/// The archipelago's sea: its elevation is the meso and micro levels' alone (no continent, so every seed has islands) lowered
+/// by `SEA_DROP`, its tops cut at `ISLAND_TOP` (height 4, below the rock). It comes in by a smoothstep from `SEA_NEAR` to `SEA_FAR`
+/// cells from the spawn, so the spawn's ring stays land.
+const SEA_DROP: f64 = 0.19;
+const ISLAND_TOP: f64 = 0.58;
+const SEA_NEAR: f64 = 40.0;
+const SEA_FAR: f64 = 90.0;
 /// Upper bounds of the elevation of heights 1 to 7 (height 0 is below the first). They were found by
 /// measuring the elevation of chunks -8 to 8 of seeds 1 to 4 (`the_eight_height_levels_hold_their_measured_shares`):
 /// their quantiles give the shares of 8, 10, 12, 16, 18, 16, 12 and 8 % per height.
@@ -104,12 +119,9 @@ const LAND: std::ops::Range<f64> = 0.45..0.70;
 /// elevation.
 const DRY: f64 = 0.422;
 /// The soft Meadow bias around the spawn (`meadow_bias`): full up to `MEADOW_INNER` cells, none from `MEADOW_OUTER`, a
-/// smoothstep between. At full bias the temperature is `MEADOW_TEMPERATURE` (between `T_COLD` and `T_HOT`, so not
-/// cold nor hot whatever the jitter) and the moisture `MEADOW_MOISTURE` (below `M_WET`, so not forest).
+/// smoothstep between.
 const MEADOW_INNER: f64 = 8.0;
 const MEADOW_OUTER: f64 = 16.0;
-const MEADOW_TEMPERATURE: f64 = 0.395;
-const MEADOW_MOISTURE: f64 = 0.30;
 
 /// What a cell looks like and whether it can be entered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -146,6 +158,7 @@ pub enum Biome {
     Tundra = 2,
     Desert = 3,
     Badlands = 4,
+    Archipelago = 5,
 }
 
 impl Biome {
@@ -156,6 +169,7 @@ impl Biome {
             Biome::Forest => 0.25,
             Biome::Tundra => 0.04,
             Biome::Desert | Biome::Badlands => 0.0,
+            Biome::Archipelago => 0.05,
         }
     }
 
@@ -167,6 +181,7 @@ impl Biome {
             Biome::Tundra => 25.0,
             Biome::Desert => 30.0,
             Biome::Badlands => 45.0,
+            Biome::Archipelago => 10.0,
         }
     }
 }
@@ -245,12 +260,31 @@ fn distance(q: i32, r: i32) -> i32 {
     (q.abs() + r.abs() + (q + r).abs()) / 2
 }
 
+/// The smoothstep of `t` clamped to `[0, 1]`.
+fn smoothstep(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// How much the spawn pulls the biome of `(q, r)` to Meadow, from 0 to 1: 1 within `MEADOW_INNER` cells of the spawn,
 /// 0 beyond `MEADOW_OUTER`, a smoothstep between (no edge). A pure function of the distance, so it is order free.
 fn meadow_bias(q: i32, r: i32) -> f64 {
-    let t = ((MEADOW_OUTER - f64::from(distance(q, r))) / (MEADOW_OUTER - MEADOW_INNER))
-        .clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+    smoothstep((MEADOW_OUTER - f64::from(distance(q, r))) / (MEADOW_OUTER - MEADOW_INNER))
+}
+
+/// Where `(q, r)` lies round the spawn, its point turned `turn` radians and moved `shift` cells more, counter-clockwise: the
+/// sextant it falls in (0 east to 5 south-east, `SEXTANTS`) and how many cells inside that sextant's border it lies. The
+/// pointy-top layout of the client: x runs along `q`, the north is `-r`.
+fn sextant(q: i32, r: i32, turn: f64, shift: f64) -> (usize, f64) {
+    let (x, y) = (
+        f64::from(q) + f64::from(r) / 2.0,
+        -(3f64.sqrt() / 2.0) * f64::from(r),
+    );
+    let reach = x.hypot(y).max(1.0);
+    let turns = (y.atan2(x) + turn + shift / reach) / (std::f64::consts::PI / 3.0);
+    let nearest = turns.round();
+    let inside = (0.5 - (turns - nearest).abs()) * (std::f64::consts::PI / 3.0) * reach;
+    ((nearest as i64).rem_euclid(6) as usize, inside)
 }
 
 /// The elevation at `(q, r)` from the seed alone, with the macro level shifted by `shift`: the same values as the
@@ -393,10 +427,10 @@ struct Window {
     r0: i32,
     /// Elevation, which gives the height.
     height: Field,
-    /// Moisture, which gives the dry rock and the biomes.
+    /// Moisture, which gives the dry rock.
     moisture: Field,
-    /// Temperature, which gives the biomes.
-    temperature: Field,
+    /// The border field, which makes the borders of the sextants ragged.
+    border: Field,
     /// Whether each cell of the chunk is on a wall, row by row.
     wall: [bool; (CHUNK * CHUNK) as usize],
 }
@@ -429,33 +463,34 @@ impl Window {
             r0,
             height: Field::new(seed, HEIGHT_SALT, q0, r0, HEIGHT_WEIGHTS, macro_shift(seed)),
             moisture: Field::new(seed, MOISTURE_SALT, q0, r0, MOISTURE_WEIGHTS, (0, 0)),
-            temperature: Field::new(seed, TEMPERATURE_SALT, q0, r0, TEMPERATURE_WEIGHTS, (0, 0)),
+            border: Field::new(seed, BORDER_SALT, q0, r0, BORDER_WEIGHTS, (0, 0)),
             wall,
         }
     }
 
-    /// The biome of a cell of `height` and `moisture`: the temperature (lower uphill) and the moisture against the thresholds,
-    /// each moved by a micro-level sample of the temperature so the borders are ragged. Near the spawn both drift towards
-    /// the Meadow values by `meadow_bias`, so the surroundings are meadow and the border is soft.
-    fn biome(&self, q: i32, r: i32, height: u8, moisture: f64) -> Biome {
-        let jitter = (self.temperature.levels[2].noise(q, r) - 0.5) * JITTER;
-        let bias = meadow_bias(q, r);
-        let natural = self.temperature.value(q, r) - LAPSE * (f64::from(height) - 3.0);
-        let temperature = natural + (MEADOW_TEMPERATURE - natural) * bias;
-        let moisture = moisture + (MEADOW_MOISTURE - moisture) * bias;
-        if temperature < T_COLD + jitter {
-            Biome::Tundra
-        } else if temperature > T_HOT + jitter {
-            if moisture < M_HOT + jitter {
-                Biome::Desert
-            } else {
-                Biome::Badlands
-            }
-        } else if moisture >= M_WET + jitter {
-            Biome::Forest
-        } else {
+    /// The biome of `(q, r)` and how deep it lies in the archipelago's sea, from 0 to 1. The biome is its sextant's, the border
+    /// moved by the border field and by a draw of up to `BLEND` cells, so it is ragged and two biomes mix along it; near the
+    /// spawn a draw below `meadow_bias` makes it meadow, so the surroundings are meadow and their edge is soft. The sea grows
+    /// smoothly over `BLEND` cells inside the archipelago's border, and from `SEA_NEAR` to `SEA_FAR` cells out.
+    fn biome(&self, q: i32, r: i32) -> (Biome, f64) {
+        let turn = (self.border.value(q, r) - 0.5) * BORDER_TURN;
+        let blend = (unit(self.seed, BLEND_SALT, q, r) - 0.5) * 2.0 * BLEND;
+        let biome = if unit(self.seed, MEADOW_SALT, q, r) < meadow_bias(q, r) {
             Biome::Meadow
-        }
+        } else {
+            SEXTANTS[sextant(q, r, turn, blend).0]
+        };
+        let (k, inside) = sextant(q, r, turn, 0.0);
+        let edge = if SEXTANTS[k] == Biome::Archipelago {
+            inside
+        } else {
+            -inside
+        };
+        let out = (f64::from(distance(q, r)) - SEA_NEAR) / (SEA_FAR - SEA_NEAR);
+        (
+            biome,
+            smoothstep((edge + BLEND) / (2.0 * BLEND)) * smoothstep(out),
+        )
     }
 
     /// The cell at `(q, r)`, which must lie in this chunk.
@@ -467,13 +502,19 @@ impl Window {
                 biome: Biome::Meadow,
             };
         }
+        let (biome, sea) = self.biome(q, r);
         let elevation = self.height.value(q, r);
+        let island = (HEIGHT_WEIGHTS[1] * self.height.levels[1].noise(q, r)
+            + HEIGHT_WEIGHTS[2] * self.height.levels[2].noise(q, r))
+            / (HEIGHT_WEIGHTS[1] + HEIGHT_WEIGHTS[2])
+            - SEA_DROP;
+        let elevation = (elevation + (island - elevation) * sea)
+            .min(ISLAND_TOP + (1.0 - ISLAND_TOP) * (1.0 - sea));
         let height = ELEVATION_STEPS
             .iter()
             .filter(|&&step| elevation >= step)
             .count() as u8;
         let moisture = self.moisture.value(q, r);
-        let biome = self.biome(q, r, height, moisture);
         let terrain = match height {
             0 | 1 => Terrain::Water,
             2 => Terrain::Sand,
@@ -579,8 +620,9 @@ const LAIR_NEAR: f64 = 160.0;
 const LAIR_FAR: f64 = 420.0;
 
 /// The cells of the `count` boss lairs of the world `seed` (docs/specs/openworld.md section 7), one per boss of the roster: lair `k`
-/// is drawn in the `k`-th `count`-th of the circle round the spawn, the first draw whose cell and six neighbours are open ground on the world, and at least `LAIR_MIN`
-/// cells from the spawn. From the seed alone, so the order of visit of the chunks does not matter.
+/// is drawn in the sextant `k % 6` (#1442), in the `k / 6`-th of its share of the sextant's lairs, the first draw whose cell and six
+/// neighbours are open ground on the world, of the sextant's biome, and at least `LAIR_MIN` cells from the spawn. So each biome holds
+/// two lairs or more of a roster of 12. From the seed alone, so the order of visit of the chunks does not matter.
 pub fn lairs(seed: u64, count: usize) -> Vec<(i32, i32)> {
     (0..count as i32)
         .map(|k| {
@@ -593,14 +635,18 @@ pub fn lairs(seed: u64, count: usize) -> Vec<(i32, i32)> {
 
 /// The `n`-th try of lair `k`: its cell when it is a fit one.
 fn lair_try(seed: u64, count: usize, k: i32, n: i32) -> Option<(i32, i32)> {
-    let third = std::f64::consts::TAU / count as f64;
-    let angle = (f64::from(k) + 0.1 + 0.8 * unit(seed, LAIR_SALT, k, n)) * third;
+    let (wedge, nth) = (k as usize % 6, f64::from(k / 6));
+    let shares = (count / 6 + usize::from(wedge < count % 6)) as f64;
+    let slot = nth + 0.2 + 0.6 * unit(seed, LAIR_SALT, k, n);
+    let angle = (wedge as f64 - 0.5 + slot / shares) * std::f64::consts::FRAC_PI_3;
     let reach = LAIR_NEAR + (LAIR_FAR - LAIR_NEAR) * unit(seed, LAIR_SALT + 1, k, n);
-    // The pointy-top layout of the client's `cellAtPoint`: x runs along q, z along the rows.
-    let r = (reach * angle.sin() / (3f64.sqrt() / 2.0)).round() as i32;
+    // The pointy-top layout of the client's `cellAtPoint`: x runs along q, z along the rows, the north up.
+    let r = (-reach * angle.sin() / (3f64.sqrt() / 2.0)).round() as i32;
     let q = (reach * angle.cos() - f64::from(r) / 2.0).round() as i32;
-    let open =
-        |(dq, dr): (i32, i32)| cell(seed, q + dq, r + dr).is_some_and(|c| !c.terrain.blocked());
+    let open = |(dq, dr): (i32, i32)| {
+        cell(seed, q + dq, r + dr)
+            .is_some_and(|c| !c.terrain.blocked() && c.biome == SEXTANTS[wedge])
+    };
     let fit = distance(q, r) >= LAIR_MIN
         && [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
             .into_iter()
@@ -1130,12 +1176,15 @@ mod tests {
 
     #[test]
     fn the_eight_height_levels_hold_their_measured_shares() {
-        // The 16 x 16 chunks around the spawn, the real window, of four seeds.
+        // The 16 x 16 chunks around the spawn, the real window, of four seeds, out of the archipelago, whose sea lowers it (#1442).
         let mut counts = [0usize; 8];
         for seed in 1..=4 {
             for cx in -8..8 {
                 for cy in -8..8 {
-                    for c in full(seed, cx, cy) {
+                    for c in full(seed, cx, cy)
+                        .into_iter()
+                        .filter(|c| c.biome != Biome::Archipelago)
+                    {
                         counts[c.height as usize] += 1;
                     }
                 }
@@ -1169,9 +1218,10 @@ mod tests {
             Biome::Tundra,
             Biome::Desert,
             Biome::Badlands,
+            Biome::Archipelago,
         ]
         .map(|b| b as u8);
-        assert_eq!(codes, [0, 1, 2, 3, 4]);
+        assert_eq!(codes, [0, 1, 2, 3, 4, 5]);
     }
 
     #[test]
@@ -1180,13 +1230,7 @@ mod tests {
             .into_iter()
             .filter(|c| c.height >= 2)
             .collect();
-        for biome in [
-            Biome::Meadow,
-            Biome::Forest,
-            Biome::Tundra,
-            Biome::Desert,
-            Biome::Badlands,
-        ] {
+        for biome in SEXTANTS {
             assert!(
                 land.iter().any(|c| c.biome == biome),
                 "{biome:?} never appears"
@@ -1194,27 +1238,134 @@ mod tests {
         }
     }
 
+    /// The cell `reach` cells from the spawn at `angle` degrees, counter-clockwise from the east with the north up (the `r` of
+    /// the axial grid grows southward).
+    fn polar(angle: f64, reach: f64) -> (i32, i32) {
+        let (x, z) = (
+            reach * angle.to_radians().cos(),
+            -reach * angle.to_radians().sin(),
+        );
+        let r = (z / (3f64.sqrt() / 2.0)).round() as i32;
+        ((x - f64::from(r) / 2.0).round() as i32, r)
+    }
+
     #[test]
-    fn the_biome_shares_on_land_are_the_measured_ones() {
-        // Land is every cell above the water (heights 2 to 7), the 16 x 16 chunks around the spawn, seeds 1 to 4.
-        let land: Vec<Cell> = window_cells(1..=4)
-            .into_iter()
-            .filter(|c| c.height >= 2)
-            .collect();
-        let targets = [
-            (Biome::Meadow, 35.0),
-            (Biome::Forest, 25.0),
-            (Biome::Tundra, 15.0),
-            (Biome::Desert, 15.0),
-            (Biome::Badlands, 10.0),
-        ];
-        for (biome, target) in targets {
-            let share =
-                land.iter().filter(|c| c.biome == biome).count() as f64 * 100.0 / land.len() as f64;
+    fn the_six_sextants_round_the_spawn_are_meadow_forest_tundra_desert_badlands_and_archipelago() {
+        // The axial directions east, north-east, north-west, west, south-west and south-east, in that order (#1442).
+        assert_eq!(
+            SEXTANTS,
+            [
+                Biome::Meadow,
+                Biome::Forest,
+                Biome::Tundra,
+                Biome::Desert,
+                Biome::Badlands,
+                Biome::Archipelago,
+            ]
+        );
+        assert_eq!(polar(60.0, 100.0), (100, -100));
+        // The middle 20 degrees of each sextant, from 40 cells out to the edge: its own biome, on seeds 1 to 4.
+        for seed in 1..=4 {
+            for (k, &biome) in SEXTANTS.iter().enumerate() {
+                let (mut own, mut total) = (0, 0);
+                for reach in (40..380).step_by(8) {
+                    for turn in (-10..=10).step_by(2) {
+                        let (q, r) = polar(60.0 * k as f64 + f64::from(turn), f64::from(reach));
+                        total += 1;
+                        own += usize::from(cell(seed, q, r).unwrap().biome == biome);
+                    }
+                }
+                assert!(
+                    own * 100 >= total * 95,
+                    "seed {seed}: {biome:?} on {own} of {total} cells of its sextant"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_border_between_two_sextants_is_ragged_and_blends_over_a_few_cells() {
+        // Arcs from 5 to 55 degrees, across the border between the meadow and the forest (30 degrees), every 10 cells out, a
+        // cell a step: where each arc first turns forest moves from arc to arc (ragged), some arcs turn more than once
+        // (blended), and each starts meadow and ends forest.
+        let seed = 3;
+        let (mut offsets, mut mixed) = (Vec::new(), 0);
+        for reach in (100..=370).step_by(10) {
+            let reach = f64::from(reach);
+            let degree = 180.0 / std::f64::consts::PI / reach; // one cell along the arc, in degrees
+            let half = (25.0 / degree) as i32;
+            let arc: Vec<Biome> = (-half..=half)
+                .map(|k| polar(30.0 + f64::from(k) * degree, reach))
+                .map(|(q, r)| cell(seed, q, r).unwrap().biome)
+                .collect();
             assert!(
-                (share - target).abs() <= 5.0,
-                "{biome:?}: {share:.1} % against {target} %"
+                arc[..5].iter().all(|&b| b == Biome::Meadow),
+                "{reach}: {arc:?}"
             );
+            assert!(
+                arc[arc.len() - 5..].iter().all(|&b| b == Biome::Forest),
+                "{reach}: {arc:?}"
+            );
+            let first = arc.iter().position(|&b| b == Biome::Forest).unwrap() as i32 - half;
+            offsets.push(first);
+            mixed += usize::from(arc.windows(2).filter(|w| w[0] != w[1]).count() > 1);
+        }
+        let spread = offsets.iter().max().unwrap() - offsets.iter().min().unwrap();
+        assert!(spread >= 6, "the border is a straight line: {offsets:?}");
+        assert!(mixed >= 10, "{mixed} arcs blend");
+    }
+
+    #[test]
+    fn the_archipelago_is_mostly_water_with_islands_of_sand_and_grass() {
+        // The middle 20 degrees of the south-east sextant, from 120 cells out, seeds 1 to 4: three quarters water, the
+        // islands sand and low grass (heights 2 to 4) with their trees, boulders and walls; no rock, no peak.
+        let cells: Vec<Cell> = (1..=4)
+            .flat_map(|seed| {
+                (120..380).step_by(2).flat_map(move |reach| {
+                    (-10..=10).map(move |turn| {
+                        let (q, r) = polar(300.0 + f64::from(turn), f64::from(reach));
+                        cell(seed, q, r).unwrap()
+                    })
+                })
+            })
+            .collect();
+        let water =
+            cells.iter().filter(|c| c.terrain == Terrain::Water).count() * 100 / cells.len();
+        assert!((65..=85).contains(&water), "{water} % water");
+        let land: Vec<&Cell> = cells
+            .iter()
+            .filter(|c| c.terrain != Terrain::Water)
+            .collect();
+        assert!(
+            land.iter().all(|c| (2..=4).contains(&c.height)),
+            "an island rises above the low ground"
+        );
+        for terrain in [Terrain::Sand, Terrain::Grass, Terrain::Tree] {
+            assert!(land.iter().any(|c| c.terrain == terrain), "no {terrain:?}");
+        }
+        assert!(land
+            .iter()
+            .all(|c| !matches!(c.terrain, Terrain::Rock | Terrain::Peak)));
+    }
+
+    #[test]
+    fn enemies_live_on_the_land_of_every_biome() {
+        let mut groups = HashMap::new();
+        for seed in 1..=2 {
+            for cx in -8..8 {
+                for cy in -8..8 {
+                    for group in enemy_groups(seed, cx, cy) {
+                        let (q, r) = group[0];
+                        *groups
+                            .entry(cell(seed, q, r).unwrap().biome as u8)
+                            .or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+        for biome in SEXTANTS {
+            let found = groups.get(&(biome as u8)).copied().unwrap_or(0);
+            assert!(found >= 10, "{biome:?}: {found} groups");
         }
     }
 
@@ -1229,6 +1380,7 @@ mod tests {
             (Biome::Tundra, 0.04, 25.0),
             (Biome::Desert, 0.0, 30.0),
             (Biome::Badlands, 0.0, 45.0),
+            (Biome::Archipelago, 0.05, 10.0),
         ];
         for (biome, tree, boulder) in table {
             let low: Vec<&Cell> = cells
@@ -1277,10 +1429,12 @@ mod tests {
 
     #[test]
     fn a_far_view_around_the_spawn_has_a_sea_and_a_range() {
-        // The widest zoom sees about 21 x 21 chunks around the spawn: each of seeds 1 to 8 shows water, and rock or peak.
+        // The widest zoom sees about 21 x 21 chunks around the spawn: each of seeds 1 to 8 shows water, and rock or peak, out of
+        // the archipelago, which is mostly sea (#1442).
         for seed in 1..=8 {
             let cells: Vec<Cell> = (-10..=10)
                 .flat_map(|cx| (-10..=10).flat_map(move |cy| full(seed, cx, cy)))
+                .filter(|c| c.biome != Biome::Archipelago)
                 .collect();
             let total = cells.len() as f64;
             let water =
@@ -1451,7 +1605,7 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             (WORLD_VERSION, world_digest()),
-            (3, 15_901_084_256_825_590_468),
+            (4, 16_742_511_850_258_042_212),
             "WORLD_VERSION and digest of the reference world"
         );
     }
@@ -1571,8 +1725,19 @@ mod tests {
     }
 
     #[test]
+    fn every_biome_holds_at_least_two_lairs_on_its_land() {
+        for seed in 0..60 {
+            let mut count = [0; 6];
+            for (q, r) in lairs(seed, ROSTER) {
+                count[cell(seed, q, r).unwrap().biome as usize] += 1;
+            }
+            assert!(count.iter().all(|&n| n >= 2), "seed {seed}: {count:?}");
+        }
+    }
+
+    #[test]
     fn the_lairs_of_seed_7_are_pinned() {
-        assert_eq!(lairs(7, 3), vec![(139, 58), (-327, 233), (286, -172)]);
+        assert_eq!(lairs(7, 3), vec![(256, -38), (337, -412), (31, -224)]);
     }
 
     #[test]
@@ -1638,10 +1803,21 @@ mod tests {
     }
 
     #[test]
+    fn every_biome_holds_a_teleporter_on_its_land() {
+        for seed in 0..6 {
+            let mut count = [0; 6];
+            for (q, r) in teleporters(seed, &[]) {
+                count[cell(seed, q, r).unwrap().biome as usize] += 1;
+            }
+            assert!(count.iter().all(|&n| n >= 1), "seed {seed}: {count:?}");
+        }
+    }
+
+    #[test]
     fn the_teleporters_of_seed_7_are_pinned() {
         let found = teleporters(7, &[]);
-        // A quarter as many as one a square of 4 x 4 chunks, which gave 137 (#1444).
-        assert_eq!(found.len(), 36);
+        // A quarter as many as one a square of 4 x 4 chunks, which gave 137 (#1444); 36 before the archipelago's sea (#1442).
+        assert_eq!(found.len(), 34);
         assert_eq!(found[..3], [(2, -1), (29, -382), (130, -355)]);
     }
 

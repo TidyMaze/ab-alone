@@ -1855,6 +1855,14 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     for (const colour of [terrainColour('grass'), COLOURS.hero, COLOURS.troop, COLOURS.enemy, COLOURS.lair]) expect(ctx.fills, colour).toContain(colour);
   });
 
+  it('paints the low grass of the world in the ground of its biome (#1442)', () => {
+    const ctx = withCanvas();
+    const tundra = (_s: number, cx: number, cy: number): Uint8Array => bytes(cx, cy).map((b, i) => (i % 3 === 0 ? 3 : i % 3 === 2 ? 2 : b));
+    mode(undefined, tundra).enter(42, 800, 600);
+    expect(ctx.fills).toContain(terrainColour('grass', 'tundra'));
+    expect(ctx.fills).not.toContain(terrainColour('grass'));
+  });
+
   it('is redrawn on a step and on a camera turn, never on a frame', () => {
     const ctx = withCanvas();
     const m = mode();

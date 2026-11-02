@@ -91,7 +91,7 @@ describe('a new world', () => {
     expect(state.troop).toEqual(['(1,0)', '(-1,0)', '(1,-1)', '(-1,1)', '(0,-1)', '(0,1)']);
     expect(state.broken).toBe(0);
     expect(state.lairs).toHaveLength(15);
-    expect(state.lairs[0]).toEqual({ boss: bossIds()[0], cell: '(373,51)', distance: 424, beaten: false });
+    expect(state.lairs[0]).toEqual({ boss: bossIds()[0], cell: '(206,132)', distance: 338, beaten: false });
     expect(state.ending).toBeUndefined();
   });
 

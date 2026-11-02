@@ -54,8 +54,11 @@ A-light Explore (#720 to #725), which it does not touch.
   heights 0 and 1), sand (the shore, height 2), grass, rock, **mountains** (peaks, height 7). Forests
   (**trees**) and ruined **walls** (segments of 3 to 6 cells along one of
   three axes, one per 24-cell square at most, laid on land) come on top.
-- **Biomes** (#984): meadow, forest, tundra (snow), desert and badlands, from a temperature and the moisture; each sets the
-  colour of the low ground and the density of its trees and boulders (see [openworld-terrain.md](openworld-terrain.md) section 4).
+- **Biomes** (#984, #1442): six, one per sextant of the hexagon seen from the spawn, with ragged borders that blend over a few
+  cells: meadow east (the start, the spawn's surroundings are meadow), forest north-east, tundra (snow) north-west, desert west,
+  badlands south-west and the archipelago south-east, mostly water with islands of sand and grass, crossed by boat. Each sets the
+  colour of the low ground, in the 3D view and on the map, and the density of its trees and boulders (see
+  [openworld-terrain.md](openworld-terrain.md) section 4).
 - **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: mountains,
   trees, walls, and scattered boulders (about 2 % of the open cells). Water blocks the enemies only: the hero and the troop
   sail on it (section 4, #1441), and lairs, teleporters and the spawn stay on land. A push into an obstacle is
@@ -242,11 +245,12 @@ hero, the troop and the enemies of the loaded square (the generated ones are hid
 The Open world has a goal: one landmark lair per boss of the roster (15 today, the length of `boss_ids()`), each a normal boss fight.
 
 - **Placement** is seeded world generation in Rust (`world::lairs(seed, count)`, bridge `world_lairs(seed)` passes the roster size, `q, r` pairs, lair 0 first).
-  Lair `k` is drawn in the `k`-th `count`-th of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
-  six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). The count and the band are
-  kept for the hexagon (#1440): its corners are 448 ground units out and the middles of its sides about 388, so a draw past the edge
-  is drawn again and the lairs still spread over all of it. It reads the terrain, never
-  changes it, so `WORLD_VERSION` does not move.
+  Lair `k` is drawn in the sextant `k % 6` of the hexagon (#1442, the biome of section 2), in the `k / 6`-th of its share of
+  that sextant's lairs (the middle 60 % of it), 160 to 420 ground units out, and kept when its cell and its six neighbours are open
+  ground of that sextant's biome on the world and it is at least 150 cells from the spawn (`LAIR_MIN`): so every biome holds two
+  lairs or more (three in the meadow, the forest and the tundra for the 15 bosses), on land, an island in the archipelago. Before
+  #1442 lair `k` was drawn in the `k`-th `count`-th of the circle. The hexagon's corners are 448 ground units out and the middles
+  of its sides about 388, so a draw past the edge is drawn again. It reads the terrain, never changes it.
 - **Look.** A low-poly landmark made in Blender (`client/models/openworld-lair.glb`, vertex colours, under 72 triangles each) on
   the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
   while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).
@@ -326,7 +330,8 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   4 x 4 chunks (half its side), from a drawn one, 24 tries a chunk, and keeps the first whose cell and six neighbours are open ground,
   with no generated enemy within 2 cells and no lair within 3 (the bridge passes the lairs); a square with no fit try has none. Two
   teleporters are at least 64 cells apart. A quarter as many as before #1444 (squares of 4 x 4 chunks, a middle of 2 x 2, 32 cells
-  apart): seed 7 holds 36 teleporters, against 137 in the same hexagon, and the public world 1305 holds 37, against 159. It
+  apart): seed 7 holds 34 teleporters (36 before the archipelago's sea of #1442, which leaves some squares with no island that
+  fits), against 137 in the same hexagon, and the public world 1305 holds 36 (37 before #1442), against 159; every biome holds some. It
   reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move and the saves keep loading. In the hexagon
   (#1440) the squares run as far as their middle chunks reach it, and a try keeps its pad in the world.
 - **Look.** A flat violet hex pad on the cell and a violet ring floating over it (`TELEPORTER_LOOK`), drawn for the teleporters of the

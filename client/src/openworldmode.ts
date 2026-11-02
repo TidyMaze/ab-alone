@@ -568,8 +568,8 @@ export class OpenWorldMode {
   /** The camera's yaw the minimap and the map were last drawn at (#1448). */
   private mapYaw = 0;
 
-  /** The terrain of a discovered cell, none for a cell not discovered or off the world: the minimap and the map draw only these. */
-  private readonly seen = (q: number, r: number) => (this.discovered.has(q, r) ? this.world!.tile(q, r)?.terrain : undefined);
+  /** The tile of a discovered cell, none for a cell not discovered or off the world: the minimap and the map draw only these. */
+  private readonly seen = (q: number, r: number) => (this.discovered.has(q, r) ? this.world!.tile(q, r) : undefined);
 
   /** What the minimap and the map draw, with the `cells` given: the hero, the troop, the enemies near the hero on discovered cells and the
    * lairs, which are landmarks seen from afar. */

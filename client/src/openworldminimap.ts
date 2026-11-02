@@ -3,9 +3,9 @@
 // push or a camera turn changed it, and the map is redrawn then, never every frame. The full screen map (#1411, openworldmap.ts) is the
 // same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
-import { same, type Terrain } from './openworld';
+import { type Biome, same, type Terrain, type Tile } from './openworld';
 import { iconSize, lairIcon, portalIcon } from './openworldlairicon';
-import { LOOK, PROPS, WATER } from './openworldview';
+import { BIOME_LOOK, LOOK, lowGround, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
 import { mapColour } from './neonworld';
 
@@ -16,8 +16,8 @@ const COMPASS_RADIUS = 22;
 /** The lairs out of the window that get an arrow on the edge: the nearest unbeaten ones. */
 const ARROWS = 3;
 
-/** A cell of the window: `q, r` and its terrain. */
-export type MinimapCell = readonly [number, number, Terrain];
+/** A cell of the window: `q, r`, its terrain and, for low grass, its biome (#1442). */
+export type MinimapCell = readonly [number, number, Terrain, Biome?];
 
 export interface MinimapData {
   cells: readonly MinimapCell[];
@@ -53,10 +53,11 @@ export const COLOURS = {
 
 const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
 
-/** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`), except the mountain that cannot be crossed (#1439). */
-export function terrainColour(terrain: Terrain): string {
+/** The colour of a terrain: the one the 3D view draws it in (`LOOK`, `WATER`, `PROPS`, the ground of `biome` for low grass, #1442), except
+ * the mountain that cannot be crossed (#1439). */
+export function terrainColour(terrain: Terrain, biome?: Biome): string {
   if (terrain === 'peak' || terrain === 'wall') return COLOURS.mountain;
-  const own = terrain === 'water' ? WATER.shore : terrain === 'tree' || terrain === 'boulder' ? PROPS[terrain].color : LOOK[terrain].color;
+  const own = terrain === 'water' ? WATER.shore : terrain === 'tree' || terrain === 'boulder' ? PROPS[terrain].color : biome ? BIOME_LOOK[biome].ground : LOOK[terrain].color;
   return hex(neonWorldOn() ? mapColour(own) : own); // the neon look's dark terrain is lifted for the map (#1424)
 }
 
@@ -102,14 +103,14 @@ export function groundOffset(x: number, y: number, yaw: number): Axial {
 }
 
 /** The cells of the hex disc of `radius` (RADIUS: the minimap's window) round `hero`, read with `tile`; the cells off the world, or
- * hidden (not discovered, #1411), are left out. */
-export function windowCells(tile: (q: number, r: number) => Terrain | undefined, hero: Axial, radius = RADIUS): MinimapCell[] {
+ * hidden (not discovered, #1411), are left out. A low grass cell keeps its biome, whose ground it is drawn in. */
+export function windowCells(tile: (q: number, r: number) => Tile | undefined, hero: Axial, radius = RADIUS): MinimapCell[] {
   const cells: MinimapCell[] = [];
   for (let dq = -radius; dq <= radius; dq++) {
     for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr++) {
       const [q, r] = [hero[0] + dq, hero[1] + dr];
-      const terrain = tile(q, r);
-      if (terrain) cells.push([q, r, terrain]);
+      const found = tile(q, r);
+      if (found) cells.push([q, r, found.terrain, found.terrain === 'grass' && lowGround(found) ? found.biome : undefined]);
     }
   }
   return cells;
@@ -180,9 +181,9 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   ctx.fillStyle = COLOURS.back;
   ctx.fillRect(0, 0, width, height);
   const side = unit * 1.3; // a little over a cell, so the turned squares leave no gap
-  for (const [q, r, terrain] of data.cells) {
+  for (const [q, r, terrain, biome] of data.cells) {
     const { x, y } = put([q, r]);
-    ctx.fillStyle = terrainColour(terrain);
+    ctx.fillStyle = terrainColour(terrain, biome);
     ctx.fillRect(x - side / 2, y - side / 2, side, side);
   }
   const edge = round ? midX - 8 : Infinity; // the full map has no edge: every lair is drawn where it is

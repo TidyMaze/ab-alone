@@ -88,9 +88,9 @@
 //!   chunk its edge crosses, a cell past the edge is `[0, 255, 0]`, `255` off the world. `height` `0` to `7`;
 //!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall;
 //!   all but sand, grass and rock are blocked; `biome` `0` meadow, `1` forest, `2` tundra, `3` desert,
-//!   `4` badlands (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
+//!   `4` badlands, `5` archipelago, one per sextant of the hexagon (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
 //! - Open world lairs (`world_lairs(seed)`): one boss lair per boss of the roster, `q, r` pairs, lair 0 first, each at least 150 cells from the
-//!   spawn on open ground (docs/specs/openworld.md section 7).
+//!   spawn on open ground, lair `k` in the sextant `k % 6` (docs/specs/openworld.md section 7).
 //! - Open world teleporters (`world_teleporters(seed)`): `q, r` pairs, the spawn's first, one a square of 8 x 8 chunks, kept off
 //!   the lairs (docs/specs/openworld.md section 10).
 //! - Open world push (`world_push(seed, troop, enemies, broken)`): `troop` is the hero's cell then the troop's,

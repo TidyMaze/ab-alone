@@ -24,11 +24,12 @@ function bytes(cx: number, cy: number): Uint8Array {
 describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
   it('reads the bytes of the bridge, three a cell, by terrain and biome code', () => {
     expect(TERRAINS).toEqual(['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall']);
-    expect(BIOMES).toEqual(['meadow', 'forest', 'tundra', 'desert', 'badlands']);
-    expect(parseChunk(new Uint8Array([0, 0, 0, 3, 4, 1, 2, 3, 4]))).toEqual([
+    expect(BIOMES).toEqual(['meadow', 'forest', 'tundra', 'desert', 'badlands', 'archipelago']);
+    expect(parseChunk(new Uint8Array([0, 0, 0, 3, 4, 1, 2, 3, 4, 2, 1, 5]))).toEqual([
       { height: 0, terrain: 'water', biome: 'meadow' },
       { height: 3, terrain: 'peak', biome: 'forest' },
       { height: 2, terrain: 'rock', biome: 'badlands' },
+      { height: 2, terrain: 'sand', biome: 'archipelago' },
     ]);
     expect(parseChunk(new Uint8Array())).toEqual([]);
   });

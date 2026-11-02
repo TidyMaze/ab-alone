@@ -15,7 +15,7 @@ export type Terrain = (typeof TERRAINS)[number];
  * walls). The hero and the troop also sail on water (`Terrain::open_to_hero`, #1441). */
 export const WALKABLE: ReadonlySet<Terrain> = new Set<Terrain>(['sand', 'grass', 'rock']);
 /** The biome codes of the bridge (`world_chunk`), by code: the order of `Biome` in the engine (openworld-terrain.md section 4). */
-export const BIOMES = ['meadow', 'forest', 'tundra', 'desert', 'badlands'] as const;
+export const BIOMES = ['meadow', 'forest', 'tundra', 'desert', 'badlands', 'archipelago'] as const;
 export type Biome = (typeof BIOMES)[number];
 export interface Tile {
   height: number;

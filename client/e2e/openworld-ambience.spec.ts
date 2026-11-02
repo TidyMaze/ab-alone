@@ -3,7 +3,7 @@ import { openModes } from './modes';
 
 // #1104: each Open world biome has its own ambience: pollen, leaves, snow or dust (#1110) and, in the desert, a shimmer of the sand. Seed 1 has a cell of each (found with `world_chunk`). The page marks what is drawn (`data-openworld-particles`,
 // `data-openworld-motion`, webdriver pages only).
-const CELL = { forest: [-58, 6], tundra: [-10, 38], desert: [-41, 23], meadow: [-42, 23] } as const;
+const CELL = { forest: [29, -59], tundra: [-19, -44], desert: [-60, 30], meadow: [40, -20] } as const; // one a sextant (#1442)
 type Biome = keyof typeof CELL;
 
 async function enter(page: Page, query = ''): Promise<void> {

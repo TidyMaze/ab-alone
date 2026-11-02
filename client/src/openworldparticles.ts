@@ -24,7 +24,7 @@ export interface Look {
   gravity?: number;
 }
 
-/** The ambient particles by biome, born within `RADIUS` cells of the hero. The badlands have none. */
+/** The ambient particles by biome, born within `RADIUS` cells of the hero. The badlands and the archipelago have none. */
 export const AMBIENT: Partial<Record<Biome, Look>> = {
   meadow: { rate: 12, life: 4000, lift: 0.2, spread: 1.4, rise: 0.12, sway: 0.35, size: 0.14, colour: 0xfff0a0 },
   forest: { rate: 8, life: 6000, lift: 2.2, spread: 0.8, rise: -0.35, sway: 0.5, size: 0.15, colour: 0xe08a2e },
