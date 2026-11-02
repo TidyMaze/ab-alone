@@ -349,29 +349,22 @@ for (const { name, viewport, mobile } of sizes) {
       await expect(page.locator('#hud .end')).toContainText('The books balance');
     };
 
-    test('the end banner covers neither a cell nor a button, #282', async ({ page }, testInfo) => {
+    // Upright, then turned around, in one page load: the turn is a resize of the same page (one boot instead of two).
+    test('the end banner covers neither a cell nor a button, nor turned around, #282', async ({ page }, testInfo) => {
       await importBlackWins(page);
       await check(page, testInfo, 'with the end banner');
-    });
-
-    test('the end banner covers neither a cell nor a button turned around, #282', async ({ page }, testInfo) => {
-      await importBlackWins(page);
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'with the end banner turned around');
     });
 
-    test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {
+    // The same defeat as the plate check of bug #271 (the plate and the buttons cover no cell after a daily defeat): one
+    // page load and one fight per window, the card checked upright, then the page turned around (a resize, no second fight).
+    test('the daily result card covers neither the HUD nor the board, nor turned around, #196 #271', async ({ page }, testInfo) => {
       await startDaily(page);
       await loseByRepetition(page);
       await expect(page.locator('#daily-card')).toBeVisible();
       await check(page, testInfo, 'with the daily result card');
       expect(await cardOverCorner(page), 'the card is clear of Copy diagnostics').toEqual([]);
-    });
-
-    test('the daily result card covers neither the HUD nor the board turned around, #196', async ({ page }, testInfo) => {
-      await startDaily(page);
-      await loseByRepetition(page);
-      await expect(page.locator('#daily-card')).toBeVisible();
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'with the daily result card turned around');
       expect(await cardOverCorner(page), 'turned around, the card is clear of Copy diagnostics').toEqual([]);
@@ -472,10 +465,9 @@ test('on a desktop the cog is top right and the controls form a centred bar at t
 });
 
 // Bug #271: at the end of a daily fight the plate gains the daily, result and score lines, and grew over the board
-// or pushed the button rows onto it. Same check as above, played to the end: a draw by threefold repetition.
+// or pushed the button rows onto it. Same check as above, played to the end: a draw by threefold repetition. The windows
+// 1000 by 720 and 1024 by 600 are in `sizes`: their daily result card test (#196 #271) is this same state, checked there.
 for (const { name, viewport } of [
-  { name: 'a window 1000 by 720', viewport: { width: 1000, height: 720 } },
-  { name: 'a window 1024 by 600', viewport: { width: 1024, height: 600 } },
   { name: 'a tablet held upright', viewport: { width: 768, height: 1024 } },
 ]) {
   test.describe(`${name}, end of a daily fight`, () => {
