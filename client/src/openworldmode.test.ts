@@ -6,6 +6,7 @@ import type { Axial } from './board';
 import { CHUNK, World } from './openworld';
 import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_STEP, twistOf } from './openworldmode';
 import { FightState } from './openworldfight';
+import { BOSS_COLOURS, ICON } from './openworldlairicon';
 import { COLOURS, terrainColour } from './openworldminimap';
 import { SIGHT } from './openworlddiscovered';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
@@ -1952,6 +1953,21 @@ describe('the discovered cells and the map of the Open world (#1411, docs/specs/
     mode(undefined, undefined, undefined, foes).enter(42, 800, 600);
     expect(grass(fills)).toBe(DISC - 1); // the boulder on (0, 1) is the other one
     expect(fills.filter((c) => c === COLOURS.enemy)).toHaveLength(1); // (5, 5) is 10 away, (15, 0) 15
+  });
+
+  it('draws the tower of its boss on each lair (#1438): lair k is boss k counted round the roster, a lair without a roster is a plain tower', () => {
+    const fills = withCanvas();
+    const bytes = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) bytes.set([1, 2, 4], i * 3);
+    const lairs = Int32Array.of(2, 0, 4, 0, 6, 0);
+    const make = (roster?: () => string[]) =>
+      new OpenWorldMode((_s, cx, cy) => (cx === 0 && cy === 0 ? bytes : new Uint8Array()), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, roster);
+    make(() => ['hull', 'echo']).enter(42, 800, 600);
+    expect(fills.filter((c) => c === BOSS_COLOURS.hull)).toHaveLength(2); // lairs 0 and 2
+    expect(fills.filter((c) => c === BOSS_COLOURS.echo)).toHaveLength(1);
+    fills.length = 0;
+    make().enter(42, 800, 600);
+    expect(fills.filter((c) => c === ICON.unknown)).toHaveLength(3);
   });
 
   it('opens no map outside a world', () => {

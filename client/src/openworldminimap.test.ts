@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import type { Terrain } from './openworld';
 import { LOOK, PROPS, WATER } from './openworldview';
+import { BOSS_COLOURS, ICON } from './openworldlairicon';
 import { COLOURS, drawMap, drawMinimap, groundOffset, RADIUS, screenOffset, terrainColour, windowCells, type MinimapData } from './openworldminimap';
 
 // The Open world's minimap (#1410, docs/specs/openworld.md section 8): a 2D canvas drawn from plain data.
@@ -151,12 +152,17 @@ describe('drawMinimap', () => {
     expect(y).toBeLessThan(MIDDLE);
   });
 
-  it('draws a lair in the window, a beaten one in another colour', () => {
+  it('draws a lair in the window as the tower icon of its boss (#1438), a beaten one grey, and the minimap icon is smaller than the map one', () => {
     const { ctx, fills } = fakeContext();
-    drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [5, 0], beaten: false }, { cell: [-5, 0], beaten: true }] }));
-    expect(at(fills, COLOURS.lair)).toHaveLength(1);
-    expect(at(fills, COLOURS.lairBeaten)).toHaveLength(1);
-    expect(COLOURS.lair).not.toBe(COLOURS.lairBeaten);
+    drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [5, 0], beaten: false, boss: 'hull' }, { cell: [-5, 0], beaten: true, boss: 'echo' }] }));
+    expect(at(fills, BOSS_COLOURS.hull!)).toHaveLength(1);
+    expect(at(fills, ICON.done)).toHaveLength(1);
+    expect(at(fills, BOSS_COLOURS.echo!)).toHaveLength(0);
+    const span = (points: number[]): number => Math.max(...points.filter((_, i) => i % 2 === 0)) - Math.min(...points.filter((_, i) => i % 2 === 0));
+    const small = span(at(fills, BOSS_COLOURS.hull!)[0]!.at);
+    const big = fakeContext();
+    drawMap(big.ctx, { width: 400, height: 200, centre: [0, 0], unit: 10, round: false }, data({ lairs: [{ cell: [5, 0], beaten: false, boss: 'hull' }] }));
+    expect(small).toBeLessThan(span(at(big.fills, BOSS_COLOURS.hull!)[0]!.at));
   });
 
   it('draws the teleporters given in the window as hexagons (#1412), none out of it, and rings the one chosen', () => {
@@ -189,16 +195,17 @@ describe('drawMinimap', () => {
 describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, centre and scale', () => {
   const frame = { width: 400, height: 200, centre: [0, 0] as Axial, unit: 10, round: false };
 
-  it('fills the whole rectangle, with no circle, no edge and no arrow: every lair is a diamond where it is', () => {
+  it('fills the whole rectangle, with no circle, no edge and no arrow: every lair is its tower icon where it is', () => {
     const { ctx, log, fills } = fakeContext();
-    drawMap(ctx, frame, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [3, 0], beaten: true }] }));
+    drawMap(ctx, frame, data({ lairs: [{ cell: [200, 0], beaten: false, boss: 'hull' }, { cell: [3, 0], beaten: true, boss: 'hull' }] }));
     expect(log).not.toContain('clip');
     expect(log).not.toContain('stroke');
     expect(at(fills, COLOURS.back)[0]!.at).toEqual([200, 100, 400, 200]);
-    const [far] = at(fills, COLOURS.lair);
-    expect(far!.at).toHaveLength(8); // a diamond: four points, off the canvas
-    expect(far!.at[0]).toBeCloseTo(200 + 200 * 10);
-    expect(at(fills, COLOURS.lairBeaten)).toHaveLength(1);
+    const [far] = at(fills, BOSS_COLOURS.hull!);
+    expect(far!.at.length).toBeGreaterThan(8); // the crenellated tower, off the canvas
+    expect(far!.at[0]).toBeGreaterThan(200 + 200 * 10 - 14);
+    expect(far!.at[0]).toBeLessThan(200 + 200 * 10 + 14);
+    expect(at(fills, ICON.done)).toHaveLength(1);
   });
 
   it('draws every teleporter given where it is, however far', () => {
