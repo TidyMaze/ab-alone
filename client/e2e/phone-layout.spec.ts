@@ -43,7 +43,7 @@ const problems = (page: Page) =>
       const box = el.getBoundingClientRect();
       if (el.id !== 'hud-fold' && meets(box, hud)) found.push(`${name} covers the HUD`); // its own fold button (#957)
       if (!onScreen(box)) found.push(`${name} is off screen`);
-      const sheeted = el.closest('#mode-menu, #daily-card') != null; // #1032: a sheet above the dock may lie over the board's lower cells
+      const sheeted = el.closest('#mode-menu, #daily-card, #lobby-sheet') != null; // #1032 #1488: a sheet above the dock (the open Lobby too) may lie over the board's lower cells
       if (!sheeted) for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
     }
     // The plates let taps through, so they must not lie over a control either, or they hide it.
@@ -60,7 +60,7 @@ const problems = (page: Page) =>
     }
     // #1032: the Game modes sheet and the daily result card are sheets above the thumb dock; an open one may lie over
     // the board's lower cells (spec section 3), so only a cell under the sheet is let through, never off screen.
-    const sheet = (el: Element | null) => el?.closest('#mode-menu, #daily-card') != null;
+    const sheet = (el: Element | null) => el?.closest('#mode-menu, #daily-card, #lobby-sheet') != null;
     for (const c of cells) {
       if (!onScreen(c.disc)) found.push(`${c.name} is off screen`);
       else if (document.elementFromPoint(c.centre.x, c.centre.y)?.tagName !== 'CANVAS' && !sheet(document.elementFromPoint(c.centre.x, c.centre.y))) found.push(`a tap on ${c.name} misses the board`);
@@ -328,10 +328,21 @@ for (const { name, viewport, mobile } of sizes) {
       await openModes(page);
       await page.getByRole('button', { name: 'Play online' }).click();
       await expect(hud).toContainText('Waiting for an opponent');
-      // The invite link sits in the lobby sheet, shut until Lobby opens it: it covers no cell (#1044).
-      await expect(page.getByRole('button', { name: 'Lobby' })).toBeVisible();
-      await expect(page.locator('#invite')).toBeHidden();
+      // The invite link shows in the lobby sheet, open until the opponent connects (#1488, was shut: #1044).
+      const lobby = page.getByRole('button', { name: 'Lobby' });
+      await expect(lobby).toBeVisible();
+      await expect(page.locator('#invite')).toBeVisible();
       await check(page, testInfo, 'waiting for an opponent');
+      // The open sheet leaves a way out: Esc and the Lobby button close it, the board and the HUD stay as they were.
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#invite')).toBeHidden();
+      await check(page, testInfo, 'waiting for an opponent, lobby shut');
+      await lobby.click();
+      await expect(page.locator('#invite')).toBeVisible();
+      await lobby.click();
+      await expect(page.locator('#invite')).toBeHidden();
+      await lobby.click();
+      await expect(page.locator('#invite')).toBeVisible();
 
       // Turning the device around keeps the layout right.
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
