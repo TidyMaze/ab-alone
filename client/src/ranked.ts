@@ -136,6 +136,8 @@ function reportOf(r: Report, other: Report): MatchReport {
 }
 
 const RIVAL_SPREAD = 400;
+/** The rival's rating as listed on the local board: what it signed, within the range ratings can really have. */
+const RATING_RANGE: readonly [number, number] = [0, 3000];
 
 /**
  * Settles a finished 1v1 ranked match from the two signed reports, ours and the opponent's (#1317). Both must agree
@@ -160,7 +162,7 @@ export function settleRanked1v1(
     newRating: elo.ratingA,
     opponentsCount: 1,
   });
-  recordRival(store, theirs.pub, rival, Date.now());
+  recordRival(store, theirs.pub, Math.min(Math.max(theirs.rating, RATING_RANGE[0]), RATING_RANGE[1]), Date.now()); // listed as signed (bounded); only the Elo change uses the 400 spread
   return { profile, delta: elo.deltaA };
 }
 

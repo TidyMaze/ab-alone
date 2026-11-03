@@ -218,9 +218,12 @@ describe('ranked profile and badges (#687)', () => {
     it('keeps the opponent signed rating within 400 of ours: 100000 or -5 is not believed', () => {
       const huge = settleRanked1v1(store, report(1, 1, 1200), report(2, 1, 100_000));
       expect(huge!.delta).toBe(update1v1Elo(1200, 1600, 1).deltaA);
-      expect(loadRivals(store).at(-1)!.rating).toBe(1600);
+      expect(loadRivals(store).at(-1)!.rating).toBe(3000); // listed as signed, within 0..3000
       const tiny = settleRanked1v1(store, report(1, 1, huge!.profile.rating1v1, 'h', 'game2'), report(2, 1, -5, 'h', 'game2'));
       expect(tiny!.delta).toBe(update1v1Elo(huge!.profile.rating1v1, huge!.profile.rating1v1 - 400, 1).deltaA);
+      expect(loadRivals(store).at(-1)!.rating).toBe(0);
+      settleRanked1v1(store, report(1, 1, tiny!.profile.rating1v1, 'h', 'game3'), report(2, 1, 1900, 'h', 'game3'));
+      expect(loadRivals(store).at(-1)!.rating).toBe(1900); // a real strong rival is listed as it is, the Elo uses 400 at most
     });
 
     it('rates nothing when the two reports differ: hash, game, result, same colour, same key, or a rating that is not our stored one', () => {
