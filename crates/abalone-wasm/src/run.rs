@@ -111,7 +111,7 @@ mod tests {
             .find(|(_, n)| n.kind == NodeKind::Elite)
             .expect("seed 5 has an elite");
         let plan = run::foe_plan(5, index, 1, Biome::Meadow);
-        let flat = run_foes(5, index as u32, 1, 0);
+        let flat = run_foes(5, index as u32, 1, 0, None);
         assert_eq!(flat[..3], [i32::from(plan.count), plan.formation as i32, 0]);
         assert_eq!(plan.count, run::FULL_ARMY - 1);
         assert_eq!(flat.len(), 3 + 3 * plan.specials.len());
@@ -123,9 +123,9 @@ mod tests {
 
     #[test]
     fn run_foes_carries_the_biome_and_an_unknown_one_is_the_meadow() {
-        let flat = run_foes(5, 0, 0, 3);
+        let flat = run_foes(5, 0, 0, 3, None);
         assert_eq!(flat[2], 3);
-        assert_eq!(run_foes(5, 0, 0, 99), run_foes(5, 0, 0, 0));
+        assert_eq!(run_foes(5, 0, 0, 99, None), run_foes(5, 0, 0, 0, None));
         let plan = run::foe_plan(5, 0, 0, Biome::Desert);
         assert_eq!(flat[3..].len(), 3 * plan.specials.len());
     }
@@ -135,5 +135,20 @@ mod tests {
         let core = run::exits(7, 2, Biome::Tundra).map(|b| b as u8);
         assert_eq!(run_exits(7, 2, 2), core);
         assert_eq!(run_exits(7, 2, 99), run_exits(7, 2, 0));
+    }
+
+    #[test]
+    fn run_foes_adds_the_ascension_special_marbles() {
+        let core = run::run_map(5);
+        let (index, _) = core
+            .iter()
+            .enumerate()
+            .find(|(_, n)| n.kind == NodeKind::Fight)
+            .expect("seed 5 has a fight");
+        let plain = run_foes(5, index as u32, 0, 0, None);
+        assert_eq!(run_foes(5, index as u32, 0, 0, Some(0)), plain);
+        let more = run_foes(5, index as u32, 0, 0, Some(2));
+        assert_eq!(more.len(), plain.len() + 6);
+        assert_eq!(more[..3], plain[..3]);
     }
 }

@@ -2694,4 +2694,83 @@ mod biomes {
             }
         }
     }
+    #[test]
+    fn ascension_adds_special_marbles_to_a_fight_and_an_elite() {
+        for seed in 0..40 {
+            for (kind, base) in [(NodeKind::Fight, 1), (NodeKind::Elite, 2)] {
+                for act in 0..ACTS {
+                    let Some((i, node)) = node_of(seed, kind, act) else {
+                        continue;
+                    };
+                    let plain = foe_plan(seed, i, 0, Biome::Meadow);
+                    assert_eq!(
+                        foe_plan_with(seed, i, 0, Biome::Meadow, 0),
+                        plain,
+                        "more 0 is the plain plan"
+                    );
+                    for more in 1..=2usize {
+                        let plan = foe_plan_with(seed, i, 0, Biome::Meadow, more as u8);
+                        assert_eq!(
+                            plan.specials.len(),
+                            act + base + more,
+                            "seed {seed} act {act}"
+                        );
+                        assert_eq!((plan.count, plan.formation), (plain.count, node.formation));
+                        assert_eq!(
+                            plan,
+                            foe_plan_with(seed, i, 0, Biome::Meadow, more as u8),
+                            "deterministic"
+                        );
+                        let mut cells: Vec<_> = plan.specials.iter().map(|s| s.0).collect();
+                        assert!(cells
+                            .iter()
+                            .all(|c| plan.formation.cells(plan.count).contains(c)));
+                        cells.sort();
+                        cells.dedup();
+                        assert_eq!(cells.len(), plan.specials.len(), "a marble twice");
+                        assert!(army_game_formed(14, &plan).is_ok());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_extra_special_marbles_of_a_fight_stay_in_the_act_and_an_elite_keeps_its_style() {
+        let (i, _) = node_of(3, NodeKind::Fight, 0).unwrap();
+        let kinds: Vec<_> = foe_plan_with(3, i, 0, Biome::Meadow, 2)
+            .specials
+            .iter()
+            .map(|s| s.1)
+            .collect();
+        assert!(kinds
+            .iter()
+            .all(|k| matches!(k, Special::Heavy | Special::Anchor | Special::Spark)));
+        assert_eq!(kinds.len(), 3); // the act 1 pool is only 3 kinds: no kind twice
+        for seed in 0..120 {
+            let Some((i, node)) = node_of(seed, NodeKind::Elite, 1) else {
+                continue;
+            };
+            let plan = foe_plan_with(seed, i, 0, Biome::Meadow, 2);
+            let expected = match node.elite.unwrap() {
+                Elite::Wall => vec![Special::Anchor],
+                Elite::Brute => vec![Special::Heavy],
+                Elite::Artificer => vec![Special::Spark, Special::Bomb(FUSE)],
+            };
+            assert!(plan.specials.iter().all(|s| expected.contains(&s.1)));
+        }
+    }
+
+    #[test]
+    fn ascension_never_asks_more_special_marbles_than_the_bot_has_marbles() {
+        let (i, _) = node_of(3, NodeKind::Elite, 2).unwrap();
+        let plan = foe_plan_with(3, i, 10, Biome::Meadow, 200);
+        assert_eq!(plan.count, MIN_ARMY);
+        assert_eq!(plan.specials.len(), usize::from(MIN_ARMY));
+        // A node with no foe plan of its own has none to add to.
+        let (boss, _) = node_of(3, NodeKind::Boss, 0).unwrap();
+        assert!(foe_plan_with(3, boss, 0, Biome::Meadow, 2)
+            .specials
+            .is_empty());
+    }
 }

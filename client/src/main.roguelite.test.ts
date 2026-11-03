@@ -1013,5 +1013,46 @@ describe('main.ts, the biome exits between acts (#1472)', () => {
     expect(nodes[path[path.length - 1]!]!.kind).toBe('boss');
     expect(document.body.dataset.boss).toBe(BIOMES[2]!.boss);
     expect(document.body.dataset.biome).toBe('tundra');
+
+// Ascension (#1465, docs/specs/roguelite.md section 18): the level is picked on the start screen next to the commander, a run won
+// at level N unlocks N + 1.
+describe('main.ts, the ascension levels of a run (#1465)', () => {
+  const levels = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-ascension]')];
+
+  it('the start screen picks a level unlocked by an earlier win; it is saved with the run and resumed on reload', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    localStorage.setItem('ab-alone.roguelite.ascension', '7'); // levels 1 to 7 unlocked
+    game.openModes();
+    byId('roguelite').click();
+    expect(levels().map((b) => b.disabled)).toEqual([false, false, false, false, false, false, false, false, true, true, true]);
+    expect(levels()[0]!.getAttribute('aria-pressed')).toBe('true');
+    levels()[6]!.click(); // level 6 starts with 12 marbles
+    expect(line()).toBe('Rogue-lite run · ascension 6 · army 12 marbles · pick a fight');
+    expect(levels()[6]!.getAttribute('aria-pressed')).toBe('true');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(line()).toBe('Rogue-lite run · ascension 6 · army 12 marbles · pick a fight');
+    open()[0]!.click();
+    expect(game.hud()).toContain('ascension 6');
+    localStorage.clear();
+  });
+
+  it('level 3 stands one more special marble on the bot, level 8 two', async () => {
+    const game = await boot('?bot=off');
+    const stand = async (ascension: number): Promise<number> => {
+      await game.hook('__run', { ...pick({ ...newRun(3, 3, LEGACY_UNLOCKED, 10), ascension }, 0) });
+      return document.body.dataset.specials!.split(' ').filter(Boolean).length;
+    };
+    expect([await stand(0), await stand(3), await stand(8)]).toEqual([1, 2, 3]);
+  });
+
+  it('a run won at level 2 unlocks level 3 at once, and says so in its summary', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...plainRun(3, 0), ascension: 2, top: 2, army: 8, path: [0, 2, 6, 9, 10], end: 'won' });
+    expect(localStorage.getItem('ab-alone.roguelite.ascension')).toBe('3');
+    expect([...map().querySelectorAll('.run-help')].map((p) => p.textContent)).toContain('Ascension: 2');
+    expect([...map().querySelectorAll('.run-help')].map((p) => p.textContent).join()).toContain('Ascension 3');
+    localStorage.clear();
   });
 });

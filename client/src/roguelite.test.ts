@@ -7,6 +7,11 @@ import { GLASS, SHELL } from './marbles';
 import {
   ACT_PERCENT,
   actBoss,
+  ASCENSIONS,
+  chooseAscension,
+  MAX_ASCENSION,
+  readAscension,
+  recordAscension,
   actsWon,
   BIOMES,
   biomeOf,
@@ -137,7 +142,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [] });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [] });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -213,7 +218,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'exits', 'exit', 'biomes']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -1909,5 +1914,168 @@ describe('roguelite biomes (#1472)', () => {
     await store.put(RUN_KEY, { ...fresh({ path: [0] }), ...bad });
     expect(await loadRun(store, () => THREE, engine)).toBeNull();
     expect(store.data.has(RUN_KEY)).toBe(false);
+
+// Ascension (#1465, docs/specs/roguelite.md section 18): a run won at level N unlocks level N + 1, each level adds a handicap.
+describe('roguelite ascension', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  // One act: a fight 0 leads to an elite 1, a rest 2 and an event 3, each to the boss 4; a fight 5 opens the next act, a boss 6 ends it.
+  const ACT = parseMap([0, 0, 0, 0, 0b111, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 1, 1, 3, 1, 0, 0, 0, 1, 2, 4, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0]);
+  // One act: a fight 0 leads to a shop 1 and an elite 2, each to the boss 3.
+  const SHOP = parseMap([0, 0, 0, 0, 0b11, 0, 0, 0, 1, 0, 6, 1, 0, 0, 0, 1, 1, 2, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+  const level = (n: number, state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED, 10), ascension: n, ...state });
+  const memory = () => {
+    const data = new Map<string, string>();
+    return { data, getItem: (k: string): string | null => data.get(k) ?? null, setItem: (k: string, v: string): void => void data.set(k, v) };
+  };
+
+  it('lists ten levels, each with a name and a rule', () => {
+    expect(MAX_ASCENSION).toBe(10);
+    expect(ASCENSIONS).toHaveLength(10);
+    expect(ASCENSIONS.every((a) => a.name && a.help)).toBe(true);
+    expect(new Set(ASCENSIONS.map((a) => a.name)).size).toBe(10);
+  });
+
+  it('a new run is at level 0 with the levels unlocked before it', () => {
+    expect(newRun(1, 3, LEGACY_UNLOCKED)).toMatchObject({ ascension: 0, top: 0 });
+    expect(newRun(1, 3, LEGACY_UNLOCKED, 4)).toMatchObject({ ascension: 0, top: 4 });
+  });
+
+  it('the level is picked before the first node, only an unlocked one; level 6 starts with 12 marbles', () => {
+    const run = newRun(1, 3, LEGACY_UNLOCKED, 7);
+    expect(chooseAscension(run, 3)).toEqual({ ...run, ascension: 3 });
+    expect(chooseAscension(run, 6)).toEqual({ ...run, ascension: 6, army: 12 });
+    expect(chooseAscension(chooseAscension(run, 6), 2)).toEqual({ ...run, ascension: 2 }); // the pick is changed: the army is back to 14
+    expect(chooseAscension(chooseAscension(run, 3), 0)).toEqual(run);
+    expect(chooseAscension(run, 8)).toBe(run); // locked
+    expect(chooseAscension(run, 11)).toBe(run);
+    expect(chooseAscension(run, 1.5)).toBe(run);
+    expect(chooseAscension(run, -1)).toBe(run);
+    expect(chooseAscension({ ...run, path: [0] }, 3).ascension).toBe(0); // the run is on
+    expect(chooseAscension({ ...run, end: 'lost' }, 3).ascension).toBe(0);
+  });
+
+  it('level 1: an elite searches 3 times a fight, not 2', () => {
+    expect(fightBudget(ACT, pick({ ...level(0), path: [0] }, 1), 1000)).toBe(2000);
+    expect(fightBudget(ACT, pick({ ...level(1), path: [0] }, 1), 1000)).toBe(3000);
+    expect(fightBudget(ACT, pick(level(1), 0), 1000)).toBe(1000); // a fight
+  });
+
+  it('level 2: a rest brings the army back up to 12 only, and never lowers it', () => {
+    const site = (n: number, army: number): Run => visit(ACT, level(n, { army, path: [0] }), 2);
+    expect(rest(site(1, 6)).army).toBe(14);
+    expect(rest(site(2, 6)).army).toBe(12);
+    expect(rest(site(2, 13)).army).toBe(13);
+    expect(restHtml(site(1, 6))).toContain('Rest: back up to 14 marbles');
+    expect(restHtml(site(2, 6))).toContain('Rest: back up to 12 marbles');
+  });
+
+  it('levels 3 and 8: the bot has 1 then 2 special marbles more', () => {
+    const calls: number[][] = [];
+    const planOf = (node: number, less: number, more: number): number[] => (calls.push([node, less, more]), [10, 0]);
+    for (const n of [0, 2, 3, 7, 8, 10]) foePlan(ACT, pick(level(n), 0), planOf);
+    foePlan(ACT, pick(level(3, { relics: [Relic.Saboteur] }), 0), planOf);
+    expect(calls).toEqual([[0, 0, 0], [0, 0, 0], [0, 0, 1], [0, 0, 1], [0, 0, 2], [0, 0, 2], [0, 1, 1]]);
+  });
+
+  it('level 4: the shop asks a quarter more, the removal too', () => {
+    const shop = (n: number): Run => visit(SHOP, level(n, { path: [0], scrap: 500 }), 1);
+    const plain = shopStock(shop(3)).map((i) => i.price);
+    expect(shopStock(shop(4)).map((i) => i.price)).toEqual(plain.map((p) => Math.round(p * 1.25)));
+    const run = level(0, { army: 9, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    const paid = (n: number): number => 500 - removeSpecial({ ...shop(n), army: 9, specials: run.specials }, 1).scrap;
+    expect(paid(4)).toBe(Math.round(paid(3) * 1.25));
+  });
+
+  it('level 5: a won fight, elite and boss earn 30 % less scrap', () => {
+    const scrap = (n: number, node: number, path: number[]): number => fightOver(SHOP, pick(level(n, { path }), node), true, 0).scrap;
+    expect([scrap(4, 0, []), scrap(4, 2, [0]), scrap(4, 3, [0, 2])]).toEqual([10, 20, 30]);
+    expect([scrap(5, 0, []), scrap(5, 2, [0]), scrap(5, 3, [0, 2])]).toEqual([7, 14, 21]);
+  });
+
+  it('level 7: an act boss plays at a quarter more strength', () => {
+    const ids = ['echo', 'hull', 'anvil'];
+    const boss = (n: number, relics: number[] = []): number => actBoss(ACT, pick(level(n, { path: [0], relics }), 4), ids)!.percent;
+    expect(boss(6)).toBe(50);
+    expect(boss(7)).toBe(63);
+    expect(boss(7, [Relic.Dampener])).toBe(47);
+  });
+
+  it('level 9: a reward offers one choice fewer', () => {
+    const short = { ...level(8, { army: 12 }), reward: true };
+    expect(offers(short)).toHaveLength(3);
+    expect(offers({ ...short, ascension: 9 })).toEqual(offers(short).slice(0, 2));
+    expect(offers({ ...short, ascension: 9, relics: [Relic.LuckyCoin] })).toHaveLength(3);
+  });
+
+  it('level 10: the bot searches a quarter more in fights and elites, not against a boss', () => {
+    expect(fightBudget(ACT, pick(level(9), 0), 1000)).toBe(1000);
+    expect(fightBudget(ACT, pick(level(10), 0), 1000)).toBe(1250);
+    expect(fightBudget(ACT, pick(level(10, { path: [0] }), 1), 1000)).toBe(3750);
+    expect(fightBudget(ACT, pick(level(10, { path: [0], relics: [Relic.Jammer] }), 1), 1000)).toBe(2813);
+    expect(fightBudget(ACT, pick(level(10, { path: [0] }), 4), 1000)).toBe(1000);
+  });
+
+  it('a run won at level N unlocks level N + 1, up to 10, never lowers it', () => {
+    const kept = memory();
+    expect(readAscension(kept)).toBe(0);
+    recordAscension(kept, level(0, { end: 'lost' }));
+    recordAscension(kept, level(3));
+    expect(readAscension(kept)).toBe(0);
+    recordAscension(kept, level(0, { end: 'won' }));
+    expect(readAscension(kept)).toBe(1);
+    recordAscension(kept, level(0, { end: 'won' })); // a lower level won later
+    expect(readAscension(kept)).toBe(1);
+    recordAscension(kept, level(4, { end: 'won' }));
+    expect(readAscension(kept)).toBe(5);
+    recordAscension(kept, level(10, { end: 'won' }));
+    expect(readAscension(kept)).toBe(10);
+    kept.data.set('ab-alone.roguelite.ascension', '11');
+    expect(readAscension(kept)).toBe(0); // not a level
+    kept.data.set('ab-alone.roguelite.ascension', 'x');
+    expect(readAscension(kept)).toBe(0);
+  });
+
+  it('the summary and the run line name the level, and a win at the top level says what it unlocked', () => {
+    expect(runLine(ACT, level(0))).toBe('Rogue-lite run · army 14 marbles · pick a fight');
+    expect(runLine(ACT, level(3))).toBe('Rogue-lite run · ascension 3 · army 14 marbles · pick a fight');
+    expect(runLine(ACT, pick(level(3), 0))).toBe('Rogue-lite run · ascension 3 · act 1 fight · army 14 marbles');
+    const helps = (run: Run): (string | null)[] => [...parse(mapHtml(ACT, run)).querySelectorAll('.run-help')].map((p) => p.textContent);
+    const over = { path: [0, 1, 4], end: 'lost' as const, top: 3, ascension: 3 };
+    expect(helps(level(3, over))).toContain('Ascension: 3');
+    expect(helps(level(0, { ...over, ascension: 0 }))).not.toContain('Ascension: 0');
+    expect(earned(ACT, level(3, { ...over, end: 'won' }))).toContain('Ascension 4');
+    expect(earned(ACT, level(2, { ...over, end: 'won' }))).not.toContain('Ascension 3'); // unlocked before
+    expect(earned(ACT, level(3, over))).not.toContain('Ascension 4'); // lost
+    expect(earned(ACT, level(10, { ...over, top: 10, ascension: 10, end: 'won' }))).not.toContain('Ascension 11');
+  });
+
+  it('draws the picker on the start screen: a button per level, the locked ones off, the picked one pressed with its rule', () => {
+    const start = (n: number, top: number): Document => parse(mapHtml(ACT, chooseAscension(newRun(1, 3, LEGACY_UNLOCKED, top), n)));
+    const doc = start(2, 3);
+    const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-ascension]')];
+    expect(buttons.map((b) => b.dataset.ascension)).toEqual(Array.from({ length: 11 }, (_, n) => String(n)));
+    expect(buttons.map((b) => b.disabled)).toEqual([false, false, false, false, true, true, true, true, true, true, true]);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true', ...Array<string>(8).fill('false')]);
+    expect(buttons.map((b) => b.textContent).slice(0, 3)).toEqual(['0', '1', '2']);
+    expect(doc.body.textContent).toContain(`Ascension 2: ${ASCENSIONS[1]!.name}`);
+    expect(doc.body.textContent).toContain(ASCENSIONS[1]!.help);
+    expect(start(0, 0).body.textContent).toContain('Ascension: win a run to unlock the first level');
+    expect(parse(mapHtml(ACT, { ...newRun(1, 3, LEGACY_UNLOCKED, 3), path: [0] })).querySelector('button[data-ascension]')).toBeNull(); // the run is on
+  });
+
+  it('saves the level with the run, and a run saved before loads at level 0', async () => {
+    const saved = memoryStore();
+    const run = chooseAscension(newRun(1, 3, LEGACY_UNLOCKED, 7), 6);
+    await saveRun(saved, run);
+    expect((await loadRun(saved, () => ACT, engine))!.state).toEqual(run);
+    const older: Record<string, unknown> = { ...run };
+    delete older.ascension;
+    delete older.top;
+    await saved.put(RUN_KEY, older);
+    expect((await loadRun(saved, () => ACT, engine))!.state).toMatchObject({ ascension: 0, top: 0 });
+    for (const bad of [{ ascension: 11 }, { ascension: -1 }, { ascension: 1.5 }, { top: 11 }, { top: 'x' }]) {
+      await saved.put(RUN_KEY, { ...run, ...bad });
+      expect(await loadRun(saved, () => ACT, engine)).toBeNull();
+    }
   });
 });
