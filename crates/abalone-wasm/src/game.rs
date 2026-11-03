@@ -4,6 +4,7 @@ use crate::convert::{
     board_bytes, decode, decode_tactic, draw_reason_code, encode, player, side_code, special,
     special_code, status_code, MOVE_STRIDE,
 };
+use abalone_core::board::Special;
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
 use abalone_core::run::{
@@ -99,6 +100,20 @@ impl Engine {
             .specials()
             .iter()
             .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))])
+            .collect()
+    }
+
+    /// The fuses of the Bombs, records of 3 integers `[q, r, turns]`, see the module docs.
+    pub fn fuses(&self) -> Vec<i32> {
+        self.game
+            .board()
+            .specials()
+            .iter()
+            .filter_map(|&((q, r), kind)| match kind {
+                Special::Bomb(turns) => Some([q, r, i32::from(turns)]),
+                _ => None,
+            })
+            .flatten()
             .collect()
     }
 

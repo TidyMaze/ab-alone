@@ -185,6 +185,7 @@ import { coopStatus, duelStatus, onlineStatus, type OnlineStatus } from './prese
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
+import { fuseDigit, fuseNote, parseFuses } from './specialcues';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
@@ -2162,6 +2163,12 @@ const plusGlyph = new THREE.ShapeGeometry(new THREE.Shape(PLUS_POINTS.map(([x, y
   glyphTilt - Math.PI / 2,
 );
 const plusInk = new THREE.MeshBasicMaterial({ color: PLUS_INK, side: THREE.DoubleSide });
+// The turns a Bomb's fuse has left (#1490), 3 to 1, in the same ink over its glyph: seven bar digits, not a font.
+const fuseGlyphs = [1, 2, 3].map((turns) =>
+  new THREE.ShapeGeometry(
+    fuseDigit(turns).map(([x, y, w, h]) => new THREE.Shape([[x, y], [x + w, y], [x + w, y + h], [x, y + h]].map(([vx, vy]) => new THREE.Vector2(vx! * 0.22, vy! * 0.22)))),
+  ).rotateX(glyphTilt - Math.PI / 2),
+);
 // The breach (#503): a cracked arena cell glows in the hazard colour under the Hull's crack decal and ticks.
 const breachTint = new THREE.Color(); // the look's tint of the glow, mixed in by `neonTell.breachMix`
 const breachGeometry = neonLook ? neonBreachGeometry() : crackGeometry; // a hexagon wider than the cell with the look: one band
@@ -3465,7 +3472,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${run && !(engine instanceof Encounter) ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3950,12 +3957,20 @@ function refresh(): void {
   }
   // The special marbles of a rogue-lite fight (#961): each type's glyph in its colour on the marble.
   const specials = run && !(engine instanceof Encounter) ? parseSpecials(engine.specials()) : [];
+  const fuses = run && !(engine instanceof Encounter) ? parseFuses(engine.fuses()) : [];
   for (const { cell, kind } of specials) {
     const p = axialTo3D(...cell);
     const glyph = Object.assign(new THREE.Mesh(specialGlyphs[kind - 1]!, specialInks[kind - 1]!), { name: 'special-mark' });
     glyph.position.set(p.x, 0.36, p.z).add(glyphLift);
     marbles.add(glyph);
     onMarble(cellIndex(...cell), glyph);
+    const fuse = fuses.find((f) => f.cell[0] === cell[0] && f.cell[1] === cell[1]);
+    if (fuse) {
+      const digit = Object.assign(new THREE.Mesh(fuseGlyphs[fuse.turns - 1]!, plusInk), { name: 'bomb-fuse' });
+      digit.position.copy(glyph.position).addScaledVector(glyphLift, 0.01); // just over the glyph
+      marbles.add(digit);
+      onMarble(cellIndex(...cell), digit);
+    }
     if (!SPECIAL_LOOKS[kind - 1]!.plus) continue;
     const plus = Object.assign(new THREE.Mesh(plusGlyph, plusInk), { name: 'special-plus' });
     plus.position.copy(glyph.position).addScaledVector(glyphLift, 0.01); // just over the glyph
@@ -3963,6 +3978,7 @@ function refresh(): void {
     onMarble(cellIndex(...cell), plus);
   }
   document.body.dataset.specials = specials.map((s) => `${s.cell},${s.kind}`).join(' '); // read by the e2e tests
+  document.body.dataset.fuses = fuses.map((f) => `${f.cell},${f.turns}`).join(' '); // read by the e2e tests
 
   if (martyr) {
     const p = axialTo3D(martyr[0], martyr[1]);

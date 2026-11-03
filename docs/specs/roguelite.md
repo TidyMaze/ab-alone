@@ -395,8 +395,12 @@ Bomb's fuse is part of its mark, so it is part of the position too.
   dealt by the run seed and the node as before. A run saved before this change (3 or 6 special counts) loads with
   none of the new four. Rewards, events and shop items waiting in such a save are dealt from the larger pool, so
   they may show other offers than before the update.
-- **Not in this slice**: no upgraded form of the new four, no fuse counter on the Bomb, and no ring or slide drawn
-  for a Bomb's burst, a Magnet's pull or a Medic's return (the marbles are on their new cell when the ply is over).
+- **The Bomb's fuse** (#1490): the turns of its side left (3 at the start) are drawn on its glyph as a digit in the
+  shell's ink (3:1 on the pink, seven bars, not a font), and the HUD line of the fight says it (`Bomb: 2 turns left`,
+  `Bombs: 3, 1 turns left`). The bridge's `Engine.fuses()` gives them (`[q, r, turns]` per Bomb); the page never counts
+  turns itself.
+- **Not in this slice**: no upgraded form of the new four, and no ring or slide drawn for a Bomb's burst, a Magnet's
+  pull or a Medic's return (the marbles are on their new cell when the ply is over).
 
 ## 14. Varied enemy armies (#1462)
 
