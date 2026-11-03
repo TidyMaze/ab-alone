@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { inviteLink, openModes } from './modes';
+import { inviteLink, lowTierPages, openModes } from './modes';
 
 // Two isolated browser contexts. The transport is the ?net=hook test hook: the test relays records
 // from one page to the other, so no public Nostr relay is involved.
@@ -15,7 +15,10 @@ const cell = async (page: Page, q: number, r: number) => {
 // click. The setup plies of a test use it, so each test pays the mouse path once, on its last ply.
 const play = (page: Page, q: number, r: number) => page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [q, r]);
 // Reduced motion on pages whose test checks no animation: slides and ejection effects take no time.
-const calm = (...pages: Page[]) => Promise.all(pages.map((p) => p.emulateMedia({ reducedMotion: 'reduce' })));
+const calm = async (...pages: Page[]) => {
+  await lowTierPages(...pages); // on CI: the runner's software GL draws the low tier ten times faster
+  await Promise.all(pages.map((p) => p.emulateMedia({ reducedMotion: 'reduce' })));
+};
 const plies =(page: Page) => page.evaluate(() => (window as any).__plies());
 // Seating is a Hello round trip after the connection opens: wait for it before the first move. A page that just
 // loaded can block its main thread for seconds on a loaded machine (one long task of 4 to 10 s seen, bug #554),
@@ -580,6 +583,7 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const rest = [b, c];
   await calm(a, b, c);
+  await Promise.all(rest.map((p) => p.clock.install())); // the missing heartbeats are counted on the page clock, moved by hand below
   await room({ a, b, c });
   await a.goto('./?bot=off&net=hook&beat=1200');
   await a.locator('canvas').waitFor();
@@ -600,6 +604,7 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   for (const page of [a, ...rest]) await expect(page.locator('body')).toHaveAttribute('data-coordinator', '1');
 
   await a.context().close(); // no __netLeave anywhere
+  for (let beat = 0; beat < 6; beat++) for (const page of rest) await page.clock.fastForward(1200); // the heartbeats a closed tab no longer sends
   for (const page of rest) await expect(page.locator('body')).toHaveAttribute('data-coordinator', '2');
   await expect(b.locator('body')).toHaveAttribute('data-handover', 'done'); // the spectator acknowledged it
   for (const page of rest) await page.context().close();
