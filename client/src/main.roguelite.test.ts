@@ -1005,12 +1005,12 @@ describe('main.ts, the scroll of power between acts (#1471)', () => {
     expect(document.body.dataset.run).toBe('scroll');
     scrolls()[2]!.click();
     expect(document.body.dataset.run).toBe('map');
-    expect(chips()).toEqual(['Chaos 1: Spark and Bomb bursts push 1 cell further']);
+    expect(chips()).toEqual(['Chaos 1: the burst of a Spark or a Bomb pushes 1 cell further']);
     expect(document.querySelector('#hud .relics')!.nextElementSibling!.classList.contains('affinities')).toBe(true);
     expect(open().length).toBeGreaterThanOrEqual(2); // the first row of act 2
     await game.settle();
     await boot('?bot=off', { indexedDB }); // and keeps the affinity
-    expect(chips()).toEqual(['Chaos 1: Spark and Bomb bursts push 1 cell further']);
+    expect(chips()).toEqual(['Chaos 1: the burst of a Spark or a Bomb pushes 1 cell further']);
   });
 
   it('comes before the Collector', async () => {

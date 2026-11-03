@@ -345,7 +345,10 @@ import {
   resolve,
   rest,
   restHtml,
+  affinityBarHtml,
   relicBarHtml,
+  scrollHtml,
+  takeScroll,
   relicHtml,
   relicMask,
   removeSpecial,
@@ -3527,6 +3530,7 @@ function drawHud(extra = ''): void {
   });
   if (run) {
     document.getElementById('hud')!.insertAdjacentHTML('beforeend', relicBarHtml(run.state)); // the relic bar (#1457)
+    document.getElementById('hud')!.insertAdjacentHTML('beforeend', affinityBarHtml(run.state)); // and the affinities (#1471)
     // The tactic bar (#1460): in the army's fights only, none enabled during the placement or a replay.
     if (run.state.fighting && engine instanceof Engine) {
       const mask = placing(run.state) || replaying !== null ? 0 : engine.tactics();
@@ -5843,18 +5847,20 @@ function showRun(): void {
           ? restHtml(state)
           : state.shop
             ? shopHtml(state)
-            : state.collector
-              ? collectorHtml(state)
-              : state.exit
-                ? exitHtml(map, state, exitsFor(state), boss_name)
-                : placed
-              ? placeHtml(state, armed)
-              : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))));
+            : state.scroll
+              ? scrollHtml(map, state)
+              : state.collector
+                ? collectorHtml(state)
+                : state.exit
+                  ? exitHtml(map, state, exitsFor(state), boss_name)
+                  : placed
+                    ? placeHtml(state, armed)
+                    : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))));
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
   const next = runPanel.querySelector('button.node:not(:disabled)'); // after a pick the map scrolls to the nodes to pick, in the middle of the plate (#1468); before the first the commanders stay in view
   if (next && state.path.length) runPanel.scrollTop += next.getBoundingClientRect().top - runPanel.getBoundingClientRect().top - runPanel.clientHeight / 2;
-  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.collector ? 'collector' : state.exit ? 'exit' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.scroll ? 'scroll' : state.collector ? 'collector' : state.exit ? 'exit' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
   const biome = currentBiome(map, state); // the tint of the map and the board (#1472); the Meadow has none
   if (biome) document.body.dataset.biome = BIOMES[biome]!.id;
@@ -5969,6 +5975,10 @@ runPanel.addEventListener('click', (e) => {
   if (button?.id === 'run-new') beginRun();
   else if (button?.dataset.key) {
     run!.state = takeKey(run!.map, run!.state, Number(button.dataset.key));
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.scroll) {
+    run!.state = takeScroll(run!.state, Number(button.dataset.scroll));
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.relic) {

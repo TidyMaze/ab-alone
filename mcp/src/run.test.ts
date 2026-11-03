@@ -555,7 +555,7 @@ describe('the screens that wait for a choice', () => {
     expect(state.options!.map((o) => o.text)).toEqual([
       'Force 1 (Heavy, Heavy+): Heavy and Heavy+ weigh 1 more in a push',
       'Tactics 1 (Anchor, Anchor+, Shield): the Anchor keeps the marble in front of it on the board, like an Anchor+',
-      'Chaos 1 (Spark, Spark+, Bomb): Spark and Bomb bursts push 1 cell further',
+      'Chaos 1 (Spark, Spark+, Bomb): the burst of a Spark or a Bomb pushes 1 cell further',
     ]);
     expect(state.options!.every((o) => o.ok)).toBe(true);
     expect(failure(run.pick({ node: 0 })).code).toBe('not_now');

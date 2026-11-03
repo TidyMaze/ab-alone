@@ -77,7 +77,9 @@ export interface MapNode {
  * won with no marble lost (#1466), the score's; `daily` is the UTC day of a daily run, '' for any other, and a run saved before has
  * neither. `keys` are the codes of the keys it took, in order (#1467): with the three, an act 4 follows act 3; a run saved before has none.
  * `curse` is the fights left of a cursed chest's curse (#1474): while it is above 0, each marble lost in a fight costs 2; a run saved before has none.
- * `flasks` are the charges it can drink on the map (#1475): FLASKS at the start, refilled at each act; a run saved before has FLASKS. */
+ * `flasks` are the charges it can drink on the map (#1475): FLASKS at the start, refilled at each act; a run saved before has FLASKS.
+ * `affinities` are the levels of Force, Tactics and Chaos (#1471, docs/specs/roguelite.md section 23), 0 to MAX_AFFINITY, and `scroll` is on
+ * while the choice of the scroll that grows one waits after an act boss; a run saved before has no affinity. */
 export interface Run {
   seed: number;
   army: number;
@@ -116,6 +118,8 @@ export interface Run {
   keys: number[];
   curse: number;
   flasks: number;
+  affinities: number[];
+  scroll: boolean;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -140,6 +144,21 @@ export const Relic = {
   StaticShroud: 14,
   BossBreaker: 15,
 } as const;
+/** The affinities (#1471, docs/specs/roguelite.md section 23) by their code on the bridge (crates/abalone-core run::Affinity): their name, the
+ * special marbles they grow, the rule each level adds on the army's marbles in the engine, and their glyph, a line drawing on the 24 grid. */
+export const AFFINITIES: readonly { name: string; kinds: string; levels: readonly string[]; icon: string }[] = [
+  { name: 'Force', kinds: 'Heavy, Heavy+', levels: ['Heavy and Heavy+ weigh 1 more in a push', 'Heavy and Heavy+ weigh 2 more in a push'], icon: 'M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10' },
+  {
+    name: 'Tactics',
+    kinds: 'Anchor, Anchor+, Shield',
+    levels: ['the Anchor keeps the marble in front of it on the board, like an Anchor+', 'Anchor, Anchor+ and Shield weigh 1 more in a push'],
+    icon: 'M12 4a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M9.5 12h5M10 12c0 3-2 4-2 7h8c0-3-2-4-2-7',
+  },
+  { name: 'Chaos', kinds: 'Spark, Spark+, Bomb', levels: ['the burst of a Spark or a Bomb pushes 1 cell further', 'the Bomb burns two turns of its fuse per turn'], icon: 'M13 3L5 14h6l-1 7 8-11h-6z' },
+];
+/** The highest level of an affinity. */
+export const MAX_AFFINITY = 2;
+
 /** The first boss relic's code (#1467): the codes from here on are offered after an act boss, one of its 3 relics, and are never
  * dealt by a treasure, an elite, an event or a shop. */
 const BOSS_RELICS = 12;
@@ -163,8 +182,9 @@ export const RELICS: readonly { name: string; help: string; icon: string }[] = [
   { name: 'Boss breaker', help: 'act bosses play at half their strength, but the bot searches 25 % more positions in fights and elites', icon: 'M4 18l2-10 4 4 2-6 2 6 4-4 2 10zM4 21h16' },
 ];
 const has = (run: Run, relic: number): boolean => run.relics.includes(relic);
-/** The run's relics as the bridge's bit mask (Engine.set_relics): the engine plays the Gyroscope and the Detonator. */
-export const relicMask = (run: Run): number => run.relics.reduce((mask, r) => mask | (1 << r), 0);
+/** The run's relics and affinities as the bridge's bit mask (Engine.set_relics): the engine plays the Gyroscope and the Detonator, and from bit 16
+ * the level of each affinity on 2 bits (#1471). */
+export const relicMask = (run: Run): number => run.relics.reduce((mask, r) => mask | (1 << r), 0) | run.affinities.reduce((mask, level, k) => mask | (level << (16 + 2 * k)), 0);
 /** The relics the run does not hold yet and its pools hold (#1470), by code: no relic twice in a run. */
 const unheld = (run: Run): number[] => RELICS.slice(0, BOSS_RELICS).flatMap((_, code) => (has(run, code) || !isOn(run, 'relic', code) ? [] : [code]));
 /** The boss relics the run does not hold yet (#1467), by code. */
@@ -359,6 +379,8 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   keys: [],
   curse: 0,
   flasks: FLASKS,
+  affinities: [0, 0, 0],
+  scroll: false,
 });
 
 /** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
@@ -418,7 +440,7 @@ export const choices = (map: MapNode[], run: Run): number[] => (waiting(run) ? [
 
 /** Whether the run waits for more than the map: a fight, the end, or the screen of a reward, an event, a relic, a rest, a shop,
  * the Collector or an exit. */
-const waiting = (run: Run): boolean => run.fighting || run.reward || run.event || run.relic || run.rest || run.shop || run.collector || run.exit || run.end !== '';
+const waiting = (run: Run): boolean => run.fighting || run.reward || run.event || run.relic || run.rest || run.shop || run.scroll || run.collector || run.exit || run.end !== '';
 
 /** The flask charges a run starts an act with (#1475), the marbles one gives back, and the most charges it can hold. */
 export const FLASKS = 2;
@@ -790,13 +812,27 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const found = earns && tier !== 'fight' && node.act < final ? dropOf(run) : -1; // no Collector follows the last act
   const carried = found < 0 ? run.carried : [...run.carried, found];
   const collector = earns && tier === 'boss' && node.act < final && carried.length > 0;
+  const scroll = earns && tier === 'boss' && node.act < final && growable(run).length > 0; // the scroll of the act's end (#1471)
   const exit = run.exits && earns && tier === 'boss' && node.act < Math.min(final, FINAL_ACT - 1); // the exits wait after the Collector (#1472); none leads to the fourth act
   const emerald = end === '' && node.kind === 'elite' && bearsKey(map, run, run.path[run.path.length - 1]!); // the marked elite fell (#1467)
   const keys = emerald ? [...run.keys, Key.Emerald] : run.keys;
   const told = emerald ? `${KEYS[Key.Emerald]!.name} key taken, ${keysLeft(keys.length)}` : run.told;
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit, keys, told, flawless: run.flawless + Number(won && lost === 0), curse: Math.max(0, run.curse - 1) };
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, scroll, exit, keys, told, flawless: run.flawless + Number(won && lost === 0), curse: Math.max(0, run.curse - 1) };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
+}
+
+/** The affinities still below their top level, by code. */
+const growable = (run: Run): number[] => AFFINITIES.flatMap((_, k) => (run.affinities[k]! < MAX_AFFINITY ? [k] : []));
+
+/** The scrolls a waiting offer holds (#1471, docs/specs/roguelite.md section 23): one per affinity below its top level, by code, the
+ * same on every run. */
+export const scrollOffers = (run: Run): number[] => (run.scroll ? growable(run) : []);
+
+/** The run once the scroll of affinity `affinity` is taken: that affinity is a level higher, the offer is closed. Unchanged when it is not
+ * offered. */
+export function takeScroll(run: Run, affinity: number): Run {
+  return scrollOffers(run).includes(affinity) ? { ...run, affinities: run.affinities.map((n, k) => n + Number(k === affinity)), scroll: false } : run;
 }
 
 /** The blueprint a won elite or act boss drops at the run's last node (#1470): one the run's pools do not hold, that it does
@@ -1258,6 +1294,32 @@ function dropHtml(map: MapNode[], run: Run): string {
     : '';
 }
 
+/** The scroll screen at the end of an act (#1471): a button per scroll with the next level of its affinity, the special marbles it grows and
+ * the rule that level adds, each with the affinity's glyph. */
+export function scrollHtml(map: MapNode[], run: Run): string {
+  const buttons = scrollOffers(run).map((k) => {
+    const a = AFFINITIES[k]!;
+    const level = run.affinities[k]! + 1;
+    return `<button type="button" data-scroll="${k}">${lineGlyph(a.icon)}${a.name} ${level} (${a.kinds}): ${a.levels[level - 1]!}</button>`;
+  });
+  return (
+    `<p class="run-line">Act ${lastNode(map, run)!.act + 1} done · pick a scroll of power</p>` +
+    '<p class="run-help">Each level of an affinity adds a rule to your special marbles of its family, in every fight to come.</p>' +
+    `<div class="run-kinds">${buttons.join('')}</div>`
+  );
+}
+
+/** The affinity bar (#1471), in the HUD next to the relic bar: a glyph and the level per affinity grown, its name and rule as its tooltip;
+ * nothing before the first scroll. */
+export function affinityBarHtml(run: Run): string {
+  const chips = AFFINITIES.flatMap((a, k) => {
+    const level = run.affinities[k]!;
+    const text = `${a.name} ${level}: ${a.levels[level - 1]!}`;
+    return level ? [`<span class="affinity" role="img" tabindex="0" title="${text}" aria-label="${text}">${lineGlyph(a.icon)}${level}</span>`] : [];
+  });
+  return chips.length ? `<div class="affinities" role="group" aria-label="Affinities">${chips.join('')}</div>` : '';
+}
+
 /** The Collector's room between two acts (#1470): a button per blueprint carried with its cost in cells (disabled when the
  * cells fall short), what this run banked, and Leave. */
 export function collectorHtml(run: Run): string {
@@ -1432,7 +1494,7 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1485,9 +1547,13 @@ function decodeRun(raw: unknown): Run | null {
     Array.isArray(keys) &&
     keys.every((k, i) => isInt(k, KEYS.length - 1) && keys.indexOf(k) === i) &&
     isInt(curse, CURSE_FIGHTS) &&
-    isInt(flasks, MAX_FLASKS);
+    isInt(flasks, MAX_FLASKS) &&
+    typeof scroll === 'boolean' &&
+    Array.isArray(affinities) &&
+    affinities.length === AFFINITIES.length &&
+    affinities.every((level) => isInt(level, MAX_AFFINITY));
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll }
     : null;
 }
 

@@ -1674,7 +1674,7 @@ describe('roguelite Collector (#1470)', () => {
   it('the map waits at the Collector', () => {
     const room = won([0, 1, 2], { reward: false });
     expect(choices(TWO, { ...room, reward: false, relic: false })).toEqual([]);
-    expect(choices(TWO, { ...room, reward: false, relic: false, collector: false })).toEqual([3]);
+    expect(choices(TWO, { ...room, reward: false, relic: false, scroll: false, collector: false })).toEqual([3]);
   });
 
   it('banks a carried blueprint for cells, for good, leaving this run\'s pools as they were', () => {
@@ -1837,8 +1837,8 @@ describe('roguelite biomes (#1472)', () => {
 
   it('the map waits at the exits, and goes on to the next act once one is picked', () => {
     const waiting = won([0, 1], { reward: false });
-    expect(choices(THREE, { ...waiting, reward: false, relic: false, collector: false })).toEqual([]);
-    expect(choices(THREE, { ...waiting, reward: false, relic: false, collector: false, exit: false })).toEqual([2]);
+    expect(choices(THREE, { ...waiting, reward: false, relic: false, scroll: false, collector: false })).toEqual([]);
+    expect(choices(THREE, { ...waiting, reward: false, relic: false, scroll: false, collector: false, exit: false })).toEqual([2]);
   });
 
   it('the exits are the bridge\'s for the next act, from the biome the run is in', () => {
@@ -2425,8 +2425,9 @@ describe('roguelite scrolls of power (#1471)', () => {
 
   it('the map waits for the scroll', () => {
     const room = won([0, 1, 2], { reward: false });
-    expect(choices(TWO, { ...room, reward: false, relic: false })).toEqual([]);
-    expect(choices(TWO, { ...room, reward: false, relic: false, scroll: false })).toEqual([3]);
+    const clear = { ...room, reward: false, relic: false, collector: false };
+    expect(choices(TWO, clear)).toEqual([]);
+    expect(choices(TWO, { ...clear, scroll: false })).toEqual([3]);
   });
 
   it('the engine gets the levels with the relics, 2 bits each from bit 16', () => {
@@ -2436,15 +2437,15 @@ describe('roguelite scrolls of power (#1471)', () => {
   });
 
   it('the scroll screen: a button per scroll with the rule of the next level, the kinds it grows and its glyph', () => {
-    const doc = parse(scrollHtml(fresh({ scroll: true, affinities: [1, 0, 0], path: [0, 1, 2] })));
+    const doc = parse(scrollHtml(TWO, fresh({ scroll: true, affinities: [1, 0, 0], path: [0, 1, 2] })));
     expect(doc.querySelector('.run-line')!.textContent).toBe('Act 1 done · pick a scroll of power');
     const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-scroll]')];
     expect(buttons.map((b) => b.dataset.scroll)).toEqual(['0', '1', '2']);
     expect(buttons[0]!.textContent).toBe('Force 2 (Heavy, Heavy+): Heavy and Heavy+ weigh 2 more in a push');
     expect(buttons[1]!.textContent).toBe('Tactics 1 (Anchor, Anchor+, Shield): the Anchor keeps the marble in front of it on the board, like an Anchor+');
-    expect(buttons[2]!.textContent).toBe('Chaos 1 (Spark, Spark+, Bomb): Spark and Bomb bursts push 1 cell further');
+    expect(buttons[2]!.textContent).toBe('Chaos 1 (Spark, Spark+, Bomb): the burst of a Spark or a Bomb pushes 1 cell further');
     expect(buttons.every((b) => b.querySelector('svg') !== null)).toBe(true);
-    const topped = parse(scrollHtml(fresh({ scroll: true, affinities: [2, 0, 2] })));
+    const topped = parse(scrollHtml(TWO, fresh({ scroll: true, affinities: [2, 0, 2], path: [0, 1, 2] })));
     expect([...topped.querySelectorAll<HTMLButtonElement>('button[data-scroll]')].map((b) => b.dataset.scroll)).toEqual(['1']);
   });
 
@@ -2455,7 +2456,7 @@ describe('roguelite scrolls of power (#1471)', () => {
     expect(chips.map((c) => c.textContent)).toEqual(['2', '1']);
     expect(chips.map((c) => c.title)).toEqual([
       'Force 2: Heavy and Heavy+ weigh 2 more in a push',
-      'Chaos 1: Spark and Bomb bursts push 1 cell further',
+      'Chaos 1: the burst of a Spark or a Bomb pushes 1 cell further',
     ]);
     expect(chips[0]!.getAttribute('aria-label')).toBe(chips[0]!.title);
     expect(chips[0]!.querySelector('svg')).not.toBeNull();

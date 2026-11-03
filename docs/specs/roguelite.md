@@ -792,6 +792,42 @@ Slay the Spire's boss relics and its three keys: the end of a won run holds one 
   the Mending core are the player's edge for the fights, paid for later, and the Boss breaker is the player's edge against the
   bosses, paid for in every fight.
 
+## 23. Scrolls of power and affinities (#1471)
+
+Dead Cells' scrolls let a run specialise: at the end of each act the player grows one family of special marbles. Only variety
+carries between runs (Decision #934): nothing here is kept after the run.
+
+- **Three affinities**, codes 0 to 2 on the bridge (`Affinity`), each a family of the special marbles of sections 5, 10 and 13, with
+  two levels (`MAX_AFFINITY`). A level adds one rule, stated here and on the screens; level 2 holds the rule of level 1.
+
+  | Code | Affinity | Special marbles | Level 1 | Level 2 |
+  |---|---|---|---|---|
+  | 0 | Force | Heavy, Heavy+ | they weigh 1 more in a push | they weigh 2 more in a push |
+  | 1 | Tactics | Anchor, Anchor+, Shield | the Anchor keeps the marble in front of it on the board in a pushed line, like an Anchor+ | the Anchor, Anchor+ and Shield weigh 1 more in a push |
+  | 2 | Chaos | Spark, Spark+, Bomb | a Spark's and a Bomb's burst pushes 1 cell further | the Bomb burns two turns of its fuse per turn |
+
+  The bonuses are the **army's** (Black) alone: the bot's Heavy, Anchor, Spark and the like play as in section 5 and 13. A marble that
+  weighs more weighs more on both sides of a push, attacking or defending. Chaos 1 stacks with the Detonator (section 9): a Spark
+  with both bursts 3 cells, a Spark+ 4. With Chaos 2 a Bomb of fuse 3 bursts at the end of the army's second turn, not the third.
+- **The scroll**: after an act boss beaten that is not the last of the run (acts 1 and 2, act 3 too when the three keys of section 22
+  open act 4), a screen "Act N done · pick a scroll of power" offers one scroll per affinity below its top level (up to 3, the same
+  on every run, so a reload offers the same). Picking one raises that affinity by one level and the map goes on. A run that took
+  every level (6 scrolls, which a run cannot reach) gets no screen. The order of the screens at an act's end: the boss's relic
+  and reward, then the **scroll**, then the Collector (section 15), then the exit (section 18). The scroll is its own screen: it is not
+  part of anything an act's start refills.
+- **On the map**: the affinity bar, next to the relic bar in the HUD of the map and of the fights: a glyph and the level per affinity
+  grown, its name and the rule of its level as its tooltip (and under the glyph on focus). Nothing before the first scroll.
+- **In the engine and the bridge**: `Board::set_affinities` gives the army its three levels before the first move (rogue-lite
+  boards only, each capped at `MAX_AFFINITY`); they are part of the position's hash. `Engine::set_relics(mask)` carries them from
+  bit 16: the level of Force, Tactics and Chaos on 2 bits each, so every path that sets the relics (the page, the bot's worker,
+  the MCP server) sets the affinities, and the bot's search plays them like any rule. `engine_version` is unchanged.
+- **Saving**: `affinities` (three levels) and `scroll` (the screen waiting) are saved with the run. A run saved before them has no
+  affinity and no scroll waiting; a save with a level above 2, or not three levels, does not load.
+- **The MCP server** (section 19): the screen `scroll` with one option per scroll (`Force 1 (Heavy, Heavy+): Heavy and Heavy+ weigh 1
+  more in a push`), and `affinities` in the run state once a scroll was taken.
+- **Turn it against the bot**: the bot's marbles keep the rules of sections 5 and 13; the player's scrolls are their edge against
+  fights and elites of the acts to come (a boss fight has no special marble of the army, so the scrolls change nothing there).
+
 ## 24. The cursed chest (#1474)
 
 Dead Cells' cursed chests are a pure risk-or-reward choice: a strong reward now, paid for in the next fights. The rogue-lite

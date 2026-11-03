@@ -303,9 +303,9 @@ export function createServer(
     'run_state',
     {
       description:
-        'The run: screen (map, place, fight, reward, relic, event, rest, shop, collector, exit, won, lost), army, special marbles, relics, tactics, flasks, scrap, ' +
+        'The run: screen (map, place, fight, reward, relic, event, rest, shop, scroll, collector, exit, won, lost), army, special marbles, relics, affinities, tactics, flasks, scrap, ' +
         'cells, blueprints, and what the screen holds: on the map the nodes to pick; in a fight the bot, the boss or the elite, the game id and the ' +
-        'special marbles placed; on a screen with a choice (reward, relic, event, rest, shop, collector) the options to take with run_choose, ok ' +
+        'special marbles placed; on a screen with a choice (reward, relic, event, rest, shop, scroll, collector) the options to take with run_choose, ok ' +
         'false for one that cannot be taken now; once over the acts won and what it unlocked. With map, every node of the map: its act, row, kind ' +
         'and the nodes it leads to.',
       inputSchema: z.strictObject({ map: z.boolean().optional().describe('Also list every node of the map.') }),
@@ -343,7 +343,7 @@ export function createServer(
     {
       description:
         'Take an option of the screen (run_state, options): a reward, a relic, an event choice (the last is Leave), Rest or an upgrade at a rest ' +
-        'site, a purchase or a removal at a shop or Leave, a blueprint to bank at the Collector or Leave, the exit (biome) to take after an act boss. Refused (bad_choice, nothing changes) ' +
+        'site, a purchase or a removal at a shop or Leave, the affinity to grow with the scroll after an act boss, a blueprint to bank at the Collector or Leave, the exit (biome) to take after an act boss. Refused (bad_choice, nothing changes) ' +
         'when it cannot be taken now. Returns the run state.',
       inputSchema: z.strictObject({ choice: z.int().min(0).describe('The number of the option.') }),
     },

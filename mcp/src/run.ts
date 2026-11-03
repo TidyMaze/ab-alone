@@ -8,6 +8,9 @@ import { cellIndex } from '../../client/src/board';
 import { COLLECT_COST } from '../../client/src/collector';
 import {
   actBoss,
+  AFFINITIES,
+  scrollOffers,
+  takeScroll,
   actsWon,
   BIOMES,
   chooseCommander,
@@ -98,7 +101,7 @@ export interface RunRules {
 
 type Cell = [q: number, r: number];
 
-export type Screen = 'map' | 'place' | 'fight' | 'reward' | 'relic' | 'event' | 'rest' | 'shop' | 'collector' | 'exit' | 'won' | 'lost';
+export type Screen = 'map' | 'place' | 'fight' | 'reward' | 'relic' | 'event' | 'rest' | 'shop' | 'scroll' | 'collector' | 'exit' | 'won' | 'lost';
 
 export interface NewRunInput {
   seed?: number;
@@ -171,6 +174,8 @@ export interface RunState {
   /** The biome of the act, none in the Meadow. */
   biome?: string;
   relics: string[];
+  /** The levels of the affinities grown by scrolls (Force, Tactics, Chaos), none before the first scroll: the engine plays them in the army's fights. */
+  affinities?: Record<string, number>;
   /** The keys taken (Ruby, Sapphire, Emerald), none before the first: the three open act 4 (#1467). */
   keys?: string[];
   /** The fights left of a cursed chest's curse, none without it: each marble lost costs 2 (#1474). */
@@ -321,7 +326,7 @@ export class RogueRun {
     });
   }
 
-  /** Takes choice `choice` of the screen's options: a reward, a relic, an event choice, the rest site, the shop, the Collector. */
+  /** Takes choice `choice` of the screen's options: a reward, a relic, an event choice, the rest site, the shop, the scroll of power, the Collector. */
   choose({ choice }: ChooseInput): Result<RunState> {
     return this.withRun((active) => {
       const menu = this.menu(active);
@@ -421,6 +426,7 @@ export class RogueRun {
     if (state.event) return 'event';
     if (state.rest) return 'rest';
     if (state.shop) return 'shop';
+    if (state.scroll) return 'scroll';
     if (state.collector) return 'collector';
     if (state.exit) return 'exit';
     if (placing(state) && !fight!.boss) return 'place';
@@ -456,6 +462,12 @@ export class RogueRun {
         })),
         { text: 'Leave', apply: () => leaveShop(state) },
       ];
+    }
+    if (state.scroll) {
+      return scrollOffers(state).map((k) => ({
+        text: `${AFFINITIES[k]!.name} ${state.affinities[k]! + 1} (${AFFINITIES[k]!.kinds}): ${AFFINITIES[k]!.levels[state.affinities[k]!]!}`,
+        apply: () => takeScroll(state, k),
+      }));
     }
     if (state.collector) {
       return [
@@ -509,6 +521,7 @@ export class RogueRun {
       specials: named(state.specials),
       ...(currentBiome(map, state) ? { biome: BIOMES[currentBiome(map, state)]!.name } : {}),
       relics: state.relics.map((r) => RELICS[r]!.name),
+      ...(state.affinities.some(Boolean) ? { affinities: Object.fromEntries(AFFINITIES.map((a, k) => [a.name, state.affinities[k]!])) } : {}),
       ...(state.keys.length ? { keys: state.keys.map((k) => KEYS[k]!.name) } : {}),
       ...(state.curse ? { curse: state.curse } : {}),
       tactics: state.tactics.map((t) => TACTICS[t - 1]!.name),
