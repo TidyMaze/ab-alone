@@ -1,6 +1,8 @@
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 // @ts-expect-error plain Node script, no type declarations (the client has no Node types)
+import { cspNoDevSockets } from './scripts/csp-no-dev-sockets.mjs';
+// @ts-expect-error plain Node script, no type declarations (the client has no Node types)
 import { editorScene } from './scripts/editor-scene.mjs';
 // @ts-expect-error plain Node script, no type declarations (the client has no Node types)
 import { ktx2Textures } from './scripts/ktx2-textures.mjs';
@@ -37,12 +39,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   // out (bug #585). The production build and its preview (the offline spec) keep them.
   plugins: [
     ktx2Textures(),
-    // The dev server's sockets (hot reload) are in the page's Content-Security-Policy for dev and e2e only: the built page cannot reach a local WebSocket.
-    {
-      name: 'csp-no-dev-sockets',
-      apply: 'build' as const,
-      transformIndexHtml: (html: string) => html.replace(' ws://localhost:* ws://127.0.0.1:*', ''),
-    },
+    cspNoDevSockets(), // the dev server's sockets leave the policy of the built page
     offlineApp(),
     // The three.js Editor export of ?lights (#872): dev server only.
     editorScene(),
