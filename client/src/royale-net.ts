@@ -152,6 +152,9 @@ async function replayed(game: string, s: Sealed, humans: string[]): Promise<numb
  * round missed some: it says it is behind, and a peer that has them sends the signed commits and reveals of the rounds
  * it missed, which it replays.
  */
+/** The messages of rounds to come kept at most: seats x a few rounds x commit and reveal, with room to spare. */
+const PENDING_MAX = 200;
+
 export class RoyaleNet<G extends NetGame> {
   seats: string[] | null = null; // keys by arena seat, '' for a bot, from the coordinator's first start
   round = 1; // the round being played
@@ -311,9 +314,15 @@ export class RoyaleNet<G extends NetGame> {
   }
 
   /** A commit or a reveal: kept by the open round, and then forwarded to every peer (royale-round.ts, #532). */
+  /** Keeps a message of a round not open here yet, only from a seated key, for the next rounds, and at most PENDING_MAX of them. */
+  private hold(m: Commit | Reveal, from: string): void {
+    if (!this.lineup.includes(from) || m.round > this.round + 3 || this.pending.length >= PENDING_MAX) return;
+    this.pending.push({ m, from });
+  }
+
   private async order(m: Commit | Reveal, from: string): Promise<void> {
     if (m.round < this.round) return;
-    if (m.round > this.round || !this.book) return void this.pending.push({ m, from });
+    if (m.round > this.round || !this.book) return void this.hold(m, from);
     const now = this.o.now();
     if (m.kind === 'commit' ? !(await this.book.commit(m, now, from)) : !(await this.book.reveal(m, now, from))) return;
     if (m.kind === 'commit') this.kept.commits.push(m);

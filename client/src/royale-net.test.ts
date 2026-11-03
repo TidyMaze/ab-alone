@@ -726,4 +726,21 @@ describe('a catch-up answer (online F1)', () => {
     await room.settle();
     expect(b.net.round).toBe(round);
   });
+
+  it('keeps no commit of an unseated key or of a far future round, and at most 200 messages', async () => {
+    const { room, b } = await started();
+    const d = await room.join('d');
+    const commit = async (keys: typeof d.keys, round: number) => (await commitOrder(keys, { game: ROOM, round, order: [] })).commit;
+    const pending = (): number => (b.net as unknown as { pending: unknown[] }).pending.length;
+    room.deliver(d, await commit(d.keys, 2));
+    room.deliver(d, await commit(d.keys, 2), 'b');
+    await room.settle();
+    expect(pending()).toBe(0); // an unseated key
+    const a = room.peers[0]!;
+    await b.net.receive(await commit(a.keys, 99), a.keys.pub, 'a');
+    expect(pending()).toBe(0); // too far ahead
+    const near = await commit(a.keys, 2);
+    for (let i = 0; i < 205; i++) await b.net.receive(near, a.keys.pub, 'a');
+    expect(pending()).toBe(200);
+  });
 });
