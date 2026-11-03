@@ -15,11 +15,11 @@ const NODE_STRIDE = 5;
 /** Key of the run in the game store, next to the local game (savegame.ts). */
 export const RUN_KEY = 'run';
 
-/** What a node holds, by the bridge's kind code (#800, the treasure #1457). */
-const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure'] as const;
+/** What a node holds, by the bridge's kind code (#800, the treasure #1457, the shop #1459). */
+const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop'] as const;
 export type NodeKind = (typeof KINDS)[number];
 
-/** One node of the map: a fight, an elite, a rest, an event, a treasure, or the boss that ends its act. `links` are the columns of
+/** One node of the map: a fight, an elite, a rest, an event, a treasure, a shop, or the boss that ends its act. `links` are the columns of
  * the next row it leads to. */
 export interface MapNode {
   act: number;
@@ -36,7 +36,8 @@ export interface MapNode {
  * the choice of an event node waits (#800). `best` is the most acts won in one run before this one, which unlocks its
  * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
  * `relic` is on while a relic offer waits to be taken (#1457). `rest` is on while a rest site's choice waits (#1458).
- * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). */
+ * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). `scrap` is what it can
+ * spend at a shop (#1459), `shop` is on while the shop's screen waits and `bought` are the ids of what that shop sold. */
 export interface Run {
   seed: number;
   army: number;
@@ -53,6 +54,9 @@ export interface Run {
   relic: boolean;
   rest: boolean;
   tactics: number[];
+  scrap: number;
+  shop: boolean;
+  bought: number[];
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -190,6 +194,9 @@ export const newRun = (seed: number, best: number): Run => ({
   relic: false,
   rest: false,
   tactics: [],
+  scrap: 0,
+  shop: false,
+  bought: [],
 });
 
 /** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
@@ -219,18 +226,19 @@ function next(map: MapNode[], path: number[]): number[] {
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
 export const choices = (map: MapNode[], run: Run): number[] =>
-  run.fighting || run.end || run.reward || run.event || run.relic || run.rest ? [] : next(map, run.path);
+  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop ? [] : next(map, run.path);
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [] });
 
 /** The run once `node` of `map` is visited (#800): a rest site waits for its choice (#1458), an event for its own, a
- * treasure for its relic (#1457), any other node starts its fight. */
+ * treasure for its relic (#1457), a shop for its purchases (#1459), any other node starts its fight. */
 export function visit(map: MapNode[], run: Run, node: number): Run {
   const path = [...run.path, node];
   const { kind } = map[node]!;
   if (kind === 'rest') return { ...run, path, rest: true };
   if (kind === 'treasure') return { ...run, path, relic: unheld(run).length > 0 };
+  if (kind === 'shop') return { ...run, path, shop: true };
   return kind === 'event' ? { ...run, path, event: true } : pick(run, node);
 }
 
@@ -349,13 +357,16 @@ export function resolve(run: Run, taken: boolean): Run {
   return after ? { ...after, event: false } : run;
 }
 
+/** Scrap earned by a won fight, a won elite and a beaten act boss (#1459). */
+export const SCRAP = { fight: 10, elite: 20, boss: 30 } as const;
+
 /** Marbles back after an act boss beaten with the War chest (#1457). */
 const CHEST_MARBLES = 2;
 
 /** The run after the fight of its last node, `won` or not, the army having lost `lost` marbles and kept `kept` of each
  * special marble type placed (all by default): a loss or an army below MIN_ARMY ends it, the boss of the last act wins
  * it, any other win offers a reward, and an elite or an act boss a relic first (#1457). The army never holds more special
- * marbles than marbles: past that, they go in the order FALL. The relics act here: Hull
+ * marbles than marbles: past that, they go in the order FALL. A win earns scrap (#1459). The relics act here: Hull
  * plating brings one lost marble back, the Salvage magnet and the War chest more marbles after an elite and a boss. */
 export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, kept = countOf(run.placed)): Run {
   const node = lastNode(map, run)!;
@@ -376,7 +387,9 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
     specials[k]! -= drop;
     over -= drop;
   }
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '' };
+  const earn = node.kind === 'boss' ? SCRAP.boss : node.kind === 'elite' ? SCRAP.elite : SCRAP.fight;
+  const scrap = run.scrap + (end === 'lost' ? 0 : earn);
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
@@ -438,6 +451,72 @@ export function claim(run: Run, offer: number): Run {
   const specials = run.specials.map((n, k) => n + Number(offer === k + 1));
   return { ...run, army: run.army + Number(offer === 0), specials, reward: false };
 }
+
+/** One thing the shop sells (#1459): its id (0 to 3), its kind, its code (a special marble type, a relic or a tactic; 0 for a
+ * marble) and its price in scrap. */
+export interface ShopItem {
+  id: number;
+  kind: 'marble' | 'special' | 'relic' | 'tactic';
+  code: number;
+  price: number;
+}
+/** The id of the shop's removal of a special marble in `Run.bought`: once per shop. */
+const REMOVAL = 4;
+/** The shop's draw `id` of the run's last node: the run seed and the node, as the reward offers. */
+const shopDraw = (run: Run, id: number): number => hash(run.seed, run.path[run.path.length - 1]! * 8 + id);
+/** A price from `base` up to `spread - 1` more, dealt by the run seed and the node. */
+const priced = (run: Run, id: number, base: number, spread: number): number => base + (shopDraw(run, id) % spread);
+/** What the shop asks to make a special marble plain again. */
+const removalPrice = (run: Run): number => priced(run, REMOVAL, 20, 11);
+
+/** What the shop at the run's last node still sells, dealt by the run seed and the node: a marble, a special marble of an
+ * unlocked type, a relic the run does not hold (none when it holds them all) and a tactic. Nothing when no shop waits. */
+export function shopStock(run: Run): ShopItem[] {
+  if (!run.shop) return [];
+  const types = PLAIN.filter((k) => kindOn(run, k));
+  const relics = unheld(run);
+  const deal = (id: number, n: number): number => hash(shopDraw(run, id), 1) % n;
+  const items: ShopItem[] = [
+    { id: 0, kind: 'marble', code: 0, price: priced(run, 0, 15, 6) },
+    { id: 1, kind: 'special', code: types[deal(1, types.length)]!, price: priced(run, 1, 25, 11) },
+    ...(relics.length ? [{ id: 2, kind: 'relic' as const, code: relics[deal(2, relics.length)]!, price: priced(run, 2, 60, 21) }] : []),
+    { id: 3, kind: 'tactic', code: 1 + deal(3, TACTICS.length), price: priced(run, 3, 30, 11) },
+  ];
+  return items.filter((i) => !run.bought.includes(i.id));
+}
+
+/** Why the run cannot take `item` whatever its scrap, or '' (#1459). */
+function blocked(run: Run, item: ShopItem): string {
+  if (item.kind === 'marble') return run.army >= START_ARMY ? 'army full' : '';
+  if (item.kind === 'special') return sum(run.specials) >= run.army ? 'no plain marble left' : '';
+  return item.kind === 'tactic' && run.tactics.length >= MAX_TACTICS ? 'hand full' : '';
+}
+
+/** The run once the shop's item `id` is bought: its price paid, its marble, special marble, relic or tactic gained and the
+ * item sold. Unchanged when no such item is for sale, it cannot be taken or the scrap falls short. */
+export function buy(run: Run, id: number): Run {
+  const item = shopStock(run).find((i) => i.id === id);
+  if (!item || blocked(run, item) || run.scrap < item.price) return run;
+  const paid = { ...run, scrap: run.scrap - item.price, bought: [...run.bought, id] };
+  if (item.kind === 'marble') return { ...paid, army: run.army + 1 };
+  if (item.kind === 'special') return { ...paid, specials: run.specials.map((n, k) => n + Number(k === item.code - 1)) };
+  return item.kind === 'relic' ? { ...paid, relics: [...run.relics, item.code] } : { ...paid, tactics: [...run.tactics, item.code] };
+}
+
+/** The special marble types the shop may take back to a plain marble: those the army holds, until it has done it once. */
+export const removable = (run: Run): number[] =>
+  run.shop && !run.bought.includes(REMOVAL) ? SPECIAL_LOOKS.flatMap((_, k) => (run.specials[k]! > 0 ? [k + 1] : [])) : [];
+
+/** The run once the shop makes one of its special marbles of the type `kind` a plain marble for scrap, once per shop.
+ * Unchanged when the army holds none of `kind`, it was done or the scrap falls short. */
+export function removeSpecial(run: Run, kind: number): Run {
+  const price = removalPrice(run);
+  if (!removable(run).includes(kind) || run.scrap < price) return run;
+  return { ...run, scrap: run.scrap - price, bought: [...run.bought, REMOVAL], specials: run.specials.map((n, k) => n - Number(k === kind - 1)) };
+}
+
+/** The run once it leaves the shop: the map goes on, the next shop sells afresh. */
+export const leaveShop = (run: Run): Run => ({ ...run, shop: false, bought: [] });
 
 /** Before the first move of a fight, the army's special marbles are placed on its board. */
 export const placing = (run: Run): boolean => run.fighting && run.moves.length === 0 && sum(run.specials) > 0;
@@ -537,6 +616,7 @@ function summaryHtml(map: MapNode[], run: Run): string {
     `Path: ${acts.join(' · ')}`,
     `Fights: ${fights - lost} won, ${lost} lost`,
     `Army at the end: ${owned(run.army, run.specials)}`,
+    ...(run.scrap ? [`Scrap left: ${run.scrap}, lost with the run`] : []),
     unlocks.length ? `Unlocked: ${unlocks.join(', ')}` : 'No new unlock',
   ]
     .map((line) => `<p class="run-help">${line}</p>`)
@@ -552,7 +632,7 @@ export function runLine(map: MapNode[], run: Run): string {
   if (run.end === 'lost') return `Run lost · ${run.army} marbles left`;
   const node = run.fighting ? lastNode(map, run)! : null;
   const where = node ? `act ${node.act + 1} ${node.kind}` : '';
-  const army = `army ${owned(run.army, run.specials)}`;
+  const army = `army ${owned(run.army, run.specials)}${run.scrap ? ` · ${run.scrap} scrap` : ''}`;
   const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
   return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
 }
@@ -655,6 +735,35 @@ export function tacticBarHtml(run: Run, mask: number, swapping: boolean): string
   return buttons.length ? `<div class="tactics" role="group" aria-label="Tactics">${buttons.join('')}</div>` : '';
 }
 
+/** The shop's screen (#1459): the scrap, a button per item for sale with its price (disabled with its reason when it cannot
+ * be taken or paid), a button per special marble type to make plain again, and Leave. */
+export function shopHtml(run: Run): string {
+  const text = (item: ShopItem): string =>
+    item.kind === 'marble'
+      ? 'One more marble'
+      : item.kind === 'special'
+        ? `${SPECIAL_LOOKS[item.code - 1]!.name}: ${SPECIAL_LOOKS[item.code - 1]!.help}`
+        : item.kind === 'relic'
+          ? relicText(item.code)
+          : tacticText(item.code);
+  const icon = (item: ShopItem): string =>
+    item.kind === 'marble' || item.kind === 'special' ? glyph(item.code) : item.kind === 'relic' ? relicGlyph(item.code) : lineGlyph(TACTICS[item.code - 1]!.icon);
+  const button = (data: string, glyphs: string, label: string, price: number, block = ''): string => {
+    const why = block || (run.scrap < price ? 'not enough scrap' : '');
+    return `<button type="button" ${data}${why ? ' disabled' : ''}>${glyphs}${label} · ${price} scrap${why ? ` · ${why}` : ''}</button>`;
+  };
+  const items = shopStock(run).map((i) => button(`data-buy="${i.id}"`, icon(i), text(i), i.price, blocked(run, i)));
+  const removes = removable(run).map((k) =>
+    button(`data-remove="${k}"`, glyph(k), `Remove a ${SPECIAL_LOOKS[k - 1]!.name}: back to a plain marble`, removalPrice(run)),
+  );
+  const none = '<button type="button" data-remove="0" disabled>Remove a special marble: none to remove</button>';
+  const removal = run.bought.includes(REMOVAL) ? [] : removes.length ? removes : [none];
+  return (
+    `<p class="run-line">Shop · ${run.scrap} scrap</p>` +
+    `<div class="run-kinds">${[...items, ...removal].join('')}<button type="button" data-leave="1">Leave</button></div>`
+  );
+}
+
 /** The map screen: the run line, the unlocks and starting armies before the first pick, the nodes act by act from the
  * top, each placed on its row, the links between them (the path taken marked), the nodes to pick enabled; once the run
  * is over, its summary and New run. */
@@ -689,6 +798,8 @@ export function mapHtml(map: MapNode[], run: Run): string {
   return `${head}${run.path.length ? '' : startHtml(run)}<div class="run-graph">${svg}${nodes.join('')}</div>`;
 }
 
+/** The most scrap a saved run may hold. */
+const MAX_SCRAP = 99999;
 const isInt = (v: unknown, max: number): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max;
 const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MOVE_STRIDE && mv.every((v) => Number.isInteger(v));
 
@@ -696,10 +807,11 @@ const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.l
 
 /** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none, one
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
- * upgrades (#1458) no upgraded special marble and no rest site waiting. */
+ * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
+ * shop waiting. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [] } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [] } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -721,9 +833,13 @@ function decodeRun(raw: unknown): Run | null {
     typeof rest === 'boolean' &&
     Array.isArray(tactics) &&
     tactics.length <= MAX_TACTICS &&
-    tactics.every((t) => isInt(t, TACTICS.length) && t > 0);
+    tactics.every((t) => isInt(t, TACTICS.length) && t > 0) &&
+    isInt(scrap, MAX_SCRAP) &&
+    typeof shop === 'boolean' &&
+    Array.isArray(bought) &&
+    bought.every((b, i) => isInt(b, REMOVAL) && bought.indexOf(b) === i);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought }
     : null;
 }
 

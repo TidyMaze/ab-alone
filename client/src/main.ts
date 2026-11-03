@@ -305,10 +305,12 @@ import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
   actBoss,
   actsWon,
+  buy,
   chooseArmy,
   claim,
   clearRun,
   eventHtml,
+  leaveShop,
   fightBudget,
   fightOver,
   foesOf,
@@ -331,9 +333,11 @@ import {
   relicBarHtml,
   relicHtml,
   relicMask,
+  removeSpecial,
   rewardHtml,
   runLine,
   saveRun,
+  shopHtml,
   sparkBurst,
   SPECIAL_LOOKS,
   claimTactic,
@@ -5756,8 +5760,8 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
     refresh();
   }
 }
-// The run's panel: a relic offer (#1457), the reward of a won fight (#961), an event's choice (#800), a rest site's (#1458), the
-// placement before a fight's first move (never in a boss fight: no special marble there), or the map.
+// The run's panel: a relic offer (#1457), the reward of a won fight (#961), an event's choice (#800), a rest site's (#1458), a
+// shop's (#1459), the placement before a fight's first move (never in a boss fight: no special marble there), or the map.
 function showRun(): void {
   const { map, state } = run!;
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
@@ -5770,12 +5774,14 @@ function showRun(): void {
         ? eventHtml(state)
         : state.rest
           ? restHtml(state)
-          : placed
-            ? placeHtml(state, armed)
-            : mapHtml(map, state);
+          : state.shop
+            ? shopHtml(state)
+            : placed
+              ? placeHtml(state, armed)
+              : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
-  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
   hud();
 }
@@ -5904,6 +5910,11 @@ runPanel.addEventListener('click', (e) => {
     run!.state = button.dataset.rest ? rest(run!.state) : upgrade(run!.state, Number(button.dataset.upgrade));
     void saveRun(gameStore, run!.state);
     showRun();
+  } else if (button?.dataset.buy || button?.dataset.remove || button?.dataset.leave) {
+    const { state } = run!;
+    run!.state = button.dataset.buy ? buy(state, Number(button.dataset.buy)) : button.dataset.remove ? removeSpecial(state, Number(button.dataset.remove)) : leaveShop(state);
+    void saveRun(gameStore, run!.state);
+    showRun();
   } else if (button?.dataset.army) {
     run!.state = chooseArmy(run!.state, Number(button.dataset.army));
     void saveRun(gameStore, run!.state);
@@ -5915,7 +5926,7 @@ runPanel.addEventListener('click', (e) => {
     run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
     void saveRun(gameStore, run!.state);
     if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));
-    else showRun(); // a rest site, an event or a treasure
+    else showRun(); // a rest site, an event, a treasure or a shop
   }
 });
 runButton.addEventListener('click', beginRun);
