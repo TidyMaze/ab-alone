@@ -10,7 +10,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
     // The build's own files (page, bot worker, engine) and the fonts (#1436: CI has the real ones) are not textures; any other file under /assets/ is.
     else if (r.url().includes('/assets/') && !/^(index|bot\.worker|abalone_wasm_bg|[a-z-]+-latin-\d+-normal)-[\w-]+\.(js|css|wasm|woff2)$/.test(file)) loaded.push(`${r.status()} ${file}`);
   });
-  await page.goto('./?bot=on');
+  await page.goto('./?bot=on&quality=high'); // the runner takes the low tier, which asks for fewer maps: pin the tier the list describes
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
@@ -53,7 +53,7 @@ test('the skin maps are asked for with the first wave, not after it (bug #925)',
     skinsAskedWhenWaveEnded = skinFiles.size;
     return route.continue();
   });
-  await page.goto('./?bot=on&scene=room');
+  await page.goto('./?bot=on&scene=room&quality=high');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready');
   expect(skinsAskedWhenWaveEnded).toBe(6);
