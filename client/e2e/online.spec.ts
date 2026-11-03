@@ -60,6 +60,26 @@ const open = async (page: Page) => {
 };
 const status = (page: Page) => page.locator('#hud .presence');
 
+test('the invite link shows in the open lobby sheet without a tap while alone, and the sheet folds once the opponent joins', async ({ browser }) => {
+  const a = await (await browser.newContext()).newPage();
+  const b = await (await browser.newContext()).newPage();
+  await room({ a, b });
+  await a.goto('./?bot=off&net=hook&quality=low');
+  await a.locator('canvas').waitFor();
+  await openModes(a);
+  await a.locator('#play-online').click();
+  await expect(a.locator('#lobby-sheet')).toBeVisible();
+  await expect(a.locator('#invite')).toBeVisible();
+  await a.mouse.click(5, 5); // a tap on the board keeps the link while alone
+  await expect(a.locator('#invite')).toBeVisible();
+  await b.goto(`./?net=hook&quality=low${new URL(await inviteLink(a)).hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(a.locator('#lobby-sheet')).toBeHidden();
+});
+
 test('a move played on page A shows up on page B over the signed move log', async ({ browser }) => {
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
@@ -232,7 +252,6 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await openModes(a);
   await a.locator('#play-online').click();
   await expect(status(a)).toHaveText('You are Black. Waiting for an opponent...');
-  await a.getByRole('button', { name: 'Lobby' }).click(); // the invite link sits in the lobby sheet (#1044)
   await expect(a.locator('#invite')).toBeVisible();
   await expect(a.getByText('Invite link: send it to your opponent')).toBeVisible();
   const invite = await inviteLink(a);

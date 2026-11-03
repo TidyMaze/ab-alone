@@ -232,4 +232,15 @@ describe('the lobby sheet (#1044)', () => {
     expect(byId('lobby-sheet').hidden).toBe(false);
     expect(byId('royale-start').hidden).toBe(false);
   });
+
+  it('an online 1v1 shows the invite link in the open lobby sheet at once, and a tap outside keeps it open (bug)', async () => {
+    const game = await boot('?bot=off');
+    byId('play-online').click();
+    for (let i = 0; i < 200 && document.body.dataset.seat !== 'player'; i++) await game.settle();
+    expect(byId('lobby-sheet').hidden).toBe(false);
+    expect(byId('lobby').getAttribute('aria-expanded')).toBe('true');
+    expect(byId('lobby-sheet').contains(byId('invite'))).toBe(true);
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(byId('lobby-sheet').hidden).toBe(false);
+  });
 });

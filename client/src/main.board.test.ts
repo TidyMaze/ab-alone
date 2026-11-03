@@ -517,6 +517,7 @@ describe('main.ts board and HUD', () => {
       onRefuse: () => {},
     });
     await until(game, () => document.body.dataset.opponent === 'here');
+    expect(document.getElementById('lobby-sheet')!.hidden).toBe(true); // the opponent is in: the lobby folds
     const rematch = document.getElementById('rematch')!;
     expect(rematch.hidden).toBe(true);
     const white: Play = async (from, to) => {

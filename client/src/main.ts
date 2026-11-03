@@ -5558,6 +5558,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName(mine, glassOf());
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
+    if (opponent !== 'waiting') closeLobby(); // the opponent is in: the lobby folds
     document.body.dataset.coordinator = String(session.coordinatorSeq); // join_seq of the coordinator, read by the e2e tests (#359)
     document.body.dataset.handover = session.handover;
     onlineLine = duel ? duelStatus(mine, role, opponent, session.isAgent(other)) : coop ? coopStatus(role, opponent, session.isAgent(other)) : onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
@@ -5567,7 +5568,10 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
   const keys = await generateKeys();
   roomKeys = keys;
   const key = await fingerprint(keys.pub); // the creator's invite link carries it
-  if (side === 1) showInvite(inviteUrl(location.href, room, coop, key, duel), `Invite link: send it to your ${duel ? 'boss player' : coop ? 'partner' : 'opponent'}`);
+  if (side === 1) {
+    showInvite(inviteUrl(location.href, room, coop, key, duel), `Invite link: send it to your ${duel ? 'boss player' : coop ? 'partner' : 'opponent'}`);
+    openLobby(); // the link shows open until an opponent connects, no tap on Lobby needed
+  }
   online = new OnlineSession({
     game: room,
     side,
@@ -6502,6 +6506,7 @@ hookHost.__seatGlyphs = () =>
 // and one sheet at a time: Esc and a tap outside close it, and the focus goes back to Lobby.
 const lobbyControls = (): HTMLElement[] => [startButton, royaleInviteButton, backButton, inviteBox, inviteCopy];
 /** A lobby waits: the creator's Start shows, or the invite link shows while the other seat is waiting. */
+const inviteWaiting = (): boolean => !inviteBox.hidden && document.body.dataset.opponent === 'waiting';
 const lobbyWaiting = (): boolean => !startButton.hidden || (!inviteBox.hidden && document.body.dataset.opponent === 'waiting');
 function paintLobby(): void {
   lobbySheet.hidden = !lobbyOpen;
@@ -6534,6 +6539,7 @@ addEventListener('keydown', (e) => {
   lobbyButton.focus();
 });
 addEventListener('pointerdown', (e) => {
+  if (inviteWaiting()) return; // the link stays open until an opponent connects
   if (lobbyOpen && !within(lobbySheet, e.target) && !within(lobbyButton, e.target)) closeLobby();
 });
 function syncConnectivity(): void {
