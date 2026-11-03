@@ -304,12 +304,13 @@ export class OnlineSession {
     );
   }
 
-  private async hello(): Promise<void> {
+  private async hello(to?: string): Promise<void> {
     const roster = this.o.side === CREATOR ? this.seats.roster() : [];
     const order = this.o.beat && this.o.side === CREATOR ? [...this.order] : undefined; // the join order, for the coordinator migration
     const seat = this.seats.seatOf(this.o.keys.pub) || this.o.side; // the seat we hold, once the creator gave us one
     this.o.transport.send(
       await signHello(this.o.keys, { game: this.o.game, seat, roster, agent: this.o.agent, order, engine: this.o.engine, peer: this.o.transport.self }),
+      to,
     );
   }
 
@@ -490,18 +491,23 @@ export class OnlineSession {
     }
     this.presence.hello(peer, h.pub);
     if (this.o.beat) this.coord.beat(h.pub, this.o.beat.now());
-    if (this.o.side === CREATOR && !this.order.includes(h.pub)) this.order.push(h.pub);
     if (h.agent) this.agents.add(h.pub);
-    await this.seat(h);
+    await this.seat(h, peer);
     this.o.onPresence?.();
   }
 
-  private async seat(h: Hello): Promise<void> {
+  private async seat(h: Hello, peer: string): Promise<void> {
     if (this.o.side === CREATOR) {
       // First valid Hello for a free seat wins, or it gets the first free seat (a battle royale room, #504). Everyone,
       // the refused included, gets the new roster.
       const free = this.seats.roster().indexOf('') + 1;
-      if (!this.seats.claim(h.seat, h.pub) && !this.seats.claim(free, h.pub)) this.o.onRefuse('seat-refused');
+      if (!this.seats.claim(h.seat, h.pub) && !this.seats.claim(free, h.pub)) {
+        // No seat: not in the coordinator's order (a spectator is never elected, nor does a flood of keys grow it), and the
+        // roster goes back to that peer alone, not to the room.
+        this.o.onRefuse('seat-refused');
+        return this.hello(peer);
+      }
+      if (!this.order.includes(h.pub)) this.order.push(h.pub);
       return this.hello();
     }
     // Joiners trust the first Hello for seat 1 (the creator) and take the roster from it. With the invite link's
