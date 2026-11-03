@@ -16,8 +16,9 @@ const NODE_STRIDE = 7;
 /** Key of the run in the game store, next to the local game (savegame.ts). */
 export const RUN_KEY = 'run';
 
-/** What a node holds, by the bridge's kind code (#800, the treasure #1457, the shop #1459). */
-const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop'] as const;
+/** What a node holds, by the bridge's kind code (#800, the treasure #1457, the shop #1459). An `unknown` node (#1463, drawn
+ * as a "?") turns into an event, a fight or a treasure when it is entered; the bridge no longer draws an `event` node. */
+const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop', 'unknown'] as const;
 export type NodeKind = (typeof KINDS)[number];
 
 /** How the bot's marbles stand in a fight or an elite (#1462, docs/specs/roguelite.md section 14), by the bridge's code. */
@@ -29,7 +30,7 @@ export const ELITES: readonly { name: string; help: string }[] = [
   { name: 'The Brute', help: 'Heavies' },
 ];
 
-/** One node of the map: a fight, an elite, a rest, an event, a treasure, a shop, or the boss that ends its act. `links` are the columns of
+/** One node of the map: a fight, an elite, a rest, an event, a treasure, a shop, an unknown "?", or the boss that ends its act. `links` are the columns of
  * the next row it leads to. A fight or an elite has the bridge's `formation` of the bot's army, an elite its archetype
  * (`elite`, `0` for none). */
 export interface MapNode {
@@ -52,7 +53,7 @@ export interface MapNode {
  * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). `scrap` is what it can
  * spend at a shop (#1459), `shop` is on while the shop's screen waits and `bought` are the ids of what that shop sold.
  * `enemies` is on for a run that fights the varied armies of #1462; a run saved before them has it off and fights the plain
- * army, so its fight in progress replays. `unlocked` are the blueprints banked before this run (#1470), which widen its pools
+ * army, so its fight in progress replays. `told` is the line of what the last event gave or cost, on the map until the next node is picked (#1463). `unlocked` are the blueprints banked before this run (#1470), which widen its pools
  * (a run keeps the ones it started with, so its offers replay); `cells` are what it can spend at the Collector, `carried`
  * the blueprints dropped and not yet banked, `banked` the ones it banked, `drop` the blueprint (id + 1) the last fight
  * dropped, 0 for none, and `collector` is on while the Collector's room waits between two acts. */
@@ -82,6 +83,7 @@ export interface Run {
   banked: number[];
   drop: number;
   collector: boolean;
+  told: string;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -257,6 +259,7 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[]):
   banked: [],
   drop: 0,
   collector: false,
+  told: '',
 });
 
 /** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
@@ -289,17 +292,28 @@ export const choices = (map: MapNode[], run: Run): number[] =>
   run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop || run.collector ? [] : next(map, run.path);
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
-export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [] });
+export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [], told: '' });
+
+/** What an unknown node turns into when entered (#1463, docs/specs/roguelite.md section 16): an event 7 times in 10, a
+ * fight twice, a treasure once, drawn from the run seed and the node. */
+function became(run: Run, node: number): 'event' | 'fight' | 'treasure' {
+  const draw = hash(hash(run.seed, node * 8 + 3), 9) % 10;
+  return draw < 7 ? 'event' : draw < 9 ? 'fight' : 'treasure';
+}
+/** The kind of node `node` of `map` for `run`: what an unknown node turned into, else its own. */
+const kindOf = (map: MapNode[], run: Run, node: number): NodeKind => (map[node]!.kind === 'unknown' ? became(run, node) : map[node]!.kind);
 
 /** The run once `node` of `map` is visited (#800): a rest site waits for its choice (#1458), an event for its own, a
- * treasure for its relic (#1457), a shop for its purchases (#1459), any other node starts its fight. */
+ * treasure for its relic (#1457), a shop for its purchases (#1459), any other node starts its fight. An unknown node
+ * (#1463) is the event, fight or treasure it turns into. What the last event told is gone. */
 export function visit(map: MapNode[], run: Run, node: number): Run {
+  const from = { ...run, told: '' };
   const path = [...run.path, node];
-  const { kind } = map[node]!;
-  if (kind === 'rest') return { ...run, path, rest: true };
-  if (kind === 'treasure') return { ...run, path, relic: unheld(run).length > 0 };
-  if (kind === 'shop') return { ...run, path, shop: true };
-  return kind === 'event' ? { ...run, path, event: true } : pick(run, node);
+  const kind = kindOf(map, run, node);
+  if (kind === 'rest') return { ...from, path, rest: true };
+  if (kind === 'treasure') return { ...from, path, relic: unheld(run).length > 0 };
+  if (kind === 'shop') return { ...from, path, shop: true };
+  return kind === 'event' ? { ...from, path, event: true } : pick(from, node);
 }
 
 /** The run once Rest is picked at its rest site: the army back up to START_ARMY (with Bunks, a plain marble becomes a
@@ -321,8 +335,11 @@ export function upgrade(run: Run, kind: number): Run {
   return { ...run, specials, rest: false };
 }
 
-/** The node of the run's last pick, if any. */
-const lastNode = (map: MapNode[], run: Run): MapNode | undefined => map[run.path[run.path.length - 1]!];
+/** The node of the run's last pick, if any, with the kind an unknown node turned into (#1463). */
+function lastNode(map: MapNode[], run: Run): MapNode | undefined {
+  const node = run.path[run.path.length - 1]!;
+  return map[node] && { ...map[node]!, kind: kindOf(map, run, node) };
+}
 
 /** The marbles of a fight node's bot (#1145): its standard layout less the 4 of its front row. */
 export const FIGHT_FOES = 10;
@@ -370,62 +387,148 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
   return { id: dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
 }
 
-/** An event (#800): its title and text, and the trade it offers: `army` marbles more or less (up to START_ARMY), `gain`
- * special marbles of each type, `lose` one special marble (in the order FALL), and `tactic` one tactic (#1460), dealt by
- * the run seed and the node: `{tactic}` in `take` is its name. */
+/** What one side of an event choice gives and costs (#1463): `army` marbles more or less (up to START_ARMY), `count`
+ * special marbles of the type `special` (the bridge's kind, 0 for none), `lose` one special marble (in the order FALL), `tactic` one
+ * tactic and `relic` one relic the run does not hold (each dealt by the run seed and the node), `scrap` more or less, and
+ * `heal` the army back up to START_ARMY. */
+export interface Outcome {
+  army: number;
+  special: number;
+  count: number;
+  lose: boolean;
+  tactic: boolean;
+  relic: boolean;
+  scrap: number;
+  heal: boolean;
+}
+const NOTHING: Outcome = { army: 0, special: 0, count: 1, lose: false, tactic: false, relic: false, scrap: 0, heal: false };
+const outcome = (o: Partial<Outcome>): Outcome => ({ ...NOTHING, ...o });
+
+/** One choice of an event: its `verb`, and what it gives, `win`, with `odds` chances in 100 (a gamble when under 100,
+ * drawn from the run seed and the node); otherwise it gives `fail`. */
+export interface EventChoice {
+  verb: string;
+  odds: number;
+  win: Outcome;
+  fail: Outcome;
+}
+const deal = (verb: string, win: Partial<Outcome>): EventChoice => ({ verb, odds: 100, win: outcome(win), fail: NOTHING });
+const gamble = (verb: string, odds: number, win: Partial<Outcome>, fail: Partial<Outcome>): EventChoice => ({ verb, odds, win: outcome(win), fail: outcome(fail) });
+const LEAVE = deal('Leave', {});
+
+/** An event (#800, #1463): its title, a line of lore, and its 2 or 3 choices, the last one Leave. */
 export interface RunEvent {
   title: string;
   text: string;
-  take: string;
-  army: number;
-  gain: number[];
-  lose: boolean;
-  tactic: boolean;
+  choices: EventChoice[];
 }
 export const EVENTS: readonly RunEvent[] = [
-  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: only(1, 1), lose: false, tactic: false },
-  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: only(2, 1), lose: false, tactic: false },
-  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: only(3, 1), lose: false, tactic: false },
-  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: only(3, 2), lose: false, tactic: false },
-  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: noSpecials(), lose: true, tactic: false },
-  { title: 'Field manual', text: 'A battered manual of old tricks lies open.', take: 'Learn {tactic} · lose 1 marble', army: -1, gain: noSpecials(), lose: false, tactic: true },
-  { title: 'Lodestone', text: 'A lodestone hums in a split crate.', take: 'Fit a Magnet · lose 2 marbles', army: -2, gain: only(7, 1), lose: false, tactic: false },
-  { title: 'Bulkhead', text: 'A spare bulkhead plate leans on the wall.', take: 'Plate a Shield · lose 2 marbles', army: -2, gain: only(8, 1), lose: false, tactic: false },
-  { title: 'Unexploded charge', text: 'A live charge ticks in the rubble.', take: 'Arm a Bomb · lose 1 marble', army: -1, gain: only(9, 1), lose: false, tactic: false },
-  { title: 'Sick bay', text: 'A cot and a medic kit, still stocked.', take: 'Staff a Medic · lose 2 marbles', army: -2, gain: only(10, 1), lose: false, tactic: false },
+  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', choices: [deal('Forge a Heavy', { army: -2, special: 1 }), LEAVE] },
+  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', choices: [deal('Fit an Anchor', { army: -2, special: 2 }), LEAVE] },
+  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', choices: [deal('Charge a Spark', { army: -1, special: 3 }), LEAVE] },
+  { title: 'Salvage drone', text: 'A drone offers its last two cells.', choices: [deal('Arm 2 Sparks', { army: -3, special: 3, count: 2 }), LEAVE] },
+  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', choices: [deal('Wake 3 marbles', { army: 3, lose: true }), LEAVE] },
+  { title: 'Field manual', text: 'A battered manual of old tricks lies open.', choices: [deal('Learn from the manual', { army: -1, tactic: true }), LEAVE] },
+  { title: 'Lodestone', text: 'A lodestone hums in a split crate.', choices: [deal('Fit a Magnet', { army: -2, special: 7 }), LEAVE] },
+  { title: 'Bulkhead', text: 'A spare bulkhead plate leans on the wall.', choices: [deal('Plate a Shield', { army: -2, special: 8 }), LEAVE] },
+  { title: 'Unexploded charge', text: 'A live charge ticks in the rubble.', choices: [deal('Arm a Bomb', { army: -1, special: 9 }), LEAVE] },
+  { title: 'Sick bay', text: 'A cot and a medic kit, still stocked.', choices: [deal('Staff a Medic', { army: -2, special: 10 }), LEAVE] },
+  { title: 'Slag-glass vein', text: 'A vein of slag-glass glows in the hull. It remembers heat, and it is warm.', choices: [gamble('Touch the vein', 50, { special: 1 }, { army: -2 }), deal('Chip off a shard', { army: -1, scrap: 25 }), LEAVE] },
+  { title: 'Ledger terminal', text: 'A ledger terminal lists the crew, one line each. Yours is the last without a mark.', choices: [deal('Read the ledger', { army: -1, tactic: true }), deal('Call the shelled crew back', { army: 2, scrap: -20 }), LEAVE] },
+  { title: 'Shelled crewmate', text: 'A shelled crewmate rocks in a corner, rounding off a little more each hour.', choices: [deal('Take it along', { army: 1 }), deal('Crack its shell', { scrap: 30 }), LEAVE] },
+  { title: 'Dice', text: 'Three marbles and a worn board on a mess table. The house is long dead, the odds are not.', choices: [gamble('Wager 20 scrap', 50, { scrap: 40 }, { scrap: -20 }), gamble('Wager a marble', 40, { relic: true }, { army: -1 }), LEAVE] },
+  { title: 'Cold locker', text: 'A cold locker, frost thick on the latch. Something hums behind the door.', choices: [gamble('Force the latch', 60, { heal: true }, { army: -1 }), deal('Strip the compressor', { scrap: 15 }), LEAVE] },
+  { title: 'Airlock', text: "An airlock cycles on its own, the outer door open on Hollow's dust.", choices: [gamble('Step out', 50, { relic: true }, { army: -2 }), deal('Strip the hatch', { scrap: 15 }), LEAVE] },
+  { title: 'Chapel box', text: 'Candles and wire around a box for what the crew could spare.', choices: [deal('Give a special marble', { lose: true, relic: true }), deal('Give 25 scrap', { scrap: -25, tactic: true }), LEAVE] },
+  { title: 'Furnace vent', text: 'A vent breathes orange heat across the deck. Slag-glass fuses to anything warm.', choices: [gamble('Warm yourselves', 70, { army: 4 }, { lose: true }), deal('Cast a Heavy in the heat', { army: -1, special: 1 }), LEAVE] },
+  { title: 'Foreman crate', text: "A crate sealed with a dead foreman's ledger stamp.", choices: [gamble('Pry it open', 60, { scrap: 30, army: 1 }, { army: -1 }), deal('Sell it sealed', { scrap: 10 }), LEAVE] },
+  { title: 'Ship relay', text: 'A relay on the bridge murmurs your ledger number back, over and over.', choices: [deal('Cut the line', { scrap: 20 }), gamble('Ask it for the way', 50, { tactic: true }, { army: -1 }), LEAVE] },
 ];
 
 /** The event of the run's last node while its choice waits, seeded by the run seed and the node, else null. */
 export function eventOf(run: Run): RunEvent | null {
-  const pool = EVENTS.filter((e) => e.gain.every((g, k) => !g || kindOn(run, k + 1))); // the unlocked types only (#801)
+  const needs = (e: RunEvent): number[] => e.choices.flatMap((c) => [c.win.special, c.fail.special]).filter(Boolean);
+  const pool = EVENTS.filter((e) => needs(e).every((k) => kindOn(run, k))); // the unlocked types only (#801)
   return run.event ? pool[hash(run.seed, run.path[run.path.length - 1]! * 8 + 4) % pool.length]! : null;
 }
 
-/** The tactic a Field manual teaches at the run's last node: a code, dealt by the run seed and the node. */
+/** The draw `salt` of the run's last node: a 32-bit hash of the run seed and the node, as the reward offers. */
+const nodeDraw = (run: Run, salt: number): number => hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 4), salt);
+
+/** The tactic an event teaches at the run's last node: a code of the run's pool (#1470), dealt by the run seed and the node. */
 const taught = (run: Run): number => {
   const pool = tacticPool(run);
   return pool[hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 7), 2) % pool.length]!;
 };
 
-/** The run once the trade of `e` is taken, or null when the army cannot pay it (below MIN_ARMY, no special marble to
- * lose, more special marbles than marbles) or would gain nothing. */
-export function takeEvent(run: Run, e: RunEvent): Run | null {
-  const army = Math.min(START_ARMY, run.army + e.army + Number(e.army < 0 && has(run, Relic.Bargain)));
-  const specials = run.specials.map((n, k) => n + e.gain[k]!);
-  const lost = FALL.find((k) => e.lose && specials[k]! > 0);
-  if (lost !== undefined) specials[lost]! -= 1;
-  const paid = !e.lose || lost !== undefined;
-  const room = e.tactic && run.tactics.length < MAX_TACTICS;
-  const gained = army > run.army || sum(specials) > sum(run.specials) || room;
-  const tactics = room ? [...run.tactics, taught(run)] : run.tactics;
-  return paid && gained && army >= MIN_ARMY && sum(specials) <= army ? { ...run, army, specials, tactics } : null;
+/** The relic an event gives at the run's last node, `salt` apart per choice: one the run does not hold, or -1 when it holds
+ * them all. */
+function dealtRelic(run: Run, salt: number): number {
+  const pool = unheld(run);
+  return pool.length ? pool[nodeDraw(run, 200 + salt) % pool.length]! : -1;
 }
 
-/** The run once its event is resolved: its trade `taken` (unchanged when it cannot be paid) or left. */
-export function resolve(run: Run, taken: boolean): Run {
+/** The run once `o` is given to it, or null when the army cannot pay it (below MIN_ARMY, no special marble to lose, more
+ * special marbles than marbles, short of scrap) or it asks for a gain and none can be had. `salt` tells the choices apart
+ * for the relic dealt. */
+function give(run: Run, o: Outcome, salt: number): Run | null {
+  const cost = o.army < 0 ? o.army + Number(has(run, Relic.Bargain)) : o.army;
+  const army = o.heal ? START_ARMY : Math.min(START_ARMY, run.army + cost);
+  const specials = run.specials.map((n, k) => n + (k === o.special - 1 ? o.count : 0));
+  const lost = FALL.find((k) => o.lose && specials[k]! > 0);
+  if (lost !== undefined) specials[lost]! -= 1;
+  const scrap = Math.min(MAX_SCRAP, run.scrap + o.scrap);
+  const room = o.tactic && run.tactics.length < MAX_TACTICS;
+  const relic = o.relic ? dealtRelic(run, salt) : -1;
+  const asked = o.heal || o.army > 0 || o.special > 0 || o.tactic || o.relic || o.scrap > 0;
+  const gained = army > run.army || sum(specials) > sum(run.specials) || room || relic >= 0 || scrap > run.scrap;
+  const paid = (!o.lose || lost !== undefined) && scrap >= 0;
+  if (!paid || !(gained || !asked) || army < MIN_ARMY || sum(specials) > army) return null;
+  return { ...run, army, specials, scrap, tactics: room ? [...run.tactics, taught(run)] : run.tactics, relics: relic >= 0 ? [...run.relics, relic] : run.relics };
+}
+
+const marbles = (n: number): string => `${Math.abs(n)} marble${Math.abs(n) === 1 ? '' : 's'}`;
+/** What an outcome gives and costs in a line: the gains first, then the costs. */
+function describe(run: Run, o: Outcome): string {
+  return [
+    o.heal ? `back to ${START_ARMY} marbles` : '',
+    o.army > 0 ? `+${marbles(o.army)}` : '',
+    o.special ? `+${o.count} ${SPECIAL_LOOKS[o.special - 1]!.name}${o.count > 1 ? 's' : ''}` : '',
+    o.tactic ? `learn ${TACTICS[taught(run) - 1]!.name}` : '',
+    o.relic ? '+1 relic' : '',
+    o.scrap > 0 ? `+${o.scrap} scrap` : '',
+    o.army < 0 ? `-${marbles(o.army)}` : '',
+    o.lose ? '-1 special marble' : '',
+    o.scrap < 0 ? `${o.scrap} scrap` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
+/** The label of choice `c`: its verb and what it gives, with the odds of a gamble. */
+function choiceText(run: Run, c: EventChoice): string {
+  const effects = c.odds < 100 ? `${c.odds} %: ${describe(run, c.win)}, otherwise ${describe(run, c.fail)}` : describe(run, c.win);
+  return effects ? `${c.verb} · ${effects}` : c.verb;
+}
+
+/** The run once choice `choice` of `e` is taken, or null when it does not exist or cannot be paid: both sides of a
+ * gamble must be payable. A gamble is drawn from the run seed and the node. `told` says what it gave or cost. */
+export function takeEvent(run: Run, e: RunEvent, choice: number): Run | null {
+  const c = e.choices[choice];
+  if (!c) return null;
+  const [win, fail] = [give(run, c.win, choice), give(run, c.fail, choice)];
+  if (!win || (c.odds < 100 && !fail)) return null;
+  const won = c.odds >= 100 || nodeDraw(run, 100 + choice) % 100 < c.odds;
+  const after = won ? win : fail!;
+  const gist = describe(run, won ? c.win : c.fail);
+  const luck = c.odds < 100 ? `${won ? 'it paid off' : 'it went wrong'}, ` : '';
+  return { ...after, told: gist ? `${e.title}: ${luck}${gist}` : '' };
+}
+
+/** The run once choice `choice` of its event is taken (unchanged when it cannot be paid) or Leave: the event is over. */
+export function resolve(run: Run, choice: number): Run {
   const e = eventOf(run);
-  if (!e) return run;
-  const after = taken ? takeEvent(run, e) : run;
+  const after = e && takeEvent(run, e, choice);
   return after ? { ...after, event: false } : run;
 }
 
@@ -702,11 +805,12 @@ function startHtml(run: Run): string {
 
 /** The summary of a run over (#801): the path act by act, the fights won and lost, the army at the end, the unlocks. */
 function summaryHtml(map: MapNode[], run: Run): string {
-  const label = (n: MapNode): string => n.kind[0]!.toUpperCase() + n.kind.slice(1);
+  const kind = (n: number): NodeKind => kindOf(map, run, n); // what an unknown node turned into (#1463)
+  const label = (n: number): string => kind(n)[0]!.toUpperCase() + kind(n).slice(1);
   const acts = [...new Set(run.path.map((n) => map[n]!.act))].map(
-    (act) => `act ${act + 1} ${run.path.flatMap((n) => (map[n]!.act === act ? [label(map[n]!)] : [])).join(', ')}`,
+    (act) => `act ${act + 1} ${run.path.flatMap((n) => (map[n]!.act === act ? [label(n)] : [])).join(', ')}`,
   );
-  const fights = run.path.filter((n) => ['fight', 'elite', 'boss'].includes(map[n]!.kind)).length;
+  const fights = run.path.filter((n) => ['fight', 'elite', 'boss'].includes(kind(n))).length;
   const lost = Number(run.end === 'lost');
   const unlocks = [...earned(map, run), ...run.banked.map(blueprintName)];
   return [
@@ -790,16 +894,15 @@ export function restHtml(run: Run): string {
   );
 }
 
-/** The event screen: its title and text, its trade (disabled when it cannot be paid) and Leave. */
+/** The event screen: its title and text, a button per choice with what it gives (disabled when it cannot be paid), the
+ * last one Leave. */
 export function eventHtml(run: Run): string {
   const e = eventOf(run)!;
-  const bargain = e.army < 0 && has(run, Relic.Bargain) ? ' · Bargain: 1 marble less' : '';
-  const name = e.tactic ? TACTICS[taught(run) - 1]!.name : '';
-  const take = `<button type="button" data-choice="1"${takeEvent(run, e) ? '' : ' disabled'}>${e.take.replace('{tactic}', name)}${bargain}</button>`;
-  return (
-    `<p class="run-line">Event · ${e.title}</p><p class="run-help">${e.text}</p>` +
-    `<div class="run-kinds">${take}<button type="button" data-choice="0">Leave</button></div>`
-  );
+  const buttons = e.choices.map((c, i) => {
+    const bargain = (c.win.army < 0 || c.fail.army < 0) && has(run, Relic.Bargain) ? ' · Bargain: 1 marble less' : '';
+    return `<button type="button" data-choice="${i}"${takeEvent(run, e, i) ? '' : ' disabled'}>${choiceText(run, c)}${bargain}</button>`;
+  });
+  return `<p class="run-line">Event · ${e.title}</p><p class="run-help">${e.text}</p><div class="run-kinds">${buttons.join('')}</div>`;
 }
 
 /** A relic's glyph: its icon drawn as a line in the text's colour. */
@@ -928,7 +1031,7 @@ export function mapHtml(map: MapNode[], run: Run): string {
   const nodes = map.map((n, i) => {
     const [x, y] = spot(n);
     const mark = i === here ? ' here' : run.path.includes(i) ? ' taken' : '';
-    const kind = n.kind[0]!.toUpperCase() + n.kind.slice(1);
+    const kind = n.kind === 'unknown' ? '?' : n.kind[0]!.toUpperCase() + n.kind.slice(1);
     const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
     return (
       `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}" data-node="${i}" style="left:${x}%;top:${y}%" ` +
@@ -936,11 +1039,14 @@ export function mapHtml(map: MapNode[], run: Run): string {
     );
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
-  return `${head}${run.path.length ? '' : startHtml(run)}<div class="run-graph">${svg}${nodes.join('')}</div>`;
+  const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
+  return `${head}${told}${run.path.length ? '' : startHtml(run)}<div class="run-graph">${svg}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */
 const MAX_SCRAP = 99999;
+/** The longest line of what an event told that a saved run may hold: the line is drawn as HTML, so it holds no markup. */
+const MAX_TOLD = 200;
 const isInt = (v: unknown, max: number): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max;
 const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MOVE_STRIDE && mv.every((v) => Number.isInteger(v));
 
@@ -954,10 +1060,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '' } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -990,9 +1096,12 @@ function decodeRun(raw: unknown): Run | null {
     isIds(carried) &&
     isIds(banked) &&
     isInt(drop, BLUEPRINTS.length) &&
-    typeof collector === 'boolean';
+    typeof collector === 'boolean' &&
+    typeof told === 'string' &&
+    told.length <= MAX_TOLD &&
+    !/[<>&"]/.test(told);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told }
     : null;
 }
 

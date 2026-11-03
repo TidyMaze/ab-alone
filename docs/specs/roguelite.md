@@ -17,7 +17,8 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 - **Run**: 3 acts, each a branching map of nodes the player walks through, top to bottom. An act
   has 3 rows of nodes then its boss: 12 nodes on a path through a run, the bosses included.
 - **Nodes** (section 7): fight (the bot), elite (a stronger bot, a better reward), rest (marbles
-  back up to 14, or a special marble upgraded, section 10), event (a short text choice with a gain and a cost), treasure (a relic, section 9),
+  back up to 14, or a special marble upgraded, section 10), event (a short text with 2 or 3 choices, a gain and a cost, some of them a gamble, section 16),
+  unknown ("?", it turns into an event, a fight or a treasure when entered, section 16), treasure (a relic, section 9),
   shop (section 12), boss (a boss of the roster at the act's strength, ends the act). The currencies are the
   scrap of section 12 and the cells of section 15, which live and end with the run.
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
@@ -38,23 +39,23 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 
 Generated in the engine from the seed (`abalone-core` `run::run_map`, `run_map` on the bridge).
 A row has 2 to 4 nodes, the boss row one. The first row of an act is fights; each node of the
-two rows after it is a fight, an elite, an event, a treasure, a rest or a shop (1 chance in 6 each), its own draw from the seed and its index in the map, apart from the links: the map's shape is the
+two rows after it is a fight, an elite, an unknown, a treasure, a rest or a shop (1 chance in 6 each), its own draw from the seed and its index in the map, apart from the links: the map's shape is the
 one of slice 1, so a run saved before the kinds still walks its map. The treasure (#1457) took the
-place of a second event in the draw and the shop (#1459) the place of a second fight: a run saved before them keeps its other kinds. Between two rows the links are a walk from the
+place of a second event in the draw and the shop (#1459) the place of a second fight, and the unknown (#1463) the place of the event: a run saved before them keeps its other kinds. Between two rows the links are a walk from the
 first pair of nodes to the last that steps one row, the other or both at random: every node leads
 on, every node of the next row is reached, and no two paths cross. A boss leads to every node of the
 next act's first row.
 
 The map screen shows the acts from the top, each node named by its kind (Fight, Elite, Rest,
-Event, Treasure, Shop, Boss), the links under the nodes, the path taken in the
-accent colour, and enables only the nodes the player may pick: the first row of act 1, then the
+Unknown, Treasure, Shop, Boss), the links under the nodes, the path taken in the
+accent colour (an unknown node is a dashed "?"), and enables only the nodes the player may pick: the first row of act 1, then the
 links of the last node.
 
 ## 3. Saving
 
 The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on
 the fight on and its moves, a reward waiting to be picked, an event, a rest site or a shop waiting for its
-choice (with what the shop sold), a relic offer waiting to be taken, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
+choice (with what the shop sold), a relic offer waiting to be taken, the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -147,8 +148,9 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   reward screen, whose line says so.
 - **Rest**: no fight; a rest site (section 10): Rest brings the army back up to 14 marbles, and the
   run line says it rested.
-- **Event**: no fight; the event screen shows one of 6 events, picked by the run seed and the node
-  (a 32-bit hash, as the reward offers), with a trade and Leave. The trade is offered only when the
+- **Event**: no fight; the event screen shows one of the events, picked by the run seed and the node
+  (a 32-bit hash, as the reward offers), with a trade and Leave (since #1463 20 events with 2 or 3 choices, section 16,
+  reached from a "?" node). A trade is offered only when the
   army can pay it (no fewer than 4 marbles after, no more special marbles than marbles, a special
   marble to give) and gains something; Leave changes nothing.
 
@@ -502,3 +504,53 @@ changes no rule of the engine and no code of the bridge's map: the Collector is 
   last drop, id + 1) and `collector` (the room waiting). A run saved before this change loads with its relics and tactics
   unlocked (so it deals what it dealt), its special marbles by its acts, and no cells, blueprint or room. A browser with no
   blueprint record, or an invalid one, has none banked.
+
+## 16. Events with several choices, and unknown nodes (#1463)
+
+Five events repeat after two runs, and an event was one trade or Leave. The mode now holds **20 events**, each with 2 or
+3 choices, the last one always Leave, and a **"?" node** that hides what it is until the player enters it. Every effect
+is built from what the run already has: marbles, special marbles, relics, tactics, scrap and healing. Only the rules
+change what a run offers, never what carries between runs (Decision #934). Section 7's event table stays the first 10
+events, one trade each.
+
+- **The "?" node**: the bridge's kind `7` (`NodeKind::Unknown`, `run_map`), drawn in the place of the event in the node
+  draw (section 2: 1 chance in 6, so no map holds the old event kind any more; code `4` stays for the page). When the
+  player enters it, it turns into an **event** 7 times in 10, a **fight** twice, a **treasure** once (`became` in
+  `roguelite.ts`), drawn from the run seed and the node as the reward offers are (a 32-bit hash), so a reload and a
+  replay see the same. A fight it turns into is a fight node of its act: 10 foes (one fewer with the Saboteur), the
+  Standard formation and `act + 1` special marbles of `run::foe_plan`, scrap and rewards as a fight's, the Jammer's
+  effect. The map names it `?` and `Act 1, unknown` (aria-label); the summary of a run over names what it turned into.
+- **Choices**: a choice has a verb, what it gives, and for a **gamble** the odds in 100 (`odds`) and what it gives
+  otherwise. A gamble is drawn from the run seed, the node and the choice, never twice differently. A button reads
+  `Touch the vein · 50 %: +1 Heavy, otherwise -2 marbles`; a sure choice reads `Chip off a shard · +25 scrap, -1 marble`;
+  a tactic shows its name, a relic only that there is one.
+- **Effects**: marbles up to 14 or down (the Bargain relic takes 1 marble off any cost, as before); one or two special
+  marbles of a type; a special marble given (in the order of section 10: the Medics, Bombs, Shields and Magnets first,
+  then the plain ones, then the upgraded); a tactic; a relic the run does not hold, dealt by the seed; scrap, more or
+  less; the army healed back to 14. A choice is disabled when it cannot be paid (fewer than 4 marbles after, more
+  special marbles than marbles, no special marble to give, short of scrap) or asks for a gain and none can be had (a
+  full hand, every relic held, a full army); for a gamble, **both** sides must be payable.
+- **Told**: the run keeps one line (`told`) of what the last event gave or cost, `Slag-glass vein: it went wrong, -2
+  marbles`, shown on the map until the next node is picked. Leave tells nothing. The line holds no markup.
+- **The 20 events** (lore from world.md: Ballast, Hollow, the slag-glass, the shelled crew, the ledger). The first 10
+  are section 7's and section 13's, one trade each. A type that is not unlocked (section 8) is never dealt: an event
+  that can give it is not in the pool.
+
+  | Event | Choices (besides Leave) |
+  |---|---|
+  | Slag-glass vein | touch it: 50 % a Heavy, else -2 marbles; chip off a shard: +25 scrap, -1 marble |
+  | Ledger terminal | read it: a tactic, -1 marble; call the shelled crew back: +2 marbles, -20 scrap |
+  | Shelled crewmate | take it along: +1 marble; crack its shell: +30 scrap |
+  | Dice | wager 20 scrap: 50 % +40 scrap, else -20; wager a marble: 40 % a relic, else -1 marble |
+  | Cold locker | force the latch: 60 % healed to 14, else -1 marble; strip the compressor: +15 scrap |
+  | Airlock | step out: 50 % a relic, else -2 marbles; strip the hatch: +15 scrap |
+  | Chapel box | give a special marble: a relic; give 25 scrap: a tactic |
+  | Furnace vent | warm yourselves: 70 % +4 marbles, else a special marble fuses and is lost; cast a Heavy: +1 Heavy, -1 marble |
+  | Foreman crate | pry it open: 60 % +30 scrap and +1 marble, else -1 marble; sell it sealed: +10 scrap |
+  | Ship relay | cut the line: +20 scrap; ask it for the way: 50 % a tactic, else -1 marble |
+
+- **Saving**: a run saved before this change loads with `told` empty. Its map is recomputed from the seed: a node that
+  was an event is now a "?", the other kinds are unchanged. An event waiting in such a save is dealt from the larger
+  pool and may show another event than before the update, as in section 13's save note.
+- **Bridge**: kind code `7` on `run_map` records; `run_foes` plans a fight for a `7` node as for a fight node. `engine_version`
+  is unchanged (no game of another mode changes).

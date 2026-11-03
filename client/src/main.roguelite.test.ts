@@ -413,21 +413,31 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(specials()).toBe('0,3,4');
   });
 
-  it.each([['1', 'taken'], ['0', 'left']])('an event waits for its choice, %s: %s, then the map goes on', async (choice) => {
+  it.each([[false, 'taken'], [true, 'left']])('an unknown node turns into an event that waits for its choice, leave %s: %s, then the map goes on, #1463', async (leave) => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
     await game.hook('__run', { ...plainRun(3, 3), army: 12, specials: [0, 0, 1], path: [1] });
+    expect(node(5).getAttribute('aria-label')).toBe('Act 1, unknown');
     node(5).click();
     expect(document.body.dataset.run).toBe('event');
     expect(line()).toMatch(/^Event · /);
     await game.settle();
     await boot('?bot=off', { indexedDB }); // a reload keeps the event waiting
     expect(document.body.dataset.run).toBe('event');
-    map().querySelector<HTMLElement>(`button[data-choice="${choice}"]`)!.click();
+    const buttons = [...map().querySelectorAll<HTMLButtonElement>('button[data-choice]')];
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
+    expect(buttons[buttons.length - 1]!.textContent).toBe('Leave');
+    (leave ? buttons[buttons.length - 1]! : buttons[0]!).click();
     expect(document.body.dataset.run).toBe('map');
     const before = 'Rogue-lite run · army 12 marbles, 1 Spark · pick a fight';
-    if (choice === '1') expect(line()).not.toBe(before);
-    else expect(line()).toBe(before);
+    if (leave) expect(line()).toBe(before);
+    else {
+      expect(line()).not.toBe(before);
+      expect(map().querySelector('.run-help')!.textContent).toMatch(/^[\w -]+: /); // what the event told
+    }
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(map().querySelector('.run-help') !== null).toBe(!leave); // saved with the run
   });
 
   // The scrap and the shop (#1459). Seed 7: the fight 0 leads to the elite 2, which leads to the shop 4.

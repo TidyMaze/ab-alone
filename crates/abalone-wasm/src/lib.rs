@@ -94,7 +94,8 @@
 //!   `11` Quartermaster (docs/specs/roguelite.md section 9).
 //! - Rogue-lite map (`run_map`): records of 7 integers `[act, row, col, kind, links, formation, elite]` per node,
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
-//!   an act), `2` elite, `3` rest, `4` event, `5` treasure, `6` shop. `links` is a bit mask of the columns of the next row of the same act the node leads
+//!   an act), `2` elite, `3` rest, `4` event (no longer drawn), `5` treasure, `6` shop, `7` unknown (a "?" the page turns
+//!   into an event, a fight or a treasure). `links` is a bit mask of the columns of the next row of the same act the node leads
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md). `formation` is how the bot's marbles stand in
 //!   a fight or an elite: `0` standard, `1` Belgian daisy, `2` German daisy, `3` snake, `4` wedge (`0` on the other nodes); `elite` is
 //!   `0` for a node that is no elite, else `1` The Wall, `2` The Artificer, `3` The Brute (section 14).

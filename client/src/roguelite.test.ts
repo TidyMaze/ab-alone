@@ -663,6 +663,7 @@ describe('roguelite', () => {
     const poor = [...parse(eventHtml({ ...run, army: 5 })).querySelectorAll<HTMLButtonElement>('button[data-choice]')];
     expect(poor.map((b) => b.disabled)).toEqual([true, false, false]); // 3 marbles left would end the run
     const forge = waiting('Scrap forge');
+    expect(parse(eventHtml(waiting('Salvage drone'))).querySelector('button[data-choice="0"]')!.textContent).toBe('Arm 2 Sparks · +2 Sparks, -3 marbles');
     expect(parse(eventHtml({ ...forge, army: MIN_ARMY })).querySelector<HTMLButtonElement>('button[data-choice="0"]')!.disabled).toBe(true);
   });
 
@@ -713,7 +714,7 @@ describe('roguelite', () => {
     expect([node.textContent, node.className, node.getAttribute('aria-label')]).toEqual(['?', 'node unknown', 'Act 1, unknown']);
     const told = { ...newRun(1, 3, LEGACY_UNLOCKED), told: 'Scrap forge: +1 Heavy, -2 marbles' };
     expect(parse(mapHtml(UNKNOWN, told)).querySelector('.run-help')!.textContent).toBe('Scrap forge: +1 Heavy, -2 marbles');
-    expect(parse(mapHtml(UNKNOWN, newRun(1, 3, LEGACY_UNLOCKED))).querySelector('.run-help')).toBeNull();
+    expect(parse(mapHtml(UNKNOWN, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] })).querySelector('.run-help')).toBeNull();
     expect(visit(UNKNOWN, told, 0).told).toBe('');
     expect(visit(ACT, { ...told, path: [0] }, 2).told).toBe(''); // a rest site too
     expect(pick(told, 0).told).toBe('');

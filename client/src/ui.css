@@ -811,6 +811,7 @@ body[data-reading] #log { visibility: visible; }
 }
 #run-map button.node { position: absolute; transform: translate(-50%, -50%); }
 #run-map button:is(.boss, .elite) { font-weight: 600; border-color: var(--hazard); }
+#run-map button.unknown { border-style: dashed; } /* a "?" node (#1463) */
 #run-map button.node small { display: block; font-size: 0.75em; font-weight: 400; } /* an elite's archetype under its kind (#1462) */
 #run-map button:disabled { cursor: default; color: var(--muted); }
 #run-map button:not(:disabled) { border-color: var(--accent); }

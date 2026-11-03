@@ -5948,7 +5948,7 @@ runPanel.addEventListener('click', (e) => {
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.choice) {
-    run!.state = resolve(run!.state, button.dataset.choice === '1');
+    run!.state = resolve(run!.state, Number(button.dataset.choice));
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.rest || button?.dataset.upgrade) {

@@ -59,22 +59,24 @@ mod tests {
                 record[..3],
                 [node.act as i32, node.row as i32, node.col as i32]
             );
-            let code = match node.kind {
-                NodeKind::Fight => 0,
-                NodeKind::Boss => 1,
-                NodeKind::Elite => 2,
-                NodeKind::Rest => 3,
-                NodeKind::Event => 4,
-                NodeKind::Treasure => 5,
-                NodeKind::Shop => 6,
-                NodeKind::Unknown => 7,
-            };
+            let code = node.kind as i32;
             assert_eq!(record[3], code);
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
             assert_eq!(record[4], links);
             assert_eq!(record[5], node.formation as i32);
             assert_eq!(record[6], node.elite.map_or(0, |e| e as i32));
         }
+        let codes = [
+            (NodeKind::Fight, 0),
+            (NodeKind::Boss, 1),
+            (NodeKind::Elite, 2),
+            (NodeKind::Rest, 3),
+            (NodeKind::Event, 4),
+            (NodeKind::Treasure, 5),
+            (NodeKind::Shop, 6),
+            (NodeKind::Unknown, 7),
+        ];
+        assert!(codes.iter().all(|&(kind, code)| kind as i32 == code));
         assert_eq!(flat[flat.len() - NODE_STRIDE + 3], 1); // the act 3 boss closes the map
         let kinds: Vec<i32> = flat.chunks(NODE_STRIDE).map(|r| r[3]).collect();
         assert!(

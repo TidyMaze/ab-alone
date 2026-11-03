@@ -29,6 +29,9 @@ pub enum NodeKind {
     Event = 4,
     Treasure = 5,
     Shop = 6,
+    /// A "?" node (#1463): the page turns it into an event, a fight or a treasure when it is
+    /// entered. It took the place of the Event in the draw, so no map holds an `Event` any more.
+    Unknown = 7,
 }
 
 /// A relic of a rogue-lite run (docs/specs/roguelite.md section 9): a passive effect for the rest of
@@ -278,13 +281,13 @@ fn links(from: usize, to: usize, state: &mut u64) -> Vec<Vec<usize>> {
 }
 
 /// The kinds a node after the first row of an act draws from, equally likely. The Treasure took
-/// the place of a second Event (#1457) and the Shop the place of a second Fight (#1459), so a run
-/// saved before keeps its other kinds.
+/// the place of a second Event (#1457), the Shop the place of a second Fight (#1459) and the
+/// Unknown the place of the Event (#1463), so a run saved before keeps its other kinds.
 const DRAWN: [NodeKind; 6] = [
     NodeKind::Shop,
     NodeKind::Fight,
     NodeKind::Elite,
-    NodeKind::Event,
+    NodeKind::Unknown,
     NodeKind::Treasure,
     NodeKind::Rest,
 ];
@@ -569,27 +572,29 @@ pub struct FoePlan {
 }
 
 /// The bot's army at node `index` of the map of `seed`, `less` marbles short (the Saboteur): a
-/// pure function of the seed and the node. A fight has `FIGHT_FOES` marbles and an elite
-/// `FULL_ARMY`, in the node's formation. A fight holds `act + 1` special marbles of different
+/// pure function of the seed and the node. A fight, or an Unknown node the page turned into
+/// one (#1463), has `FIGHT_FOES` marbles and an elite `FULL_ARMY`, in the node's formation. A fight holds `act + 1` special marbles of different
 /// kinds, from the Heavy, Anchor and Spark in act 1, with the Magnet and Shield in act 2 and the
 /// Bomb and Medic in act 3; an elite holds its archetype's. Any other node, or an index off the
 /// map, has the plain army.
 pub fn foe_plan(seed: u64, index: usize, less: u8) -> FoePlan {
     let map = run_map(seed);
-    let Some(node) = map
-        .get(index)
-        .filter(|n| matches!(n.kind, NodeKind::Fight | NodeKind::Elite))
-    else {
+    let Some(node) = map.get(index).filter(|n| {
+        matches!(
+            n.kind,
+            NodeKind::Fight | NodeKind::Elite | NodeKind::Unknown
+        )
+    }) else {
         return FoePlan {
             count: FULL_ARMY,
             formation: Formation::Standard,
             specials: Vec::new(),
         };
     };
-    let base = if node.kind == NodeKind::Fight {
-        FIGHT_FOES
-    } else {
+    let base = if node.kind == NodeKind::Elite {
         FULL_ARMY
+    } else {
+        FIGHT_FOES
     };
     let count = base.saturating_sub(less).max(MIN_ARMY);
     let mut cells = node.formation.cells(count);
@@ -1670,25 +1675,6 @@ mod relics {
     }
 
     #[test]
-    fn an_unknown_node_takes_the_place_of_the_event_in_the_draw_and_fights_when_it_turns_into_one() {
-        assert_eq!(NodeKind::Unknown as u8, 7);
-        assert!((0..50).any(|seed| run_map(seed).iter().any(|n| n.kind == NodeKind::Unknown)));
-        assert!((0..50).all(|seed| run_map(seed).iter().all(|n| n.kind != NodeKind::Event)));
-        for seed in 0..50 {
-            let Some((i, node)) = node_of(seed, NodeKind::Unknown, 0) else {
-                continue;
-            };
-            // The page turns an unknown node into a fight, an event or a treasure: its fight is
-            // a plain fight of its act (docs/specs/roguelite.md section 15).
-            assert_eq!((node.formation, node.elite), (Formation::Standard, None));
-            let plan = foe_plan(seed, i, 0);
-            assert_eq!(plan.count, FIGHT_FOES);
-            assert_eq!(plan.specials.len(), 1);
-            assert_eq!(foe_plan(seed, i, 1).count, FIGHT_FOES - 1);
-        }
-    }
-
-    #[test]
     fn a_treasure_joins_the_node_draw() {
         let found = (0..50).any(|seed| run_map(seed).iter().any(|n| n.kind == NodeKind::Treasure));
         assert!(found);
@@ -2084,6 +2070,26 @@ mod foes {
     }
 
     #[test]
+    fn an_unknown_node_takes_the_place_of_the_event_in_the_draw_and_fights_when_it_turns_into_one()
+    {
+        assert_eq!(NodeKind::Unknown as u8, 7);
+        assert!((0..50).any(|seed| run_map(seed).iter().any(|n| n.kind == NodeKind::Unknown)));
+        assert!((0..50).all(|seed| run_map(seed).iter().all(|n| n.kind != NodeKind::Event)));
+        for seed in 0..50 {
+            let Some((i, node)) = node_of(seed, NodeKind::Unknown, 0) else {
+                continue;
+            };
+            // The page turns an unknown node into a fight, an event or a treasure: its fight is
+            // a plain fight of its act (docs/specs/roguelite.md section 16).
+            assert_eq!((node.formation, node.elite), (Formation::Standard, None));
+            let plan = foe_plan(seed, i, 0);
+            assert_eq!(plan.count, FIGHT_FOES);
+            assert_eq!(plan.specials.len(), 1);
+            assert_eq!(foe_plan(seed, i, 1).count, FIGHT_FOES - 1);
+        }
+    }
+
+    #[test]
     fn every_formation_is_14_distinct_cells_of_the_bots_half_clear_of_the_army() {
         assert_eq!(Formation::ALL.len(), 5);
         let army: Vec<_> = STANDARD_BLACK.to_vec();
@@ -2293,11 +2299,14 @@ mod foes {
     }
 
     #[test]
-    fn a_node_that_is_no_fight_or_out_of_the_map_has_the_plain_army() {
+    fn a_node_that_is_no_fight_or_unknown_or_out_of_the_map_has_the_plain_army() {
         let plain = |s, i| foe_plan(s, i, 0);
         for seed in 0..40 {
             for (i, node) in run_map(seed).iter().enumerate() {
-                if !matches!(node.kind, NodeKind::Fight | NodeKind::Elite) {
+                if !matches!(
+                    node.kind,
+                    NodeKind::Fight | NodeKind::Elite | NodeKind::Unknown
+                ) {
                     let plan = plain(seed, i);
                     assert_eq!(
                         (plan.count, plan.formation),
