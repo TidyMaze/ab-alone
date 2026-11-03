@@ -104,6 +104,44 @@ describe('the Open world tools', () => {
   });
 });
 
+describe('the rogue-lite run tools (#1469)', () => {
+  test('start a run, pick a fight, play it with the game tools, lose it: the run is over', async () => {
+    await connect();
+    expect(JSON.parse((await call('run_state')).text).code).toBe('no_run');
+    const started = JSON.parse((await call('new_run', { seed: 0, bot_nodes: 30 })).text);
+    expect(started).toMatchObject({ screen: 'map', seed: 0, army: 14 });
+    expect(JSON.parse((await call('run_state', { map: true })).text).map).toHaveLength(27);
+    const picked = JSON.parse((await call('run_pick', { node: 0 })).text);
+    expect(picked.screen).toBe('fight');
+    expect(JSON.parse((await call('get_state')).text)).toMatchObject({ mode: 'bot', game_id: picked.fight.game });
+    expect((await call('play_move', { move: '(1,3)>NE' })).isError).toBe(false);
+    expect(JSON.parse((await call('save_run')).text)).toMatchObject({ seed: 0, fighting: true, path: [0] });
+    await call('resign');
+    expect(JSON.parse((await call('run_state')).text)).toMatchObject({ screen: 'lost' });
+  });
+
+  test('place, choose and tactic are tools whose refusals are tool errors', async () => {
+    await connect();
+    await call('new_run', { seed: 0 });
+    expect(JSON.parse((await call('run_choose', { choice: 0 })).text).code).toBe('not_now');
+    expect(JSON.parse((await call('run_place', { q: 0, r: 2, kind: 'Heavy' })).text).code).toBe('not_now');
+    expect(JSON.parse((await call('run_tactic', { tactic: 'Freeze' })).text).code).toBe('not_now');
+    expect(JSON.parse((await call('run_pick', { node: 5 })).text).code).toBe('bad_choice');
+    expect((await call('run_tactic', { tactic: 'Teleport' })).isError).toBe(true);
+    expect((await call('run_choose', { choice: -1 })).isError).toBe(true);
+  });
+
+  test('a saved run resumes, a bad save is bad_save', async () => {
+    await connect();
+    await call('new_run', { seed: 2, best: 1 });
+    const save = JSON.parse((await call('save_run')).text);
+    await call('new_run', { seed: 0 });
+    expect(JSON.parse((await call('new_run', { save })).text)).toMatchObject({ seed: 2, screen: 'map' });
+    expect(JSON.parse((await call('new_run', { save: { seed: 1 } })).text).code).toBe('bad_save');
+    expect((await call('new_run', { unlocked: [99] })).isError).toBe(true);
+  });
+});
+
 describe('the public Open world tools (#1365)', () => {
   /** A room over a fake PeerNet: `say` makes a peer talk, `sent` is what the browsers would receive. */
   function room() {
@@ -164,6 +202,13 @@ describe('the MCP server', () => {
       'world_heroes',
       'world_visit',
       'leave_world_room',
+      'new_run',
+      'run_state',
+      'run_pick',
+      'run_place',
+      'run_choose',
+      'run_tactic',
+      'save_run',
     ]);
     for (const tool of tools) expect(tool.description).toBeTruthy();
     const schema = (name: string) => tools.find((tool) => tool.name === name)!.inputSchema;

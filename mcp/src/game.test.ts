@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { describe, expect, test } from 'vitest';
 import { WALLED_IN } from '../../client/src/test/blockedline';
-import { bossIds, newEncounter, newEngine } from './engine';
+import { bossIds, newEncounter, newEngine, runRules } from './engine';
 import { BOT_NODES, drawReasonName, Session, sideName, statusName, type EncounterLike, type EngineLike, type Result, type State, type ToolError } from './game';
 import { formatMove, fromRecord, fromRecords, parseMove, toRecord } from './notation';
 
@@ -501,5 +501,55 @@ describe('the outcome the Open world reads for its lairs (#1292)', () => {
     const game = new Session(engines().factory, won, noNetwork);
     const fight = value(game.newGame({ boss: 'choir' }));
     expect(game.outcome()).toEqual({ game: fight.game_id, boss: 'choir' });
+  });
+});
+
+describe('a fight of a rogue-lite run (docs/specs/mcp.md section 5, Rogue-lite tools)', () => {
+  test('runFight drops the game in progress for the engine given, the bot replies at the budget asked', () => {
+    const { factory, spy } = engines();
+    const game = new Session(factory, newEncounter, noNetwork);
+    const first = value(game.newGame({}));
+    const army = factory();
+    const fight = game.runFight(army, 77);
+    expect(fight.mode).toBe('bot');
+    expect(fight.game_id).not.toBe(first.game_id);
+    expect(spy.freed).toBe(1);
+    value(game.playMove({ move: '(1,3)>NE' }));
+    expect(spy.nodes).toEqual([77]);
+  });
+
+  test('runBoss starts the encounter given as a boss fight, the boss replies', () => {
+    const game = new Session(engines().factory, newEncounter, noNetwork);
+    const fight = game.runBoss('hull', newEncounter('hull', 4));
+    expect(fight).toMatchObject({ mode: 'boss', boss: { id: 'hull', result: 'playing' } });
+    expect(value(game.playMove({ move: '(1,3)>NE' })).reply).not.toBeNull();
+  });
+
+  test('playTactic plays the tactic record, then the bot replies when it is its turn', () => {
+    const game = new Session(engines().factory, newEncounter, noNetwork);
+    expect(failure(game.playTactic(Int32Array.of(0, 1, 0, 0, 0, 0, 0, 0), 'Reinforce')).code).toBe('no_game');
+    game.runFight(runRules().fight(14, 10, [[0, 2, 1]], 0), 30);
+    const swap = Int32Array.of(0, 3, 0, 2, -1, 2, 0, 0); // a Heavy trades places with a plain marble
+    const played = value(game.playTactic(swap, 'Swap (0,2)(-1,2)'));
+    expect(played.played).toBe('Swap (0,2)(-1,2)');
+    expect(played.reply).not.toBeNull(); // a Swap costs the move: the bot answers
+    expect(played.state.last_moves[0]).toBe('Swap (0,2)(-1,2)');
+    expect(played.state.to_move).toBe('black');
+    const refused = failure(game.playTactic(Int32Array.of(0, 4, 0, 0, 0, 0, 0, 0), 'Fall back'));
+    expect(refused.code).toBe('illegal_move');
+  });
+
+  test('a tactic that keeps the turn gets no reply', () => {
+    const game = new Session(engines().factory, newEncounter, noNetwork);
+    game.runFight(runRules().fight(12, 10, [], 0), 30);
+    const played = value(game.playTactic(Int32Array.of(0, 1, 0, 0, 0, 0, 0, 0), 'Reinforce'));
+    expect(played.reply).toBeNull();
+  });
+
+  test('playTactic is refused once the game is over', () => {
+    const game = new Session(engines().factory, newEncounter, noNetwork);
+    game.runFight(runRules().fight(12, 10, [], 0), 30);
+    value(game.resign());
+    expect(failure(game.playTactic(Int32Array.of(0, 2, 0, 0, 0, 0, 0, 0), 'Freeze')).code).toBe('game_over');
   });
 });
