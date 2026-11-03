@@ -54,7 +54,7 @@ First to eject 6 wins. On top of it, the ship:
   that turn into an event, a fight or a treasure when entered, two exits at the end of each act to biomes (Forest, Tundra, Desert,
   Badlands, Archipelago) with holes in their boards, a signature enemy and a boss of their own, and cells and blueprints dropped by elites and act bosses,
   banked at the Collector between acts to unlock relics, tactics and special marbles for good, and four commanders to start a run with
-  (The Captain, The Warden, The Saboteur, The Juggernaut), each with a starting relic and special marbles of its own, unlocked by acts won, and ten ascension levels, each unlocked by winning a run at the one before and adding a handicap to the next run ([spec](docs/specs/roguelite.md)); Auto-play can play a fight, and an AI agent can play a whole run through the MCP server (below).
+  (The Captain, The Warden, The Saboteur, The Juggernaut), each with a starting relic and special marbles of its own, unlocked by acts won, and ten ascension levels, each unlocked by winning a run at the one before and adding a handicap to the next run ([spec](docs/specs/roguelite.md)); a score at the end of a run, a Daily run (the seed of the day for everyone, one try a day, its score kept), the history of your last runs and a compendium of the relics, special marbles, tactics and events you have seen, the rest as silhouettes; Auto-play can play a fight, and an AI agent can play a whole run through the MCP server (below).
 - **Trainer**: waves against the bot, one more marble each wave.
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.

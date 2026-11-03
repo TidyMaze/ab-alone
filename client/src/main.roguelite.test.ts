@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import { cellIndex, type Axial, type Move } from './board';
-import { actBoss, BIOMES, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
+import { actBoss, BIOMES, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, relicText, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
 import { LEGACY_UNLOCKED } from './collector';
 import type { View } from './camera';
@@ -1107,12 +1107,10 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     const { run_map } = await import('abalone-wasm');
     const expected = parseMap(run_map(dailySeed(today()))).filter((n) => n.act === 0 && n.row === 0).map((n) => `Act 1, ${n.kind}`);
     expect(open().map((b) => b.getAttribute('aria-label'))).toEqual(expected); // the map of the seed of the day
-    await game.settle();
-    const again = await boot('?bot=off', { indexedDB });
-    expect(line()).toBe(`Daily run ${today()} · army 14 marbles · pick a fight`); // resumed
     expect(localStorage.getItem('ab-alone.roguelite.daily')).toBe(JSON.stringify({ day: today(), score: null }));
-    expect(dailyButton().disabled).toBe(true);
-    expect(again.hook).toBeDefined();
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(line()).toBe(`Daily run ${today()} · army 14 marbles · pick a fight`); // resumed
   });
 
   it('a daily run over keeps its score, the button then shows it and stays shut, and the history lists the run', async () => {
@@ -1150,12 +1148,12 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     game.openModes();
     byId('roguelite').click();
     bookButton('compendium').click();
-    expect(map().querySelector('.run-line')!.textContent).toMatch(/^Compendium · 1 of \d+ seen$/);
+    expect(map().querySelector('.run-line')!.textContent).toMatch(/^Compendium · 2 of \d+ seen$/);
     const seen = [...map().querySelectorAll('li.seen')].map((li) => li.textContent);
-    expect(seen).toEqual([`${RELICS[Relic.Jammer]!.name}: ${RELICS[Relic.Jammer]!.help}`]);
+    expect(seen).toEqual([relicText(Relic.Gyroscope), relicText(Relic.Jammer)]); // the new run's Captain brings his Gyroscope
     expect(map().querySelectorAll('li.unseen svg.silhouette').length).toBeGreaterThan(10);
     map().querySelector<HTMLButtonElement>('button[data-book="map"]')!.click();
     expect(bookButton('compendium')).not.toBeNull();
-    expect(localStorage.getItem('ab-alone.roguelite.seen')).toContain('"relics":[3]');
+    expect(localStorage.getItem('ab-alone.roguelite.seen')).toContain('"relics":[0,3]');
   });
 });

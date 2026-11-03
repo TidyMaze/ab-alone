@@ -32,9 +32,12 @@ export function hash32(text: string): number {
   return h >>> 0;
 }
 
+/** The seed of the daily challenge of `day`: the boss fight's, and the rogue-lite daily run's (#1466). */
+export const dailySeed = (day: string): number => hash32(`ab-alone daily ${day}`);
+
 /** The daily challenge of `day`: its seed, and its boss picked among `ids` (the bridge's boss list). */
 export function dailyFor(day: string, ids: readonly string[]): Daily {
-  const seed = hash32(`ab-alone daily ${day}`);
+  const seed = dailySeed(day);
   return { day, id: ids[seed % ids.length]!, seed };
 }
 

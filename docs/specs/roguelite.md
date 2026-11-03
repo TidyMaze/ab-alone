@@ -697,3 +697,44 @@ never a stronger army.
   summary of a run over an `Ascension: N` line, and a run won at its top level lists the level it unlocked (`Ascension 4`)
   among its unlocks (section 8).
 - **Turn it against the boss**: not a boss mechanic; no boss has a level.
+
+## 21. Score, daily run, history and compendium (#1466)
+
+A reason to replay (Slay the Spire's daily climb, Dead Cells' unlocked-item list): a score at the end of a run, one shared run
+a day, the last runs, and a list of what there is to find. Only variety is kept between runs (Decision #934): none of it
+changes what a run holds.
+
+- **Score**: shown at the end of a run, won or lost, as `Score: 210 (acts 1 × 100, elites 2 × 25, ...)`, in a line of its own
+  above the summary of section 8. It counts, with the points each:
+
+  | What | Points each |
+  |---|---|
+  | Acts won (section 8: bosses beaten, not the one fought or lost to) | 100 |
+  | Elites beaten (not the one fought or lost to) | 25 |
+  | Marbles left in the army at the end | 10 |
+  | Flawless fights: a fight, an elite or a boss won with no marble lost (the Hull plating's marble back does not count) | 15 |
+  | Ascension level of the run (section 20) | 50 |
+
+  A part that counts nothing is left out of the line. The run keeps `flawless`, the fights won with no marble lost; it is a
+  pure function of the run, so a replayed run has the same score.
+- **Daily run**: a button on the start screen, `Daily run YYYY-MM-DD`. It plays the seed of the day, the one the Daily
+  challenge's boss fight uses (`daily.ts` `dailySeed`: a hash of the UTC date, the same for everyone), with **every unlock open**
+  (all the acts-won unlocks and blueprints, ascension 0, the Captain picked, any commander allowed), so no player's progress changes
+  its map, offers or events, and no blueprint is dropped. The run keeps `daily`, its day, shown in the run line
+  (`Daily run 2026-11-03 · ...`).
+  - **One try a day**: pressing the button spends the day (`ab-alone.roguelite.daily`), even if the run is abandoned; the
+    button then stays shut, `tried today, back tomorrow`. The day changes at 00:00 UTC.
+  - **Its score** is kept when the run ends, and the button reads `score N, back tomorrow`.
+- **Run history**: `Run history` on the start screen lists the last 10 runs over, the newest first: commander, result,
+  score, the ascension level when above 0 and the day of a daily run (`The Warden · won · score 640 · ascension 2`).
+  Kept in `ab-alone.roguelite.history`, a run once (by its seed).
+- **Compendium**: `Compendium` on the start screen lists the 12 relics, the 10 special marbles, the 4 tactics and the 20 events,
+  each with its rule once **seen** (a relic, special marble or tactic the army held, an event met), the others a silhouette
+  with `???`, and `N of M seen` as its title. Kept in `ab-alone.roguelite.seen`, filled as a run screen is drawn, so a run
+  abandoned still counts what it met. Back leaves a list for the start screen.
+- **Saving**: the run keeps `flawless` and `daily`. A run saved before this change loads with `0` and `''`. The history, the
+  daily try and the compendium are in the browser's localStorage, with the other progress: a blocked storage keeps none of them
+  and loses no run; a bad value is read as empty.
+- **MCP**: the server's run is the client's `Run`, its `fightOver` counts the flawless fights, and a save carries both
+  fields. The score and the book are the page's, not the server's (section 19).
+- **Turn it against the boss**: not a boss mechanic; no boss has a score.

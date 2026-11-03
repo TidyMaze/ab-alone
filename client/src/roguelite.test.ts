@@ -2110,6 +2110,10 @@ describe('roguelite ascension', () => {
     for (const bad of [{ ascension: 11 }, { ascension: -1 }, { ascension: 1.5 }, { top: 11 }, { top: 'x' }]) {
       await saved.put(RUN_KEY, { ...run, ...bad });
       expect(await loadRun(saved, () => ACT, engine)).toBeNull();
+    }
+  });
+});
+
 describe('roguelite score and daily run (#1466)', () => {
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   // Act 1: a fight 0 leads to an elite 1, then the boss 2. Act 2: a fight 3, then the boss 4.
@@ -2154,6 +2158,7 @@ describe('roguelite score and daily run (#1466)', () => {
     expect(doc.querySelector('.run-score')!.textContent).toBe('Score: 170 (acts 1 × 100, elites 1 × 25, marbles 3 × 10, flawless fights 1 × 15)');
     expect([...doc.querySelectorAll('.run-help')].map((p) => p.textContent)[0]).toBe('Path: act 1 Fight, Elite, Boss · act 2 Fight');
     expect(parse(mapHtml(TWO, fresh({ path: [0], army: 3, end: 'lost' }))).querySelector('.run-score')!.textContent).toBe('Score: 30 (marbles 3 × 10)');
+    expect(parse(mapHtml(TWO, fresh({ path: [0], army: 0, end: 'lost' }))).querySelector('.run-score')!.textContent).toBe('Score: 0'); // nothing left
     expect(parse(mapHtml(TWO, fresh({ path: [0] }))).querySelector('.run-score')).toBeNull(); // only a run over
   });
 

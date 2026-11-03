@@ -165,7 +165,7 @@ import { ballastText, firedText, parseFired, type Fired } from './ballast';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
-import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
+import { countAttempt, dailyCard, dailyFor, dailyLine, dailySeed, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
 import { hookHost, netHook } from './hooks';
@@ -316,6 +316,7 @@ import {
   exitHtml,
   claim,
   clearRun,
+  dailyRun,
   collect,
   collectorHtml,
   leaveCollector,
@@ -363,6 +364,7 @@ import {
   type MapNode,
   type Run,
 } from './roguelite';
+import { bookHtml, compendiumHtml, finished, historyHtml, readDaily, readHistory, readSeen, recordFinished, recordSeen, startDailyTry } from './runbook';
 import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
 import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } from './royale-net';
@@ -5787,6 +5789,12 @@ function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
   startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store), readAscension(store)), 0), parseMap(run_map(seed))); // the Captain until another is picked (#1464)
 }
+// The daily run (#1466): the seed of the day for everyone, one try a day (its button is shut once tried), its score kept when it ends.
+function beginDailyRun(): void {
+  const day = utcDay(Date.now());
+  startDailyTry(store, day);
+  startRun(dailyRun(day, dailySeed(day)), parseMap(run_map(dailySeed(day))));
+}
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
   armed = 0;
@@ -5819,6 +5827,9 @@ function showRun(): void {
   const { map, state } = run!;
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
   recordAscension(store, state); // a run won unlocks the next ascension level (#1465)
+  recordSeen(store, state); // the compendium (#1466)
+  const done = finished(map, state);
+  if (done) recordFinished(store, done); // the history, and the daily run's score
   const placed = placing(state) && !(engine instanceof Encounter);
   runPanel.innerHTML = state.relic
     ? relicHtml(map, state)
@@ -5836,7 +5847,7 @@ function showRun(): void {
                 ? exitHtml(map, state, exitsFor(state), boss_name)
                 : placed
               ? placeHtml(state, armed)
-              : mapHtml(map, state);
+              : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))));
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
   const next = runPanel.querySelector('button.node:not(:disabled)'); // after a pick the map scrolls to the nodes to pick, in the middle of the plate (#1468); before the first the commanders stay in view
@@ -5996,6 +6007,12 @@ runPanel.addEventListener('click', (e) => {
     run!.state = chooseAscension(run!.state, Number(button.dataset.ascension));
     void saveRun(gameStore, run!.state);
     showRun();
+  } else if (button?.dataset.daily) {
+    beginDailyRun();
+  } else if (button?.dataset.book) {
+    const book = button.dataset.book;
+    if (book === 'map') showRun();
+    else runPanel.innerHTML = book === 'history' ? historyHtml(readHistory(store)) : compendiumHtml(readSeen(store));
   } else if (button?.dataset.kind) {
     armed = armed === Number(button.dataset.kind) ? 0 : Number(button.dataset.kind);
     showRun();

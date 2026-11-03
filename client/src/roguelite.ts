@@ -73,7 +73,9 @@ export interface MapNode {
  * the blueprints dropped and not yet banked, `banked` the ones it banked, `drop` the blueprint (id + 1) the last fight
  * dropped, 0 for none, and `collector` is on while the Collector's room waits between two acts. `exits` is on for a run that
  * offers a biome at the end of each act but the last (#1472); a run saved before has it off and stays in the Meadow. `exit` is on
- * while the choice between the two exits waits, and `biomes` are the codes picked for act 2 then act 3. */
+ * while the choice between the two exits waits, and `biomes` are the codes picked for act 2 then act 3. `flawless` counts the fights
+ * won with no marble lost (#1466), the score's; `daily` is the UTC day of a daily run, '' for any other, and a run saved before has
+ * neither. */
 export interface Run {
   seed: number;
   army: number;
@@ -107,6 +109,8 @@ export interface Run {
   exits: boolean;
   exit: boolean;
   biomes: number[];
+  flawless: number;
+  daily: string;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -318,7 +322,14 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   exits: true,
   exit: false,
   biomes: [],
+  flawless: 0,
+  daily: '',
 });
+
+/** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
+ * so that no player's progress changes its offers, and no Collector (nothing is left to find), the Captain picked. */
+export const dailyRun = (day: string, seed: number): Run =>
+  chooseCommander({ ...newRun(seed, ALL_ACTS, BLUEPRINTS.map((_, id) => id)), daily: day }, 0);
 
 /** The run with the commander `commander` (an index of COMMANDERS): its special marbles and its relic, before the first pick
  * and only once unlocked. Picking another commander drops the first one's. */
@@ -675,7 +686,7 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const carried = found < 0 ? run.carried : [...run.carried, found];
   const collector = earns && tier === 'boss' && node.act < lastAct(map) && carried.length > 0;
   const exit = run.exits && earns && tier === 'boss' && node.act < lastAct(map); // the exits wait after the Collector (#1472)
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit };
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit, flawless: run.flawless + Number(won && lost === 0) };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
@@ -869,6 +880,37 @@ export function actsWon(map: MapNode[], run: Run): number {
   return bosses - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'boss');
 }
 
+/** The points of the score of a run (#1466, docs/specs/roguelite.md section 20), each. */
+export const SCORE = { act: 100, elite: 25, marble: 10, flawless: 15, ascension: 50 } as const;
+
+/** The elites a run beat: the ones on its path, but not the one it fights or lost to, as the acts won (`actsWon`). */
+function elitesBeaten(map: MapNode[], run: Run): number {
+  const elites = run.path.filter((n) => map[n]!.kind === 'elite').length;
+  return elites - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'elite');
+}
+
+/** What the score of a run counts, `[label, how many, points each]`, none left out when there is none: the acts won, the elites
+ * beaten, the marbles left in the army, the fights won with no marble lost, the ascension level. */
+export function scoreParts(map: MapNode[], run: Run): [string, number, number][] {
+  const parts: [string, number, number][] = [
+    ['acts', actsWon(map, run), SCORE.act],
+    ['elites', elitesBeaten(map, run), SCORE.elite],
+    ['marbles', run.army, SCORE.marble],
+    ['flawless fights', run.flawless, SCORE.flawless],
+    ['ascension', run.ascension, SCORE.ascension],
+  ];
+  return parts.filter(([, count]) => count > 0);
+}
+
+/** The score of a run, at any point of it: what `scoreParts` counts, in points. */
+export const runScore = (map: MapNode[], run: Run): number => scoreParts(map, run).reduce((total, [, count, each]) => total + count * each, 0);
+
+/** The score line of a run over, with where the points come from. */
+function scoreLine(map: MapNode[], run: Run): string {
+  const parts = scoreParts(map, run).map(([label, count, each]) => `${label} ${count} × ${each}`);
+  return `<p class="run-score">Score: ${runScore(map, run)}${parts.length ? ` (${parts.join(', ')})` : ''}</p>`;
+}
+
 /** The unlocks of a run over: the special marble types and commanders of the acts it won past its `best`, and the next
  * ascension level of a run won at its top one (#1465). */
 export function earned(map: MapNode[], run: Run): string[] {
@@ -966,6 +1008,7 @@ export const auditLine = (run: Run): string => (run.end === 'won' ? `Reconciled:
 export function runLine(map: MapNode[], run: Run): string {
   if (run.end === 'won') return `Run won with ${run.army} marbles`;
   if (run.end === 'lost') return `Run lost · ${run.army} marbles left`;
+  const title = run.daily ? `Daily run ${run.daily}` : 'Rogue-lite run';
   const node = run.fighting ? lastNode(map, run)! : null;
   const foes = node && run.enemies ? [...(node.elite ? [ELITES[node.elite - 1]!.name] : []), ...(node.formation ? [FORMATIONS[node.formation]!] : [])] : [];
   const biome = currentBiome(map, run);
@@ -975,13 +1018,13 @@ export function runLine(map: MapNode[], run: Run): string {
   const bag = [run.scrap && `${run.scrap} scrap`, run.cells && `${run.cells} cells`, run.carried.length && `${run.carried.length} blueprint${run.carried.length === 1 ? '' : 's'}`];
   const army = `army ${owned(run.army, run.specials)}${bag.flatMap((b) => (b ? [` · ${b}`] : [])).join('')}`;
   const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
-  return node ? `Rogue-lite run · ${level}${where} · ${army}` : `Rogue-lite run · ${level}${rested}${place.map((p) => `${p} · `).join('')}${army} · pick a fight`;
+  return node ? `${title} · ${level}${where} · ${army}` : `${title} · ${level}${rested}${place.map((p) => `${p} · `).join('')}${army} · pick a fight`;
 }
 
 const polygon = (points: readonly [number, number][]): string => points.map(([x, y]) => `${x},${-y}`).join(' ');
 /** The glyph of a special marble type (`0` a plain marble), drawn in its colour, outlined in the text's colour; an
  * upgraded type's with its `+` (#1458). */
-function glyph(kind: number): string {
+export function glyph(kind: number): string {
   const look = SPECIAL_LOOKS[kind - 1];
   const plus = look?.plus ? `<polygon class="plus" points="${polygon(PLUS_POINTS)}" fill="#${PLUS_INK.toString(16).padStart(6, '0')}"/>` : '';
   const shape = look
@@ -1042,7 +1085,7 @@ export function eventHtml(run: Run): string {
 }
 
 /** A relic's glyph: its icon drawn as a line in the text's colour. */
-const lineGlyph = (icon: string): string =>
+export const lineGlyph = (icon: string): string =>
   `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const relicGlyph = (code: number): string => lineGlyph(RELICS[code]!.icon);
 /** The icon and the legend name of each kind of node on the map (#1468): a line drawing on the 24 grid, as the relics' are. */
@@ -1176,10 +1219,11 @@ export function shopHtml(run: Run): string {
 /** The map screen: the run line, the unlocks and commanders before the first pick, a legend, the nodes act by act from the
  * top under the header of their act (half a row), each placed on its row with the icon of its kind, the links between them
  * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
- * summary and New run. */
-export function mapHtml(map: MapNode[], run: Run): string {
+ * score, summary and New run. `book` is what the start screen holds besides (#1466): the daily run, the history and the
+ * compendium. */
+export function mapHtml(map: MapNode[], run: Run, book = ''): string {
   const head = `<p class="run-line">${runLine(map, run)}</p>`;
-  if (run.end) return `${head}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
+  if (run.end) return `${head}${scoreLine(map, run)}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
   const rows = Math.max(...map.map((n) => n.row)) + 1;
   const acts = lastAct(map) + 1;
@@ -1214,13 +1258,16 @@ export function mapHtml(map: MapNode[], run: Run): string {
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
-  return `${head}${told}${run.path.length ? '' : startHtml(run)}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
+  return `${head}${told}${run.path.length ? '' : startHtml(run) + book}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */
 const MAX_SCRAP = 99999;
 /** The longest line of what an event told that a saved run may hold: the line is drawn as HTML, so it holds no markup. */
 const MAX_TOLD = 200;
+/** The most flawless fights a saved run may count, and the form of the day of a daily run (YYYY-MM-DD). */
+const MAX_FLAWLESS = 999;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const isInt = (v: unknown, max: number): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max;
 const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MOVE_STRIDE && mv.every((v) => Number.isInteger(v));
 
@@ -1237,7 +1284,7 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [] } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '' } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1283,9 +1330,12 @@ function decodeRun(raw: unknown): Run | null {
     typeof exit === 'boolean' &&
     Array.isArray(biomes) &&
     biomes.length < ALL_ACTS &&
-    biomes.every((b, i) => isInt(b, BIOMES.length - 1) && b > 0 && biomes.indexOf(b) === i);
+    biomes.every((b, i) => isInt(b, BIOMES.length - 1) && b > 0 && biomes.indexOf(b) === i) &&
+    isInt(flawless, MAX_FLAWLESS) &&
+    typeof daily === 'string' &&
+    (daily === '' || DAY.test(daily));
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily }
     : null;
 }
 

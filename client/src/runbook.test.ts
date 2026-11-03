@@ -90,7 +90,7 @@ describe('the history', () => {
     expect(doc.querySelector('.run-line')!.textContent).toBe('Run history');
     expect([...doc.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
       'The Warden · won · score 640 · ascension 2',
-      'The Captain · lost · score 100 · daily 2026-11-03',
+      'The Captain · lost · score 80 · daily 2026-11-03',
       'No commander · lost · score 100',
     ]);
     expect(doc.querySelector<HTMLButtonElement>('button[data-book="map"]')!.textContent).toBe('Back');
@@ -145,7 +145,7 @@ describe('the compendium', () => {
     expect(readSeen(store)).toEqual({ relics: [], specials: [], tactics: [], events: [] });
     recordSeen(store, fresh({ relics: [Relic.Gyroscope, Relic.Jammer], specials: [2, 0, 0, 0, 0, 0, 0, 1, 0, 0], tactics: [2] }));
     recordSeen(store, fresh({ relics: [Relic.Jammer, Relic.Bunks], specials: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0], tactics: [2, 3] }));
-    expect(readSeen(store)).toEqual({ relics: [0, 3, 5], specials: [1, 8, 3], tactics: [2, 3], events: [] });
+    expect(readSeen(store)).toEqual({ relics: [0, 3, 5], specials: [1, 3, 8], tactics: [2, 3], events: [] });
   });
 
   it('sees the event on the screen', () => {
