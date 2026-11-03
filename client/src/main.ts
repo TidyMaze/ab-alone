@@ -30,7 +30,7 @@ import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, publishFlag, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
-import { askBot, askEval, botBudget, engineFor } from './bot';
+import { askBot, askEval, botBudget, encounterFor, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
@@ -459,7 +459,7 @@ const fightView = (): View => {
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
 // camera himself and a new window size fits it again. Once he orbits or zooms, his view stays until Reset view.
 let fitted: View | null = null;
-const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : trainer ? Engine.trainer(trainer.wave, MARBLES - trainer.lost) : new Engine());
+const makeGame = (): Engine | Encounter => (fight ? encounterFor(Encounter, fight.id, fight.seed, run?.state.placed, run ? relicMask(run.state) : undefined) : trainer ? Engine.trainer(trainer.wave, MARBLES - trainer.lost) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
 // The rogue-lite run (#798) while it is on, else null: its map and where it stands.
@@ -470,6 +470,8 @@ let trainer: { wave: number; lost: number } | null = null; // `lost`: the marble
 let armed = 0;
 // Whether the Swap tactic is picking the army's two marbles (#1460): the first one is the selection.
 let swapping = false;
+// Whether the fight on carries the army's build (#1494): a run's army fight, or an act boss that takes it (special marbles, relics, tactics).
+const built = (): boolean => run !== null && (engine instanceof Engine || engine.takes_build());
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
 let royaleNet: RoyaleNet<Royale> | null = null;
 let ticking = 0;
@@ -2563,10 +2565,10 @@ const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, 
 // The exits at the end of an act (#1472) and the roster names of their bosses.
 const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from, state.runes);
 const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesFor(map, state), undefined, relicMask(state));
-// The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
+// The fight of the run's last node: the act's roster boss (#800) with the army's build, or the bot against the army.
 const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
   const boss = actBoss(map, state, boss_ids());
-  return boss ? new Encounter(boss.id, boss.seed) : armyEngine(state, map);
+  return boss ? encounterFor(Encounter, boss.id, boss.seed, state.placed, relicMask(state)) : armyEngine(state, map); // an act boss takes the army's build when its rules allow it (#1494)
 };
 const loadSavedRun = () => loadRun(gameStore, (seed, runes) => parseMap(run_map(seed, runes)), runEngine);
 const resumedRun = await loadSavedRun();
@@ -2831,7 +2833,7 @@ const ejecting: Ejecting[] = [];
 function playMove(record: number[]): void {
   leaveReplay(); // a bot reply or a peer's move shows the live game
   const before = Array.from(engine.board());
-  const army = run && !(engine instanceof Encounter) ? engine : null;
+  const army = built() ? engine : null;
   const specials = army ? parseSpecials(army.specials()) : [];
   const fuses = army ? parseFuses(army.fuses()) : [];
   engine.play(Int32Array.from(record));
@@ -3520,7 +3522,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${run && !(engine instanceof Encounter) ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${built() ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3537,8 +3539,8 @@ function drawHud(extra = ''): void {
   if (run) {
     document.getElementById('hud')!.insertAdjacentHTML('beforeend', relicBarHtml(run.state)); // the relic bar (#1457)
     document.getElementById('hud')!.insertAdjacentHTML('beforeend', affinityBarHtml(run.state)); // and the affinities (#1471)
-    // The tactic bar (#1460): in the army's fights only, none enabled during the placement or a replay.
-    if (run.state.fighting && engine instanceof Engine) {
+    // The tactic bar (#1460): in the army's fights and the act bosses' that take the build, none enabled during the placement or a replay.
+    if (run.state.fighting && built()) {
       const mask = placing(run.state) || replaying !== null ? 0 : engine.tactics();
       document.getElementById('hud')!.insertAdjacentHTML('beforeend', tacticBarHtml(run.state, mask, swapping));
     }
@@ -4005,8 +4007,8 @@ function refresh(): void {
     onMarble(cellIndex(cell[0], cell[1]), ring);
   }
   // The special marbles of a rogue-lite fight (#961): each type's glyph in its colour on the marble.
-  const specials = run && !(engine instanceof Encounter) ? parseSpecials(engine.specials()) : [];
-  const fuses = run && !(engine instanceof Encounter) ? parseFuses(engine.fuses()) : [];
+  const specials = built() ? parseSpecials(engine.specials()) : [];
+  const fuses = built() ? parseFuses(engine.fuses()) : [];
   for (const { cell, kind } of specials) {
     const p = axialTo3D(...cell);
     const glyph = Object.assign(new THREE.Mesh(specialGlyphs[kind - 1]!, specialInks[kind - 1]!), { name: 'special-mark' });
@@ -5835,7 +5837,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
   }
 }
 // The run's panel: a relic offer (#1457), the reward of a won fight (#961), an event's choice (#800), a rest site's (#1458), a
-// shop's (#1459), the placement before a fight's first move (never in a boss fight: no special marble there), or the map.
+// shop's (#1459), the placement before a fight's first move (in a boss fight when the boss takes the build, #1494), or the map.
 function showRun(): void {
   const { map, state } = run!;
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
@@ -5844,7 +5846,7 @@ function showRun(): void {
   recordSeen(store, state); // the compendium (#1466)
   const done = finished(map, state);
   if (done) recordFinished(store, done); // the history, and the daily run's score
-  const placed = placing(state) && !(engine instanceof Encounter);
+  const placed = placing(state) && built();
   runPanel.innerHTML = state.bonus
     ? bonusHtml(map, state)
     : state.relic
@@ -5883,7 +5885,7 @@ function placeAt(q: number, r: number): void {
   run!.state = place(run!.state, [q, r], armed);
   if (left(run!.state, armed) === 0) armed = 0; // none left: the type is put down
   void saveRun(gameStore, run!.state);
-  engine = armyEngine(run!.state, run!.map);
+  engine = runEngine(run!.state, run!.map);
   showRun();
   refresh();
 }
@@ -5910,8 +5912,7 @@ function fightRun(game: Engine | Encounter): void {
 function runMoved(): void {
   const boss = engine instanceof Encounter;
   const status = engine instanceof Encounter ? engine.result() : engine.status(); // a boss fight: 1 won, 2 lost
-  const kept = (): number[] | undefined =>
-    boss ? undefined : armyKept(engine.board(), (engine as Engine).specials());
+  const kept = (): number[] => armyKept(engine.board(), engine.specials()); // a boss that takes no build has none on its board
   const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, { ...run!.state, moves: history.slice() }, status === 1, engine.ejected(2), kept()); // its last move counts (#1473)
   run!.state = state;
   armed = 0;

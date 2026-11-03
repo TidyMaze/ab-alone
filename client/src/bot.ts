@@ -105,14 +105,30 @@ export function engineFor<E extends { place_special(q: number, r: number, kind: 
   return engine;
 }
 
+/** The boss fight of a request: the boss `id` of `seed`, and in a run (`relics` given, 0 for none) the build of the army when the
+ * boss takes it (#1494): the rogue-lite flag with the run's relics, then its special marbles `placed`. */
+export function encounterFor<E extends { takes_build(): boolean; place_special(q: number, r: number, kind: number): void; set_relics(mask: number): void }>(
+  make: { new (id: string, seed: number): E },
+  id: string,
+  seed: number,
+  placed: number[][] = [],
+  relics?: number,
+): E {
+  const fight = new make(id, seed);
+  if (relics === undefined || !fight.takes_build()) return fight;
+  fight.set_relics(relics);
+  for (const [q, r, kind] of placed) fight.place_special(q!, r!, kind!);
+  return fight;
+}
+
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
   makeEngine: (army?: number, placed?: number[][], foes?: number | number[], trainer?: TrainerRef, relics?: number) => EngineLike,
-  makeEncounter: (id: string, seed: number) => EncounterLike,
+  makeEncounter: (id: string, seed: number, placed?: number[][], relics?: number) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
-    const fight = makeEncounter(req.boss.id, req.boss.seed);
+    const fight = makeEncounter(req.boss.id, req.boss.seed, req.placed, req.relics);
     if (req.difficultyPercent && fight.scale_node_budget) {
       fight.scale_node_budget(req.difficultyPercent);
     }

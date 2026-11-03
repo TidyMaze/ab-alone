@@ -876,39 +876,38 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     expect(map().querySelector('button[data-tactic-offer]')).toBeNull();
   });
 
-  it('an act boss fight plays Reinforce and Fall back, never Freeze nor Swap, and the record joins the saved moves (#1494)', async () => {
+  it('an act boss fight plays Fall back, never Swap nor Freeze, and the record joins the saved moves (#1494)', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?nodes=50', { indexedDB });
     const { state } = await bossRun('hull');
-    await game.hook('__run', { ...state, tactics: [1, 2, 3, 4] });
+    await game.hook('__run', { ...state, tactics: [2, 3, 4] });
     expect(document.body.dataset.boss).toBe('hull');
-    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['1', '2', '3', '4']);
+    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['2', '3', '4']);
     expect(tactics().every((b) => b.disabled)).toBe(true); // none before the first move
     const start = game.hook<number[]>('__board');
     playMove(game);
     await answered(game);
     expect(plies(game)).toBe(2);
-    expect(tactics().map((b) => [b.dataset.tactic, b.disabled])).toEqual([['1', true], ['2', true], ['3', true], ['4', false]]); // a full back row, no skipped turn in a boss's clock
+    expect(tactics().map((b) => [b.dataset.tactic, b.disabled])).toEqual([['2', true], ['3', true], ['4', false]]); // a skipped turn would break the boss's clock
     button(2).click(); // disabled: nothing happens
     button(4).click();
     expect(plies(game)).toBe(3); // the record joins the list, the engine is back at the start
     expect(game.hook<number[]>('__board')).toEqual(start);
     expect(game.hook<number[][]>('__history')[2]).toEqual([0, 4, 0, 0, 0, 0, 0, 0]);
-    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['1', '2', '3']);
+    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['2', '3']);
     await game.settle();
     const again = await boot('?nodes=50', { indexedDB });
     expect(plies(again)).toBe(3); // the records replay on the boss
     expect(again.hook<number[]>('__board')).toEqual(start);
-    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['1', '2', '3']);
+    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['2', '3']);
   });
 
-  it('an act boss fight shows the held tactics greyed out when the boss takes no build (#1494)', async () => {
+  it('an act boss that takes no build has no tactic bar (#1494)', async () => {
     const game = await boot('?nodes=50');
     await game.hook('__run', { ...(await bossRun('echo')).state, tactics: [1, 4] });
     expect(document.body.dataset.boss).toBe('echo');
-    playMove(game);
-    await answered(game);
-    expect(tactics().map((b) => [b.dataset.tactic, b.disabled])).toEqual([['1', true], ['4', true]]);
+    expect(tactics()).toHaveLength(0);
+    expect(document.body.dataset.tactics).toBe('1,4'); // still held
   });
 });
 
@@ -1452,6 +1451,15 @@ describe('main.ts, an act boss fight carries the army build (#1494)', () => {
     expect(game.hook<number>('__plies')).toBe(2); // the boss answered on the board that has them
     relics.mockRestore();
     placed.mockRestore();
+  });
+
+  it('a hovered move shows its ghost on the boss fight of a run, played on the board that has the build', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...(await bossRun('hull')).state, relics: [0], moves: [] });
+    game.click(-2, 2);
+    const { x, y } = game.hook<{ x: number; y: number }>('__cellToScreen', -3, 2);
+    document.querySelector('body > canvas')!.dispatchEvent(new MouseEvent('pointermove', { clientX: x, clientY: y }));
+    expect(document.body.dataset.ghosts).toBe('1');
   });
 
   it('a boss that takes no build starts its fight at once, with no special marble on its board', async () => {
