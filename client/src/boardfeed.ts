@@ -12,7 +12,7 @@ export const LIMIT = 200;
 const TIMEOUT_MS = 8000;
 const SUB = 'ab-board';
 const TAG = 'ab-alone-ranked';
-const MAX_PLIES = 1000;
+export const MAX_PLIES = 1000;
 /** The plies replayed in one read at most, whatever the relays send: a stranger cannot make the page replay for long. */
 export const REPLAY_BUDGET = 20_000;
 const STRIDE = 8; // integers per move record, crates/abalone-wasm/src/lib.rs
@@ -67,7 +67,7 @@ const isMove = (m: unknown): m is number[] => Array.isArray(m) && m.length === S
 export async function resultPayload(r: Omit<SharedResult, 'sigs'>): Promise<Uint8Array<ArrayBuffer>> {
   const log = new TextEncoder().encode(JSON.stringify(r.moves));
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', log)), (b) => b.toString(16).padStart(2, '0')).join('');
-  return new TextEncoder().encode(JSON.stringify(['result', r.v, r.game, r.black.pub, cleanName(r.black.name), r.white.pub, cleanName(r.white.name), hash, r.status, r.ejected, r.ts]));
+  return new TextEncoder().encode(JSON.stringify(['ab-alone.result.v1', r.v, r.game, r.black.pub, cleanName(r.black.name), r.white.pub, cleanName(r.white.name), hash, r.status, r.ejected, r.ts]));
 }
 
 /** One seat's signature of the result, base64url. */
