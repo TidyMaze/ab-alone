@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import init, { Engine, replay_score } from 'abalone-wasm';
 import banned from './bannedkeys.json';
-import { retireTimes, BANNED, banSet, LIMIT, MIN_OPPONENTS, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import { retireTimes, BANNED, banSet, JUNK_BUDGET, LIMIT, MAX_FAILS_PER_KEY, MIN_OPPONENTS, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
 import { boardKeys, joinBoard, leaveBoard, signRetire, type RetireEvent } from './shareboard';
 import { generateKeys, type Keys } from './moverecord';
 
@@ -65,8 +65,8 @@ describe('the shared board read side (#1287)', () => {
       signed({ game: 'g5', status: 1, ejected: [6, 0] }, short),
     ]);
     const twice = await signed({ ts: 200 });
-    const kept = await verifiedResults([JSON.stringify(good), ...lies.map((l) => JSON.stringify(l)), 'junk', JSON.stringify(twice)], score);
-    expect(kept).toEqual([good]);
+    expect(await verifiedResults([...lies.map((l) => JSON.stringify(l)), 'junk'], score)).toEqual([]);
+    expect(await verifiedResults([JSON.stringify(good), 'junk', JSON.stringify(twice)], score)).toEqual([good]);
   });
 
   it('refuses a result a seat did not sign: one seat, swapped seats, an outsider, a changed field, a borrowed key (#1317)', async () => {
@@ -144,10 +144,26 @@ describe('the shared board read side (#1287)', () => {
     await verifiedResults([bad, bad, bad], counting);
     expect(calls).toHaveLength(1);
     calls.length = 0;
-    const big = (game: string): Promise<string> => signed({ game, moves: Array.from({ length: 1000 }, () => Array(8).fill(0)) }).then((r) => JSON.stringify(r));
-    await verifiedResults(await Promise.all(Array.from({ length: 30 }, (_, i) => big(`b${i}`))), counting);
-    expect(calls).toHaveLength(REPLAY_BUDGET / 1000);
+    const pairs = async (): Promise<[Keys, Keys]> => [await generateKeys(), await generateKeys()];
+    const big = async (game: string, by: [Keys, Keys]): Promise<string> =>
+      JSON.stringify(await signed({ game, black: { pub: by[0].pub, name: 'X' }, white: { pub: by[1].pub, name: 'Y' }, moves: Array.from({ length: 1000 }, () => Array(8).fill(0)) }, ended, by));
+    await verifiedResults(await Promise.all(Array.from({ length: 30 }, async (_, i) => big(`b${i}`, await pairs()))), counting);
+    expect(calls).toHaveLength(JUNK_BUDGET / 1000);
     expect(parseResult(JSON.stringify(result()).replace('"ts":100', '"ts":1e999'))).toBeNull();
+  });
+
+  it('results that do not replay never use up the budget of honest ones, and a key whose replays fail is heard twice at most', async () => {
+    const junkOf = async (i: number, by: [Keys, Keys]): Promise<string> =>
+      JSON.stringify(await signed({ game: `j${i}`, black: { pub: by[0].pub, name: 'X' }, white: { pub: by[1].pub, name: 'Y' }, moves: Array.from({ length: 1000 }, () => Array(8).fill(0)), status: 1 }, ended, by));
+    const flood = await Promise.all(Array.from({ length: 25 }, async (_, i) => junkOf(i, [await generateKeys(), await generateKeys()])));
+    const good = await signed({ game: 'honest' });
+    expect(await verifiedResults([...flood, JSON.stringify(good)].slice(0, 20).concat(JSON.stringify(good)), score)).toEqual([good]);
+    // One pair of keys sending many junk results: only MAX_FAILS_PER_KEY of them are replayed.
+    const calls: number[] = [];
+    const counting = (flat: Int32Array): Uint8Array => (calls.push(flat.length), new Uint8Array());
+    const mine: [Keys, Keys] = [await generateKeys(), await generateKeys()];
+    await verifiedResults(await Promise.all(Array.from({ length: 6 }, (_, i) => junkOf(100 + i, mine))), counting);
+    expect(calls).toHaveLength(MAX_FAILS_PER_KEY);
   });
 
   it('derives the ratings by replaying the valid results in order from 1200, never reading one', () => {

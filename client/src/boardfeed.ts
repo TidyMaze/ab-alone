@@ -24,6 +24,10 @@ export interface BanEntry {
 }
 export const banSet = (list: readonly BanEntry[]): ReadonlySet<string> => new Set(list.map((b) => b.pub));
 export const BANNED = banSet((banned as { banned: readonly BanEntry[] }).banned);
+/** The plies replayed for results that do NOT replay to their claim, kept apart so junk cannot use up the honest budget; and how many such
+ * results one key may have before its events are no longer replayed. */
+export const JUNK_BUDGET = 20_000;
+export const MAX_FAILS_PER_KEY = 2;
 const STRIDE = 8; // integers per move record, crates/abalone-wasm/src/lib.rs
 
 export interface Side {
@@ -138,16 +142,25 @@ export async function verifiedResults(contents: readonly string[], score: Score,
   const kept: SharedResult[] = [];
   const retired = await retireTimes(contents);
   let budget = REPLAY_BUDGET;
-  for (const content of contents) {
-    const r = parseResult(content);
-    if (!r || ban.has(r.black.pub) || ban.has(r.white.pub)) continue; // a banned key's results are ignored
+  let junk = JUNK_BUDGET;
+  const fails = new Map<string, number>(); // refused replays by key (either seat)
+  // The shortest logs first (stable, so the first seen still wins a tie): a flood of long junk cannot come before the games people play.
+  const parsed = contents.flatMap((c) => parseResult(c) ?? []).sort((a, b) => a.moves.length - b.moves.length);
+  for (const r of parsed) {
+    if (ban.has(r.black.pub) || ban.has(r.white.pub)) continue; // a banned key's results are ignored
     if (r.ts > (retired.get(r.black.pub) ?? Infinity) || r.ts > (retired.get(r.white.pub) ?? Infinity)) continue; // a key stopped before this game
     const id = JSON.stringify([r.game, r.black.pub, r.white.pub]);
-    if (seen.has(id) || r.moves.length > budget || !(await bothSigned(r))) continue;
+    if (seen.has(id) || r.moves.length > budget || r.moves.length > junk || !(await bothSigned(r))) continue;
+    if ((fails.get(r.black.pub) ?? 0) >= MAX_FAILS_PER_KEY || (fails.get(r.white.pub) ?? 0) >= MAX_FAILS_PER_KEY) continue;
     seen.add(id);
-    budget -= r.moves.length;
     const got = score(Int32Array.from(r.moves.flat()));
-    if (got.length === 3 && got[0] === r.status && got[1] === r.ejected[0] && got[2] === r.ejected[1]) kept.push(r);
+    if (got.length === 3 && got[0] === r.status && got[1] === r.ejected[0] && got[2] === r.ejected[1]) {
+      budget -= r.moves.length; // only a replay that held uses the honest budget
+      kept.push(r);
+    } else {
+      junk -= r.moves.length;
+      for (const pub of [r.black.pub, r.white.pub]) fails.set(pub, (fails.get(pub) ?? 0) + 1);
+    }
   }
   return kept;
 }
