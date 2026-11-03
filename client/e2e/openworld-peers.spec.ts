@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { MIN_GAP_MS } from '../src/worldpeers';
 import { clickHud, openModes, showHud, lowTierOnCi } from './modes';
 
 lowTierOnCi();
@@ -27,6 +28,9 @@ async function enter(page: Page, seed: number): Promise<void> {
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe(String(seed));
 }
 
+// A peer's positions closer than MIN_GAP_MS (100 ms, flood guard in worldpeers.ts) are refused: Firefox and WebKit are quick enough to send the next one inside it.
+const pastGap = (page: Page): Promise<void> => page.waitForTimeout(MIN_GAP_MS + 20);
+
 const pos = (q: number, r: number, seq: number): number[] => [2, 2, (q >> 8) & 255, q & 255, (r >> 8) & 255, r & 255, seq];
 
 test('a far hero shows as an arrow at the screen edge with its distance, a near one as a marker, #1305', async ({ page }) => {
@@ -52,6 +56,7 @@ test('a far hero shows as an arrow at the screen edge with its distance, a near 
   await page.screenshot({ path: 'test-results/peers-far.png' });
 
   // The same hero walks next to ours: it is in view, so a marker in the scene and no arrow.
+  await pastGap(page);
   await page.evaluate((near) => (window as unknown as Hook).__netPeerIn(near, 'p'), pos(1, 0, 1));
   await expect(edge).toHaveCount(0);
   await expect(page.locator('#openworld-peers')).toHaveAttribute('data-peers', '1');
@@ -360,6 +365,7 @@ test('the hero of another player rides a boat on water and has none on land, #14
   const peers = page.locator('#openworld-peers');
   await expect(peers).toHaveAttribute('data-boats', '1');
   await page.screenshot({ path: 'test-results/peers-boat.png' });
+  await pastGap(page);
   await page.evaluate((land) => (window as unknown as Hook).__netPeerIn(land, 'p'), pos(24, 1, 1));
   await expect(peers).toHaveAttribute('data-boats', '0');
 });
