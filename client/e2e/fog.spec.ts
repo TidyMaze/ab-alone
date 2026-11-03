@@ -139,10 +139,12 @@ test('the fog shows smoothly across the bay, not on board cells nor as a brutal 
   await drawn();
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
   const fogOn = await shot('fog-on.png');
-  const fogOnAgain = await shot('fog-on-again.png'); // the same fog, a steady frame later: the still check (one flip less, #1481)
   await flip();
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'on');
   const fogOff = await shot('fog-off.png');
+  await flip();
+  await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
+  const fogOnAgain = await shot('fog-on-again.png');
 
   const size = page.viewportSize()!;
   const band = (cells: { x: number; y: number }[]) => {
