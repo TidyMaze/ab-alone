@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
-import type { Axial, Move } from './board';
+import { cellIndex, type Axial, type Move } from './board';
 import { actBoss, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
 import type { View } from './camera';
@@ -292,6 +292,61 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     await game.settle();
     expect(document.body.dataset.run).toBe('lost');
     expect(specials()).toBe('0,2,1'); // the Heavy stayed, the Spark went off
+  });
+
+  // The cues of Magnet, Shield, Bomb and Medic (#1490): the ring of a burst, the slide of a pull, the drop of a Medic that
+  // comes back, the flash of a Shield. They only show what the engine did.
+  const counts = (kind: number): number[] => Array.from({ length: 10 }, (_, k) => Number(k === kind - 1));
+  /** The fight of node 0 with `placed` marbles of `kind` and `moves` already played (records of the bridge). */
+  const staged = (kind: number, placed: number[][], moves: number[][] = []): Run => ({ ...pick({ ...plainRun(3, 3), specials: counts(kind) }, 0), placed, moves });
+  /** The record of a move of one marble on `(q, r)` in direction `dir`. */
+  const ONE = (q: number, r: number, dir: number): number[] => [1, dir, q, r, 0, 0, 0, 0];
+
+  it.each([false, true])('a Bomb bursts on its last turn with a ring in its colour, never with reduced motion (%s)', async (reducedMotion) => {
+    const game = await boot('?bot=off', { reducedMotion });
+    await game.hook('__run', staged(9, [[0, 4, 9]]));
+    play(game, [[-2, 2]], [-3, 2]);
+    playMove(game);
+    play(game, [[-3, 2]], [-2, 2]);
+    playMove(game);
+    expect(document.body.dataset.bombs).toBeUndefined(); // the fuse has one turn left
+    play(game, [[-2, 2]], [-3, 2]);
+    expect(document.body.dataset.bombs).toBe(reducedMotion ? undefined : '1');
+    expect(specials()).toBe('');
+  });
+
+  it.each([false, true])('a Magnet that moved slides the enemy marble it pulls to its new cell, at once with reduced motion (%s)', async (reducedMotion) => {
+    const game = await boot('?bot=off', { reducedMotion });
+    // Four plies, then the Magnet steps from (1, 1) to (1, 0): the white marble on (1, -2) comes to (1, -1).
+    const moves = [ONE(-4, 3, 2), ONE(0, -4, 3), ONE(0, 2, 2), ONE(1, -3, 5)];
+    await game.hook('__run', staged(7, [[0, 2, 7]], moves));
+    const at = (q: number, r: number): number => game.hook<number[]>('__board')[cellIndex(q, r)]!;
+    expect([at(1, -2), at(1, -1)]).toEqual([2, 0]);
+    play(game, [[1, 1]], [1, 0]);
+    expect([at(1, -2), at(1, -1), at(1, 0)]).toEqual([0, 2, 1]);
+    expect(document.body.dataset.pulls).toBe(reducedMotion ? undefined : '1');
+  });
+
+  it.each([false, true])('a push into a Shield flashes it, even with reduced motion (%s)', async (reducedMotion) => {
+    const game = await boot('?bot=off', { reducedMotion });
+    // Six plies and a white Shield on (0, -3) that went down to (0, -1); Black pushes it with two marbles, nothing moves.
+    const moves = [[2, 2, -2, 2, -1, 2, 0, 0], [2, 5, 0, -3, 1, -3, 0, 0], [2, 4, -3, 3, -2, 3, 0, 0], ONE(0, -2, 5), [3, 4, 0, 1, 0, 2, 0, 3], ONE(2, -3, 1)];
+    await game.hook('__run', staged(8, [[0, -3, 8]], moves));
+    expect(document.body.dataset.shields).toBeUndefined();
+    play(game, [[0, 0], [0, 1]], [0, -1]);
+    expect(document.body.dataset.shields).toBe('1');
+    expect(specials()).toBe(''); // the Shield is spent
+  });
+
+  it.each([false, true])('a Medic thrown off drops back onto its row, never with reduced motion (%s)', async (reducedMotion) => {
+    const game = await boot('?bot=off', { reducedMotion });
+    // Eighteen plies in which the white Medic on (0, -3) was pushed to the rim; Black's push throws it off.
+    const moves = [[3, 4, -2, 2, -2, 3, -2, 4], [2, 3, 0, -4, 0, -3, 0, 0], [2, 2, -2, 1, -2, 2, 0, 0], [2, 5, 2, -3, 3, -3, 0, 0], [1, 2, 1, 3, 0, 0, 0, 0], [1, 0, -1, -3, 0, 0, 0, 0], [1, 0, -3, 4, 0, 0, 0, 0], [2, 3, 3, -2, 4, -3, 0, 0], [1, 2, 0, 3, 0, 0, 0, 0], [1, 5, 2, -1, 0, 0, 0, 0], [2, 1, -1, 2, 0, 2, 0, 0], [2, 3, -1, -2, 0, -3, 0, 0], [2, 1, -1, 0, -1, 1, 0, 0], [1, 1, -2, -1, 0, 0, 0, 0], [3, 0, -3, 3, -2, 3, -1, 3], [2, 1, 1, -4, 1, -3, 0, 0], [2, 1, -2, 0, -2, 1, 0, 0], [3, 3, 2, -4, 3, -4, 4, -4]];
+    await game.hook('__run', staged(10, [[0, -3, 10]], moves));
+    expect(document.body.dataset.medics).toBeUndefined();
+    play(game, [[-3, 0], [-3, 1]], [-3, -1]);
+    expect(document.body.dataset.medics).toBe(reducedMotion ? undefined : '1');
+    expect(specials()).toBe('');
   });
 
   it('the bot replays the fight with its special marbles: a Heavy push the plain board refuses, #961', async () => {
