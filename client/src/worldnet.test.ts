@@ -12,7 +12,7 @@ import type { PeerNet } from './p2p';
 import { generateKeys } from './moverecord';
 import type { Store } from './quality';
 import { EVENTS_KEY, SYNC_MAX, signBeaten, signBreak, signLair } from './worldevents';
-import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
+import { SETTLE_MS, decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
 import { PeersLayer } from './worldpeersview';
 
@@ -370,6 +370,29 @@ describe('WorldPeersHost', () => {
       expect(applied.length).toBe(SYNC_MAX + 1);
       expect(applied).toContainEqual([22, 0]);
       expect(applied).not.toContainEqual([100 + SYNC_MAX, 0]);
+    }, 30000);
+
+    it('a place a peer jumped to makes its events near only after SETTLE_MS', async () => {
+      const { nets, applied, clock, enter, keysOnce } = setup();
+      enter();
+      const keys = await keysOnce;
+      const net = nets[0]!;
+      net.data(encodeHello(), 'p');
+      net.data(encodePos(0, 0, 1), 'p');
+      for (let i = 0; i < SYNC_MAX; i++) {
+        clock.now += 200;
+        net.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 100 + i, 0)), 'p'); // far: the whole cap
+      }
+      await vi.waitFor(() => expect(applied.length).toBe(SYNC_MAX), { timeout: 20000 });
+      clock.now += 200;
+      net.data(encodePos(5000, 0, 2), 'p'); // 5000 cells in 40 s
+      clock.now += 200;
+      net.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 5000, 1)), 'p'); // right at the place it claims, but it just jumped there
+      await flush();
+      expect(applied.length).toBe(SYNC_MAX);
+      clock.now += SETTLE_MS;
+      net.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 5001, 1)), 'p');
+      await vi.waitFor(() => expect(applied.length).toBe(SYNC_MAX + 1));
     }, 30000);
 
     it('sends a beaten enemy signed as type 5 to every peer, and only one the rules allow', async () => {

@@ -58,6 +58,10 @@ export const KEEPALIVE_MS = 5000;
 export const PEER_TTL_MS = 10_000;
 /** Positions from one peer closer together than this are dropped (flood guard; the honest rate is SEND_MS). */
 export const MIN_GAP_MS = 100;
+/** The fastest a hero is believed to move between two positions (cells per second, above any walk or boat), and how long a place reached by a
+ * faster jump (a teleporter, or a lie) stays unproven: its events count as far from it until then. */
+export const MAX_SPEED = 20;
+export const SETTLE_MS = 3000;
 /** The most heroes drawn, markers and edge indicators. */
 export const MAX_PEERS = 20;
 /** The table keeps at most this many peers, shown or not. */
@@ -227,6 +231,8 @@ interface Entry {
   heard: number;
   posAt: number;
   troopAt: number;
+  /** Until when its place is unproven: it jumped faster than MAX_SPEED. */
+  unsettled: number;
 }
 
 /** What this hero knows of the others, by transport peer. */
@@ -243,7 +249,7 @@ export class Peers {
     if (known) {
       known.heard = now;
       known.name = name;
-    } else if (this.table.size < MAX_TABLE) this.table.set(peer, { cell: null, offsets: [], name, seq: 0, heard: now, posAt: -Infinity, troopAt: -Infinity });
+    } else if (this.table.size < MAX_TABLE) this.table.set(peer, { cell: null, offsets: [], name, seq: 0, heard: now, posAt: -Infinity, troopAt: -Infinity, unsettled: -Infinity });
   }
 
   /** A position from `peer`. False when it is refused: no Hello first, too fast, or not newer than the last (seq mod 256). */
@@ -253,6 +259,7 @@ export class Peers {
     if (now - e.posAt < MIN_GAP_MS) return false;
     const ahead = (seq - e.seq + 256) % 256;
     if (e.cell && (ahead === 0 || ahead > 127)) return false;
+    if (e.cell && hexDistance(e.cell, [q, r]) > 2 + (MAX_SPEED * (now - e.posAt)) / 1000) e.unsettled = now + SETTLE_MS;
     e.cell = [q, r];
     e.seq = seq;
     e.heard = now;
@@ -270,9 +277,10 @@ export class Peers {
     return true;
   }
 
-  /** The last place `peer` reported, null when none. */
-  cellOf(peer: string): Axial | null {
-    return this.table.get(peer)?.cell ?? null;
+  /** The last place `peer` reported, null when none or when it got there faster than a hero goes (until SETTLE_MS have passed). */
+  cellOf(peer: string, now: number): Axial | null {
+    const e = this.table.get(peer);
+    return e && now >= e.unsettled ? e.cell : null;
   }
 
   leave(peer: string): void {

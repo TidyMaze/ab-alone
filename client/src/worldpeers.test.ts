@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { b64 } from './moverecord';
-import { BREAK_BYTES, encodeTroop, TROOP_MAX, TROOP_REACH, cleanName, decode, encodeBreak, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_NAME, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, PUBLIC_SEED, readName, roomOf, SEND_MS, Sender, writeName } from './worldpeers';
+import { BREAK_BYTES, encodeTroop, TROOP_MAX, TROOP_REACH, cleanName, decode, encodeBreak, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_NAME, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, SETTLE_MS, PUBLIC_SEED, readName, roomOf, SEND_MS, Sender, writeName } from './worldpeers';
 
 describe('the wire format', () => {
   it('names one room for the public world', () => {
@@ -250,6 +250,21 @@ describe('Peers', () => {
     expect(p.cells().map((c) => c.peer)).toEqual(['b']);
     p.expire(PEER_TTL_MS + 1);
     expect(p.cells()).toEqual([]);
+  });
+
+  it('trusts a place for events only when the peer got there at a hero\'s speed, or has stood there for SETTLE_MS', () => {
+    const p = new Peers();
+    expect(p.cellOf('a', 0)).toBeNull(); // unknown peer
+    p.hello('a', 0);
+    expect(p.cellOf('a', 0)).toBeNull(); // no place yet
+    p.position('a', pos(1, 0, 0), 0);
+    expect(p.cellOf('a', 0)).toEqual([1, 0]);
+    p.position('a', pos(5, 0, 1), 1000); // 4 cells in a second: a walk
+    expect(p.cellOf('a', 1000)).toEqual([5, 0]);
+    p.position('a', pos(500, 0, 2), 1200); // a jump of 495 cells in 0.2 s
+    expect(p.cellOf('a', 1200)).toBeNull();
+    expect(p.cellOf('a', 1200 + SETTLE_MS - 1)).toBeNull();
+    expect(p.cellOf('a', 1200 + SETTLE_MS)).toEqual([500, 0]);
   });
 
   it('refuses a flood: a message under MIN_GAP_MS after the last one is dropped', () => {

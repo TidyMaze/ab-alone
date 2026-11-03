@@ -219,7 +219,7 @@ export class WorldPeersHost implements PeerHost {
     const now = this.clock();
     if (now - (this.lastBreak.get(peer) ?? -Infinity) < BREAK_GAP_MS) return;
     this.lastBreak.set(peer, now);
-    const at = run?.peers.cellOf(peer);
+    const at = run?.peers.cellOf(peer, now);
     if (!at || hexDistance(at, [event.q, event.r]) > NEAR) {
       const used = this.far.get(peer) ?? 0;
       if (used >= SYNC_MAX) return;
