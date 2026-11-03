@@ -3,6 +3,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial, Move } from './board';
 import { actBoss, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
+import { AUTO_DELAY_MS } from './autoplay';
 import type { View } from './camera';
 import { boot, type Game } from './test/harness';
 
@@ -87,12 +88,42 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(again.hud()).toContain('Rogue-lite run · act 1 fight');
   });
 
-  it('Auto-play is greyed in a run fight, its reason given', async () => {
-    await startRun('?nodes=50');
+  it('Auto-play plays the player side of a run fight, the bot answers, and a tactic held stays unplayed (#1489)', async () => {
+    const game = await startRun('?nodes=50');
     open()[0]!.click();
     expect(byId<HTMLButtonElement>('auto-play').hidden).toBe(false);
+    expect(byId<HTMLButtonElement>('auto-play').disabled).toBe(false);
+    expect(byId('auto-reason').hidden).toBe(true);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    byId('auto-play').click();
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
+      game.frame(1000);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(game.hook<number>('__plies')).toBeGreaterThanOrEqual(3);
+    byId('auto-play').click();
+    vi.useRealTimers();
+  });
+
+  it('Auto-play is greyed against an act boss without its medal, and plays with it (#1489)', async () => {
+    const game = await boot('?nodes=50');
+    const { state } = await bossRun('hull');
+    await game.hook('__run', state);
     expect(byId<HTMLButtonElement>('auto-play').disabled).toBe(true);
-    expect(byId('auto-reason').textContent).toBe('Not in a rogue-lite run');
+    expect(byId('auto-reason').textContent).toBe('Beat The Hull once to unlock Auto-play against it');
+    localStorage.setItem('ab-alone.medals', JSON.stringify({ hull: 7 }));
+    await game.hook('__run', state);
+    expect(byId<HTMLButtonElement>('auto-play').disabled).toBe(false);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    byId('auto-play').click();
+    await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
+    game.frame(1000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(game.hook<number>('__plies')).toBeGreaterThanOrEqual(1);
+    byId('auto-play').click();
+    vi.useRealTimers();
+    localStorage.clear();
   });
 
   it('a marble lost by an army of 4 loses the run, and New run starts another', async () => {

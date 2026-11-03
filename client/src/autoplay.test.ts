@@ -22,8 +22,8 @@ describe('autoPlayState, #792', () => {
     });
   });
 
-  it("is greyed with the reason in a rogue-lite run: the run is the player's own army, #798", () => {
-    expect(autoPlayState({ online: false, boss: null, run: true }, false)).toEqual({ shown: true, reason: 'Not in a rogue-lite run' });
+  it("is on offer in a rogue-lite run's fight, #1489", () => {
+    expect(autoPlayState({ online: false, boss: null, run: true }, false)).toEqual({ shown: true, reason: null });
   });
 
   it('is greyed in the Trainer: the score is the player\'s own, #1159', () => {
