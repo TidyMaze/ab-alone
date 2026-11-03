@@ -103,16 +103,19 @@ export function parseResult(content: string): SharedResult | null {
   };
 }
 
-/** The results both seats signed whose log the rules replay to the claimed score, one per game (the first seen). The rest is not shown.
+/** The results both seats signed whose log the rules replay to the claimed score, one per game and pair of seats (the first seen). The rest is not shown.
  * A result with a bad signature is dropped before the replay and does not use up its game id, so nobody can squat a game. */
 export async function verifiedResults(contents: readonly string[], score: Score): Promise<SharedResult[]> {
-  const seen = new Set<string>(); // every game id met, a refused one too: a game is replayed once
+  const seen = new Set<string>(); // every (game, black, white) met, a refused one too: a game is replayed once. The seats are in the key so that
+  // another pair of keys reusing a public game id cannot spend it.
   const kept: SharedResult[] = [];
   let budget = REPLAY_BUDGET;
   for (const content of contents) {
     const r = parseResult(content);
-    if (!r || seen.has(r.game) || r.moves.length > budget || !(await bothSigned(r))) continue;
-    seen.add(r.game);
+    if (!r) continue;
+    const id = JSON.stringify([r.game, r.black.pub, r.white.pub]);
+    if (seen.has(id) || r.moves.length > budget || !(await bothSigned(r))) continue;
+    seen.add(id);
     budget -= r.moves.length;
     const got = score(Int32Array.from(r.moves.flat()));
     if (got.length === 3 && got[0] === r.status && got[1] === r.ejected[0] && got[2] === r.ejected[1]) kept.push(r);

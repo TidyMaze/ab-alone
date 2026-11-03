@@ -92,6 +92,13 @@ describe('the shared board read side (#1287)', () => {
     expect(await verifiedResults([JSON.stringify(forged[0]), JSON.stringify(good)], score)).toEqual([good]);
   });
 
+  it('a signed junk event reusing a game id and two other keys does not hide the honest result', async () => {
+    const good = await signed();
+    const squat = await signed({ moves: [[1, 0, 0, 0, 0, 0, 0, 0]], black: { pub: kC.pub, name: 'X' }, white: { pub: kB.pub, name: 'Y' } }, ended, [kC, kB]);
+    expect(squat.game).toBe(good.game);
+    expect(await verifiedResults([JSON.stringify(squat), JSON.stringify(good)], score)).toEqual([good]);
+  });
+
   it('replays a game once even when it is refused, and stops at the budget of plies', async () => {
     const calls: number[] = [];
     const counting = (flat: Int32Array): Uint8Array => (calls.push(flat.length / 8), new Uint8Array());
