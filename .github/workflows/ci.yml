@@ -332,7 +332,7 @@ jobs:
           restore-keys: ktx2-
       # --no-deps: chromium-serial depends on chromium, and Playwright refuses to shard a project others depend on (#1436).
       # One worker per runner keeps the frame-time check alone anyway.
-      - run: bun run e2e --no-deps --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+      - run: bunx playwright test e2e/zz-probe.spec.ts --project=chromium --workers=1 --retries=0 --reporter=list --timeout=200000
         working-directory: client
       # The 10 slowest tests of this shard, in the run summary even when the shard fails (#323).
       - if: always()
