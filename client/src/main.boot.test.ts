@@ -131,6 +131,21 @@ describe('the renderer and its textures', () => {
     expect(hud).toContain('Black to move');
   });
 
+  it('does not draw the room while the boot veil is up and the terrace is off (#1481)', async () => {
+    const game = await boot('?bot=off&scene=room');
+    const { WebGPURenderer } = await import('three/webgpu');
+    const render = vi.spyOn(WebGPURenderer.prototype, 'render');
+    document.body.dataset.veil = 'on';
+    game.hook('__drawNext');
+    game.frame(1000);
+    expect(render).not.toHaveBeenCalled();
+    delete document.body.dataset.veil;
+    game.hook('__drawNext');
+    game.frame(2000);
+    expect(render).toHaveBeenCalled();
+    render.mockRestore();
+  });
+
   it('draws the generated textures, and frames the whole board in the window', async () => {
     const game = await boot('?bot=off&scene=room');
     const { scene, camera } = await drawn(game);
