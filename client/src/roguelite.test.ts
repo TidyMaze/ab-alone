@@ -60,6 +60,13 @@ import {
   relicOffers,
   takeRelic,
   claimTactic,
+  buy,
+  leaveShop,
+  removable,
+  removeSpecial,
+  SCRAP,
+  shopHtml,
+  shopStock,
   MAX_TACTICS,
   tacticBarHtml,
   tacticOffer,
@@ -108,7 +115,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [] });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [] });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -128,7 +135,7 @@ describe('roguelite', () => {
 
   it('a won fight costs the ejected marbles and goes on, a lost one ends the run', () => {
     const fight = pick(newRun(1, 3), 0);
-    expect(fightOver(MAP, fight, true, 2)).toEqual({ ...fight, army: 12, fighting: false, end: '', reward: true });
+    expect(fightOver(MAP, fight, true, 2)).toEqual({ ...fight, army: 12, fighting: false, end: '', reward: true, scrap: 10 });
     expect(fightOver(MAP, fight, false, 3).end).toBe('lost');
   });
 
@@ -184,7 +191,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual(fight);
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -225,6 +232,11 @@ describe('roguelite', () => {
     ['tactic 0', { ...newRun(1, 3), tactics: [0] }],
     ['four tactics', { ...newRun(1, 3), tactics: [1, 2, 3, 4] }],
     ['tactics that are no list', { ...newRun(1, 3), tactics: 2 }],
+    ['a bad scrap', { ...newRun(1, 3), scrap: -1 }],
+    ['a bad shop flag', { ...newRun(1, 3), shop: 1 }],
+    ['an unknown purchase', { ...newRun(1, 3), bought: [5] }],
+    ['a purchase twice', { ...newRun(1, 3), bought: [1, 1] }],
+    ['purchases that are no list', { ...newRun(1, 3), bought: 1 }],
   ])('drops a saved run with %s', async (_, raw) => {
     const store = memoryStore();
     await store.put(RUN_KEY, raw);
@@ -940,5 +952,196 @@ describe('roguelite tactics', () => {
     };
     expect(ratio('#7fd6e8', '#161a1d')).toBeGreaterThanOrEqual(3); // --accent on --panel, dark
     expect(ratio('#0a5f73', '#f3f0e6')).toBeGreaterThanOrEqual(3); // light
+  });
+});
+
+// The scrap and the shop (#1459, docs/specs/roguelite.md section 12): a currency earned in fights, spent at a Shop node.
+describe('roguelite shop', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  // One act: a fight 0 leads to a shop 1 and an elite 2, each to the boss 3; a fight 4 opens the next act.
+  const SHOP = parseMap([0, 0, 0, 0, 0b11, 0, 1, 0, 6, 1, 0, 1, 1, 2, 1, 0, 2, 0, 1, 0, 1, 0, 0, 0, 0]);
+  const shop = (state: Partial<Run> = {}): Run => visit(SHOP, { ...newRun(1, 3), path: [0], scrap: 500, ...state }, 1);
+  const kinds = (run: Run): string[] => shopStock(SHOP, run).map((i) => i.kind);
+  const item = (run: Run, kind: string) => shopStock(SHOP, run).find((i) => i.kind === kind)!;
+
+  it('a won fight earns scrap, more for an elite and most for a boss, none in a lost one', () => {
+    expect(SCRAP).toEqual({ fight: 10, elite: 20, boss: 30 });
+    expect(newRun(1, 3).scrap).toBe(0); // no carry-over: a new run starts with none
+    const fight = fightOver(SHOP, pick({ ...newRun(1, 3), scrap: 5 }, 0), true, 1);
+    expect(fight.scrap).toBe(15);
+    expect(fightOver(SHOP, pick({ ...newRun(1, 3), path: [0] }, 2), true, 0).scrap).toBe(20);
+    expect(fightOver(SHOP, pick({ ...newRun(1, 3), path: [0, 2] }, 3), true, 0).scrap).toBe(30);
+    expect(fightOver(SHOP, pick({ ...newRun(1, 3), scrap: 5 }, 0), false, 0).scrap).toBe(5);
+    expect(fightOver(SHOP, { ...pick(newRun(1, 3), 0), army: 5 }, true, 2).scrap).toBe(0); // lost below 4 marbles
+  });
+
+  it('a shop waits for the player, with no fight, and the map waits', () => {
+    const run = shop();
+    expect(run).toMatchObject({ path: [0, 1], fighting: false, shop: true, bought: [] });
+    expect(choices(SHOP, run)).toEqual([]);
+    expect(choices(SHOP, leaveShop(run))).toEqual([3]);
+  });
+
+  it('sells a marble, a special marble, a relic and a tactic at prices from the seed and the node', () => {
+    const run = shop();
+    expect(kinds(run)).toEqual(['marble', 'special', 'relic', 'tactic']);
+    expect(shopStock(SHOP, run).map((i) => i.id)).toEqual([0, 1, 2, 3]);
+    const [marble, special, relic, tactic] = shopStock(SHOP, run);
+    expect(marble!.price).toBeGreaterThanOrEqual(15);
+    expect(marble!.price).toBeLessThanOrEqual(20);
+    expect(special!.price).toBeGreaterThanOrEqual(25);
+    expect(special!.price).toBeLessThanOrEqual(35);
+    expect(relic!.price).toBeGreaterThanOrEqual(60);
+    expect(relic!.price).toBeLessThanOrEqual(80);
+    expect(tactic!.price).toBeGreaterThanOrEqual(30);
+    expect(tactic!.price).toBeLessThanOrEqual(40);
+    expect(shopStock(SHOP, { ...run })).toEqual(shopStock(SHOP, run)); // a reload sells the same
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8].map((seed) => JSON.stringify(shopStock(SHOP, { ...run, seed })));
+    expect(new Set(seeds).size).toBeGreaterThan(1); // other seeds, other stock
+    expect(shopStock(SHOP, newRun(1, 3))).toEqual([]); // no shop waits
+  });
+
+  it('sells only a relic the run does not hold, and a special marble type unlocked', () => {
+    const run = shop();
+    const found = item(run, 'relic').code;
+    expect(item({ ...run, relics: [found] }, 'relic').code).not.toBe(found);
+    expect(kinds({ ...run, relics: RELICS.map((_, c) => c) })).toEqual(['marble', 'special', 'tactic']);
+    for (const seed of [1, 2, 3, 4, 5, 6]) expect(item({ ...run, seed, best: 0 }, 'special').code).toBe(1); // only Heavy at first
+    expect(new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => item({ ...run, seed }, 'special').code)).size).toBeGreaterThan(1);
+    expect(new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => item({ ...run, seed }, 'tactic').code)).size).toBeGreaterThan(1);
+  });
+
+  it('buying a marble pays the price and adds a marble, only below 14 and with the scrap', () => {
+    const run = shop({ army: 9, scrap: 100 });
+    const price = item(run, 'marble').price;
+    const bought = buy(SHOP, run, 0);
+    expect(bought).toMatchObject({ army: 10, scrap: 100 - price, bought: [0], shop: true });
+    expect(kinds(bought)).toEqual(['special', 'relic', 'tactic']); // sold, gone
+    expect(buy(SHOP, bought, 0)).toBe(bought); // once
+    expect(buy(SHOP, shop({ army: 14 }), 0).army).toBe(14); // full
+    expect(buy(SHOP, shop({ army: 14 }), 0).bought).toEqual([]);
+    expect(buy(SHOP, shop({ army: 9, scrap: price - 1 }), 0).army).toBe(9); // too dear
+    expect(buy(SHOP, shop({ army: 9, scrap: price }), 0)).toMatchObject({ army: 10, scrap: 0 });
+  });
+
+  it('buying a special marble adds one of its type while the army has a plain marble to make special', () => {
+    const run = shop({ army: 9 });
+    const { code, price } = item(run, 'special');
+    const specials = [0, 0, 0, 0, 0, 0].map((_, k) => Number(k === code - 1));
+    expect(buy(SHOP, run, 1)).toMatchObject({ army: 9, specials, scrap: 500 - price, bought: [1] });
+    const full = shop({ army: 4, specials: [4, 0, 0, 0, 0, 0] });
+    expect(buy(SHOP, full, 1)).toBe(full); // all 4 marbles are special already
+  });
+
+  it('buying a relic adds it for the rest of the run', () => {
+    const run = shop();
+    const { code, price } = item(run, 'relic');
+    expect(buy(SHOP, run, 2)).toMatchObject({ relics: [code], scrap: 500 - price, bought: [2] });
+    expect(kinds(buy(SHOP, run, 2))).toEqual(['marble', 'special', 'tactic']);
+    expect(buy(SHOP, shop({ scrap: price - 1 }), 2).relics).toEqual([]);
+  });
+
+  it('buying a tactic adds it to the hand, up to 3', () => {
+    const run = shop();
+    const { code, price } = item(run, 'tactic');
+    expect(buy(SHOP, run, 3)).toMatchObject({ tactics: [code], scrap: 500 - price, bought: [3] });
+    const hand = shop({ tactics: [1, 2, 3] });
+    expect(buy(SHOP, hand, 3)).toBe(hand);
+  });
+
+  it('buys nothing off a stock that is not there: no shop, an unknown or a sold item', () => {
+    const run = newRun(1, 3);
+    expect(buy(SHOP, { ...run, scrap: 500 }, 0)).toEqual({ ...run, scrap: 500 });
+    expect(buy(SHOP, shop(), 9)).toEqual(shop());
+    expect(buy(SHOP, shop(), 4)).toEqual(shop()); // 4 is the removal, not an item
+  });
+
+  it('a paid removal makes one special marble plain again, once per shop', () => {
+    const run = shop({ army: 9, specials: [1, 0, 2, 0, 0, 1], scrap: 100 });
+    expect(removable(run)).toEqual([1, 3, 6]);
+    const done = removeSpecial(SHOP, run, 3);
+    expect(done).toMatchObject({ army: 9, specials: [1, 0, 1, 0, 0, 1], bought: [4] });
+    expect(100 - done.scrap).toBeGreaterThanOrEqual(20);
+    expect(100 - done.scrap).toBeLessThanOrEqual(30);
+    expect(removable(done)).toEqual([]); // once per shop
+    expect(removeSpecial(SHOP, done, 1)).toBe(done);
+    expect(removeSpecial(SHOP, run, 2)).toBe(run); // no Anchor to remove
+    expect(removeSpecial(SHOP, { ...run, scrap: 19 }, 1)).toEqual({ ...run, scrap: 19 }); // too dear
+    expect(removeSpecial(SHOP, { ...newRun(1, 3), specials: [1, 0, 0, 0, 0, 0], scrap: 100 }, 1).specials[0]).toBe(1); // no shop
+  });
+
+  it('leaving the shop forgets what was bought, the next shop sells afresh', () => {
+    const left = leaveShop(buy(SHOP, shop({ army: 9 }), 0));
+    expect(left).toMatchObject({ shop: false, bought: [] });
+    expect(left.army).toBe(10);
+  });
+
+  it('draws the shop: the scrap, the items with prices, the removal, Leave', () => {
+    const run = shop({ army: 9, specials: [1, 0, 0, 0, 0, 0], scrap: 100 });
+    const doc = parse(shopHtml(SHOP, run));
+    expect(doc.querySelector('.run-line')!.textContent).toBe('Shop · 100 scrap');
+    const buys = [...doc.querySelectorAll<HTMLButtonElement>('button[data-buy]')];
+    const stock = shopStock(SHOP, run);
+    expect(buys.map((b) => b.dataset.buy)).toEqual(['0', '1', '2', '3']);
+    expect(buys[0]!.textContent).toBe(`One more marble · ${stock[0]!.price} scrap`);
+    expect(buys[1]!.textContent).toBe(`${SPECIAL_LOOKS[stock[1]!.code - 1]!.name}: ${SPECIAL_LOOKS[stock[1]!.code - 1]!.help} · ${stock[1]!.price} scrap`);
+    expect(buys[2]!.textContent).toBe(`${RELICS[stock[2]!.code]!.name}: ${RELICS[stock[2]!.code]!.help} · ${stock[2]!.price} scrap`);
+    expect(buys[3]!.textContent).toBe(`${TACTICS[stock[3]!.code - 1]!.name}: ${TACTICS[stock[3]!.code - 1]!.help} · ${stock[3]!.price} scrap`);
+    expect(buys.map((b) => b.querySelector('svg.glyph') !== null)).toEqual([true, true, true, true]);
+    const remove = doc.querySelector<HTMLButtonElement>('button[data-remove]')!;
+    expect(remove.dataset.remove).toBe('1');
+    expect(remove.textContent).toMatch(/^Remove a Heavy: back to a plain marble · \d+ scrap$/);
+    expect(doc.querySelector('button[data-leave]')!.textContent).toBe('Leave');
+  });
+
+  it('disables an item with its reason: too dear, the army full, no room for a special marble, the hand full', () => {
+    const reason = (run: Run, id: number): [string, boolean] => {
+      const b = parse(shopHtml(SHOP, run)).querySelector<HTMLButtonElement>(`button[data-buy="${id}"]`)!;
+      return [b.textContent!.split(' · ').slice(2).join(' · '), b.disabled];
+    };
+    expect(reason(shop({ army: 9, scrap: 0 }), 0)).toEqual(['not enough scrap', true]);
+    expect(reason(shop({ army: 14 }), 0)).toEqual(['army full', true]);
+    expect(reason(shop({ army: 14, scrap: 0 }), 0)).toEqual(['army full', true]);
+    expect(reason(shop({ army: 4, specials: [4, 0, 0, 0, 0, 0] }), 1)).toEqual(['no plain marble left', true]);
+    expect(reason(shop({ tactics: [1, 2, 3] }), 3)).toEqual(['hand full', true]);
+    expect(reason(shop(), 2)).toEqual(['', false]);
+    const none = parse(shopHtml(SHOP, shop())).querySelector<HTMLButtonElement>('button[data-remove]')!;
+    expect([none.dataset.remove, none.textContent, none.disabled]).toEqual(['0', 'Remove a special marble: none to remove', true]);
+    const dear = parse(shopHtml(SHOP, shop({ specials: [1, 0, 0, 0, 0, 0], scrap: 0 }))).querySelector<HTMLButtonElement>('button[data-remove]')!;
+    expect([dear.dataset.remove, dear.disabled, dear.textContent!.endsWith(' · not enough scrap')]).toEqual(['1', true, true]);
+  });
+
+  it('sold items and a used removal leave the shop', () => {
+    const run = removeSpecial(SHOP, buy(SHOP, shop({ army: 9, specials: [1, 0, 0, 0, 0, 0] }), 0), 1);
+    const doc = parse(shopHtml(SHOP, run));
+    expect([...doc.querySelectorAll('button[data-buy]')].map((b) => (b as HTMLElement).dataset.buy)).toEqual(['1', '2', '3']);
+    expect(doc.querySelector('button[data-remove]')).toBeNull();
+    expect(doc.querySelector('button[data-leave]')).not.toBeNull();
+  });
+
+  it('draws the shop on the map, the scrap in the run line and the scrap lost in the summary', () => {
+    const nodes = [...parse(mapHtml(SHOP, at(newRun(1, 3), 0))).querySelectorAll<HTMLButtonElement>('button[data-node]')];
+    expect(nodes[1]!.textContent).toBe('Shop');
+    expect(nodes[1]!.className).toBe('node shop');
+    expect(nodes[1]!.getAttribute('aria-label')).toBe('Act 1, shop');
+    expect(runLine(SHOP, { ...newRun(1, 3), scrap: 25 })).toBe('Rogue-lite run · army 14 marbles · 25 scrap · pick a fight');
+    expect(runLine(SHOP, { ...pick(newRun(1, 3), 0), scrap: 25 })).toBe('Rogue-lite run · act 1 fight · army 14 marbles · 25 scrap');
+    expect(runLine(SHOP, newRun(1, 3))).toBe('Rogue-lite run · army 14 marbles · pick a fight'); // none yet: nothing shown
+    const over = parse(mapHtml(SHOP, { ...at(newRun(1, 3), 0), army: 3, end: 'lost', scrap: 40 }));
+    expect([...over.querySelectorAll('.run-help')].map((p) => p.textContent)).toContain('Scrap left: 40, lost with the run');
+    const none = parse(mapHtml(SHOP, { ...at(newRun(1, 3), 0), army: 3, end: 'lost' }));
+    expect([...none.querySelectorAll('.run-help')].map((p) => p.textContent!.slice(0, 5))).not.toContain('Scrap');
+  });
+
+  it('saves the scrap and the shop with the run, and an older save loads with none', async () => {
+    const store = memoryStore();
+    const mapOf = (): MapNode[] => SHOP;
+    const waiting = buy(SHOP, shop({ army: 9, scrap: 70 }), 0);
+    await saveRun(store, waiting);
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual(waiting);
+    const older: Record<string, unknown> = { ...waiting };
+    for (const key of ['scrap', 'shop', 'bought']) delete older[key];
+    await store.put(RUN_KEY, older);
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...waiting, scrap: 0, shop: false, bought: [] });
   });
 });

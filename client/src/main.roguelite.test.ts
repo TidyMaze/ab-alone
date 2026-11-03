@@ -311,6 +311,34 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     else expect(line()).toBe(before);
   });
 
+  // The scrap and the shop (#1459). Seed 7: the fight 0 leads to the elite 2, which leads to the shop 4.
+  it('a shop from the map sells for scrap, saved with the run; a purchase and a removal stay across a reload, Leave goes on, #1459', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...newRun(7, 3), army: 9, specials: [1, 0, 0], scrap: 200, path: [0, 2] });
+    expect(line()).toBe('Rogue-lite run · army 9 marbles, 1 Heavy · 200 scrap · pick a fight');
+    expect(node(4).getAttribute('aria-label')).toBe('Act 1, shop');
+    node(4).click();
+    expect(document.body.dataset.run).toBe('shop');
+    expect(line()).toBe('Shop · 200 scrap');
+    const press = (selector: string): void => map().querySelector<HTMLButtonElement>(selector)!.click();
+    press('button[data-buy="0"]'); // a marble
+    expect(document.body.dataset.run).toBe('shop');
+    expect(map().querySelector('button[data-buy="0"]')).toBeNull(); // sold
+    press('button[data-remove="1"]'); // the Heavy goes back to a plain marble
+    expect(map().querySelector('button[data-remove="1"]')).toBeNull();
+    const scrap = Number(line().match(/\d+/)![0]);
+    expect(scrap).toBeLessThan(200 - 15 - 20);
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the shop as it was
+    expect(document.body.dataset.run).toBe('shop');
+    expect(line()).toBe(`Shop · ${scrap} scrap`);
+    expect(map().querySelector('button[data-buy="0"]')).toBeNull();
+    press('button[data-leave]');
+    expect(document.body.dataset.run).toBe('map');
+    expect(line()).toBe(`Rogue-lite run · army 10 marbles · ${scrap} scrap · pick a fight`);
+  });
+
   it('a fight starts with 10 enemy marbles, its front row gone, and an elite with all 14, #1145', async () => {
     const whites = async (node: number, path: number[]): Promise<string[]> => {
       const game = await boot('?bot=off');
