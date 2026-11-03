@@ -96,6 +96,32 @@ pub enum Affinity {
 /// The highest level of an affinity.
 pub const MAX_AFFINITY: u8 = 2;
 
+/// What the army's affinities add to the weight of the special marble `kind` on `cell` in a push (docs/specs/roguelite.md
+/// section 23): Force adds its level to a Heavy and a Heavy+, Tactics 2 adds 1 to an Anchor, an Anchor+ and a Shield. The
+/// enemy's marbles gain nothing.
+pub(crate) fn affinity_weight(board: &Board, (q, r): (i32, i32), kind: Special) -> u32 {
+    if board.get(q, r) != Some(Cell::Black) {
+        return 0;
+    }
+    match kind {
+        Special::Heavy | Special::HeavyPlus => u32::from(board.affinity(Affinity::Force)),
+        Special::Shield => u32::from(board.affinity(Affinity::Tactics) >= 2),
+        _ => u32::from(kind.anchor() && board.affinity(Affinity::Tactics) >= 2),
+    }
+}
+
+/// Whether the special marble on `cell` keeps the marble in front of it in a pushed line on the board: an Anchor+, and
+/// the army's Anchor with Tactics 1 (section 23).
+pub(crate) fn keeps_in_front(board: &Board, (q, r): (i32, i32)) -> bool {
+    match board.special((q, r)) {
+        Some(Special::AnchorPlus) => true,
+        Some(Special::Anchor) => {
+            board.get(q, r) == Some(Cell::Black) && board.affinity(Affinity::Tactics) >= 1
+        }
+        _ => false,
+    }
+}
+
 /// How the bot's marbles stand at the start of a fight or an elite (docs/specs/roguelite.md section
 /// 14), its value its code on the bridge. The army always stands on the standard layout, so the
 /// daisies are the flowers of the Belgian daisy (`Board::belgian_daisy`) set on the bot's half.
@@ -490,7 +516,10 @@ pub(crate) fn carry_specials(
     if let Some(spark) = off.filter(|_| reach > 0) {
         // The army's Detonator: its Sparks push 1 cell further (a Spark+ 3).
         let army = board.get(spark.0, spark.1) == Some(Cell::Black);
-        let reach = reach + i32::from(army && board.has_relic(Relic::Detonator));
+        // And Chaos 1 one cell further again (section 23).
+        let reach = reach
+            + i32::from(army && board.has_relic(Relic::Detonator))
+            + i32::from(army && board.affinity(Affinity::Chaos) >= 1);
         burst(next, &mut specials, spark, reach);
     }
     specials.sort_by_key(|s| s.0);
@@ -528,21 +557,24 @@ fn pull(next: &mut Board, specials: &mut [((i32, i32), Special)], magnet: (i32, 
     }
 }
 
-/// The `mover`'s Bombs each lose a turn of their fuse; those at 0 burst like a Spark where they
-/// stand (1 cell) and are gone with their marble. Returns whether one did.
+/// The `mover`'s Bombs each lose a turn of their fuse (two for the army's with Chaos 2); those at 0 burst like a Spark
+/// where they stand (1 cell, 2 for the army's with Chaos 1) and are gone with their marble. Returns whether one did.
 fn burn(next: &mut Board, specials: &mut Vec<((i32, i32), Special)>, mover: Cell) -> bool {
+    let chaos = next.affinity(Affinity::Chaos);
+    let army = mover == Cell::Black;
     for (cell, kind) in specials.iter_mut() {
         if let Special::Bomb(turns) = kind {
             if next.get(cell.0, cell.1) == Some(mover) {
-                *turns = turns.saturating_sub(1);
+                *turns = turns.saturating_sub(1 + u8::from(army && chaos >= 2));
             }
         }
     }
     let mut bombed = false;
     while let Some(i) = specials.iter().position(|s| s.1 == Special::Bomb(0)) {
         let (cell, _) = specials.remove(i);
+        let reach = 1 + i32::from(next.get(cell.0, cell.1) == Some(Cell::Black) && chaos >= 1);
         next.set(cell.0, cell.1, Cell::Empty);
-        burst(next, specials, cell, 1);
+        burst(next, specials, cell, reach);
         bombed = true;
     }
     bombed
@@ -2902,7 +2934,6 @@ mod affinities {
         v
     }
 
-    const NONE: [u8; 3] = [0, 0, 0];
     const FORCE: [[u8; 3]; 3] = [[0; 3], [1, 0, 0], [2, 0, 0]];
     const TACTICS: [[u8; 3]; 3] = [[0; 3], [0, 1, 0], [0, 2, 0]];
     const CHAOS: [[u8; 3]; 3] = [[0; 3], [0, 0, 1], [0, 0, 2]];
@@ -3040,7 +3071,8 @@ mod affinities {
         .contains(&push));
         assert_eq!(run(TACTICS[0], Anchor).map(|r| r.1), Ok(true));
         assert_eq!(run(TACTICS[1], Anchor), Err(MoveError::PushBlocked));
-        assert_eq!(run(TACTICS[2], Anchor), Err(MoveError::PushBlocked));
+        // Tactics 2 also weighs the Anchor 2: the trio (3) then ties with the pair (3), too weak.
+        assert_eq!(run(TACTICS[2], Anchor), Err(MoveError::NotStrongEnough));
         assert!(!legal_moves(
             &board(&[(3, 0), (4, 0)], &trio, &[((3, 0), Anchor)], TACTICS[1]),
             Player::White
@@ -3159,15 +3191,13 @@ mod affinities {
             levels,
         );
         let walk = [mv(&[(-4, 4)], NW), mv(&[(-4, 3)], NW), mv(&[(-4, 2)], NW)];
-        let reply = [mv(&[(4, -4)], SW), mv(&[(3, -3)], SW)];
+        let reply = [mv(&[(4, -4)], SW), mv(&[(3, -3)], SW), mv(&[(2, -2)], SW)];
         for i in 0..turns {
             b = apply(&b, Player::Black, &walk[i]).unwrap().0;
             if b.special((3, 0)).is_none() {
                 return b;
             }
-            if i < reply.len() {
-                b = apply(&b, Player::White, &reply[i]).unwrap().0;
-            }
+            b = apply(&b, Player::White, &reply[i]).unwrap().0;
         }
         b
     }

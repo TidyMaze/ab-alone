@@ -97,12 +97,10 @@ impl Engine {
             .into_iter()
             .filter(|r| mask & r.bit() != 0)
             .collect();
-        self.game
-            .set_relics(&relics)
-            .map_err(|e| format!("{e:?}"))?;
         let level = |a: u32| ((mask >> (16 + 2 * a)) & 3) as u8;
         self.game
-            .set_affinities([level(0), level(1), level(2)])
+            .set_relics(&relics)
+            .and_then(|()| self.game.set_affinities([level(0), level(1), level(2)]))
             .map_err(|e| format!("{e:?}"))
     }
 
