@@ -26,6 +26,7 @@ pub enum NodeKind {
     Rest = 3,
     Event = 4,
     Treasure = 5,
+    Shop = 6,
 }
 
 /// A relic of a rogue-lite run (docs/specs/roguelite.md section 9): a passive effect for the rest of
@@ -109,9 +110,10 @@ fn links(from: usize, to: usize, state: &mut u64) -> Vec<Vec<usize>> {
 }
 
 /// The kinds a node after the first row of an act draws from, equally likely. The Treasure took
-/// the place of a second Event (#1457), so a run saved before keeps its other kinds.
+/// the place of a second Event (#1457) and the Shop the place of a second Fight (#1459), so a run
+/// saved before keeps its other kinds.
 const DRAWN: [NodeKind; 6] = [
-    NodeKind::Fight,
+    NodeKind::Shop,
     NodeKind::Fight,
     NodeKind::Elite,
     NodeKind::Event,
