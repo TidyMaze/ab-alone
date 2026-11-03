@@ -8,6 +8,8 @@ import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
 import type { OpenWorldView } from './openworldview';
+import { stopLeftIntervalsAfterEach } from './test/intervals';
+stopLeftIntervalsAfterEach();
 
 // #1065: a held walk draws the hero at one speed from cell to cell, the camera follows it; a step begins on the frame that is due
 // and is drawn on it; the release slows the step under way to a rest on its cell; a single tap eases out.

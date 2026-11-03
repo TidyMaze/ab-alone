@@ -5,6 +5,8 @@ import { world_chunk } from 'abalone-wasm';
 import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
+import { stopLeftIntervalsAfterEach } from './test/intervals';
+stopLeftIntervalsAfterEach();
 
 // #1104: each biome of the Open world drifts its own particles (pollen, leaves, snow, dust) and the desert shimmers. Seed 1 has a
 // cell of each (found with `world_chunk`). The page marks what is drawn on a webdriver page. This was an e2e spec

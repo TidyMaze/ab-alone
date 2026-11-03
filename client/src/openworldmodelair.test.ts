@@ -6,6 +6,8 @@ import { CHUNK } from './openworld';
 import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
+import { stopLeftIntervalsAfterEach } from './test/intervals';
+stopLeftIntervalsAfterEach();
 
 // Open grass everywhere in the square -3..3 of chunks; the lairs stand at (3, 0) and (-4, 2), lair 0 beaten in `saved`.
 function grass(_seed: number, cx: number, cy: number): Uint8Array {

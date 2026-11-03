@@ -10,6 +10,8 @@ import { screenOffset } from './openworldminimap';
 import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
+import { stopLeftIntervalsAfterEach } from './test/intervals';
+stopLeftIntervalsAfterEach();
 
 // The teleporters of the Open world mode (#1412, docs/specs/openworld.md section 10). Open grass in the chunks -3..3, water on
 // (11, 0); the teleporters stand on (2, -1), the spawn's, (10, 0), within sight of the spawn, (40, 0), out of it, and (63, 0), on the

@@ -14,6 +14,8 @@ import { memoryStore } from './savegame';
 import { world_chunk } from 'abalone-wasm';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
 import { CRUISE_MS, GLIDE_MS, NUDGE_MS, stepMs } from './openworldglide';
+import { stopLeftIntervalsAfterEach } from './test/intervals';
+stopLeftIntervalsAfterEach();
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1). The badlands have no particles (#1110), so a frame
 // with motion on is idle when nothing moves; `meadow` is the same world with pollen.

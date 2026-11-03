@@ -6,6 +6,8 @@ import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
 import { OpenWorldView } from './openworldview';
+import { stopLeftIntervalsAfterEach } from './test/intervals';
+stopLeftIntervalsAfterEach();
 
 // The mode drives the water and tree motion (#1101, #1102): the loops draw every frame while their element is in view and motion is on,
 // the ripple follows a step, and reduced motion and the low tier switch it all off.
