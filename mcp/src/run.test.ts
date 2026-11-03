@@ -509,10 +509,12 @@ describe('the screens that wait for a choice', () => {
     expect(texts[0]).toMatch(/^One more marble · \d+ scrap$/);
     expect(texts.some((t) => t.startsWith('Remove a Heavy: back to a plain marble · '))).toBe(true);
     expect(texts.at(-1)).toBe('Leave');
+    const charge = texts.findIndex((t) => /^One more flask charge: 3 marbles back on the map · \d+ scrap$/.test(t));
+    expect(value(run.choose({ choice: charge })).flasks).toBe(3); // a flask charge, #1475
     const bought = value(run.choose({ choice: 0 }));
     expect(bought.army).toBe(11);
     expect(bought.scrap).toBeLessThan(500);
-    expect(bought.options).toHaveLength(state.options!.length - 1);
+    expect(bought.options).toHaveLength(state.options!.length - 2);
     const removeAt = bought.options!.findIndex((o) => o.text.startsWith('Remove'));
     expect(value(run.choose({ choice: removeAt })).specials).toEqual({});
     const left = value(run.choose({ choice: value(run.state({})).options!.length - 1 }));
@@ -832,9 +834,9 @@ describe('flasks (#1475)', () => {
   test('a flask is refused with the army full or no charge left, and nothing changes', async () => {
     const { run } = setup();
     value(await run.newRun({ seed: 0 }));
-    expect(failure(run.flask())).toMatchObject({ code: 'bad_choice', message: expect.stringContaining('army full') });
+    expect(failure(run.flask())).toMatchObject({ code: 'bad_choice', message: 'army full' });
     value(await run.newRun({ save: { ...before('fight').save, army: 8, flasks: 0 } }));
-    expect(failure(run.flask())).toMatchObject({ code: 'bad_choice', message: expect.stringContaining('no flask left') });
+    expect(failure(run.flask())).toMatchObject({ code: 'bad_choice', message: 'no flask left' });
     expect(value(run.state({}))).toMatchObject({ army: 8, flasks: 0 });
   });
 

@@ -33,6 +33,8 @@ import {
   lastAct,
   FORMATIONS,
   leaveCollector,
+  CHARGE_TEXT,
+  drink,
   leaveShop,
   left,
   loadRun,
@@ -174,6 +176,8 @@ export interface RunState {
   /** The fights left of a cursed chest's curse, none without it: each marble lost costs 2 (#1474). */
   curse?: number;
   tactics: string[];
+  /** The flask charges left: `run_flask` drinks one on the map (#1475). */
+  flasks: number;
   scrap: number;
   cells: number;
   /** Blueprints dropped, not yet banked, by id. */
@@ -346,6 +350,17 @@ export class RogueRun {
     });
   }
 
+  /** Drinks a flask on the map (`drink`): 3 marbles back, a charge spent (#1475). */
+  flask(): Result<RunState> {
+    return this.withRun((active) => {
+      if (this.screen(active) !== 'map') return fail('not_now', `a flask is drunk on the map, the run is on its ${this.screen(active)} screen`);
+      const next = drink(active.state);
+      if (next === active.state) return fail('bad_choice', active.state.flasks <= 0 ? 'no flask left' : 'army full');
+      active.state = next;
+      return ok(this.describe(active));
+    });
+  }
+
   /** The run, or the error when there is none. A fight resigned is lost; a fight whose game another game replaced leaves the run. */
   private withRun<T>(use: (active: Active) => Result<T>): Result<T> {
     const active = this.active;
@@ -432,7 +447,7 @@ export class RogueRun {
       return [{ text: restLabel(state), apply: () => rest(state) }, ...upgrades, ...keys];
     }
     if (state.shop) {
-      const sold = (i: ShopItem): string => (i.kind === 'marble' ? 'One more marble' : i.kind === 'special' ? specialText(i.code) : i.kind === 'relic' ? relicText(i.code) : tacticText(i.code));
+      const sold = (i: ShopItem): string => (i.kind === 'marble' ? 'One more marble' : i.kind === 'special' ? specialText(i.code) : i.kind === 'relic' ? relicText(i.code) : i.kind === 'flask' ? CHARGE_TEXT : tacticText(i.code));
       return [
         ...shopStock(state).map((i) => ({ text: `${sold(i)} · ${i.price} scrap`, apply: () => buy(state, i.id) })),
         ...removable(state).map((k) => ({
@@ -497,6 +512,7 @@ export class RogueRun {
       ...(state.keys.length ? { keys: state.keys.map((k) => KEYS[k]!.name) } : {}),
       ...(state.curse ? { curse: state.curse } : {}),
       tactics: state.tactics.map((t) => TACTICS[t - 1]!.name),
+      flasks: state.flasks,
       scrap: state.scrap,
       cells: state.cells,
       carried: state.carried,

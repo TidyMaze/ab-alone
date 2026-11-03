@@ -303,7 +303,7 @@ export function createServer(
     'run_state',
     {
       description:
-        'The run: screen (map, place, fight, reward, relic, event, rest, shop, collector, exit, won, lost), army, special marbles, relics, tactics, scrap, ' +
+        'The run: screen (map, place, fight, reward, relic, event, rest, shop, collector, exit, won, lost), army, special marbles, relics, tactics, flasks, scrap, ' +
         'cells, blueprints, and what the screen holds: on the map the nodes to pick; in a fight the bot, the boss or the elite, the game id and the ' +
         'special marbles placed; on a screen with a choice (reward, relic, event, rest, shop, collector) the options to take with run_choose, ok ' +
         'false for one that cannot be taken now; once over the acts won and what it unlocked. With map, every node of the map: its act, row, kind ' +
@@ -364,6 +364,16 @@ export function createServer(
       }),
     },
     (input) => toolResult(rogue.tactic(input)),
+  );
+
+  server.registerTool(
+    'run_flask',
+    {
+      description:
+        'Drink a flask on the map between two nodes: 3 marbles back (up to 14), one charge spent. The run starts with 2 charges, refilled at each ' +
+        'act; run_state shows the charges left (flasks). Refused (bad_choice, nothing changes) with the army full or no charge left. Returns the run state.',
+    },
+    () => toolResult(rogue.flask()),
   );
 
   server.registerTool(
