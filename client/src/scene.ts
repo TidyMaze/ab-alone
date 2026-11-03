@@ -307,7 +307,7 @@ export class SceneRenderer {
 
     const smooth = smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0);
     this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, webdriver ? 1 : 2, options.bloom ?? true);
-    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, webdriver ? 1 : 2, !!options.neon && (options.bloom ?? true), options.neon ? 1 : TERRACE_SATURATION, options.neon ? 1 : TERRACE_CONTRAST);
+    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, options.neon && !webdriver ? 2 : 1, !!options.neon && (options.bloom ?? true), options.neon ? 1 : TERRACE_SATURATION, options.neon ? 1 : TERRACE_CONTRAST);
   }
 
   async init(): Promise<void> {

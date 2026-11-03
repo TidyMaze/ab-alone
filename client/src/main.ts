@@ -1830,9 +1830,9 @@ const armyGlyphs = [
   new THREE.BoxGeometry(0.13, 0.13, 0.13),
 ].map((glyph) => glyph.scale(neonTell.glyph, neonTell.glyph, neonTell.glyph));
 if (neonLook) armyGlyphs[0]!.scale(1.3, 1, 1.3); // the Alto cone: a wider base
-const armyHalos = armyGlyphs.map((glyph, army) => army === 0 ? glyph.clone().scale(1.85, 2.4, 1.85) : glyph.clone().scale(1.7, 1.7, 1.7)); // the Bone outline behind the neon look's near-black glyph: wider on the cone, which reads small from above
-const choirInk = new THREE.MeshBasicMaterial({ color: 0x15191c });
-const choirHalo = Object.assign(new THREE.MeshBasicMaterial({ side: THREE.BackSide, toneMapped: false }), { color: paleMaterial.color }); // the pale tell colour, shared: only the back faces of the larger shape show, an outline round the glyph
+const armyHalos = !neonLook ? [] : armyGlyphs.map((glyph, army) => army === 0 ? glyph.clone().scale(1.85, 2.4, 1.85) : glyph.clone().scale(1.7, 1.7, 1.7)); // the Bone outline behind the neon look's near-black glyph: wider on the cone, which reads small from above
+const choirInk = neonLook ? new THREE.MeshBasicMaterial({ color: 0x15191c }) : paleMaterial;
+const choirHalo = neonLook ? Object.assign(new THREE.MeshBasicMaterial({ side: THREE.BackSide, toneMapped: false }), { color: paleMaterial.color }) : paleMaterial; // the pale tell colour, shared: only the back faces of the larger shape show, an outline round the glyph
 // The Overseer (#635, game-design.md section 7.11): a dark hexagonal pedestal with a pale eye on the centre cell; a core
 // is a pale marble with a dark eye on top, a shape and not a colour; a vent wears a warm disc crossed by dark slots on
 // its cell. A burning marble sinks into its vent where it stands (overseer.ts).
@@ -4006,7 +4006,7 @@ function refresh(): void {
   for (const { cell, army } of armies) {
     const p = axialTo3D(cell[0], cell[1]);
     // Under the neon look the glyph is near black over a Bone outline a third larger (the Chaplain's rule, #1374): it reads on the pale and the dark shell alike.
-    const glyph = new THREE.Mesh(armyGlyphs[army], neonLook ? choirInk : paleMaterial);
+    const glyph = new THREE.Mesh(armyGlyphs[army], choirInk);
     glyph.position.set(p.x, 0.76, p.z);
     if (army === 1) glyph.rotation.x = Math.PI / 2; // the ring lies flat, read from above
     marbles.add(glyph);

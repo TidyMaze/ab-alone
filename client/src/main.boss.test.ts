@@ -611,8 +611,8 @@ describe('main.ts boss tells', () => {
   }, 60_000);
 
   it.each([
-    ['', 18],
-    ['&look=terrace', 0],
+    ['&look=neon', 18],
+    ['', 0],
   ])('The Choir glyphs under the neon look are near black over a Bone outline 1.7 times larger (#1424), boot %s: %i', async (look, count) => {
     let scene: THREE.Scene | null = null;
     const add = THREE.Object3D.prototype.add;
