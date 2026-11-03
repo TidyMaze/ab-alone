@@ -513,7 +513,7 @@ changes no rule of the engine and no code of the bridge's map: the Collector is 
 
 ## 16. Events with several choices, and unknown nodes (#1463)
 
-Five events repeat after two runs, and an event was one trade or Leave. The mode now holds **20 events**, each with 2 or
+Five events repeat after two runs, and an event was one trade or Leave. The mode now holds **20 events** (21 with the cursed chest of section 24), each with 2 or
 3 choices, the last one always Leave, and a **"?" node** that hides what it is until the player enters it. Every effect
 is built from what the run already has: marbles, special marbles, relics, tactics, scrap and healing. Only the rules
 change what a run offers, never what carries between runs (Decision #934). Section 7's event table stays the first 10
@@ -790,3 +790,33 @@ Slay the Spire's boss relics and its three keys: the end of a won run holds one 
 - **Turn it against the bot**: the marked elite and the final boss are fought like any other; the War banner, the Static shroud and
   the Mending core are the player's edge for the fights, paid for later, and the Boss breaker is the player's edge against the
   bosses, paid for in every fight.
+
+## 24. The cursed chest (#1474)
+
+Dead Cells' cursed chests are a pure risk-or-reward choice: a strong reward now, paid for in the next fights. The rogue-lite
+gets one as the 21st **event** (section 16), so it comes from an event node or a "?" node, with no new kind of node and no
+change to the bridge (`run_map`, `engine_version`). Only the rules change what a run offers, never what carries between runs
+(Decision #934).
+
+- **The event**: "Cursed chest", dealt like any event by the run seed and the node (section 16). Its choices:
+  - **Open it for its relic**: +1 relic of the pools the run does not hold yet (dealt by the run seed and the node, as the
+    Chapel box's). Not offered (disabled) when the run holds them all.
+  - **Open it for its arms**: +3 Heavies (the special marble type always unlocked), only while the army has 3 plain marbles to
+    make special.
+  - **Leave**: always offered, takes no curse and changes nothing.
+  Opening takes the curse. No marble is paid, the curse is the price.
+- **The curse** (`Run.curse`, `CURSE_FIGHTS` = 2): for the next 2 fights, **each marble the army loses costs 2**. "A fight" is
+  any fight that ends: a fight, an elite or an act boss, won or lost; each ends one fight of the curse (`fightOver`), even
+  one with no marble lost. The marbles lost are those the bot ejected, less the one Hull plating brings
+  back, then doubled: the army falls by 2 per marble, and a run that falls below 4 marbles ends as ever. Opening a second chest
+  while cursed renews the curse to 2 fights, it does not stack. Marbles the army gains (rest, rewards, shop, Mending core) are
+  unchanged.
+- **On screen**: the run line, on the map and in the HUD of a fight, ends its army with `cursed: marbles lost cost 2, N fights
+  left` (`1 fight left`), and the event's button reads `Open it for its relic · +1 relic, cursed: marbles lost cost 2 for the next 2
+  fights`. Nothing shows once the curse is spent.
+- **Saving**: `curse` (0 to 2) is saved with the run, and a fight in progress resumes cursed. A run saved before it has none and
+  loads with no curse; a save with another value does not load.
+- **The MCP server** (section 19): the chest is an event screen like the others, its options being the choices above; the run
+  state has `curse` (the fights left) while it lasts, and `line` carries the curse.
+- **Turn it against the bot**: the chest is the player's gamble: the curse makes the fights riskier, never the bot stronger, and
+  the player who keeps the army out of trouble (the Hull plating, a Medic, the Anchors) is paid its reward for nothing.

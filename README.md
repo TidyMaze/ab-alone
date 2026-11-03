@@ -50,7 +50,7 @@ First to eject 6 wins. On top of it, the ship:
   scrap earned in fights and spent at shop nodes on marbles, special marbles, relics and tactics, and
   seven special marbles in all (Heavy, Anchor, Spark, Magnet, Shield, Bomb, Medic), enemy armies
   that vary (five formations, special marbles of their own, more in later acts, and the named elites The
-  Wall, The Artificer and The Brute), twenty events with two or three choices, some of them gambles, "?" nodes
+  Wall, The Artificer and The Brute), twenty-one events with two or three choices, some of them gambles, one of them a cursed chest (a relic or three Heavies, but the marbles lost in the next 2 fights cost 2 each), "?" nodes
   that turn into an event, a fight or a treasure when entered, two exits at the end of each act to biomes (Forest, Tundra, Desert,
   Badlands, Archipelago) with holes in their boards, a signature enemy and a boss of their own, and cells and blueprints dropped by elites and act bosses,
   banked at the Collector between acts to unlock relics, tactics and special marbles for good, and four commanders to start a run with

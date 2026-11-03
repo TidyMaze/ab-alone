@@ -75,7 +75,8 @@ export interface MapNode {
  * offers a biome at the end of each act but the last (#1472); a run saved before has it off and stays in the Meadow. `exit` is on
  * while the choice between the two exits waits, and `biomes` are the codes picked for act 2 then act 3. `flawless` counts the fights
  * won with no marble lost (#1466), the score's; `daily` is the UTC day of a daily run, '' for any other, and a run saved before has
- * neither. `keys` are the codes of the keys it took, in order (#1467): with the three, an act 4 follows act 3; a run saved before has none. */
+ * neither. `keys` are the codes of the keys it took, in order (#1467): with the three, an act 4 follows act 3; a run saved before has none.
+ * `curse` is the fights left of a cursed chest's curse (#1474): while it is above 0, each marble lost in a fight costs 2; a run saved before has none. */
 export interface Run {
   seed: number;
   army: number;
@@ -112,6 +113,7 @@ export interface Run {
   flawless: number;
   daily: string;
   keys: number[];
+  curse: number;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -353,6 +355,7 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   flawless: 0,
   daily: '',
   keys: [],
+  curse: 0,
 });
 
 /** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
@@ -566,8 +569,8 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
 
 /** What one side of an event choice gives and costs (#1463): `army` marbles more or less (up to START_ARMY), `count`
  * special marbles of the type `special` (the bridge's kind, 0 for none), `lose` one special marble (in the order FALL), `tactic` one
- * tactic and `relic` one relic the run does not hold (each dealt by the run seed and the node), `scrap` more or less, and
- * `heal` the army back up to START_ARMY. */
+ * tactic and `relic` one relic the run does not hold (each dealt by the run seed and the node), `scrap` more or less,
+ * `heal` the army back up to START_ARMY, and `curse` the curse of a cursed chest (#1474). */
 export interface Outcome {
   army: number;
   special: number;
@@ -577,8 +580,9 @@ export interface Outcome {
   relic: boolean;
   scrap: number;
   heal: boolean;
+  curse: boolean;
 }
-const NOTHING: Outcome = { army: 0, special: 0, count: 1, lose: false, tactic: false, relic: false, scrap: 0, heal: false };
+const NOTHING: Outcome = { army: 0, special: 0, count: 1, lose: false, tactic: false, relic: false, scrap: 0, heal: false, curse: false };
 const outcome = (o: Partial<Outcome>): Outcome => ({ ...NOTHING, ...o });
 
 /** One choice of an event: its `verb`, and what it gives, `win`, with `odds` chances in 100 (a gamble when under 100,
@@ -620,6 +624,7 @@ export const EVENTS: readonly RunEvent[] = [
   { title: 'Furnace vent', text: 'A vent breathes orange heat across the deck. Slag-glass fuses to anything warm.', choices: [gamble('Warm yourselves', 70, { army: 4 }, { lose: true }), deal('Cast a Heavy in the heat', { army: -1, special: 1 }), LEAVE] },
   { title: 'Foreman crate', text: "A crate sealed with a dead foreman's ledger stamp.", choices: [gamble('Pry it open', 60, { scrap: 30, army: 1 }, { army: -1 }), deal('Sell it sealed', { scrap: 10 }), LEAVE] },
   { title: 'Ship relay', text: 'A relay on the bridge murmurs your ledger number back, over and over.', choices: [deal('Cut the line', { scrap: 20 }), gamble('Ask it for the way', 50, { tactic: true }, { army: -1 }), LEAVE] },
+  { title: 'Cursed chest', text: 'A chest bound in chain and warning tape. Whatever it holds is worth the weight on it.', choices: [deal('Open it for its relic', { relic: true, curse: true }), deal('Open it for its arms', { special: 1, count: 3, curse: true }), LEAVE] },
 ];
 
 /** The event of the run's last node while its choice waits, seeded by the run seed and the node, else null. */
@@ -628,6 +633,10 @@ export function eventOf(run: Run): RunEvent | null {
   const pool = EVENTS.filter((e) => needs(e).every((k) => kindOn(run, k))); // the unlocked types only (#801)
   return run.event ? pool[hash(run.seed, run.path[run.path.length - 1]! * 8 + 4) % pool.length]! : null;
 }
+
+/** The fights a cursed chest's curse lasts (#1474, docs/specs/roguelite.md section 24), and what each marble lost costs while it lasts. */
+export const CURSE_FIGHTS = 2;
+const CURSE_COST = 2;
 
 /** The draw `salt` of the run's last node: a 32-bit hash of the run seed and the node, as the reward offers. */
 const nodeDraw = (run: Run, salt: number): number => hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 4), salt);
@@ -661,7 +670,7 @@ function give(run: Run, o: Outcome, salt: number): Run | null {
   const gained = army > run.army || sum(specials) > sum(run.specials) || room || relic >= 0 || scrap > run.scrap;
   const paid = (!o.lose || lost !== undefined) && scrap >= 0;
   if (!paid || !(gained || !asked) || army < MIN_ARMY || sum(specials) > army) return null;
-  return { ...run, army, specials, scrap, tactics: room ? [...run.tactics, taught(run)] : run.tactics, relics: relic >= 0 ? [...run.relics, relic] : run.relics };
+  return { ...run, army, specials, scrap, tactics: room ? [...run.tactics, taught(run)] : run.tactics, relics: relic >= 0 ? [...run.relics, relic] : run.relics, curse: o.curse ? CURSE_FIGHTS : run.curse };
 }
 
 const marbles = (n: number): string => `${Math.abs(n)} marble${Math.abs(n) === 1 ? '' : 's'}`;
@@ -675,6 +684,7 @@ function describe(run: Run, o: Outcome): string {
     o.relic ? '+1 relic' : '',
     o.scrap > 0 ? `+${o.scrap} scrap` : '',
     o.army < 0 ? `-${marbles(o.army)}` : '',
+    o.curse ? `cursed: marbles lost cost ${CURSE_COST} for the next ${CURSE_FIGHTS} fights` : '',
     o.lose ? '-1 special marble' : '',
     o.scrap < 0 ? `${o.scrap} scrap` : '',
   ]
@@ -725,7 +735,7 @@ const CHEST_MARBLES = 2;
  * plating brings one lost marble back, the Salvage magnet and the War chest more marbles after an elite and a boss. */
 export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, kept = countOf(run.placed)): Run {
   const node = lastNode(map, run)!;
-  const left = run.army - Math.max(0, lost - Number(has(run, Relic.HullPlating)));
+  const left = run.army - Math.max(0, lost - Number(has(run, Relic.HullPlating))) * (run.curse > 0 ? CURSE_COST : 1); // a cursed chest's curse (#1474)
   const final = lastAct(map, run);
   const end = !won || left < MIN_ARMY ? 'lost' : node.kind === 'boss' && node.act === final ? 'won' : '';
   const back =
@@ -754,7 +764,7 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const emerald = end === '' && node.kind === 'elite' && bearsKey(map, run, run.path[run.path.length - 1]!); // the marked elite fell (#1467)
   const keys = emerald ? [...run.keys, Key.Emerald] : run.keys;
   const told = emerald ? `${KEYS[Key.Emerald]!.name} key taken, ${keysLeft(keys.length)}` : run.told;
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit, keys, told, flawless: run.flawless + Number(won && lost === 0) };
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit, keys, told, flawless: run.flawless + Number(won && lost === 0), curse: Math.max(0, run.curse - 1) };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
@@ -1088,7 +1098,8 @@ export function runLine(map: MapNode[], run: Run): string {
   const where = node ? [`act ${node.act + 1} ${node.kind}`, ...place, ...foes].join(' · ') : '';
   const level = run.ascension ? `ascension ${run.ascension} · ` : '';
   const bag = [run.scrap && `${run.scrap} scrap`, run.cells && `${run.cells} cells`, run.carried.length && `${run.carried.length} blueprint${run.carried.length === 1 ? '' : 's'}`];
-  const army = `army ${owned(run.army, run.specials)}${bag.flatMap((b) => (b ? [` · ${b}`] : [])).join('')}`;
+  const cursed = run.curse ? ` · cursed: marbles lost cost ${CURSE_COST}, ${run.curse} fight${run.curse === 1 ? '' : 's'} left` : '';
+  const army = `army ${owned(run.army, run.specials)}${bag.flatMap((b) => (b ? [` · ${b}`] : [])).join('')}${cursed}`;
   const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
   return node ? `${title} · ${level}${where} · ${army}` : `${title} · ${level}${rested}${place.map((p) => `${p} · `).join('')}${army} · pick a fight`;
 }
@@ -1381,10 +1392,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [] } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0 } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1435,9 +1446,10 @@ function decodeRun(raw: unknown): Run | null {
     typeof daily === 'string' &&
     (daily === '' || DAY.test(daily)) &&
     Array.isArray(keys) &&
-    keys.every((k, i) => isInt(k, KEYS.length - 1) && keys.indexOf(k) === i);
+    keys.every((k, i) => isInt(k, KEYS.length - 1) && keys.indexOf(k) === i) &&
+    isInt(curse, CURSE_FIGHTS);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse }
     : null;
 }
 

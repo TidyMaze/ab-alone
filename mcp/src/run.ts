@@ -171,6 +171,8 @@ export interface RunState {
   relics: string[];
   /** The keys taken (Ruby, Sapphire, Emerald), none before the first: the three open act 4 (#1467). */
   keys?: string[];
+  /** The fights left of a cursed chest's curse, none without it: each marble lost costs 2 (#1474). */
+  curse?: number;
   tactics: string[];
   scrap: number;
   cells: number;
@@ -493,6 +495,7 @@ export class RogueRun {
       ...(currentBiome(map, state) ? { biome: BIOMES[currentBiome(map, state)]!.name } : {}),
       relics: state.relics.map((r) => RELICS[r]!.name),
       ...(state.keys.length ? { keys: state.keys.map((k) => KEYS[k]!.name) } : {}),
+      ...(state.curse ? { curse: state.curse } : {}),
       tactics: state.tactics.map((t) => TACTICS[t - 1]!.name),
       scrap: state.scrap,
       cells: state.cells,

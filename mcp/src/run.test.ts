@@ -441,6 +441,23 @@ describe('the screens that wait for a choice', () => {
     expect(after.screen).toBe('map');
   });
 
+  test('the cursed chest is an event: opening it gives its reward and a curse that shows in the state and the fight', async () => {
+    const save = at('fight', { event: true }, (r) => eventOf(r)!.title === 'Cursed chest');
+    const { run } = setup();
+    const state = value(await run.newRun({ save }));
+    expect(state.title).toMatch(/^Cursed chest: /);
+    expect(state.curse).toBeUndefined();
+    expect(state.options!.map((o) => o.text)).toEqual([
+      'Open it for its relic · +1 relic, cursed: marbles lost cost 2 for the next 2 fights',
+      'Open it for its arms · +3 Heavys, cursed: marbles lost cost 2 for the next 2 fights',
+      'Leave',
+    ]);
+    const opened = value(run.choose({ choice: 0 }));
+    expect(opened).toMatchObject({ screen: 'map', curse: 2, relics: [expect.any(String)] });
+    expect(opened.line).toContain('cursed: marbles lost cost 2, 2 fights left');
+    expect(value(run.save()).curse).toBe(2);
+  });
+
   test('a rest site: rest back to 14 marbles, or upgrade a plain special marble', async () => {
     const save = at('rest', { rest: true, army: 9, specials: [1, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
     const { run } = setup();
@@ -793,7 +810,7 @@ describe('save and resume', () => {
 
   test('a save from before the Collector still loads, with its relics and tactics unlocked', async () => {
     const old: Record<string, unknown> = { ...newRun(2, 0, []) };
-    for (const key of ['unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told']) delete old[key];
+    for (const key of ['unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'curse']) delete old[key];
     const { run } = setup();
     expect(value(await run.newRun({ save: old })).screen).toBe('map');
     expect(value(run.save()).unlocked.length).toBeGreaterThan(0);
