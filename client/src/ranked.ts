@@ -144,7 +144,7 @@ const RIVAL_SPREAD = 400;
 /** The rival's rating as listed on the local board: what it signed, within the range ratings can really have. */
 const RATING_RANGE: readonly [number, number] = [0, 3000];
 /** A stored rating: a finite number within the range ratings can really have. */
-export const isRating = (x: unknown): x is number => typeof x === 'number' && x >= RATING_RANGE[0] && x <= RATING_RANGE[1];
+export const isRating = (x: unknown): x is number => typeof x === 'number' && x >= 0 && x <= 4000; // the same range a signed report may carry (moverecord.ts parseReport)
 
 /**
  * Settles a finished 1v1 ranked match from the two signed reports, ours and the opponent's (#1317). Both must agree
