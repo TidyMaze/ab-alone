@@ -9,19 +9,21 @@ use wasm_bindgen::prelude::*;
 /// Integers per map node: `[act, row, col, kind, links, formation, elite]`.
 pub const NODE_STRIDE: usize = 7;
 
-/// The map of the run `seed`, one record of `NODE_STRIDE` integers per node.
+/// The map of the run `seed` of a player who owns the runes `runes` (none when omitted, section 27), one record of
+/// `NODE_STRIDE` integers per node.
 #[wasm_bindgen]
-pub fn run_map(seed: u32) -> Vec<i32> {
-    run::run_map(u64::from(seed))
+pub fn run_map(seed: u32, runes: Option<u8>) -> Vec<i32> {
+    run::run_map_with(u64::from(seed), runes.unwrap_or(0))
         .iter()
         .flat_map(|node| {
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
+            let skips: i32 = node.skips.iter().map(|&c| 1 << (8 + c)).sum();
             [
                 node.act as i32,
                 node.row as i32,
                 node.col as i32,
                 node.kind as i32,
-                links,
+                links | skips,
                 node.formation as i32,
                 node.elite.map_or(0, |e| e as i32),
             ]
@@ -57,13 +59,15 @@ pub fn run_foes(seed: u32, node: u32, less: u8, biome: u8, more: Option<u8>) -> 
 }
 
 /// The codes of the two biomes the exits lead to for act `act` (1 or 2, `0` for the Meadow when out of range) of the run
-/// `seed` that left the biome of code `from` (docs/specs/roguelite.md section 18).
+/// `seed` that left the biome of code `from` (docs/specs/roguelite.md section 18), and a third one with the rune of the exit in
+/// `runes` (section 27).
 #[wasm_bindgen]
-pub fn run_exits(seed: u32, act: u8, from: u8) -> Vec<u8> {
+pub fn run_exits(seed: u32, act: u8, from: u8, runes: Option<u8>) -> Vec<u8> {
     let from = Biome::from_code(from).unwrap_or(Biome::Meadow);
-    run::exits(u64::from(seed), usize::from(act), from)
+    run::exits_with(u64::from(seed), usize::from(act), from, runes.unwrap_or(0))
+        .into_iter()
         .map(|b| b as u8)
-        .to_vec()
+        .collect()
 }
 
 #[cfg(test)]
