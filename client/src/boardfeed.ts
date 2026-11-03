@@ -141,7 +141,7 @@ const inWindow = (ts: number, nowS: number): boolean => ts >= nowS - WINDOW_S &&
 
 /** The results both seats signed whose log the rules replay to the claimed score, one per game and pair of seats (the first seen). The rest is not shown.
  * A result with a bad signature is dropped before the replay and does not use up its game id, so nobody can squat a game. */
-export async function verifiedResults(contents: readonly string[], score: Score, nowS?: number, ban: ReadonlySet<string> = BANNED): Promise<SharedResult[]> {
+export async function verifiedResults(contents: readonly string[], score: Score, nowS: number, ban: ReadonlySet<string> = BANNED): Promise<SharedResult[]> {
   const seen = new Set<string>(); // every (game, black, white) met, a refused one too: a game is replayed once. The seats are in the key so that
   // another pair of keys reusing a public game id cannot spend it.
   const kept: SharedResult[] = [];
@@ -150,7 +150,7 @@ export async function verifiedResults(contents: readonly string[], score: Score,
   let junk = JUNK_BUDGET;
   const fails = new Map<string, number>(); // refused replays by key (either seat)
   // The shortest logs first (stable, so the first seen still wins a tie): a flood of long junk cannot come before the games people play.
-  const parsed = contents.flatMap((c) => parseResult(c) ?? []).filter((r) => nowS === undefined || inWindow(r.ts, nowS)).sort((a, b) => a.moves.length - b.moves.length);
+  const parsed = contents.flatMap((c) => parseResult(c) ?? []).filter((r) => inWindow(r.ts, nowS)).sort((a, b) => a.moves.length - b.moves.length);
   for (const r of parsed) {
     if (ban.has(r.black.pub) || ban.has(r.white.pub)) continue; // a banned key's results are ignored
     if (r.ts > (retired.get(r.black.pub) ?? Infinity) || r.ts > (retired.get(r.white.pub) ?? Infinity)) continue; // a key stopped before this game

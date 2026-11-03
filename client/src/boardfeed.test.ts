@@ -33,6 +33,7 @@ const signed = async (over: Partial<SharedResult> = {}, from = ended, by: [Keys,
   const base = result({ black: { pub: kA.pub, name: 'Ann' }, white: { pub: kB.pub, name: 'Bob' }, ...over }, from);
   return { ...base, sigs: { black: await signResult(by[0], base), white: await signResult(by[1], base) } };
 };
+const NOW = 1000; // every test result is dated 100 to 200
 const score = (flat: Int32Array): Uint8Array => replay_score(flat);
 
 describe('the shared board read side (#1287)', () => {
@@ -65,8 +66,8 @@ describe('the shared board read side (#1287)', () => {
       signed({ game: 'g5', status: 1, ejected: [6, 0] }, short),
     ]);
     const twice = await signed({ ts: 200 });
-    expect(await verifiedResults([...lies.map((l) => JSON.stringify(l)), 'junk'], score)).toEqual([]);
-    expect(await verifiedResults([JSON.stringify(good), 'junk', JSON.stringify(twice)], score)).toEqual([good]);
+    expect(await verifiedResults([...lies.map((l) => JSON.stringify(l)), 'junk'], score, NOW)).toEqual([]);
+    expect(await verifiedResults([JSON.stringify(good), 'junk', JSON.stringify(twice)], score, NOW)).toEqual([good]);
   });
 
   it('refuses a result a seat did not sign: one seat, swapped seats, an outsider, a changed field, a borrowed key (#1317)', async () => {
@@ -89,25 +90,25 @@ describe('the shared board read side (#1287)', () => {
     const victim = await signed({ black: { pub: kC.pub, name: 'Carl' }, white: { pub: kB.pub, name: 'Bob' } });
     forged.push(victim);
     for (const f of forged) expect(await bothSigned(f)).toBe(false);
-    expect(await verifiedResults(forged.map((f) => JSON.stringify(f)), score)).toEqual([]);
+    expect(await verifiedResults(forged.map((f) => JSON.stringify(f)), score, NOW)).toEqual([]);
     // A forged event does not squat the game id: the real result with the same id still counts.
-    expect(await verifiedResults([JSON.stringify(forged[0]), JSON.stringify(good)], score)).toEqual([good]);
+    expect(await verifiedResults([JSON.stringify(forged[0]), JSON.stringify(good)], score, NOW)).toEqual([good]);
   });
 
   it('a signed junk event reusing a game id and two other keys does not hide the honest result', async () => {
     const good = await signed();
     const squat = await signed({ moves: [[1, 0, 0, 0, 0, 0, 0, 0]], black: { pub: kC.pub, name: 'X' }, white: { pub: kB.pub, name: 'Y' } }, ended, [kC, kB]);
     expect(squat.game).toBe(good.game);
-    expect(await verifiedResults([JSON.stringify(squat), JSON.stringify(good)], score)).toEqual([good]);
+    expect(await verifiedResults([JSON.stringify(squat), JSON.stringify(good)], score, NOW)).toEqual([good]);
   });
 
   it('ignores the results of a banned key, in either seat, and ships a well formed list', async () => {
     const good = await signed();
     const other = await signed({ game: 'g9', black: { pub: kC.pub, name: 'Cy' } }, ended, [kC, kB]);
     const raw = [JSON.stringify(good), JSON.stringify(other)];
-    expect(await verifiedResults(raw, score, undefined, new Set([kA.pub]))).toEqual([other]);
-    expect(await verifiedResults(raw, score, undefined, new Set([kB.pub]))).toEqual([]);
-    expect(await verifiedResults(raw, score, undefined, new Set())).toHaveLength(2);
+    expect(await verifiedResults(raw, score, NOW, new Set([kA.pub]))).toEqual([other]);
+    expect(await verifiedResults(raw, score, NOW, new Set([kB.pub]))).toEqual([]);
+    expect(await verifiedResults(raw, score, NOW, new Set())).toHaveLength(2);
     expect(banned.v).toBe(1);
     for (const b of banned.banned as { pub: string; reason: string; date: string }[]) expect([typeof b.pub, b.reason.length > 0, /^\d{4}-\d\d-\d\d$/.test(b.date)]).toEqual(['string', true, true]);
     expect(BANNED.size).toBe(banned.banned.length);
@@ -122,7 +123,7 @@ describe('the shared board read side (#1287)', () => {
     const mine = (game: string, ts: number): Promise<SharedResult> => signed({ game, ts, black: { pub: kP.pub, name: 'Ann' } }, ended, [kP, kB]);
     const raw = (await Promise.all([mine('e', 100), mine('a', 200), mine('l', 300)])).map((r) => JSON.stringify(r));
     const retire = JSON.stringify(await leaveBoard(store, 200_000)); // the event the player publishes, at 200 s
-    const kept = async (...extra: string[]): Promise<string[]> => (await verifiedResults([...raw, ...extra], score, undefined, new Set())).map((r) => r.game);
+    const kept = async (...extra: string[]): Promise<string[]> => (await verifiedResults([...raw, ...extra], score, NOW, new Set())).map((r) => r.game);
     expect(await kept()).toEqual(['e', 'a', 'l']);
     expect(await kept(retire)).toEqual(['e', 'a']);
     const other = JSON.stringify(await signRetire(kB, 150));
@@ -141,13 +142,13 @@ describe('the shared board read side (#1287)', () => {
     const calls: number[] = [];
     const counting = (flat: Int32Array): Uint8Array => (calls.push(flat.length / 8), new Uint8Array());
     const bad = JSON.stringify(await signed({ game: 'dup', status: 1 }));
-    await verifiedResults([bad, bad, bad], counting);
+    await verifiedResults([bad, bad, bad], counting, NOW);
     expect(calls).toHaveLength(1);
     calls.length = 0;
     const pairs = async (): Promise<[Keys, Keys]> => [await generateKeys(), await generateKeys()];
     const big = async (game: string, by: [Keys, Keys]): Promise<string> =>
       JSON.stringify(await signed({ game, black: { pub: by[0].pub, name: 'X' }, white: { pub: by[1].pub, name: 'Y' }, moves: Array.from({ length: 1000 }, () => Array(8).fill(0)) }, ended, by));
-    await verifiedResults(await Promise.all(Array.from({ length: 30 }, async (_, i) => big(`b${i}`, await pairs()))), counting);
+    await verifiedResults(await Promise.all(Array.from({ length: 30 }, async (_, i) => big(`b${i}`, await pairs()))), counting, NOW);
     expect(calls).toHaveLength(JUNK_BUDGET / 1000);
     expect(parseResult(JSON.stringify(result()).replace('"ts":100', '"ts":1e999'))).toBeNull();
   });
@@ -157,12 +158,12 @@ describe('the shared board read side (#1287)', () => {
       JSON.stringify(await signed({ game: `j${i}`, black: { pub: by[0].pub, name: 'X' }, white: { pub: by[1].pub, name: 'Y' }, moves: Array.from({ length: 1000 }, () => Array(8).fill(0)), status: 1 }, ended, by));
     const flood = await Promise.all(Array.from({ length: 25 }, async (_, i) => junkOf(i, [await generateKeys(), await generateKeys()])));
     const good = await signed({ game: 'honest' });
-    expect(await verifiedResults([...flood, JSON.stringify(good)].slice(0, 20).concat(JSON.stringify(good)), score)).toEqual([good]);
+    expect(await verifiedResults([...flood, JSON.stringify(good)].slice(0, 20).concat(JSON.stringify(good)), score, NOW)).toEqual([good]);
     // One pair of keys sending many junk results: only MAX_FAILS_PER_KEY of them are replayed.
     const calls: number[] = [];
     const counting = (flat: Int32Array): Uint8Array => (calls.push(flat.length), new Uint8Array());
     const mine: [Keys, Keys] = [await generateKeys(), await generateKeys()];
-    await verifiedResults(await Promise.all(Array.from({ length: 6 }, (_, i) => junkOf(100 + i, mine))), counting);
+    await verifiedResults(await Promise.all(Array.from({ length: 6 }, (_, i) => junkOf(100 + i, mine))), counting, NOW);
     expect(calls).toHaveLength(MAX_FAILS_PER_KEY);
   });
 
@@ -173,8 +174,6 @@ describe('the shared board read side (#1287)', () => {
     const now = JSON.stringify(await signed({ game: 'now', ts: 2 * WINDOW_S }));
     await verifiedResults([old, now], counting, 2 * WINDOW_S);
     expect(calls).toHaveLength(1);
-    await verifiedResults([old], counting); // no clock given: everything is replayed
-    expect(calls).toHaveLength(2);
   });
 
   it('derives the ratings by replaying the valid results in order from 1200, never reading one', () => {
