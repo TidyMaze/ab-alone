@@ -135,10 +135,12 @@ function reportOf(r: Report, other: Report): MatchReport {
   return { matchId: r.game, reporterPeerId: r.pub, opponentPeerId: other.pub, stateHash: r.hash, winner };
 }
 
+const RIVAL_SPREAD = 400;
+
 /**
  * Settles a finished 1v1 ranked match from the two signed reports, ours and the opponent's (#1317). Both must agree
  * (same game, board and result, two colours, two keys) and ours must carry our stored rating. A mismatch rates nothing
- * and returns null. The opponent's own rating, as it signed it, sets our Elo change.
+ * and returns null. The opponent's rating, as it signed it and kept within 400 of ours, sets our Elo change.
  */
 export function settleRanked1v1(
   store: RankedStore,
@@ -149,14 +151,16 @@ export function settleRanked1v1(
   if (mine.rating !== current.rating1v1 || mine.side === theirs.side || mine.pub === theirs.pub) return null;
   if (!verifyMatchOutcome(reportOf(mine, theirs), reportOf(theirs, mine))) return null;
   const actualScore = mine.status === 3 ? 0.5 : mine.status === mine.side ? 1 : 0;
-  const elo = update1v1Elo(current.rating1v1, theirs.rating, actualScore);
+  // The rating the opponent signed is its own word: it counts only within 400 points of ours, the gap at which a win is nearly sure.
+  const rival = Math.min(Math.max(theirs.rating, current.rating1v1 - RIVAL_SPREAD), current.rating1v1 + RIVAL_SPREAD);
+  const elo = update1v1Elo(current.rating1v1, rival, actualScore);
   const profile = recordRankedMatch(store, {
     mode: '1v1',
     delta: elo.deltaA,
     newRating: elo.ratingA,
     opponentsCount: 1,
   });
-  recordRival(store, theirs.pub, theirs.rating, Date.now());
+  recordRival(store, theirs.pub, rival, Date.now());
   return { profile, delta: elo.deltaA };
 }
 
