@@ -147,14 +147,16 @@ fn every_move(board: &Board, own: Cell) -> Vec<Move> {
     moves
 }
 
-/// Plays `mv` for `player`. Returns the new board and whether an opponent marble was ejected.
+/// Plays `mv` for `player`. Returns the new board and whether an opponent marble was ejected (or, in
+/// a rogue-lite fight, a Bomb burst).
 pub fn apply(board: &Board, player: Player, mv: &Move) -> Result<(Board, bool), MoveError> {
     apply_for(board, player.cell(), mv)
 }
 
 /// Plays `mv` for the `own` marbles (a marble colour, not `Empty`). Every marble of another
 /// colour is an opponent: the opponent run of a sumito may mix colours, and only an own marble
-/// blocks it (rules.md section 10.4). Returns the new board and whether a marble was ejected.
+/// blocks it (rules.md section 10.4). Returns the new board and whether a marble was ejected (or, in
+/// a rogue-lite fight, a Bomb burst).
 pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), MoveError> {
     let mut group = mv.cells.clone();
     group.sort();
@@ -185,6 +187,8 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
     // The cell of the marble the push throws off the board.
     let mut off = None;
     let mut gyroscope = false;
+    // The cells of the Shields a failed push spent.
+    let mut spent = Vec::new();
     let mut moved: Vec<((i32, i32), Cell)> = group.iter().map(|&c| (c, own)).collect();
     if inline {
         let front = if d == v { group[n - 1] } else { group[0] };
@@ -229,10 +233,22 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
                 }
                 None => off = Some(step(lead, d, run - 1)),
             }
-            moved.extend((0..run).map(|i| {
-                let c = step(lead, d, i);
-                (c, at(board, c).expect("run cell"))
-            }));
+            // A Shield in the pushed line stops the push (a rogue-lite fight): nothing moves and the
+            // Shield is spent.
+            spent = (0..run)
+                .map(|i| step(lead, d, i))
+                .filter(|&c| board.special(c) == Some(Special::Shield))
+                .collect();
+            if spent.is_empty() {
+                moved.extend((0..run).map(|i| {
+                    let c = step(lead, d, i);
+                    (c, at(board, c).expect("run cell"))
+                }));
+            } else {
+                moved.clear();
+                off = None;
+                gyroscope = false;
+            }
         }
     } else {
         for &c in &group {
@@ -250,14 +266,15 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
         let t = step(c, d, 1);
         next.set(t.0, t.1, cell);
     }
+    let mut bombed = false;
     if board.rogue_lite() {
         let moved: Vec<_> = moved.iter().map(|&(c, _)| c).collect();
-        crate::run::carry_specials(board, &mut next, &moved, d, off);
+        bombed = crate::run::carry_specials(board, &mut next, &moved, d, off, own, &spent);
     }
     if gyroscope {
         next.spend_relic(crate::run::Relic::Gyroscope);
     }
-    Ok((next, off.is_some()))
+    Ok((next, off.is_some() || bombed))
 }
 
 #[cfg(test)]

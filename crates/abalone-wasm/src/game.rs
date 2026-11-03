@@ -42,7 +42,7 @@ impl Engine {
     }
 
     /// Makes the marble on `(q, r)` a special marble of a rogue-lite fight, before its first
-    /// move: `kind` `1` Heavy, `2` Anchor, `3` Spark. `Err` carries the reason.
+    /// move: `kind` `1` Heavy, `2` Anchor, `3` Spark, up to `10` Medic. `Err` carries the reason.
     pub fn place_special(&mut self, q: i32, r: i32, kind: u8) -> Result<(), String> {
         let kind = special(kind).ok_or_else(|| format!("unknown kind {kind}"))?;
         self.game

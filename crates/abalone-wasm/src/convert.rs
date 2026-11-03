@@ -3,7 +3,7 @@
 //! Encapsulates board serialization, move encoding/decoding strides,
 //! status/result codes, and coordinate generators.
 
-use abalone_core::board::{Board, Cell, Special, RADIUS};
+use abalone_core::board::{Board, Cell, Special, FUSE, RADIUS};
 use abalone_core::encounter::PveResult;
 use abalone_core::game::{DrawReason, Outcome, Tactic};
 use abalone_core::moves::{Direction, Move, Player};
@@ -65,6 +65,10 @@ pub(crate) fn special_code(kind: Special) -> u8 {
         Special::HeavyPlus => 4,
         Special::AnchorPlus => 5,
         Special::SparkPlus => 6,
+        Special::Magnet => 7,
+        Special::Shield => 8,
+        Special::Bomb(_) => 9,
+        Special::Medic => 10,
     }
 }
 
@@ -77,6 +81,10 @@ pub(crate) fn special(code: u8) -> Option<Special> {
         Special::HeavyPlus,
         Special::AnchorPlus,
         Special::SparkPlus,
+        Special::Magnet,
+        Special::Shield,
+        Special::Bomb(FUSE),
+        Special::Medic,
     ]
     .into_iter()
     .find(|&kind| special_code(kind) == code)

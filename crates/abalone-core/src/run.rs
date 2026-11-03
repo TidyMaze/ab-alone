@@ -160,28 +160,40 @@ pub fn run_map(seed: u64) -> Vec<Node> {
     map
 }
 
-/// The special marbles of `next`, the board after a push of `board` that moved the marbles on
-/// `moved` one step along `d` and threw the one on `off` off the board: the marks follow their
-/// marbles, and an ejected Spark bursts (docs/specs/roguelite.md section 5).
+/// The special marbles of `next`, the board after a ply of the `mover` on `board` that moved the
+/// marbles on `moved` one step along `d`, threw the one on `off` off the board and spent the Shields
+/// on `spent` (docs/specs/roguelite.md sections 5 and 13): the marks follow their marbles, the
+/// Magnets that moved pull, an ejected Spark bursts, the mover's Bombs burn and the Medics thrown
+/// off come back. Returns whether a Bomb burst, which takes its own marble off the board.
 pub(crate) fn carry_specials(
     board: &Board,
     next: &mut Board,
     moved: &[(i32, i32)],
     (dq, dr): (i32, i32),
     off: Option<(i32, i32)>,
-) {
+    mover: Cell,
+    spent: &[(i32, i32)],
+) -> bool {
+    let mut magnets = Vec::new();
     let mut specials: Vec<_> = board
         .specials()
         .iter()
-        .filter(|s| Some(s.0) != off)
+        .filter(|s| Some(s.0) != off && !spent.contains(&s.0))
         .map(|&((q, r), kind)| {
             if moved.contains(&(q, r)) {
+                if kind == Special::Magnet {
+                    magnets.push((q + dq, r + dr));
+                }
                 ((q + dq, r + dr), kind)
             } else {
                 ((q, r), kind)
             }
         })
         .collect();
+    magnets.sort();
+    for magnet in magnets {
+        pull(next, &mut specials, magnet);
+    }
     let reach = off.and_then(|c| board.special(c)).map_or(0, Special::burst);
     if let Some(spark) = off.filter(|_| reach > 0) {
         // The army's Detonator: its Sparks push 1 cell further (a Spark+ 3).
@@ -190,7 +202,81 @@ pub(crate) fn carry_specials(
         burst(next, &mut specials, spark, reach);
     }
     specials.sort_by_key(|s| s.0);
+    let bombed = burn(next, &mut specials, mover);
+    revive(board, next, &specials);
     next.set_specials(specials);
+    bombed
+}
+
+/// The Magnet on `magnet` pulls the first enemy marble in line two cells away, in the order of the
+/// directions, one cell toward it, when the cell between is free. A pulled marble keeps its mark.
+/// The Magnets that moved in one ply sit in one line with the marbles they pushed, so none pulls
+/// another.
+fn pull(next: &mut Board, specials: &mut [((i32, i32), Special)], magnet: (i32, i32)) {
+    let side = next.get(magnet.0, magnet.1);
+    let mut toward = NEIGHBOURS;
+    toward.sort();
+    for (dq, dr) in toward {
+        let (near, far) = (
+            (magnet.0 + dq, magnet.1 + dr),
+            (magnet.0 + 2 * dq, magnet.1 + 2 * dr),
+        );
+        let Some(foe @ (Cell::Black | Cell::White)) = next.get(far.0, far.1) else {
+            continue;
+        };
+        if Some(foe) == side || next.get(near.0, near.1) != Some(Cell::Empty) {
+            continue;
+        }
+        next.set(far.0, far.1, Cell::Empty);
+        next.set(near.0, near.1, foe);
+        if let Some(mark) = specials.iter_mut().find(|s| s.0 == far) {
+            mark.0 = near;
+        }
+        return;
+    }
+}
+
+/// The `mover`'s Bombs each lose a turn of their fuse; those at 0 burst like a Spark where they
+/// stand (1 cell) and are gone with their marble. Returns whether one did.
+fn burn(next: &mut Board, specials: &mut Vec<((i32, i32), Special)>, mover: Cell) -> bool {
+    for (cell, kind) in specials.iter_mut() {
+        if let Special::Bomb(turns) = kind {
+            if next.get(cell.0, cell.1) == Some(mover) {
+                *turns = turns.saturating_sub(1);
+            }
+        }
+    }
+    let mut bombed = false;
+    while let Some(i) = specials.iter().position(|s| s.1 == Special::Bomb(0)) {
+        let (cell, _) = specials.remove(i);
+        next.set(cell.0, cell.1, Cell::Empty);
+        burst(next, specials, cell, 1);
+        bombed = true;
+    }
+    bombed
+}
+
+/// The Medics of `board` that no longer have a mark in `specials` were thrown off the board: each
+/// comes back as a plain marble on the first free cell of its side's back row, in the order of the
+/// standard layout, and is lost when the row is full.
+fn revive(board: &Board, next: &mut Board, specials: &[((i32, i32), Special)]) {
+    let medics = |marks: &[((i32, i32), Special)], on: &Board, side: Cell| {
+        marks
+            .iter()
+            .filter(|s| s.1 == Special::Medic && on.get(s.0 .0, s.0 .1) == Some(side))
+            .count()
+    };
+    for side in [Cell::Black, Cell::White] {
+        let mut gone = medics(board.specials(), board, side) - medics(specials, next, side);
+        let flip = if side == Cell::Black { 1 } else { -1 };
+        for &(q, r) in &STANDARD_BLACK[..5] {
+            let (q, r) = (q * flip, r * flip);
+            if gone > 0 && next.get(q, r) == Some(Cell::Empty) {
+                next.set(q, r, side);
+                gone -= 1;
+            }
+        }
+    }
 }
 
 /// A Spark's burst from its last cell: each marble next to it slides `reach` cells straight away

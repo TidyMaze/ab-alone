@@ -153,7 +153,19 @@ pub enum Special {
     AnchorPlus,
     /// A Spark whose burst pushes its neighbours 2 cells away.
     SparkPlus,
+    /// After a move that moved it, pulls an enemy marble two cells away in line one cell toward it.
+    Magnet,
+    /// The first push that would move it fails, and it becomes a plain marble.
+    Shield,
+    /// Bursts like a Spark where it stands at the end of the third turn of its side, and is gone.
+    /// The turns of its side left, `FUSE` at the start of the fight.
+    Bomb(u8),
+    /// When it is ejected, comes back once on a free cell of its side's back row.
+    Medic,
 }
+
+/// The turns of its side a [`Special::Bomb`] burns before it bursts.
+pub const FUSE: u8 = 3;
 
 impl Special {
     /// What it adds to its marble's weight in a push: 1 for a Heavy, 2 for a Heavy+.

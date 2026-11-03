@@ -85,7 +85,8 @@
 //!   - State hash: 16 lowercase hex digits, the same on every peer for the same state.
 //! - Special marbles of a rogue-lite fight (`Engine::specials`, `Engine::place_special`): records
 //!   of 3 integers `[q, r, kind]`, in `q` then `r` order. `kind` `1` Heavy, `2` Anchor, `3` Spark,
-//!   and upgraded `4` Heavy+, `5` Anchor+, `6` Spark+ (docs/specs/roguelite.md sections 5 and 10).
+//!   and upgraded `4` Heavy+, `5` Anchor+, `6` Spark+ (docs/specs/roguelite.md sections 5 and 10),
+//!   then `7` Magnet, `8` Shield, `9` Bomb, `10` Medic (section 13).
 //! - Relics of a rogue-lite fight (`Engine::set_relics`): a bit mask, bit `code` set for each relic
 //!   the army holds. `code` `0` Gyroscope, `1` Hull plating, `2` Salvage magnet, `3` Jammer, `4`
 //!   Detonator, `5` Bunks, `6` Lucky coin, `7` Bargain, `8` Saboteur, `9` Dampener, `10` War chest,
