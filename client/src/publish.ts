@@ -3,6 +3,7 @@
 // names nobody (the seats' signatures inside the content say who played), and two events never share an author.
 import { schnorr, utils } from '@noble/secp256k1';
 import { RELAYS, TAG, type Socket, type SharedResult } from './boardfeed';
+import type { RetireEvent } from './shareboard';
 
 const TIMEOUT_MS = 8000;
 const hex = (b: Uint8Array): string => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
@@ -17,8 +18,8 @@ export interface NostrEvent {
   readonly sig: string;
 }
 
-/** The NIP-01 event of a result: kind 1, tagged for the board, signed with a fresh throwaway key. */
-export async function resultEvent(result: SharedResult, nowS: number): Promise<NostrEvent> {
+/** The NIP-01 event of a result, or of a key's signed retire (`leaveBoard`, `newKey`): kind 1, tagged for the board, signed with a fresh throwaway key. */
+export async function resultEvent(result: SharedResult | RetireEvent, nowS: number): Promise<NostrEvent> {
   const secret = utils.randomSecretKey();
   const pubkey = hex(schnorr.getPublicKey(secret));
   const tags = [['t', TAG]];
@@ -61,8 +62,8 @@ export function sendEvent(open: (url: string) => Socket, url: string, event: Nos
   });
 }
 
-/** Publishes a result both seats signed to the relays; the number of relays that accepted it. Never throws. */
-export async function publishResult(open: (url: string) => Socket, result: SharedResult, nowS: number, relays: readonly string[] = RELAYS): Promise<number> {
+/** Publishes a result both seats signed, or a retire its key signed, to the relays; the number of relays that accepted it. Never throws. */
+export async function publishResult(open: (url: string) => Socket, result: SharedResult | RetireEvent, nowS: number, relays: readonly string[] = RELAYS): Promise<number> {
   try {
     const event = await resultEvent(result, nowS);
     return (await Promise.all(relays.map((url) => sendEvent(open, url, event)))).filter(Boolean).length;

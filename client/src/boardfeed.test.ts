@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import init, { Engine, replay_score } from 'abalone-wasm';
 import banned from './bannedkeys.json';
-import { BANNED, banSet, LIMIT, MIN_OPPONENTS, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import { retireTimes, BANNED, banSet, LIMIT, MIN_OPPONENTS, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import { boardKeys, joinBoard, leaveBoard, signRetire, type RetireEvent } from './shareboard';
 import { generateKeys, type Keys } from './moverecord';
 
 // The replay is the real rules engine (crates/abalone-wasm replay_score), as antistalling.test.ts: Node's fetch cannot read a file:// URL.
@@ -111,6 +112,29 @@ describe('the shared board read side (#1287)', () => {
     for (const b of banned.banned as { pub: string; reason: string; date: string }[]) expect([typeof b.pub, b.reason.length > 0, /^\d{4}-\d\d-\d\d$/.test(b.date)]).toEqual(['string', true, true]);
     expect(BANNED.size).toBe(banned.banned.length);
     expect([...banSet([{ pub: 'P', reason: 'r', date: '2026-11-03' }])]).toEqual(['P']);
+  });
+
+  it('honours the retire that leaveBoard stores, for later results only, the earliest one, and refuses a forged one', async () => {
+    const mem = new Map<string, string>();
+    const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) } as Storage;
+    await joinBoard(store, 'Ann');
+    const kP = await boardKeys(store);
+    const mine = (game: string, ts: number): Promise<SharedResult> => signed({ game, ts, black: { pub: kP.pub, name: 'Ann' } }, ended, [kP, kB]);
+    const raw = (await Promise.all([mine('e', 100), mine('a', 200), mine('l', 300)])).map((r) => JSON.stringify(r));
+    const retire = JSON.stringify(await leaveBoard(store, 200_000)); // the event the player publishes, at 200 s
+    const kept = async (...extra: string[]): Promise<string[]> => (await verifiedResults([...raw, ...extra], score, new Set())).map((r) => r.game);
+    expect(await kept()).toEqual(['e', 'a', 'l']);
+    expect(await kept(retire)).toEqual(['e', 'a']);
+    const other = JSON.stringify(await signRetire(kB, 150));
+    expect(await kept(other)).toEqual(['e']); // the opponent's retire hides the games after it too
+    expect(await kept(retire, JSON.stringify(await signRetire(kP, 150)), JSON.stringify(await signRetire(kP, 400)))).toEqual(['e']);
+    // Altered after signing, or signed by another key: nothing hidden.
+    const moved = { ...(JSON.parse(retire) as RetireEvent), at: 0 };
+    const forged = { ...(JSON.parse(retire) as RetireEvent), pub: kA.pub };
+    expect(await kept(JSON.stringify(moved), JSON.stringify(forged))).toEqual(['e', 'a', 'l']);
+    const ok = JSON.parse(retire) as Record<string, unknown>;
+    const bad = ['junk', 'null', '{}', ...[{ v: 2 }, { kind: 'x' }, { pub: 1 }, { sig: 5 }, { at: 'x' }, { at: null }].map((o) => JSON.stringify({ ...ok, ...o }))];
+    expect([...(await retireTimes(bad))]).toEqual([]);
   });
 
   it('replays a game once even when it is refused, and stops at the budget of plies', async () => {

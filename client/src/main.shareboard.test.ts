@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
+import type { Keys } from './moverecord';
 import { boot } from './test/harness';
 
 // The opt-in for the shared ranked board on the harness (#1287): asked at the first ranked entry, unticked, nothing sent.
@@ -154,6 +155,32 @@ describe('shared board opt-in', () => {
     expect(sockets).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+  it('with ?board=publish, Leave the board and New key each send their retire to the three relays; plain ?board sent none above', async () => {
+    const sent: string[] = [];
+    class Sock {
+      constructor(readonly url: string) { queueMicrotask(() => this.on.get('open')?.({})); }
+      on = new Map<string, (e: { data?: string }) => void>();
+      addEventListener(t: string, f: (e: { data?: string }) => void): void { this.on.set(t, f); }
+      send(d: string): void { sent.push(d); }
+      close(): void {}
+    }
+    vi.stubGlobal('WebSocket', Sock);
+    const game = await boot('?bot=off&board=publish&net=hook');
+    game.openModes();
+    byId('ranked').click();
+    await game.settle();
+    tick();
+    byId('optin-yes').click();
+    await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
+    byId('board-newkey').click();
+    await vi.waitFor(() => expect(sent).toHaveLength(3));
+    byId('board-leave').click();
+    await vi.waitFor(() => expect(sent).toHaveLength(6));
+    const events = sent.map((m) => (JSON.parse(m) as [string, { content: string }])[1].content);
+    expect(sent.every((m) => m.startsWith('["EVENT"'))).toBe(true);
+    expect(events.map((c) => (JSON.parse(c) as { kind: string }).kind)).toEqual(Array(6).fill('retire'));
+    vi.unstubAllGlobals();
+  });
   // The read side (#1287): behind ?board and after the opt-in, the board reads the three relays and shows the results the rules replay.
   class FakeSocket {
     static all: FakeSocket[] = [];
@@ -191,13 +218,15 @@ describe('shared board opt-in', () => {
     }
     const { generateKeys } = await import('./moverecord');
     const { signResult } = await import('./boardfeed');
-    const [ka, kb] = [await generateKeys(), await generateKeys()];
-    const result = async (game: string, name: string, status: number, signedBy = true): Promise<string> => {
+    const [ka, ...opps] = (await Promise.all(Array.from({ length: 6 }, () => generateKeys()))) as [Keys, ...Keys[]];
+    // Ann needs 5 distinct opponents to be ranked (MIN_OPPONENTS): five keys, the first one is Bob.
+    const result = async (game: string, name: string, status: number, signedBy = true, kb: Keys = opps[0]!): Promise<string> => {
       const r = { v: 1 as const, game, black: { pub: ka.pub, name }, white: { pub: kb.pub, name: 'Bob' }, moves, status, ejected: [engine.ejected(1), engine.ejected(2)] as [number, number], ts: 5 };
       return JSON.stringify({ ...r, sigs: signedBy ? { black: await signResult(ka, r), white: await signResult(kb, r) } : { black: 'x', white: 'y' } });
     };
     const lie = engine.status() === 1 ? 2 : 1;
-    const contents = [await result('g1', '<i>Ann</i>', engine.status()), await result('g2', 'Liar', lie), await result('g3', 'Unsigned', engine.status(), false)];
+    const wins = await Promise.all(opps.slice(0, 5).map((k, i) => result(`h${i}`, '<i>Ann</i>', engine.status(), true, k)));
+    const contents = [...wins, await result('g2', 'Liar', lie), await result('g3', 'Unsigned', engine.status(), false)];
     FakeSocket.serve = (s) => {
       for (const content of contents) {
         s.emit('message', JSON.stringify(['EVENT', 'ab-board', { kind: 1, tags: [['t', 'ab-alone-ranked']], content }]));
@@ -217,7 +246,7 @@ describe('shared board opt-in', () => {
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
     game.openModes();
     byId('leaderboard').click();
-    await vi.waitFor(() => expect(byId('board-shared').textContent).toContain('Bob'));
+    await vi.waitFor(() => expect(byId('board-shared').textContent).toContain('Ann'));
     expect(FakeSocket.all.map((s) => s.url)).toEqual(['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
     expect(byId('board-shared').textContent).toContain('<i>Ann</i>'); // as text
     expect(byId('board-shared').innerHTML).toContain('&lt;i&gt;');
@@ -229,8 +258,8 @@ describe('shared board opt-in', () => {
     byId('board-shared').textContent = '';
     byId('leaderboard').click();
     byId('leaderboard').click();
-    await vi.waitFor(() => expect(byId('board-shared').textContent).toContain('Bob'));
-    expect(byId('board-shared').querySelectorAll('tbody tr')).toHaveLength(2);
+    await vi.waitFor(() => expect(byId('board-shared').textContent).toContain('Ann'));
+    expect(byId('board-shared').querySelectorAll('tbody tr')).toHaveLength(1); // the opponents have met one key each: not ranked
     vi.unstubAllGlobals();
   });
 

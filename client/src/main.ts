@@ -28,7 +28,7 @@ import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consen
 import { readBoard, sharedHtml, type SharedResult } from './boardfeed';
 import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
-import { BOARD_TEXT, publishFlag, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
+import { BOARD_TEXT, publishFlag, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -1298,8 +1298,12 @@ function showShare(): void {
   document.getElementById('board-newkey')!.hidden = !joined;
 }
 document.getElementById('board-join')!.addEventListener('click', () => void askBoard().then(showShare));
-document.getElementById('board-leave')!.addEventListener('click', () => void leaveBoard(store, Date.now()).then(showShare));
-document.getElementById('board-newkey')!.addEventListener('click', () => void newKey(store, Date.now()));
+// Behind ?board=publish the retire that Leave or New key just stored goes to the three relays (publish.ts); plain ?board sends nothing.
+const publishRetire = (): void => {
+  if (publishFlag(location.search)) void publishResult((url) => new WebSocket(url), readRetires(store).at(-1)!, Math.floor(Date.now() / 1000));
+};
+document.getElementById('board-leave')!.addEventListener('click', () => void leaveBoard(store, Date.now()).then(() => (publishRetire(), showShare())));
+document.getElementById('board-newkey')!.addEventListener('click', () => void newKey(store, Date.now()).then(publishRetire));
 // The shared board, read side (#1287): behind ?board and after the opt-in, the three relays are read and the results the Rust rules replay
 // are shown. Nothing is published. A reopened board drops an older read that comes back late.
 let sharedRead = 0;

@@ -1,6 +1,8 @@
 import { schnorr } from '@noble/secp256k1';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RELAYS, TAG, parseResult, type SharedResult, type Socket } from './boardfeed';
+import { RELAYS, TAG, parseResult, retireTimes, type SharedResult, type Socket } from './boardfeed';
+import { generateKeys } from './moverecord';
+import { signRetire } from './shareboard';
 import { publishResult, resultEvent, sendEvent } from './publish';
 
 // A relay that is a stub: no test reaches the network.
@@ -43,6 +45,14 @@ describe('publishing a ranked result (#1287)', () => {
     expect(e.id).toBe(Array.from(id, (b) => b.toString(16).padStart(2, '0')).join(''));
     expect(await schnorr.verifyAsync(unhex(e.sig), id, unhex(e.pubkey))).toBe(true);
     expect((await resultEvent(result, 99)).pubkey).not.toBe(e.pubkey); // a fresh author each time
+  });
+
+  it('wraps a key\'s signed retire the same way, and the reader takes it back', async () => {
+    const keys = await generateKeys();
+    const retire = await signRetire(keys, 500);
+    const e = await resultEvent(retire, 600);
+    expect(e.tags).toEqual([['t', TAG]]);
+    expect([...(await retireTimes([e.content]))]).toEqual([[keys.pub, 500]]);
   });
 
   it('sends one EVENT per relay and counts those that say OK; a refusal, a notice, an error, a close or count for none', async () => {

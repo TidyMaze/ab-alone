@@ -5,7 +5,7 @@
 import banned from './bannedkeys.json';
 import { DEFAULT_RATING, update1v1Elo } from './elo';
 import { b64, signedBy, type Keys } from './moverecord';
-import { cleanName } from './shareboard';
+import { cleanName, verifyRetire, type RetireEvent } from './shareboard';
 
 export const RELAYS = ['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud'] as const;
 export const WINDOW_S = 7 * 24 * 3600;
@@ -112,16 +112,36 @@ export function parseResult(content: string): SharedResult | null {
   };
 }
 
+/** The retire time of each key that sent a `RetireEvent` signed by itself (what `leaveBoard` and `newKey` store and publish): the earliest
+ * if it sent several. A retire not signed by its own key counts for nothing. Results of that key dated after it are hidden, earlier ones stay. */
+export async function retireTimes(contents: readonly string[]): Promise<Map<string, number>> {
+  const times = new Map<string, number>();
+  for (const content of contents) {
+    let e: Partial<RetireEvent> | null;
+    try {
+      e = JSON.parse(content) as Partial<RetireEvent> | null;
+    } catch {
+      continue;
+    }
+    if (e?.v !== 1 || e.kind !== 'retire' || typeof e.pub !== 'string' || typeof e.sig !== 'string' || typeof e.at !== 'number' || !Number.isFinite(e.at)) continue;
+    if (e.at >= (times.get(e.pub) ?? Infinity) || !(await verifyRetire(e as RetireEvent))) continue;
+    times.set(e.pub, e.at);
+  }
+  return times;
+}
+
 /** The results both seats signed whose log the rules replay to the claimed score, one per game and pair of seats (the first seen). The rest is not shown.
  * A result with a bad signature is dropped before the replay and does not use up its game id, so nobody can squat a game. */
 export async function verifiedResults(contents: readonly string[], score: Score, ban: ReadonlySet<string> = BANNED): Promise<SharedResult[]> {
   const seen = new Set<string>(); // every (game, black, white) met, a refused one too: a game is replayed once. The seats are in the key so that
   // another pair of keys reusing a public game id cannot spend it.
   const kept: SharedResult[] = [];
+  const retired = await retireTimes(contents);
   let budget = REPLAY_BUDGET;
   for (const content of contents) {
     const r = parseResult(content);
     if (!r || ban.has(r.black.pub) || ban.has(r.white.pub)) continue; // a banned key's results are ignored
+    if (r.ts > (retired.get(r.black.pub) ?? Infinity) || r.ts > (retired.get(r.white.pub) ?? Infinity)) continue; // a key stopped before this game
     const id = JSON.stringify([r.game, r.black.pub, r.white.pub]);
     if (seen.has(id) || r.moves.length > budget || !(await bothSigned(r))) continue;
     seen.add(id);
