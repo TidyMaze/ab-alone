@@ -1315,3 +1315,63 @@ describe('main.ts, the bonus room before an act boss (#1473)', () => {
     }
   });
 });
+
+describe('main.ts, the runes (#1476)', () => {
+  const secrets = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-node-kind="secret"]')];
+  const helps = (): string[] => [...map().querySelectorAll('.run-help')].map((p) => p.textContent!);
+
+  it('a run without runes plays the map of its seed and says which runes there are to find', async () => {
+    await startRun('?bot=off');
+    expect(secrets()).toHaveLength(0);
+    expect(helps().join()).toContain('Runes to find: Rune of Stone (beat The Wall: a secret room in every act)');
+    expect(map().querySelectorAll('line.shortcut')).toHaveLength(0);
+  });
+
+  it('a run of a player who owns the runes shows its secret room in each act, saved and resumed on reload', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    localStorage.setItem('ab-alone.roguelite.runes', '7');
+    game.openModes();
+    byId('roguelite').click();
+    expect(secrets()).toHaveLength(3);
+    expect(secrets().every((b) => b.disabled)).toBe(true); // not on the first row
+    expect(map().querySelector('.run-runes')!.textContent).toContain('Rune of Stone (a secret room in every act) · Rune of Spark');
+    expect(helps().join()).not.toContain('Runes to find');
+    expect(map().querySelectorAll('line.shortcut')).toHaveLength(3);
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(secrets()).toHaveLength(3);
+    expect(map().querySelectorAll('line.shortcut')).toHaveLength(3);
+    localStorage.clear();
+  });
+
+  it('a rune found in a run is kept for the next ones, and the summary says so', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...plainRun(3, 0), found: 2, runes: 1, army: 3, path: [0, 2, 6], end: 'lost' });
+    expect(localStorage.getItem('ab-alone.roguelite.runes')).toBe('2');
+    expect(helps().join()).toContain('Rune of Spark');
+    await game.hook('__run', { ...plainRun(3, 0), found: 4, army: 3, path: [0, 2, 6], end: 'lost' });
+    expect(localStorage.getItem('ab-alone.roguelite.runes')).toBe('6'); // the Spark one stays
+    localStorage.clear();
+  });
+
+  it('the rune of the exit adds a secret third exit to the screen, and its biome can be taken', async () => {
+    const game = await boot('?bot=off');
+    const { run_exits, run_map } = await import('abalone-wasm');
+    const nodes = parseMap(run_map(1));
+    const boss = nodes.findIndex((n) => n.act === 0 && n.kind === 'boss');
+    const path = [nodes.findIndex((n) => n.act === 0 && n.row === 0)];
+    for (let n = nodes[path[0]!]!; n.kind !== 'boss'; ) {
+      path.push(nodes.findIndex((m) => m.act === 0 && m.row === n.row + 1 && m.col === n.links[0]));
+      n = nodes[path[path.length - 1]!]!;
+    }
+    expect(path[path.length - 1]).toBe(boss);
+    await game.hook('__run', { ...newRun(1, 3, LEGACY_UNLOCKED, 0, 4), path, exit: true });
+    const buttons = [...map().querySelectorAll<HTMLButtonElement>('button[data-exit]')];
+    expect(buttons.map((b) => b.dataset.exit)).toEqual(Array.from(run_exits(1, 1, 0, 4)).map(String));
+    expect(buttons).toHaveLength(3);
+    expect(buttons[2]!.textContent).toMatch(/^Secret exit · /);
+    buttons[2]!.click();
+    expect(document.body.dataset.biome).toBe(BIOMES[Number(buttons[2]!.dataset.exit)]!.id);
+  });
+});

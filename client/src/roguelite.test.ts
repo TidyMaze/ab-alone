@@ -157,15 +157,15 @@ const grants = (e: RunEvent): number[] => e.choices.flatMap((c) => [c.win.specia
 describe('roguelite', () => {
   it('parses the map records of the bridge', () => {
     expect(MAP).toHaveLength(6);
-    expect(MAP[0]).toEqual({ act: 0, row: 0, col: 0, kind: 'fight', links: [0], formation: 0, elite: 0 });
-    expect(MAP[2]).toEqual({ act: 0, row: 1, col: 0, kind: 'boss', links: [], formation: 0, elite: 0 });
+    expect(MAP[0]).toEqual({ act: 0, row: 0, col: 0, kind: 'fight', links: [0], skips: [], formation: 0, elite: 0 });
+    expect(MAP[2]).toEqual({ act: 0, row: 1, col: 0, kind: 'boss', links: [], skips: [], formation: 0, elite: 0 });
     expect(parseMap([0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 3, 7, 0, 0, 0]).map((n) => n.kind)).toEqual(['elite', 'rest', 'event', 'unknown']);
     expect(parseMap([0, 0, 1, 0, 0b101, 0, 0])[0]!.links).toEqual([0, 2]);
   });
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false, runes: 0, found: 0 });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 

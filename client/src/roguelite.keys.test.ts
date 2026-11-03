@@ -39,7 +39,7 @@ import type { Store } from './quality';
 // Four acts in the bridge's shape: acts 1 to 3 hold a fight, then elites (or a rest and a treasure), then a boss; the
 // fourth holds an elite and its boss. Act 1: 0 fight, 1 elite, 2 rest, 3 treasure, 4 boss. Act 2: 5 fight, 6 elite,
 // 7 elite, 8 boss. Act 3: 9 fight, 10 elite, 11 boss. Act 4: 12 elite, 13 boss.
-const nd = (act: number, row: number, col: number, kind: NodeKind, links: number[] = [0]): MapNode => ({ act, row, col, kind, links, formation: 0, elite: kind === 'elite' ? 1 : 0 });
+const nd = (act: number, row: number, col: number, kind: NodeKind, links: number[] = [0]): MapNode => ({ act, row, col, kind, links, skips: [], formation: 0, elite: kind === 'elite' ? 1 : 0 });
 const MAP: MapNode[] = [
   nd(0, 0, 0, 'fight', [0, 1, 2]),
   nd(0, 1, 0, 'elite'),
@@ -124,7 +124,7 @@ describe('the Emerald key: a marked elite', () => {
   it('only the first elite of an act is marked, and no more once the key is held', () => {
     expect(fightOver(MAP, first(base(), 0, 1, 4, 5, 7), true, 0).keys).toEqual([]);
     expect(fightOver(MAP, first({ ...base(), keys: [Key.Emerald] }, 0, 1, 4, 5, 6), true, 0).keys).toEqual([Key.Emerald]);
-    expect(fightOver(MAP, first({ ...base(), keys: [Key.Emerald] }, 0, 1, 4, 5, 6), true, 0).told).toBe('');
+    expect(fightOver(MAP, first({ ...base(), keys: [Key.Emerald], runes: 7 }, 0, 1, 4, 5, 6), true, 0).told).toBe(''); // the runes are owned: nothing to tell
   });
   it('a lost marked elite, a plain fight and the act 4 elite give no key', () => {
     expect(fightOver(MAP, first(base(), 0, 1), false, 0).keys).toEqual([]);

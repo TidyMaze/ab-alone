@@ -952,3 +952,61 @@ describe('the bonus room before an act boss (#1473)', () => {
     expect(value(await second.newRun({ save: value(first.save()) })).screen).toBe('bonus');
   });
 });
+
+describe('the runes (#1476)', () => {
+  const withRunes = (seed: number, runes: number): MapNode[] => parseMap(runRules().run_map(seed, runes));
+
+  test('new_run takes the runes the player owns: the map lists a secret room per act and the shortcut, the state names the runes', async () => {
+    const { run } = setup();
+    expect(value(await run.newRun({ seed: 0 })).runes).toBeUndefined();
+    const state = value(await run.newRun({ seed: 0, runes: 7 }));
+    expect(state.runes).toEqual(['Rune of Stone', 'Rune of Spark', 'Rune of Might']);
+    expect(value(await run.newRun({ seed: 0, runes: 5 })).runes).toEqual(['Rune of Stone', 'Rune of Might']);
+    value(await run.newRun({ seed: 0, runes: 3 }));
+    const rows = value(run.state({ map: true })).map!;
+    expect(rows.filter((row) => row.includes(' secret -> '))).toHaveLength(3);
+    const nodes = withRunes(0, 3);
+    const skipping = nodes.findIndex((n) => n.skips.length > 0);
+    const target = nodes.findIndex((n) => n.act === nodes[skipping]!.act && n.row === 2 && n.col === nodes[skipping]!.skips[0]);
+    expect(rows[skipping]!.split(' -> ')[1]!.split(',')).toContain(String(target));
+    expect(rows).toHaveLength(nodes.length - 2);
+    expect(value(run.save())).toMatchObject({ runes: 3, found: 0 });
+  });
+
+  test('a secret room is picked from the node before it and gives a relic to take, as a treasure does', async () => {
+    const nodes = withRunes(0, 1);
+    const room = nodes.findIndex((n) => n.kind === 'secret' && n.act === 0);
+    const from = nodes.findIndex((n) => n.act === 0 && n.row === 0 && n.links.includes(nodes[room]!.col) && n.row + 1 === nodes[room]!.row);
+    const { run } = setup();
+    value(await run.newRun({ save: { ...newRun(0, 3, [], 0, 1), path: [from], fighting: false } }));
+    const state = value(run.state({}));
+    expect(state.nodes).toContainEqual({ node: room, kind: 'secret' });
+    const entered = value(run.pick({ node: room }));
+    expect(entered.screen).toBe('relic');
+    expect(entered.options!.length).toBeGreaterThan(0);
+  });
+
+  test('the secret exit is the third option of the exit screen, marked as such', async () => {
+    const { save, node } = before('boss', { runes: 4 });
+    const { run, session } = setup(true);
+    value(await run.newRun({ save }));
+    value(run.pick({ node }));
+    value(session.playMove({ move: FIRST_MOVE }));
+    let state = value(run.state({}));
+    for (let step = 0; step < 8 && state.screen !== 'exit'; step++) state = value(run.choose({ choice: state.options!.findIndex((o) => o.ok) }));
+    expect(state.screen).toBe('exit');
+    expect(state.options).toHaveLength(3);
+    expect(state.options![2]!.text).toMatch(/^Secret exit · /);
+    expect(state.options![0]!.text).not.toMatch(/^Secret/);
+  });
+
+  test('an elite of an archetype beaten finds its rune: told, listed once the run is over', async () => {
+    const save = at('elite', { fighting: true, keys: [2] }, (r) => r.path.length > 0);
+    const { run, session } = setup(true);
+    value(await run.newRun({ save: { ...save, path: save.path, runes: 0 }, bot_nodes: CHEAP }));
+    value(session.playMove({ move: FIRST_MOVE }));
+    const state = value(run.state({}));
+    expect(state.told ?? '').toMatch(/Rune of (Stone|Spark|Might) found/);
+    expect(value(run.save()).found).toBeGreaterThan(0);
+  });
+});
