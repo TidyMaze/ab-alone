@@ -1611,7 +1611,7 @@ describe('OnlineSession Hello bound to its sender id', () => {
     const old = await signHello(a, { game: 'g', seat: 1, roster: [a.pub, ''], engine: ENGINE }); // no id in it
     r.from('creator-peer', old);
     await session.settled;
-    expect(refused).toEqual(['bad-hello', 'bad-hello']);
+    expect(refused).toEqual(['bad-hello', 'old-page-reload-it']);
   });
 
   it('signs its own id into its Hello when the transport has one, and none otherwise', async () => {
