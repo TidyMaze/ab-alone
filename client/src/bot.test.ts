@@ -95,7 +95,7 @@ describe('answer', () => {
 
   it('replays a rogue-lite fight on an engine of its army and its special marbles, #798 #961', () => {
     const made: unknown[][] = [];
-    const make = (army?: number, placed?: number[][], foes?: number, trainer?: TrainerRef, relics?: number) =>
+    const make = (army?: number, placed?: number[][], foes?: number | number[], trainer?: TrainerRef, relics?: number) =>
       (made.push([army, placed, foes, trainer, relics]), new FakeEngine());
     answer({ id: 9, history: [], nodes: 5, army: 9, placed: [[0, 4, 1]], foes: 10, relics: 0b10001 }, make, noEncounter);
     answer({ id: 10, history: [], nodes: 5 }, make, noEncounter);

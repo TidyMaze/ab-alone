@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, replay_score, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, replay_score, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -313,7 +313,7 @@ import {
   leaveShop,
   fightBudget,
   fightOver,
-  foesOf,
+  foePlan,
   left,
   loadRun,
   mapHtml,
@@ -2527,7 +2527,9 @@ const saves = new LocalSaves(gameStore, navigator.storage);
 const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? new Encounter(boss.id, boss.seed) : new Engine()));
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
-const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesOf(map, state), undefined, relicMask(state));
+// The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
+const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less) => run_foes(state.seed, node, less));
+const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesFor(map, state), undefined, relicMask(state));
 // The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
 const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
   const boss = actBoss(map, state, boss_ids());
@@ -2725,7 +2727,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed, run ? foesOf(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined, run ? relicMask(run.state) : undefined),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed, run ? foesFor(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined, run ? relicMask(run.state) : undefined),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {

@@ -19,7 +19,7 @@ export interface BotRequest {
   /** With `army`: the special marbles placed before the fight, `[q, r, kind]` (#961). */
   placed?: number[][];
   /** With `army`: the marbles of the bot's army, 14 when unset (#1145). */
-  foes?: number;
+  foes?: number | number[];
   /** With `army`: the run's relics, the bit mask of their codes (#1457), none when unset. */
   relics?: number;
   /** Set in a Trainer game (#1159): the worker replays the history on a wave of that many white marbles, with `left` marbles of the run's pool. */
@@ -87,19 +87,19 @@ export function botBudget(search: string, automated: boolean): number {
   return automated && Number.isInteger(n) && n > 0 ? n : BOT_NODES;
 }
 
-/** The engine of a request: a plain game, or a rogue-lite fight of `army` marbles against `foes` with its special
- * marbles `placed` and the run's `relics` (#961, #1145, #1457), so the bot searches the board the page plays. */
+/** The engine of a request: a plain game, or a rogue-lite fight of `army` marbles against `foes` (a count, or the plan of
+ * #1462: the bot's formation and special marbles) with its special marbles `placed` and the run's `relics` (#961, #1145, #1457), so the bot searches the board the page plays. */
 export function engineFor<E extends { place_special(q: number, r: number, kind: number): void; set_relics(mask: number): void }>(
-  make: { new (): E; with_army(army: number, foes: number): E; trainer(wave: number, left: number): E },
+  make: { new (): E; with_army(army: number, foes: number): E; with_foes(army: number, plan: Int32Array): E; trainer(wave: number, left: number): E },
   army?: number,
   placed: number[][] = [],
-  foes = 14,
+  foes: number | number[] = 14,
   trainer?: TrainerRef,
   relics = 0,
 ): E {
   if (trainer) return make.trainer(trainer.wave, trainer.left);
   if (army === undefined) return new make();
-  const engine = make.with_army(army, foes);
+  const engine = typeof foes === 'number' ? make.with_army(army, foes) : make.with_foes(army, Int32Array.from(foes));
   for (const [q, r, kind] of placed) engine.place_special(q!, r!, kind!);
   engine.set_relics(relics);
   return engine;
@@ -108,7 +108,7 @@ export function engineFor<E extends { place_special(q: number, r: number, kind: 
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
-  makeEngine: (army?: number, placed?: number[][], foes?: number, trainer?: TrainerRef, relics?: number) => EngineLike,
+  makeEngine: (army?: number, placed?: number[][], foes?: number | number[], trainer?: TrainerRef, relics?: number) => EngineLike,
   makeEncounter: (id: string, seed: number) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
@@ -170,7 +170,7 @@ export async function askBot(
   player?: boolean,
   army?: number,
   placed?: number[][],
-  foes?: number,
+  foes?: number | number[],
   trainer?: TrainerRef,
   relics?: number,
 ): Promise<number[]> {

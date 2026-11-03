@@ -11,6 +11,8 @@ import { boot, type Game } from './test/harness';
 // a new run, a pick starts the fight of that node against the bot with the army's marbles, a reload resumes it, the
 // run ends on a loss, and another mode abandons it.
 
+/** A run that fights the plain army of before the varied enemies (#1462), so the scripted fights below stay scripted. */
+const plainRun = (seed: number, best: number): Run => ({ ...newRun(seed, best), enemies: false });
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const map = (): HTMLElement => byId('run-map');
 const line = (): string => map().querySelector('.run-line')!.textContent!;
@@ -50,7 +52,7 @@ async function bossRun(id: string): Promise<{ state: Run; nodes: MapNode[] }> {
   for (let seed = 0; ; seed++) {
     const nodes = parseMap(run_map(seed));
     const path = toBoss(nodes);
-    const state = pick({ ...newRun(seed, 3), path: path.slice(0, -1) }, path[path.length - 1]!);
+    const state = pick({ ...plainRun(seed, 3), path: path.slice(0, -1) }, path[path.length - 1]!);
     if (actBoss(nodes, state, boss_ids())?.id === id) return { state, nodes };
   }
 }
@@ -76,7 +78,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     open()[0]!.click();
     expect(map().hidden).toBe(true);
     expect(document.body.dataset.run).toBe('fight');
-    expect(game.hud()).toContain('Rogue-lite run · act 1 fight · army 14 marbles');
+    expect(game.hud()).toContain('Rogue-lite run · act 1 fight'); // its formation too, from a random seed
     playMove(game);
     await game.settle(); // the bot's reply, and the save
     game.frame(1000); // the bot's move waits for the slide of the player's
@@ -90,7 +92,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('Auto-play plays the player side of a run fight, the bot answers, and a tactic held stays unplayed (#1489)', async () => {
     const game = await boot('?nodes=50');
-    await game.hook('__run', pick({ ...newRun(3, 3), tactics: [2, 3, 4] }, 0));
+    await game.hook('__run', pick({ ...plainRun(3, 3), tactics: [2, 3, 4] }, 0));
     expect(byId<HTMLButtonElement>('auto-play').hidden).toBe(false);
     expect(byId<HTMLButtonElement>('auto-play').disabled).toBe(false);
     expect(byId('auto-reason').hidden).toBe(true);
@@ -129,7 +131,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('a marble lost by an army of 4 loses the run, and New run starts another', async () => {
     const game = await boot('?bot=off');
-    await game.hook('__run', pick({ ...newRun(3, 3), enemies: false, army: 4, path: [0] }, 2)); // an elite (14 White, the plain army of a run saved before #1462): the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
+    await game.hook('__run', pick({ ...plainRun(3, 3), army: 4, path: [0] }, 2)); // an elite (14 White, the plain army of a run saved before #1462): the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
     expect(document.body.dataset.run).toBe('fight');
     // White walks its column q = 1 down four times while Black steps (-2, 2) aside and back, then pushes (1, 3) off.
     const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
@@ -150,7 +152,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('an invite link wins over a saved run: the online game starts, the run stays saved for later', async () => {
     const indexedDB = new IDBFactory();
     const first = await boot('?bot=off', { indexedDB });
-    await first.hook('__run', pick(newRun(1, 3), 0));
+    await first.hook('__run', pick(plainRun(1, 3), 0));
     await first.settle();
     const game = await boot('?net=hook#room=the-room', { indexedDB });
     for (let i = 0; i < 50 && document.body.dataset.seat !== 'pending'; i++) await game.settle();
@@ -196,7 +198,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('places the army special marbles before the first move, saves them, and the first move starts the fight', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', pick({ ...newRun(1, 3), specials: [1, 0, 2] }, 0));
+    await game.hook('__run', pick({ ...plainRun(1, 3), specials: [1, 0, 2] }, 0));
     expect(document.body.dataset.run).toBe('place');
     expect(map().hidden).toBe(false);
     expect(map().classList.contains('place')).toBe(true);
@@ -236,7 +238,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
     const counts = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1];
-    await game.hook('__run', { ...pick({ ...newRun(3, 3), specials: counts }, 0), placed: [[-4, 4, 7], [-3, 4, 8], [0, 4, 9], [-1, 4, 10]] });
+    await game.hook('__run', { ...pick({ ...plainRun(3, 3), specials: counts }, 0), placed: [[-4, 4, 7], [-3, 4, 8], [0, 4, 9], [-1, 4, 10]] });
     expect(map().classList.contains('place')).toBe(true);
     expect([...map().querySelectorAll('button[data-kind]')].map((b) => b.textContent)).toEqual(['Magnet · 0 left', 'Shield · 0 left', 'Bomb · 0 left', 'Medic · 0 left']);
     expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10 0,4,9');
@@ -255,7 +257,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a won fight offers a reward, its pick goes back to the map', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(1, 3), army: 12, path: [0], reward: true });
+    await game.hook('__run', { ...plainRun(1, 3), army: 12, path: [0], reward: true });
     expect(document.body.dataset.run).toBe('reward');
     expect(line()).toBe('Fight won · pick a reward');
     const offers = [...map().querySelectorAll<HTMLButtonElement>('button[data-offer]')];
@@ -271,7 +273,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it.each([false, true])('a Spark pushed off bursts on screen, never with reduced motion (%s)', async (reducedMotion) => {
     const game = await boot('?bot=off', { reducedMotion });
-    await game.hook('__run', { ...pick({ ...newRun(3, 3), army: 4, specials: [1, 0, 1], path: [0] }, 2), placed: [[1, 3, 3], [0, 2, 1]] });
+    await game.hook('__run', { ...pick({ ...plainRun(3, 3), army: 4, specials: [1, 0, 1], path: [0] }, 2), placed: [[1, 3, 3], [0, 2, 1]] });
     const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
     for (let k = 0; k < 5; k++) {
       play(game, k % 2 ? [[-3, 2]] : [[-2, 2]], k % 2 ? [-2, 2] : [-3, 2]);
@@ -286,7 +288,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('the bot replays the fight with its special marbles: a Heavy push the plain board refuses, #961', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...pick({ ...newRun(3, 3), specials: [1, 0, 0], path: [0] }, 2), placed: [[0, 4, 1]] });
+    await game.hook('__run', { ...pick({ ...plainRun(3, 3), specials: [1, 0, 0], path: [0] }, 2), placed: [[0, 4, 1]] });
     // The column q = 0 marches up while White steps (2, -2) down out of the way.
     for (let k = 0; k < 3; k++) {
       play(game, [0, 1, 2].map((d): Axial => [0, 2 + d - k]), [0, 1 - k]);
@@ -308,7 +310,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a rest site from the map waits for its choice, saved with the run; Rest brings the army back to 14 with no fight', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(3, 3), army: 9, path: [1] });
+    await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [1] });
     expect(node(3).getAttribute('aria-label')).toBe('Act 1, rest');
     expect(node(2).className).toBe('node elite');
     node(3).click();
@@ -329,7 +331,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('Upgrade at a rest site makes a special marble upgraded, placed with its own type and a + on its glyph, #1458', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(3, 3), army: 9, specials: [1, 0, 0], path: [1] });
+    await game.hook('__run', { ...plainRun(3, 3), army: 9, specials: [1, 0, 0], path: [1] });
     node(3).click();
     map().querySelector<HTMLButtonElement>('button[data-upgrade="1"]')!.click();
     expect(document.body.dataset.run).toBe('map');
@@ -349,7 +351,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it.each([['1', 'taken'], ['0', 'left']])('an event waits for its choice, %s: %s, then the map goes on', async (choice) => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(3, 3), army: 12, specials: [0, 0, 1], path: [1] });
+    await game.hook('__run', { ...plainRun(3, 3), army: 12, specials: [0, 0, 1], path: [1] });
     node(5).click();
     expect(document.body.dataset.run).toBe('event');
     expect(line()).toMatch(/^Event · /);
@@ -367,7 +369,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a shop from the map sells for scrap, saved with the run; a purchase and a removal stay across a reload, Leave goes on, #1459', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(7, 3), army: 9, specials: [1, 0, 0], scrap: 200, path: [0, 2] });
+    await game.hook('__run', { ...plainRun(7, 3), army: 9, specials: [1, 0, 0], scrap: 200, path: [0, 2] });
     expect(line()).toBe('Rogue-lite run · army 9 marbles, 1 Heavy · 200 scrap · pick a fight');
     expect(node(4).getAttribute('aria-label')).toBe('Act 1, shop');
     node(4).click();
@@ -394,7 +396,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a fight starts with 10 enemy marbles, its front row gone, and an elite with all 14, #1145', async () => {
     const whites = async (node: number, path: number[]): Promise<string[]> => {
       const game = await boot('?bot=off');
-      await game.hook('__run', pick({ ...newRun(3, 3), path }, node));
+      await game.hook('__run', pick({ ...plainRun(3, 3), path }, node));
       playMove(game); // White to move: its legal moves show the marbles it has
       const cells = game.hook<Move[]>('__legal').flatMap((m) => m.cells.map((c) => c.join(',')));
       return [...new Set(cells)];
@@ -407,7 +409,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('an elite is a fight against the bot on the army board', async () => {
     const game = await boot('?nodes=50');
-    await game.hook('__run', pick({ ...newRun(3, 3), path: [0] }, 2));
+    await game.hook('__run', pick({ ...plainRun(3, 3), path: [0] }, 2));
     expect(game.hud()).toContain('Rogue-lite run · act 1 elite · army 14 marbles');
     playMove(game);
     await game.settle();
@@ -422,7 +424,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a treasure from the map waits for its relic, saved, and the relic taken joins the bar in the HUD', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(3, 3), path: [1], relics: [Relic.Jammer] });
+    await game.hook('__run', { ...plainRun(3, 3), path: [1], relics: [Relic.Jammer] });
     expect(bar()).toEqual([`Jammer: ${RELICS[Relic.Jammer]!.help}`]);
     expect(node(4).getAttribute('aria-label')).toBe('Act 1, treasure');
     node(4).click();
@@ -442,7 +444,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('an act boss beaten offers 3 relics, then its reward', async () => {
     const game = await boot('?bot=off');
     // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6.
-    await game.hook('__run', { ...newRun(3, 3), army: 12, path: [0, 2, 6, 9], reward: true, relic: true });
+    await game.hook('__run', { ...plainRun(3, 3), army: 12, path: [0, 2, 6, 9], reward: true, relic: true });
     expect(document.body.dataset.run).toBe('relic');
     expect(line()).toBe('Boss beaten · pick a relic');
     expect(relics()).toHaveLength(3);
@@ -455,7 +457,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     const game = await boot('?nodes=50');
     const { Engine } = await import('abalone-wasm');
     const taken = vi.spyOn(Engine.prototype, 'set_relics');
-    await game.hook('__run', pick({ ...newRun(3, 3), relics: [Relic.Gyroscope, Relic.Detonator] }, 0));
+    await game.hook('__run', pick({ ...plainRun(3, 3), relics: [Relic.Gyroscope, Relic.Detonator] }, 0));
     expect(document.body.dataset.run).toBe('fight');
     expect(taken).toHaveBeenLastCalledWith(0b10001);
     expect(bar()).toHaveLength(2);
@@ -508,7 +510,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     await game.settle();
     expect(document.body.dataset.run).toBe('lost');
     expect(line()).toBe('Run lost · 14 marbles left');
-    await game.hook('__run', visit(nodes, newRun(state.seed, 3), 0));
+    await game.hook('__run', visit(nodes, plainRun(state.seed, 3), 0));
     expect(document.body.dataset.boss).toBeUndefined();
     expect(document.body.dataset.deck).toBe('mess');
   });
@@ -535,7 +537,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('an act boss beaten counts at once: a run abandoned after it keeps the unlock, its own unlocks stay', async () => {
     const game = await boot('?bot=off');
     // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6; won, its reward waits.
-    await game.hook('__run', { ...newRun(3, 0), army: 12, path: [0, 2, 6, 9], reward: true });
+    await game.hook('__run', { ...plainRun(3, 0), army: 12, path: [0, 2, 6, 9], reward: true });
     expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
     expect(document.body.dataset.run).toBe('reward');
     expect(map().querySelectorAll('button[data-offer]')).toHaveLength(2); // its own unlocks: a marble or a Heavy
@@ -547,7 +549,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a run over shows its summary and keeps the acts it won for the next runs', async () => {
     const game = await boot('?bot=off');
     // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6, and leads to the first fight 10 of act 2, lost here.
-    await game.hook('__run', { ...newRun(3, 0), army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
+    await game.hook('__run', { ...plainRun(3, 0), army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
     expect(document.body.dataset.run).toBe('lost');
     expect([...map().querySelectorAll('.run-help')].map((p) => p.textContent)).toEqual([
       'Path: act 1 Fight, Elite, Elite, Boss · act 2 Fight',
@@ -579,7 +581,7 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
   const button = (code: number): HTMLButtonElement => tactics().find((b) => b.dataset.tactic === String(code))!;
   const FIRST = [1, 1, -2, 2, 0, 0, 0, 0]; // (-2, 2) steps W
   /** A fight of node 0 whose first move is played: the bot answers on load. */
-  const fight = (state: Partial<Run> = {}): Run => ({ ...pick({ ...newRun(3, 3), tactics: [2, 3, 4, 1].slice(0, 3) }, 0), moves: [FIRST], ...state });
+  const fight = (state: Partial<Run> = {}): Run => ({ ...pick({ ...plainRun(3, 3), tactics: [2, 3, 4, 1].slice(0, 3) }, 0), moves: [FIRST], ...state });
   async function answered(game: Game): Promise<void> {
     await game.settle();
     game.frame(1000);
@@ -711,7 +713,7 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
   it('a won fight offers a tactic with its rewards, the hand full offers none', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(1, 3), army: 12, path: [0], reward: true, tactics: [1] });
+    await game.hook('__run', { ...plainRun(1, 3), army: 12, path: [0], reward: true, tactics: [1] });
     const offer = map().querySelector<HTMLButtonElement>('button[data-tactic-offer]')!;
     expect(map().querySelectorAll('button[data-offer]')).toHaveLength(3);
     const code = Number(offer.dataset.tacticOffer);
@@ -721,7 +723,7 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     await game.settle();
     await boot('?bot=off', { indexedDB });
     expect(document.body.dataset.tactics).toBe(`1,${code}`); // saved with the run
-    await game.hook('__run', { ...newRun(1, 3), army: 12, path: [0], reward: true, tactics: [1, 1, 1] });
+    await game.hook('__run', { ...plainRun(1, 3), army: 12, path: [0], reward: true, tactics: [1, 1, 1] });
     expect(map().querySelector('button[data-tactic-offer]')).toBeNull();
   });
 
@@ -734,14 +736,23 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
 });
 
 describe('main.ts, the varied enemy armies of a run (#1462)', () => {
-  /** The first node of `seed`'s map of the `kind`, deepest act first. */
-  async function nodeOf(seed: number, kind: string): Promise<{ nodes: MapNode[]; index: number }> {
+  /** The act 1 nodes of `seed`'s map of the `kind` with the path that walks to each, by the first link back. */
+  async function nodesOf(seed: number, kind: string): Promise<{ nodes: MapNode[]; found: { index: number; path: number[] }[] }> {
     const { run_map } = await import('abalone-wasm');
     const nodes = parseMap(run_map(seed));
-    return { nodes, index: nodes.findIndex((n, i) => n.kind === kind && n.act === 2 && i > 0) };
+    const found = nodes.flatMap((n, index) => {
+      if (n.kind !== kind || n.act !== 0) return [];
+      const path = [index];
+      for (let m = n; m.row > 0; ) {
+        const prev = nodes.findIndex((o) => o.act === 0 && o.row === m.row - 1 && o.links.includes(m.col));
+        path.unshift(prev);
+        m = nodes[prev]!;
+      }
+      return [{ index, path }];
+    });
+    return { nodes, found };
   }
-  const board = (game: Game): number[] => game.hook<number[]>('__board');
-  const whites = (game: Game): number => board(game).filter((c) => c === 2).length;
+  const whites = (game: Game): number => game.hook<number[]>('__board').filter((c) => c === 2).length;
   /** The plan the bridge deals for a node as the board dataset lists its special marbles: `q,r,kind`, cell by cell. */
   async function listed(seed: number, index: number): Promise<string> {
     const { run_foes } = await import('abalone-wasm');
@@ -750,23 +761,24 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
     return marks.sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!).map((m) => m.join(',')).join(' ');
   }
 
-  it('a fight of act 3 stands the formation of its node with enemy special marbles, and the HUD names the formation', async () => {
+  it('a fight stands the formation of its node with an enemy special marble, and the HUD names the formation', async () => {
     const game = await boot('?bot=off');
     let seed = 1;
-    const { run_foes } = await import('abalone-wasm');
-    for (;; seed++) {
-      const { nodes, index } = await nodeOf(seed, 'fight');
-      if (index > 0 && nodes[index]!.formation > 0) break;
+    let pickable: { index: number; path: number[] } | undefined;
+    for (; !pickable; seed++) {
+      const { nodes, found } = await nodesOf(seed, 'fight');
+      pickable = found.find((f) => nodes[f.index]!.formation > 0);
     }
-    const { nodes, index } = await nodeOf(seed, 'fight');
-    const plan = Array.from(run_foes(seed, index, 0));
-    expect(plan.length).toBe(2 + 3 * 3); // act 3: three special marbles
-    await game.hook('__run', pick(newRun(seed, 3), index));
+    seed--;
+    const { nodes } = await nodesOf(seed, 'fight');
+    const { index, path } = pickable;
+    await game.hook('__run', pick({ ...newRun(seed, 3), path: path.slice(0, -1) }, index));
     expect(whites(game)).toBe(10);
     expect(document.body.dataset.specials).toBe(await listed(seed, index));
-    expect(game.hud()).toContain(`act 3 fight · ${FORMATIONS[nodes[index]!.formation]} · army 14 marbles`);
-    // The same node of a run saved before: the standard army of 10, none special.
-    await game.hook('__run', pick({ ...newRun(seed, 3), enemies: false }, index));
+    expect(document.body.dataset.specials).not.toBe('');
+    expect(game.hud()).toContain(`act 1 fight · ${FORMATIONS[nodes[index]!.formation]} · army 14 marbles`);
+    // The same node of a run saved before: the standard army of 10, none special, nothing named.
+    await game.hook('__run', pick({ ...plainRun(seed, 3), path: path.slice(0, -1) }, index));
     expect(whites(game)).toBe(10);
     expect(document.body.dataset.specials).toBe('');
     expect(game.hud()).not.toContain(FORMATIONS[nodes[index]!.formation]!);
@@ -775,17 +787,18 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
   it('an elite stands 14 marbles with its archetype\'s special marbles, named on the map and in the HUD', async () => {
     const game = await boot('?bot=off');
     let seed = 1;
-    while ((await nodeOf(seed, 'elite')).index < 0) seed++;
-    const { nodes, index } = await nodeOf(seed, 'elite');
+    while (!(await nodesOf(seed, 'elite')).found.length) seed++;
+    const { nodes, found } = await nodesOf(seed, 'elite');
+    const { index, path } = found[0]!;
     const elite = ELITES[nodes[index]!.elite - 1]!;
-    const run = pick({ ...newRun(seed, 3), path: [] }, index);
+    const run = pick({ ...newRun(seed, 3), path: path.slice(0, -1) }, index);
     await game.hook('__run', run);
     expect(whites(game)).toBe(14);
     expect(document.body.dataset.specials).toBe(await listed(seed, index));
-    expect(game.hud()).toContain(`act 3 elite · ${elite.name}`);
-    await game.hook('__run', { ...run, fighting: false, path: [] });
+    expect(game.hud()).toContain(`act 1 elite · ${elite.name}`);
+    await game.hook('__run', { ...run, fighting: false, path: path.slice(0, -1) });
     const node = map().querySelector(`button[data-node="${index}"]`)!;
-    expect(node.getAttribute('aria-label')).toBe(`Act 3, elite, ${elite.name}`);
+    expect(node.getAttribute('aria-label')).toBe(`Act 1, elite, ${elite.name}`);
     expect(node.textContent).toContain(elite.name);
   });
 });

@@ -11,7 +11,7 @@ export const START_ARMY = 14;
 /** Below this many marbles the run is over. */
 export const MIN_ARMY = 4;
 /** Integers per node of the bridge's map (crates/abalone-wasm/src/lib.rs). */
-const NODE_STRIDE = 5;
+const NODE_STRIDE = 7;
 /** Key of the run in the game store, next to the local game (savegame.ts). */
 export const RUN_KEY = 'run';
 
@@ -19,14 +19,26 @@ export const RUN_KEY = 'run';
 const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop'] as const;
 export type NodeKind = (typeof KINDS)[number];
 
+/** How the bot's marbles stand in a fight or an elite (#1462, docs/specs/roguelite.md section 14), by the bridge's code. */
+export const FORMATIONS: readonly string[] = ['Standard', 'Belgian daisy', 'German daisy', 'Snake', 'Wedge'];
+/** The named elites by the bridge's code less 1: a name and the special marbles of its army. */
+export const ELITES: readonly { name: string; help: string }[] = [
+  { name: 'The Wall', help: 'Anchors' },
+  { name: 'The Artificer', help: 'Sparks and Bombs' },
+  { name: 'The Brute', help: 'Heavies' },
+];
+
 /** One node of the map: a fight, an elite, a rest, an event, a treasure, a shop, or the boss that ends its act. `links` are the columns of
- * the next row it leads to. */
+ * the next row it leads to. A fight or an elite has the bridge's `formation` of the bot's army, an elite its archetype
+ * (`elite`, `0` for none). */
 export interface MapNode {
   act: number;
   row: number;
   col: number;
   kind: NodeKind;
   links: number[];
+  formation: number;
+  elite: number;
 }
 
 /** A run: its seed, its army, the nodes picked (indices in the map), the fight of the last one while it is on and its
@@ -37,7 +49,9 @@ export interface MapNode {
  * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
  * `relic` is on while a relic offer waits to be taken (#1457). `rest` is on while a rest site's choice waits (#1458).
  * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). `scrap` is what it can
- * spend at a shop (#1459), `shop` is on while the shop's screen waits and `bought` are the ids of what that shop sold. */
+ * spend at a shop (#1459), `shop` is on while the shop's screen waits and `bought` are the ids of what that shop sold.
+ * `enemies` is on for a run that fights the varied armies of #1462; a run saved before them has it off and fights the plain
+ * army, so its fight in progress replays. */
 export interface Run {
   seed: number;
   army: number;
@@ -57,6 +71,7 @@ export interface Run {
   scrap: number;
   shop: boolean;
   bought: number[];
+  enemies: boolean;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -165,13 +180,13 @@ export function parseSpecials(flat: ArrayLike<number>): Special[] {
   return specials;
 }
 
-/** The map of the bridge's records `[act, row, col, kind, links]`. */
+/** The map of the bridge's records `[act, row, col, kind, links, formation, elite]`. */
 export function parseMap(flat: ArrayLike<number>): MapNode[] {
   const nodes: MapNode[] = [];
   for (let i = 0; i < flat.length; i += NODE_STRIDE) {
     const mask = flat[i + 4]!;
     const links = [0, 1, 2, 3, 4, 5].filter((c) => mask & (1 << c));
-    nodes.push({ act: flat[i]!, row: flat[i + 1]!, col: flat[i + 2]!, kind: KINDS[flat[i + 3]!]!, links });
+    nodes.push({ act: flat[i]!, row: flat[i + 1]!, col: flat[i + 2]!, kind: KINDS[flat[i + 3]!]!, links, formation: flat[i + 5]!, elite: flat[i + 6]! });
   }
   return nodes;
 }
@@ -216,6 +231,7 @@ export const newRun = (seed: number, best: number): Run => ({
   scrap: 0,
   shop: false,
   bought: [],
+  enemies: true,
 });
 
 /** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
@@ -290,6 +306,11 @@ export const FIGHT_FOES = 10;
  * fewer with the Saboteur. */
 export const foesOf = (map: MapNode[], run: Run): number =>
   (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY) - Number(has(run, Relic.Saboteur));
+
+/** The bot's army in the run's fight as `Engine.with_foes` takes it (#1462): the bridge's plan for the node, `planOf(node,
+ * less)` (`run_foes`), `less` being 1 with the Saboteur; the count alone (`foesOf`) for a run saved before. */
+export const foePlan = (map: MapNode[], run: Run, planOf: (node: number, less: number) => ArrayLike<number>): number | number[] =>
+  run.enemies ? Array.from(planOf(run.path[run.path.length - 1]!, Number(has(run, Relic.Saboteur)))) : foesOf(map, run);
 
 /** An elite's bot searches this many times the positions of a fight's (#800). */
 export const ELITE_BUDGET = 2;
@@ -653,7 +674,8 @@ export function runLine(map: MapNode[], run: Run): string {
   if (run.end === 'won') return `Run won with ${run.army} marbles`;
   if (run.end === 'lost') return `Run lost · ${run.army} marbles left`;
   const node = run.fighting ? lastNode(map, run)! : null;
-  const where = node ? `act ${node.act + 1} ${node.kind}` : '';
+  const foes = node && run.enemies ? [...(node.elite ? [ELITES[node.elite - 1]!.name] : []), ...(node.formation ? [FORMATIONS[node.formation]!] : [])] : [];
+  const where = node ? [`act ${node.act + 1} ${node.kind}`, ...foes].join(' · ') : '';
   const army = `army ${owned(run.army, run.specials)}${run.scrap ? ` · ${run.scrap} scrap` : ''}`;
   const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
   return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
@@ -810,10 +832,11 @@ export function mapHtml(map: MapNode[], run: Run): string {
   const nodes = map.map((n, i) => {
     const [x, y] = spot(n);
     const mark = i === here ? ' here' : run.path.includes(i) ? ' taken' : '';
-    const label = n.kind[0]!.toUpperCase() + n.kind.slice(1);
+    const kind = n.kind[0]!.toUpperCase() + n.kind.slice(1);
+    const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
     return (
       `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}" data-node="${i}" style="left:${x}%;top:${y}%" ` +
-      `aria-label="Act ${n.act + 1}, ${n.kind}"${open.includes(i) ? '' : ' disabled'}>${label}</button>`
+      `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}"${open.includes(i) ? '' : ' disabled'}>${kind}${elite && `<small>${elite}</small>`}</button>`
     );
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
@@ -832,10 +855,11 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
 /** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none, one
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
- * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them. */
+ * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
+ * the plain army. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [] } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -861,9 +885,10 @@ function decodeRun(raw: unknown): Run | null {
     isInt(scrap, MAX_SCRAP) &&
     typeof shop === 'boolean' &&
     Array.isArray(bought) &&
-    bought.every((b, i) => isInt(b, REMOVAL) && bought.indexOf(b) === i);
+    bought.every((b, i) => isInt(b, REMOVAL) && bought.indexOf(b) === i) &&
+    typeof enemies === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought, enemies }
     : null;
 }
 
