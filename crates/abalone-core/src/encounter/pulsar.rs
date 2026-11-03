@@ -63,6 +63,13 @@ pub fn pulse(board: &Board, pulsar: u8, force: Option<u8>) -> (Board, Vec<P>) {
     for &(q, r) in &moved {
         out.set(q + dq, r + dr, board.get(q, r).unwrap_or(Cell::Empty));
     }
+    out.follow_specials(board, |c| {
+        Some(if moved.contains(&c) {
+            (c.0 + dq, c.1 + dr)
+        } else {
+            c
+        })
+    });
     (out, moved)
 }
 

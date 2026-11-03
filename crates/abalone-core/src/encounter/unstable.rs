@@ -139,6 +139,7 @@ fn shove(board: &mut Board, charges: &mut Vec<(P, u8)>, wedge: u8, seed: u64) ->
         .filter(|&c| wedge_of(c) == Some(wedge))
         .collect();
     group.sort_by_key(|&(q, r)| (-ring((q, r)), q, r));
+    let before = board.clone();
     let mut moved = Vec::new();
     for (k, cell) in group.into_iter().enumerate() {
         let ahead: Vec<P> = CORNERS
@@ -161,6 +162,9 @@ fn shove(board: &mut Board, charges: &mut Vec<(P, u8)>, wedge: u8, seed: u64) ->
     }
     charges.retain(|&((q, r), _)| matches!(board.get(q, r), Some(Cell::Black | Cell::White)));
     charges.sort();
+    board.follow_specials(&before, |c| {
+        Some(moved.iter().find(|m| m.0 == c).map_or(c, |m| m.1))
+    });
     moved
 }
 

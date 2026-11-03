@@ -156,6 +156,10 @@ pub fn turn(board: &Board, phase: u8, seed: u64) -> (Board, Vec<Carry>) {
             });
         }
     }
+    out.follow_specials(board, |c| match carries.iter().find(|k| k.from == c) {
+        Some(carry) => (carry.fate == Fate::Moved).then_some(carry.to),
+        None => Some(c),
+    });
     belts.turns += 1;
     if phase == 2 && belts.turns % ASSEMBLY_STRIKE_EVERY == 0 {
         for belt in 0..3 {

@@ -134,6 +134,7 @@ fn pushed_off(before: &Board, mv: &Move) -> Option<(Cell, P)> {
 pub(crate) fn carried_dual(before: &Board, mv: &Move, _after: &Board) -> Option<Dual> {
     let mut dual = before.dual()?;
     dual.ejected = pushed_off(before, mv);
+    dual.marks[0] = dual.ejected.and_then(|(_, cell)| before.special(cell));
     dual.ejections += u8::from(matches!(dual.ejected, Some((Cell::White, _))));
     if !dual.bridged {
         dual.turn = (dual.turn + 1) % 4;
@@ -174,11 +175,18 @@ fn run(mut board: Board, seed: u64) -> Board {
     if let Some((marble, at)) = dual.coming.take() {
         let (q, r) = nearest_empty(&board, at);
         board.set(q, r, marble);
+        if let Some(kind) = dual.marks[1].take() {
+            board
+                .place_special((q, r), kind)
+                .expect("a mark on a rogue-lite board");
+        }
     }
     let phase = phase(dual.ejections);
+    let mark = dual.marks[0].take();
     if let Some((marble, from)) = dual.ejected.take() {
         if phase < 2 {
             dual.coming = Some((marble, landing(&board, from, phase, seed)));
+            dual.marks[1] = mark;
         }
     }
     if phase >= 2 && !dual.bridged {
@@ -335,6 +343,7 @@ mod tests {
         ejections: 5,
         ejected: None,
         coming: None,
+        marks: [None; 2],
         turn: 0,
     };
 

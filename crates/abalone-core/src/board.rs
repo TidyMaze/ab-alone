@@ -219,6 +219,8 @@ pub struct Dual {
     pub ejected: Option<(Cell, (i32, i32))>,
     /// The announced return: the marble and the cell it lands on at the end of the next ply.
     pub coming: Option<(Cell, (i32, i32))>,
+    /// The special mark of the marble in `ejected` and in `coming` (a rogue-lite fight): it comes back with its marble.
+    pub marks: [Option<Special>; 2],
     /// The plies played before the bridge, modulo 4 (#992): the player then the boss in the south
     /// room, then both in the north room.
     pub turn: u8,
@@ -534,6 +536,27 @@ impl Board {
             };
         }
         specials.sort_by_key(|s| s.0);
+    }
+
+    /// After a boss's hook moved marbles from `before` to this board: each special mark goes to `to(cell)`, where its marble
+    /// went (`to` gives the cell it stands on now, `None` when it left), and is dropped when no marble stands there, because
+    /// the marble was ejected, removed or replaced. A board without the rogue-lite flag has none.
+    pub(crate) fn follow_specials(
+        &mut self,
+        before: &Board,
+        to: impl Fn((i32, i32)) -> Option<(i32, i32)>,
+    ) {
+        if !before.rogue_lite() {
+            return;
+        }
+        let mut specials: Vec<_> = before
+            .specials()
+            .iter()
+            .filter_map(|&(cell, kind)| to(cell).map(|at| (at, kind)))
+            .filter(|&((q, r), _)| matches!(self.get(q, r), Some(Cell::Black | Cell::White)))
+            .collect();
+        specials.sort_by_key(|s| s.0);
+        self.specials = Some(specials);
     }
 
     /// The army's relics, by their bit (`Relic::bit`), `0` without the rogue-lite flag.

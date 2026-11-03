@@ -80,8 +80,8 @@ struct BossEntry {
     id: &'static str,
     /// Whether the fight takes the army's build in a rogue-lite run (docs/specs/roguelite.md section 28): its special
     /// marbles, relics and affinities and the Reinforce and Fall back tactics. Only a boss that plays standard Abalone
-    /// and whose hooks remove marbles (and move none) can: a special mark moves with its marble, which a hook would
-    /// not carry. Not the Echo (its free moves and memory), the Choir and the Swarm (their own fights).
+    /// and whose hooks take the special mark of a marble they remove, move or replace (`Board::follow_specials`) can.
+    /// Not the Echo (its free moves and memory), the Choir and the Swarm (their own fights).
     builds: bool,
     /// The goal the player reads before the first move: the rule that differs, and how it is won or lost.
     goal: &'static str,
@@ -233,7 +233,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "ballast",
-        builds: false,
+        builds: true,
         goal:
             "Void pillars; every 2 turns it borrows a crack, a pulse, a polarity, a conversion or a wave. Eject 12 to win; lose 12 or draw to lose.",
         def: ballast_boss,
@@ -264,7 +264,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "magnetizer",
-        builds: false,
+        builds: true,
         goal:
             "Your + and − marbles repel and push any line. Eject 6 to win; lose 6 or draw to lose.",
         def: magnetizer_boss,
@@ -275,7 +275,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "pulsar",
-        builds: false,
+        builds: true,
         goal: "Pulses push every lone marble or pair away. Eject 6 to win; lose 6 or draw to lose.",
         def: pulsar_boss,
         start: pulsar_fight,
@@ -296,7 +296,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "assembly",
-        builds: false,
+        builds: true,
         goal: "Belts carry every marble off the board; later, presses strike. Eject 6 to win; lose 6 or draw to lose.",
         def: assembly_boss,
         start: assembly_fight,
@@ -306,7 +306,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "core",
-        builds: false,
+        builds: true,
         goal: "Centre cells charge marbles, a charged marble weighs more in a push, 4 blow it off. Eject 6 to win; lose 6 or draw to lose.",
         def: unstable_boss,
         start: unstable_fight,
@@ -316,7 +316,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "dual",
-        builds: false,
+        builds: true,
         goal: "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose.",
         def: dual_boss,
         start: dual_fight,
@@ -482,10 +482,10 @@ impl Encounter {
     }
 
     /// The tactics the player can play now, a bit mask as `Engine::tactics`: Reinforce (bit 0) and Fall back (bit 3),
-    /// never Freeze nor Swap, and none in a fight with no build.
+    /// never Freeze nor Swap, and none in a fight with no build (the rogue-lite flag is not on yet).
     pub fn tactics(&self) -> u8 {
         match &self.fight {
-            Fight::Plain(e) => tactic_mask(e.tactics()),
+            Fight::Plain(e) if e.game().board().rogue_lite() => tactic_mask(e.tactics()),
             _ => 0,
         }
     }
@@ -1169,7 +1169,7 @@ impl Encounter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::convert::{cells_of, encode, DIRECTIONS, MOVE_STRIDE};
+    use crate::convert::{board_cells, cells_of, encode, DIRECTIONS, MOVE_STRIDE};
     use abalone_core::encounter::ballast::{
         BALLAST_BOSS_START, BALLAST_PILLARS, BALLAST_PLAYER_START,
     };
@@ -2929,7 +2929,7 @@ mod tests {
         let mut f = Encounter::new(id, seed).unwrap();
         f.set_relics(MASK).unwrap();
         let board = f.board();
-        let black = cells().zip(board.iter()).filter(|(_, &c)| c == 1);
+        let black = board_cells(7).zip(board.iter()).filter(|(_, &c)| c == 1);
         for ((q, r), kind) in black.map(|(cell, _)| cell).zip(1..=10) {
             f.place_special(q, r, kind).unwrap();
         }
@@ -2946,13 +2946,13 @@ mod tests {
             let mut f = Encounter::new(&id, 1).unwrap();
             let takes = BUILDING.contains(&id.as_str());
             assert_eq!(f.takes_build(), takes, "{id}");
+            assert_eq!(f.tactics(), 0, "{id}: none before the flag is on");
             assert_eq!(f.set_relics(0).is_ok(), takes, "{id}");
             if !takes {
                 assert!(f.place_special(0, 0, 1).is_err(), "{id}");
                 assert!(f.play(&tactic(1)).is_err(), "{id}: a tactic needs the flag");
             }
             assert!(f.specials().is_empty() && f.fuses().is_empty(), "{id}");
-            assert_eq!(f.tactics(), 0, "{id}");
         }
         let mut f = Encounter::new("hull", 1).unwrap();
         assert!(f.place_special(0, 4, 1).is_err(), "no flag yet");
@@ -2979,7 +2979,9 @@ mod tests {
                     f.play(&mv).unwrap();
                     let board = f.board();
                     for mark in f.specials().chunks(3) {
-                        let at = cells().position(|c| c == (mark[0], mark[1])).unwrap();
+                        let at = board_cells(7)
+                            .position(|c| c == (mark[0], mark[1]))
+                            .unwrap();
                         assert!(board[at] == 1 || board[at] == 2, "{id}: a mark on a marble");
                     }
                     if f.result() != 0 {

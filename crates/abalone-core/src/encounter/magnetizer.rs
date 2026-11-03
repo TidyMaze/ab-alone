@@ -165,6 +165,7 @@ fn repel(board: &Board, [a, b]: [P; 2]) -> (Board, [u8; 2]) {
         .collect();
     out.set_polarities(poles);
     out.set_announce(board.announce().map(|(c, s)| (c.and_then(shift), s)));
+    out.follow_specials(board, shift);
     (out, credits)
 }
 
