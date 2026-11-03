@@ -406,6 +406,13 @@ pub fn boss_name(id: &str) -> Option<String> {
     boss_entry(id).map(|b| (b.def)().name.to_string())
 }
 
+/// Whether the boss `id` takes the army's build in a run (see `BossEntry::builds`), `false` when unknown: the map says so
+/// before the fight.
+#[wasm_bindgen]
+pub fn boss_takes_build(id: &str) -> bool {
+    boss_entry(id).is_some_and(|b| b.builds)
+}
+
 /// The goal of a boss id, the text the client shows before the first move. `None` when unknown.
 #[wasm_bindgen]
 pub fn boss_goal(id: &str) -> Option<String> {
@@ -2962,7 +2969,11 @@ mod tests {
     #[test]
     fn a_boss_id_says_whether_it_takes_the_build_before_any_fight() {
         for id in boss_ids() {
-            assert_eq!(boss_takes_build(&id), BUILDING.contains(&id.as_str()), "{id}");
+            assert_eq!(
+                boss_takes_build(&id),
+                BUILDING.contains(&id.as_str()),
+                "{id}"
+            );
         }
         assert!(!boss_takes_build("nobody"), "an unknown boss takes none");
     }

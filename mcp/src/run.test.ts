@@ -134,8 +134,8 @@ function before(kind: MapNode['kind'], patch: Partial<Run> = {}): { save: Run; n
   return { save: { ...full, path: full.path.slice(0, -1), spent: [], ...patch }, node: full.path[full.path.length - 1]! };
 }
 
-/** The bosses that take the army's build (#1494), and the others. */
-const BUILD = ['hull', 'chaplain', 'alien', 'railyard', 'overseer', 'stalker'];
+/** The bosses that take the army's build (#1494, #1495), and the others (their own fights). */
+const BUILD = ['hull', 'chaplain', 'alien', 'railyard', 'overseer', 'stalker', 'magnetizer', 'pulsar', 'assembly', 'core', 'dual', 'ballast'];
 const NO_BUILD = bossIds().filter((id) => !BUILD.includes(id));
 
 /** A run standing before the act boss of the first seed that deals one of `ids`, and that node, with `patch`. */

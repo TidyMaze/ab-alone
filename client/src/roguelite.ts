@@ -644,20 +644,25 @@ export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
 /** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, normal, hard. */
 export const ACT_PERCENT = [50, 100, 200, 300];
 
-/** The roster boss of the run's fight when its node is a boss (#800), one of `ids` (the bridge's boss_ids): the run seed
- * deals them, a new one each act, the act's strength, and the fight's seed from the run seed and the node. The boss of an act
- * in a biome is the biome's (#1472), when the roster has it; the fourth act's is FINAL_BOSS (#1467), at 300 %. */
-export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; seed: number; percent: number } | null {
-  const node = lastNode(map, run);
-  if (!run.fighting || node?.kind !== 'boss') return null;
+/** The roster boss that ends act `act` of the run (#800), one of `ids` (the bridge's boss_ids): the run seed deals them, a new one
+ * each act. The boss of an act in a biome is the biome's (#1472), when the roster has it; the fourth act's is FINAL_BOSS (#1467). */
+export function bossOfAct(run: Run, act: number, ids: string[]): string {
   const dealt = [...ids];
   for (let i = dealt.length - 1; i > 0; i--) {
     const j = hash(run.seed, i) % (i + 1);
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
   }
+  const own = act === FINAL_ACT ? FINAL_BOSS : BIOMES[biomeOf(run, act)]!.boss;
+  return ids.includes(own) ? own : dealt[act % dealt.length]!;
+}
+
+/** The roster boss of the run's fight when its node is a boss (#800), with the act's strength, and the fight's seed from the
+ * run seed and the node. The fourth act's is at 300 % (#1467). */
+export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; seed: number; percent: number } | null {
+  const node = lastNode(map, run);
+  if (!run.fighting || node?.kind !== 'boss') return null;
   const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1) * (has(run, Relic.WarBanner) ? 1.5 : 1) * (has(run, Relic.BossBreaker) ? 0.5 : 1) * (from(run, 7) ? HUNTED : 1);
-  const own = node.act === FINAL_ACT ? FINAL_BOSS : BIOMES[biomeOf(run, node.act)]!.boss;
-  return { id: ids.includes(own) ? own : dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
+  return { id: bossOfAct(run, node.act, ids), seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
 }
 
 /** What one side of an event choice gives and costs (#1463): `army` marbles more or less (up to START_ARMY), `count`
@@ -1529,12 +1534,22 @@ export function keysHtml(run: Run): string {
 export const runesHtml = (run: Run): string =>
   run.runes ? `<p class="run-help run-runes">Runes: ${heldRunes(run.runes).map((k) => `${lineGlyph(RUNES[k]!.icon)}${RUNES[k]!.name} (${RUNES[k]!.opens})`).join(' · ')}</p>` : '';
 
+/** What the map needs of the bridge to name an act boss (#1495): the roster, a boss's name, and whether it takes the army's build. */
+export interface BossRoster {
+  ids: string[];
+  name(id: string): string | undefined;
+  builds(id: string): boolean;
+}
+
+/** The tip line of a boss node: its name and whether the fight carries the army's special marbles, relics and tactics (docs/specs/roguelite.md section 28). */
+const bossTip = (bosses: BossRoster, id: string): string => `Boss: ${bosses.name(id)!} · ${bosses.builds(id) ? 'takes your build' : 'fights without your build'}`;
+
 /** The map screen: the run line, the unlocks and commanders before the first pick, a legend, the nodes act by act from the
  * top under the header of their act (half a row), each placed on its row with the icon of its kind, the links between them
  * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
  * score, summary and New run. The fourth act (#1467) is drawn once the run holds the three keys; an elite that holds a key is marked. `book` is what the start screen holds besides (#1466): the daily run, the history and the
  * compendium. */
-export function mapHtml(map: MapNode[], run: Run, book = ''): string {
+export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster): string {
   const head = `<p class="run-line">${runLine(map, run)}</p>`;
   if (run.end) return `${head}${scoreLine(map, run)}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
@@ -1566,7 +1581,7 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
     const kind = n.kind === 'unknown' ? '?' : n.kind[0]!.toUpperCase() + n.kind.slice(1);
     const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
     const key = marked.includes(i);
-    const tip = [elite ? `Elite: ${elite} (${ELITES[n.elite - 1]!.help})` : NODE_LOOKS[n.kind].name, run.enemies && n.formation ? `Formation: ${FORMATIONS[n.formation]}` : '', `Act ${n.act + 1}${biome(n.act)}`]; // what hovering or focusing the node shows (#1468)
+    const tip = [elite ? `Elite: ${elite} (${ELITES[n.elite - 1]!.help})` : NODE_LOOKS[n.kind].name, run.enemies && n.formation ? `Formation: ${FORMATIONS[n.formation]}` : '', `Act ${n.act + 1}${biome(n.act)}`, n.kind === 'boss' && bosses && (!run.exits || n.act <= run.biomes.length) ? bossTip(bosses, bossOfAct(run, n.act, bosses.ids)) : '']; // what hovering or focusing the node shows (#1468); a boss node names its boss once the act's biome is known, and says whether it takes the build (#1495)
     const note = [elite.replace('The ', ''), key ? 'key' : ''].filter(Boolean).join(' · ');
     return [
       `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}${key ? ' marked' : ''}" data-node="${i}" data-node-kind="${n.kind}" data-tip="${tip.filter(Boolean).join('&#10;')}" data-tip-side="${x < 34 ? 'left' : x > 66 ? 'right' : 'mid'}" style="left:${x}%;top:${y}%" ` +

@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -5886,7 +5886,7 @@ function showRun(): void {
                   ? exitHtml(map, state, exitsFor(state), boss_name)
                   : placed
                     ? placeHtml(state, armed)
-                    : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))));
+                    : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))), { ids: boss_ids(), name: boss_name, builds: boss_takes_build });
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
   const next = runPanel.querySelector('button.node:not(:disabled)'); // after a pick the map scrolls to the nodes to pick, in the middle of the plate (#1468); before the first the commanders stay in view
