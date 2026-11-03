@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { cellIndex, type Axial, type Move } from './board';
 import { actBoss, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
+import { LEGACY_UNLOCKED } from './collector';
 import type { View } from './camera';
 import { boot, type Game } from './test/harness';
 
@@ -12,7 +13,7 @@ import { boot, type Game } from './test/harness';
 // run ends on a loss, and another mode abandons it.
 
 /** A run that fights the plain army of before the varied enemies (#1462), so the scripted fights below stay scripted. */
-const plainRun = (seed: number, best: number): Run => ({ ...newRun(seed, best), enemies: false });
+const plainRun = (seed: number, best: number): Run => ({ ...newRun(seed, best, LEGACY_UNLOCKED), enemies: false });
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const map = (): HTMLElement => byId('run-map');
 const line = (): string => map().querySelector('.run-line')!.textContent!;
@@ -836,7 +837,7 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
     seed--;
     const { nodes } = await nodesOf(seed, 'fight');
     const { index, path } = pickable;
-    await game.hook('__run', pick({ ...newRun(seed, 3), path: path.slice(0, -1) }, index));
+    await game.hook('__run', pick({ ...newRun(seed, 3, LEGACY_UNLOCKED), path: path.slice(0, -1) }, index));
     expect(whites(game)).toBe(10);
     expect(document.body.dataset.specials).toBe(await listed(seed, index));
     expect(document.body.dataset.specials).not.toBe('');
@@ -855,7 +856,7 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
     const { nodes, found } = await nodesOf(seed, 'elite');
     const { index, path } = found[0]!;
     const elite = ELITES[nodes[index]!.elite - 1]!;
-    const run = pick({ ...newRun(seed, 3), path: path.slice(0, -1) }, index);
+    const run = pick({ ...newRun(seed, 3, LEGACY_UNLOCKED), path: path.slice(0, -1) }, index);
     await game.hook('__run', run);
     expect(whites(game)).toBe(14);
     expect(document.body.dataset.specials).toBe(await listed(seed, index));
@@ -864,5 +865,55 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
     const node = map().querySelector(`button[data-node="${index}"]`)!;
     expect(node.getAttribute('aria-label')).toBe(`Act 1, elite, ${elite.name}`);
     expect(node.textContent).toBe(`Elite${elite.name.replace('The ', '')}`);
+  });
+});
+
+describe('main.ts, the Collector between acts (#1470)', () => {
+  const KEY = 'ab-alone.roguelite.blueprints';
+  /** A run of seed 1 at its act 1 boss beaten, in the Collector with `cells` and the blueprints `carried`. */
+  async function inCollector(game: Game, cells: number, carried: number[]): Promise<void> {
+    const { run_map } = await import('abalone-wasm');
+    const path = toBoss(parseMap(run_map(1)));
+    await game.hook('__run', { ...plainRun(1, 3), path, collector: true, cells, carried });
+  }
+
+  it('shows the room after the act boss; a blueprint banked is kept for later runs, spends the cells and is saved with the run', async () => {
+    localStorage.removeItem(KEY);
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await inCollector(game, 12, [0, 8]);
+    expect(document.body.dataset.run).toBe('collector');
+    expect(line()).toBe('Collector · 12 cells');
+    expect(open()).toHaveLength(0); // the map waits
+    map().querySelector<HTMLButtonElement>('button[data-collect="8"]')!.click();
+    expect(localStorage.getItem(KEY)).toBe('[8]');
+    expect(line()).toBe('Collector · 7 cells');
+    expect(map().querySelectorAll('button[data-collect]')).toHaveLength(1);
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the room as it was
+    expect(document.body.dataset.run).toBe('collector');
+    expect(line()).toBe('Collector · 7 cells');
+    map().querySelector<HTMLButtonElement>('button[data-depart]')!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(open().length).toBeGreaterThanOrEqual(2); // the first row of act 2
+    expect(line()).toContain('2 cells');
+  });
+
+  it('a blueprint the cells cannot pay stays on the shelf', async () => {
+    localStorage.removeItem(KEY);
+    const game = await boot('?bot=off');
+    await inCollector(game, 4, [0]);
+    expect(map().querySelector<HTMLButtonElement>('button[data-collect]')!.disabled).toBe(true);
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('a new run starts with the blueprints banked before it', async () => {
+    localStorage.removeItem(KEY);
+    await startRun('?bot=off');
+    expect(map().textContent).toContain('Blueprints to bank: 14');
+    localStorage.setItem(KEY, '[0,1]');
+    await startRun('?bot=off');
+    expect(map().textContent).toContain('Blueprints to bank: 12');
+    localStorage.removeItem(KEY);
   });
 });
