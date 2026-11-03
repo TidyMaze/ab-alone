@@ -188,4 +188,21 @@ describe('the teleporters of the Open world mode (#1412)', () => {
     await m.open(7, 800, 600);
     expect(body().openworldTeleporters).toBe('2,-1 10,0 40,0');
   });
+  it('a hero teleported to another teleporter and saved comes back there on a reload, with the teleporters discovered on the way', async () => {
+    document.body.innerHTML = PAGE;
+    const first = setup();
+    first.m.enter(7, 800, 600);
+    first.m.fixture({ hero: [10, 0], troop: [], enemies: [] }); // standing on a teleporter discovers it
+    first.m.fixture({ hero: [2, -1], troop: [], enemies: [] }); // back at the first one
+    first.m.teleport();
+    click(first.m, 8); // the map pick moves the hero to (10, 0) and saves
+    first.m.frame(vi.fn());
+    await new Promise((done) => setTimeout(done));
+    expect((await first.saves.load(7))!.hero).toEqual([10, 0]);
+    for (const key of Object.keys(body())) delete body()[key];
+    const again = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, first.saves, () => Int32Array.of(10, 2), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, () => TELEPORTERS);
+    await again.open(7, 800, 600);
+    expect(body().openworldAt).toBe('10,0');
+    expect(body().openworldTeleporters).toBe('2,-1 10,0');
+  });
 });
