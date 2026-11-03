@@ -380,6 +380,27 @@ describe('Play online', () => {
     expect(byId('hud').querySelector('.rank-delta')?.textContent).toMatch(/^[+-]\d+ Elo$/);
     expect(JSON.parse(localStorage.getItem('ab-alone.ranked')!).matches[0].mode).toBe('royale');
   });
+
+  it('a finished royale game is rated once, however often Ranked is pressed after it', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    game.openModes();
+    byId('battle-royale').click();
+    game.openModes();
+    byId('ranked').click();
+    const { Royale } = await import('abalone-wasm');
+    const r = new Royale(6, 7);
+    const rounds: number[][] = [];
+    while (r.placement().length === 0) {
+      r.resolve(new Int32Array());
+      rounds.push([]);
+    }
+    (window as unknown as { __royale(f: { seed: number; rounds: number[][] }): void }).__royale({ seed: 7, rounds });
+    for (let i = 0; i < 3; i++) {
+      game.openModes();
+      byId('ranked').click();
+    }
+    expect(JSON.parse(localStorage.getItem('ab-alone.ranked')!).matches).toHaveLength(1);
+  });
 });
 
 describe('Rematch', () => {

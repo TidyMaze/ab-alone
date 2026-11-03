@@ -5413,6 +5413,7 @@ let rankedMode: RankedMode | null = null;
 let rankedQueuedAt = 0;
 let rankedDelta: number | undefined;
 let rankedDone = false;
+let ratedRoyale: Royale | null = null; // the royale game already rated: pressing Ranked again after it ends rates nothing
 let rankedSent = false;
 let rankedMine: Report | null = null;
 let rankedTheirs: Report | null = null;
@@ -6302,9 +6303,10 @@ function royaleHud(game: Royale): void {
   const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet), left: royaleNet.left };
   document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed, ...room });
   if (rankedMode === 'royale') {
-    if (placed.length > 0 && !rankedDone) {
+    if (placed.length > 0 && !rankedDone && ratedRoyale !== game) {
       rankedDelta = settleRankedRoyale(store, placed, me()).delta;
       rankedDone = true;
+      ratedRoyale = game;
     }
     document.getElementById('hud')!.insertAdjacentHTML('beforeend', rankedHudHtml(loadRankedProfile(store).ratingRoyale, { delta: rankedDelta }));
   }
