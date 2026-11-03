@@ -85,11 +85,13 @@ jobs:
           bun-version-file: client/package.json
       - run: bun install --frozen-lockfile
         working-directory: client
-      - run: bunx vitest run $(bun run scripts/unit-shard.ts ${{ matrix.shard }} 5) --reporter=blob --outputFile.blob=reports/blob-${{ matrix.shard }}-5.json --coverage
+      # The default reporter prints each failing test by name next to the blob (the blob reporter alone prints nothing on a failure).
+      - run: bunx vitest run $(bun run scripts/unit-shard.ts ${{ matrix.shard }} 5) --reporter=default --reporter=blob --outputFile.blob=reports/blob-${{ matrix.shard }}-5.json --coverage
         working-directory: client
         env:
           VITEST_SHARD: '1'
-      - uses: actions/upload-artifact@v4
+      - if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: vitest-blob-${{ matrix.shard }}
           path: client/reports/blob-${{ matrix.shard }}-5.json
