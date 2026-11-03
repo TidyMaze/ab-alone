@@ -221,7 +221,7 @@ describe('shared board opt-in', () => {
     const [ka, ...opps] = (await Promise.all(Array.from({ length: 6 }, () => generateKeys()))) as [Keys, ...Keys[]];
     // Ann needs 5 distinct opponents to be ranked (MIN_OPPONENTS): five keys, the first one is Bob.
     const result = async (game: string, name: string, status: number, signedBy = true, kb: Keys = opps[0]!): Promise<string> => {
-      const r = { v: 1 as const, game, black: { pub: ka.pub, name }, white: { pub: kb.pub, name: 'Bob' }, moves, status, ejected: [engine.ejected(1), engine.ejected(2)] as [number, number], ts: 5 };
+      const r = { v: 1 as const, game, black: { pub: ka.pub, name }, white: { pub: kb.pub, name: 'Bob' }, moves, status, ejected: [engine.ejected(1), engine.ejected(2)] as [number, number], ts: Math.floor(Date.now() / 1000) - 60 };
       return JSON.stringify({ ...r, sigs: signedBy ? { black: await signResult(ka, r), white: await signResult(kb, r) } : { black: 'x', white: 'y' } });
     };
     const lie = engine.status() === 1 ? 2 : 1;
