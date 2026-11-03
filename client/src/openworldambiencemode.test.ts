@@ -38,7 +38,7 @@ describe('the ambience of the biomes of the Open world (#1104)', () => {
     }
   });
 
-  it('no particle is drawn under reduced motion, even after a step, #1110', () => {
+  it('no particle is drawn under reduced motion, #1110', () => {
     Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
     const m = mode(true);
     m.enter(1, 480, 270);
