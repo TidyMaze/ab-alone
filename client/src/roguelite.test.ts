@@ -8,6 +8,12 @@ import {
   ACT_PERCENT,
   actBoss,
   actsWon,
+  BIOMES,
+  biomeOf,
+  chooseExit,
+  currentBiome,
+  exitHtml,
+  exitOffers,
   chooseCommander,
   COMMANDERS,
   collect,
@@ -130,7 +136,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [] });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -206,9 +212,9 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'exits', 'exit', 'biomes']) delete older[key];
     await store.put(RUN_KEY, older);
-    expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false }); // before the varied enemies (#1462): the plain army
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, specials: [1, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2, 0, 1, 0] }); // saved before the new four (#1461): none of them
@@ -1549,7 +1555,7 @@ describe('roguelite Collector (#1470)', () => {
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   // Two acts. Act 1: a fight 0 leads to an elite 1, which leads to the boss 2. Act 2: a fight 3, an elite 4, the last boss 5.
   const TWO = parseMap([[0, 0, 0, 0, 1, 0, 0], [0, 1, 0, 2, 1, 0, 0], [0, 2, 0, 1, 0, 0, 0], [1, 0, 0, 0, 1, 0, 0], [1, 1, 0, 2, 1, 0, 0], [1, 2, 0, 1, 0, 0, 0]].flat());
-  const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 0, []), ...state });
+  const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 0, []), exits: false, ...state }); // the Collector alone, no exits (#1472)
   const fight = (path: number[], state: Partial<Run> = {}): Run => ({ ...pick(fresh(state), path[path.length - 1]!), path });
   const won = (path: number[], state: Partial<Run> = {}): Run => fightOver(TWO, fight(path, state), true, 0);
 
@@ -1719,5 +1725,179 @@ describe('roguelite Collector (#1470)', () => {
     const kept = fresh({ path: [0], unlocked: [3], cells: 7, carried: [1, 2], banked: [5], drop: 3, collector: true });
     await store.put(RUN_KEY, kept);
     expect((await loadRun(store, () => TWO, engine))!.state).toEqual(kept);
+  });
+});
+
+describe('roguelite biomes (#1472)', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  // Three acts of a fight 0 that leads to the boss 1 (act 1), 2 and 3 (act 2), 4 and 5 (act 3).
+  const THREE = parseMap([[0, 0, 0, 0, 1, 0, 0], [0, 1, 0, 1, 0, 0, 0], [1, 0, 0, 0, 1, 0, 0], [1, 1, 0, 1, 0, 0, 0], [2, 0, 0, 0, 1, 0, 0], [2, 1, 0, 1, 0, 0, 0]].flat());
+  const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), ...state });
+  const fight = (path: number[], state: Partial<Run> = {}): Run => ({ ...pick(fresh(state), path[path.length - 1]!), path });
+  const won = (path: number[], state: Partial<Run> = {}): Run => fightOver(THREE, fight(path, state), true, 0);
+  const IDS = ['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker', 'swarm'];
+  /** The exits of the bridge, standing in: act 2 offers the Tundra (2) and the Desert (3), act 3 the Badlands (4) and the Archipelago (5). */
+  const exitsOf = (act: number, from: number): number[] => (act === 1 ? [2, 3] : from === 4 ? [1, 5] : [4, 5]);
+
+  it('the biomes echo the Open world\'s, the Meadow first with no boss of its own, each other one a boss of the roster', () => {
+    expect(BIOMES.map((b) => b.name)).toEqual(['Meadow', 'Forest', 'Tundra', 'Desert', 'Badlands', 'Archipelago']);
+    expect(BIOMES.map((b) => b.id)).toEqual(['meadow', 'forest', 'tundra', 'desert', 'badlands', 'archipelago']);
+    expect(BIOMES[0]!.boss).toBe('');
+    const bosses = BIOMES.slice(1).map((b) => b.boss);
+    expect(new Set(bosses).size).toBe(5);
+    for (const boss of bosses) expect(IDS).toContain(boss);
+    for (const b of BIOMES.slice(1)) expect(`${b.hazard}${b.foes}`).not.toBe('');
+  });
+
+  it('a new run offers exits and has no biome yet, one saved before has neither', () => {
+    expect(newRun(5, 3, [])).toMatchObject({ exits: true, exit: false, biomes: [] });
+    expect([biomeOf(fresh(), 0), biomeOf(fresh(), 1), biomeOf(fresh(), 2)]).toEqual([0, 0, 0]);
+  });
+
+  it('the biome of an act is the exit picked before it, the Meadow in act 1 and for a run without exits', () => {
+    const run = fresh({ biomes: [2, 5] });
+    expect([0, 1, 2].map((act) => biomeOf(run, act))).toEqual([0, 2, 5]);
+    expect([0, 1, 2].map((act) => biomeOf({ ...run, exits: false }, act))).toEqual([0, 0, 0]);
+    expect(biomeOf(fresh({ biomes: [2] }), 2)).toBe(0); // not picked yet
+  });
+
+  it('an act boss beaten opens the exits unless it is the last one or the run has none; nothing else does', () => {
+    expect(won([0, 1])).toMatchObject({ exit: true, end: '' });
+    expect(won([0, 1, 2, 3])).toMatchObject({ exit: true });
+    expect(won([0, 1], { exits: false })).toMatchObject({ exit: false });
+    expect(won([0, 1, 2, 3, 4, 5])).toMatchObject({ end: 'won', exit: false });
+    expect(won([0])).toMatchObject({ exit: false });
+    expect(fightOver(THREE, fight([0, 1]), false, 0)).toMatchObject({ end: 'lost', exit: false });
+  });
+
+  it('the map waits at the exits, and goes on to the next act once one is picked', () => {
+    const waiting = won([0, 1], { reward: false });
+    expect(choices(THREE, { ...waiting, reward: false, relic: false, collector: false })).toEqual([]);
+    expect(choices(THREE, { ...waiting, reward: false, relic: false, collector: false, exit: false })).toEqual([2]);
+  });
+
+  it('the exits are the bridge\'s for the next act, from the biome the run is in', () => {
+    const seen: number[][] = [];
+    const spy = (act: number, from: number): number[] => {
+      seen.push([act, from]);
+      return exitsOf(act, from);
+    };
+    const room = fresh({ path: [0, 1], exit: true });
+    expect(exitOffers(THREE, room, spy)).toEqual([2, 3]);
+    expect(exitOffers(THREE, fresh({ path: [0, 1, 2, 3], exit: true, biomes: [4] }), spy)).toEqual([1, 5]);
+    expect(seen).toEqual([[1, 0], [2, 4]]);
+    expect(exitOffers(THREE, fresh({ path: [0, 1] }), spy)).toEqual([]); // no exit waits
+    expect(seen).toHaveLength(2);
+  });
+
+  it('picks an exit once: the biome joins the run, the map goes on, a biome not offered changes nothing', () => {
+    const room = fresh({ path: [0, 1], exit: true });
+    const picked = chooseExit(THREE, room, 3, exitsOf);
+    expect(picked).toEqual({ ...room, exit: false, biomes: [3] });
+    expect(choices(THREE, picked)).toEqual([2]);
+    expect(chooseExit(THREE, room, 4, exitsOf)).toBe(room); // not an exit of this act
+    expect(chooseExit(THREE, room, 0, exitsOf)).toBe(room);
+    expect(chooseExit(THREE, picked, 3, exitsOf)).toBe(picked); // none waits
+    const second = chooseExit(THREE, fresh({ path: [0, 1, 2, 3], exit: true, biomes: [3] }), 5, exitsOf);
+    expect(second.biomes).toEqual([3, 5]);
+  });
+
+  it('the biome in play follows the act: kept while the exits wait, the next act\'s once picked, none once over', () => {
+    expect(currentBiome(THREE, fresh())).toBe(0);
+    expect(currentBiome(THREE, fresh({ path: [0] }))).toBe(0);
+    const room = fresh({ path: [0, 1], exit: true });
+    expect(currentBiome(THREE, room)).toBe(0);
+    const act2 = chooseExit(THREE, room, 3, exitsOf);
+    expect(currentBiome(THREE, act2)).toBe(3);
+    expect(currentBiome(THREE, { ...act2, path: [0, 1, 2] })).toBe(3);
+    expect(currentBiome(THREE, { ...act2, path: [0, 1, 2, 3], exit: true })).toBe(3); // still in act 2 until it picks
+    expect(currentBiome(THREE, { ...act2, path: [0, 1, 2, 3, 4, 5], biomes: [3, 5], end: 'won' })).toBe(0);
+    expect(currentBiome(THREE, { ...act2, path: [0, 1, 2], fighting: true })).toBe(3);
+    expect(currentBiome(THREE, { ...act2, exits: false })).toBe(0);
+  });
+
+  it('the bot\'s army of a fight is asked in the biome of its act', () => {
+    const seen: number[][] = [];
+    const planOf = (node: number, less: number, biome: number): ArrayLike<number> => {
+      seen.push([node, less, biome]);
+      return Int32Array.from([10, 0, biome]);
+    };
+    foePlan(THREE, pick(fresh({ path: [0, 1], biomes: [3] }), 2), planOf);
+    foePlan(THREE, pick(fresh(), 0), planOf);
+    foePlan(THREE, pick(fresh({ path: [0, 1], biomes: [3], exits: false }), 2), planOf);
+    expect(seen).toEqual([[2, 0, 3], [0, 0, 0], [2, 0, 0]]);
+  });
+
+  it('the act boss of a biome is the biome\'s, whatever the seed deals; the Meadow, an unknown boss or a run without exits keep the deal', () => {
+    const boss = (state: Partial<Run>, node: number, ids = IDS): ReturnType<typeof actBoss> => actBoss(THREE, pick(fresh(state), node), ids);
+    for (const [biome, id] of [[1, 'alien'], [2, 'hull'], [3, 'pulsar'], [4, 'core'], [5, 'ballast']] as const) {
+      for (let seed = 1; seed < 6; seed++) expect(boss({ seed, path: [0, 1], biomes: [biome] }, 3)!.id).toBe(id);
+    }
+    const dealt = boss({ path: [0, 1], biomes: [1] }, 3)!;
+    expect(dealt.percent).toBe(ACT_PERCENT[1]);
+    expect(boss({ path: [0, 1], biomes: [1], relics: [Relic.Dampener] }, 3)!.percent).toBe(75);
+    expect(dealt.seed).toBe(boss({ path: [0, 1], biomes: [5] }, 3)!.seed); // the fight's seed is the run\'s and the node\'s
+    const deal = boss({ path: [0, 1], exits: false, biomes: [1] }, 3)!.id;
+    expect(boss({ path: [0, 1] }, 3)!.id).toBe(deal); // the Meadow
+    expect(boss({ path: [0, 1], biomes: [1] }, 3, IDS.filter((id) => id !== 'alien'))!.id).not.toBe('alien');
+    expect(boss({ path: [0, 1], biomes: [1] }, 1)!.id).toBe(boss({}, 1)!.id); // act 1 is never a biome
+  });
+
+  it('the run line names the biome, in a fight and on the map, and not the Meadow', () => {
+    const act2 = fresh({ path: [0, 1], biomes: [2] });
+    expect(runLine(THREE, pick(act2, 2))).toBe('Rogue-lite run · act 2 fight · Tundra · army 14 marbles');
+    expect(runLine(THREE, act2)).toBe('Rogue-lite run · Tundra · army 14 marbles · pick a fight');
+    expect(runLine(THREE, pick(fresh(), 0))).toBe('Rogue-lite run · act 1 fight · army 14 marbles');
+    expect(runLine(THREE, fresh({ path: [0, 1], biomes: [2], exits: false }))).toBe('Rogue-lite run · army 14 marbles · pick a fight');
+  });
+
+  it('the exit screen offers a button per exit with its biome, hazard, foes and boss, named by the bridge', () => {
+    const doc = parse(exitHtml(THREE, fresh({ path: [0, 1], exit: true }), exitsOf, (id) => id.toUpperCase()));
+    expect(doc.querySelector('.run-line')!.textContent).toBe('Act 1 done · pick the exit to act 2');
+    const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-exit]')];
+    expect(buttons.map((b) => b.dataset.exit)).toEqual(['2', '3']);
+    expect(buttons.map((b) => b.dataset.biome)).toEqual(['tundra', 'desert']);
+    expect(buttons[0]!.textContent).toBe(`Tundra · ${BIOMES[2]!.hazard} · foes: ${BIOMES[2]!.foes} · boss: HULL`);
+    expect(buttons[1]!.textContent).toContain('boss: PULSAR');
+    expect(buttons.every((b) => !b.disabled)).toBe(true);
+    expect(doc.querySelector('.run-help')!.textContent).toContain('hole');
+    const unknown = parse(exitHtml(THREE, fresh({ path: [0, 1], exit: true }), exitsOf, () => undefined));
+    expect(unknown.querySelector('button[data-exit]')!.textContent).toContain('boss: unknown');
+    const second = parse(exitHtml(THREE, fresh({ path: [0, 1, 2, 3], exit: true, biomes: [4] }), exitsOf, String));
+    expect(second.querySelector('.run-line')!.textContent).toBe('Act 2 done · pick the exit to act 3');
+    expect([...second.querySelectorAll<HTMLButtonElement>('button[data-exit]')].map((b) => b.dataset.exit)).toEqual(['1', '5']);
+  });
+
+  it('the summary lists the biomes of the acts played', () => {
+    const helps = (run: Run): string[] => [...parse(mapHtml(THREE, run)).querySelectorAll('.run-help')].map((p) => p.textContent!);
+    expect(helps(fresh({ path: [0, 1, 2], end: 'lost', biomes: [2] }))).toContain('Biomes: Meadow, Tundra');
+    expect(helps(fresh({ path: [0, 1, 2, 3, 4], end: 'lost', biomes: [2, 5] }))).toContain('Biomes: Meadow, Tundra, Archipelago');
+    expect(helps(fresh({ path: [0], end: 'lost' })).join()).not.toContain('Biomes');
+  });
+
+  it('a saved run keeps its biomes and a pending exit, and one saved before them offers none', async () => {
+    const store = memoryStore();
+    const kept = fresh({ path: [0, 1], exit: true, biomes: [2] });
+    await store.put(RUN_KEY, kept);
+    expect((await loadRun(store, () => THREE, engine))!.state).toEqual(kept);
+    const older: Record<string, unknown> = { ...kept };
+    for (const key of ['exits', 'exit', 'biomes']) delete older[key];
+    await store.put(RUN_KEY, older);
+    expect((await loadRun(store, () => THREE, engine))!.state).toEqual({ ...kept, exits: false, exit: false, biomes: [] });
+  });
+
+  it.each([
+    ['a bad exits flag', { exits: 1 }],
+    ['a bad exit flag', { exit: 'yes' }],
+    ['biomes that are no list', { biomes: 2 }],
+    ['the Meadow as a chosen biome', { biomes: [0] }],
+    ['an unknown biome', { biomes: [6] }],
+    ['a biome twice', { biomes: [2, 2] }],
+    ['three biomes', { biomes: [1, 2, 3] }],
+  ])('drops a saved run with %s', async (_, bad) => {
+    const store = memoryStore();
+    await store.put(RUN_KEY, { ...fresh({ path: [0] }), ...bad });
+    expect(await loadRun(store, () => THREE, engine)).toBeNull();
+    expect(store.data.has(RUN_KEY)).toBe(false);
   });
 });
