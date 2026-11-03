@@ -106,7 +106,8 @@ export class BreakSet {
 
   private hold(e: BreakEvent): boolean {
     const key = `${e.q},${e.r}`;
-    if (this.held.has(key)) return false;
+    const had = this.held.get(key);
+    if (had && !(e.kind === 'lair' && had.kind === 'beaten')) return false; // a lair-won event takes the place of a `beaten` one: anyone may send that, no one may shut the real one out
     this.held.set(key, e);
     if (this.held.size > MAX_HELD) this.held.delete(this.held.keys().next().value!);
     return true;

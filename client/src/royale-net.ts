@@ -156,6 +156,8 @@ async function replayed(game: string, s: Sealed, humans: string[]): Promise<numb
 const PENDING_MAX = 200;
 /** The rounds' time a coordinator may take to open the next round before the next seated key does. */
 const STALL_ROUNDS = 2;
+/** The rounds ahead of the open one a peer's hash is kept for. */
+const HASH_AHEAD = 3;
 
 export class RoyaleNet<G extends NetGame> {
   seats: string[] | null = null; // keys by arena seat, '' for a bot, from the coordinator's first start
@@ -174,6 +176,7 @@ export class RoyaleNet<G extends NetGame> {
   private readonly hashes: string[] = []; // ours after each round
   private heard: Hash[] = []; // the peers' hashes of the rounds we have not resolved yet
   private pending: { m: RoyaleMessage; from: string }[] = []; // messages of a round not open here yet
+  private answered = new Map<string, number>(); // by peer: the open round it was answered in, one answer per peer per round
   private queue: Promise<void> = Promise.resolve();
 
   constructor(private readonly o: NetOptions<G>) {}
@@ -400,6 +403,7 @@ export class RoyaleNet<G extends NetGame> {
     this.hashes.push(hash);
     this.o.send({ kind: 'hash', game: this.o.game, round: this.round, hash });
     this.round++;
+    this.answered.clear();
     this.check();
     if (live) this.o.onRound?.(before, cracks, Int32Array.from(all));
     this.o.onChange?.();
@@ -408,6 +412,7 @@ export class RoyaleNet<G extends NetGame> {
   /** Only a seated key's hash counts: a peer with no key or no seat cannot raise a desync (#1322). */
   private compare(h: Hash, from: string): void {
     if (from === '' || !this.seats?.includes(from)) return;
+    if (h.round > this.round + HASH_AHEAD || this.heard.length >= PENDING_MAX) return; // none from far ahead, none beyond the cap
     this.heard.push(h);
     this.check();
     this.o.onChange?.();
@@ -424,6 +429,8 @@ export class RoyaleNet<G extends NetGame> {
   /** A peer behind gets the rounds we resolved from its round on, and what we kept of the round open now. */
   private answer(m: Behind, peer: string): void {
     if (!this.seats || (this.sealed.length < m.round && !this.book)) return;
+    if (this.answered.get(peer) === this.round || (this.answered.size >= PENDING_MAX && !this.answered.has(peer))) return; // a flood gets one answer
+    this.answered.set(peer, this.round);
     const open = this.book ? { ...this.kept, commits: [...this.kept.commits], reveals: [...this.kept.reveals] } : null; // ours grows on
     this.o.send({ kind: 'played', game: this.o.game, seats: this.seats, rounds: this.sealed.slice(m.round - 1), open }, peer);
   }
