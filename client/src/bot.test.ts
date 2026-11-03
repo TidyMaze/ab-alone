@@ -115,6 +115,10 @@ describe('answer', () => {
       static with_army(army: number, foes: number): Board {
         return Object.assign(new Board(), { army, foes });
       }
+      plan: number[] = [];
+      static with_foes(army: number, plan: Int32Array): Board {
+        return Object.assign(new Board(), { army, plan: Array.from(plan) });
+      }
       static trainer(wave: number, left: number): Board {
         return Object.assign(new Board(), { army: 100 + wave, foes: left });
       }
@@ -134,6 +138,10 @@ describe('answer', () => {
     engineFor(Board, 9, [[0, 4, 1], [1, 3, 3]]);
     expect(placedOn).toEqual([[9, 0, 4, 1], [9, 1, 3, 3]]);
     expect(engineFor(Board, 9, [], 10, undefined, 0b10001).relics).toBe(0b10001); // the run's relics, #1457
+    // The bot's army from a plan (#1462): its formation and special marbles stand, then the army's are placed.
+    const formed = engineFor(Board, 9, [[0, 4, 1]], [10, 3, 4, -4, 2], undefined, 0b1);
+    expect(formed).toMatchObject({ army: 9, foes: 0, plan: [10, 3, 4, -4, 2], relics: 1 });
+    expect(placedOn.at(-1)).toEqual([9, 0, 4, 1]);
     expect(engineFor(Board, 9).relics).toBe(0);
   });
 

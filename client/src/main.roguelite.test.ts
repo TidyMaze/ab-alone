@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial, Move } from './board';
-import { actBoss, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
+import { actBoss, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
 import type { View } from './camera';
 import { boot, type Game } from './test/harness';
@@ -129,7 +129,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('a marble lost by an army of 4 loses the run, and New run starts another', async () => {
     const game = await boot('?bot=off');
-    await game.hook('__run', pick({ ...newRun(3, 3), army: 4, path: [0] }, 2)); // an elite (14 White): the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
+    await game.hook('__run', pick({ ...newRun(3, 3), enemies: false, army: 4, path: [0] }, 2)); // an elite (14 White, the plain army of a run saved before #1462): the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
     expect(document.body.dataset.run).toBe('fight');
     // White walks its column q = 1 down four times while Black steps (-2, 2) aside and back, then pushes (1, 3) off.
     const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
@@ -730,5 +730,62 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     await game.hook('__run', { ...(await bossRun('hull')).state, tactics: [2] });
     expect(document.body.dataset.boss).toBeDefined();
     expect(tactics()).toHaveLength(0);
+  });
+});
+
+describe('main.ts, the varied enemy armies of a run (#1462)', () => {
+  /** The first node of `seed`'s map of the `kind`, deepest act first. */
+  async function nodeOf(seed: number, kind: string): Promise<{ nodes: MapNode[]; index: number }> {
+    const { run_map } = await import('abalone-wasm');
+    const nodes = parseMap(run_map(seed));
+    return { nodes, index: nodes.findIndex((n, i) => n.kind === kind && n.act === 2 && i > 0) };
+  }
+  const board = (game: Game): number[] => game.hook<number[]>('__board');
+  const whites = (game: Game): number => board(game).filter((c) => c === 2).length;
+  /** The plan the bridge deals for a node as the board dataset lists its special marbles: `q,r,kind`, cell by cell. */
+  async function listed(seed: number, index: number): Promise<string> {
+    const { run_foes } = await import('abalone-wasm');
+    const plan = Array.from(run_foes(seed, index, 0)).slice(2);
+    const marks = Array.from({ length: plan.length / 3 }, (_, i) => plan.slice(3 * i, 3 * i + 3));
+    return marks.sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!).map((m) => m.join(',')).join(' ');
+  }
+
+  it('a fight of act 3 stands the formation of its node with enemy special marbles, and the HUD names the formation', async () => {
+    const game = await boot('?bot=off');
+    let seed = 1;
+    const { run_foes } = await import('abalone-wasm');
+    for (;; seed++) {
+      const { nodes, index } = await nodeOf(seed, 'fight');
+      if (index > 0 && nodes[index]!.formation > 0) break;
+    }
+    const { nodes, index } = await nodeOf(seed, 'fight');
+    const plan = Array.from(run_foes(seed, index, 0));
+    expect(plan.length).toBe(2 + 3 * 3); // act 3: three special marbles
+    await game.hook('__run', pick(newRun(seed, 3), index));
+    expect(whites(game)).toBe(10);
+    expect(document.body.dataset.specials).toBe(await listed(seed, index));
+    expect(game.hud()).toContain(`act 3 fight · ${FORMATIONS[nodes[index]!.formation]} · army 14 marbles`);
+    // The same node of a run saved before: the standard army of 10, none special.
+    await game.hook('__run', pick({ ...newRun(seed, 3), enemies: false }, index));
+    expect(whites(game)).toBe(10);
+    expect(document.body.dataset.specials).toBe('');
+    expect(game.hud()).not.toContain(FORMATIONS[nodes[index]!.formation]!);
+  });
+
+  it('an elite stands 14 marbles with its archetype\'s special marbles, named on the map and in the HUD', async () => {
+    const game = await boot('?bot=off');
+    let seed = 1;
+    while ((await nodeOf(seed, 'elite')).index < 0) seed++;
+    const { nodes, index } = await nodeOf(seed, 'elite');
+    const elite = ELITES[nodes[index]!.elite - 1]!;
+    const run = pick({ ...newRun(seed, 3), path: [] }, index);
+    await game.hook('__run', run);
+    expect(whites(game)).toBe(14);
+    expect(document.body.dataset.specials).toBe(await listed(seed, index));
+    expect(game.hud()).toContain(`act 3 elite · ${elite.name}`);
+    await game.hook('__run', { ...run, fighting: false, path: [] });
+    const node = map().querySelector(`button[data-node="${index}"]`)!;
+    expect(node.getAttribute('aria-label')).toBe(`Act 3, elite, ${elite.name}`);
+    expect(node.textContent).toContain(elite.name);
   });
 });

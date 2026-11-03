@@ -22,6 +22,9 @@ import {
   fightBudget,
   FIGHT_FOES,
   foesOf,
+  foePlan,
+  FORMATIONS,
+  ELITES,
   resolve,
   takeEvent,
   visit,
@@ -80,7 +83,7 @@ import { memoryStore, type KeyStore } from './savegame';
 
 // A small map in the bridge's encoding (crates/abalone-wasm/src/lib.rs): 2 acts of one fight row of 2 nodes, then a
 // boss. Act 1: node 0 leads to the boss, node 1 too. Act 2 the same. Indices: 0, 1 fights, 2 boss, 3, 4 fights, 5 boss.
-const FLAT = [0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0];
+const FLAT = [0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0];
 const MAP = parseMap(FLAT);
 const at = (run: Run, ...path: number[]): Run => ({ ...run, path });
 const failing: KeyStore = {
@@ -107,15 +110,15 @@ const MV = [1, 0, 0, 0, 0, 0, 0, 0];
 describe('roguelite', () => {
   it('parses the map records of the bridge', () => {
     expect(MAP).toHaveLength(6);
-    expect(MAP[0]).toEqual({ act: 0, row: 0, col: 0, kind: 'fight', links: [0] });
-    expect(MAP[2]).toEqual({ act: 0, row: 1, col: 0, kind: 'boss', links: [] });
-    expect(parseMap([0, 0, 0, 2, 0, 0, 0, 1, 3, 0, 0, 0, 2, 4, 0]).map((n) => n.kind)).toEqual(['elite', 'rest', 'event']);
-    expect(parseMap([0, 0, 1, 0, 0b101])[0]!.links).toEqual([0, 2]);
+    expect(MAP[0]).toEqual({ act: 0, row: 0, col: 0, kind: 'fight', links: [0], formation: 0, elite: 0 });
+    expect(MAP[2]).toEqual({ act: 0, row: 1, col: 0, kind: 'boss', links: [], formation: 0, elite: 0 });
+    expect(parseMap([0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0]).map((n) => n.kind)).toEqual(['elite', 'rest', 'event']);
+    expect(parseMap([0, 0, 1, 0, 0b101, 0, 0])[0]!.links).toEqual([0, 2]);
   });
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [] });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -191,9 +194,9 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies']) delete older[key];
     await store.put(RUN_KEY, older);
-    expect((await loadRun(store, mapOf, engine))!.state).toEqual(fight);
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, specials: [1, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2, 0, 1, 0] }); // saved before the new four (#1461): none of them
@@ -404,7 +407,7 @@ describe('roguelite', () => {
   });
   // Elites, rests, events and act bosses (#800). One act: a fight leads to an elite, a rest and an event, each to the
   // boss. Indices: 0 fight, 1 elite, 2 rest, 3 event, 4 boss.
-  const ACT = parseMap([0, 0, 0, 0, 0b111, 0, 1, 0, 2, 1, 0, 1, 1, 3, 1, 0, 1, 2, 4, 1, 0, 2, 0, 1, 0]);
+  const ACT = parseMap([0, 0, 0, 0, 0b111, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 1, 1, 3, 1, 0, 0, 0, 1, 2, 4, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0]);
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
 
   // The rest site (#1458): Rest or Upgrade one special marble.
@@ -695,7 +698,7 @@ describe('roguelite relics', () => {
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   // One act: a fight leads to an elite, a rest, an event and a treasure, each to the boss. Indices: 0 fight, 1 elite,
   // 2 rest, 3 event, 4 treasure, 5 boss.
-  const ACT = parseMap([0, 0, 0, 0, 0b1111, 0, 1, 0, 2, 1, 0, 1, 1, 3, 1, 0, 1, 2, 4, 1, 0, 1, 3, 5, 1, 0, 2, 0, 1, 0]);
+  const ACT = parseMap([0, 0, 0, 0, 0b1111, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 1, 1, 3, 1, 0, 0, 0, 1, 2, 4, 1, 0, 0, 0, 1, 3, 5, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0]);
   const run = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3), path: [0], ...state });
   const ALL = RELICS.map((_, code) => code);
 
@@ -859,7 +862,7 @@ describe('roguelite relics', () => {
 // Tactics (#1460, docs/specs/roguelite.md section 11): one-use plays of a fight, up to 3 held.
 describe('roguelite tactics', () => {
   // One act: a fight leads to an elite, a rest, an event (3) and a treasure, each to the boss.
-  const ACT_EVENT = parseMap([0, 0, 0, 0, 0b1111, 0, 1, 0, 2, 1, 0, 1, 1, 3, 1, 0, 1, 2, 4, 1, 0, 1, 3, 5, 1, 0, 2, 0, 1, 0]);
+  const ACT_EVENT = parseMap([0, 0, 0, 0, 0b1111, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 1, 1, 3, 1, 0, 0, 0, 1, 2, 4, 1, 0, 0, 0, 1, 3, 5, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0]);
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   const won = (state: Partial<Run> = {}): Run => fightOver(MAP, { ...pick(newRun(1, 3), 0), ...state }, true, 0);
 
@@ -976,7 +979,7 @@ describe('roguelite tactics', () => {
 describe('roguelite shop', () => {
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   // One act: a fight 0 leads to a shop 1 and an elite 2, each to the boss 3; a fight 4 opens the next act.
-  const SHOP = parseMap([0, 0, 0, 0, 0b11, 0, 1, 0, 6, 1, 0, 1, 1, 2, 1, 0, 2, 0, 1, 0, 1, 0, 0, 0, 0]);
+  const SHOP = parseMap([0, 0, 0, 0, 0b11, 0, 0, 0, 1, 0, 6, 1, 0, 0, 0, 1, 1, 2, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
   const shop = (state: Partial<Run> = {}): Run => visit(SHOP, { ...newRun(1, 3), path: [0], scrap: 500, ...state }, 1);
   const kinds = (run: Run): string[] => shopStock(run).map((i) => i.kind);
   const item = (run: Run, kind: string) => shopStock(run).find((i) => i.kind === kind)!;
@@ -1251,7 +1254,7 @@ describe('roguelite Magnet, Shield, Bomb and Medic', () => {
   });
 
   it('the rest site upgrades none of them: no upgraded form', () => {
-    const site = visit(parseMap([0, 0, 0, 3, 0]), { ...newRun(1, 3), specials: counts(7, 8, 9, 10) }, 0);
+    const site = visit(parseMap([0, 0, 0, 3, 0, 0, 0]), { ...newRun(1, 3), specials: counts(7, 8, 9, 10) }, 0);
     expect(upgradable(site)).toEqual([]);
     expect(upgrade(site, 7)).toBe(site);
     expect(parse(restHtml(site)).querySelector<HTMLButtonElement>('button[data-upgrade]')!.disabled).toBe(true);
@@ -1290,5 +1293,62 @@ describe('roguelite Magnet, Shield, Bomb and Medic', () => {
     const older: Record<string, unknown> = { ...run, specials: [1, 0, 0, 0, 0, 0] };
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, () => MAP, engine))!.state.specials).toEqual(run.specials);
+  });
+});
+
+describe('varied enemy armies (#1462)', () => {
+  // A snake fight (node 0) leading to a wedge elite, The Artificer (node 1), then the boss, in the bridge's encoding.
+  const FOES = parseMap([0, 0, 0, 0, 0b1, 3, 0, 0, 1, 0, 2, 0b1, 4, 2, 0, 2, 0, 1, 0, 0, 0]);
+
+  it('the map record carries the formation of a node and the archetype of an elite', () => {
+    expect(FOES[0]).toMatchObject({ kind: 'fight', formation: 3, elite: 0 });
+    expect(FOES[1]).toMatchObject({ kind: 'elite', formation: 4, elite: 2 });
+    expect(FORMATIONS).toEqual(['Standard', 'Belgian daisy', 'German daisy', 'Snake', 'Wedge']);
+    expect(ELITES.map((e) => e.name)).toEqual(['The Wall', 'The Artificer', 'The Brute']);
+    expect(ELITES.map((e) => e.help)).toEqual(['Anchors', 'Sparks and Bombs', 'Heavies']);
+  });
+
+  it('a new run has the varied enemies, and the fight HUD names the formation and the elite', () => {
+    expect(newRun(1, 3).enemies).toBe(true);
+    expect(runLine(FOES, pick(newRun(1, 3), 0))).toBe('Rogue-lite run · act 1 fight · Snake · army 14 marbles');
+    expect(runLine(FOES, pick({ ...newRun(1, 3), path: [0] }, 1))).toBe('Rogue-lite run · act 1 elite · The Artificer · Wedge · army 14 marbles');
+    expect(runLine(FOES, pick({ ...newRun(1, 3), path: [0, 1] }, 2))).toBe('Rogue-lite run · act 1 boss · army 14 marbles');
+    // The Standard formation is the layout of before: nothing to name.
+    expect(runLine(MAP, pick(newRun(1, 3), 0))).toBe('Rogue-lite run · act 1 fight · army 14 marbles');
+    // A run saved before them fights the plain army, and the HUD names nothing.
+    expect(runLine(FOES, pick({ ...newRun(1, 3), enemies: false }, 0))).toBe('Rogue-lite run · act 1 fight · army 14 marbles');
+  });
+
+  it('the map names an elite by its archetype, and only for a run with the varied enemies', () => {
+    const labels = (run: Run): string[] =>
+      [...new DOMParser().parseFromString(mapHtml(FOES, run), 'text/html').querySelectorAll<HTMLButtonElement>('button[data-node]')].map((b) => `${b.textContent}|${b.getAttribute('aria-label')}`);
+    const after = { ...newRun(1, 3), path: [0] };
+    expect(labels(after)).toEqual(['Fight|Act 1, fight', 'EliteThe Artificer|Act 1, elite, The Artificer', 'Boss|Act 1, boss']);
+    expect(labels({ ...after, enemies: false })).toEqual(['Fight|Act 1, fight', 'Elite|Act 1, elite', 'Boss|Act 1, boss']);
+  });
+
+  it('the bot\'s army of the fight is the bridge\'s plan for the node, a marble short with the Saboteur', () => {
+    const seen: number[][] = [];
+    const planOf = (node: number, less: number): ArrayLike<number> => {
+      seen.push([node, less]);
+      return Int32Array.from([10 - less, 3, 0, -4, 2]);
+    };
+    expect(foePlan(FOES, pick(newRun(1, 3), 0), planOf)).toEqual([10, 3, 0, -4, 2]);
+    expect(foePlan(FOES, pick({ ...newRun(1, 3), path: [0], relics: [Relic.Saboteur] }, 1), planOf)).toEqual([9, 3, 0, -4, 2]);
+    expect(seen).toEqual([[0, 0], [1, 1]]);
+    // A run saved before them: the count alone, as before.
+    expect(foePlan(FOES, pick({ ...newRun(1, 3), enemies: false }, 0), planOf)).toBe(FIGHT_FOES);
+    expect(seen).toHaveLength(2);
+  });
+
+  it('a saved run keeps the flag, and one saved before it fights the plain army', async () => {
+    const store = memoryStore();
+    const fight = pick(newRun(1, 3), 0);
+    await saveRun(store, fight);
+    expect((await loadRun(store, () => FOES, engine))!.state.enemies).toBe(true);
+    await store.put(RUN_KEY, { ...fight, enemies: 'yes' });
+    expect(await loadRun(store, () => FOES, engine)).toBeNull();
+    await store.put(RUN_KEY, { ...fight, enemies: false });
+    expect((await loadRun(store, () => FOES, engine))!.state.enemies).toBe(false);
   });
 });
