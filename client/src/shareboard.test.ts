@@ -15,7 +15,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('the board opt-in (#1287)', () => {
   it('says what the law asks: public, permanent, third party relays, no deletion, a name that is not you, 16+', () => {
-    expect(BOARD_VERSION).toBe(2); // the answers given before the IP sentence are asked again
+    expect(BOARD_VERSION).toBe(3); // the answers given before the moves-and-opponent-key words are asked again
+    expect(BOARD_TEXT).toContain('your ranked results (with the moves of each game and your opponent\'s key), a random key');
     expect(BOARD_TEXT).toContain('Opening the board connects your browser to these relays, which see your IP address. It is public');
     for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'nos.lol']) {
       expect(BOARD_TEXT).toContain(word);
@@ -85,7 +86,7 @@ describe('the board opt-in (#1287)', () => {
     const store = memory();
     const keys = await boardKeys(store);
     const old = await signRetire(keys, 1_800_000_000);
-    store.setItem('ab-alone.board-retire', JSON.stringify({ v: 1, events: [old] })); // written before BOARD_VERSION became 2
+    store.setItem('ab-alone.board-retire', JSON.stringify({ v: 1, events: [old] })); // written before BOARD_VERSION became 3
     expect(readRetires(store)).toEqual([old]);
     const pub = await joinBoard(store, 'a');
     expect(pub).not.toBe(keys.pub);

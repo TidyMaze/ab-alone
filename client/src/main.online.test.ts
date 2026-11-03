@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encodeMove, moveForClick, parseMoves, type Axial } from './board';
 import { generateKeys, signCoordinator, signHello, type Report, type Wire } from './moverecord';
+import { RankedSeal, type Seal } from './rankedseal';
+import { bothSigned, type SharedResult } from './boardfeed';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { OnlineSession } from './session';
 import { fingerprint } from './invite';
@@ -24,7 +26,7 @@ async function until(game: Game, ok: () => boolean): Promise<void> {
 
 /** The other player: a session with its own engine on `transport`, which plays a move by its cells. `version` is
  * added to the engine version its Hello carries, so it can run another one (#526). */
-async function opponent(transport: Transport, room: string, side: number, version = 0) {
+async function opponent(transport: Transport, room: string, side: number, version = 0, onOther?: (m: Wire, key: string) => void | Promise<void>) {
   const { Engine, engine_version } = await import('abalone-wasm');
   let engine = new Engine();
   const keys = await generateKeys();
@@ -44,6 +46,7 @@ async function opponent(transport: Transport, room: string, side: number, versio
     onMove: () => {},
     onRefuse: () => {},
     onReport: (r) => reports.push(r),
+    onOther,
     beat: { ms: 5000, now: Date.now, every: () => {} }, // sends the join order the coordinator migration needs
   });
   const play = async (from: Axial, to: Axial): Promise<void> => {
@@ -260,6 +263,55 @@ describe('Play online', () => {
     expect(byId('hud').querySelector('.rank-result')).toBeNull();
     expect(JSON.parse(localStorage.getItem('ab-alone.ranked')!).matches).toHaveLength(1);
     expect(white.reports).toMatchObject([{ side: 1, status: 3, rating: 1200 }]); // ours reached the opponent, signed by our key
+  });
+
+  /** A ranked draw with a White opponent that listens for seals (#1287). `whiteJoins`: the opponent plays under a board key too. */
+  async function sealedDraw(joined: boolean, whiteJoins: boolean) {
+    const game = await boot('?bot=off&board');
+    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 3, choice: joined ? 'joined' : 'declined' }));
+    game.openModes();
+    byId('ranked').click();
+    await until(game, () => data().seat === 'player');
+    const heard: Seal[] = [];
+    const out: { seal?: RankedSeal; result?: SharedResult } = {};
+    const transport = game.peer()!;
+    const white = await opponent(transport, game.room()!, 2, 0, async (m, key) => {
+      heard.push(m as Seal);
+      const step = await out.seal?.receive(m, key);
+      if (step?.send) transport.send(step.send);
+      if (step?.result) out.result = step.result;
+    });
+    await until(game, () => data().opponent === 'here');
+    const board = await generateKeys();
+    if (whiteJoins) out.seal = new RankedSeal({ game: white.session.game, side: 2, keys: white.keys, board, name: 'Bob', opponent: white.session.opponent, nowS: () => Math.floor(Date.now() / 1000) });
+    await drawGame(game, white);
+    if (out.seal) {
+      transport.send(await out.seal.intro());
+      await out.seal.finish({ moves: white.session.signedLog.map((r) => r.move), status: 3, ejected: [0, 0] });
+    }
+    await white.report(1200);
+    await until(game, () => byId('hud').querySelector('.rank-delta') !== null);
+    return { game, heard, out };
+  }
+
+  it('with ?board and both seats joined, the seats sign the ranked result together (#1287)', async () => {
+    const { game, heard, out } = await sealedDraw(true, true);
+    await until(game, () => game.hook('__sealed') !== null);
+    const mine = game.hook('__sealed') as SharedResult;
+    expect(await bothSigned(mine)).toBe(true);
+    expect(out.result).toEqual(mine);
+    expect(mine).toMatchObject({ status: 3, ejected: [0, 0] });
+    expect(mine.moves).toHaveLength(8);
+    expect(heard.map((s) => s.step)).toEqual(['intro', 'result']);
+  });
+
+  it('a seat that did not join sends no seal and takes none: nothing is signed (#1287)', async () => {
+    for (const [joined, whiteJoins] of [[true, false], [false, true]] as const) {
+      const { game, heard } = await sealedDraw(joined, whiteJoins);
+      await game.settle();
+      expect(game.hook('__sealed')).toBeNull();
+      expect(heard.map((s) => s.step)).toEqual(joined ? ['intro'] : []); // joined alone: its intro is all there is, no result
+    }
   });
 
   it('Ranked rates against the opponent real rating from its report, not a default (#1317)', async () => {

@@ -25,7 +25,8 @@ import { keyTip } from './touchwording';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
-import { readBoard, sharedHtml } from './boardfeed';
+import { readBoard, sharedHtml, type SharedResult } from './boardfeed';
+import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
@@ -174,7 +175,7 @@ import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
 import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
-import { generateKeys, type Report } from './moverecord';
+import { generateKeys, type Keys, type Report } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { beatPeriod } from './coordinator';
 import { OnlineSession } from './session';
@@ -4907,6 +4908,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 
 // Used by the browser checks to count the plies played, bot replies included, and to compare them.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
+(window as unknown as Record<string, unknown>).__sealed = () => sealedResult; // the ranked result both seats signed (#1287), read by the tests
 (window as unknown as Record<string, unknown>).__history = () => history;
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.
 (window as unknown as Record<string, unknown>).__fight = () => fight;
@@ -5409,11 +5411,42 @@ let rankedSent = false;
 let rankedMine: Report | null = null;
 let rankedTheirs: Report | null = null;
 let rankedResult: 'refused' | undefined;
+// The seats seal a ranked result (#1287, rankedseal.ts): behind ?board, only when this seat joined the board; the other seat's intro is
+// what proves it joined too. Nothing is sent to a relay: the result both seats signed waits in `sealedResult` for the publishing slice.
+let roomKeys: Keys | null = null;
+let sealing: { game: string; seal: Promise<RankedSeal> } | null = null;
+let sealedResult: SharedResult | null = null;
+function sealOf(): Promise<RankedSeal> | null {
+  const session = online;
+  if (!session || !roomKeys || !link || rankedMode !== '1v1' || !boardFlag(location.search) || readChoice(store) !== 'joined') return null;
+  if (sealing?.game !== session.game) {
+    const keys = roomKeys;
+    sealing = { game: session.game, seal: boardKeys(store).then((board) => new RankedSeal({ game: session.game, side: session.side as 1 | 2, keys, board, name: readBoardName(store), opponent: session.opponent, nowS: () => Math.floor(Date.now() / 1000) })) };
+  }
+  return sealing.seal;
+}
+function sealed(step: Step): void {
+  if (step.send) link?.send(step.send);
+  if (step.result) sealedResult = step.result;
+}
+/** The pair of reports agreed: our intro goes out, and the final is offered to the seal. */
+async function sealFinal(): Promise<void> {
+  const seal = await sealOf();
+  if (!seal) return;
+  link?.send(await seal.intro());
+  sealed(await seal.finish({ moves: history.map((m) => [...m]), status: engine.status(), ejected: [engine.ejected(1), engine.ejected(2)] }));
+}
+/** A seal from the other seat. */
+async function sealReceived(raw: unknown, key: string): Promise<void> {
+  const seal = await sealOf();
+  if (seal) sealed(await seal.receive(raw, key));
+}
 /** Rates the 1v1 once both signed reports are in; reports that differ rate nothing (#1317). */
 function settleRankedPair(): void {
   if (rankedMode !== '1v1' || rankedDone || !rankedMine || !rankedTheirs) return;
   rankedDone = true;
   const settled = settleRanked1v1(store, rankedMine, rankedTheirs);
+  if (settled) void sealFinal();
   rankedDelta = settled?.delta;
   rankedResult = settled ? undefined : 'refused';
   hud();
@@ -5522,6 +5555,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     hud();
   };
   const keys = await generateKeys();
+  roomKeys = keys;
   const key = await fingerprint(keys.pub); // the creator's invite link carries it
   if (side === 1) showInvite(inviteUrl(location.href, room, coop, key, duel), `Invite link: send it to your ${duel ? 'boss player' : coop ? 'partner' : 'opponent'}`);
   online = new OnlineSession({
@@ -5564,6 +5598,11 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     onCoordinator: note,
     beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: beatEvery },
     onRematchAsk: note,
+    onOther: (m, key) => {
+      if (parseSeal(m)) return sealReceived(m, key);
+      diag.refused('malformed'); // any other message with a kind: as the session read it before seals
+      hud(' · refused move: malformed');
+    },
     onReport: (report) => {
       rankedTheirs = report;
       settleRankedPair();

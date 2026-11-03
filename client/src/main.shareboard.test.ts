@@ -31,7 +31,7 @@ describe('shared board opt-in', () => {
     byId('optin-yes').click();
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
     expect(shown()).toBe(false);
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 2, choice: 'joined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 3, choice: 'joined' });
     expect(localStorage.getItem('ab-alone.board-name')).toHaveLength(16);
   });
 
@@ -52,7 +52,7 @@ describe('shared board opt-in', () => {
     await game.settle();
     byId('optin-no').click();
     await game.settle();
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 2, choice: 'declined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 3, choice: 'declined' });
   });
 
   it('Keep ranked local stores a decline, and it is not asked again', async () => {
@@ -72,7 +72,7 @@ describe('shared board opt-in', () => {
       leave();
       await game.settle();
       expect(shown()).toBe(false);
-      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 2, choice: 'declined' });
+      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 3, choice: 'declined' });
       expect(localStorage.getItem('ab-alone.board-key')).toBeNull();
     }
     game.openModes();
@@ -237,7 +237,7 @@ describe('shared board opt-in', () => {
   it('without ?board nothing is read, even from a player who joined before', async () => {
     FakeSocket.all = [];
     vi.stubGlobal('WebSocket', FakeSocket);
-    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 2, choice: 'joined' }));
+    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 3, choice: 'joined' }));
     const game = await boot('?bot=off&net=hook');
     game.openModes();
     byId('leaderboard').click();
@@ -247,7 +247,7 @@ describe('shared board opt-in', () => {
   });
 
   it('with ?board, no relay is contacted before a current opt-in: not asked, declined, an older answer, or garbage', async () => {
-    for (const saved of [null, { v: 2, choice: 'declined' }, { v: 1, choice: 'joined' }, 'garbage']) {
+    for (const saved of [null, { v: 3, choice: 'declined' }, { v: 1, choice: 'joined' }, { v: 2, choice: 'joined' }, 'garbage']) {
       FakeSocket.all = [];
       vi.stubGlobal('WebSocket', FakeSocket);
       localStorage.clear();

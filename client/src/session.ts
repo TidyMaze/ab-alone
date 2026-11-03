@@ -184,6 +184,11 @@ export class OnlineSession {
     return this.now.log.from(0);
   }
 
+  /** The key of the seat that plays the other colour in this game (a 1v1). */
+  get opponent(): string {
+    return this.keyOf(3 - this.side);
+  }
+
   /** Our room seat: 1 for the creator. */
   get ourSeat(): number {
     return this.o.side;
