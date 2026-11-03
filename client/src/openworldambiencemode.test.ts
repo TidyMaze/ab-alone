@@ -38,6 +38,15 @@ describe('the ambience of the biomes of the Open world (#1104)', () => {
     }
   });
 
+  it('no particle is drawn under reduced motion, even after a step, #1110', () => {
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    const m = mode(true);
+    m.enter(1, 480, 270);
+    stand(m, CELL.forest, 1000);
+    m.frame(vi.fn(), 2500);
+    expect(Number(body().openworldParticles ?? 0)).toBe(0);
+  });
+
   it('nothing drifts or shimmers on the low tier', () => {
     Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
     document.body.dataset.tier = 'low';
