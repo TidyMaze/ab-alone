@@ -47,6 +47,7 @@ import {
   offers,
   parseMap,
   parseSpecials,
+  armyKept,
   pick,
   place,
   placeHtml,
@@ -371,6 +372,15 @@ describe('roguelite', () => {
 
   it('parses the special marbles of the bridge', () => {
     expect(parseSpecials([-1, 4, 2, 0, -4, 3])).toEqual([{ cell: [-1, 4], kind: 2 }, { cell: [0, -4], kind: 3 }]);
+  });
+
+  it('counts by type only the army special marbles left on the board, never the bot ones, #1492', () => {
+    const board = new Array<number>(61).fill(0);
+    board[cellIndex(-1, 4)] = 1; // the army's Anchor
+    board[cellIndex(0, 4)] = 1; // the army's Heavy
+    board[cellIndex(1, -4)] = 2; // the bot's Heavy
+    expect(armyKept(board, [-1, 4, 2, 0, 4, 1, 1, -4, 1])).toEqual([1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(armyKept(board, [])).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   it('finds the Spark a push throws off: the last marble of the pushed line at the rim', () => {
