@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import { cellIndex, type Axial, type Move } from './board';
-import { actBoss, BIOMES, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, relicText, visit, type MapNode, type Run } from './roguelite';
+import { actBoss, BIOMES, ELITES, FORMATIONS, BONUS_SCRAP, MOVE_BUDGET, newRun, parseMap, pick, Relic, RELICS, relicText, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
 import { LEGACY_UNLOCKED } from './collector';
 import type { View } from './camera';
@@ -1245,5 +1245,55 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     map().querySelector<HTMLButtonElement>('button[data-book="map"]')!.click();
     expect(bookButton('compendium')).not.toBeNull();
     expect(localStorage.getItem('ab-alone.roguelite.seen')).toContain('"relics":[0,3]');
+  });
+});
+
+describe('main.ts, the bonus room before an act boss (#1473)', () => {
+  /** The run of seed 1 at the last node before its act 1 boss, with `spent` moves counted in the act, and the boss node. */
+  async function beforeBoss(game: Game, spent: number[]): Promise<number> {
+    const { run_map } = await import('abalone-wasm');
+    const path = toBoss(parseMap(run_map(1)));
+    await game.hook('__run', { ...plainRun(1, 3), path: path.slice(0, -1), spent });
+    return path[path.length - 1]!;
+  }
+
+  it('shows the budget on the map and in a fight, and counts the moves of the fight', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('roguelite').click();
+    expect(map().querySelector('.run-moves')!.textContent).toBe(`moves 0 of ${MOVE_BUDGET[0]} · bonus room open`);
+    open()[0]!.click();
+    expect(game.hud()).toContain(`moves 0 of ${MOVE_BUDGET[0]} · bonus room open`);
+  });
+
+  it('a pick of the boss within budget shows the room: no node to pick, its relic and scrap taken, then the boss fight starts and is saved', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    const boss = await beforeBoss(game, [5, 0, 0, 0]);
+    expect(map().querySelector('.run-moves')!.textContent).toBe(`moves 5 of ${MOVE_BUDGET[0]} · bonus room open`);
+    map().querySelector<HTMLButtonElement>(`button[data-node="${boss}"]`)!.click();
+    expect(document.body.dataset.run).toBe('bonus');
+    expect(line()).toBe('Bonus room · fast play pays');
+    expect(open()).toHaveLength(0);
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the room waiting
+    expect(document.body.dataset.run).toBe('bonus');
+    map().querySelector<HTMLButtonElement>('button[data-bonus]')!.click();
+    expect(document.body.dataset.run).toBe('fight');
+    expect(document.body.dataset.boss).toBeTruthy();
+    expect(game.hud()).toContain('act 1 boss');
+    expect(game.hud()).not.toContain('moves');
+    expect(document.querySelectorAll('#hud .relics .relic')).toHaveLength(1);
+    expect(game.hud()).toContain(`${BONUS_SCRAP} scrap`);
+  });
+
+  it('a pick of the boss over budget, or in a run saved before the room, starts the fight at once', async () => {
+    const game = await boot('?bot=off');
+    for (const spent of [[MOVE_BUDGET[0]! + 1, 0, 0, 0], []]) {
+      const boss = await beforeBoss(game, spent);
+      map().querySelector<HTMLButtonElement>(`button[data-node="${boss}"]`)!.click();
+      expect(document.body.dataset.run).toBe('fight');
+      expect(game.hud()).not.toContain('Bonus');
+    }
   });
 });

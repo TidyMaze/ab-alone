@@ -7,6 +7,13 @@ import { GLASS, SHELL } from './marbles';
 import {
   ACT_PERCENT,
   actBoss,
+  BONUS_SCRAP,
+  bonusHtml,
+  bonusRelic,
+  MOVE_BUDGET,
+  movesLine,
+  rounds,
+  takeBonus,
   ASCENSIONS,
   chooseAscension,
   MAX_ASCENSION,
@@ -158,7 +165,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -262,9 +269,9 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily', 'curse', 'affinities', 'scroll']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily', 'curse', 'affinities', 'scroll', 'spent', 'bonus']) delete older[key];
     await store.put(RUN_KEY, older);
-    expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false }); // before the varied enemies (#1462): the plain army
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false, spent: [] }); // before the varied enemies (#1462): the plain army; before the bonus room (#1473): no count
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, specials: [1, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2, 0, 1, 0] }); // saved before the new four (#1461): none of them
@@ -2380,6 +2387,127 @@ describe('roguelite flasks (#1475)', () => {
     }
     await store.put(RUN_KEY, { ...fresh(), bought: [5] }); // the flask in a shop's sold list
     expect((await loadRun(store, mapOf, engine))!.state.bought).toEqual([5]);
+
+describe('roguelite bonus room (#1473)', () => {
+  const fresh = newRun(1, 3, LEGACY_UNLOCKED);
+  const budget = MOVE_BUDGET[0]!;
+  const reached = (spent: number[]): Run => ({ ...at(fresh, 0), spent }); // the last node of act 1 before its boss picked
+  const TURN = [1, 0, 0, 0, 0, 0, 0, 0];
+
+  it('gives each of the four acts a budget of moves, growing with the act', () => {
+    expect(MOVE_BUDGET).toHaveLength(4);
+    expect(MOVE_BUDGET.every((b, i) => i === 0 || b > MOVE_BUDGET[i - 1]!)).toBe(true);
+  });
+
+  it('counts a move as one round: the army moves and the bot answers, a tactic is not a move', () => {
+    expect(rounds([])).toBe(0);
+    expect(rounds([TURN])).toBe(1);
+    expect(rounds([TURN, TURN])).toBe(1);
+    expect(rounds([TURN, TURN, TURN])).toBe(2);
+    expect(rounds([tacticRecord(2), TURN, TURN])).toBe(1);
+  });
+
+  it('adds the moves of a fight to its act when it ends, even a lost one, and counts nothing for an older run', () => {
+    const fight = { ...pick(fresh, 0), moves: [TURN, TURN, TURN] };
+    expect(fightOver(MAP, fight, true, 0).spent).toEqual([2, 0, 0, 0]);
+    expect(fightOver(MAP, { ...fight, spent: [5, 0, 0, 0] }, true, 0).spent).toEqual([7, 0, 0, 0]);
+    expect(fightOver(MAP, fight, false, 0).spent).toEqual([2, 0, 0, 0]);
+    expect(fightOver(MAP, { ...pick({ ...fresh, spent: [0, 4, 0, 0] }, 3), moves: [TURN] }, true, 0).spent).toEqual([0, 5, 0, 0]);
+    expect(fightOver(MAP, { ...fight, spent: [] }, true, 0).spent).toEqual([]);
+  });
+
+  it('opens a bonus room on the way to the act boss when the act was won within its budget', () => {
+    expect(visit(MAP, reached([budget, 0, 0, 0]), 2)).toMatchObject({ bonus: true, fighting: false, path: [0, 2] });
+    expect(visit(MAP, reached([0, 0, 0, 0]), 2)).toMatchObject({ bonus: true });
+    expect(visit(MAP, reached([budget + 1, 0, 0, 0]), 2)).toMatchObject({ bonus: false, fighting: true, path: [0, 2] });
+    expect(visit(MAP, reached([]), 2)).toMatchObject({ bonus: false, fighting: true }); // a run saved before it has no count, no room
+    expect(visit(MAP, at({ ...fresh, spent: [0, 0, 0, 0] }, 0), 2).bonus).toBe(true);
+    expect(visit(MAP, at(fresh, 1), 2).bonus).toBe(true);
+  });
+
+  it('opens no room before a node that is not a boss', () => {
+    expect(visit(MAP, fresh, 0).bonus).toBe(false);
+  });
+
+  it('shows the room as a screen: no node to pick while it waits', () => {
+    const waiting = visit(MAP, reached([1, 0, 0, 0]), 2);
+    expect(choices(MAP, waiting)).toEqual([]);
+  });
+
+  it('the room holds a relic the run lacks, dealt by the run seed and the node, and scrap', () => {
+    const waiting = visit(MAP, reached([1, 0, 0, 0]), 2);
+    const relic = bonusRelic(waiting);
+    expect(relic).toBeGreaterThanOrEqual(0);
+    expect(relic).toBeLessThan(12); // an ordinary relic, never a boss relic
+    expect(bonusRelic(waiting)).toBe(relic);
+    expect(bonusRelic({ ...waiting, seed: 2 })).not.toBeNull();
+    expect(new Set(Array.from({ length: 30 }, (_, seed) => bonusRelic({ ...waiting, seed })!)).size).toBeGreaterThan(3);
+    expect(bonusRelic({ ...waiting, relics: [relic] })).not.toBe(relic);
+    expect(bonusRelic({ ...waiting, relics: RELICS.map((_, code) => code) })).toBe(-1);
+    expect(bonusRelic(reached([1, 0, 0, 0]))).toBe(-1); // none waits
+  });
+
+  it('taking it gives the relic and the scrap once, then the boss fight starts', () => {
+    const waiting = visit(MAP, reached([1, 0, 0, 0]), 2);
+    const taken = takeBonus(waiting);
+    expect(taken).toMatchObject({ bonus: false, fighting: true, moves: [], placed: [], path: [0, 2], scrap: BONUS_SCRAP, relics: [bonusRelic(waiting)] });
+    expect(takeBonus(taken)).toBe(taken);
+    expect(takeBonus(reached([1, 0, 0, 0]))).toEqual(reached([1, 0, 0, 0]));
+    const none = takeBonus({ ...waiting, relics: RELICS.map((_, code) => code) });
+    expect(none).toMatchObject({ fighting: true, scrap: BONUS_SCRAP });
+    expect(none.relics).toHaveLength(RELICS.length);
+  });
+
+  it('the screen names the relic and the scrap, and says how fast the act was won', () => {
+    const waiting = visit(MAP, reached([7, 0, 0, 0]), 2);
+    const html = bonusHtml(waiting);
+    expect(html).toContain('Bonus room');
+    expect(html).toContain(`Act 1 won in 7 of ${budget} moves`);
+    expect(html).toContain(RELICS[bonusRelic(waiting)]!.name);
+    expect(html).toContain(`+${BONUS_SCRAP} scrap`);
+    expect(html).toContain('data-bonus');
+    const empty = bonusHtml({ ...waiting, relics: RELICS.map((_, code) => code) });
+    expect(empty).toContain(`+${BONUS_SCRAP} scrap`);
+    expect(empty).not.toContain('data-relic');
+  });
+
+  it('shows the budget and the count on the map and in the fights, while the room is open or shut', () => {
+    const map = (spent: number[]): string => movesLine(MAP, { ...fresh, spent });
+    expect(map([3, 0, 0, 0])).toBe(`moves 3 of ${budget} · bonus room open`);
+    expect(map([budget, 0, 0, 0])).toBe(`moves ${budget} of ${budget} · bonus room open`);
+    expect(map([budget + 1, 0, 0, 0])).toBe(`moves ${budget + 1} of ${budget} · bonus room closed`);
+    expect(mapHtml(MAP, { ...fresh, spent: [3, 0, 0, 0] })).toContain(`<p class="run-help run-moves">moves 3 of ${budget} · bonus room open</p>`);
+    expect(runLine(MAP, { ...fresh, spent: [3, 0, 0, 0] })).not.toContain('moves'); // the run line is the same as before
+    const fight = { ...pick({ ...fresh, spent: [3, 0, 0, 0] }, 0), moves: [TURN, TURN, TURN] };
+    expect(movesLine(MAP, fight)).toBe(`moves 5 of ${budget} · bonus room open`); // the fight on counts too
+    expect(movesLine(MAP, { ...fight, spent: [budget, 0, 0, 0] })).toBe(`moves ${budget + 2} of ${budget} · bonus room closed`);
+    expect(movesLine(MAP, { ...at({ ...fresh, spent: [3, 2, 0, 0] }, 0, 2) })).toBe(`moves 2 of ${MOVE_BUDGET[1]} · bonus room open`); // after the boss, the next act's
+  });
+
+  it('shows nothing for a run saved before it, in the boss fight, once the room waits or the run is over', () => {
+    const fight = pick({ ...fresh, spent: [3, 0, 0, 0] }, 0);
+    expect(movesLine(MAP, { ...fight, spent: [] })).toBe('');
+    expect(mapHtml(MAP, { ...fresh, spent: [] })).not.toContain('run-moves');
+    expect(movesLine(MAP, { ...fight, path: [0, 2] })).toBe(''); // the boss fight itself
+    expect(movesLine(MAP, visit(MAP, reached([1, 0, 0, 0]), 2))).toBe('');
+    expect(movesLine(MAP, { ...fresh, end: 'lost' })).toBe('');
+  });
+
+  it('is saved and loaded, a run saved before it has no count and no room, a bad one does not load', async () => {
+    const store = memoryStore();
+    const mapOf = (): MapNode[] => MAP;
+    const waiting = visit(MAP, reached([4, 0, 0, 0]), 2);
+    await saveRun(store, waiting);
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual(waiting);
+    await saveRun(store, { ...fresh, spent: [1, 2, 3, 4] });
+    expect((await loadRun(store, mapOf, engine))!.state.spent).toEqual([1, 2, 3, 4]);
+    const { spent: _s, bonus: _b, ...older } = fresh;
+    await store.put(RUN_KEY, older);
+    expect((await loadRun(store, mapOf, engine))!.state).toMatchObject({ spent: [], bonus: false });
+    for (const bad of [{ spent: [1, 2, 3] }, { spent: [0, 0, 0, -1] }, { spent: [0, 0, 0, 10000] }, { spent: [0, 0, 0, 1.5] }, { spent: 'x' }, { bonus: 'x' }]) {
+      await store.put(RUN_KEY, { ...fresh, ...bad });
+      expect(await loadRun(store, mapOf, engine)).toBeNull();
+    }
   });
 });
 

@@ -8,6 +8,8 @@ import {
   eventOf,
   fightOver,
   foePlan,
+  BONUS_SCRAP,
+  MOVE_BUDGET,
   loadRun,
   newRun,
   offers,
@@ -888,5 +890,52 @@ describe('flasks (#1475)', () => {
     value(await run.newRun({ save: { ...newRun(0, 3, []), path, flasks: 0, army: 8 } }));
     const next = value(run.state({})).nodes![0]!.node;
     expect(value(run.pick({ node: next })).flasks).toBe(2);
+
+describe('the bonus room before an act boss (#1473)', () => {
+  test('a fight won counts its moves in the act: the state shows the count and the budget, the save keeps them', async () => {
+    const { run, session } = setup(true);
+    expect(value(await run.newRun({ seed: 7, best: 3 }))).toMatchObject({ moves: 0, budget: MOVE_BUDGET[0] });
+    value(run.pick({ node: 0 }));
+    expect(value(run.state({}))).toMatchObject({ screen: 'fight', moves: 0 });
+    value(session.playMove({ move: FIRST_MOVE }));
+    expect(value(run.state({}))).toMatchObject({ screen: 'reward', moves: 1, budget: MOVE_BUDGET[0] });
+    expect(value(run.save()).spent).toEqual([1, 0, 0, 0]);
+  });
+
+  test('a boss picked within the budget waits on the bonus screen: its relic and scrap are taken, then the boss fight starts', async () => {
+    const { save, node } = before('boss', { spent: [3, 0, 0, 0] });
+    const { run } = setup(false);
+    value(await run.newRun({ save }));
+    const state = value(run.pick({ node }));
+    expect(state).toMatchObject({ screen: 'bonus', moves: 3, scrap: 0 });
+    expect(state.nodes).toBeUndefined();
+    expect(state.options).toHaveLength(1);
+    expect(state.options![0]!.text).toContain(`+${BONUS_SCRAP} scrap`);
+    expect(failure(run.pick({ node })).code).toBe('not_now');
+    const fight = value(run.choose({ choice: 0 }));
+    expect(fight).toMatchObject({ screen: 'fight', scrap: BONUS_SCRAP, fight: { kind: 'boss' } });
+    expect(fight.relics).toHaveLength(1);
+    expect(fight.moves).toBeUndefined(); // the boss fight itself has no budget
+    expect(value(run.save())).toMatchObject({ bonus: false, fighting: true });
+  });
+
+  test('a boss picked over the budget, or in a run saved before the room, starts its fight', async () => {
+    for (const spent of [[MOVE_BUDGET[0]! + 1, 0, 0, 0], []]) {
+      const { save, node } = before('boss', { spent });
+      const { run } = setup(false);
+      value(await run.newRun({ save }));
+      expect(value(run.pick({ node })).screen).toBe('fight');
+    }
+    const { save } = before('boss', { spent: [] });
+    expect(value(await setup(false).run.newRun({ save })).moves).toBeUndefined();
+  });
+
+  test('a save at the bonus room resumes there', async () => {
+    const { save, node } = before('boss', { spent: [3, 0, 0, 0] });
+    const first = setup(false).run;
+    value(await first.newRun({ save }));
+    value(first.pick({ node }));
+    const second = setup(false).run;
+    expect(value(await second.newRun({ save: value(first.save()) })).screen).toBe('bonus');
   });
 });
