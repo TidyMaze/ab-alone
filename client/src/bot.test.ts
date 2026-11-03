@@ -4,6 +4,7 @@ import {
   askBot,
   askEval,
   BOT_NODES,
+  encounterFor,
   engineFor,
   botBudget,
   EVAL_NODES,
@@ -84,6 +85,40 @@ describe('answer', () => {
     };
     answer(req, () => new FakeEngine(), (id, seed) => (made = new FakeEncounter(id, seed)));
     expect(made!.scaledPercent).toBe(200);
+  });
+
+  it("hands a boss fight the run's special marbles and relics to stand, #1494", () => {
+    const made: unknown[][] = [];
+    const make = (id: string, seed: number, placed?: number[][], relics?: number): FakeEncounter => (made.push([id, seed, placed, relics]), new FakeEncounter(id, seed));
+    answer({ id: 4, history: [], nodes: 5, boss: { id: 'hull', seed: 9 }, placed: [[0, 4, 1]], relics: 0b11 }, () => new FakeEngine(), make);
+    answer({ id: 5, history: [], nodes: 5, boss: { id: 'hull', seed: 9 } }, () => new FakeEngine(), make);
+    expect(made).toEqual([['hull', 9, [[0, 4, 1]], 0b11], ['hull', 9, undefined, undefined]]);
+  });
+
+  it('builds the boss fight of a request: plain, or with the build of a run when the boss takes it, #1494', () => {
+    const log: string[] = [];
+    class Boss {
+      constructor(
+        readonly id: string,
+        readonly seed: number,
+      ) {}
+      takes_build(): boolean {
+        return this.id !== 'echo';
+      }
+      set_relics(mask: number): void {
+        log.push(`${this.id} relics ${mask}`);
+      }
+      place_special(q: number, r: number, kind: number): void {
+        log.push(`${this.id} ${q},${r},${kind}`);
+      }
+    }
+    expect(encounterFor(Boss, 'hull', 3)).toMatchObject({ id: 'hull', seed: 3 });
+    expect(encounterFor(Boss, 'hull', 3, [[0, 4, 1]])).toMatchObject({ id: 'hull' });
+    expect(log).toEqual([]); // no relics given: not in a run
+    encounterFor(Boss, 'hull', 3, [[0, 4, 1], [1, 3, 3]], 0);
+    encounterFor(Boss, 'echo', 3, [[0, 4, 1]], 5);
+    encounterFor(Boss, 'hull', 3, undefined, 5);
+    expect(log).toEqual(['hull relics 0', 'hull 0,4,1', 'hull 1,3,3', 'hull relics 5']); // the flag first, none for the Echo
   });
 
   it('replays the history into a fresh engine, then returns its best move', () => {

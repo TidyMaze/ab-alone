@@ -40,6 +40,15 @@ describe('bot.worker', () => {
     expect(reply).toEqual({ id: 14, error: expect.stringContaining('NoMarble') });
   });
 
+  it("stands an act boss fight's special marbles and relics before it replays, and plays a tactic of the history, #1494", async () => {
+    const boss = { id: 'hull', seed: 5 };
+    const reply = await ask({ id: 16, history: [], nodes: 50, boss, placed: [[0, 4, 1]], relics: 0 });
+    expect(reply).toMatchObject({ id: 16, move: [] }); // the player's turn: no boss move
+    const fall = await ask({ id: 17, history: [[0, 4, 0, 0, 0, 0, 0, 0]], nodes: 50, boss, placed: [[0, 4, 1]], relics: 0 });
+    expect(fall).toEqual({ id: 17, error: expect.stringContaining('NothingToUndo') });
+    expect(await ask({ id: 18, history: [[0, 4, 0, 0, 0, 0, 0, 0]], nodes: 50, boss })).toEqual({ id: 18, error: expect.stringContaining('NotRogueLite') });
+  });
+
   it('plays a Trainer wave on its own engine, #1159', async () => {
     const records = (flat: Int32Array): string[] => Array.from({ length: flat.length / 8 }, (_, i) => String(flat.slice(i * 8, i * 8 + 8)));
     const black = Engine.trainer(1, 6).legal_moves().slice(0, 8);

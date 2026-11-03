@@ -876,11 +876,39 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
     expect(map().querySelector('button[data-tactic-offer]')).toBeNull();
   });
 
-  it('an act boss fight has no tactics', async () => {
+  it('an act boss fight plays Reinforce and Fall back, never Freeze nor Swap, and the record joins the saved moves (#1494)', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?nodes=50', { indexedDB });
+    const { state } = await bossRun('hull');
+    await game.hook('__run', { ...state, tactics: [1, 2, 3, 4] });
+    expect(document.body.dataset.boss).toBe('hull');
+    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['1', '2', '3', '4']);
+    expect(tactics().every((b) => b.disabled)).toBe(true); // none before the first move
+    const start = game.hook<number[]>('__board');
+    playMove(game);
+    await answered(game);
+    expect(plies(game)).toBe(2);
+    expect(tactics().map((b) => [b.dataset.tactic, b.disabled])).toEqual([['1', true], ['2', true], ['3', true], ['4', false]]); // a full back row, no skipped turn in a boss's clock
+    button(2).click(); // disabled: nothing happens
+    button(4).click();
+    expect(plies(game)).toBe(3); // the record joins the list, the engine is back at the start
+    expect(game.hook<number[]>('__board')).toEqual(start);
+    expect(game.hook<number[][]>('__history')[2]).toEqual([0, 4, 0, 0, 0, 0, 0, 0]);
+    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['1', '2', '3']);
+    await game.settle();
+    const again = await boot('?nodes=50', { indexedDB });
+    expect(plies(again)).toBe(3); // the records replay on the boss
+    expect(again.hook<number[]>('__board')).toEqual(start);
+    expect(tactics().map((b) => b.dataset.tactic)).toEqual(['1', '2', '3']);
+  });
+
+  it('an act boss fight shows the held tactics greyed out when the boss takes no build (#1494)', async () => {
     const game = await boot('?nodes=50');
-    await game.hook('__run', { ...(await bossRun('hull')).state, tactics: [2] });
-    expect(document.body.dataset.boss).toBeDefined();
-    expect(tactics()).toHaveLength(0);
+    await game.hook('__run', { ...(await bossRun('echo')).state, tactics: [1, 4] });
+    expect(document.body.dataset.boss).toBe('echo');
+    playMove(game);
+    await answered(game);
+    expect(tactics().map((b) => [b.dataset.tactic, b.disabled])).toEqual([['1', true], ['4', true]]);
   });
 });
 
@@ -1373,5 +1401,91 @@ describe('main.ts, the runes (#1476)', () => {
     expect(buttons[2]!.textContent).toMatch(/^Secret exit · /);
     buttons[2]!.click();
     expect(document.body.dataset.biome).toBe(BIOMES[Number(buttons[2]!.dataset.exit)]!.id);
+  });
+});
+
+describe('main.ts, an act boss fight carries the army build (#1494)', () => {
+  const kinds = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-kind]')];
+  const specials = (): string => document.body.dataset.specials!;
+  /** A run at the act boss `id` with a Heavy and 2 Sparks in the army. */
+  async function armed(id: string): Promise<Run> {
+    return { ...(await bossRun(id)).state, specials: [1, 0, 2, 0, 0, 0, 0, 0, 0, 0] };
+  }
+
+  it('places the special marbles on the boss board before the first move, saves them, and fights with them', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', await armed('hull'));
+    expect(document.body.dataset.boss).toBe('hull');
+    expect(document.body.dataset.run).toBe('place');
+    expect(line()).toBe('Place your special marbles');
+    expect(kinds().map((b) => b.textContent)).toEqual(['Heavy · 1 left', 'Spark · 2 left']);
+    kinds()[0]!.click();
+    game.click(0, -4); // a boss marble: nothing
+    game.click(0, 4);
+    kinds()[1]!.click();
+    game.click(1, 3);
+    expect(specials()).toBe('0,4,1 1,3,3');
+    await game.settle();
+    const again = await boot('?bot=off', { indexedDB }); // a reload keeps the placements
+    expect(document.body.dataset.run).toBe('place');
+    expect(specials()).toBe('0,4,1 1,3,3');
+    play(again, [[-2, 2]], [-3, 2]);
+    expect(document.body.dataset.run).toBe('fight');
+    expect(map().hidden).toBe(true);
+    expect(specials()).toBe('0,4,1 1,3,3');
+  });
+
+  it('the relics and the special marbles reach the boss fight, in the page and in the bot worker', async () => {
+    const game = await boot('?nodes=50');
+    const { Encounter } = await import('abalone-wasm');
+    const relics = vi.spyOn(Encounter.prototype, 'set_relics');
+    const placed = vi.spyOn(Encounter.prototype, 'place_special');
+    await game.hook('__run', { ...(await armed('hull')), relics: [0, 4], placed: [[0, 4, 1]] });
+    expect(relics).toHaveBeenCalledWith(0b10001);
+    expect(placed).toHaveBeenCalledWith(0, 4, 1);
+    expect(specials()).toBe('0,4,1');
+    playMove(game);
+    await game.settle();
+    game.frame(1000);
+    await game.settle();
+    expect(game.hook<number>('__plies')).toBe(2); // the boss answered on the board that has them
+    relics.mockRestore();
+    placed.mockRestore();
+  });
+
+  it('a boss that takes no build starts its fight at once, with no special marble on its board', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', await armed('echo'));
+    expect(document.body.dataset.boss).toBe('echo');
+    expect(document.body.dataset.run).toBe('fight');
+    expect(specials()).toBe('');
+  });
+
+  it('a run saved in an act boss fight before the build loads and goes on without the special marbles', async () => {
+    const game = await boot('?nodes=50');
+    const old = { ...(await armed('hull')), moves: [[1, 1, -2, 2, 0, 0, 0, 0]], placed: [] };
+    await game.hook('__run', old);
+    expect(document.body.dataset.run).toBe('fight');
+    expect(specials()).toBe('');
+    await game.settle();
+    game.frame(1000);
+    expect(game.hook<number>('__plies')).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a boss fight lost keeps what the army has: its special marbles left on the board go home, the run is lost', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', await armed('stalker'));
+    kinds()[0]!.click();
+    game.click(0, 4);
+    // The Stalker draws by repetition (a loss for the army) in 8 plies of shuffling, both sides by hand.
+    for (let i = 0; i < 2; i++) {
+      play(game, [[-2, 2]], [-3, 2]);
+      play(game, [[2, -2]], [3, -2]);
+      play(game, [[-3, 2]], [-2, 2]);
+      play(game, [[3, -2]], [2, -2]);
+    }
+    await game.settle();
+    expect(document.body.dataset.run).toBe('lost');
   });
 });
