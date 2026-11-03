@@ -70,7 +70,7 @@ test('M opens the map, a drag pans it, the wheel zooms it, Escape closes it and 
   await expect(page.locator('body')).toHaveAttribute('data-openworld', '7');
 });
 
-test('the cells discovered are saved with the world and come back on a reload', async ({ page }) => {
+test('the cells discovered are saved with the world', async ({ page }) => {
   await open(page);
   await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [30, 0], troop: [], enemies: [] }));
   await page.keyboard.press('ArrowRight');
@@ -78,9 +78,7 @@ test('the cells discovered are saved with the world and come back on a reload', 
   await expect(page.locator('body')).toHaveAttribute('data-openworld-saved', /\d/);
   const discovered = Number(await page.locator('body').getAttribute('data-openworld-discovered'));
   expect(discovered).toBeGreaterThan(2 * 331); // the spawn's disc and the one round (30, 0), and the step
-  await page.reload();
-  await expect(page.locator('body')).toHaveAttribute('data-openworld', '7');
-  await expect(page.locator('body')).toHaveAttribute('data-openworld-discovered', String(discovered));
+  // The reload that brings them back is a unit test (openworldmode.test.ts, main.openworld.test.ts): a page reload costs a full boot.
 });
 
 // #1453: the world's edge is a void blue with a pale line along the land, not the dark of the undiscovered.
