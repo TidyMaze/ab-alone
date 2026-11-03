@@ -24,6 +24,10 @@ class FakeEngine implements EngineLike {
   best_move(nodes: number): Int32Array {
     return Int32Array.from([1, 0, nodes, 0, 0, 0, 0, 0]);
   }
+  /** The auto-played side's move (#1500): its first value tells it from `best_move`. */
+  auto_move(nodes: number): Int32Array {
+    return Int32Array.from([3, 0, nodes, 0, 0, 0, 0, 0]);
+  }
   /** A score that shows both the budget and the replayed history. */
   evaluate(nodes: number): number {
     return 2 * nodes + this.played.length;
@@ -126,6 +130,13 @@ describe('answer', () => {
     const reply = answer({ id: 7, history: [[1, 0, 0, 2, 0, 0, 0, 0]], nodes: 123 }, () => engine, noEncounter);
     expect(engine.played).toEqual([[1, 0, 0, 2, 0, 0, 0, 0]]);
     expect(reply).toEqual({ id: 7, move: [1, 0, 123, 0, 0, 0, 0, 0] });
+  });
+
+  it('asks a plain game for the auto-played move, which does not repeat into a draw, when the request is for the player, #1500', () => {
+    const engine = new FakeEngine();
+    const reply = answer({ id: 8, history: [], nodes: 77, player: true }, () => engine, noEncounter);
+    expect(reply).toEqual({ id: 8, move: [3, 0, 77, 0, 0, 0, 0, 0] });
+    expect(answer({ id: 9, history: [], nodes: 77 }, () => engine, noEncounter)).toEqual({ id: 9, move: [1, 0, 77, 0, 0, 0, 0, 0] }); // the bot's reply and the hint are unchanged
   });
 
   it('replays a rogue-lite fight on an engine of its army and its special marbles, #798 #961', () => {

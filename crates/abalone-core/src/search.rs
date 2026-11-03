@@ -4,7 +4,7 @@ use std::cmp::Reverse;
 
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::hull::NEIGHBOURS;
-use crate::game::{Game, Outcome};
+use crate::game::{Game, Outcome, REPETITION_LIMIT};
 use crate::moves::{apply, legal_moves, Move, Player};
 use crate::run::credits;
 
@@ -621,11 +621,24 @@ pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
     search(game, node_budget).map(|r| r.mv)
 }
 
+/// Stub of auto-play's search (#1500): the plain move, repetition not yet avoided.
+pub fn auto_move(game: &Game, node_budget: u32) -> Option<Move> {
+    best_move(game, node_budget)
+}
+
+/// Stub (#1500): asks `search` with no filter.
+pub fn avoiding_repeats(
+    _game: &Game,
+    search: impl Fn(&dyn Fn(&Move) -> bool) -> Option<SearchResult>,
+) -> Option<SearchResult> {
+    search(&|_| true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
-    use crate::game::WIN_EJECTIONS;
+    use crate::game::{DrawReason, WIN_EJECTIONS};
     use crate::moves::{apply, legal_moves, Direction, Player};
 
     type P = (i32, i32);
@@ -902,6 +915,131 @@ mod tests {
     /// Black pair next to a lone White marble on the rim, Black one push from the sixth marble.
     fn winning_push() -> Game {
         game_from(&[(2, 0), (3, 0)], &[(4, 0)], Player::Black, [5, 0])
+    }
+
+    /// Two lone marbles that can shuffle forever: the plain search repeats itself into a draw.
+    fn shuffling() -> Game {
+        game_from(&[(0, 0)], &[(4, -4)], Player::Black, [0, 0])
+    }
+
+    /// `shuffling` played with the plain search until it would play the third occurrence.
+    fn about_to_repeat() -> Game {
+        let mut game = shuffling();
+        for _ in 0..13 {
+            let mv = best_move(&game, 300).unwrap();
+            game.play(&mv).unwrap();
+        }
+        let plain = best_move(&game, 300).unwrap();
+        assert_eq!(
+            game.seen_after(&plain),
+            REPETITION_LIMIT,
+            "the plain move draws"
+        );
+        game
+    }
+
+    #[test]
+    fn the_auto_move_does_not_play_the_third_occurrence_the_plain_move_does() {
+        let game = about_to_repeat();
+        let auto = auto_move(&game, 300).unwrap();
+        assert_legal(&game, &auto);
+        assert!(game.seen_after(&auto) < REPETITION_LIMIT);
+        let mut after = game.clone();
+        after.play(&auto).unwrap();
+        assert_eq!(after.outcome(), None);
+    }
+
+    #[test]
+    fn the_auto_move_prefers_a_position_not_seen_yet_even_when_it_scores_less() {
+        let game = about_to_repeat();
+        let auto = auto_move(&game, 300).unwrap();
+        assert_eq!(
+            game.seen_after(&auto),
+            1,
+            "a fresh position exists, it is taken"
+        );
+    }
+
+    #[test]
+    fn two_auto_played_sides_never_draw_by_repetition() {
+        let mut game = shuffling();
+        while game.outcome().is_none() {
+            let mv = auto_move(&game, 300).unwrap();
+            game.play(&mv).unwrap();
+        }
+        assert_ne!(game.draw_reason(), Some(DrawReason::Repetition));
+    }
+
+    #[test]
+    fn the_auto_move_keeps_a_win() {
+        let game = winning_push();
+        assert_eq!(auto_move(&game, 500), best_move(&game, 500));
+        assert_eq!(search(&game, 500).unwrap().score, WIN - 1);
+    }
+
+    #[test]
+    fn the_auto_move_of_a_finished_game_is_none() {
+        let mut game = winning_push();
+        game.play(&best_move(&game, 500).unwrap()).unwrap();
+        assert_eq!(auto_move(&game, 500), None);
+    }
+
+    #[test]
+    fn the_filters_go_from_fresh_to_unrepeated_to_anything() {
+        let game = about_to_repeat();
+        let mv = best_move(&game, 300).unwrap();
+        let tiers = std::cell::RefCell::new(Vec::new());
+        let found = avoiding_repeats(&game, |allow| {
+            let legal = legal_moves(game.board(), game.to_move());
+            let kept: Vec<Move> = legal.into_iter().filter(|m| allow(m)).collect();
+            let call = tiers.borrow().len();
+            tiers.borrow_mut().push(kept.clone());
+            (call == 2).then(|| SearchResult {
+                mv: mv.clone(),
+                depth: 1,
+                nodes: 1,
+                score: 0,
+            })
+        });
+        assert_eq!(
+            found.map(|r| r.mv),
+            Some(mv.clone()),
+            "the last tier is asked last"
+        );
+        let tiers = tiers.into_inner();
+        assert_eq!(tiers.len(), 3);
+        assert!(tiers[0].iter().all(|m| game.seen_after(m) == 1));
+        assert!(tiers[1]
+            .iter()
+            .all(|m| game.seen_after(m) < REPETITION_LIMIT));
+        assert!(tiers[1].len() > tiers[0].len() && tiers[2].len() > tiers[1].len());
+        assert!(tiers[2].contains(&mv), "anything: the drawing move too");
+    }
+
+    #[test]
+    fn a_player_one_ejection_from_the_win_still_keeps_out_a_move_that_only_repeats() {
+        let mut game = game_from(&[(0, 0)], &[(4, -4)], Player::Black, [5, 0]);
+        for _ in 0..12 {
+            game.play(&best_move(&game, 300).unwrap()).unwrap();
+        }
+        let legal = legal_moves(game.board(), game.to_move());
+        assert!(
+            legal.iter().any(|m| game.seen_after(m) > 1),
+            "a repeat exists"
+        );
+        let first = std::cell::RefCell::new(None);
+        avoiding_repeats(&game, |allow| {
+            first.borrow_mut().get_or_insert_with(|| {
+                legal
+                    .iter()
+                    .filter(|m| allow(m))
+                    .cloned()
+                    .collect::<Vec<Move>>()
+            });
+            None
+        });
+        let first = first.into_inner().unwrap();
+        assert!(!first.is_empty() && first.iter().all(|m| game.seen_after(m) == 1));
     }
 
     fn assert_legal(game: &Game, mv: &Move) {

@@ -547,7 +547,7 @@ impl Encounter {
 mod tests {
     use super::*;
     use crate::board::{PlaceError, Special, MAX_RADIUS};
-    use crate::game::{Tactic, TacticError};
+    use crate::game::{DrawReason, Tactic, TacticError};
     use crate::moves::Direction::{E, NE, SW, W};
     use crate::moves::{legal_moves, Direction, Player};
     use crate::run::Relic;
@@ -871,6 +871,21 @@ mod tests {
             step(&mut enc);
             assert!(enc.player_search().is_none(), "boss's turn");
         }
+    }
+
+    #[test]
+    fn the_player_search_does_not_draw_by_repetition_where_the_boss_search_would() {
+        // Two lone marbles shuffle: both plain searches repeat until the third occurrence.
+        let lone = || position(&[(0, 0)], &[(4, -4)], Player::Black, [0, 0]);
+        let mut fight = Encounter::new(lone(), trivial_boss(), 0);
+        while fight.result().is_none() {
+            let mv = match fight.game().to_move() {
+                Player::Black => fight.player_search().unwrap().mv,
+                Player::White => fight.boss_search().unwrap().mv,
+            };
+            fight.play(&mv).unwrap();
+        }
+        assert_ne!(fight.game().draw_reason(), Some(DrawReason::Repetition));
     }
 
     #[test]

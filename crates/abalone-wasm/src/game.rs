@@ -163,6 +163,11 @@ impl Engine {
             .unwrap_or_default()
     }
 
+    /// Stub (#1500).
+    pub fn auto_move(&self, nodes: u32) -> Vec<i32> {
+        self.best_move(nodes)
+    }
+
     /// Score of the position for the side to move, searching at most `nodes` positions. See the
     /// module docs.
     pub fn evaluate(&self, nodes: u32) -> i32 {
@@ -500,6 +505,39 @@ mod tests {
         assert!((1..=2).contains(&engine.draw_reason()));
         assert!(engine.legal_moves().is_empty());
         assert!(engine.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
+    }
+
+    #[test]
+    fn auto_move_does_not_repeat_into_a_draw_where_best_move_does() {
+        // The bot against itself on the standard board draws by repetition at ply 61 (#1500).
+        let play = |auto: bool| {
+            let mut engine = Engine::new();
+            while engine.status() == 0 {
+                let mv = if auto {
+                    engine.auto_move(20)
+                } else {
+                    engine.best_move(20)
+                };
+                engine.play(&mv).unwrap();
+            }
+            (engine.status(), engine.draw_reason())
+        };
+        assert_eq!(play(false), (3, 1), "the plain search repeats");
+        assert_ne!(play(true).1, 1, "the auto-played search does not");
+    }
+
+    #[test]
+    fn auto_move_is_one_legal_record_and_empty_once_the_game_is_over() {
+        let mut engine = Engine::new();
+        let record = engine.auto_move(300);
+        assert_eq!(record.len(), MOVE_STRIDE);
+        engine.play(&record).unwrap();
+        let mut over = Engine::new();
+        while over.status() == 0 {
+            let mv = over.best_move(5);
+            over.play(&mv).unwrap();
+        }
+        assert!(over.auto_move(300).is_empty());
     }
 
     #[test]
