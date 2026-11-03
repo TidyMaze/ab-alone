@@ -1917,9 +1917,8 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     m.remoteLair([5, 5]); // no lair there
     expect(document.body.dataset.openworldLairsBeaten).toBe('');
     m.remoteLair([8, 0]);
-    expect(document.body.dataset.openworldLairsBeaten).toBe('0');
-    m.remoteLair([8, 0]); // twice: it is beaten already
-    expect(document.body.dataset.openworldLairsBeaten).toBe('0');
+    expect(document.body.dataset.openworldLairsBeaten).toBe(''); // heard, not filed: no fight of this hero proves it
+    m.remoteLair([8, 0]); // twice: heard already
   });
 
   it('shows a beaten lair in its own colour', () => {

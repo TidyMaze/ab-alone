@@ -724,15 +724,15 @@ describe('the public Open world online', () => {
     expect(data().openworldBeaten).toBe('1');
   });
 
-  it('a peer takes a boss lair: it shows beaten here, once (#1305)', async () => {
+  it('a peer takes a boss lair: it is heard, but not filed as beaten here (#1305, a stranger cannot finish the world)', async () => {
     const game = await joined();
     const room = game.world()!;
     const lairs = (window as unknown as { __openworldLairs: (seed: number) => [number, number][] }).__openworldLairs(PUBLIC_SEED); // the test hook of the e2e
     const [q, r] = lairs[0]!;
     const event = await signLair(await generateKeys(), PUBLIC_SEED, q, r);
     room.data(encodeBreak(event), 'p');
-    for (let i = 0; i < 40 && data().openworldLairsBeaten !== '0'; i++) await new Promise((done) => setTimeout(done, 10));
-    expect(data().openworldLairsBeaten).toBe('0');
+    await new Promise((done) => setTimeout(done, 150)); // long enough for the signature check and the event to be applied
+    expect(data().openworldLairsBeaten).toBe('');
   });
 });
 

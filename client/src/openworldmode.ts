@@ -78,6 +78,8 @@ export class OpenWorldMode {
   /** The boss lairs of the world entered, by number, and the numbers of the ones beaten (#1170). */
   private lairs: Axial[] = [];
   private beaten: number[] = [];
+  /** Lairs other heroes reported taken (#1305): drawn beaten for the visit, never counted, filed or saved, since no fight proves them. */
+  private heard: number[] = [];
   /** The teleporters of the world entered (#1412), the spawn's first. */
   private teleporters: Axial[] = [];
   private dirty = false;
@@ -162,6 +164,7 @@ export class OpenWorldMode {
     const flatLairs = this.lairsOf(seed);
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
     this.beaten = saved ? [...saved.lairs] : [];
+    this.heard = [];
     this.teleporters = pairs(this.teleportersOf(seed));
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     const view = new OpenWorldView(world, this.fight, skins);
@@ -178,7 +181,7 @@ export class OpenWorldMode {
     view.resize(width, height);
     view.turnTo(saved ? restYaw(saved.yaw) : DEFAULT_YAW); // the camera opens at the angle the world was left at, or the default (#1026, #1254)
     view.show(this.hero.at, this.hero.troop);
-    view.setLairs(this.lairs, this.beaten);
+    this.drawLairs();
     view.setTeleporters(this.teleporters);
     this.peers?.enter(seed, view.scene, view.camera, world);
     this.keepAlive();
@@ -307,7 +310,7 @@ export class OpenWorldMode {
     this.view!.snap();
     if (beaten) {
       this.beaten = [...beaten];
-      this.view!.setLairs(this.lairs, this.beaten);
+      this.drawLairs();
       this.showTally(false);
       this.persist();
     }
@@ -357,15 +360,19 @@ export class OpenWorldMode {
     this.mark(document.body.dataset.openworld!);
   }
 
-  /** Another hero took the boss lair on `cell` (#1305, a signed event checked by the peers host): the lair shows beaten for the visit.
-   * A cell that is no lair of this world, or a lair beaten already, does nothing. */
+  /** Another hero took the boss lair on `cell` (#1305, a signed event checked by the peers host): the lair shows beaten for the visit, but it is not filed, counted
+   * towards the ending or saved: only a fight of this hero does that. A cell that is no lair of this world, or a lair beaten already, does nothing. */
   remoteLair(cell: Axial): void {
     const lair = this.lairs.findIndex((c) => same(c, cell));
-    if (!this.view || lair < 0 || this.beaten.includes(lair)) return;
-    this.beaten.push(lair);
-    this.view.setLairs(this.lairs, this.beaten);
+    if (!this.view || lair < 0 || this.beaten.includes(lair) || this.heard.includes(lair)) return;
+    this.heard.push(lair);
+    this.drawLairs();
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
+  }
+
+  private drawLairs(): void {
+    this.view!.setLairs(this.lairs, [...new Set([...this.beaten, ...this.heard])]);
   }
 
   /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
