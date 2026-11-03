@@ -51,6 +51,10 @@ import {
   visit,
   clearRun,
   FIGHT_CAP,
+  FLASK_MARBLES,
+  FLASKS,
+  MAX_FLASKS,
+  drink,
   fightOver,
   loadRun,
   mapHtml,
@@ -148,7 +152,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0 });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2 });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -1252,8 +1256,8 @@ describe('roguelite shop', () => {
 
   it('sells a marble, a special marble, a relic and a tactic at prices from the seed and the node', () => {
     const run = shop();
-    expect(kinds(run)).toEqual(['marble', 'special', 'relic', 'tactic']);
-    expect(shopStock(run).map((i) => i.id)).toEqual([0, 1, 2, 3]);
+    expect(kinds(run)).toEqual(['marble', 'special', 'relic', 'tactic', 'flask']);
+    expect(shopStock(run).map((i) => i.id)).toEqual([0, 1, 2, 3, 5]);
     const [marble, special, relic, tactic] = shopStock(run);
     expect(marble!.price).toBeGreaterThanOrEqual(15);
     expect(marble!.price).toBeLessThanOrEqual(20);
@@ -1273,7 +1277,7 @@ describe('roguelite shop', () => {
     const run = shop();
     const found = item(run, 'relic').code;
     expect(item({ ...run, relics: [found] }, 'relic').code).not.toBe(found);
-    expect(kinds({ ...run, relics: RELICS.map((_, c) => c) })).toEqual(['marble', 'special', 'tactic']);
+    expect(kinds({ ...run, relics: RELICS.map((_, c) => c) })).toEqual(['marble', 'special', 'tactic', 'flask']);
     for (const seed of [1, 2, 3, 4, 5, 6]) expect(item({ ...run, seed, best: 0 }, 'special').code).toBe(1); // only Heavy at first
     expect(new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => item({ ...run, seed }, 'special').code)).size).toBeGreaterThan(1);
     expect(new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => item({ ...run, seed }, 'tactic').code)).size).toBeGreaterThan(1);
@@ -1284,7 +1288,7 @@ describe('roguelite shop', () => {
     const price = item(run, 'marble').price;
     const bought = buy(run, 0);
     expect(bought).toMatchObject({ army: 10, scrap: 100 - price, bought: [0], shop: true });
-    expect(kinds(bought)).toEqual(['special', 'relic', 'tactic']); // sold, gone
+    expect(kinds(bought)).toEqual(['special', 'relic', 'tactic', 'flask']); // sold, gone
     expect(buy(bought, 0)).toBe(bought); // once
     expect(buy(shop({ army: 14 }), 0).army).toBe(14); // full
     expect(buy(shop({ army: 14 }), 0).bought).toEqual([]);
@@ -1305,7 +1309,7 @@ describe('roguelite shop', () => {
     const run = shop();
     const { code, price } = item(run, 'relic');
     expect(buy(run, 2)).toMatchObject({ relics: [code], scrap: 500 - price, bought: [2] });
-    expect(kinds(buy(run, 2))).toEqual(['marble', 'special', 'tactic']);
+    expect(kinds(buy(run, 2))).toEqual(['marble', 'special', 'tactic', 'flask']);
     expect(buy(shop({ scrap: price - 1 }), 2).relics).toEqual([]);
   });
 
@@ -1350,12 +1354,13 @@ describe('roguelite shop', () => {
     expect(doc.querySelector('.run-line')!.textContent).toBe('Shop · 100 scrap');
     const buys = [...doc.querySelectorAll<HTMLButtonElement>('button[data-buy]')];
     const stock = shopStock(run);
-    expect(buys.map((b) => b.dataset.buy)).toEqual(['0', '1', '2', '3']);
+    expect(buys.map((b) => b.dataset.buy)).toEqual(['0', '1', '2', '3', '5']);
     expect(buys[0]!.textContent).toBe(`One more marble · ${stock[0]!.price} scrap`);
     expect(buys[1]!.textContent).toBe(`${SPECIAL_LOOKS[stock[1]!.code - 1]!.name}: ${SPECIAL_LOOKS[stock[1]!.code - 1]!.help} · ${stock[1]!.price} scrap`);
     expect(buys[2]!.textContent).toBe(`${RELICS[stock[2]!.code]!.name}: ${RELICS[stock[2]!.code]!.help} · ${stock[2]!.price} scrap`);
     expect(buys[3]!.textContent).toBe(`${TACTICS[stock[3]!.code - 1]!.name}: ${TACTICS[stock[3]!.code - 1]!.help} · ${stock[3]!.price} scrap`);
-    expect(buys.map((b) => b.querySelector('svg.glyph') !== null)).toEqual([true, true, true, true]);
+    expect(buys[4]!.textContent).toBe(`One more flask charge: ${FLASK_MARBLES} marbles back on the map · ${stock[4]!.price} scrap`);
+    expect(buys.map((b) => b.querySelector('svg.glyph') !== null)).toEqual([true, true, true, true, true]);
     const remove = doc.querySelector<HTMLButtonElement>('button[data-remove]')!;
     expect(remove.dataset.remove).toBe('1');
     expect(remove.textContent).toMatch(/^Remove a Heavy: back to a plain marble · \d+ scrap$/);
@@ -1382,7 +1387,7 @@ describe('roguelite shop', () => {
   it('sold items and a used removal leave the shop', () => {
     const run = removeSpecial(buy(shop({ army: 9, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] }), 0), 1);
     const doc = parse(shopHtml(run));
-    expect([...doc.querySelectorAll('button[data-buy]')].map((b) => (b as HTMLElement).dataset.buy)).toEqual(['1', '2', '3']);
+    expect([...doc.querySelectorAll('button[data-buy]')].map((b) => (b as HTMLElement).dataset.buy)).toEqual(['1', '2', '3', '5']);
     expect(doc.querySelector('button[data-remove]')).toBeNull();
     expect(doc.querySelector('button[data-leave]')).not.toBeNull();
   });
@@ -2263,4 +2268,106 @@ describe('roguelite cursed chest (#1474)', () => {
   function cursedFight(): Run {
     return { ...pick(fresh, 0), curse: 2 };
   }
+});
+
+// Flasks (#1475, docs/specs/roguelite.md section 25): 2 charges an act, 3 marbles back each, drunk on the map.
+describe('roguelite flasks (#1475)', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [0], ...state });
+  const flask = (run: Run): HTMLButtonElement => parse(mapHtml(MAP, run)).querySelector<HTMLButtonElement>('button[data-flask]')!;
+  // The shop of the shop tests: a fight 0, a shop 1 and an elite 2, a boss 3, then a fight 4 of the next act.
+  const SHOP = parseMap([0, 0, 0, 0, 0b11, 0, 0, 0, 1, 0, 6, 1, 0, 0, 0, 1, 1, 2, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+
+  it('a new run carries 2 flasks that give 3 marbles each', () => {
+    expect([FLASKS, FLASK_MARBLES, MAX_FLASKS]).toEqual([2, 3, 4]);
+    expect(newRun(1, 3, LEGACY_UNLOCKED).flasks).toBe(2);
+  });
+
+  it('a flask gives 3 marbles back, never above 14, and is spent', () => {
+    expect(drink(fresh({ army: 8 }))).toMatchObject({ army: 11, flasks: 1 });
+    expect(drink(drink(fresh({ army: 8 })))).toMatchObject({ army: 14, flasks: 0 });
+    expect(drink(fresh({ army: 12 }))).toMatchObject({ army: 14, flasks: 1 }); // the surplus is lost
+  });
+
+  it('a flask is refused with the army full or no charge left, and nothing changes', () => {
+    const full = fresh({ army: 14 });
+    expect(drink(full)).toBe(full);
+    const empty = fresh({ army: 8, flasks: 0 });
+    expect(drink(empty)).toBe(empty);
+  });
+
+  it('a flask is drunk on the map only: not in a fight, a choice, or once the run is over', () => {
+    for (const busy of [{ fighting: true }, { reward: true }, { event: true }, { relic: true }, { rest: true }, { shop: true }, { collector: true }, { exit: true }, { end: 'lost' as const }]) {
+      const run = fresh({ army: 8, ...busy });
+      expect(drink(run)).toBe(run);
+    }
+  });
+
+  it('the next act refills the flasks to 2 at its first node, never lowering the ones the shop sold', () => {
+    const boss = fresh({ path: [0, 2], army: 8, flasks: 0 });
+    expect(visit(MAP, boss, 3).flasks).toBe(2);
+    expect(visit(MAP, { ...boss, flasks: 1 }, 4).flasks).toBe(2);
+    expect(visit(MAP, { ...boss, flasks: 3 }, 3).flasks).toBe(3);
+    expect(visit(MAP, { ...boss, flasks: 4 }, 3).flasks).toBe(4);
+  });
+
+  it('a node inside an act, the first node of the run and a drink before the first node refill nothing', () => {
+    expect(visit(MAP, fresh({ path: [0], flasks: 0 }), 2).flasks).toBe(0);
+    expect(visit(MAP, { ...newRun(1, 3, LEGACY_UNLOCKED), flasks: 0 }, 0).flasks).toBe(0);
+    expect(visit(MAP, drink(drink({ ...newRun(1, 3, LEGACY_UNLOCKED), army: 8 })), 0).flasks).toBe(0);
+  });
+
+  it('the map has a button that drinks a flask, with the marbles it gives and the charges left', () => {
+    expect(flask(fresh({ army: 8 })).textContent).toBe('Drink a flask: 3 marbles back · 2 left');
+    expect(flask(fresh({ army: 8 })).disabled).toBe(false);
+    expect(flask(drink(fresh({ army: 8 }))).textContent).toBe('Drink a flask: 3 marbles back · 1 left');
+    expect(flask(newRun(1, 3, LEGACY_UNLOCKED)).textContent).toBe('Drink a flask: 3 marbles back · 2 left · army full'); // also before the first pick
+  });
+
+  it('the button says why it is disabled: the army full, no charge left', () => {
+    expect([flask(fresh({ army: 14 })).disabled, flask(fresh({ army: 14 })).textContent!.endsWith(' · army full')]).toEqual([true, true]);
+    const empty = flask(fresh({ army: 8, flasks: 0 }));
+    expect([empty.disabled, empty.textContent]).toEqual([true, 'Drink a flask: 3 marbles back · 0 left · no flask left']);
+    expect(flask(fresh({ army: 14, flasks: 0 })).textContent!.endsWith(' · no flask left')).toBe(true);
+  });
+
+  it('the map of a run over has no flask button', () => {
+    expect(parse(mapHtml(MAP, fresh({ end: 'lost' }))).querySelector('button[data-flask]')).toBeNull();
+  });
+
+  it('the shop sells one more charge for 20 to 30 scrap, up to 4 held', () => {
+    const run = visit(SHOP, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0], scrap: 100 }, 1);
+    const item = shopStock(run).find((i) => i.kind === 'flask')!;
+    expect(item).toMatchObject({ id: 5, code: 0 });
+    expect(item.price).toBeGreaterThanOrEqual(20);
+    expect(item.price).toBeLessThanOrEqual(30);
+    const bought = buy(run, 5);
+    expect(bought).toMatchObject({ flasks: 3, scrap: 100 - item.price, bought: [5], shop: true });
+    expect(shopStock(bought).some((i) => i.id === 5)).toBe(false); // once per shop
+    expect(buy(bought, 5)).toBe(bought);
+    const full = { ...run, flasks: 4 };
+    expect(buy(full, 5)).toBe(full);
+    const dear = parse(shopHtml({ ...full, scrap: 0 })).querySelector<HTMLButtonElement>('button[data-buy="5"]')!;
+    expect([dear.disabled, dear.textContent!.endsWith(' · flasks full')]).toEqual([true, true]);
+    expect(buy({ ...run, scrap: item.price - 1 }, 5).flasks).toBe(2); // too dear
+  });
+
+  it('saves the flasks with the run, an older save loads with 2 and a bad count is dropped', async () => {
+    const store = memoryStore();
+    const mapOf = (): MapNode[] => MAP;
+    await saveRun(store, fresh({ flasks: 1, army: 9 }));
+    expect((await loadRun(store, mapOf, engine))!.state).toMatchObject({ flasks: 1, army: 9 });
+    await saveRun(store, fresh({ flasks: 0 }));
+    expect((await loadRun(store, mapOf, engine))!.state.flasks).toBe(0);
+    const older: Record<string, unknown> = { ...fresh({ army: 9 }) };
+    delete older.flasks;
+    await store.put(RUN_KEY, older);
+    expect((await loadRun(store, mapOf, engine))!.state.flasks).toBe(2);
+    for (const flasks of [-1, 5, 1.5, '2']) {
+      await store.put(RUN_KEY, { ...fresh(), flasks });
+      expect(await loadRun(store, mapOf, engine)).toBeNull();
+    }
+    await store.put(RUN_KEY, { ...fresh(), bought: [5] }); // the flask in a shop's sold list
+    expect((await loadRun(store, mapOf, engine))!.state.bought).toEqual([5]);
+  });
 });
