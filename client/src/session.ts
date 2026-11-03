@@ -337,7 +337,7 @@ export class OnlineSession {
     if (kind === 'hello') return this.receiveHello(parseHello(raw), peer);
     if (kind === 'beat') return this.receiveBeat(peer);
     if (kind === 'coordinator') return this.receiveCoordinator(parseCoordinator(raw));
-    if (kind === 'sync') return this.answer(parseSync(raw), peer);
+    if (kind === 'sync') return this.presence.keyOf(peer) === '' ? undefined : this.answer(parseSync(raw), peer); // a peer with no proven key gets no reflected log
     if (kind === 'missed') return this.receiveMissed(parseMissed(raw));
     if (kind === 'rematch') return this.receiveRematch(parseRematch(raw), true);
     if (kind === 'report') return this.receiveReport(parseReport(raw));

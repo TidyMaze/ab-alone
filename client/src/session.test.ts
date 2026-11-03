@@ -1345,8 +1345,13 @@ describe('OnlineSession catch-up of what a peer missed, #226', () => {
     const { r, black } = await hostWithWhite();
     await blackWins(black);
     const win = r.sent.at(-1) as MoveRecord;
+    r.from('x', sync(0)); // a peer that never said Hello gets nothing back (it would reflect the log)
+    await settle();
+    expect(answers(r)).toEqual([]);
+    r.from('c', await hello(await generateKeys(), 3)); // a spectator says Hello first, as it does
+    await settle();
     let at = r.sent.length;
-    r.from('c', sync(0)); // a spectator that has nothing
+    r.from('c', sync(0)); // and has nothing
     await settle();
     expect(answers(r, at)).toEqual([{ of: win, to: 'c' }]);
 
@@ -1355,7 +1360,7 @@ describe('OnlineSession catch-up of what a peer missed, #226', () => {
     r.from('c', { kind: 'sync', game: 'g' } as unknown as Wire);
     await settle();
     expect(r.sent.length).toBe(at);
-    expect(black.refused).toEqual(['malformed']);
+    expect(black.refused).toEqual(['seat-refused', 'malformed']); // the spectator's Hello found no seat
 
     r.from('c', sync(0));
     r.from('c', sync(0));
@@ -1372,6 +1377,7 @@ describe('OnlineSession catch-up of what a peer missed, #226', () => {
     const win = r.sent.at(-1) as MoveRecord;
     const theirs = await signRematch(white, { game: 'g' });
     r.from('b', theirs);
+    for (const spectator of ['c', 'd']) r.from(spectator, await hello(await generateKeys(), 3));
     await settle();
     let at = r.sent.length;
     r.from('c', sync(1)); // at the last ply, without White's ask
