@@ -321,6 +321,7 @@ import {
   collectorHtml,
   leaveCollector,
   eventHtml,
+  drink,
   leaveShop,
   fightBudget,
   armyKept,
@@ -6020,6 +6021,10 @@ runPanel.addEventListener('click', (e) => {
     else runPanel.innerHTML = book === 'history' ? historyHtml(readHistory(store)) : compendiumHtml(readSeen(store));
   } else if (button?.dataset.kind) {
     armed = armed === Number(button.dataset.kind) ? 0 : Number(button.dataset.kind);
+    showRun();
+  } else if (button?.dataset.flask) {
+    run!.state = drink(run!.state);
+    void saveRun(gameStore, run!.state);
     showRun();
   } else if (button) {
     run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
