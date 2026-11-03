@@ -366,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn an_act_opens_on_fights_then_mixes_elites_rests_events_and_treasures() {
+    fn an_act_opens_on_fights_then_mixes_elites_rests_events_treasures_and_shops() {
         let mut seen = Vec::new();
         for seed in 0..50 {
             let map = run_map(seed);
@@ -381,7 +381,7 @@ mod tests {
         }
         seen.sort_by_key(|k| *k as u8);
         use NodeKind::*;
-        assert_eq!(seen, [Fight, Elite, Rest, Event, Treasure]);
+        assert_eq!(seen, [Fight, Elite, Rest, Event, Treasure, Shop]);
     }
 
     #[test]
