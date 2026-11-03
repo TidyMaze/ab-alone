@@ -45,7 +45,7 @@ test('three players: a round resolves at its deadline, the silent player holds (
     for (const p of [a, b, c]) await p.clock.fastForward(1500);
   };
 
-  await a.goto('./?bot=off&net=hook&round=1500');
+  await a.goto('./?bot=off&net=hook&quality=low&round=1500');
   await expect(a.locator('#hud')).not.toBeEmpty(); // the mode menu's listeners are wired
   await openModes(a);
   await a.getByRole('button', { name: 'Battle royale', exact: true }).click();
@@ -53,7 +53,7 @@ test('three players: a round resolves at its deadline, the silent player holds (
   await a.getByRole('button', { name: 'Invite' }).click(); // the offline game becomes a room
   const hash = new URL(await inviteLink(a)).hash;
   expect(hash).toMatch(/^#royale=[\w-]+&key=[\w-]{8}$/);
-  await Promise.all([b, c].map((p) => p.goto(`./?bot=off&net=hook&round=1500${hash}`)));
+  await Promise.all([b, c].map((p) => p.goto(`./?bot=off&net=hook&quality=low&round=1500${hash}`)));
   // Every session exists before the first page opens: the hook has no peer join, after which a Trystero page says Hello
   // again, so a page whose session came later would never hear the Hello of the pages open before it.
   for (const p of [b, c]) await p.locator('body[data-seat]').waitFor({ state: 'attached' });
