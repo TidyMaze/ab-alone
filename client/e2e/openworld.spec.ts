@@ -330,8 +330,8 @@ test.describe('the Open world settings menu on a touch phone, #1051', () => {
 });
 
 // #1026: Q and E turn the Open world camera round the hero by a step, R goes back to the default angle, and the turn is saved with
-// the world, so a reload resumes it (the turn itself is unit tested in openworldview.test.ts and openworldmode.test.ts).
-test('Q and E turn the Open world camera round the hero, R goes back, and the turn resumes after a reload, #1026', async ({ page }) => {
+// the world (saved and resumed: main.openworld.test.ts; the turn itself: openworldview.test.ts and openworldmode.test.ts).
+test('Q and E turn the Open world camera round the hero, R goes back, #1026', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
@@ -345,26 +345,7 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
   await expect.poll(yaw).toBe('-30');
   await page.keyboard.press('q');
   await expect.poll(yaw).toBe('30');
-  // The save of this turn is written after the frame: wait for the stored yaw itself, not for any earlier save (#1340).
-  const stored = () =>
-    page.evaluate(
-      () =>
-        new Promise<number | null>((done, fail) => {
-          const open = indexedDB.open('ab-alone', 1);
-          open.onerror = () => fail(open.error);
-          open.onsuccess = () => {
-            const get = open.result.transaction('game', 'readonly').objectStore('game').get('openworld:7');
-            get.onsuccess = () => {
-              open.result.close();
-              done(get.result ? Math.round(((get.result as { yaw: number }).yaw * 180) / Math.PI) : null);
-            };
-          };
-        }),
-    );
-  await expect.poll(stored).toBe(30);
-  await page.reload();
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  await expect.poll(yaw).toBe('30');
+  // The turn saved on leaving and resumed on entering is a unit test (main.openworld.test.ts).
 });
 
 // #1040: a step glides the hero from its cell to the next one. The cell is exact at once (`openworldAt`, the save and the push use

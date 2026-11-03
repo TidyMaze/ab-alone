@@ -8,6 +8,7 @@ import { shot } from './shot';
 test('the daily challenge keeps its boss and seed all day, counts attempts, and changes at 00:00 UTC, #195', async ({
   page,
 }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // the slides take no time
   const hud = page.locator('#hud');
   const daily = page.locator('#daily');
   const fight = () => page.evaluate(() => (window as any).__fight());
@@ -18,10 +19,7 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
     await expect(daily).toBeEnabled();
     await openModes(page);
   };
-  const click = async (q: number, r: number) => {
-    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
-    await page.mouse.click(p.x, p.y);
-  };
+  const click = (q: number, r: number) => page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [q, r]); // the page's own click, no mouse round trip
   // The first forward one-marble move (NW or NE), then the boss reply.
   const advance = async () => {
     const mv = await page.evaluate(() =>

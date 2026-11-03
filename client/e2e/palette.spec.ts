@@ -55,10 +55,18 @@ test.describe('Colorblind and high-contrast palettes (#381)', () => {
 
   test('captures screenshots for each palette', async ({ page }) => {
     mkdirSync('test-results/screenshots', { recursive: true });
-    for (const pal of ['default', 'protan', 'deutan', 'tritan', 'contrast']) {
-      await page.addInitScript((p) => localStorage.setItem('ab-alone.palette', p), pal);
-      await page.goto('./?bot=off');
-      await page.locator('canvas').waitFor();
+    await page.goto('./?bot=off'); // one page load: the setting steps through the palettes, as the test above checks
+    await page.locator('canvas').waitFor();
+    const cog = page.locator('#settings');
+    await expect(cog).toBeEnabled();
+    const paletteBtn = page.locator('#setting-palette');
+    for (const [i, pal] of ['default', 'protan', 'deutan', 'tritan', 'contrast'].entries()) {
+      if (i) {
+        await cog.click();
+        await paletteBtn.click();
+        await cog.click(); // the menu is closed for the shot
+      }
+      expect(await page.evaluate(() => (window as any).__palette())).toBe(pal);
       await shot(page, { path: `test-results/screenshots/palette-${pal}.png` });
     }
   });

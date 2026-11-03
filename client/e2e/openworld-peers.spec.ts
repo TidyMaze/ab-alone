@@ -100,6 +100,7 @@ test('a private seed has no room: no position leaves the page, #1305', async ({ 
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(600);
   expect(await page.evaluate(() => (window as unknown as Hook).__out)).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem('ab-alone.world-events'))).toBeNull(); // a private seed stores nothing
 });
 
 test('a public name goes out in the Hello and shows over a near hero, Hide leaves the room, an error is shown, #1305', async ({ page }) => {
@@ -303,11 +304,6 @@ test('a broken cell survives a reload, and a hero who joins late is given it, #1
   await expect(page.locator('body')).toHaveAttribute('data-openworld-broken', '1'); // the cell is still broken after the reload
   await page.evaluate(() => (window as unknown as Hook).__netPeerJoin('q'));
   await expect.poll(() => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m.length === 106 && m[1] === 3).length)).toBe(1); // re-served
-  // a private seed stores nothing
-  await page.evaluate(() => localStorage.removeItem('ab-alone.world-events'));
-  await page.goto('./?bot=off&net=hook&openworld=7');
-  await page.locator('canvas:not(#openworld-minimap)').waitFor();
-  expect(await page.evaluate(() => localStorage.getItem('ab-alone.world-events'))).toBeNull();
 });
 
 // The HUD of the public world on a phone (390x844): the name field and Hide are touch targets of 44 px, and the plate leaves the hero

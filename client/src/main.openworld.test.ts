@@ -237,6 +237,22 @@ describe('the Open world mode', () => {
     expect(yawOf()).toBe(30);
   });
 
+  it('the camera turn is saved when the world is left and resumes when it is entered again, #1026', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(data().openworldYaw).toBe('-30');
+    press('q');
+    expect(data().openworldYaw).toBe('30');
+    press('Escape'); // leaving saves the world with its turn
+    await settle();
+    game.openModes();
+    byId('openworld').click(); // the saved world is read
+    await settle();
+    expect(data().openworldYaw).toBe('30');
+  });
+
   it('zooms the Open world out with the wheel and with a pinch, #976', async () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();
