@@ -46,7 +46,9 @@ impl Engine {
             .and_then(Formation::from_code)
             .ok_or_else(|| format!("unknown formation {formation}"))?;
         let specials = marks
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|m| {
                 let kind = u8::try_from(m[2]).ok().and_then(special);
                 kind.map(|kind| ((m[0], m[1]), kind))
