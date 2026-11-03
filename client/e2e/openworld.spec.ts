@@ -269,7 +269,8 @@ test('with reduced motion the troop pushes the enemy at once, with no animation,
 // the hero walks on while the thumb is held and stops when it lifts. Touch is emulated through CDP (hasTouch).
 test.describe('the touch joystick', () => {
   test.use({ hasTouch: true });
-  test('a drag on the left half walks the hero right until the thumb lifts, #1025', async ({ page }) => {
+  test('a drag on the left half walks the hero right until the thumb lifts, #1025', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'needs a CDP session (newCDPSession), which only Chromium has');
     await page.goto('./?bot=off&openworld=7');
     await page.locator('canvas:not(#openworld-minimap)').waitFor();
     const at = () => page.evaluate(() => document.body.dataset.openworldAt);

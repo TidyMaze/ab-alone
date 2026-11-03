@@ -16,7 +16,8 @@ const PERMISSIONS = ['clipboard-read', 'clipboard-write'];
 const clipboard = async (page: Page) => JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
 const eventNames = (d: { events: { event: string }[] }) => d.events.map((e) => e.event);
 
-test('Copy diagnostics puts the move, the bot search and the build in the clipboard', async ({ page, context }) => {
+test('Copy diagnostics puts the move, the bot search and the build in the clipboard', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'only Chromium grants the clipboard-read and clipboard-write permissions the test needs');
   await context.grantPermissions(PERMISSIONS);
   await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
@@ -73,7 +74,9 @@ test('when the clipboard is refused, the diagnostics are selected in a text box 
 
 test('an online game exports its connection counters, its refused moves and its signed log, no private key', async ({
   browser,
+  browserName,
 }) => {
+  test.skip(browserName !== 'chromium', 'only Chromium grants the clipboard-read and clipboard-write permissions the test needs');
   const a = await (await browser.newContext({ permissions: PERMISSIONS })).newPage();
   const b = await (await browser.newContext()).newPage();
   // Each page relays its records to the other, with its own name as the sender (the ?net=hook transport).

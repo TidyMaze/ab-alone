@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 
 // The FPS readout (#426): off by default, switched on in the settings menu, kept across a reload, its last value in
 // Copy diagnostics.
-test('the FPS readout is off by default, shows a rate once switched on, and survives a reload', async ({ page, context }) => {
+test('the FPS readout is off by default, shows a rate once switched on, and survives a reload', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'only Chromium grants the clipboard-read and clipboard-write permissions the test needs');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();

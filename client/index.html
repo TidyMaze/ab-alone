@@ -40,7 +40,7 @@
       <div id="boss-bar" hidden></div>
       <div id="hud-dock">
         <div id="hud" role="status" aria-live="polite"></div>
-        <button id="hud-fold" type="button" aria-label="HUD panel" aria-expanded="true" aria-controls="hud" title="Fold the panel" disabled>
+        <button autocomplete="off" id="hud-fold" type="button" aria-label="HUD panel" aria-expanded="true" aria-controls="hud" title="Fold the panel" disabled>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
         </button>
       </div>
@@ -76,7 +76,7 @@
       </div>
       <div id="online">
         <div id="settings-box">
-          <button id="settings" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu" disabled>
+          <button autocomplete="off" id="settings" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu" disabled>
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8z"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
           </button>
           <div id="settings-menu" role="group" aria-label="Settings" hidden></div>
@@ -100,10 +100,10 @@
         <button id="boss-retry" type="button" data-label="Retry" aria-label="Retry" hidden>Retry</button>
         <button id="rematch" type="button" data-label="Rematch" aria-label="Rematch" hidden>Rematch</button>
         <button id="boss-goal" type="button" data-label="Goal" aria-label="Goal" aria-expanded="true" hidden>Goal</button>
-        <button id="new-game" type="button" data-label="New" disabled></button>
-        <button id="reset-view" type="button" data-label="View" aria-label="Reset view" disabled>Reset view</button>
-        <button id="hint" type="button" data-label="Hint" aria-label="Hint" aria-pressed="false" disabled>Hint</button>
-        <button id="replay" type="button" data-label="Replay" aria-label="Replay" disabled>Replay</button>
+        <button autocomplete="off" id="new-game" type="button" data-label="New" disabled></button>
+        <button autocomplete="off" id="reset-view" type="button" data-label="View" aria-label="Reset view" disabled>Reset view</button>
+        <button autocomplete="off" id="hint" type="button" data-label="Hint" aria-label="Hint" aria-pressed="false" disabled>Hint</button>
+        <button autocomplete="off" id="replay" type="button" data-label="Replay" aria-label="Replay" disabled>Replay</button>
         <div id="dock-replay" class="steps" role="group" aria-label="Replay">
           <button id="replay-first" type="button" aria-label="First position" title="First position">&#9198;</button>
           <button id="replay-prev" type="button" aria-label="Previous move" title="Previous move">&#9664;</button>
@@ -113,26 +113,26 @@
         </div>
         <button id="royale-hold" type="button" data-label="Hold" aria-label="Hold" hidden>Hold</button>
         <button id="lobby" type="button" data-label="Lobby" aria-label="Lobby" aria-expanded="false" aria-controls="lobby-sheet" hidden>Lobby</button>
-        <button id="modes" type="button" data-label="Modes" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
+        <button autocomplete="off" id="modes" type="button" data-label="Modes" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
         <button id="auto-play" type="button" data-label="Auto" aria-label="Auto-play" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
       </nav>
       <div id="mode-menu" role="group" aria-label="Game modes" hidden>
         <button id="update" type="button" hidden>New version: reload</button>
-        <button id="play-online" type="button" disabled>Play online</button>
-        <button id="fight-together" type="button" aria-expanded="false" disabled>Fight together</button>
+        <button autocomplete="off" id="play-online" type="button" disabled>Play online</button>
+        <button autocomplete="off" id="fight-together" type="button" aria-expanded="false" disabled>Fight together</button>
         <div id="coop-list" hidden></div>
-        <button id="boss-duel" type="button" aria-expanded="false" disabled>Boss duel</button>
-        <button id="battle-royale" type="button" disabled>Battle royale</button>
-        <button id="ranked" type="button" disabled>Ranked</button>
+        <button autocomplete="off" id="boss-duel" type="button" aria-expanded="false" disabled>Boss duel</button>
+        <button autocomplete="off" id="battle-royale" type="button" disabled>Battle royale</button>
+        <button autocomplete="off" id="ranked" type="button" disabled>Ranked</button>
         <button id="leaderboard" type="button">Leaderboard</button>
         <button id="console-entry" type="button" hidden>Console</button>
-        <button id="boss-fight" type="button" aria-expanded="false" disabled>Boss fight</button>
+        <button autocomplete="off" id="boss-fight" type="button" aria-expanded="false" disabled>Boss fight</button>
         <div id="boss-list" hidden></div>
-        <button id="daily" type="button" disabled>Daily challenge</button>
-        <button id="roguelite" type="button" disabled>Rogue-lite run</button>
-        <button id="trainer" type="button" disabled>Trainer</button>
-        <button id="openworld" type="button" disabled>Open world</button>
-        <button id="ship" type="button" disabled>Hub</button>
+        <button autocomplete="off" id="daily" type="button" disabled>Daily challenge</button>
+        <button autocomplete="off" id="roguelite" type="button" disabled>Rogue-lite run</button>
+        <button autocomplete="off" id="trainer" type="button" disabled>Trainer</button>
+        <button autocomplete="off" id="openworld" type="button" disabled>Open world</button>
+        <button autocomplete="off" id="ship" type="button" disabled>Hub</button>
       </div>
       <div id="lobby-sheet" role="group" aria-label="Lobby" hidden>
         <button id="royale-start" type="button" hidden>Start</button>
@@ -162,7 +162,7 @@
         <div class="label" aria-hidden="true">Even</div>
       </div>
       <textarea id="diagnostics" readonly hidden aria-label="Diagnostics"></textarea>
-      <button id="copy-diagnostics" type="button" disabled>Copy diagnostics</button>
+      <button autocomplete="off" id="copy-diagnostics" type="button" disabled>Copy diagnostics</button>
     </div>
     <div id="run-map" role="region" aria-label="Rogue-lite map" hidden></div>
     <div id="bubble" hidden><span id="bubble-text" aria-hidden="true"></span><span id="bubble-line" role="status"></span></div>
@@ -203,7 +203,7 @@
         <a id="optin-notice" target="_blank" rel="noopener noreferrer">Privacy notice</a>
         <div class="actions">
           <button id="optin-no" type="button">Keep ranked local</button>
-          <button id="optin-yes" type="button" disabled>Join the board</button>
+          <button autocomplete="off" id="optin-yes" type="button" disabled>Join the board</button>
         </div>
       </div>
     </div>

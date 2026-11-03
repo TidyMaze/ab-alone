@@ -6588,6 +6588,7 @@ copyButton.addEventListener('click', async () => {
   diagnosticsBox.focus();
   diagnosticsBox.select();
   diagnosticsBox.scrollTop = 0; // select() scrolls to the end
+  setTimeout(() => (diagnosticsBox.scrollTop = 0), 0); // Firefox scrolls to the end after select() returns
   hud(' · diagnostics selected: copy them by hand');
 });
 diagnosticsBox.addEventListener('blur', () => (diagnosticsBox.hidden = true)); // never left over the board

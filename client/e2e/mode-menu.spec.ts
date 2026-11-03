@@ -23,7 +23,9 @@ test('the mode menu is closed at the start, and its button opens and closes it',
   await expect(page.getByRole('button', { name: 'Boss fight' })).toBeHidden();
 });
 
-test('the mode menu closes on Escape and on a press outside, and is reachable by keyboard', async ({ page }) => {
+test('the mode menu closes on Escape and on a press outside, and is reachable by keyboard', async ({ page, browserName }) => {
+  // On a Mac, Tab skips buttons in Safari unless Option is held (system keyboard navigation setting).
+  const tab = process.platform === 'darwin' && browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
   await page.goto('./?bot=off');
   const button = page.getByRole('button', { name: 'Game modes' });
   const online = page.getByRole('button', { name: 'Play online' });
@@ -32,7 +34,7 @@ test('the mode menu closes on Escape and on a press outside, and is reachable by
   await button.focus();
   await page.keyboard.press('Enter');
   await expect(online).toBeVisible();
-  await page.keyboard.press('Tab');
+  await page.keyboard.press(tab);
   await expect(online).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(online).toBeHidden();

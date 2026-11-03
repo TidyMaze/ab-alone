@@ -135,7 +135,9 @@ const card = (name: string) =>
 test('a finished daily fight shows the result card, and Copy puts its text in the clipboard, #196', async ({
   page,
   context,
+  browserName,
 }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'only Chromium grants the clipboard-read and clipboard-write permissions the test needs');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const name = await startDaily(page);
   await expect(page.locator('#daily-card')).toBeHidden(); // not while the fight is on

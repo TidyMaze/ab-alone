@@ -58,7 +58,9 @@ test('the board still plays with Clear board on, and the first press on it close
   await expect(body).toHaveAttribute('data-clear', 'off');
 });
 
-test('the settings menu closes on Escape and on a click outside, and is reachable by keyboard', async ({ page }) => {
+test('the settings menu closes on Escape and on a click outside, and is reachable by keyboard', async ({ page, browserName }) => {
+  // On a Mac, Tab skips buttons in Safari unless Option is held (system keyboard navigation setting).
+  const tab = process.platform === 'darwin' && browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   const cog = page.getByRole('button', { name: 'Settings' });
@@ -68,7 +70,9 @@ test('the settings menu closes on Escape and on a click outside, and is reachabl
   await cog.focus();
   await page.keyboard.press('Enter');
   await expect(toggle).toBeVisible();
-  await page.keyboard.press('Tab');
+  await page.keyboard.press(tab);
+  // Firefox first stops on the scrollable menu box itself, one more Tab reaches the first button.
+  if (browserName === 'firefox') await page.keyboard.press(tab);
   await expect(toggle).toBeFocused();
   await page.keyboard.press('Space');
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'on');

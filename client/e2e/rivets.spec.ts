@@ -7,8 +7,9 @@ const rivets = (page: Page, id: string) =>
     const plate = getComputedStyle(document.getElementById(id)!);
     return {
       gradients: plate.backgroundImage.match(/radial-gradient/g)?.length ?? 0,
-      size: plate.backgroundSize,
-      repeat: plate.backgroundRepeat,
+      // Firefox and Safari write a list of four equal values as one.
+      size: [...new Set(plate.backgroundSize.split(', '))].join(', '),
+      repeat: [...new Set(plate.backgroundRepeat.split(', '))].join(', '),
       position: plate.backgroundPosition,
       panel: plate.backgroundColor !== 'rgba(0, 0, 0, 0)',
     };
@@ -26,8 +27,8 @@ for (const [name, viewport] of [
     for (const id of ['hud', 'eval']) {
       expect(await rivets(page, id), id).toEqual({
         gradients: 4,
-        size: Array(4).fill('6px 6px').join(', '),
-        repeat: Array(4).fill('no-repeat').join(', '),
+        size: '6px 6px',
+        repeat: 'no-repeat',
         position: '4px 4px, calc(100% - 4px) 4px, 4px calc(100% - 4px), calc(100% - 4px) calc(100% - 4px)',
         panel: true,
       });

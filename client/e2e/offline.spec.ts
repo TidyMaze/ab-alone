@@ -31,7 +31,8 @@ const click = async (page: Page, q: number, r: number): Promise<void> => {
   await page.mouse.click(p.x, p.y);
 };
 
-test('after one visit the game loads offline and the bot answers', async ({ page, context }) => {
+test('after one visit the game loads offline and the bot answers', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'needs a CDP session (newCDPSession), which only Chromium has');
   await serveFonts(context);
   const url = process.env.E2E_PREVIEW_URL!;
   const withBot = url.includes('?') ? `${url}&bot=on` : `${url}?bot=on`;

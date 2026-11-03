@@ -96,14 +96,16 @@ for (const { name, viewport } of viewports) {
       await check(page, 'a boss fight');
     });
 
-    test('a review: the dock holds the five replay steps, clear of the board, bug #1032', async ({ page }) => {
+    test('a review: the dock holds the five replay steps, clear of the board, bug #1032', async ({ page, browserName, hasTouch }) => {
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
       // One move, by two clicks, so the history has a position to review.
       const mv = await page.evaluate(() => (window as any).__legal().find((m: any) => m.cells.length === 1));
       const click = async ([q, r]: number[]) => {
         const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
-        await page.mouse.click(p.x, p.y);
+        // Firefox with touch emulation takes a tap, not a mouse click, as the press.
+        if (browserName === 'firefox' && hasTouch) await page.touchscreen.tap(p.x, p.y);
+        else await page.mouse.click(p.x, p.y);
       };
       await click(mv.cells[0]);
       const target = await page.evaluate(

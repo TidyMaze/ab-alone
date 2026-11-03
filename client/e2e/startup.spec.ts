@@ -5,7 +5,8 @@ import { expect, test } from '@playwright/test';
 // A Mac has a GPU: the local e2e browser draws on it, with the same WebGL2 backend as CI. CI runners have no GPU.
 test.skip(!!process.env.CI || process.platform !== 'darwin', 'only a local run on a Mac has a GPU to draw on');
 
-test('the local e2e browser draws WebGL on the GPU and offers no WebGPU, bug #563', async ({ page }) => {
+test('the local e2e browser draws WebGL on the GPU and offers no WebGPU, bug #563', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'the GPU and no-WebGPU flags are Chromium launch options (playwright.config.ts)');
   await page.goto('./?bot=off');
   const gpu = await page.evaluate(async () => {
     const gl = document.createElement('canvas').getContext('webgl2')!;

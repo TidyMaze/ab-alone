@@ -621,6 +621,21 @@ describe('Copy diagnostics', () => {
     box.blur();
     expect(box.hidden).toBe(true);
   });
+
+  it('keeps the start of the diagnostics in view in a browser that scrolls to the end of a selection after select() returns (Firefox)', async () => {
+    clipboard(() => Promise.reject(new Error('denied')));
+    const game = await boot('?bot=off');
+    const box = byId<HTMLTextAreaElement>('diagnostics');
+    const select = box.select.bind(box);
+    box.select = () => {
+      select();
+      setTimeout(() => (box.scrollTop = 508), 0); // the late scroll
+    };
+    byId('copy-diagnostics').click();
+    await until(game, () => game.hud().includes(' · diagnostics selected: copy them by hand'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(box.scrollTop).toBe(0);
+  });
 });
 
 describe('The service worker', () => {
