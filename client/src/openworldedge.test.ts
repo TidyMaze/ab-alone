@@ -81,5 +81,8 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect(edgeMaterial({ ...look, emissiveNode: water, neon }).emissiveNode).not.toBe(water); // the foam keeps its term, the grid is added
     expect(NEON_GRID.line).toBeLessThan(0.3); // quiet: a lit line, never a cell top
     expect(NEON_GRID.near).toBeLessThan(NEON_GRID.far);
+    // the floor of light keeps the darkest ground off the sky's colour (#04050c) in the screenshot, and stays a hint of colour (#1424)
+    expect(Math.max(...NEON_GRID.floor)).toBeLessThan(0.01);
+    expect(NEON_GRID.floor[2]).toBeGreaterThan(0.002);
   });
 });

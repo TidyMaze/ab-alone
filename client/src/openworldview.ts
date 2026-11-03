@@ -95,6 +95,8 @@ const TILT = Math.atan2(CAMERA_BACK, CAMERA_UP);
 /** The fog starts at the hero's depth, the middle of the ground in view, and ends this factor past the depth of the farthest
  * corner of the footprint: it only softens the far horizon, the loaded edge lies outside the footprint (#976). */
 const FOG_BEYOND = 1.3;
+/** The neon look's ground fades to the near-black sky: its fog ends further out, so the ground at the screen edge keeps its colour and never reads as the sky (#1424). */
+const NEON_FOG_BEYOND = 1.8;
 const CAMERA_FAR = 80;
 const NEAR = 0.1;
 /** The widest zoom of the camera for a 16:9 screen: the zoom where the reach of the loaded chunks reaches `MAX_REACH` (#976).
@@ -1292,7 +1294,7 @@ export class OpenWorldView {
       this.drawnChunks = ''; // the screen moved past the margin: the ground is laid again for it
     }
     this.fog.near = CAMERA_DISTANCE * k;
-    this.fog.far = FOG_BEYOND * depth;
+    this.fog.far = (this.neon ? NEON_FOG_BEYOND : FOG_BEYOND) * depth;
     this.camera.far = this.fog.far * 1.5; // the planes reach past the fog: no ground is clipped
     this.camera.updateProjectionMatrix();
     const hero = cellAtPoint(at.x, at.z);

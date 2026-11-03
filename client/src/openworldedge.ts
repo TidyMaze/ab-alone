@@ -46,8 +46,8 @@ export interface NeonGrid {
   hero: THREE.UniformNode<'vec2', THREE.Vector2>;
   traces: THREE.Texture;
 }
-/** The look's numbers: the cyan line is 1 px and 30 % lit, the violet traces 25 %; both quieter far from the hero (full within `NEAR`, a third past `FAR`), and the far ground darker. */
-export const NEON_GRID = { line: 0.2, trace: 0.2, quiet: 0.2, near: 6, far: 18, farDim: 0.55, traceScale: 1 / 40 } as const;
+/** The look's numbers: the cyan line is 1 px and 30 % lit, the violet traces 25 %; both quieter far from the hero (full within `NEAR`, a third past `FAR`), and the far ground darker, and a `floor` of light (linear RGB) under the darkest rock and water so no ground reads as the sky colour #04050c at the screen edge. */
+export const NEON_GRID = { line: 0.2, trace: 0.2, quiet: 0.2, near: 6, far: 18, farDim: 0.55, traceScale: 1 / 40, floor: [0.0008, 0.0015, 0.003] } as const;
 
 /** A ground material: white until an instance colours it (the colour comes per cell), with the edge band of `gain` on the top face and
  * the `emissiveNode` given in place of the plain emissive colour. */
@@ -72,7 +72,7 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
     const line = float(1).sub(smoothstep(pixel.mul(0.5), pixel.mul(1.5), distance)).mul(top); // 1 px, in the gap, never on a cell top
     const glow = color(0x19e6ff).mul(line).mul(NEON_GRID.line).mul(quiet);
     const circuit = color(0x9a6bff).mul(texture(traces, flatWorld.mul(NEON_GRID.traceScale)).r).mul(NEON_GRID.trace).mul(top).mul(quiet);
-    material.emissiveNode = ((look.emissiveNode ?? vec3(0)) as ReturnType<typeof vec3>).add(glow).add(circuit);
+    material.emissiveNode = ((look.emissiveNode ?? vec3(0)) as ReturnType<typeof vec3>).add(glow).add(circuit).add(color(new THREE.Color(...NEON_GRID.floor)));
   }
   // The desert's shimmer (#1104) and the widening of the prisms (#1347). The position node reads the position after the instance moved it:
   // the corner is pushed out from the cell's centre by its own local position, not scaled from the world's origin.

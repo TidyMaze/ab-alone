@@ -6,6 +6,7 @@ import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, OFF_WORLD,
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
+import { setNeonWorldOn } from './neonlook';
 import { SUN, sunPosition } from './tablezero';
 import {
   BIOME_LOOK,
@@ -723,6 +724,22 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(fog.near).toBeCloseTo(2 * Math.hypot(14, 11));
     expect(view.camera.far).toBeGreaterThan(fog.far);
     expect(view.camera.near).toBeCloseTo(0.2); // the near plane too: the depth precision stays
+  });
+
+  it('under the neon look the fog ends further out than in the default look: the far ground keeps its colour to the screen edge (#1424)', () => {
+    const fogFar = (): number => {
+      const view = new OpenWorldView(new World(bytes));
+      view.show([2, 1]);
+      return (view.scene.fog as THREE.Fog).far;
+    };
+    const plain = fogFar();
+    setNeonWorldOn(true);
+    try {
+      expect(fogFar()).toBeGreaterThan(plain * 1.2);
+    } finally {
+      setNeonWorldOn(false);
+    }
+    expect(fogFar()).toBe(plain);
   });
 
   it('keeps the camera behind the hero as it walks, at the zoom it has', () => {

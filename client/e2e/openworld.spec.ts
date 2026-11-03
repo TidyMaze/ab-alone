@@ -199,7 +199,7 @@ test(`the widest zoom on a 32:9 screen shows no black background at its edges in
     return { top: strip(0, 0, w, 6), bottom: strip(0, h - 6, w, 6), left: strip(0, 0, 6, h), right: strip(w - 6, 0, 6, h) };
   }, [png.toString('base64'), [br, bg, bb]] as const);
   // Owner decision (#1424): the neon look tolerates 3 px at most of dark ground at the edges (its ground fades to near the sky colour); the terrace stays at 0.
-  expect(background.top + background.bottom + background.left + background.right).toBeLessThanOrEqual(allowed);
+  expect(background.top + background.bottom + background.left + background.right, JSON.stringify(background)).toBeLessThanOrEqual(allowed);
 });
 
 // #989: the props within 8 cells of the hero are drawn with their detailed models once those load, the low-poly ones beyond.
