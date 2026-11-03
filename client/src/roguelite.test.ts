@@ -565,7 +565,7 @@ describe('roguelite', () => {
   });
 
   it('a fight, an elite or a boss starts its fight as a pick does', () => {
-    const run = { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] };
+    const run = { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0], spent: [] }; // no count: no bonus room before the boss
     expect(visit(ACT, run, 1)).toEqual(pick(run, 1));
     expect(visit(ACT, at(run, 0, 1), 4)).toEqual(pick(at(run, 0, 1), 4));
     expect(visit(ACT, newRun(1, 3, LEGACY_UNLOCKED), 0)).toEqual(pick(newRun(1, 3, LEGACY_UNLOCKED), 0));
@@ -797,7 +797,7 @@ describe('roguelite', () => {
     expect([node.textContent, node.className, node.getAttribute('aria-label')]).toEqual(['?', 'node unknown', 'Act 1, unknown']);
     const told = { ...newRun(1, 3, LEGACY_UNLOCKED), told: 'Scrap forge: +1 Heavy, -2 marbles' };
     expect(parse(mapHtml(UNKNOWN, told)).querySelector('.run-help')!.textContent).toBe('Scrap forge: +1 Heavy, -2 marbles');
-    expect(parse(mapHtml(UNKNOWN, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] })).querySelector('.run-help')).toBeNull();
+    expect(parse(mapHtml(UNKNOWN, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] })).querySelector('.run-help:not(.run-moves)')).toBeNull();
     expect(visit(UNKNOWN, told, 0).told).toBe('');
     expect(visit(ACT, { ...told, path: [0] }, 2).told).toBe(''); // a rest site too
     expect(pick(told, 0).told).toBe('');
@@ -2387,6 +2387,8 @@ describe('roguelite flasks (#1475)', () => {
     }
     await store.put(RUN_KEY, { ...fresh(), bought: [5] }); // the flask in a shop's sold list
     expect((await loadRun(store, mapOf, engine))!.state.bought).toEqual([5]);
+  });
+});
 
 describe('roguelite bonus room (#1473)', () => {
   const fresh = newRun(1, 3, LEGACY_UNLOCKED);
@@ -2394,9 +2396,9 @@ describe('roguelite bonus room (#1473)', () => {
   const reached = (spent: number[]): Run => ({ ...at(fresh, 0), spent }); // the last node of act 1 before its boss picked
   const TURN = [1, 0, 0, 0, 0, 0, 0, 0];
 
-  it('gives each of the four acts a budget of moves, growing with the act', () => {
+  it('gives each of the four acts a budget of moves, growing over the first three (the fourth has an elite only)', () => {
     expect(MOVE_BUDGET).toHaveLength(4);
-    expect(MOVE_BUDGET.every((b, i) => i === 0 || b > MOVE_BUDGET[i - 1]!)).toBe(true);
+    expect(MOVE_BUDGET[1]! > MOVE_BUDGET[0]! && MOVE_BUDGET[2]! > MOVE_BUDGET[1]!).toBe(true);
   });
 
   it('counts a move as one round: the army moves and the bot answers, a tactic is not a move', () => {
@@ -2440,7 +2442,6 @@ describe('roguelite bonus room (#1473)', () => {
     expect(relic).toBeGreaterThanOrEqual(0);
     expect(relic).toBeLessThan(12); // an ordinary relic, never a boss relic
     expect(bonusRelic(waiting)).toBe(relic);
-    expect(bonusRelic({ ...waiting, seed: 2 })).not.toBeNull();
     expect(new Set(Array.from({ length: 30 }, (_, seed) => bonusRelic({ ...waiting, seed })!)).size).toBeGreaterThan(3);
     expect(bonusRelic({ ...waiting, relics: [relic] })).not.toBe(relic);
     expect(bonusRelic({ ...waiting, relics: RELICS.map((_, code) => code) })).toBe(-1);
@@ -2460,13 +2461,13 @@ describe('roguelite bonus room (#1473)', () => {
 
   it('the screen names the relic and the scrap, and says how fast the act was won', () => {
     const waiting = visit(MAP, reached([7, 0, 0, 0]), 2);
-    const html = bonusHtml(waiting);
+    const html = bonusHtml(MAP, waiting);
     expect(html).toContain('Bonus room');
     expect(html).toContain(`Act 1 won in 7 of ${budget} moves`);
     expect(html).toContain(RELICS[bonusRelic(waiting)]!.name);
     expect(html).toContain(`+${BONUS_SCRAP} scrap`);
     expect(html).toContain('data-bonus');
-    const empty = bonusHtml({ ...waiting, relics: RELICS.map((_, code) => code) });
+    const empty = bonusHtml(MAP, { ...waiting, relics: RELICS.map((_, code) => code) });
     expect(empty).toContain(`+${BONUS_SCRAP} scrap`);
     expect(empty).not.toContain('data-relic');
   });

@@ -14,6 +14,7 @@ import {
   newRun,
   offers,
   parseMap,
+  RELICS,
   RUN_KEY,
   tacticOffer,
   takeEvent,
@@ -126,16 +127,16 @@ function at(kind: MapNode['kind'], patch: Partial<Run> = {}, accept: (run: Run) 
   throw new Error(`no seed has a ${kind} node that fits`);
 }
 
-/** A run standing before the first node of `kind`, and that node. */
+/** A run standing before the first node of `kind`, and that node. It has no count of moves, so no bonus room before a boss (#1473), unless `patch` sets one. */
 function before(kind: MapNode['kind'], patch: Partial<Run> = {}): { save: Run; node: number } {
   const full = at(kind);
-  return { save: { ...full, path: full.path.slice(0, -1), ...patch }, node: full.path[full.path.length - 1]! };
+  return { save: { ...full, path: full.path.slice(0, -1), spent: [], ...patch }, node: full.path[full.path.length - 1]! };
 }
 
 /** A run of seed 0 with the third act's boss to fight: the last of a run without the three keys (the fourth act's two nodes come after it). */
 function lastBoss(keys: number[] = []): Run {
   const map = mapOf(0);
-  return { ...newRun(0, 3, []), path: pathTo(map, (_, i) => i === map.length - 3)!, fighting: true, keys };
+  return { ...newRun(0, 3, []), path: pathTo(map, (_, i) => i === map.length - 3)!, fighting: true, keys, spent: [] };
 }
 
 describe('before a run is started', () => {
@@ -230,8 +231,9 @@ describe('the same seed and the same choices give the same run as the client', (
     value(session.playMove({ move: FIRST_MOVE }));
     const state = value(run.state({}));
     expect(state.screen).toBe('reward');
-    expected = fightOver(map, expected, true, 2);
+    expected = fightOver(map, { ...expected, moves: [[1, 0, 0, 0, 0, 0, 0, 0]] }, true, 2); // the one move played is counted
     expect(value(run.save())).toEqual(expected);
+    expect(expected.spent).toEqual([1, 0, 0, 0]);
 
     // take the first reward, then pick the next node
     const offered = offers(expected);
@@ -734,7 +736,7 @@ describe('a fight ends the run or the node', () => {
     const map = mapOf(0);
     const path = pathTo(map, (n) => n.kind === 'boss')!;
     const { run, session } = setup(true);
-    value(await run.newRun({ save: { ...newRun(0, 3, []), path: path.slice(0, -1) } }));
+    value(await run.newRun({ save: { ...newRun(0, 3, []), path: path.slice(0, -1), spent: [] } }));
     value(run.pick({ node: path.at(-1)! }));
     value(session.playMove({ move: FIRST_MOVE }));
     const state = value(run.state({}));
@@ -890,6 +892,8 @@ describe('flasks (#1475)', () => {
     value(await run.newRun({ save: { ...newRun(0, 3, []), path, flasks: 0, army: 8 } }));
     const next = value(run.state({})).nodes![0]!.node;
     expect(value(run.pick({ node: next })).flasks).toBe(2);
+  });
+});
 
 describe('the bonus room before an act boss (#1473)', () => {
   test('a fight won counts its moves in the act: the state shows the count and the budget, the save keeps them', async () => {
@@ -907,7 +911,8 @@ describe('the bonus room before an act boss (#1473)', () => {
     const { run } = setup(false);
     value(await run.newRun({ save }));
     const state = value(run.pick({ node }));
-    expect(state).toMatchObject({ screen: 'bonus', moves: 3, scrap: 0 });
+    expect(state).toMatchObject({ screen: 'bonus', scrap: 0 });
+    expect(state.moves).toBeUndefined(); // the room waits
     expect(state.nodes).toBeUndefined();
     expect(state.options).toHaveLength(1);
     expect(state.options![0]!.text).toContain(`+${BONUS_SCRAP} scrap`);
@@ -917,6 +922,14 @@ describe('the bonus room before an act boss (#1473)', () => {
     expect(fight.relics).toHaveLength(1);
     expect(fight.moves).toBeUndefined(); // the boss fight itself has no budget
     expect(value(run.save())).toMatchObject({ bonus: false, fighting: true });
+  });
+
+  test('a run holding every relic finds scrap only in the room', async () => {
+    const { save, node } = before('boss', { spent: [3, 0, 0, 0], relics: RELICS.map((_, code) => code) });
+    const { run } = setup(false);
+    value(await run.newRun({ save }));
+    expect(value(run.pick({ node })).options![0]!.text).toBe(`+${BONUS_SCRAP} scrap, then the boss`);
+    expect(value(run.choose({ choice: 0 }))).toMatchObject({ screen: 'fight', scrap: BONUS_SCRAP });
   });
 
   test('a boss picked over the budget, or in a run saved before the room, starts its fight', async () => {

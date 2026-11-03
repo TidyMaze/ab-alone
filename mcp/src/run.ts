@@ -19,6 +19,8 @@ import {
   exitOffers,
   blueprintName,
   blueprintText,
+  bonusRelic,
+  BONUS_SCRAP,
   buy,
   choiceText,
   choices,
@@ -41,6 +43,7 @@ import {
   leaveShop,
   left,
   loadRun,
+  moveCount,
   newRun,
   offers,
   parseMap,
@@ -64,6 +67,7 @@ import {
   tacticRecord,
   TACTICS,
   tacticText,
+  takeBonus,
   takeKey,
   takeRelic,
   upgrade,
@@ -101,7 +105,7 @@ export interface RunRules {
 
 type Cell = [q: number, r: number];
 
-export type Screen = 'map' | 'place' | 'fight' | 'reward' | 'relic' | 'event' | 'rest' | 'shop' | 'scroll' | 'collector' | 'exit' | 'won' | 'lost';
+export type Screen = 'map' | 'place' | 'fight' | 'reward' | 'relic' | 'event' | 'rest' | 'shop' | 'scroll' | 'collector' | 'exit' | 'bonus' | 'won' | 'lost';
 
 export interface NewRunInput {
   seed?: number;
@@ -180,6 +184,10 @@ export interface RunState {
   keys?: string[];
   /** The fights left of a cursed chest's curse, none without it: each marble lost costs 2 (#1474). */
   curse?: number;
+  /** The army's moves counted in the act (the fight on included) and the act's budget, for the bonus room before its boss (#1473); none
+   * in a run saved before it, in a boss fight and once the room waits. */
+  moves?: number;
+  budget?: number;
   tactics: string[];
   /** The flask charges left: `run_flask` drinks one on the map (#1475). */
   flasks: number;
@@ -335,6 +343,7 @@ export class RogueRun {
       const next = picked?.apply();
       if (!next || next === active.state) return fail('bad_choice', `choice ${choice} cannot be taken now`);
       active.state = next;
+      if (next.fighting) this.begin(active, this.engineFor(next, active.map), []); // the bonus room's boss fight
       return ok(this.describe(active));
     });
   }
@@ -393,8 +402,8 @@ export class RogueRun {
   /** The run once its fight is over, `won` or not (`fightOver`): the marbles the bot ejected are lost, the special marbles kept
    * are those still on the board. */
   private settle(active: Active, won: boolean): void {
-    const { engine, boss } = active.fight!;
-    active.state = fightOver(active.map, active.state, won, engine.ejected(2), boss ? undefined : kinds(engine as RunEngine));
+    const { engine, boss, moves } = active.fight!;
+    active.state = fightOver(active.map, { ...active.state, moves: moves.map((mv) => [...mv]) }, won, engine.ejected(2), boss ? undefined : kinds(engine as RunEngine)); // its last move counts (#1473)
     active.fight = null;
   }
 
@@ -421,6 +430,7 @@ export class RogueRun {
   /** The screen of the run, as main.ts `showRun` picks it. */
   private screen({ state, fight }: Active): Screen {
     if (state.end) return state.end;
+    if (state.bonus) return 'bonus';
     if (state.relic) return 'relic';
     if (state.reward) return 'reward';
     if (state.event) return 'event';
@@ -436,6 +446,10 @@ export class RogueRun {
   /** What the screen offers, `null` on a screen with nothing to choose. */
   private menu({ state, map }: Active): Choice[] | null {
     const keys = keyOffers(map, state).map((k) => ({ text: KEYS[k]!.offer, apply: () => takeKey(map, state, k) })); // a key in place of the rest or the relic (#1467)
+    if (state.bonus) {
+      const relic = bonusRelic(state);
+      return [{ text: `${relic >= 0 ? `${relicText(relic)} · ` : ''}+${BONUS_SCRAP} scrap, then the boss`, apply: () => takeBonus(state) }];
+    }
     if (state.relic) return [...relicOffers(map, state).map((r) => ({ text: relicText(r), apply: () => takeRelic(map, state, r) })), ...keys];
     if (state.reward) {
       const tactic = tacticOffer(state);
@@ -513,6 +527,7 @@ export class RogueRun {
     const node = state.fighting ? map[state.path[state.path.length - 1]!]! : null;
     const bossFight = node ? actBoss(map, state, this.bossIds()) : null;
     const event = state.event ? eventOf(state) : null;
+    const counted = moveCount(map, state);
     return {
       screen,
       line: runLine(map, state),
@@ -524,6 +539,7 @@ export class RogueRun {
       ...(state.affinities.some(Boolean) ? { affinities: Object.fromEntries(AFFINITIES.map((a, k) => [a.name, state.affinities[k]!])) } : {}),
       ...(state.keys.length ? { keys: state.keys.map((k) => KEYS[k]!.name) } : {}),
       ...(state.curse ? { curse: state.curse } : {}),
+      ...(counted ? { moves: counted.count, budget: counted.budget } : {}),
       tactics: state.tactics.map((t) => TACTICS[t - 1]!.name),
       flasks: state.flasks,
       scrap: state.scrap,

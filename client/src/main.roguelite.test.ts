@@ -437,7 +437,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     }
     await game.settle();
     await boot('?bot=off', { indexedDB });
-    expect(map().querySelector('.run-help') !== null).toBe(!leave); // saved with the run
+    expect(map().querySelector('.run-help:not(.run-moves)') !== null).toBe(!leave); // saved with the run
   });
 
   // The scrap and the shop (#1459). Seed 7: the fight 0 leads to the elite 2, which leads to the shop 4.
@@ -1262,6 +1262,7 @@ describe('main.ts, the bonus room before an act boss (#1473)', () => {
     game.openModes();
     byId('roguelite').click();
     expect(map().querySelector('.run-moves')!.textContent).toBe(`moves 0 of ${MOVE_BUDGET[0]} · bonus room open`);
+    expect(game.hud()).not.toContain('moves'); // the map says it, not the HUD
     open()[0]!.click();
     expect(game.hud()).toContain(`moves 0 of ${MOVE_BUDGET[0]} · bonus room open`);
   });

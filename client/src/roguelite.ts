@@ -79,7 +79,8 @@ export interface MapNode {
  * `curse` is the fights left of a cursed chest's curse (#1474): while it is above 0, each marble lost in a fight costs 2; a run saved before has none.
  * `flasks` are the charges it can drink on the map (#1475): FLASKS at the start, refilled at each act; a run saved before has FLASKS.
  * `affinities` are the levels of Force, Tactics and Chaos (#1471, docs/specs/roguelite.md section 23), 0 to MAX_AFFINITY, and `scroll` is on
- * while the choice of the scroll that grows one waits after an act boss; a run saved before has no affinity. */
+ * while the choice of the scroll that grows one waits after an act boss; a run saved before has no affinity.
+ * `spent` counts the army's moves in the fights of each act so far (#1473), `[]` for a run saved before it, which has no bonus room; `bonus` is on while the bonus room before an act boss waits. */
 export interface Run {
   seed: number;
   army: number;
@@ -120,6 +121,8 @@ export interface Run {
   flasks: number;
   affinities: number[];
   scroll: boolean;
+  spent: number[];
+  bonus: boolean;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -381,6 +384,8 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   flasks: FLASKS,
   affinities: [0, 0, 0],
   scroll: false,
+  spent: MOVE_BUDGET.map(() => 0),
+  bonus: false,
 });
 
 /** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
@@ -439,8 +444,8 @@ function next(map: MapNode[], path: number[], max: number): number[] {
 export const choices = (map: MapNode[], run: Run): number[] => (waiting(run) ? [] : next(map, run.path, lastAct(map, run)));
 
 /** Whether the run waits for more than the map: a fight, the end, or the screen of a reward, an event, a relic, a rest, a shop,
- * the Collector or an exit. */
-const waiting = (run: Run): boolean => run.fighting || run.reward || run.event || run.relic || run.rest || run.shop || run.scroll || run.collector || run.exit || run.end !== '';
+ * the Collector, an exit or the bonus room. */
+const waiting = (run: Run): boolean => run.fighting || run.reward || run.event || run.relic || run.rest || run.shop || run.scroll || run.collector || run.exit || run.bonus || run.end !== '';
 
 /** The flask charges a run starts an act with (#1475), the marbles one gives back, and the most charges it can hold. */
 export const FLASKS = 2;
@@ -477,6 +482,22 @@ function became(run: Run, node: number): 'event' | 'fight' | 'treasure' {
 /** The kind of node `node` of `map` for `run`: what an unknown node turned into, else its own. */
 const kindOf = (map: MapNode[], run: Run, node: number): NodeKind => (map[node]!.kind === 'unknown' ? became(run, node) : map[node]!.kind);
 
+/** The moves the fights of each act may take for the bonus room before its boss to open (#1473, docs/specs/roguelite.md section 26):
+ * a fixed budget per act, growing with the act's fights. */
+export const MOVE_BUDGET = [60, 80, 100, 40];
+/** The scrap the bonus room gives, with a relic. */
+export const BONUS_SCRAP = 40;
+/** The most moves a saved run may hold for one act. */
+const MAX_SPENT = 9999;
+
+/** The moves of a fight's record `moves`: one per round, the army's move and the bot's answer (a tactic is not a move; a Swap, which
+ * costs the move, still has its answer, and a Freeze, which skips the answer, adds a move to the round). */
+export const rounds = (moves: number[][]): number => Math.ceil(moves.filter((m) => m[0]! > 0).length / 2);
+
+/** Whether the bonus room opens on the way to the boss of act `act`: the moves counted for the act are within its budget. A run
+ * saved before the room has no count, so no room. */
+const opens = (run: Run, act: number): boolean => run.spent.length > 0 && run.spent[act]! <= MOVE_BUDGET[act]!;
+
 /** The run once `node` of `map` is visited (#800): a rest site waits for its choice (#1458), an event for its own, a
  * treasure for its relic (#1457), a shop for its purchases (#1459), any other node starts its fight. An unknown node
  * (#1463) is the event, fight or treasure it turns into. What the last event told is gone. */
@@ -485,6 +506,7 @@ export function visit(map: MapNode[], run: Run, node: number): Run {
   const from = { ...run, told: '', flasks: entering ? Math.max(run.flasks, FLASKS) : run.flasks };
   const path = [...run.path, node];
   const kind = kindOf(map, run, node);
+  if (kind === 'boss' && opens(run, map[node]!.act)) return { ...from, path, bonus: true };
   if (kind === 'rest') return { ...from, path, rest: true };
   if (kind === 'treasure') return { ...from, path, relic: unheld(run).length > 0 };
   if (kind === 'shop') return { ...from, path, shop: true };
@@ -817,7 +839,7 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const emerald = end === '' && node.kind === 'elite' && bearsKey(map, run, run.path[run.path.length - 1]!); // the marked elite fell (#1467)
   const keys = emerald ? [...run.keys, Key.Emerald] : run.keys;
   const told = emerald ? `${KEYS[Key.Emerald]!.name} key taken, ${keysLeft(keys.length)}` : run.told;
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, scroll, exit, keys, told, flawless: run.flawless + Number(won && lost === 0), curse: Math.max(0, run.curse - 1) };
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, scroll, exit, keys, told, flawless: run.flawless + Number(won && lost === 0), curse: Math.max(0, run.curse - 1), spent: run.spent.map((n, act) => n + (act === node.act ? rounds(run.moves) : 0)) };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
@@ -852,6 +874,20 @@ export function collect(run: Run, id: number): Run {
 
 /** The run once it leaves the Collector: the map goes on; the blueprints not banked wait for the next one. */
 export const leaveCollector = (run: Run): Run => ({ ...run, collector: false });
+
+/** The relic the bonus room waiting holds (#1473): one the run's pools hold and the run lacks, never a boss relic, dealt by the run
+ * seed and the node, as the reward offers; -1 when none waits or none is left. */
+export function bonusRelic(run: Run): number {
+  const pool = unheld(run);
+  return run.bonus && pool.length ? pool[hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 6), 1473) % pool.length]! : -1;
+}
+
+/** The run once the bonus room's relic and scrap are taken: the boss fight starts. Unchanged when no room waits. */
+export function takeBonus(run: Run): Run {
+  if (!run.bonus) return run;
+  const relic = bonusRelic(run);
+  return { ...run, bonus: false, fighting: true, moves: [], placed: [], scrap: run.scrap + BONUS_SCRAP, relics: relic >= 0 ? [...run.relics, relic] : run.relics };
+}
 
 /** A 32-bit hash of two integers (murmur3's finaliser): the reward offers' only randomness. */
 function hash(a: number, b: number): number {
@@ -1361,6 +1397,33 @@ export function relicHtml(map: MapNode[], run: Run): string {
   return `<p class="run-line">${title}</p>${toldHtml(run)}${dropHtml(map, run)}<div class="run-kinds">${buttons.join('')}${keyOffers(map, run).map(keyButton).join('')}</div>`;
 }
 
+/** The moves counted for the act the run stands in (#1473), the fight on included, and the act's budget; null for a run saved before the
+ * bonus room, in the fight of an act boss, while the room waits and once the run is over. */
+export function moveCount(map: MapNode[], run: Run): { count: number; budget: number } | null {
+  const node = lastNode(map, run);
+  if (!run.spent.length || run.end || run.bonus || (run.fighting && node!.kind === 'boss')) return null;
+  const act = !node ? 0 : node.kind === 'boss' ? node.act + 1 : node.act; // after a boss, the next act's
+  return { count: run.spent[act]! + (run.fighting ? rounds(run.moves) : 0), budget: MOVE_BUDGET[act]! };
+}
+
+/** The budget and the count of the act, on the map and in the HUD of a fight (#1473), and whether the bonus room before its boss is still
+ * open; empty when there is no count. */
+export function movesLine(map: MapNode[], run: Run): string {
+  const moves = moveCount(map, run);
+  return moves ? `moves ${moves.count} of ${moves.budget} · bonus room ${moves.count <= moves.budget ? 'open' : 'closed'}` : '';
+}
+
+/** The bonus room's screen (#1473): how fast the act was won, and the relic and scrap to take before the boss. */
+export function bonusHtml(map: MapNode[], run: Run): string {
+  const act = lastNode(map, run)!.act;
+  const relic = bonusRelic(run);
+  const gift = `${relic >= 0 ? `${relicText(relic)} · ` : ''}+${BONUS_SCRAP} scrap`;
+  return (
+    `<p class="run-line">Bonus room · fast play pays</p><p class="run-help">Act ${act + 1} won in ${run.spent[act]} of ${MOVE_BUDGET[act]} moves.</p>` +
+    `<div class="run-kinds"><button type="button" data-bonus="1">${relic >= 0 ? relicGlyph(relic) : ''}${gift} · then the boss</button></div>`
+  );
+}
+
 /** The relic bar (#1457), in the HUD on the map and in the fights: a glyph per relic the run holds, its name and rule
  * as its tooltip; nothing before the first relic. */
 export function relicBarHtml(run: Run): string {
@@ -1468,7 +1531,8 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
-  return `${head}${told}${keysHtml(run)}${flaskHtml(run)}${run.path.length ? '' : startHtml(run) + book}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
+  const moves = movesLine(map, run);
+  return `${head}${told}${keysHtml(run)}${flaskHtml(run)}${run.path.length ? '' : startHtml(run) + book}${moves && `<p class="run-help run-moves">${moves}</p>`}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */
@@ -1491,10 +1555,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, spent = [], bonus = false } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1551,9 +1615,12 @@ function decodeRun(raw: unknown): Run | null {
     typeof scroll === 'boolean' &&
     Array.isArray(affinities) &&
     affinities.length === AFFINITIES.length &&
-    affinities.every((level) => isInt(level, MAX_AFFINITY));
+    affinities.every((level) => isInt(level, MAX_AFFINITY)) &&
+    Array.isArray(spent) &&
+    (spent.length === 0 || (spent.length === MOVE_BUDGET.length && spent.every((n) => isInt(n, MAX_SPENT)))) &&
+    typeof bonus === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll, spent: [...spent], bonus }
     : null;
 }
 

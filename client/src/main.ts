@@ -326,6 +326,9 @@ import {
   fightBudget,
   armyKept,
   fightOver,
+  bonusHtml,
+  movesLine,
+  takeBonus,
   foePlan,
   left,
   loadRun,
@@ -3493,6 +3496,7 @@ function drawHud(extra = ''): void {
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
   const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
+  const moves = run?.state.fighting ? movesLine(run.map, run.state) : ''; // the budget and the count of the act in a fight (#1473), the map has its own
   // End banner (#282): body[data-over] carries the animation id for the CSS and the e2e tests.
   const end = endBanner({
     status,
@@ -3514,7 +3518,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${run && !(engine instanceof Encounter) ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${run && !(engine instanceof Encounter) ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -5837,7 +5841,9 @@ function showRun(): void {
   const done = finished(map, state);
   if (done) recordFinished(store, done); // the history, and the daily run's score
   const placed = placing(state) && !(engine instanceof Encounter);
-  runPanel.innerHTML = state.relic
+  runPanel.innerHTML = state.bonus
+    ? bonusHtml(map, state)
+    : state.relic
     ? relicHtml(map, state)
     : state.reward
       ? rewardHtml(map, state)
@@ -5860,7 +5866,7 @@ function showRun(): void {
   runPanel.classList.toggle('place', placed);
   const next = runPanel.querySelector('button.node:not(:disabled)'); // after a pick the map scrolls to the nodes to pick, in the middle of the plate (#1468); before the first the commanders stay in view
   if (next && state.path.length) runPanel.scrollTop += next.getBoundingClientRect().top - runPanel.getBoundingClientRect().top - runPanel.clientHeight / 2;
-  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.scroll ? 'scroll' : state.collector ? 'collector' : state.exit ? 'exit' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  const screen = state.bonus ? 'bonus' : state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.scroll ? 'scroll' : state.collector ? 'collector' : state.exit ? 'exit' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
   const biome = currentBiome(map, state); // the tint of the map and the board (#1472); the Meadow has none
   if (biome) document.body.dataset.biome = BIOMES[biome]!.id;
@@ -5902,7 +5908,7 @@ function runMoved(): void {
   const status = engine instanceof Encounter ? engine.result() : engine.status(); // a boss fight: 1 won, 2 lost
   const kept = (): number[] | undefined =>
     boss ? undefined : armyKept(engine.board(), (engine as Engine).specials());
-  const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2), kept());
+  const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, { ...run!.state, moves: history.slice() }, status === 1, engine.ejected(2), kept()); // its last move counts (#1473)
   run!.state = state;
   armed = 0;
   void saveRun(gameStore, state);
@@ -5973,7 +5979,11 @@ function resumeRun(saved: NonNullable<Awaited<ReturnType<typeof loadSavedRun>>>)
 runPanel.addEventListener('click', (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
   if (button?.id === 'run-new') beginRun();
-  else if (button?.dataset.key) {
+  else if (button?.dataset.bonus) {
+    run!.state = takeBonus(run!.state);
+    void saveRun(gameStore, run!.state);
+    fightRun(runEngine(run!.state, run!.map)); // the boss fight (#1473)
+  } else if (button?.dataset.key) {
     run!.state = takeKey(run!.map, run!.state, Number(button.dataset.key));
     void saveRun(gameStore, run!.state);
     showRun();

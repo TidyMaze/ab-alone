@@ -12,6 +12,7 @@ test('an act won within its move budget opens a bonus room before the boss, #147
   await page.waitForFunction(() => typeof (window as any).__run === 'function'); // the page is ready
   await hook({ ...run, spent: [5, 0, 0, 0] });
   await expect(map.locator('.run-moves')).toHaveText(/^moves 5 of \d+ · bonus room open$/);
+  await map.evaluate((e) => (e.scrollTop = 0)); // the run line and the budget at the top
   await shot(page, { path: testInfo.outputPath('roguelite-budget.png') });
 
   await map.locator('[data-node="9"]').click();

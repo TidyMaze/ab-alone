@@ -879,3 +879,38 @@ carries between runs (Decision #934): nothing here is kept after the run.
   run. A run saved before this change loads with 2 charges; a count above 4 does not load. The `bought` ids go to 5.
 - **The MCP server** (section 19): `run_state` shows `flasks`, and `run_flask` drinks one on the map (`not_now` on any other screen,
   `bad_choice` with the army full or no charge left). The shop lists the charge as an option.
+
+## 26. The bonus room (#1473)
+
+Dead Cells' timed doors reward bold, fast play. Each act has a **move budget**; an act whose fights are won within it opens a
+**bonus room** just before its boss, with a relic and scrap. It is a screen on the way to the boss, with no new kind of node and
+no change to the bridge (`run_map`, `engine_version`). Only the rules change what a run offers, never what carries between runs
+(Decision #934).
+
+- **The budget** (`MOVE_BUDGET`, a fixed rule by act, no draw): 60 moves in act 1, 80 in act 2, 100 in act 3, 40 in act 4 (its
+  elite only). The values are design numbers, easy to tune; a fight against the bot takes about 20 to 35 moves.
+- **A move** is one round: the army's move and the bot's answer, counted from the move list of the fight (`rounds`). A tactic is not
+  a move; a Swap, which costs the move, still gets its answer and counts; a Freeze, after which the bot does not answer, adds a move
+  to the round, so it gains a move. The moves of every fight of the act count when it ends (`fightOver`), a fight, an elite or an
+  act boss, won or lost (a lost one ends the run), and are kept in `Run.spent`, one count per act. Only the moves of the act
+  count, so a new act starts from 0 with no step at the act transition: nothing after the boss (the Collector, the exits)
+  changes.
+- **The room**: picking the act boss (`visit`) with the count of its act at or under the budget shows the bonus room
+  (`Run.bonus`) in place of starting the boss fight, and no node can be picked, no flask drunk (section 25), while it waits. It gives, once:
+  - **a relic**, one the run's pools hold and the run lacks, dealt by the run seed and the node as the reward offers (a boss
+    relic is never dealt, section 22); none when the run holds them all;
+  - **40 scrap** (`BONUS_SCRAP`, more than a won boss's 30).
+  One button takes both (`takeBonus`) and starts the boss fight at once. Over the budget there is no room and the boss fight
+  starts as before. The room is for each act's boss, and once: the boss is picked once.
+- **On screen**: the budget and the count show on the map, as a line under the run line (`moves 12 of 60 · bonus room open`,
+  `moves 61 of 60 · bonus room closed`), and in the HUD line of each fight, the fight on counted in it (it grows with each move). After an act boss the line shows the next act's count. It does not show in the fight of an act boss,
+  while the room waits or once the run is over. The room's screen reads `Bonus room · fast play pays`, `Act 1 won in 41 of 60
+  moves.` and one button with the relic and `+40 scrap · then the boss`.
+- **Saving**: `spent` (four counts, 0 to 9999) and `bonus` are saved with the run; a room waiting resumes waiting. A run saved
+  before the room has `spent` empty (no count) and `bonus` off: it counts nothing and opens no room for the rest of the run. A save
+  with another shape (a count of other than 0 or 4 acts, a number out of range, a `bonus` that is not a boolean) does not load.
+  Deterministic: the count is a function of the moves played, the relic of the run seed and the node, so a run replays.
+- **The MCP server** (section 19): a new `bonus` screen, one option (`run_choose` 0) that takes the room and starts the boss fight;
+  the run state has `moves` (the count) and `budget` while the count shows, and `save_run` carries `spent` and `bonus`.
+- **Turn it against the bot**: the budget is the player's gamble against time, not the bot's: a Freeze (the bot skips its answer)
+  or a quick push saves moves, and the fast player is paid in relics and scrap for the boss, never in a stronger bot.
