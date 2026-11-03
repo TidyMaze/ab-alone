@@ -25,7 +25,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
   back row first; the bot has its 14 against an elite, 10 against a fight node (#1145): its
   standard layout without the 4 marbles of its front row (`FIGHT_FOES`). Marbles ejected in a fight are lost for the run. A won fight
   that does not end the run offers a reward (section 6): a marble or a special marble (Heavy,
-  Anchor, Spark), placed before the next fights.
+  Anchor, Spark, and section 13's Magnet, Shield, Bomb, Medic), placed before the next fights.
 - **End**: the run is lost when a fight is lost (a draw is a loss) or the army is below 4 marbles,
   and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
   fight never goes on after the run is lost; the army wins at the usual 6 ejections, also against the 10 marbles of a fight node (4 are left).
@@ -113,13 +113,13 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   specials and relics, and never a tactic: tactics stay the player's. The map, rewards, rests, shops and events stay the
   player's too, and Auto-play turns itself off when the fight ends.
 - **Bridge**: `Engine::place_special(q, r, kind)` and `Engine::specials()` (records `[q, r, kind]`,
-  `1` Heavy, `2` Anchor, `3` Spark, and the upgraded `4` Heavy+, `5` Anchor+, `6` Spark+ of section
-  10).
+  `1` Heavy, `2` Anchor, `3` Spark, the upgraded `4` Heavy+, `5` Anchor+, `6` Spark+ of section
+  10, and `7` Magnet, `8` Shield, `9` Bomb, `10` Medic of section 13).
 
 ## 6. Special marbles on screen (#961)
 
 - **The army's special marbles** are some of its marbles, counted by type with the run, and never
-  more than the army: when the army falls below its count, the Sparks go first, then the Anchors,
+  more than the army: when the army falls below its count, the Medics, Bombs, Shields and Magnets go first (section 13), then the Sparks, the Anchors,
   then the Heavies (the upgraded ones after them, section 10). One placed on a fight's board and thrown off is lost for the run.
 - **Placement**: a fight of an army that holds special marbles opens on the placement screen,
   beside the board (over its far half when the window is held upright), so the army's marbles stay
@@ -129,7 +129,7 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   which keeps the bot's search affordable), and no more than the army holds. The first move starts
   the fight and closes the screen; the placements are saved with the run, so a reload replays them.
 - **Reward**: after a won fight that does not end the run, the reward screen offers 3 of: one more
-  marble (only below 14) and the three special types (only while the army has a plain marble to
+  marble (only below 14) and the special types unlocked (section 8; only while the army has a plain marble to
   make special). The offers are a pure function of the run seed and the node won (its index in the
   map, a 32-bit hash), so a run replays them. A special reward makes one plain marble of the army
   special.
@@ -160,6 +160,10 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   | Salvage drone | 2 Sparks | 3 marbles |
   | Cryo pods | 3 marbles (up to 14) | a special marble, the Sparks first, then the Anchors, then the Heavies |
   | Field manual | a tactic (section 11) | 1 marble |
+  | Lodestone | a Magnet (section 13) | 2 marbles |
+  | Bulkhead | a Shield | 2 marbles |
+  | Unexploded charge | a Bomb | 1 marble |
+  | Sick bay | a Medic | 2 marbles |
 
 - **Act boss**: a boss of the roster (the bridge's `boss_ids`), dealt by the run seed, a new one each
   act, played as from the boss menu (`Encounter`, its deck, view and rules, its own layout: the army
@@ -186,9 +190,9 @@ marbles, and an unlock only widens what a run may hold.
   | Acts won in one run | Special marble type in rewards and events | Starting army (14 marbles) |
   |---|---|---|
   | 0 | Heavy | Standard (14 plain) |
-  | 1 | Anchor | Bulwark (12 plain, 2 Anchors) |
-  | 2 | Spark | Volatile (12 plain, 2 Sparks) |
-  | 3 (a run won) | | Ironclad (12 plain, 2 Heavies) |
+  | 1 | Anchor, Shield | Bulwark (12 plain, 2 Anchors) |
+  | 2 | Spark, Medic | Volatile (12 plain, 2 Sparks) |
+  | 3 (a run won) | Magnet, Bomb | Ironclad (12 plain, 2 Heavies) |
 
   A locked type is never a reward offer, and an event that gains it is never dealt.
 - **Start**: before the first pick, the map shows the types in the rewards (the locked ones with
@@ -339,7 +343,7 @@ in-run economy is approved for the rogue-lite only, and it lifts the "no economy
   | Id | For sale | Price | Taken when |
   |---|---|---|---|
   | 0 | one marble | 15 to 20 | the army is below 14 |
-  | 1 | a special marble of a type unlocked (Heavy, Anchor or Spark, section 8), plain | 25 to 35 | the army has a plain marble to make special |
+  | 1 | a special marble of a type unlocked (section 8), plain | 25 to 35 | the army has a plain marble to make special |
   | 2 | a relic the run does not hold (section 9); none for sale with all 12 held | 60 to 80 | always |
   | 3 | a tactic (section 11) | 30 to 40 | fewer than 3 are held |
 
@@ -352,3 +356,45 @@ in-run economy is approved for the rogue-lite only, and it lifts the "no economy
   run, so a reload shows the same shop as it was. A run saved before this change loads with no scrap and no shop
   waiting. The rules live in the client with the rest of the run; the bridge only draws the Shop node (kind `6`).
 - **Not in this slice**: no way to sell or reroll, and no scrap from events.
+
+## 13. Magnet, Shield, Bomb and Medic (#1461)
+
+Three special types run dry fast, so four more open new plans (Slay the Spire's and Dead Cells' variety). Each
+is one rule of the engine behind the rogue-lite flag, like section 5's, so the bot plays them in its search, every
+peer sees the same result, and every other mode plays bit for bit as before (section 5's digest still matches). A
+Bomb's fuse is part of its mark, so it is part of the position too.
+
+| Code | Type | Rule |
+|---|---|---|
+| 7 | Magnet | after a move that moved it (in the moving group or pushed along), it pulls one enemy marble two cells away in line, the cell between being free, one cell toward it. The first of the six directions in cell order (`q` then `r` of the direction) with such a marble is the one: nothing else is pulled. The pulled marble keeps its mark and is never thrown off by it |
+| 8 | Shield | the first push that would move it fails: the push is legal and costs the move, but nothing moves (the pushing group included, no marble goes off, a Gyroscope is not spent) and every Shield in the pushed line becomes a plain marble. A Shield that walks itself, or is moved by a burst or a pull, keeps its mark. A push that is too weak is still refused |
+| 9 | Bomb | its side's third turn after the fight starts (a turn is a move of that side, a tactic is not) ends in a burst: the marble leaves the board where it stands, each marble on a neighbour cell moves one cell straight away as a Spark's burst does, and the Bomb is gone. The fuse (3 at the start) loses one at the end of each of its side's moves, and moves with the marble. The marble gone counts as an ejection for the opponent of its colour, with each marble the burst throws off; a Spark it throws off does not burst (no chain), and the Detonator does not touch it |
+| 10 | Medic | when it is thrown off the board, by a push or a burst, it comes back once as a plain marble on the first free cell of its side's back row, in the order of the standard layout (Black `(-4, 4)` to `(0, 4)`, White the opposite cells); the row full, it is lost. A Medic that comes back is no ejection for the opponent |
+
+- **Order in a ply**: the move or push, the Magnets that moved pull (in cell order), an ejected Spark bursts, the
+  mover's Bombs burn and burst, the Medics thrown off come back. A Bomb's burst counts as an ejection in
+  `credits` and in the ply's `ejected` flag, so the fight, the win test and the bot's score see it.
+- **"Adjacent" Magnet**: the issue says it pulls "one adjacent enemy marble one cell toward it when that cell is
+  free". A marble next to the Magnet has no free cell between, so the rule is read as the marble two cells away in
+  line, the cell between free: after the pull it is adjacent.
+- **Bridge**: codes `7` to `10` in `Engine::place_special` and `Engine::specials` (a Bomb is `9` whatever its fuse).
+- **In the run**: `Run.specials` holds 10 counts, by code less 1 (the 6 of section 10, then Magnet, Shield, Bomb,
+  Medic). The new four are plain types: no upgrade at a rest site (Upgrade does not list them), and the placement,
+  its cap of 3 a fight, the reward, the shop (with its removal), the run line and the summary treat them as the
+  other types. When the army falls below its count or an event takes a special marble, they go first, in the order
+  Medic, Bomb, Shield, Magnet, then section 10's order. A Bomb that burst or a Medic that came back is no longer
+  special after the fight: the count follows what is on the board, as for a thrown-off Spark.
+- **Unlocks**, by acts won in one run (section 8): Shield with the Anchor (1), Medic with the Spark (2), Magnet and
+  Bomb after a run won (3). A locked type is never a reward offer, an event or a shop item. Only variety carries
+  over, never power (Decision #934).
+- **Events**: Lodestone, Bulkhead, Unexploded charge and Sick bay (the table of section 7).
+- **Looks**: a flat glyph on the marble, its own shape and colour, both 3:1 on the player's glass and the enemy's
+  shell: Magnet a vermillion horseshoe, Shield an orange shield, Bomb a pink disc, Medic a green cross. The
+  placement and reward buttons show the same glyphs.
+- **Determinism and saving**: the engine rules are pure functions of the board; the rewards, events and shop are
+  dealt by the run seed and the node as before. A run saved before this change (3 or 6 special counts) loads with
+  none of the new four. Rewards, events and shop items waiting in such a save are dealt from the larger pool, so
+  they may show other offers than before the update.
+- **Not in this slice**: no upgraded form of the new four, no fuse counter on the Bomb, and no ring or slide drawn
+  for a Bomb's burst, a Magnet's pull or a Medic's return (the marbles are on their new cell when the ply is over).
+

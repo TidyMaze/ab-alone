@@ -12,7 +12,7 @@ test('the rogue-lite run: the start shows the unlocks, a run over its summary, #
   await page.evaluate(() => localStorage.setItem('ab-alone.roguelite', '1'));
   await openModes(page);
   await page.getByRole('button', { name: 'Rogue-lite run' }).click();
-  await expect(map.locator('.run-help')).toHaveText('Special marbles in rewards: Heavy, Anchor · Spark after 2 acts won in a run');
+  await expect(map.locator('.run-help')).toHaveText('Special marbles in rewards: Heavy, Anchor, Shield · Spark after 2 acts won in a run · Magnet after a run won · Bomb after a run won · Medic after 2 acts won in a run');
   await map.getByRole('button', { name: /^Bulwark/ }).click();
   await expect(map.locator('.run-line')).toHaveText('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
   await expect(map.getByRole('button', { name: /^Volatile/ })).toBeDisabled();
@@ -26,7 +26,7 @@ test('the rogue-lite run: the start shows the unlocks, a run over its summary, #
     'Path: act 1 Fight, Elite, Elite, Boss · act 2 Fight',
     'Fights: 4 won, 1 lost',
     'Army at the end: 3 marbles, 1 Heavy',
-    'Unlocked: Anchor marbles, Bulwark army',
+    'Unlocked: Anchor marbles, Shield marbles, Bulwark army',
   ]);
   await expect(map.locator('.run-tally')).toHaveText('Run voided. Audit reopened.');
   expect(await page.evaluate(() => localStorage.getItem('ab-alone.roguelite'))).toBe('1');
