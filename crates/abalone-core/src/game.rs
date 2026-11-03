@@ -522,6 +522,11 @@ impl Game {
         hash
     }
 
+    /// Times the position now on the board has been seen in this game, this one included.
+    pub(crate) fn seen_now(&self) -> usize {
+        self.seen(self.history.last().map_or(self.start_hash, |p| p.hash))
+    }
+
     /// Times the position `hash` has been seen in this game, the start included.
     fn seen(&self, hash: u64) -> usize {
         self.history.iter().filter(|p| p.hash == hash).count()
@@ -896,6 +901,7 @@ mod tests {
     #[test]
     fn threefold_repetition_is_a_draw() {
         let mut game = lone();
+        assert_eq!(game.seen_now(), 1, "the start, before any ply");
         let cycle = [
             mv(&[(0, 0)], SE),
             mv(&[(4, -4)], W),
@@ -949,6 +955,7 @@ mod tests {
         }
         assert_eq!(game.seen_after(&cycle[3]), 2, "the start position again");
         game.play(&cycle[3]).unwrap();
+        assert_eq!(game.seen_now(), 2, "the start position, seen again");
         assert_eq!(game.seen_after(&cycle[0]), 2, "the position after ply 1");
         assert_eq!(game.outcome(), None);
     }

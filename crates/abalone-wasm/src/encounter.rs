@@ -721,9 +721,12 @@ impl Encounter {
         let mv = match &self.fight {
             Fight::Plain(e) => e.player_search().map(|r| r.mv),
             Fight::Choir(c) => c.player_move(),
-            Fight::Swarm(s) => {
-                avoiding_repeats(s.game(), |allow| s.player_search(s.budget(), allow)).map(|r| r.mv)
-            }
+            Fight::Swarm(s) => avoiding_repeats(
+                s.game(),
+                |mv| s.game().seen_after(mv),
+                |allow| s.player_search(s.budget(), allow),
+            )
+            .map(|r| r.mv),
         };
         mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
     }

@@ -423,7 +423,9 @@ fight and a rogue-lite run's fight, never online (a versus room, a co-op fight, 
   lost boss fight and a lost fight of a run). At the root of its search a move to a position not yet seen in the game is
   preferred over any move to a seen one, even if it scores a little worse; failing that, a move that does not reach the
   third occurrence; a move that draws is played only when every legal move does. A winning move is always kept (an
-  ejection cannot be undone, so it is never a repeat). The bot's own reply, the hint and the boss's difficulty are
+  ejection cannot be undone, so it is never a repeat). In a boss fight the position counted is the one after the
+  boss's hook (#1501): `Encounter::player_search` plays the move on a copy of the fight with `Encounter::play`, so a move
+  whose hook (the Chaplain's conversions) rewrites the board into a seen position is not fresh. The bot's own reply, the hint and the boss's difficulty are
   unchanged. The rule is `avoiding_repeats` in `crates/abalone-core/src/search.rs`, the move is recorded as any other, so
   replays and saves are unchanged.
 - **Stop.** Any time: a second press turns it off, and a move being searched is dropped. It turns itself off when the game

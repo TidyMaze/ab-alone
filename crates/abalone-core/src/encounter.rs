@@ -526,9 +526,22 @@ impl Encounter {
         if self.game.to_move() != Player::Black {
             return None;
         }
-        avoiding_repeats(&self.game, |allow| {
-            search_with(&self.game, self.boss.node_budget, DEFAULT_WEIGHTS, allow)
-        })
+        avoiding_repeats(
+            &self.game,
+            |mv| self.seen_after(mv),
+            |allow| search_with(&self.game, self.boss.node_budget, DEFAULT_WEIGHTS, allow),
+        )
+    }
+
+    /// [`Game::seen_after`] with the fight's hook: the move is played on a copy of the fight, by
+    /// [`Encounter::play`], and the position counted is the one the players face after it (#1501).
+    /// 0 when the move is refused.
+    fn seen_after(&self, mv: &Move) -> usize {
+        let mut next = self.clone();
+        match next.play(mv) {
+            Ok(()) => next.game.seen_now(),
+            Err(_) => 0,
+        }
     }
 
     /// Scales the boss node budget by a percentage (e.g. 50, 100, 200). Minimum is 1.
@@ -929,6 +942,7 @@ mod tests {
             enc.play(&shuffle[n % 2]).unwrap();
             assert_eq!(enc.result(), None, "ply {n}: {black:?} led to a draw");
         }
+        assert_eq!(enc.seen_after(&mv(&[(1, 1)], E)), 0, "a refused move");
     }
 
     #[test]

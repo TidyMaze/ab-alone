@@ -624,9 +624,11 @@ pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
 /// The move of the side Auto-play plays (#1500): the best move that does not repeat the game into
 /// a draw, see [`avoiding_repeats`]. The bot's own reply and the hint use [`best_move`].
 pub fn auto_move(game: &Game, node_budget: u32) -> Option<Move> {
-    avoiding_repeats(game, |allow| {
-        search_with(game, node_budget, DEFAULT_WEIGHTS, allow)
-    })
+    avoiding_repeats(
+        game,
+        |mv| game.seen_after(mv),
+        |allow| search_with(game, node_budget, DEFAULT_WEIGHTS, allow),
+    )
     .map(|r| r.mv)
 }
 
@@ -645,10 +647,11 @@ fn wins(game: &Game, mv: &Move) -> bool {
 /// never a repeat: an ejection cannot be undone).
 pub fn avoiding_repeats(
     game: &Game,
+    seen_after: impl Fn(&Move) -> usize,
     search: impl Fn(&dyn Fn(&Move) -> bool) -> Option<SearchResult>,
 ) -> Option<SearchResult> {
-    search(&|mv| game.seen_after(mv) == 1 || wins(game, mv))
-        .or_else(|| search(&|mv| game.seen_after(mv) < REPETITION_LIMIT))
+    search(&|mv| seen_after(mv) == 1 || wins(game, mv))
+        .or_else(|| search(&|mv| seen_after(mv) < REPETITION_LIMIT))
         .or_else(|| search(&|_| true))
 }
 
@@ -1024,18 +1027,22 @@ mod tests {
         let game = about_to_repeat();
         let mv = best_move(&game, 300).unwrap();
         let tiers = std::cell::RefCell::new(Vec::new());
-        let found = avoiding_repeats(&game, |allow| {
-            let legal = legal_moves(game.board(), game.to_move());
-            let kept: Vec<Move> = legal.into_iter().filter(|m| allow(m)).collect();
-            let call = tiers.borrow().len();
-            tiers.borrow_mut().push(kept.clone());
-            (call == 2).then(|| SearchResult {
-                mv: mv.clone(),
-                depth: 1,
-                nodes: 1,
-                score: 0,
-            })
-        });
+        let found = avoiding_repeats(
+            &game,
+            |m| game.seen_after(m),
+            |allow| {
+                let legal = legal_moves(game.board(), game.to_move());
+                let kept: Vec<Move> = legal.into_iter().filter(|m| allow(m)).collect();
+                let call = tiers.borrow().len();
+                tiers.borrow_mut().push(kept.clone());
+                (call == 2).then(|| SearchResult {
+                    mv: mv.clone(),
+                    depth: 1,
+                    nodes: 1,
+                    score: 0,
+                })
+            },
+        );
         assert_eq!(
             found.map(|r| r.mv),
             Some(mv.clone()),
@@ -1063,16 +1070,20 @@ mod tests {
             "a repeat exists"
         );
         let first = std::cell::RefCell::new(None);
-        avoiding_repeats(&game, |allow| {
-            first.borrow_mut().get_or_insert_with(|| {
-                legal
-                    .iter()
-                    .filter(|m| allow(m))
-                    .cloned()
-                    .collect::<Vec<Move>>()
-            });
-            None
-        });
+        avoiding_repeats(
+            &game,
+            |m| game.seen_after(m),
+            |allow| {
+                first.borrow_mut().get_or_insert_with(|| {
+                    legal
+                        .iter()
+                        .filter(|m| allow(m))
+                        .cloned()
+                        .collect::<Vec<Move>>()
+                });
+                None
+            },
+        );
         let first = first.into_inner().unwrap();
         assert!(!first.is_empty() && first.iter().all(|m| game.seen_after(m) == 1));
     }
