@@ -347,20 +347,34 @@ impl Biome {
     }
 }
 
-/// The two biomes the exits at the end of act `act - 1` lead to, for act `act` (1 or 2) of the run `seed` that
-/// left the biome `from`: two different ones, never the Meadow nor `from`, drawn from the seed and the act.
-pub fn exits(seed: u64, act: usize, from: Biome) -> [Biome; 2] {
+/// The biomes the exits at the end of act `act - 1` could lead to for act `act` of the run `seed` that left the biome `from`,
+/// in the order they are offered: never the Meadow nor `from`, drawn from the seed and the act. The third is the secret exit.
+fn exit_pool(seed: u64, act: usize, from: Biome) -> Vec<Biome> {
     let mut pool: Vec<Biome> = Biome::ALL[1..]
         .iter()
         .copied()
         .filter(|&b| b != from)
         .collect();
     let mut state = mix(seed ^ mix(act as u64 | 4 << 32));
-    for i in 0..2 {
+    for i in 0..3 {
         let j = i + (draw(&mut state) % (pool.len() - i) as u64) as usize;
         pool.swap(i, j);
     }
+    pool
+}
+
+/// The two biomes the exits at the end of act `act - 1` lead to, for act `act` (1 or 2) of the run `seed` that
+/// left the biome `from`: two different ones, never the Meadow nor `from`, drawn from the seed and the act.
+pub fn exits(seed: u64, act: usize, from: Biome) -> [Biome; 2] {
+    let pool = exit_pool(seed, act, from);
     [pool[0], pool[1]]
+}
+
+/// The exits of `exits` and, with the rune of the exit (`RUNE_EXIT`, section 27), a third one: another biome of the same draw.
+pub fn exits_with(seed: u64, act: usize, from: Biome, runes: u8) -> Vec<Biome> {
+    let mut pool = exit_pool(seed, act, from);
+    pool.truncate(2 + usize::from(runes & RUNE_EXIT != 0));
+    pool
 }
 
 /// One node of the map. `links` are the columns of the next row of the same act it leads to,
@@ -446,6 +460,12 @@ fn foes_of(seed: u64, index: usize, kind: NodeKind) -> (Formation, Option<Elite>
 /// The map of the run `seed`: act by act, row by row, column ascending. A fight row has 2 to 4
 /// nodes, the boss row one; the fourth act (`FINAL_ACT`) has an elite and its boss.
 pub fn run_map(seed: u64) -> Vec<Node> {
+    run_map_with(seed, 0)
+}
+
+/// The map of the run `seed` of a player who owns the runes `runes` (`RUNE_*`, section 27): the map of `run_map` with the hidden
+/// branches the runes open. The secret rooms come after every other node, so a node keeps its index.
+pub fn run_map_with(seed: u64, runes: u8) -> Vec<Node> {
     let mut state = seed;
     let mut map = Vec::new();
     for act in 0..ACTS {
@@ -488,17 +508,47 @@ pub fn run_map(seed: u64) -> Vec<Node> {
             elite,
         });
     }
+    open_runes(&mut map, seed, runes);
     map
 }
 
-/// The map of the run `seed` for a player who owns the runes `runes` (`RUNE_*`, section 27).
-pub fn run_map_with(seed: u64, _runes: u8) -> Vec<Node> {
-    run_map(seed)
-}
-
-/// The biomes the exits at the end of an act lead to, with the secret exit the rune of the exit opens.
-pub fn exits_with(seed: u64, act: usize, from: Biome, _runes: u8) -> Vec<Biome> {
-    exits(seed, act, from).to_vec()
+/// Opens the hidden branches of `runes` on `map` of the run `seed`, act by act (section 27). The rune of the shortcut links a
+/// node of the first row to a node of the third; the rune of the room adds, at the end of the second row, a room reached from the last
+/// node of the first row that leads to the last node of the third: neither crosses a path of the map.
+fn open_runes(map: &mut Vec<Node>, seed: u64, runes: u8) {
+    for act in 0..ACTS {
+        let width = |map: &[Node], row| map.iter().filter(|n| n.act == act && n.row == row).count();
+        let (w0, w1, w2) = (width(map, 0), width(map, 1), width(map, 2));
+        let mut state = mix(seed ^ mix(act as u64 | 5 << 32));
+        if runes & RUNE_SHORTCUT != 0 {
+            let (from, to) = (
+                draw(&mut state) as usize % w0,
+                draw(&mut state) as usize % w2,
+            );
+            map.iter_mut()
+                .find(|n| (n.act, n.row, n.col) == (act, 0, from))
+                .unwrap()
+                .skips
+                .push(to);
+        }
+        if runes & RUNE_ROOM != 0 {
+            map.iter_mut()
+                .find(|n| (n.act, n.row, n.col) == (act, 0, w0 - 1))
+                .unwrap()
+                .links
+                .push(w1);
+            map.push(Node {
+                act,
+                row: 1,
+                col: w1,
+                kind: NodeKind::Secret,
+                links: vec![w2 - 1],
+                skips: Vec::new(),
+                formation: Formation::Standard,
+                elite: None,
+            });
+        }
+    }
 }
 
 /// The special marbles of `next`, the board after a ply of the `mover` on `board` that moved the
