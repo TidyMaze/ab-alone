@@ -2783,3 +2783,43 @@ mod biomes {
         }
     }
 }
+
+#[cfg(test)]
+mod final_act {
+    use super::*;
+    use crate::world::Biome;
+
+    #[test]
+    fn a_fourth_act_follows_the_three_with_one_elite_then_its_boss() {
+        for seed in 0..50 {
+            let map = run_map(seed);
+            let last: Vec<&Node> = map.iter().filter(|n| n.act == FINAL_ACT).collect();
+            assert_eq!(FINAL_ACT, ACTS);
+            assert_eq!(last.len(), 2, "seed {seed}");
+            assert_eq!((last[0].row, last[0].col), (0, 0));
+            assert_eq!(last[0].kind, NodeKind::Elite);
+            assert!(last[0].elite.is_some());
+            assert_eq!(last[0].links, [0]);
+            assert_eq!((last[1].row, last[1].col), (1, 0));
+            assert_eq!(last[1].kind, NodeKind::Boss);
+            assert!(last[1].links.is_empty() && last[1].elite.is_none());
+            // The fourth act comes last, so the nodes of a run saved before keep their indices.
+            assert!(map[map.len() - 2..].iter().all(|n| n.act == FINAL_ACT));
+            assert_eq!(map.iter().filter(|n| n.act < ACTS).count(), map.len() - 2);
+        }
+    }
+
+    #[test]
+    fn the_final_elite_holds_its_archetypes_marbles_of_the_fourth_act() {
+        for seed in 0..50 {
+            let map = run_map(seed);
+            let i = map.len() - 2;
+            let plan = foe_plan(seed, i, 0, Biome::Meadow);
+            assert_eq!(plan.count, FULL_ARMY);
+            assert_eq!(plan.specials.len(), FINAL_ACT + 2);
+            assert_eq!(plan.biome, Biome::Meadow);
+            // The act boss that follows has the plain army.
+            assert_eq!(foe_plan(seed, i + 1, 0, Biome::Meadow).specials, []);
+        }
+    }
+}

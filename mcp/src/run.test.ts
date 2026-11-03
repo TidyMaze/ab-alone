@@ -130,10 +130,10 @@ function before(kind: MapNode['kind'], patch: Partial<Run> = {}): { save: Run; n
   return { save: { ...full, path: full.path.slice(0, -1), ...patch }, node: full.path[full.path.length - 1]! };
 }
 
-/** A run of seed 0 with the last act's boss to fight. */
-function lastBoss(): Run {
+/** A run of seed 0 with the third act's boss to fight: the last of a run without the three keys (the fourth act's two nodes come after it). */
+function lastBoss(keys: number[] = []): Run {
   const map = mapOf(0);
-  return { ...newRun(0, 3, []), path: pathTo(map, (_, i) => i === map.length - 1)!, fighting: true };
+  return { ...newRun(0, 3, []), path: pathTo(map, (_, i) => i === map.length - 3)!, fighting: true, keys };
 }
 
 describe('before a run is started', () => {
@@ -195,11 +195,11 @@ describe('new_run', () => {
     const { run } = setup();
     value(await run.newRun({ seed: 0 }));
     const map = value(run.state({ map: true })).map!;
-    expect(map).toHaveLength(mapOf(0).length);
+    expect(map).toHaveLength(mapOf(0).length - 2); // the fourth act is hidden until the three keys
     expect(map[0]).toBe('0: act 1 row 1 fight -> 3,4');
     expect(map[3]).toBe('3: act 1 row 2 rest -> 5');
     expect(map[7]).toBe('7: act 1 row 4 boss -> 8,9,10');
-    expect(map[mapOf(0).length - 1]).toMatch(/boss -> end$/);
+    expect(map[mapOf(0).length - 3]).toMatch(/boss -> end$/);
     expect(value(run.state({})).map).toBeUndefined();
   });
 
@@ -450,6 +450,7 @@ describe('the screens that wait for a choice', () => {
       expect.stringMatching(/^Rest: back up to 14 marbles/),
       expect.stringMatching(/^Upgrade Heavy: Heavy\+/),
       expect.stringMatching(/^Upgrade Spark: Spark\+/),
+      expect.stringMatching(/^Give up the rest: take the Ruby key/),
     ]);
     const upgraded = value(run.choose({ choice: 2 }));
     expect(upgraded.specials).toEqual({ Heavy: 1, 'Spark+': 1, Spark: 1 });
@@ -457,6 +458,27 @@ describe('the screens that wait for a choice', () => {
     const again = setup();
     value(await again.run.newRun({ save }));
     expect(value(again.run.choose({ choice: 0 })).army).toBe(14);
+  });
+
+  test('a rest given up takes the Ruby key, shown in the state, and the key is offered once', async () => {
+    const save = at('rest', { rest: true, army: 9 });
+    const { run } = setup();
+    const state = value(await run.newRun({ save }));
+    expect(state.keys).toBeUndefined();
+    const taken = value(run.choose({ choice: state.options!.length - 1 }));
+    expect(taken).toMatchObject({ screen: 'map', keys: ['Ruby'], army: 9 });
+    expect(taken.told).toContain('Ruby');
+    expect(value(run.save()).keys).toEqual([0]);
+  });
+
+  test('a treasure given up takes the Sapphire key in place of its relic', async () => {
+    const save = at('treasure', { relic: true });
+    const { run } = setup();
+    const state = value(await run.newRun({ save }));
+    expect(state.screen).toBe('relic');
+    expect(state.options!.at(-1)!.text).toMatch(/^Give up the relic: take the Sapphire key/);
+    const taken = value(run.choose({ choice: state.options!.length - 1 }));
+    expect(taken).toMatchObject({ screen: 'map', keys: ['Sapphire'], relics: [] });
   });
 
   test('a shop: what it sells with the price, a purchase, the removal, Leave', async () => {
@@ -631,6 +653,27 @@ describe('a fight ends the run or the node', () => {
     expect(state.screen).toBe('won');
     expect(state.line).toMatch(/^Run won with 14 marbles/);
     expect(state).toMatchObject({ acts_won: 3, unlocked: ['Ascension 1'] });
+  });
+
+  test('the third act boss with the three keys goes on to act 4: an elite, then the Ballast Mind at 300 %', async () => {
+    const { run, session, calls } = setup(true);
+    value(await run.newRun({ save: lastBoss([0, 1, 2]) }));
+    value(session.playMove({ move: FIRST_MOVE }));
+    let state = value(run.state({}));
+    expect(state.screen).toBe('relic'); // the boss relic is offered at the third boss too
+    expect(state.options!.some((o) => /but /.test(o.text))).toBe(true);
+    for (let step = 0; step < 8 && state.screen !== 'map'; step++) state = value(run.choose({ choice: state.options!.findIndex((o) => o.ok) }));
+    expect(state.keys).toEqual(['Ruby', 'Sapphire', 'Emerald']);
+    expect(state.nodes).toEqual([{ node: mapOf(0).length - 2, kind: 'elite' }]);
+    expect(value(run.state({ map: true })).map).toHaveLength(mapOf(0).length);
+    value(run.pick({ node: mapOf(0).length - 2 }));
+    value(session.playMove({ move: FIRST_MOVE }));
+    state = value(run.state({}));
+    for (let step = 0; step < 8 && state.screen !== 'map'; step++) state = value(run.choose({ choice: state.options!.findIndex((o) => o.ok) }));
+    value(run.pick({ node: mapOf(0).length - 1 }));
+    expect(calls.bosses.at(-1)).toMatchObject({ 0: 'ballast', 2: 300 });
+    value(session.playMove({ move: FIRST_MOVE }));
+    expect(value(run.state({}))).toMatchObject({ screen: 'won', acts_won: 3 });
   });
 
   test('a boss beaten before the last act goes on to the next act', async () => {

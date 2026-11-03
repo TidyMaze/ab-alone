@@ -516,6 +516,38 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(open().length).toBeGreaterThan(0);
   });
 
+  it('a rest given up and a treasure given up take the Ruby and Sapphire keys, saved, counted on the map (#1467)', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [1] });
+    node(3).click();
+    map().querySelector<HTMLButtonElement>('button[data-key="0"]')!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(map().querySelector('.run-keys')!.textContent).toContain('1 of 3 keys');
+    expect(map().textContent).toContain('Ruby key');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(map().querySelector('.run-keys')!.textContent).toContain('Ruby');
+    await game.hook('__run', { ...plainRun(3, 3), path: [1] });
+    node(4).click();
+    expect(document.body.dataset.run).toBe('relic');
+    map().querySelector<HTMLButtonElement>('button[data-key="1"]')!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(bar()).toEqual([]);
+    expect(map().querySelector('.run-keys')!.textContent).toContain('Sapphire');
+  });
+
+  it('an act boss beaten offers a boss relic among its 3, marked, with its cost in the rule (#1467)', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...plainRun(3, 3), army: 12, path: [0, 2, 6, 9], reward: true, relic: true });
+    const boss = map().querySelectorAll('button[data-boss-relic]');
+    expect(boss).toHaveLength(1);
+    expect(boss[0]!.textContent).toContain(' but ');
+    (boss[0] as HTMLButtonElement).click();
+    expect(bar()).toHaveLength(1);
+    expect(Number(bar()[0] && RELICS.findIndex((r) => bar()[0]!.startsWith(r.name)))).toBeGreaterThanOrEqual(12);
+  });
+
   it('an act boss beaten offers 3 relics, then its reward', async () => {
     const game = await boot('?bot=off');
     // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6.
