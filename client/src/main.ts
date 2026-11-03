@@ -168,6 +168,7 @@ import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './ma
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
+import { hookHost, netHook } from './hooks';
 import { hookPeers, hookTransport, p2pPeers, p2pTransport } from './p2p';
 import { WorldPeersHost } from './worldnet';
 import { worldKeys } from './worldevents';
@@ -856,7 +857,7 @@ function answerLowOffer(accepted: boolean): void {
 (document.getElementById('low-offer-accept') as HTMLButtonElement).addEventListener('click', () => answerLowOffer(true));
 (document.getElementById('low-offer-dismiss') as HTMLButtonElement).addEventListener('click', () => answerLowOffer(false));
 // For the tests (adaptation is skipped under automation): one window of frames of `ms` each.
-(window as unknown as Record<string, unknown>).__slowWindow = (ms: number) => {
+hookHost.__slowWindow = (ms: number) => {
   frameTimes = Array.from({ length: RATIO_FRAMES }, () => ms);
   endWindow();
 };
@@ -864,8 +865,8 @@ function answerLowOffer(accepted: boolean): void {
 // How many times the look was rebuilt: an orbit never rebuilds it (bug #475, e2e/camera.spec.ts).
 let looks = 0;
 let pulsing = false;
-(window as unknown as Record<string, unknown>).__looks = () => looks;
-(window as unknown as Record<string, unknown>).__setTier = (nextTier: Tier) => {
+hookHost.__looks = () => looks;
+hookHost.__setTier = (nextTier: Tier) => {
   tier = nextTier;
   writeTier(store, tier);
   applyLook();
@@ -1569,7 +1570,7 @@ const steel = new THREE.MeshStandardMaterial(
 );
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
-(window as unknown as Record<string, unknown>).__deck = applyDeck;
+hookHost.__deck = applyDeck;
 // A skin's material is built flat the first time it is worn and dressed in every map its asset ships as they load: a press
 // never waits, and a page that keeps the default skins loads two sets of maps, not twenty (the requests are made above).
 const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
@@ -2417,7 +2418,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
     setTimeout(() => (plate.hidden = true), 400);
   }
 };
-(window as unknown as Record<string, unknown>).__mountBay = mountBay;drawProps();
+hookHost.__mountBay = mountBay;drawProps();
 void bayLoad.then(mountBay);
 
 let frame: FrameShape | null = null;
@@ -4732,7 +4733,7 @@ addEventListener('resize', () => {
 });
 
 // Used by the browser checks to aim at a lift's arrow (#523, #1374): its world height, on top of the cage on the terrace.
-(window as unknown as Record<string, unknown>).__liftArrowY = (q: number, r: number): number | null => {
+hookHost.__liftArrowY = (q: number, r: number): number | null => {
   let arrow: THREE.Object3D | undefined;
   sceneRenderer.marbles.traverse((o) => {
     if (!arrow && o.userData.cell === `${q},${r}`) arrow = o;
@@ -4740,7 +4741,7 @@ addEventListener('resize', () => {
   return arrow ? arrow.getWorldPosition(new THREE.Vector3()).y : null;
 };
 // Used by the browser checks to click a cell by its axial coordinates.
-(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number, lift = 0) => {
+hookHost.__cellToScreen = (q: number, r: number, lift = 0) => {
   return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1, lift);
 };
 // Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
@@ -4764,12 +4765,12 @@ function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height
     for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
   return rectOfPoints(corners);
 }
-(window as unknown as Record<string, unknown>).__consoleRect = () => rectOf(consoleScreen);
-(window as unknown as Record<string, unknown>).__recorderRect = () => rectOf(recorder);
+hookHost.__consoleRect = () => rectOf(consoleScreen);
+hookHost.__recorderRect = () => rectOf(recorder);
 // Used by the browser checks to see The Pulsar on the window (#691): the box round the vertices of each of the six
 // pulsars, its glowing core included, and round the counter it shows when it charges, the sprite facing the camera, in
 // pixels.
-(window as unknown as Record<string, unknown>).__pulsarRects = () => {
+hookHost.__pulsarRects = () => {
   camera.updateMatrixWorld();
   marbles.updateMatrixWorld(true);
   const vertices = (model: THREE.Object3D): THREE.Vector3[] =>
@@ -4789,37 +4790,37 @@ function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height
     });
 };
 // Used by the browser checks to play their setup plies: the same click, without the raycast and the frames of a mouse click.
-(window as unknown as Record<string, unknown>).__click = (q: number, r: number) => click(q, r);
+hookHost.__click = (q: number, r: number) => click(q, r);
 
 // Used by the browser checks to read the turn of the marble on a cell (#345, #346), null when it has none.
-(window as unknown as Record<string, unknown>).__marbleTurn = (q: number, r: number) =>
+hookHost.__marbleTurn = (q: number, r: number) =>
   marbleAt.get(cellIndex(q, r))?.[0]?.quaternion.toArray() ?? null;
 // Used by the browser checks to list the marbles that wear a boss accent (#507): their cell and the accent's name.
 const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not the parts of a converted marble (#508)
-(window as unknown as Record<string, unknown>).__accents = () =>
+hookHost.__accents = () =>
   [...marbleAt].flatMap(([i, [marble]]) =>
     marble!.children.filter((c) => accentNames.has(c.name)).map((c) => ({ cell: BOARD_CELLS[i], accent: c.name })),
   );
 // Used by the browser checks to see the look of The Chaplain's converted marbles (#508): the parts each one holds.
-(window as unknown as Record<string, unknown>).__convertedLooks = () =>
+hookHost.__convertedLooks = () =>
   [...marbleAt]
     .filter(([, [marble]]) => (marble as THREE.Mesh).material === unseen)
     .map(([i, [marble]]) => ({ cell: BOARD_CELLS[i], parts: marble!.children.map((c) => c.name) }));
 
 // Used by the browser checks to count the phase notches drawn on the frame and see the threshold glyph (#356).
-(window as unknown as Record<string, unknown>).__notches = () => {
+hookHost.__notches = () => {
   const drawn = notches.parent === scene ? notches.children.map((m) => (m as THREE.Mesh).geometry) : [];
   const lit = drawn.filter((g) => g === scratchGeometry).length;
   return { lit, dark: drawn.filter((g) => g === grooveGeometry).length - lit, glyph: drawn.includes(thresholdMarkGeometry) };
 };
 // Used by the browser checks to count the tally marks drawn on the frame, per side, side 1 first (#389).
-(window as unknown as Record<string, unknown>).__tally = () =>
+hookHost.__tally = () =>
   tallies.map((group) => {
     const drawn = group.parent === scene ? group.children.map((m) => (m as THREE.Mesh).geometry) : [];
     return { marked: drawn.filter((g) => g === scratchGeometry).length, slots: drawn.filter((g) => g === grooveGeometry).length };
   });
 // Used by the browser checks to read the frame's size and holes, and that it is drawn (#292).
-(window as unknown as Record<string, unknown>).__frame = () => ({
+hookHost.__frame = () => ({
   radius: frame?.radius,
   holes: frame?.holes.length,
   dishes: sceneRenderer.terraceOn ? dishesOf(terraceBoards[boardOf()])?.count : undefined, // the terrace draws one dish per cell in play: a hole is one dish fewer (#1374)
@@ -4827,22 +4828,22 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
   lit: { near: rim.near.material.emissive.getHex(), far: rim.far.material.emissive.getHex() }, // #300
 });
 // Used by the browser checks and tests to mount the high-fidelity PBR spaceship bay (#648).
-(window as unknown as Record<string, unknown>).__mountBay = mountBay;
-(window as unknown as Record<string, unknown>).__toggleFreeCam = (enabled?: boolean) => toggleFreeCam(enabled);
-(window as unknown as Record<string, unknown>).__freeCamActive = () => freeCam.active;
-(window as unknown as Record<string, unknown>).__renderMode = () => renderMode;
-(window as unknown as Record<string, unknown>).__setRenderMode = (mode: RenderMode) => setRenderMode(mode);
-(window as unknown as Record<string, unknown>).__cycleRenderMode = () => cycleRenderMode();
-(window as unknown as Record<string, unknown>).__clayActive = () => renderMode === 'clay';
-(window as unknown as Record<string, unknown>).__wireframeActive = () => renderMode === 'wireframe';
-(window as unknown as Record<string, unknown>).__toggleWireframe = (enabled?: boolean) => {
+hookHost.__mountBay = mountBay;
+hookHost.__toggleFreeCam = (enabled?: boolean) => toggleFreeCam(enabled);
+hookHost.__freeCamActive = () => freeCam.active;
+hookHost.__renderMode = () => renderMode;
+hookHost.__setRenderMode = (mode: RenderMode) => setRenderMode(mode);
+hookHost.__cycleRenderMode = () => cycleRenderMode();
+hookHost.__clayActive = () => renderMode === 'clay';
+hookHost.__wireframeActive = () => renderMode === 'wireframe';
+hookHost.__toggleWireframe = (enabled?: boolean) => {
   const next = enabled ?? renderMode !== 'wireframe';
   setRenderMode(next ? 'wireframe' : 'normal');
 };
 
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
 // frame draws them at the real time again).
-(window as unknown as Record<string, unknown>).__ejectAt = (ms: number) =>
+hookHost.__ejectAt = (ms: number) =>
   ejecting.map((e) => {
     drawEjection(e, ms);
     const material = e.mesh.material as THREE.Material;
@@ -4859,7 +4860,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 
 // Used by the browser checks to see the spatter `ms` into its effect in screen space (px), beside what it must not
 // cover: each cell disc, each marble on the board, and the frame's outer edge (#278). Draws nothing.
-(window as unknown as Record<string, unknown>).__bloodAt = (ms: number) => {
+hookHost.__bloodAt = (ms: number) => {
   camera.updateMatrixWorld();
   const px = (x: number, y: number, z: number) => {
     const v = new THREE.Vector3(x, y, z).project(camera);
@@ -4896,116 +4897,116 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 };
 
 // Used by the browser checks to see whether the audio context exists ('none') and runs.
-(window as unknown as Record<string, unknown>).__audio = () => sfx.state;
+hookHost.__audio = () => sfx.state;
 // The gain of a bus (#438): 0 before a gesture, then its slider's level.
-(window as unknown as Record<string, unknown>).__gain = (bus: Bus) => sfx.gain(bus);
+hookHost.__gain = (bus: Bus) => sfx.gain(bus);
 // The tension level and the gain of each drone layer (#439).
-(window as unknown as Record<string, unknown>).__tension = () => ({ level: sfx.tension, layers: sfx.layers });
+hookHost.__tension = () => ({ level: sfx.tension, layers: sfx.layers });
 // The sound twins of the boss tells played so far (#358).
-(window as unknown as Record<string, unknown>).__tellCues = () => tellCues;
+hookHost.__tellCues = () => tellCues;
 // Whether music and ambience are ducked under an audio log (#516).
-(window as unknown as Record<string, unknown>).__ducked = () => sfx.ducking;
-(window as unknown as Record<string, unknown>).__palette = () => palette;
+hookHost.__ducked = () => sfx.ducking;
+hookHost.__palette = () => palette;
 
 // Used by the browser checks to count the plies played, bot replies included, and to compare them.
-(window as unknown as Record<string, unknown>).__plies = () => history.length;
-(window as unknown as Record<string, unknown>).__sealed = () => sealedResult; // the ranked result both seats signed (#1287), read by the tests
-(window as unknown as Record<string, unknown>).__history = () => history;
+hookHost.__plies = () => history.length;
+hookHost.__sealed = () => sealedResult; // the ranked result both seats signed (#1287), read by the tests
+hookHost.__history = () => history;
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.
-(window as unknown as Record<string, unknown>).__fight = () => fight;
-(window as unknown as Record<string, unknown>).__view = () => view;
-(window as unknown as Record<string, unknown>).__terrace = () => sceneRenderer.terrace; // the arena's meshes, for the browser checks of #1314
+hookHost.__fight = () => fight;
+hookHost.__view = () => view;
+hookHost.__terrace = () => sceneRenderer.terrace; // the arena's meshes, for the browser checks of #1314
 // A browser check sets the camera exactly (the Blender views of the terrace, #1314): the view, then the camera and the fog follow.
-(window as unknown as Record<string, unknown>).__setView = (next: Partial<View>) => {
+hookHost.__setView = (next: Partial<View>) => {
   Object.assign(view, next);
   applyView();
   dirty = CHANGE_DRAWS;
 };
 
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
-(window as unknown as Record<string, unknown>).__ghostOpacity = () => ghostMaterials[1]!.opacity; // the Hint ghost's fade (#1097)
-(window as unknown as Record<string, unknown>).__hint = () => hint.shown(here());
-(window as unknown as Record<string, unknown>).__rings = () => ringed;
+hookHost.__ghostOpacity = () => ghostMaterials[1]!.opacity; // the Hint ghost's fade (#1097)
+hookHost.__hint = () => hint.shown(here());
+hookHost.__rings = () => ringed;
 // Used by the browser checks to read the opacity and scale of the last move's ring (#1092).
-(window as unknown as Record<string, unknown>).__lastMoveRing = () => ({ opacity: lastMoveMaterial.opacity, scale: lastMoveRings[0]?.scale.x ?? 0 });
+hookHost.__lastMoveRing = () => ({ opacity: lastMoveMaterial.opacity, scale: lastMoveRings[0]?.scale.x ?? 0 });
 // Used by the browser checks to read the target cells and the direction of their arrow (#390).
-(window as unknown as Record<string, unknown>).__targets = () => targets;
-(window as unknown as Record<string, unknown>).__marbles = () => marbles;
+hookHost.__targets = () => targets;
+hookHost.__marbles = () => marbles;
 
 // Used by the browser checks to pick a legal move (the boss tests play forward), and to find one that
 // exposes a marble to The Chaplain.
-(window as unknown as Record<string, unknown>).__legal = () => parseMoves(engine.legal_moves());
-(window as unknown as Record<string, unknown>).__preview = (mv: Parameters<typeof encodeMove>[0]) =>
+hookHost.__legal = () => parseMoves(engine.legal_moves());
+hookHost.__preview = (mv: Parameters<typeof encodeMove>[0]) =>
   engine instanceof Encounter ? previewFlips(history, encodeMove(mv), makeGame as () => Encounter) : [];
 // Used by the browser checks to see which Choir army moved.
-(window as unknown as Record<string, unknown>).__armies = () =>
+hookHost.__armies = () =>
   engine instanceof Encounter ? parseArmies(engine.armies()) : [];
 // Used by the browser checks to find The Hull's cracked cells and the ones drawn with the crack decal (#355).
-(window as unknown as Record<string, unknown>).__cracks = () =>
+hookHost.__cracks = () =>
   engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
-(window as unknown as Record<string, unknown>).__crackDecals = () => crackDecals;
-(window as unknown as Record<string, unknown>).__crackDecalShown = (shown: boolean) => (crackMaterial.visible = shown);
+hookHost.__crackDecals = () => crackDecals;
+hookHost.__crackDecalShown = (shown: boolean) => (crackMaterial.visible = shown);
 // Used by the browser checks to find The Alien's eggs as drawn: their cell, counter and glow on 1 (#588), and the glow.
-(window as unknown as Record<string, unknown>).__eggs = () => eggsDrawn;
-(window as unknown as Record<string, unknown>).__eggShade = () => eggShade;
-(window as unknown as Record<string, unknown>).__eggGlow = () => eggGlowMaterial.opacity;
+hookHost.__eggs = () => eggsDrawn;
+hookHost.__eggShade = () => eggShade;
+hookHost.__eggGlow = () => eggGlowMaterial.opacity;
 // Used by the browser checks to find The Rail Yard's trains as drawn (#626): each line, its cells from the entry and
 // its counter, and the trains passing now, with where their front is.
-(window as unknown as Record<string, unknown>).__trains = () => trainsShown;
-(window as unknown as Record<string, unknown>).__passes = () =>
+hookHost.__trains = () => trainsShown;
+hookHost.__passes = () =>
   passing.map((p) => ({ line: p.train.line, x: p.model.position.x, z: p.model.position.z }));
 // Used by the browser checks to find The Assembly Line's belts as drawn (#744): each belt's cells, direction, pattern
 // scroll and announced strike cell, and the turns left before the centre belt reverses.
-(window as unknown as Record<string, unknown>).__belts = () => beltsShown;
+hookHost.__belts = () => beltsShown;
 // Used by the browser checks to find The Ballast Mind's last borrowed effect as drawn (#838): its code and the ringed cells.
-(window as unknown as Record<string, unknown>).__fired = () => firedShown;
+hookHost.__fired = () => firedShown;
 // Used by the browser checks to find The Pulsar's next pulse as drawn (#675), and the shockwave of a pulse now.
-(window as unknown as Record<string, unknown>).__pulsar = () => pulsarShown && { ...pulsarShown, charging: charging(pulsarShown) };
-(window as unknown as Record<string, unknown>).__shock = () =>
+hookHost.__pulsar = () => pulsarShown && { ...pulsarShown, charging: charging(pulsarShown) };
+hookHost.__shock = () =>
   shock && { radius: shock.mesh.scale.x, opacity: shockMaterial.opacity, x: shock.mesh.position.x, z: shock.mesh.position.z };
 // Used by the browser checks to find The Unstable Core's marks as drawn (#751): the next events and the charges, and the
 // shockwave's slice now.
-(window as unknown as Record<string, unknown>).__unstable = () => unstableShown;
+hookHost.__unstable = () => unstableShown;
 // Used by the browser checks to read Stalker's fog as drawn (#998): the visible cells, the enemy marbles drawn, the
 // revealed ones and the rings of the bot's last move; null outside Stalker.
-(window as unknown as Record<string, unknown>).__stalker = () => stalkerShown;
+hookHost.__stalker = () => stalkerShown;
 // Used by the browser checks to read The Swarm as drawn (#1008): the turns left, the pass, the marked cells, and the evac's
 // light and lift now; null outside The Swarm.
-(window as unknown as Record<string, unknown>).__swarm = () =>
+hookHost.__swarm = () =>
   swarmShown && { ...swarmShown, evac: evac !== null, glow: evacMaterial.opacity, lift: evac?.lift ?? 0 };
 // Used by the browser checks to find The Dual Room's marks as drawn (#947, #955): the bridge and the announced return, the
 // bridge cells' heights now (null while they are the void), the mark's cell and the falling marble.
-(window as unknown as Record<string, unknown>).__dual = () => ({
+hookHost.__dual = () => ({
   state: dualShown,
   bridge: BRIDGE.map(([q, r]) => (discs[cellIndex(q, r)]!.visible ? bridgeY : null)),
   mark: dualShown?.coming?.cell ?? null,
   drop: drop && { cell: drop.cell, y: drop.y },
 });
-(window as unknown as Record<string, unknown>).__sweep = () => sweep && { scale: sweep.mesh.scale.x, opacity: sweepMaterial.opacity };
+hookHost.__sweep = () => sweep && { scale: sweep.mesh.scale.x, opacity: sweepMaterial.opacity };
 // Used by the browser checks to find The Magnetizer's polarities as drawn: the cell, the sign and the ring of a fresh one.
-(window as unknown as Record<string, unknown>).__polarities = () => polesDrawn;
+hookHost.__polarities = () => polesDrawn;
 // Used by the browser checks to find The Overseer as drawn: its cell, the cores and the vents.
-(window as unknown as Record<string, unknown>).__overseer = () => overseerDrawn;
+hookHost.__overseer = () => overseerDrawn;
 // The announced marble and its coming sign as drawn (#671), and the opacity of the glyphs of a spent pair still fading.
-(window as unknown as Record<string, unknown>).__announce = () => announceDrawn;
-(window as unknown as Record<string, unknown>).__fading = () => fading.map((f) => f.sprite.material.opacity);
+hookHost.__announce = () => announceDrawn;
+hookHost.__fading = () => fading.map((f) => f.sprite.material.opacity);
 // Used by the browser checks to read the shell's heat pulse (#509).
-(window as unknown as Record<string, unknown>).__shellPulse = () => shellLooks.get(DEFAULT_SKIN)?.emissiveIntensity ?? 0;
+hookHost.__shellPulse = () => shellLooks.get(DEFAULT_SKIN)?.emissiveIntensity ?? 0;
 // Used by the browser checks to hold the pulse `t` seconds into its cycle instead of following the clock (#716).
 let pulseHeld: number | null = null;
-(window as unknown as Record<string, unknown>).__holdPulse = (t: number) => {
+hookHost.__holdPulse = (t: number) => {
   pulseHeld = t;
 };
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
-(window as unknown as Record<string, unknown>).__blast = () =>
+hookHost.__blast = () =>
   blast && { shards: blast.shards.length, flash: blastFlashMaterial.opacity, shard: blastShardMaterial.opacity, reduced: blast.reduced };
-(window as unknown as Record<string, unknown>).__converted = () =>
+hookHost.__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];
 // Used by the e2e tests to play `turns` boss turns in one call (#349): each player move is the first legal single-marble
 // move in `dirs`, the boss replies as botTurn does, and each ply is applied as a catch-up is (afterPlay, not live): no
 // slide, ejection or frame per ply, one refresh at the end.
 if (navigator.webdriver) {
-  (window as unknown as Record<string, unknown>).__playTurns = async (turns: number, dirs: number[]): Promise<number> => {
+  hookHost.__playTurns = async (turns: number, dirs: number[]): Promise<number> => {
     if (thinking || online || !worker) return 0;
     thinking = true;
     syncHint();
@@ -5035,7 +5036,7 @@ if (navigator.webdriver) {
     return played;
   };
   // Plays the recorded plies of both sides, like a fixture of the core tests: the last one shows its effects (#748).
-  (window as unknown as Record<string, unknown>).__playMoves = (records: number[][]): number => {
+  hookHost.__playMoves = (records: number[][]): number => {
     records.forEach((record, k) => {
       const before = Array.from(engine.board());
       engine.play(Int32Array.from(record));
@@ -5513,7 +5514,7 @@ function signalingTimeout(side: number): void {
 }
 /** The transport of `room`: Trystero, or the page hook the e2e test wires under ?net=hook. */
 function roomTransport(room: string): Transport {
-  return new URLSearchParams(location.search).get('net') === 'hook' ? hookTransport() : p2pTransport(room, (message) => diag.joinError(message));
+  return netHook(location.search) ? hookTransport() : p2pTransport(room, (message) => diag.joinError(message));
 }
 /** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. A joiner
  * from a link with the creator's fingerprint `creator` takes seat 1 only from that key (#1323). */
@@ -5967,8 +5968,8 @@ trainerNext.addEventListener('click', () => startTrainer(trainer!.wave + 1, trai
 trainerButton.addEventListener('click', () => startTrainer(1));
 trainerButton.disabled = false; // listener ready (#146)
 // Used by the browser checks to start the Trainer at a wave (#1159), and to read the board.
-(window as unknown as Record<string, unknown>).__trainer = startTrainer;
-(window as unknown as Record<string, unknown>).__board = () => Array.from(engine.board());
+hookHost.__trainer = startTrainer;
+hookHost.__board = () => Array.from(engine.board());
 // The Open world (#962, docs/specs/openworld.md): its own scene, drawn by this renderer in place of the board's while it
 // is on. Its entry is in the mode menu for everyone (#1000). ?openworld=<seed> fixes the seed, ?openworld=new starts a fresh
 // random world; else a click resumes the last world played when it has a save (#968), or rolls a new seed.
@@ -6039,7 +6040,7 @@ const netBox = document.getElementById('openworld-online')!;
 const netHide = document.getElementById('openworld-hide') as HTMLButtonElement;
 const netName = document.getElementById('openworld-name') as HTMLInputElement;
 const peersHost = new WorldPeersHost(
-  (room) => (new URLSearchParams(location.search).get('net') === 'hook' ? hookPeers() : p2pPeers(room)),
+  (room) => (netHook(location.search) ? hookPeers() : p2pPeers(room)),
   () => worldOnline,
   document.getElementById('openworld-peers')!,
   (status) => {
@@ -6078,7 +6079,7 @@ netName.addEventListener('input', () => {
 /** Whether this page may take the public world online, asking first when the opt-in is due. */
 async function publicWorldOnline(): Promise<boolean> {
   const query = new URLSearchParams(location.search);
-  if (query.get('net') === 'hook') return true;
+  if (netHook(location.search)) return true;
   if (navigator.webdriver && !query.has('consent')) return false;
   return !consentWanted() || (await onlineAllowed());
 }
@@ -6095,7 +6096,7 @@ async function enterOpenWorld(): Promise<void> {
 }
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
-  const hooks = window as unknown as Record<string, unknown>;
+  const hooks = hookHost;
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
   hooks.__openworldEnemies = () => openWorld.enemies();
@@ -6127,7 +6128,7 @@ addEventListener('keyup', (e) => openWorld.release(e.key)); // a diagonal needs 
 addEventListener('blur', () => openWorld.release()); // no key stays held once the window is left
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
 // shows its summary (#801), what it leaves out taken from a new run, as a save is decoded (no relic before #1457).
-(window as unknown as Record<string, unknown>).__run = async (state: Run) => {
+hookHost.__run = async (state: Run) => {
   if (state.end) return startRun({ ...newRun(state.seed, state.best), ...state }, parseMap(run_map(state.seed)));
   await saveRun(gameStore, state);
   resumeRun((await loadSavedRun())!); // the browser checks load valid runs
@@ -6481,14 +6482,14 @@ royaleInviteButton.addEventListener('click', () => {
   void goRoyale(newRoomId((b) => crypto.getRandomValues(b)), 1); // it shows the invite link
 });
 // Used by the browser checks to load a royale game file (#502).
-(window as unknown as Record<string, unknown>).__royale = startRoyale;
+hookHost.__royale = startRoyale;
 // Used by the browser checks to read the marble drawn for an arena cell, where it is now: its seat and place (#612).
-(window as unknown as Record<string, unknown>).__arenaAt = (q: number, r: number) => {
+hookHost.__arenaAt = (q: number, r: number) => {
   const marble = arenaAt.get(cellIndex(q, r, ARENA))?.[0];
   return marble ? { seat: seatLooks.indexOf(marble.material as THREE.MeshStandardMaterial), x: marble.position.x, z: marble.position.z } : null;
 };
 // Used by the browser checks to count each seat's glyphs drawn on the arena, in seat order (#558).
-(window as unknown as Record<string, unknown>).__seatGlyphs = () =>
+hookHost.__seatGlyphs = () =>
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
 // The lobby sheet (#1044, docs/specs/thumb-dock.md section 1): Start, Invite, Back to the hub and the invite link sit above
 // the dock. The Lobby control toggles it, and carries an accent while a lobby waits. It shows only with a control to show,
@@ -6639,9 +6640,9 @@ let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
 let draws = 0;
 let drawAsked = false;
 // Used by the browser checks to wait for a draw: under automation the loop skips frames (#216), so a frame is not a draw (#365).
-(window as unknown as Record<string, unknown>).__draws = () => draws;
+hookHost.__draws = () => draws;
 // Used by the browser checks to ask for the next draw, which the throttle does not hold (#435): returns the draws so far.
-(window as unknown as Record<string, unknown>).__drawNext = () => {
+hookHost.__drawNext = () => {
   drawAsked = true;
   return draws;
 };

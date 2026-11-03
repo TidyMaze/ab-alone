@@ -115,7 +115,7 @@ export default defineConfig({
               },
             ]),
         {
-          command: `bunx vite build --logLevel warn && bunx vite preview --port ${previewPort} --strictPort`,
+          command: `VITE_TEST_HOOKS=1 bunx vite build --logLevel warn && bunx vite preview --port ${previewPort} --strictPort`,
           url: process.env.E2E_PREVIEW_URL,
           reuseExistingServer: false,
           timeout: 120_000,

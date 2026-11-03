@@ -1,5 +1,6 @@
 // The opt-in before any online connection (#1338, docs/specs/multiplayer.md section 7, docs/privacy.md): shown once,
 // Accept is stored. Pure functions and the decided text only: main.ts builds the dialog.
+import { netHook } from './hooks';
 import { read, write, type Store } from './quality';
 
 const CONSENT_KEY = 'ab-alone.online-consent';
@@ -19,6 +20,6 @@ export const writeConsent = (store: Store): void => write(store, CONSENT_KEY, 'a
  * not in an automated browser (navigator.webdriver) unless `?consent` asks for it, as the specs that prove the dialog do. */
 export const consentNeeded = (store: Store, search: string, automated: boolean): boolean => {
   const query = new URLSearchParams(search);
-  if (consentGiven(store) || query.get('net') === 'hook') return false;
+  if (consentGiven(store) || netHook(search)) return false;
   return !automated || query.has('consent');
 };
