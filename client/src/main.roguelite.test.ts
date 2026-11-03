@@ -468,6 +468,27 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(line()).toBe(`Rogue-lite run · army 10 marbles · ${scrap} scrap · pick a fight`);
   });
 
+  // Flasks (#1475): a button on the map, saved with the run.
+  it('a flask drunk on the map gives 3 marbles back and stays spent across a reload, #1475', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...plainRun(7, 3), army: 8, path: [0] });
+    const flask = (): HTMLButtonElement => map().querySelector<HTMLButtonElement>('button[data-flask]')!;
+    expect(flask().textContent).toBe('Drink a flask: 3 marbles back · 2 left');
+    flask().click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(line()).toBe('Rogue-lite run · army 11 marbles · pick a fight');
+    expect(flask().textContent).toBe('Drink a flask: 3 marbles back · 1 left');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(line()).toBe('Rogue-lite run · army 11 marbles · pick a fight');
+    expect(flask().textContent).toBe('Drink a flask: 3 marbles back · 1 left');
+    flask().click();
+    flask().click(); // a disabled button: nothing to drink
+    expect(flask().disabled).toBe(true);
+    expect(line()).toBe('Rogue-lite run · army 14 marbles · pick a fight');
+  });
+
   it('a fight starts with 10 enemy marbles, its front row gone, and an elite with all 14, #1145', async () => {
     const whites = async (node: number, path: number[]): Promise<string[]> => {
       const game = await boot('?bot=off');
