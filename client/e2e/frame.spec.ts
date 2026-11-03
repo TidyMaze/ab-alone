@@ -45,6 +45,11 @@ test('clear board and the low tier keep the frame, #292', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-rim', 'near'); // the turn is game information (#300)
 });
 
+// Waits for a draw that began after this call: the screenshot below then shows the new turn's rim, not the last turn's.
+const freshDraw = async (page: Page) => {
+  const asked = await page.evaluate(() => (window as any).__drawNext() as number);
+  await page.waitForFunction((n) => (window as any).__draws() > n, asked);
+};
 const SODIUM = 0xd9822b;
 const CYAN = 0x7fd6e8;
 // A point on the rim's top, 2 cells from the middle of its left side at each end toward the corner on the x axis, clear
@@ -96,6 +101,7 @@ test('the rim half at the end of the side to move lights in its colour, then goe
   // By place, not colour alone (world.md section 8): each half is 3:1 brighter lit than dark.
   const [near, far] = [await rimPoint(page, 'near'), await rimPoint(page, 'far')];
   const [nearMiddle, farMiddle] = [await rimPoint(page, 'near', true), await rimPoint(page, 'far', true)];
+  await freshDraw(page);
   await expect
     .poll(async () => {
       const whiteTurn = await page.screenshot({ type: 'png' });
