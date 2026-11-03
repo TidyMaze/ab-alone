@@ -743,4 +743,28 @@ describe('a catch-up answer (online F1)', () => {
     for (let i = 0; i < 205; i++) await b.net.receive(near, a.keys.pub, 'a');
     expect(pending()).toBe(200);
   });
+
+  it('a coordinator that opens no round is skipped: after 2 rounds of time the first seated human opens it, and a start of a key not in turn is refused (online-2 F4)', async () => {
+    const room = table();
+    const a = await room.join('a', 0);
+    const b = await room.join('b', 1);
+    const c = await room.join('c', 2);
+    const s = await room.join('s'); // a spectator the room elected, and that never opens anything
+    room.coordinate(a.keys.pub);
+    await a.net.start();
+    await room.settle();
+    room.coordinate(s.keys.pub); // from now on s is the coordinator, silent
+    room.lost.add('s');
+    for (const p of [a, b, c]) await p.net.play([]);
+    await room.settle();
+    await room.pass(MS);
+    expect([a.net.round, b.net.round, c.net.round]).toEqual([2, 2, 2]);
+    expect(b.net.phase).toBe('waiting'); // round 2 not open: nobody's turn yet
+    // a seated key that is not the coordinator cannot open it while the stall is young
+    room.deliver(c, { kind: 'start', game: ROOM, round: 2, seats: b.net.seats! });
+    await room.settle();
+    expect(b.net.phase).toBe('waiting');
+    await room.pass(MS);
+    expect([a.net.phase, b.net.phase, c.net.phase]).toEqual(['choosing', 'choosing', 'choosing']);
+  });
 });

@@ -154,6 +154,8 @@ async function replayed(game: string, s: Sealed, humans: string[]): Promise<numb
  */
 /** The messages of rounds to come kept at most: seats x a few rounds x commit and reveal, with room to spare. */
 const PENDING_MAX = 200;
+/** The rounds' time a coordinator may take to open the next round before the next seated key does. */
+const STALL_ROUNDS = 2;
 
 export class RoyaleNet<G extends NetGame> {
   seats: string[] | null = null; // keys by arena seat, '' for a bot, from the coordinator's first start
@@ -166,6 +168,7 @@ export class RoyaleNet<G extends NetGame> {
   private commitBy = 0; // the open round's commit deadline, on our clock
   private readonly missed: number[] = []; // by arena seat: the resolved rounds in a row it committed nothing in
   private stale = false; // the open round's deadline passed while we were cut off: only a catch-up resolves it
+  private resolvedAt = -Infinity; // when the last round resolved here: a coordinator that opens no round for STALL_ROUNDS rounds' time is skipped
   private askedUntil = -Infinity; // a `behind` was sent: a `played` answer is taken until then (one round), not after
   private readonly sealed: Sealed[] = []; // what we kept of each resolved round, for a peer behind
   private readonly hashes: string[] = []; // ours after each round
@@ -273,7 +276,7 @@ export class RoyaleNet<G extends NetGame> {
   }
 
   private async started(m: Start, from: string): Promise<void> {
-    if (from !== this.o.coordinator() || m.seats.length !== this.o.roster().length) return;
+    if (!this.mayOpen(from) || m.seats.length !== this.o.roster().length) return;
     this.seats ??= m.seats;
     if (m.round < this.round || (m.round === this.round && this.book)) return; // a round played or open here
     if (m.round === this.round) return this.openBook();
@@ -281,6 +284,24 @@ export class RoyaleNet<G extends NetGame> {
     // The next round while ours is still open is a peer ahead of us by a few messages; anything later, or anything once
     // our round went stale, we missed rounds.
     if (m.round > this.round + (this.book && !this.stale ? 1 : 0)) this.ask();
+  }
+
+  /** How many coordinators in a row were skipped: one more each STALL_ROUNDS rounds' time since the last round resolved without the next one
+   * opening. 0 while a round is open, in the lobby or when the game is over. */
+  private turns(): number {
+    if (this.book || !this.seats || this.resolvedAt === -Infinity || this.o.royale.placement().length) return 0;
+    return Math.floor((this.o.now() - this.resolvedAt) / (STALL_ROUNDS * this.o.roundMs));
+  }
+
+  /** The keys that may open the next round, in turn: the coordinator, then the seated humans in seat order. */
+  private openers(): string[] {
+    const base = this.o.coordinator();
+    return [base, ...this.humans.filter((k) => k !== base)];
+  }
+
+  /** Whether `from` may open the round: the coordinator, or one of the keys whose turn has come (one more tolerated: clocks differ). */
+  private mayOpen(from: string): boolean {
+    return from === this.o.coordinator() || (this.turns() > 0 && this.openers().slice(0, this.turns() + 2).includes(from));
   }
 
   /** Says we are behind, and from now on believes a catch-up answer. */
@@ -333,6 +354,7 @@ export class RoyaleNet<G extends NetGame> {
 
   private async step(): Promise<void> {
     const book = this.book;
+    if (!book && this.turns() > 0 && this.openers()[this.turns()] === this.o.keys.pub) return this.open(); // the coordinator is silent: our turn
     if (!book || this.stale) return;
     const now = this.o.now();
     if (!this.o.connected()) {
@@ -369,6 +391,7 @@ export class RoyaleNet<G extends NetGame> {
     const cracks = Array.from(game.cracks());
     game.resolve(Int32Array.from(all));
     this.sealed.push(kept);
+    this.resolvedAt = this.o.now();
     this.book = null;
     this.stale = false;
     const hash = game.state_hash();
