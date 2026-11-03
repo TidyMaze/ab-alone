@@ -6,7 +6,9 @@ use crate::convert::{
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
-use abalone_core::run::{army_game_against, trainer_game, Relic};
+use abalone_core::run::{
+    army_game_against, army_game_formed, trainer_game, FoePlan, Formation, Relic,
+};
 use abalone_core::search::{best_move, position_score};
 use wasm_bindgen::prelude::*;
 
@@ -30,6 +32,34 @@ impl Engine {
         Engine {
             game: army_game_against(army, foes),
         }
+    }
+
+    /// A rogue-lite fight against the bot's army of a plan from `run_foes`: `[count, formation, q, r,
+    /// kind, ...]`, its formation and special marbles stood (docs/specs/roguelite.md section 14).
+    /// `Err` carries why the plan cannot stand.
+    pub fn with_foes(army: u8, plan: &[i32]) -> Result<Engine, String> {
+        let [count, formation, marks @ ..] = plan else {
+            return Err("a plan starts with a count and a formation".to_string());
+        };
+        let formation = u8::try_from(*formation)
+            .ok()
+            .and_then(Formation::from_code)
+            .ok_or_else(|| format!("unknown formation {formation}"))?;
+        let specials = marks
+            .chunks_exact(3)
+            .map(|m| {
+                let kind = u8::try_from(m[2]).ok().and_then(special);
+                kind.map(|kind| ((m[0], m[1]), kind))
+                    .ok_or_else(|| format!("unknown kind {}", m[2]))
+            })
+            .collect::<Result<_, _>>()?;
+        let plan = FoePlan {
+            count: u8::try_from(*count).unwrap_or(u8::MAX),
+            formation,
+            specials,
+        };
+        let game = army_game_formed(army, &plan).map_err(|e| format!("{e:?}"))?;
+        Ok(Engine { game })
     }
 
     /// A Trainer wave (#1159): the player's 14 marbles (Black) against the bot's `wave` marbles,

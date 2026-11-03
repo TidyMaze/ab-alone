@@ -1,11 +1,12 @@
 //! Rogue-lite run bridge (docs/specs/roguelite.md): the map of a run seed, see the module docs of
 //! the crate for its encoding. The army's fight is `Engine::with_army`.
 
+use crate::convert::special_code;
 use abalone_core::run;
 use wasm_bindgen::prelude::*;
 
-/// Integers per map node: `[act, row, col, kind, links]`.
-pub const NODE_STRIDE: usize = 5;
+/// Integers per map node: `[act, row, col, kind, links, formation, elite]`.
+pub const NODE_STRIDE: usize = 7;
 
 /// The map of the run `seed`, one record of `NODE_STRIDE` integers per node.
 #[wasm_bindgen]
@@ -20,8 +21,25 @@ pub fn run_map(seed: u32) -> Vec<i32> {
                 node.col as i32,
                 node.kind as i32,
                 links,
+                node.formation as i32,
+                node.elite.map_or(0, |e| e as i32),
             ]
         })
+        .collect()
+}
+
+/// The bot's army at node `node` of the map of `seed`, `less` marbles short: `[count, formation,
+/// ...]` then a record `[q, r, kind]` per special marble, the plan `Engine::with_foes` stands.
+#[wasm_bindgen]
+pub fn run_foes(seed: u32, node: u32, less: u8) -> Vec<i32> {
+    let plan = run::foe_plan(u64::from(seed), node as usize, less);
+    [i32::from(plan.count), plan.formation as i32]
+        .into_iter()
+        .chain(
+            plan.specials
+                .iter()
+                .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))]),
+        )
         .collect()
 }
 
@@ -56,7 +74,7 @@ mod tests {
             assert_eq!(record[5], node.formation as i32);
             assert_eq!(record[6], node.elite.map_or(0, |e| e as i32));
         }
-        assert_eq!(flat[flat.len() - 2], 1); // the act 3 boss closes the map
+        assert_eq!(flat[flat.len() - NODE_STRIDE + 3], 1); // the act 3 boss closes the map
         let kinds: Vec<i32> = flat.chunks(NODE_STRIDE).map(|r| r[3]).collect();
         assert!(
             (2..=6).all(|k| kinds.contains(&k)),

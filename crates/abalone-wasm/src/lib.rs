@@ -91,10 +91,14 @@
 //!   the army holds. `code` `0` Gyroscope, `1` Hull plating, `2` Salvage magnet, `3` Jammer, `4`
 //!   Detonator, `5` Bunks, `6` Lucky coin, `7` Bargain, `8` Saboteur, `9` Dampener, `10` War chest,
 //!   `11` Quartermaster (docs/specs/roguelite.md section 9).
-//! - Rogue-lite map (`run_map`): records of 5 integers `[act, row, col, kind, links]` per node,
+//! - Rogue-lite map (`run_map`): records of 7 integers `[act, row, col, kind, links, formation, elite]` per node,
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
 //!   an act), `2` elite, `3` rest, `4` event, `5` treasure, `6` shop. `links` is a bit mask of the columns of the next row of the same act the node leads
-//!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
+//!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md). `formation` is how the bot's marbles stand in
+//!   a fight or an elite: `0` standard, `1` Belgian daisy, `2` German daisy, `3` snake, `4` wedge (`0` on the other nodes); `elite` is
+//!   `0` for a node that is no elite, else `1` The Wall, `2` The Artificer, `3` The Brute (section 14).
+//! - The bot's army of a fight (`run_foes(seed, node, less)`): `[count, formation, ...]` then a record `[q, r, kind]` per special marble
+//!   it holds; `Engine::with_foes(army, plan)` stands it (section 14).
 //! - Open world chunk (`world_chunk(seed, cx, cy)`): 3 bytes `[height, terrain, biome]` per cell of the
 //!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. The world is a hexagon (`WORLD_RADIUS`): in a
 //!   chunk its edge crosses, a cell past the edge is `[0, 255, 0]`, `255` off the world. `height` `0` to `7`;
@@ -124,7 +128,7 @@ pub use convert::{draw_reason_code, result_code, status_code, MOVE_STRIDE};
 pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::{replay_score, Engine};
 pub use royale::Royale;
-pub use run::run_map;
+pub use run::{run_foes, run_map};
 pub use world::{world_chunk, world_lairs, world_teleporters, world_version};
 
 #[cfg(test)]
