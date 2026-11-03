@@ -39,6 +39,7 @@ export interface Hello {
   agent?: true; // an agent player (docs/specs/mcp.md section 8): signed, absent means a human
   order?: string[]; // the creator's: every key in the order its Hello was first seen, so join_seq is the same everywhere (#359)
   engine?: number; // `engine_version()` of the sender's wasm (#526), absent from a peer older than it
+  peer?: string; // the sender's own transport id, signed: a Hello replayed from another peer names someone else and is refused
   pub: string;
   sig: string;
 }
@@ -106,7 +107,7 @@ const payload = (r: Unsigned): Uint8Array<ArrayBuffer> =>
 
 // The agent, order and engine entries are added only when set, so a Hello without them keeps the bytes older peers verify.
 const helloPayload = (h: Omit<Hello, 'sig'>): Uint8Array<ArrayBuffer> =>
-  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub, ...(h.agent ? ['agent'] : []), ...(h.order ? ['order', h.order] : []), ...(h.engine === undefined ? [] : ['engine', h.engine])]));
+  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub, ...(h.agent ? ['agent'] : []), ...(h.order ? ['order', h.order] : []), ...(h.engine === undefined ? [] : ['engine', h.engine]), ...(h.peer === undefined ? [] : ['peer', h.peer])]));
 const coordinatorPayload = (c: Omit<Coordinator, 'sig'>): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify(['coordinator', c.game, c.coordinator, c.pub]));
 
@@ -149,7 +150,7 @@ export async function signMove(
 
 export async function signHello(
   keys: Keys,
-  fields: { game: string; seat: number; roster: string[]; agent?: true; order?: string[]; engine?: number },
+  fields: { game: string; seat: number; roster: string[]; agent?: true; order?: string[]; engine?: number; peer?: string },
 ): Promise<Hello> {
   const unsigned = { kind: 'hello' as const, ...fields, pub: keys.pub };
   return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, helloPayload(unsigned))) };
@@ -228,6 +229,7 @@ export function parseHello(x: unknown): Hello | null {
     (h.agent === undefined || h.agent === true) &&
     (h.order === undefined || (Array.isArray(h.order) && h.order.every((k) => typeof k === 'string'))) &&
     (h.engine === undefined || Number.isInteger(h.engine)) &&
+    (h.peer === undefined || typeof h.peer === 'string') &&
     typeof h.pub === 'string' &&
     typeof h.sig === 'string';
   if (!ok) return null;
@@ -239,6 +241,7 @@ export function parseHello(x: unknown): Hello | null {
     ...(h.agent ? { agent: true as const } : {}),
     ...(h.order ? { order: h.order as string[] } : {}),
     ...(h.engine === undefined ? {} : { engine: h.engine as number }),
+    ...(h.peer === undefined ? {} : { peer: h.peer as string }),
     pub: h.pub as string,
     sig: h.sig as string,
   };

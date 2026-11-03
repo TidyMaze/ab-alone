@@ -5,6 +5,8 @@ export type ConnectionState = 'connecting' | 'open' | 'closed';
 /** One ordered channel for signed move records and Hello messages. Local play, P2P and later a server all fit it. */
 export interface Transport {
   readonly state: ConnectionState;
+  /** This end's own id as the others see it in `onRecord`, when the transport can tell it (Trystero): a Hello then proves it was sent from that id. */
+  readonly self?: string;
   /** To every peer, or to the one peer `to` names as onRecord named it: a catch-up answer goes to the peer behind alone. */
   send(message: Wire, to?: string): void;
   /** `peer` names the sender as the transport knows it, not by key: only a Hello proves a key. */

@@ -1,6 +1,6 @@
 // Transports that touch the outside world: the hook transport the e2e test drives, and Trystero over public
 // relays. p2p.test.ts tests both, Trystero on a mocked room.
-import { joinRoom } from 'trystero/nostr';
+import { joinRoom, selfId } from 'trystero/nostr';
 import type { Wire } from './moverecord';
 import type { ConnectionState, Transport } from './transport';
 
@@ -35,6 +35,7 @@ export function p2pTransport(room: string, onJoinError?: (message: string) => vo
     if (peers.size === 0) set('closed');
   };
   return {
+    self: selfId,
     get state() {
       return state;
     },

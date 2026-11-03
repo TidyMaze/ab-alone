@@ -308,7 +308,7 @@ export class OnlineSession {
     const order = this.o.beat && this.o.side === CREATOR ? [...this.order] : undefined; // the join order, for the coordinator migration
     const seat = this.seats.seatOf(this.o.keys.pub) || this.o.side; // the seat we hold, once the creator gave us one
     this.o.transport.send(
-      await signHello(this.o.keys, { game: this.o.game, seat, roster, agent: this.o.agent, order, engine: this.o.engine }),
+      await signHello(this.o.keys, { game: this.o.game, seat, roster, agent: this.o.agent, order, engine: this.o.engine, peer: this.o.transport.self }),
     );
   }
 
@@ -463,6 +463,8 @@ export class OnlineSession {
 
   private async receiveHello(h: Hello | null, peer: string): Promise<void> {
     if (!h || h.game !== this.o.game || !(await verifyHello(h))) return this.o.onRefuse('bad-hello');
+    // A Hello is only worth the transport id it was signed for: replayed from another peer it would bind that peer to this key.
+    if (h.peer !== undefined ? h.peer !== peer : this.o.transport.self !== undefined) return this.o.onRefuse('bad-hello');
     // Another engine would judge the same moves differently (docs/specs/tech.md section 9): no seat, no presence.
     // The creator still answers with its own Hello, so the joiner refuses it in turn and says why.
     if (h.engine !== this.o.engine) {

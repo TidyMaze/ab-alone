@@ -1577,3 +1577,49 @@ describe('OnlineSession match reports, #1317', { timeout: 30_000 }, () => {
     expect(black.role).toBe('player');
   });
 });
+
+describe('OnlineSession Hello bound to its sender id', () => {
+  const join = async (self: string | undefined) => {
+    const r = room();
+    const transport: Transport = Object.assign(Object.create(r.transport) as Transport, { self });
+    const got: [unknown, string][] = [];
+    const refused: string[] = [];
+    const keys = await generateKeys();
+    const session = new OnlineSession({
+      game: 'g', side: 2, seatCount: 2, engine: ENGINE, keys, transport, judge: new FakeJudge(), onMove() {}, onRefuse: (x) => refused.push(x),
+      onOther: (m, k) => void got.push([m, k]),
+    });
+    return { r, session, got, refused, keys };
+  };
+  const creator = generateKeys();
+
+  it('a Hello replayed from another peer binds nothing, a real transport also wants the id in it', async () => {
+    const a = await creator;
+    const { r, session, got, refused } = await join('me');
+    const captured = await signHello(a, { game: 'g', seat: 1, roster: [a.pub, ''], engine: ENGINE, peer: 'creator-peer' });
+    r.from('EVIL', captured);
+    await session.settled;
+    expect(refused).toEqual(['bad-hello']);
+    r.from('EVIL', { kind: 'start', game: 'g', round: 1, seats: ['', ''] } as unknown as Wire);
+    await session.settled;
+    expect(got.some(([, k]) => k === a.pub)).toBe(false);
+    r.from('creator-peer', captured);
+    await session.settled;
+    r.from('creator-peer', { kind: 'start', game: 'g', round: 1, seats: ['', ''] } as unknown as Wire);
+    await session.settled;
+    expect(got.some(([, k]) => k === a.pub)).toBe(true);
+    const old = await signHello(a, { game: 'g', seat: 1, roster: [a.pub, ''], engine: ENGINE }); // no id in it
+    r.from('creator-peer', old);
+    await session.settled;
+    expect(refused).toEqual(['bad-hello', 'bad-hello']);
+  });
+
+  it('signs its own id into its Hello when the transport has one, and none otherwise', async () => {
+    for (const self of ['me', undefined]) {
+      const { r, session } = await join(self);
+      await session.settled;
+      const h = r.sent.find((m) => kindOf(m) === 'hello') as { peer?: string } | undefined;
+      expect(h?.peer).toBe(self);
+    }
+  });
+});
