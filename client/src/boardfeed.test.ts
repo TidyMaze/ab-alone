@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import init, { Engine, replay_score } from 'abalone-wasm';
 import banned from './bannedkeys.json';
-import { retireTimes, BANNED, banSet, JUNK_BUDGET, LIMIT, MAX_FAILS_PER_KEY, MIN_OPPONENTS, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import { retireTimes, BANNED, banSet, JUNK_BUDGET, LIMIT, MAX_FAILS_PER_KEY, MIN_GAMES, MIN_OPPONENTS, RAMP_GAMES, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
 import { boardKeys, joinBoard, leaveBoard, signRetire, type RetireEvent } from './shareboard';
 import { generateKeys, type Keys } from './moverecord';
 
@@ -180,14 +180,14 @@ describe('the shared board read side (#1287)', () => {
     const w = (game: string, ts: number, status: number, a = 'A', b = 'B'): SharedResult =>
       result({ game, ts, status, black: { pub: a, name: a }, white: { pub: b, name: b } });
     // A beats B, A beats C (white), then A and B draw.
-    const rows = deriveBoard([w('g3', 3, 3), w('g1', 1, 1), w('g2', 2, 2, 'C', 'A')], 0);
+    const rows = deriveBoard([w('g3', 3, 3), w('g1', 1, 1), w('g2', 2, 2, 'C', 'A')], 0, 0, 0);
     expect(rows.map((r) => [r.rank, r.pub, r.rating])).toEqual([[1, 'A', 1229], [2, 'B', 1186], [3, 'C', 1185]]);
     expect(deriveBoard([])).toEqual([]);
     // Two games at the same second: the game id orders them, whatever the order they arrived in.
     const same = [w('s2', 5, 1, 'P', 'Q'), w('s1', 5, 2, 'P', 'Q')];
-    expect(deriveBoard(same, 0)).toEqual(deriveBoard([...same].reverse(), 0));
+    expect(deriveBoard(same, 0, 0, 0)).toEqual(deriveBoard([...same].reverse(), 0, 0, 0));
     // Same rating: the name decides. The latest name a key gave is the one shown.
-    const tie = deriveBoard([w('t1', 1, 3, 'X', 'Y'), result({ game: 't2', ts: 2, status: 3, black: { pub: 'X', name: 'Zed' }, white: { pub: 'Y', name: 'Yan' } })], 0);
+    const tie = deriveBoard([w('t1', 1, 3, 'X', 'Y'), result({ game: 't2', ts: 2, status: 3, black: { pub: 'X', name: 'Zed' }, white: { pub: 'Y', name: 'Yan' } })], 0, 0, 0);
     expect(tie.map((r) => r.name)).toEqual(['Yan', 'Zed']);
   });
 
@@ -199,17 +199,36 @@ describe('the shared board read side (#1287)', () => {
     expect(capPairs([...five].reverse()).map((r) => r.game)).toEqual(['1', '2', '3']);
     // A new UTC day and another pair start again.
     expect(capPairs([...five, w('6', day + 1), w('7', 60, 'A', 'C')]).map((r) => r.game)).toEqual(['1', '2', '3', '7', '6']);
-    expect(deriveBoard(five, 0).map((r) => r.rating)).toEqual(deriveBoard(five.slice(0, 3), 0).map((r) => r.rating));
+    expect(deriveBoard(five, 0, 0, 0).map((r) => r.rating)).toEqual(deriveBoard(five.slice(0, 3), 0, 0, 0).map((r) => r.rating));
+  });
+
+  it('scales a rating change by the opponent\'s counted games and shows a key after 10 games (ranked F3)', () => {
+    const w = (game: string, ts: number, a: string, b: string): SharedResult => result({ game, ts, status: 1, black: { pub: a, name: a }, white: { pub: b, name: b } });
+    expect([MIN_GAMES, RAMP_GAMES]).toEqual([10, 10]);
+    // A win over a fresh key (0 counted games) gains 0 for the winner; the loser still pays.
+    const one = deriveBoard([w('a', 1, 'A', 'B')], 0, 0);
+    expect(one.find((r) => r.pub === 'A')!.rating).toBe(1200);
+    // Ring of 6 keys, every pair 3 games a day (the cap), the lower index always winning.
+    const keys = ['K0', 'K1', 'K2', 'K3', 'K4', 'K5'];
+    const ring = (perPair: number): SharedResult[] => keys.flatMap((x, i) => keys.slice(i + 1).flatMap((y, j) => Array.from({ length: perPair }, (_, n) => w(`${x}${y}${n}`, 1 + n, x, y))));
+    // 1 game per pair: 5 games per key, below the display rule even with 5 opponents.
+    expect(deriveBoard(ring(1))).toEqual([]);
+    // 3 per pair (the cap): 15 games per key, shown; extra games of the same pair and day add nothing.
+    const capped = deriveBoard(ring(3));
+    expect(capped).toHaveLength(6);
+    expect(deriveBoard(ring(9))).toEqual(capped);
+    // The ramp holds the winner back: K0 gains less than an unscaled Elo run would give.
+    expect(capped[0]!.rating).toBeLessThan(deriveBoard(ring(3), MIN_OPPONENTS, MIN_GAMES, 0)[0]!.rating);
   });
 
   it('ranks a key only after counted results against 5 distinct opponents', () => {
     const w = (game: string, a: string, b: string): SharedResult => result({ game, ts: 1, status: 1, black: { pub: a, name: a }, white: { pub: b, name: b } });
     const four = ['B', 'C', 'D', 'E'].map((o) => w(`g${o}`, 'A', o));
-    expect(deriveBoard(four)).toEqual([]);
+    expect(deriveBoard(four, MIN_OPPONENTS, 0, 0)).toEqual([]);
     const five = [...four, w('gF', 'A', 'F')];
-    expect(deriveBoard(five).map((r) => [r.rank, r.pub])).toEqual([[1, 'A']]);
+    expect(deriveBoard(five, MIN_OPPONENTS, 0, 0).map((r) => [r.rank, r.pub])).toEqual([[1, 'A']]);
     // The same opponent three times in a day is one opponent.
-    expect(deriveBoard([...four, w('x1', 'A', 'B'), w('x2', 'A', 'B')])).toEqual([]);
+    expect(deriveBoard([...four, w('x1', 'A', 'B'), w('x2', 'A', 'B')], MIN_OPPONENTS, 0, 0)).toEqual([]);
     expect(MIN_OPPONENTS).toBe(5);
   });
 
@@ -311,7 +330,7 @@ describe('reading the relays (#1287, read only)', () => {
       });
       return s;
     };
-    const rows = await readBoard(open, 1000, score, RELAYS, new Set(), 0);
+    const rows = await readBoard(open, 1000, score, RELAYS, new Set(), 0, 0, 0);
     expect(socks.map((s) => s.url)).toEqual([...RELAYS]);
     expect(rows.map((r) => r.name)).toEqual(ended.status === 2 ? ['Bob', 'Ann'] : ['Ann', 'Bob']);
     for (const s of socks) expect(s.sent.every((m) => ['REQ', 'CLOSE'].includes((JSON.parse(m) as string[])[0]!))).toBe(true);
@@ -329,11 +348,11 @@ describe('reading the relays (#1287, read only)', () => {
       });
       return s;
     };
-    const rows = await readBoard(open, 1000, score, ['x'], new Set(), 1);
+    const rows = await readBoard(open, 1000, score, ['x'], new Set(), 1, 0, 0);
     // two games between the same pair kept (ok, edge): the other two never reach the ratings
     expect(rows.reduce((n, r) => n + r.rating, 0)).toBe(2400);
-    const only = await readBoard(open, 1000, score, ['x'], new Set(), 1);
+    const only = await readBoard(open, 1000, score, ['x'], new Set(), 1, 0, 0);
     expect(only).toHaveLength(2);
-    expect(await readBoard((url) => open(url), 1000 + 2 * WINDOW_S, score, ['x'], new Set(), 1)).toEqual([]);
+    expect(await readBoard((url) => open(url), 1000 + 2 * WINDOW_S, score, ['x'], new Set(), 1, 0, 0)).toEqual([]);
   });
 });

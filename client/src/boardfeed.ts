@@ -3,7 +3,7 @@
 // ratings are derived from the valid results, never read. A result also needs the signature of BOTH seats over the game (#1317),
 // proved with the seats' keys: the Nostr signature of the event proves nothing about who played, so it is not checked.
 import banned from './bannedkeys.json';
-import { DEFAULT_RATING, update1v1Elo } from './elo';
+import { DEFAULT_RATING, MIN_RATING, update1v1Elo } from './elo';
 import { b64, signedBy, type Keys } from './moverecord';
 import { cleanName, verifyRetire, type RetireEvent } from './shareboard';
 
@@ -172,6 +172,11 @@ export async function verifiedResults(contents: readonly string[], score: Score,
   return kept;
 }
 
+/** A key is ranked only after this many counted games (ranked F3): a throwaway key must play before it shows. */
+export const MIN_GAMES = 10;
+/** A rating change is scaled by the games the OPPONENT had counted before, over this many, at most 1: beating a fresh key gains nothing. */
+export const RAMP_GAMES = 10;
+
 /** At most this many results count for one unordered pair of keys in one UTC day: throwaway keys cannot farm each other. */
 export const PAIR_DAY_CAP = 3;
 /** A key is ranked only after counted results against this many distinct opponent keys. */
@@ -192,24 +197,28 @@ export function capPairs(results: readonly SharedResult[]): SharedResult[] {
 
 /** Every rating from the valid results in order (time, then game), from the default rating: a rating anyone could write is never read.
  * The pair cap applies; only keys with counted results against `minOpponents` distinct opponents get a row. */
-export function deriveBoard(results: readonly SharedResult[], minOpponents = MIN_OPPONENTS): SharedRow[] {
+export function deriveBoard(results: readonly SharedResult[], minOpponents = MIN_OPPONENTS, minGames = MIN_GAMES, ramp = RAMP_GAMES): SharedRow[] {
   const ratings = new Map<string, number>();
   const names = new Map<string, string>();
   const opponents = new Map<string, Set<string>>();
+  const games = new Map<string, number>(); // counted games so far, by key
+  const weight = (opponent: string): number => (ramp > 0 ? Math.min(1, (games.get(opponent) ?? 0) / ramp) : 1);
   const met = (a: string, b: string): void => void opponents.set(a, (opponents.get(a) ?? new Set<string>()).add(b));
   for (const r of capPairs(results)) {
     const a = ratings.get(r.black.pub) ?? DEFAULT_RATING;
     const b = ratings.get(r.white.pub) ?? DEFAULT_RATING;
     const next = update1v1Elo(a, b, { 1: 1, 2: 0, 3: 0.5 }[r.status]!);
-    ratings.set(r.black.pub, next.ratingA);
-    ratings.set(r.white.pub, next.ratingB);
+    ratings.set(r.black.pub, Math.max(MIN_RATING, a + Math.round(next.deltaA * weight(r.white.pub))));
+    ratings.set(r.white.pub, Math.max(MIN_RATING, b + Math.round(next.deltaB * weight(r.black.pub))));
+    games.set(r.black.pub, (games.get(r.black.pub) ?? 0) + 1);
+    games.set(r.white.pub, (games.get(r.white.pub) ?? 0) + 1);
     names.set(r.black.pub, r.black.name);
     names.set(r.white.pub, r.white.name);
     met(r.black.pub, r.white.pub);
     met(r.white.pub, r.black.pub);
   }
   return [...ratings]
-    .filter(([pub]) => opponents.get(pub)!.size >= minOpponents)
+    .filter(([pub]) => opponents.get(pub)!.size >= minOpponents && games.get(pub)! >= minGames)
     .map(([pub, rating]) => ({ pub, name: names.get(pub)!, rating }))
     .sort((a, b) => b.rating - a.rating || (a.name < b.name ? -1 : 1))
     .map((r, i) => ({ rank: i + 1, ...r }));
@@ -275,7 +284,7 @@ export function readRelay(open: (url: string) => Socket, nowS: number, url = '')
 }
 
 /** The board: the three relays read, the results that replay kept, the ratings derived. Reads only. */
-export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS, ban: ReadonlySet<string> = BANNED, minOpponents = MIN_OPPONENTS): Promise<SharedRow[]> {
+export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS, ban: ReadonlySet<string> = BANNED, minOpponents = MIN_OPPONENTS, minGames = MIN_GAMES, ramp = RAMP_GAMES): Promise<SharedRow[]> {
   const all = await Promise.all(relays.map((url) => readRelay(open, nowS, url)));
-  return deriveBoard(await verifiedResults(all.flat(), score, nowS, ban), minOpponents);
+  return deriveBoard(await verifiedResults(all.flat(), score, nowS, ban), minOpponents, minGames, ramp);
 }

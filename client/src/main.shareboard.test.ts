@@ -225,7 +225,8 @@ describe('shared board opt-in', () => {
       return JSON.stringify({ ...r, sigs: signedBy ? { black: await signResult(ka, r), white: await signResult(kb, r) } : { black: 'x', white: 'y' } });
     };
     const lie = engine.status() === 1 ? 2 : 1;
-    const wins = await Promise.all(opps.slice(0, 5).map((k, i) => result(`h${i}`, '<i>Ann</i>', engine.status(), true, k)));
+    // 10 counted games (MIN_GAMES): each of the five opponents twice.
+    const wins = await Promise.all(Array.from({ length: 10 }, (_, i) => result(`h${i}`, '<i>Ann</i>', engine.status(), true, opps[i % 5]!)));
     const contents = [...wins, await result('g2', 'Liar', lie), await result('g3', 'Unsigned', engine.status(), false)];
     FakeSocket.serve = (s) => {
       for (const content of contents) {
