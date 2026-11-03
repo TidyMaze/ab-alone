@@ -799,6 +799,6 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
     await game.hook('__run', { ...run, fighting: false, path: path.slice(0, -1) });
     const node = map().querySelector(`button[data-node="${index}"]`)!;
     expect(node.getAttribute('aria-label')).toBe(`Act 1, elite, ${elite.name}`);
-    expect(node.textContent).toContain(elite.name);
+    expect(node.textContent).toBe(`Elite${elite.name.replace('The ', '')}`);
   });
 });

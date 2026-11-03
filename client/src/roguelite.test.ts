@@ -1323,7 +1323,7 @@ describe('varied enemy armies (#1462)', () => {
     const labels = (run: Run): string[] =>
       [...new DOMParser().parseFromString(mapHtml(FOES, run), 'text/html').querySelectorAll<HTMLButtonElement>('button[data-node]')].map((b) => `${b.textContent}|${b.getAttribute('aria-label')}`);
     const after = { ...newRun(1, 3), path: [0] };
-    expect(labels(after)).toEqual(['Fight|Act 1, fight', 'EliteThe Artificer|Act 1, elite, The Artificer', 'Boss|Act 1, boss']);
+    expect(labels(after)).toEqual(['Fight|Act 1, fight', 'EliteArtificer|Act 1, elite, The Artificer', 'Boss|Act 1, boss']);
     expect(labels({ ...after, enemies: false })).toEqual(['Fight|Act 1, fight', 'Elite|Act 1, elite', 'Boss|Act 1, boss']);
   });
 

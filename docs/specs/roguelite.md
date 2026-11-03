@@ -23,7 +23,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
   back row first; the bot has its 14 against an elite, 10 against a fight node (#1145): its
-  standard layout without the 4 marbles of its front row (`FIGHT_FOES`). Marbles ejected in a fight are lost for the run. A won fight
+  standard layout without the 4 marbles of its front row (`FIGHT_FOES`), or the formation and special marbles of section 14. Marbles ejected in a fight are lost for the run. A won fight
   that does not end the run offers a reward (section 6): a marble or a special marble (Heavy,
   Anchor, Spark, and section 13's Magnet, Shield, Bomb, Medic), placed before the next fights.
 - **End**: the run is lost when a fight is lost (a draw is a loss) or the army is below 4 marbles,
@@ -398,3 +398,53 @@ Bomb's fuse is part of its mark, so it is part of the position too.
 - **Not in this slice**: no upgraded form of the new four, no fuse counter on the Bomb, and no ring or slide drawn
   for a Bomb's burst, a Magnet's pull or a Medic's return (the marbles are on their new cell when the ply is over).
 
+## 14. Varied enemy armies (#1462)
+
+Every fight against the same 10 or 14 plain marbles felt the same. A fight or an elite node now deals the bot its own
+army: a formation, special marbles of section 5 and 13's types and, for an elite, a named archetype. All of it is a
+pure function of the run seed and the node (its index in the map), as the reward offers are, so a run replays and a
+reload stands the same army. The army still stands on the standard layout whatever the bot does, and every rule of
+the special marbles is the engine's, played by the bot's search like the army's.
+
+- **Formations**: `Formation` in `abalone-core::run`, its code on the bridge. Drawn for each fight and elite, equally
+  likely, from its own draw apart from the map's shape and kinds (`run::foes_of`). A bot with fewer marbles than the
+  formation holds (10 against a fight, one fewer with the Saboteur) loses the marbles nearest the centre first (the
+  standard layout, its front row first as before).
+
+  | Code | Formation | Cells (White's half) |
+  |---|---|---|
+  | 0 | Standard | the standard layout, as before |
+  | 1 | Belgian daisy | two flowers (a cell and its six neighbours) on the corners of its back edge, centred `(0, -3)` and `(3, -3)` |
+  | 2 | German daisy | two flowers on the corners of its sides, centred `(-3, 0)` and `(3, 0)` |
+  | 3 | Snake | a chain of 14 along the back edge, then back along the third row and forward along the fourth |
+  | 4 | Wedge | a triangle of 5, 4, 3 and 2 marbles, its point toward the army |
+
+  The Belgian daisy of the rules (section 2.2 of rules.md) is a layout for both sides: its White flowers sit on the
+  army's own back edge, so the engine's `Board::belgian_daisy` cannot be the bot's alone. The two daisies here are the
+  same flower shape set on the bot's half, one pair on the corners of its back edge, one on the corners of its sides.
+  No formation has a cell of the army's standard layout, and none touches it at the start.
+- **Special marbles by act**: a **fight** holds `act + 1` special marbles (1, 2, 3 in acts 1 to 3), each of a
+  different type: the Heavy, Anchor and Spark in act 1, with the Magnet and Shield in act 2, with the Bomb and Medic in
+  act 3. They sit on marbles of the formation drawn from the seed and the node. An **elite** holds `act + 2` of its
+  archetype's.
+- **Elites**: drawn for each elite node, equally likely, named on the map node (under its kind) and in the fight HUD.
+
+  | Code | Elite | Special marbles | Turn it against the bot |
+  |---|---|---|---|
+  | 1 | The Wall | Anchors | an Anchor never leaves the board: push the others off, six are enough |
+  | 2 | The Artificer | Sparks, then as many Bombs (the odd one a Spark) | a Spark thrown off bursts, and its burst can take the bot's own marbles off; a Bomb bursts after the bot's third turn, whoever stands beside it |
+  | 3 | The Brute | Heavies | a Heavy weighs 2: push it with a strictly heavier group, or walk the marbles around it |
+
+  An elite stays a fight against the bot at twice its search budget, its reward and the marbles it gives back are
+  section 7's.
+- **The HUD** names what the fight holds: `act 1 elite · The Artificer · German daisy`, `act 2 fight · Snake` (the
+  Standard formation is not named). The marbles carry their glyphs of section 6 whatever side they are on.
+- **Bridge**: `run_map` records carry the node's `formation` and `elite` (7 integers a node, see the crate docs);
+  `run_foes(seed, node, less)` returns the bot's army of a node, `less` marbles short (the Saboteur) as `[count,
+  formation, q, r, kind, ...]`, and `Engine::with_foes(army, plan)` stands it (`Engine::with_army` stands the plain
+  army). `engine_version` is unchanged (no game of another mode changes).
+- **Saving**: the run keeps an `enemies` flag, on for a run started after this change. A run saved before it loads with
+  the flag off and fights the plain army of section 1 on every node, so a fight in progress replays its moves on the
+  board it started on.
+- **Only variety**: the enemy's armies change what a fight looks like and asks, never what carries between runs
+  (Decision #934).

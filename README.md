@@ -48,8 +48,9 @@ First to eject 6 wins. On top of it, the ship:
   act bosses and treasure nodes, and rest sites where you rest or upgrade a special marble (Heavy+,
   Anchor+, Spark+), up to 3 one-use tactics to play in a fight (Reinforce, Freeze, Swap, Fall back),
   scrap earned in fights and spent at shop nodes on marbles, special marbles, relics and tactics, and
-  seven special marbles in all (Heavy, Anchor, Spark, Magnet, Shield, Bomb, Medic)
-  ([spec](docs/specs/roguelite.md)); Auto-play can play a fight.
+  seven special marbles in all (Heavy, Anchor, Spark, Magnet, Shield, Bomb, Medic), enemy armies
+  that vary (five formations, special marbles of their own, more in later acts, and the named elites The
+  Wall, The Artificer and The Brute) ([spec](docs/specs/roguelite.md)); Auto-play can play a fight.
 - **Trainer**: waves against the bot, one more marble each wave.
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.

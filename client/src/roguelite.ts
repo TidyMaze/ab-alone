@@ -836,7 +836,7 @@ export function mapHtml(map: MapNode[], run: Run): string {
     const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
     return (
       `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}" data-node="${i}" style="left:${x}%;top:${y}%" ` +
-      `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}"${open.includes(i) ? '' : ' disabled'}>${kind}${elite && `<small>${elite}</small>`}</button>`
+      `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}"${open.includes(i) ? '' : ' disabled'}>${kind}${elite && `<small>${elite.replace('The ', '')}</small>`}</button>`
     );
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;

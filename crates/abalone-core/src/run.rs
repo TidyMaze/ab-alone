@@ -2082,6 +2082,13 @@ mod foes {
                     "{formation:?} {cell:?}"
                 );
                 assert!(!army.contains(cell), "{formation:?} {cell:?} is the army's");
+                for (dq, dr) in NEIGHBOURS {
+                    let next = (cell.0 + dq, cell.1 + dr);
+                    assert!(
+                        !army.contains(&next),
+                        "{formation:?} {cell:?} touches the army"
+                    );
+                }
             }
         }
     }
