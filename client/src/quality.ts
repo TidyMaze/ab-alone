@@ -232,6 +232,12 @@ export const timeDraw = (last: LastDraw, now: number): LastDraw =>
 export const drawWanted = (changed: boolean, moving: boolean, asked: boolean, automated: boolean): boolean =>
   automated || asked || changed || moving;
 
+/**
+ * The canvas is veiled (opacity 0) until the terrace is drawn (#1389): a frame of the room drawn meanwhile is never seen, yet its
+ * shader programs are compiled on the main thread, 18 of the 36 before the first picture (#1481). It is not drawn.
+ */
+export const roomVeiled = (veiled: boolean, terraceOn: boolean): boolean => veiled && !terraceOn;
+
 export function hasReflections(tier: Tier, automated: boolean): boolean {
   return !automated && tier === 'high';
 }
