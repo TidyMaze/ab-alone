@@ -597,6 +597,7 @@ describe('SceneRenderer (#632)', () => {
     expect((haze.material as THREE.MeshBasicMaterial).color.getHex()).toBe(0x123456); // the haze is nobody's tint
     expect(edges.visible).toBe(true);
     expect((edges.material as THREE.MeshBasicMaterial).color.getHex()).not.toBe(0xffffff);
+    sr.setBoardLook(null); // already so: nothing redone
     sr.setBoardLook(BOARD_LOOKS.day); // another look over it: the tint is of the file's colour, not of the last look
     sr.setBoardLook(null);
     expect([sr.sun.color.getHex(), sr.sun.intensity, sr.renderer.toneMappingExposure]).toEqual([TERRACE_LOOK.sun, TERRACE_LOOK.sunIntensity, TERRACE_EXPOSURE]);

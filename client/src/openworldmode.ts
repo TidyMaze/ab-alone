@@ -3,6 +3,7 @@
 // untouched.
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
+import { phaseOf, type Phase, wrapTime } from './daynight';
 import { chunkOf, Hero, neighbours, same, type Tile, WALKABLE, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
@@ -32,6 +33,9 @@ const PATH_REACH = 40;
 /** How often a hidden tab hands the peers host the hero (#1371): the host sends no more than its own caps allow. */
 const KEEPALIVE_TICK_MS = 1000;
 
+
+/** The most time of day one frame counts, in ms: a tab that was stalled does not skip the day (#1496). */
+const MAX_DAY_STEP_MS = 250;
 
 /** The cells as the bridge takes them: `q, r` pairs. */
 const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());
@@ -107,6 +111,11 @@ export class OpenWorldMode {
   private worldMap: WorldMap | null = null;
   /** The window's size, for the map. */
   private size: [number, number] = [0, 0];
+  /** The time of day (#1496), in ms into the 12 minute cycle: counted by the frames while the world is open, saved with it, and kept after the
+   * world is left so the lair that started a fight can read its phase. */
+  private tod = 0;
+  /** The time of the last frame counted into it, 0 before the first one of a visit. */
+  private counted = 0;
 
   /** `load` reads a chunk of a seed's world, `models` the low-poly and the detailed props: the first draw does not wait for them.
    * `reduced` tells whether the page asks for reduced motion, which holds the water still. */
@@ -167,7 +176,10 @@ export class OpenWorldMode {
     this.heard = [];
     this.teleporters = pairs(this.teleportersOf(seed));
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
+    this.counted = 0;
+    this.tod = saved?.time ?? 0; // an older save, or a new world, starts at the start of day (#1496)
     const view = new OpenWorldView(world, this.fight, skins);
+    view.setTime(this.tod, !this.reduced());
     view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
     view.cullGround(document.body.dataset.software === 'on'); // a software renderer lays the ground in view only (#1483)
     view.setShadows(!this.lowTier()); // the sun's soft shadow round the hero, on the high tier only (#1364)
@@ -204,6 +216,24 @@ export class OpenWorldMode {
     });
   }
 
+  /** The time of day, and its phase: `day`, `dusk` or `night` (#1496). */
+  get timeOfDay(): number {
+    return this.tod;
+  }
+
+  get phase(): Phase {
+    return phaseOf(this.tod);
+  }
+
+  /** The test hook: sets the time of day (docs/specs/openworld.md section 6). The sky changes at once. */
+  setTime(ms: number): void {
+    this.tod = wrapTime(ms);
+    this.view!.setTime(this.tod, !this.reduced());
+    this.persist();
+    this.dirty = true;
+    this.mark(document.body.dataset.openworld!);
+  }
+
   /** The scene drawn now, none outside the mode: the render-cost readout counts its lights (#1234). */
   get scene(): THREE.Scene | null {
     return this.view?.scene ?? null;
@@ -234,6 +264,7 @@ export class OpenWorldMode {
   }
 
   leave(): void {
+    if (this.active) this.persist(); // the time of day counted since the last save (#1496)
     this.flush();
     this.stopKeepAlive();
     this.peers?.leave();
@@ -270,6 +301,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldMotion;
     delete document.body.dataset.openworldDiscovered;
     delete document.body.dataset.openworldTeleporters;
+    delete document.body.dataset.openworldPhase;
     this.showTeleport(false);
   }
 
@@ -616,6 +648,10 @@ export class OpenWorldMode {
     const seconds = (now - this.clock) / 1000;
     this.clock = now;
     const reduced = this.reduced();
+    if (this.counted > 0) this.tod = wrapTime(this.tod + Math.min(now - this.counted, MAX_DAY_STEP_MS)); // the world's time passes while it is open, a stalled frame counts a quarter second at most (#1496)
+    this.counted = now;
+    if (this.view.setTime(this.tod, !reduced)) this.dirty = true; // the sky and the sun, drawn again as they change
+    this.markPhase();
     if (this.view!.follow(seconds, reduced)) this.dirty = true; // the camera follows the hero, its turn and its zoom (#988, #1026, #1333)
     if (this.view!.drawnYaw !== this.mapYaw) this.drawMap(); // the minimap and the map turn with the camera, only while it turns (#1448)
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
@@ -776,7 +812,7 @@ export class OpenWorldMode {
     if (!this.unsaved) return;
     this.unsaved = false;
     const { at, troop } = this.hero!;
-    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON()).then((stored) => {
+    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
   }
@@ -854,5 +890,11 @@ export class OpenWorldMode {
     this.showTeleport(this.onTeleporter());
     document.body.dataset.openworldYaw = String(Math.round((this.view!.yaw * 180) / Math.PI)); // the turn, in degrees (#1026)
     document.body.dataset.openworldDrawn = JSON.stringify(this.view!.drawn);
+    this.markPhase();
+  }
+
+  /** The phase on the page (`openworldPhase`, #1496), written when it changes. */
+  private markPhase(): void {
+    if (document.body.dataset.openworldPhase !== this.phase) document.body.dataset.openworldPhase = this.phase;
   }
 }

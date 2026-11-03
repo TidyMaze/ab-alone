@@ -88,10 +88,10 @@ describe('the sky of the Open world view', () => {
     view.setTime(9 * MIN, true);
     expect(glow('teleporter-pad')).toBeGreaterThan(day);
     expect(glow('teleporter-ring')).toBeGreaterThan(day);
-    expect(view.glow.value).toBe(1);
+    expect(view.shine.value).toBe(1);
     view.setTime(MIN, true);
     expect(glow('teleporter-pad')).toBe(day);
-    expect(view.glow.value).toBe(0);
+    expect(view.shine.value).toBe(0);
   });
 
   it('leaves the neon look alone: its black sky and cold sun stay whatever the time', () => {
@@ -109,6 +109,6 @@ describe('the glow of a marble (#1496)', () => {
     const fade = stripeFadeNode();
     expect(stripedMaterial(look, fade).emissiveNode).toBeNull();
     const view = made();
-    expect(stripedMaterial(look, fade, undefined, view.glow).emissiveNode).not.toBeNull();
+    expect(stripedMaterial(look, fade, undefined, view.shine).emissiveNode).not.toBeNull();
   });
 });

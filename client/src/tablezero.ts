@@ -29,10 +29,17 @@ export const TERRACE_EXPOSURE = 1.5;
 /** One sun, elevation 28 (the Blender render's, lights_camera.json), 25 degrees left of the camera axis at yaw 0, fixed in the world; a hemisphere; no point light. */
 export const SUN = { colour: 0xffd9a8, intensity: 5.0, elevation: 28, azimuth: 25, sky: 0x9db8d8, ground: 0x8a7a66, hemisphere: 1.6 } as const;
 
-/** The sun's position on a sphere of `distance` round the board: x is left of the axis, the camera looks from +z at yaw 0. */
-export function sunPosition(distance = 30): [number, number, number] {
-  const [el, az] = [(SUN.elevation * Math.PI) / 180, (SUN.azimuth * Math.PI) / 180];
-  return [-distance * Math.cos(el) * Math.sin(az), distance * Math.sin(el), distance * Math.cos(el) * Math.cos(az)];
+/** The direction from the board to the sun, a unit vector written into `out`: x is left of the axis, the camera looks from +z at yaw 0. The Open
+ * world's time of day and the lair boards move the sun (`elevation` and `azimuth` in degrees, #1496). */
+export function sunDirection(out: THREE.Vector3, elevation: number = SUN.elevation, azimuth: number = SUN.azimuth): THREE.Vector3 {
+  const [el, az] = [(elevation * Math.PI) / 180, (azimuth * Math.PI) / 180];
+  return out.set(-Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+}
+
+/** The sun's position on a sphere of `distance` round the board. */
+export function sunPosition(distance = 30, elevation: number = SUN.elevation, azimuth: number = SUN.azimuth): [number, number, number] {
+  const v = sunDirection(new THREE.Vector3(), elevation, azimuth).multiplyScalar(distance);
+  return [v.x, v.y, v.z];
 }
 
 /**
@@ -159,8 +166,9 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
     const geometry = neon ? first.geometry.clone() : first.geometry;
     if (neon) neonPaint(first.name, geometry); // the dish takes the slate, its edge the cyan line in the gap
     const mesh = new THREE.InstancedMesh(geometry, material, dishes.length);
-    const edges = neon ? new THREE.InstancedMesh(neonEdgeGeometry(), neonEdgeMaterial(), dishes.length) : null;
-    if (edges) Object.assign(edges, { frustumCulled: false, name: 'terrace_edges' });
+    // The cell edges: the neon look's cyan lines, or in the others a ring in the gap that stays hidden until a lair fight at night lights it (#1496).
+    const edges = new THREE.InstancedMesh(neon ? neonEdgeGeometry() : neonEdgeGeometry(0.52, 0.555), neon ? neonEdgeMaterial() : new THREE.MeshBasicMaterial({ name: 'terrace_edge', fog: false, side: THREE.DoubleSide }), dishes.length);
+    Object.assign(edges, { frustumCulled: false, name: 'terrace_edges', visible: neon });
     const voids = neon ? Object.assign(new THREE.InstancedMesh(neonVoidGeometry(), neonVoidMaterial(), dishes.length), { frustumCulled: false, name: 'terrace_voids' }) : null; // a pale outline where a cell is gone
     mesh.frustumCulled = false;
     mesh.name = 'terrace_dishes';
@@ -174,7 +182,7 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
           voids?.setMatrixAt(gone++, m);
           continue;
         }
-        edges?.setMatrixAt(n, m);
+        edges.setMatrixAt(n, m);
         mesh.setMatrixAt(n++, m);
       }
       mesh.count = n;
@@ -183,14 +191,12 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
         voids.count = gone;
         voids.instanceMatrix.needsUpdate = true;
       }
-      if (edges) {
-        edges.count = n;
-        edges.instanceMatrix.needsUpdate = true;
-      }
+      edges.count = n;
+      edges.instanceMatrix.needsUpdate = true;
     };
     mesh.userData.show(() => true);
     board.add(mesh);
-    if (edges) board.add(edges);
+    board.add(edges);
     if (voids) board.add(voids);
   }
   for (const bar of bars) {

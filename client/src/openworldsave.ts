@@ -3,6 +3,7 @@
 // under its own key, so the menu resumes it. A save of another world version (the generator changed, its cells mean something
 // else) or one that does not decode is deleted: the world starts fresh. Storage that fails never throws to the page.
 import type { Axial } from './board';
+import { CYCLE_MS } from './daynight';
 import { TROOP } from './openworld';
 import { decodeDiscovered, type DiscoveredSave } from './openworlddiscovered';
 import { decodeFight, isCell, type FightSave, type FightState } from './openworldfight';
@@ -23,20 +24,22 @@ export interface WorldSave {
   lairs: number[];
   /** The cells discovered (#1411), a bitset per chunk. A record saved before them has none: the mode discovers the cells round the hero. */
   discovered: DiscoveredSave;
+  /** The time of day (#1496), in ms into the 12 minute cycle. A record saved before the cycle starts at the start of day. */
+  time: number;
   savedAt: number;
 }
 
-/** The record version written now: 2 adds the camera's yaw, 3 the beaten lairs (#1170), 4 the discovered cells (#1411). A record of
- * version 1 (no `record` field, no yaw) is read with yaw 0, one of version 1 or 2 with no beaten lair, one before 4 with no cell
- * discovered, so an old save is kept, not lost (#1026). */
-export const RECORD = 4;
+/** The record version written now: 2 adds the camera's yaw, 3 the beaten lairs (#1170), 4 the discovered cells (#1411), 5 the time of day
+ * (#1496). A record of version 1 (no `record` field, no yaw) is read with yaw 0, one of version 1 or 2 with no beaten lair, one before 4
+ * with no cell discovered, one before 5 at the start of day, so an old save is kept, not lost (#1026). */
+export const RECORD = 5;
 
 /** The saves of the Open world. A failing store gives no save and a `false` put, never a throw. */
 export interface WorldSaves {
   /** The save of `seed` for this world version, `null` when there is none (a stale or garbage one is deleted). */
   load(seed: number): Promise<WorldSave | null>;
   /** Saves the world of `seed` in the state given, the camera's `yaw` too; `true` when it is stored. */
-  put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number, broken?: readonly Axial[], lairs?: readonly number[], discovered?: DiscoveredSave): Promise<boolean>;
+  put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number, broken?: readonly Axial[], lairs?: readonly number[], discovered?: DiscoveredSave, time?: number): Promise<boolean>;
   /** Marks lair `lair` of the saved world of `seed` as beaten (#1170); nothing when there is no save or the store fails. */
   beat(seed: number, lair: number): Promise<void>;
   /** Deletes the save of `seed`: the New world control discards the world it leaves (#1021). A refusing store keeps it. */
@@ -60,15 +63,17 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
   if (typeof raw !== 'object' || raw === null) return null;
   const save = raw as Record<keyof WorldSave | 'record', unknown>;
   if (save.version !== version || save.seed !== seed) return null;
-  if (save.record !== undefined && save.record !== 2 && save.record !== 3 && save.record !== RECORD) return null;
+  if (save.record !== undefined && save.record !== 2 && save.record !== 3 && save.record !== 4 && save.record !== RECORD) return null;
   const yaw = save.record === undefined ? 0 : save.yaw; // version 1: no turn yet (#1026)
   if (typeof yaw !== 'number' || !Number.isFinite(yaw)) return null;
   const broken = save.broken ?? []; // saved before the broken obstacles (#1147): none
   if (!Array.isArray(broken) || broken.length > MAX_BROKEN || !broken.every(isCell)) return null;
-  const lairs = save.record === 3 || save.record === RECORD ? save.lairs : []; // saved before the lairs: none beaten (#1170)
+  const lairs = save.record === 3 || save.record === 4 || save.record === RECORD ? save.lairs : []; // saved before the lairs: none beaten (#1170)
   if (!Array.isArray(lairs) || lairs.length > MAX_LAIRS || !lairs.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_LAIRS)) return null;
-  const discovered = decodeDiscovered(save.record === RECORD ? save.discovered : []); // saved before the discovery: none (#1411)
+  const discovered = decodeDiscovered(save.record === 4 || save.record === RECORD ? save.discovered : []); // saved before the discovery: none (#1411)
   if (!discovered) return null;
+  const time = save.record === RECORD ? save.time : 0; // saved before the cycle: the start of day (#1496)
+  if (typeof time !== 'number' || !(time >= 0 && time < CYCLE_MS)) return null;
   if (!isCell(save.hero) || !Array.isArray(save.troop) || save.troop.length > TROOP || !save.troop.every(isCell)) return null;
   const [hq, hr] = save.hero;
   if (!save.troop.every(([q, r]) => Math.max(Math.abs(q! - hq!), Math.abs(r! - hr!), Math.abs(q! - hq! + r! - hr!)) <= TROOP_REACH)) return null; // the troop is the hero's trail
@@ -84,6 +89,7 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
     broken: broken.map(([q, r]): Axial => [q, r]),
     lairs: [...lairs] as number[],
     discovered,
+    time,
     savedAt: save.savedAt as number,
   };
 }
@@ -103,9 +109,9 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
       }
       return null;
     },
-    async put(seed, hero, troop, fight, yaw, broken = [], lairs = [], discovered = []) {
+    async put(seed, hero, troop, fight, yaw, broken = [], lairs = [], discovered = [], time = 0) {
       try {
-        const save = { record: RECORD, version, seed, hero, troop, fight: fight.toJSON(), yaw, broken, lairs, discovered, savedAt: Date.now() };
+        const save = { record: RECORD, version, seed, hero, troop, fight: fight.toJSON(), yaw, broken, lairs, discovered, time, savedAt: Date.now() };
         await store.put(keyOf(seed), save);
         return true;
       } catch {
@@ -116,7 +122,7 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
       try {
         const raw = await store.get(keyOf(seed));
         const save = raw === undefined ? null : decodeWorld(raw, seed, version);
-        if (save && !save.lairs.includes(lair)) await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: [...save.lairs, lair], discovered: save.discovered });
+        if (save && !save.lairs.includes(lair)) await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: [...save.lairs, lair], discovered: save.discovered, time: save.time });
       } catch {
         // Storage blocked: the lair is beaten in the medals only.
       }

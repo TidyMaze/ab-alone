@@ -12,8 +12,9 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
+import { type BoardLook, TERRACE_LOOK } from './boardlook';
 import { NEON, NEON_LIGHT, lightNeon, neonStars } from './neonlook';
-import { TERRACE_EXPOSURE, addSun, aimSunShadow } from './tablezero';
+import { TERRACE_EXPOSURE, addSun, aimSunShadow, sunPosition } from './tablezero';
 
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
@@ -153,7 +154,11 @@ export class SceneRenderer {
   terraceOn = false;
   /** The terrace's sun: it casts the soft shadow on the high tier (#1364). */
   readonly sun: THREE.DirectionalLight;
-  private readonly hemisphere: THREE.HemisphereLight;
+  readonly hemisphere: THREE.HemisphereLight;
+  /** The lair fight's look (#1496), if one is asked for, and the colours the file's materials had before the looks. */
+  private boardLook: BoardLook | null = null;
+  private readonly paints = new WeakMap<THREE.Material, THREE.Color>();
+  private readonly neon: boolean;
   private roomBackground: THREE.Color | THREE.Texture | null = null;
 
   readonly notches: THREE.Group;
@@ -181,6 +186,7 @@ export class SceneRenderer {
     const webdriver = options.webdriver ?? Boolean(navigator.webdriver);
 
     this.renderer = options.renderer;
+    this.neon = Boolean(options.neon);
     this.renderer.setPixelRatio(renderPixelRatio(dpr, webdriver));
     this.renderer.setSize(width, height);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -505,6 +511,7 @@ export class SceneRenderer {
     this.camera.far = on ? 300 : 100;
     this.camera.updateProjectionMatrix();
     this.setShadows(on && shadows);
+    if (on && this.boardLook && !this.neon) this.applyBoardLook(this.boardLook); // a lair fight asked for its look before the terrace was in (#1496)
   }
 
   /** The neon look (#1424, `?look=neon`): black sky with fine stars, a cold sun, ACES, in place of the terrace's own light. Asked once, after `setTerrace`. */
@@ -514,6 +521,47 @@ export class SceneRenderer {
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = NEON_LIGHT.exposure;
     if (!this.terrace.getObjectByName('starfield')) this.terrace.add(neonStars());
+  }
+
+  /**
+   * Dresses the terrace for a lair fight of the Open world (#1496): the light, the sky, the exposure, the tint of the lit board and of
+   * the sky dome, and the glow of the cell edges follow `look`; null gives the terrace back. Nothing happens off the terrace and in the neon
+   * look. Asked before the terrace is on, it is applied when it comes on (`setTerrace`).
+   */
+  setBoardLook(look: BoardLook | null): void {
+    if (look === this.boardLook) return; // every mode start asks for the ordinary board
+    this.boardLook = look;
+    if (this.terraceOn && !this.neon) this.applyBoardLook(look ?? TERRACE_LOOK);
+  }
+
+  private applyBoardLook(look: BoardLook): void {
+    this.sun.color.setHex(look.sun);
+    this.sun.intensity = look.sunIntensity;
+    this.sun.position.set(...sunPosition(30, look.elevation, look.azimuth));
+    this.hemisphere.color.setHex(look.sky);
+    this.hemisphere.groundColor.setHex(look.ground);
+    this.hemisphere.intensity = look.hemisphere;
+    (this.scene.background as THREE.Color).setHex(look.background);
+    this.renderer.toneMappingExposure = look.exposure;
+    // The materials are the file's, shared with the next fight: each is multiplied from the colour it had when first dressed.
+    const tint = new THREE.Color(look.tint);
+    const dome = new THREE.Color(look.dome).multiplyScalar(TERRACE_EXPOSURE / look.exposure);
+    this.terrace.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const material = mesh.material as THREE.MeshStandardMaterial & THREE.MeshBasicMaterial;
+      if (mesh.name === 'terrace_edges') {
+        mesh.visible = look.edge !== null;
+        if (look.edge !== null) material.color.setHex(look.edge);
+      } else if (material.isMeshStandardMaterial) this.paint(material, tint);
+      else if (material.name === 'terrace_solid') this.paint(material, dome);
+    });
+  }
+
+  /** Sets a material's colour to the one it had at first, multiplied by `by`. */
+  private paint(material: THREE.MeshStandardMaterial | THREE.MeshBasicMaterial, by: THREE.Color): void {
+    if (!this.paints.has(material)) this.paints.set(material, material.color.clone());
+    material.color.copy(this.paints.get(material)!).multiply(by);
   }
 
   /** The sun's soft shadow, on the high tier only: the low tier draws none (#1364). */

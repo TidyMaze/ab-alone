@@ -4,6 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, OFF_WORLD, type Terrain, type Tile, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
+import { WORLD_LOOKS } from './daynight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import { setNeonWorldOn } from './neonlook';
@@ -20,7 +21,6 @@ import {
   HI_RADIUS,
   loadModels,
   LOOK,
-  SHIP_BLACK,
   SODIUM,
   MARBLE_LOOK,
   MAX_REACH,
@@ -2389,10 +2389,10 @@ describe('the refined look of the Open world (#1138)', () => {
     expect(BIOME_LOOK.tundra.ground).toBe(0xc4d0d8);
   });
 
-  it('fogs toward the ship\'s black and edges the walls in the one hazard colour, sodium (#1173)', () => {
+  it('fogs toward the sky of the time of day (the day\'s at the start, #1496) and edges the walls in the one hazard colour, sodium (#1173)', () => {
     const view = new OpenWorldView(new World(bytes));
-    expect(view.scene.fog!.color.getHex()).toBe(SHIP_BLACK);
-    expect((view.scene.background as THREE.Color).getHex()).toBe(SHIP_BLACK);
+    expect(view.scene.fog!.color.getHex()).toBe(WORLD_LOOKS.day.sky);
+    expect((view.scene.background as THREE.Color).getHex()).toBe(WORLD_LOOKS.day.sky);
     expect(SODIUM).toBe(0xd9822b);
   });
 

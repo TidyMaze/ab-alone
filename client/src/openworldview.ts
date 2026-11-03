@@ -4,7 +4,7 @@
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import { accentLights, neonSkyGlow } from './neonfx';
 import * as THREE from 'three/webgpu';
-import { uniform } from 'three/tsl';
+import { uniform, vertexColor } from 'three/tsl';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './openworldboat';
@@ -14,7 +14,8 @@ import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
 import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
-import { SUN, SUN_SHADOW, aimSunShadow, sunPosition } from './tablezero';
+import { SUN, SUN_SHADOW, aimSunShadow, sunDirection } from './tablezero';
+import { Sky, WORLD_LOOKS } from './daynight';
 import { NEON, lightNeon, neonSunPosition, neonStars, neonWorldOn } from './neonlook';
 import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
@@ -213,8 +214,7 @@ export const GROUND: Record<Terrain, Ground> = {
   tree: 'grass',
   wall: 'rock',
 };
-/** The ship's black (`--bg`) the fog and the sky fade to, and the ship's one hazard colour, sodium (`--hazard`), on the wall edges (#1173). */
-export const SHIP_BLACK = 0x0b0d0f;
+/** The ship's one hazard colour, sodium (`--hazard`), on the wall edges (#1173). */
 export const SODIUM = 0xd9822b;
 export const LOOK: Record<Ground, { color: number; emissive: number }> = {
   water: { color: 0xffffff, emissive: 0x000000 }, // the lakes have no glow of their own (#1315); the colour comes per cell (waterColor)
@@ -323,7 +323,9 @@ export const MARBLE = 0.3;
 /** The landmark of a boss lair (#1170): a tall pillar on a flat plinth, gold while the lair is unbeaten, green once beaten. */
 export const LAIR_LOOK = { open: 0xffb020, beaten: 0x4caf6a, height: 5 };
 /** A teleporter (#1412): a flat glowing hex pad on its cell and a ring floating `ring` over it, in a violet none of the terrain nor the marbles has. */
-export const TELEPORTER_LOOK = { colour: 0xb36bff, ring: 1.1 };
+export const TELEPORTER_LOOK = { colour: 0xb36bff, ring: 1.1, emissive: 0.5, nightGlow: 0.9 };
+/** How much of its painted colour a lair's landmark emits at full glow (#1496). */
+const LAIR_GLOW = 0.5;
 /** The most teleporters the widest loaded square holds: one a square of 4 x 4 chunks (abalone-core `TELEPORT_BLOCK`), 21 chunks across. */
 const TELEPORTER_CAPACITY = (Math.ceil((2 * MAX_REACH + 1) / 4) + 1) ** 2;
 /** The looks of the marbles (#1138): glossy, with the ring colours of the interface, cyan on the hero and the troop (the last move), amber
@@ -461,12 +463,18 @@ export class OpenWorldView {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
   private readonly neon = neonWorldOn(); // `?look=neon` (#1424): a black sky with stars, a cold sun, soft shadows at 55 %
-  private readonly fog = new THREE.Fog(neonWorldOn() ? NEON.sky : SHIP_BLACK);
+  private readonly fog = new THREE.Fog(neonWorldOn() ? NEON.sky : WORLD_LOOKS.day.sky);
   private stars: THREE.Mesh | null = null;
   /** Where the hero stands (x, z) for the ground's shader: the neon grid is clear round it, quiet further out (#1424). */
   /** The neon look's 2 accent lights (neonfx.ts), kept near the hero. */
   private readonly accents = this.neon ? accentLights('openworld') : [];
   private skyGlow: THREE.Object3D | null = null;
+  /** The look of the sky at the time of day (#1496), written by `setTime`; the shine of the things that matter at night, a uniform the marbles' and the lairs' materials read. */
+  private readonly sky = new Sky();
+  readonly shine = uniform(0);
+  private readonly hemisphere: THREE.HemisphereLight;
+  private readonly sunDirection = new THREE.Vector3();
+  private readonly waterTint: THREE.Material[] = [];
   private readonly heroXZ = uniform(new THREE.Vector2());
   private level = 1;
   /** The zoom drawn at the current turn: `level` as followed, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
@@ -587,9 +595,9 @@ export class OpenWorldView {
     skins?: MarbleSkins,
   ) {
     lifting = true; // a new view starts on the high tier (#1418)
-    this.scene.background = new THREE.Color(this.neon ? NEON.sky : SHIP_BLACK);
+    this.scene.background = new THREE.Color(this.neon ? NEON.sky : WORLD_LOOKS.day.sky);
     this.scene.fog = this.fog;
-    const hemisphere = new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 0.9);
+    const hemisphere = (this.hemisphere = new THREE.HemisphereLight(WORLD_LOOKS.day.hemiSky, WORLD_LOOKS.day.hemiGround, WORLD_LOOKS.day.hemiIntensity));
     this.scene.add(hemisphere);
     // The arena's sun (tablezero.ts, #1364): its colour and its direction, the hero's cell at its target; the shadow is the high tier's.
     this.sun = new THREE.DirectionalLight(SUN.colour, 3.2);
@@ -616,6 +624,7 @@ export class OpenWorldView {
       this.managed.push(this.grounds[ground]);
       this.flats[ground] = this.instances(`terrain-${ground}-flat`, 1, top, material()); // grows on the first low build (`fit`)
       this.managed.push(this.flats[ground]);
+      if (water) this.waterTint.push(this.grounds[ground].material as THREE.Material, this.flats[ground].material as THREE.Material);
     }
     for (const prop of PROP_NAMES) {
       this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop, this.sway));
@@ -625,12 +634,12 @@ export class OpenWorldView {
       this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.detailed[prop]!);
     }
-    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player));
+    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player, this.shine));
     this.hero.name = 'hero';
     this.hero.castShadow = this.hero.receiveShadow = true;
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
-    this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player));
+    this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player, this.shine));
     this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
     this.boats = this.instances('boats', 1 + CAPACITY.troop, boatGeometry(MARBLE), boatMaterial());
     this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
@@ -638,10 +647,11 @@ export class OpenWorldView {
     this.ejected.castShadow = true;
     this.ejected.visible = false;
     this.scene.add(this.ejected);
-    const glow = (): THREE.Material => new THREE.MeshStandardMaterial({ color: TELEPORTER_LOOK.colour, emissive: TELEPORTER_LOOK.colour, emissiveIntensity: 0.5, roughness: 0.4, flatShading: true });
+    const glow = (): THREE.Material => new THREE.MeshStandardMaterial({ color: TELEPORTER_LOOK.colour, emissive: TELEPORTER_LOOK.colour, emissiveIntensity: TELEPORTER_LOOK.emissive, roughness: 0.4, flatShading: true });
     this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, new THREE.CylinderGeometry(0.5, 0.56, 0.08, 6).translate(0, 0.04, 0), glow());
     this.rings = this.instances('teleporter-ring', TELEPORTER_CAPACITY, new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0), glow());
     this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
+    if (!this.neon) this.applyLook(); // the sky of the time of day, the day's at the start (#1496)
   }
 
   /** An instanced mesh of `capacity` instances, each with its own colour (3 floats, white until a build sets it, #984). Its geometry
@@ -1248,6 +1258,33 @@ export class OpenWorldView {
     return this.stripe.value;
   }
 
+  /**
+   * Moves the sky to the time of day `ms` (#1496): the sky and fog colour, the sun or the moon, the ambient light, the water's tint and the
+   * shine of the marbles, the lairs and the teleporters. Returns whether the look changed, so the scene is drawn again. `blend` is off under
+   * reduced motion: the look then switches where the phase changes. The neon look has a sky of its own and keeps it.
+   */
+  setTime(ms: number, blend: boolean): boolean {
+    if (this.neon || !this.sky.set(ms, blend)) return false;
+    this.applyLook();
+    return true;
+  }
+
+  private applyLook(): void {
+    const { look } = this.sky;
+    (this.scene.background as THREE.Color).setHex(look.sky);
+    this.fog.color.setHex(look.sky);
+    this.sun.color.setHex(look.sun);
+    this.sun.intensity = look.sunIntensity;
+    sunDirection(this.sunDirection, look.elevation, look.azimuth);
+    this.sun.position.copy(this.sun.target.position).add(this.sunAway.copy(this.sunDirection).multiplyScalar(30 * this.shadowScale));
+    this.hemisphere.color.setHex(look.hemiSky);
+    this.hemisphere.groundColor.setHex(look.hemiGround);
+    this.hemisphere.intensity = look.hemiIntensity;
+    for (const material of this.waterTint) (material as THREE.MeshStandardMaterial).color.setHex(look.water);
+    this.shine.value = look.glow;
+    for (const mesh of [this.pads, this.rings]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
+  }
+
   /** The sun's soft shadow round the hero, on the high tier (#1364). */
   setShadows(on: boolean): void {
     aimSunShadow(this.sun, on, SHADOW_REACH);
@@ -1280,7 +1317,7 @@ export class OpenWorldView {
       this.fitShadow();
     }
     this.sun.target.position.copy(at);
-    this.sun.position.copy(at).add(this.sunAway.set(...(this.neon ? neonSunPosition(30 * scale) : sunPosition(30 * scale))));
+    this.sun.position.copy(at).add(this.neon ? this.sunAway.set(...neonSunPosition(30 * scale)) : this.sunAway.copy(this.sunDirection).multiplyScalar(30 * scale));
     this.stars?.position.copy(this.camera.position);
     this.skyGlow?.position.set(this.camera.position.x, this.camera.position.y + 0.5, this.camera.position.z);
     this.heroXZ.value.set(at.x, at.z);
@@ -1488,7 +1525,7 @@ export class OpenWorldView {
       const model = this.lairModels && (isBeaten ? this.lairModels.beaten : this.lairModels.open);
       if (model) {
         // The Blender landmark (#1171): painted by its vertex colours, gold gem while open, a green stump once beaten.
-        group.add(new THREE.Mesh(model.clone(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, flatShading: true })));
+        group.add(new THREE.Mesh(model.clone(), Object.assign(new THREE.MeshStandardNodeMaterial({ vertexColors: true, roughness: 0.6, flatShading: true }), { emissiveNode: vertexColor().mul(this.shine).mul(LAIR_GLOW) }))); // it shines of its own at night (#1496)
       } else {
         const colour = isBeaten ? LAIR_LOOK.beaten : LAIR_LOOK.open;
         const material = new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.6, roughness: 0.5 });

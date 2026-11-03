@@ -44,7 +44,7 @@ describe('the time of day in the Open world mode', () => {
     m.frame(render, 1100); // a first frame draws; later ones draw only a change
     expect(m.timeOfDay).toBe(100);
     expect(render).toHaveBeenCalledTimes(1);
-    m.setTime(6 * MIN - 100);
+    m.setTime(6 * MIN - 150);
     m.frame(render, 1200);
     expect(body().openworldPhase).toBe('day');
     m.frame(render, 1300);

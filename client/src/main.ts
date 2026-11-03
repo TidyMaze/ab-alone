@@ -208,6 +208,8 @@ import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
+import { BOARD_LOOKS } from './boardlook';
+import type { Phase } from './daynight';
 import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
 import { worldSaves } from './openworldsave';
@@ -2548,7 +2550,14 @@ applyPalette();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPalette); // System theme follows the OS (#923)
 let hover: Axial | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the hub (#522)
-let lairFrom: { seed: number; lair: number } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170)
+let lairFrom: { seed: number; lair: number; phase: Phase } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170), and the phase of the world it was entered in (#1496)
+/** Dresses the board for the phase the lair was entered in (#1496): day, dusk or night, `body[data-fight-board]` reading the same. A fight that is no lair's has the ordinary board. */
+function syncBoardLook(): void {
+  const phase = lairFrom?.phase;
+  sceneRenderer.setBoardLook(phase ? BOARD_LOOKS[phase] : null);
+  if (phase) document.body.dataset.fightBoard = phase;
+  else delete document.body.dataset.fightBoard;
+}
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
@@ -5195,6 +5204,7 @@ const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null): void {
   leaveMode();
   lairFrom = lair; // a fight picked in a menu, a door or the daily is no lair's (#1170)
+  syncBoardLook();
   worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
   fight = { id, seed, daily };
@@ -5358,6 +5368,7 @@ backButton.addEventListener('click', () => {
   if (lairFrom) {
     const { seed } = lairFrom;
     lairFrom = null;
+    syncBoardLook();
     void openWorld.open(seed, innerWidth, innerHeight); // the world as the lair left it: the hero on the entrance (#1170)
     return;
   }
@@ -5375,6 +5386,7 @@ function leaveMode(): void {
   leaveHub();
   fight = null;
   lairFrom = null;
+  syncBoardLook();
   goalOpen = false;
   speech = null;
   skipEjections(); // the effects of the mode's last move end with it
@@ -6166,7 +6178,7 @@ const openWorld = new OpenWorldMode(
   (seed) => Int32Array.from(world_lairs(seed)),
   (seed, lair) => {
     const ids = boss_ids();
-    startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair }); // a lair starts the normal boss fight (#1170)
+    startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair, phase: openWorld.phase }); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496)
   },
   // The marbles of the Open world wear the skins of the ship (#1176): the worn glass for the hero and the troop, the worn shell
   // for the enemies, once their maps are on.
@@ -6269,6 +6281,7 @@ if (navigator.webdriver) {
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
   hooks.__openworldEnemies = () => openWorld.enemies();
+  hooks.__openworldTime = (ms: number) => openWorld.setTime(ms); // the time of day in ms of the 12 minute cycle: 0 day, 6 min dusk, 7.5 min night (#1496)
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldTeleporters = (seed: number) => Array.from(world_teleporters(seed)); // every teleporter of a world, `q, r` pairs (#1412)

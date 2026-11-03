@@ -148,7 +148,7 @@ describe('the neon look of the terrace file (#1424)', () => {
     const root = new THREE.Group();
     root.add(piece('scene_cell_00'));
     const out = mergeByMaterial(root);
-    expect(out.getObjectByName('terrace_edges')).toBeUndefined();
+    expect(out.getObjectByName('terrace_edges')!.visible).toBe(false); // a hidden glow under the dishes, for the lair fight at night (#1496)
   });
 });
 

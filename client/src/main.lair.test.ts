@@ -16,10 +16,12 @@ const settle = async (): Promise<void> => {
 const hooks = () => window as unknown as { __openworldFixture: (f: { hero: Axial; troop: Axial[]; enemies: Axial[] }) => void };
 
 /** Enters the world of seed 7 and walks onto lair `lair` from the cell west of it (the hook stands the hero there). */
-async function walkOnto(game: Game, lair: number): Promise<Axial> {
-  game.openModes();
-  byId('openworld').click();
-  await settle();
+async function walkOnto(game: Game, lair: number, open = true): Promise<Axial> {
+  if (open) {
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+  }
   const [q, r] = data().openworldLairs!.split(' ')[lair]!.split(',').map(Number) as unknown as Axial;
   hooks().__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] });
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
@@ -124,7 +126,7 @@ describe('the day and the night of the Open world (#1496)', () => {
     byId('openworld').click();
     await settle();
     setTime(9 * MIN);
-    await walkOnto(game, 0);
+    await walkOnto(game, 0, false); // the world is open: the hero steps onto the lair at night
     expect(data().openworld).toBeUndefined();
     expect(data().fightBoard).toBe('night');
     byId('boss-retry').click();
@@ -152,8 +154,9 @@ describe('the day and the night of the Open world (#1496)', () => {
     game.openModes();
     byId('openworld').click();
     await settle();
+    expect(data().openworldPhase).toBe('day'); // the first fight left the world at the start of day
     setTime(6.5 * MIN);
-    await walkOnto(game, 1);
+    await walkOnto(game, 1, false);
     expect(data().fightBoard).toBe('dusk');
     game.openModes();
     byId('boss-fight').click();

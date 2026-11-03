@@ -215,7 +215,7 @@ describe('worldSaves', () => {
     const saves = worldSaves(memoryStore(), 1);
     expect(await saves.put(7, hero, troop, fightWithPush(), 0)).toBe(true);
     const back = await saves.load(7);
-    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], savedAt: expect.any(Number) });
+    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], time: 0, savedAt: expect.any(Number) });
     expect(back!.fight.beaten).toBe(1);
   });
 

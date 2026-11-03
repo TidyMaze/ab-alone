@@ -227,7 +227,7 @@ describe('the renderer and its textures', () => {
     const { scene } = await drawn(game);
     const terrace = scene.getObjectByName('terrace')!;
     expect(terrace.getObjectByName('starfield')).toBeUndefined();
-    expect(terrace.getObjectByName('terrace_edges')).toBeUndefined();
+    expect(terrace.getObjectByName('terrace_edges')!.visible).toBe(false); // the lair fight at night lights it (#1496)
     expect((scene.background as THREE.Color).getHex()).toBe(0x2c3438);
   });
 

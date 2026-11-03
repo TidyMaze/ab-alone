@@ -3,6 +3,7 @@ import { BLEND_MS, CYCLE_MS, PHASE_MS, Sky, WORLD_LOOKS, mixHex, phaseOf, wrapTi
 
 // The day/night cycle of the Open world (docs/specs/openworld.md section 11, #1496): day 6 min, dusk 1.5 min, night 3 min, dusk 1.5 min.
 const MIN = 60_000;
+const HALF = 128 / 255; // the middle of a blend: step 128 of 255
 
 describe('the cycle', () => {
   it('lasts 12 minutes: day 6, dusk 1.5, night 3, dusk again 1.5', () => {
@@ -54,7 +55,7 @@ describe('the sky', () => {
     sky.set(6 * MIN - BLEND_MS - 1, true);
     expect(sky.look).toEqual(WORLD_LOOKS.day);
     sky.set(6 * MIN - BLEND_MS / 2, true);
-    expect(sky.look.sky).toBe(mixHex(WORLD_LOOKS.day.sky, WORLD_LOOKS.dusk.sky, 0.5));
+    expect(sky.look.sky).toBe(mixHex(WORLD_LOOKS.day.sky, WORLD_LOOKS.dusk.sky, HALF));
     expect(sky.look.sunIntensity).toBeCloseTo((WORLD_LOOKS.day.sunIntensity + WORLD_LOOKS.dusk.sunIntensity) / 2, 1);
     sky.set(6 * MIN - 1, true);
     expect(sky.look.sky).toBe(WORLD_LOOKS.dusk.sky);
@@ -68,7 +69,7 @@ describe('the sky', () => {
       sky.set(at * MIN - 1, true);
       expect(sky.look.sky, `${from} to ${to}`).toBe(WORLD_LOOKS[to].sky);
       sky.set(at * MIN - BLEND_MS / 2, true);
-      expect(sky.look.sky, `${from} to ${to}`).toBe(mixHex(WORLD_LOOKS[from].sky, WORLD_LOOKS[to].sky, 0.5));
+      expect(sky.look.sky, `${from} to ${to}`).toBe(mixHex(WORLD_LOOKS[from].sky, WORLD_LOOKS[to].sky, HALF));
     }
   });
 
