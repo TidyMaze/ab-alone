@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- The Content-Security-Policy (client F6): scripts from this origin and the one inline script below (by hash; edit it, update the hash, src/csp.test.ts checks), the wasm engine, 'unsafe-eval' for the KTX2 texture transcoder (embind builds its functions with new Function), the relays of src/p2p.ts and src/boardfeed.ts, the Google Fonts hosts. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' 'sha256-yoT49kOtxjTgtQ6/9mjOPeGLD9r7fm+tQka3/+lYp6E='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' blob: data: wss://nos.lol wss://nostr.red5d.dev wss://relay.bitmacro.cloud wss://relay.piazza.today ws://localhost:* ws://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b0d0f" />
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
