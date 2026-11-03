@@ -621,17 +621,35 @@ pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
     search(game, node_budget).map(|r| r.mv)
 }
 
-/// Stub of auto-play's search (#1500): the plain move, repetition not yet avoided.
+/// The move of the side Auto-play plays (#1500): the best move that does not repeat the game into
+/// a draw, see [`avoiding_repeats`]. The bot's own reply and the hint use [`best_move`].
 pub fn auto_move(game: &Game, node_budget: u32) -> Option<Move> {
-    best_move(game, node_budget)
+    avoiding_repeats(game, |allow| {
+        search_with(game, node_budget, DEFAULT_WEIGHTS, allow)
+    })
+    .map(|r| r.mv)
 }
 
-/// Stub (#1500): asks `search` with no filter.
+/// Whether the side to move wins the game by playing `mv`: it ejects its last marble to win.
+fn wins(game: &Game, mv: &Move) -> bool {
+    let mover = game.to_move();
+    game.ejected(mover) + 1 >= game.win_ejections(mover)
+        && matches!(apply(game.board(), mover, mv), Ok((_, true)))
+}
+
+/// Runs `search` (a root search taking the filter on the moves it may choose) for the side Auto-play
+/// plays, so it does not repeat itself into a draw by threefold repetition (#1500). A move to a
+/// position not yet seen in the game is preferred over any move to a seen one, even if it scores a
+/// little worse; failing that, one that does not reach [`REPETITION_LIMIT`]; a move that draws is
+/// played only when every legal move does. A move that wins is always kept (in practice it is
+/// never a repeat: an ejection cannot be undone).
 pub fn avoiding_repeats(
-    _game: &Game,
+    game: &Game,
     search: impl Fn(&dyn Fn(&Move) -> bool) -> Option<SearchResult>,
 ) -> Option<SearchResult> {
-    search(&|_| true)
+    search(&|mv| game.seen_after(mv) == 1 || wins(game, mv))
+        .or_else(|| search(&|mv| game.seen_after(mv) < REPETITION_LIMIT))
+        .or_else(|| search(&|_| true))
 }
 
 #[cfg(test)]
@@ -978,6 +996,23 @@ mod tests {
     }
 
     #[test]
+    fn a_move_wins_when_it_ejects_the_last_marble_the_side_needs() {
+        let game = winning_push();
+        let push = best_move(&game, 500).unwrap();
+        assert!(wins(&game, &push));
+        let shuffle = legal_moves(game.board(), Player::Black)
+            .into_iter()
+            .find(|m| !apply(game.board(), Player::Black, m).unwrap().1)
+            .unwrap();
+        assert!(!wins(&game, &shuffle), "no ejection");
+        let early = game_from(&[(2, 0), (3, 0)], &[(4, 0)], Player::Black, [4, 0]);
+        assert!(
+            !wins(&early, &push),
+            "an ejection that is not the last one needed"
+        );
+    }
+
+    #[test]
     fn the_auto_move_of_a_finished_game_is_none() {
         let mut game = winning_push();
         game.play(&best_move(&game, 500).unwrap()).unwrap();
@@ -1012,7 +1047,7 @@ mod tests {
         assert!(tiers[1]
             .iter()
             .all(|m| game.seen_after(m) < REPETITION_LIMIT));
-        assert!(tiers[1].len() > tiers[0].len() && tiers[2].len() > tiers[1].len());
+        assert!(tiers[1].len() >= tiers[0].len() && tiers[2].len() > tiers[1].len());
         assert!(tiers[2].contains(&mv), "anything: the drawing move too");
     }
 

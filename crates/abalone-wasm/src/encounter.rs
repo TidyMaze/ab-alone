@@ -37,6 +37,7 @@ use abalone_core::encounter::unstable::{
 use abalone_core::encounter::{BossDef, Encounter as CoreEncounter};
 use abalone_core::game::Game;
 use abalone_core::moves::{legal_moves, Move, Player};
+use abalone_core::search::avoiding_repeats;
 use wasm_bindgen::prelude::*;
 
 /// Army code of the Choir, see the module docs: its place in the cycle.
@@ -720,7 +721,9 @@ impl Encounter {
         let mv = match &self.fight {
             Fight::Plain(e) => e.player_search().map(|r| r.mv),
             Fight::Choir(c) => c.player_move(),
-            Fight::Swarm(s) => s.player_search(s.budget(), &|_| true).map(|r| r.mv),
+            Fight::Swarm(s) => {
+                avoiding_repeats(s.game(), |allow| s.player_search(s.budget(), allow)).map(|r| r.mv)
+            }
         };
         mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
     }

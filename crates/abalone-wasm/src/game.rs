@@ -7,7 +7,7 @@ use crate::convert::{
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
 use abalone_core::run::{army_game_against, army_game_formed, trainer_game, FoePlan, Formation};
-use abalone_core::search::{best_move, position_score};
+use abalone_core::search::{auto_move, best_move, position_score};
 use abalone_core::world::Biome;
 use wasm_bindgen::prelude::*;
 
@@ -163,9 +163,12 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// Stub (#1500).
+    /// The move Auto-play plays for the side to move (#1500), one move record: the bot's search, but
+    /// never into a draw by repetition unless every legal move draws. Empty once the game is over.
     pub fn auto_move(&self, nodes: u32) -> Vec<i32> {
-        self.best_move(nodes)
+        auto_move(&self.game, nodes)
+            .map(|mv| encode(&mv).to_vec())
+            .unwrap_or_default()
     }
 
     /// Score of the position for the side to move, searching at most `nodes` positions. See the

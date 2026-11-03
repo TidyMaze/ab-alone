@@ -29,7 +29,7 @@ use crate::encounter::unstable::carried_unstable;
 use crate::game::{Game, GameError, Outcome, Tactic, TacticError};
 use crate::moves::{Move, Player};
 use crate::run::Relic;
-use crate::search::{search, SearchResult};
+use crate::search::{avoiding_repeats, search, search_with, SearchResult, DEFAULT_WEIGHTS};
 
 /// `special(ply, phase)`: the special that fires at the end of ply number `ply` (1 is the first
 /// ply of the game), as a tell id, or `None`.
@@ -520,13 +520,15 @@ impl Encounter {
         search(&self.game, self.boss.node_budget)
     }
 
-    /// The same search for the player's turn (auto-play, #792): `None` on the boss's turn or when
-    /// the game is over.
+    /// The same search for the player's turn (auto-play, #792), which does not repeat the game into
+    /// a draw (#1500): `None` on the boss's turn or when the game is over.
     pub fn player_search(&self) -> Option<SearchResult> {
         if self.game.to_move() != Player::Black {
             return None;
         }
-        search(&self.game, self.boss.node_budget)
+        avoiding_repeats(&self.game, |allow| {
+            search_with(&self.game, self.boss.node_budget, DEFAULT_WEIGHTS, allow)
+        })
     }
 
     /// Scales the boss node budget by a percentage (e.g. 50, 100, 200). Minimum is 1.
@@ -547,7 +549,7 @@ impl Encounter {
 mod tests {
     use super::*;
     use crate::board::{PlaceError, Special, MAX_RADIUS};
-    use crate::game::{DrawReason, Tactic, TacticError};
+    use crate::game::{Tactic, TacticError, REPETITION_LIMIT};
     use crate::moves::Direction::{E, NE, SW, W};
     use crate::moves::{legal_moves, Direction, Player};
     use crate::run::Relic;
@@ -874,18 +876,26 @@ mod tests {
     }
 
     #[test]
-    fn the_player_search_does_not_draw_by_repetition_where_the_boss_search_would() {
-        // Two lone marbles shuffle: both plain searches repeat until the third occurrence.
-        let lone = || position(&[(0, 0)], &[(4, -4)], Player::Black, [0, 0]);
-        let mut fight = Encounter::new(lone(), trivial_boss(), 0);
-        while fight.result().is_none() {
-            let mv = match fight.game().to_move() {
-                Player::Black => fight.player_search().unwrap().mv,
-                Player::White => fight.boss_search().unwrap().mv,
-            };
-            fight.play(&mv).unwrap();
+    fn the_player_search_does_not_play_the_third_occurrence_the_plain_search_does() {
+        // Two lone marbles shuffle: the plain search plays the third occurrence at ply 16 (#1500).
+        let mut boss = trivial_boss();
+        boss.node_budget = 300;
+        let game = position(&[(0, 0)], &[(3, -3)], Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, boss, 0);
+        for _ in 0..16 {
+            let mv = crate::search::best_move(enc.game(), 300).unwrap();
+            enc.play(&mv).unwrap();
         }
-        assert_ne!(fight.game().draw_reason(), Some(DrawReason::Repetition));
+        let plain = crate::search::best_move(enc.game(), 300).unwrap();
+        assert_eq!(
+            enc.game().seen_after(&plain),
+            REPETITION_LIMIT,
+            "the plain move draws"
+        );
+        let mv = enc.player_search().unwrap().mv;
+        assert!(enc.game().seen_after(&mv) < REPETITION_LIMIT);
+        enc.play(&mv).unwrap();
+        assert_eq!(enc.result(), None);
     }
 
     #[test]

@@ -10,7 +10,7 @@ export interface BotRequest {
   boss?: BossRef;
   /** Search budget scaling percentage for boss encounter (e.g. 50, 100, 200). */
   difficultyPercent?: number;
-  /** With a boss: asks the move of the player's side instead of the boss's (auto-play, #792). */
+  /** Asks the move of the auto-played side (auto-play, #792): with a boss, the player's instead of the boss's; in a plain game, one that does not repeat into a draw (#1500). */
   player?: boolean;
   /** Set to ask for the search score of the position instead of a move (never with a boss). */
   evaluate?: boolean;
@@ -58,6 +58,8 @@ export interface BotFailure {
 export interface EngineLike {
   play(mv: Int32Array): void;
   best_move(nodes: number): Int32Array | number[];
+  /** The move Auto-play plays (#1500): `best_move` that does not repeat the game into a draw. */
+  auto_move(nodes: number): Int32Array | number[];
   evaluate(nodes: number): number;
 }
 
@@ -138,7 +140,7 @@ export function answer(
   const engine = makeEngine(req.army, req.placed, req.foes, req.trainer, req.relics);
   for (const mv of req.history) engine.play(Int32Array.from(mv));
   if (req.evaluate) return { id: req.id, score: engine.evaluate(req.nodes) };
-  return { id: req.id, move: Array.from(engine.best_move(req.nodes)) };
+  return { id: req.id, move: Array.from(req.player ? engine.auto_move(req.nodes) : engine.best_move(req.nodes)) };
 }
 
 let nextId = 0;

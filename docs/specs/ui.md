@@ -419,6 +419,13 @@ fight and a rogue-lite run's fight, never online (a versus room, a co-op fight, 
   player's move no sooner than 700 ms after the last (`AUTO_DELAY_MS`), through the same path as the bot's own reply, so
   the thinking guard shuts the board to clicks meanwhile. The bot's own side plays as ever. In the battle royale it
   commits the royale bot's order for the player's seat, once the reveal of the last round has ended.
+- **No repetition** (#1500). The side Auto-play plays never repeats itself into a draw by threefold repetition (a draw is a
+  lost boss fight and a lost fight of a run). At the root of its search a move to a position not yet seen in the game is
+  preferred over any move to a seen one, even if it scores a little worse; failing that, a move that does not reach the
+  third occurrence; a move that draws is played only when every legal move does. A winning move is always kept (an
+  ejection cannot be undone, so it is never a repeat). The bot's own reply, the hint and the boss's difficulty are
+  unchanged. The rule is `avoiding_repeats` in `crates/abalone-core/src/search.rs`, the move is recorded as any other, so
+  replays and saves are unchanged.
 - **Stop.** Any time: a second press turns it off, and a move being searched is dropped. It turns itself off when the game
   is over, replaced (New game, Retry, an import, another mode) or left for the hub.
 - **Boss.** A boss fight needs that boss's medal (the medals, #791): without it the button is greyed
@@ -427,7 +434,8 @@ fight and a rogue-lite run's fight, never online (a versus room, a co-op fight, 
   boss). The bot plays the army's side with the run's rules, as its own reply does, and never a tactic. It covers the fight
   only and turns itself off when the fight ends.
 - **Source.** The rule of availability lives in `client/src/autoplay.ts`. The boss move for the player's side is
-  `Encounter.player_move` (the search of the boss budget, so the difficulty scales it), a plain game asks `best_move`.
+  `Encounter.player_move` (the search of the boss budget, so the difficulty scales it), a plain game asks
+  `Engine.auto_move` (`best_move` stays the bot's reply and the hint's).
 - The label "Auto-play" is kept verbatim for the e2e tests.
 
 ### 4.4 Replay
