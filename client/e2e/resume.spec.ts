@@ -99,11 +99,16 @@ test('once a hot-seat game is over, a reload starts a new game', async ({ page }
   await page.goto('./?bot=off');
   await ready(page);
   const hud = page.locator('#hud');
-  const seq: [number, number][][] = [
-    [[0, 2], [0, 1]], [[0, -2], [0, -1]], [[0, 1], [0, 0]], [[0, -1], [0, -2]], [[0, 0], [0, 1]],
-    [[0, -2], [0, -1]], [[0, 1], [0, 0]], [[0, -1], [0, -2]], [[0, 0], [0, 1]], // the position after ply 1 a third time
-  ];
-  for (const [from, to] of seq) await move(page, from, to);
+  // The nine plies that repeat the start position a third time, loaded from a game file (one import, not nine moves
+  // on the page: the clicks are covered by the tests above). Same moves as the draw of endgame.spec.ts.
+  const A = [1, 4, 0, 2, 0, 0, 0, 0], B = [1, 5, 0, -2, 0, 0, 0, 0], C = [1, 4, 0, 1, 0, 0, 0, 0];
+  const D = [1, 4, 0, -1, 0, 0, 0, 0], E = [1, 5, 0, 0, 0, 0, 0, 0];
+  const moves = [A, B, C, D, E, B, C, D, E]; // the position after ply 1 a third time
+  await page.locator('#import-file').setInputFiles({
+    name: 'game.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: false, moves })),
+  });
   await expect(hud).toContainText('Same position three times'); // the draw reason, on the HUD since #425
   await expect.poll(() => savedPlies(page)).toBe(0);
 
