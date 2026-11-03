@@ -79,9 +79,9 @@ test('T on a teleporter opens the choice, Enter picks the ringed one: the hero a
   await expect(page.locator('#openworld-map')).toBeHidden();
   await expect(page.locator('body')).toHaveAttribute('data-openworld-at', far);
   await expect(page.locator('body')).toHaveAttribute('data-openworld-saved', /\d/);
-  await page.reload();
-  await expect(page.locator('body')).toHaveAttribute('data-openworld-at', far);
-  await expect(page.locator('body')).toHaveAttribute('data-openworld-teleporters', `2,-1 ${far}`);
+  // No reload here (a second Open world boot costs seconds on a runner, #1481): the save of the hero at the teleporter
+  // is unit tested ('a click on a discovered teleporter moves the hero ... and saves the world') and so is the load of the
+  // discovered teleporters (openworldmodeteleport.test.ts, 'a save keeps the teleporters discovered').
 });
 
 test('a click on the map picks the teleporter under it, the hero\'s own is refused', async ({ page }) => {

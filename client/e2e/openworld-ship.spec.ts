@@ -21,7 +21,7 @@ for (const { name, viewport } of viewports) {
   test.describe(name, () => {
     test.use({ viewport, isMobile: true, hasTouch: true });
 
-    test('the Hub button is a 44 px target clear of the plate, the chip and the settings, and a tap leads to the hub', async ({ page }) => {
+    test('the Hub button is a 44 px target clear of the plate, the chip and the settings, and a tap reaches it', async ({ page }) => {
       await page.goto('./?bot=off&openworld=7');
       await expect(page.locator('body')).toHaveAttribute('data-openworld', '7');
       const ship = page.locator('#openworld-ship');
@@ -37,10 +37,9 @@ for (const { name, viewport } of viewports) {
       expect(await clearOf(page, '#settings')).toBe(true);
       await expect(page.locator('#openworld-hud .tap-hint')).toBeVisible();
       await expect(page.locator('#openworld-hud .keys-hint')).toBeHidden();
-      await ship.tap();
-      await expect(page.locator('body')).not.toHaveAttribute('data-openworld', /.+/);
-      await expect(page.locator('body')).toHaveAttribute('data-hub', /.+/);
-      await expect(ship).toBeHidden();
+      // A trial tap checks that the button is the hit target (nothing covers it) without leaving the world: the Hub it leads to
+      // is unit tested (main.openworldlink.test.ts, 'leaves the world, saved as Esc does, for the Hub'); the hub boot costs 1.4 s here (#1481).
+      await ship.tap({ trial: true });
     });
   });
 }
