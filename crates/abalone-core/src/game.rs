@@ -70,6 +70,8 @@ pub enum TacticError {
     BadSwap,
     /// Fall back: the army has not moved yet.
     NothingToUndo,
+    /// Freeze, Swap: a boss's turns are on a clock the skipped turn would break (docs/specs/roguelite.md section 28).
+    BossClock,
 }
 
 /// A move played, with the hash of the position it produced.
@@ -106,7 +108,7 @@ pub struct Game {
 
 /// What Fall back brings back: the fight before one move of the army.
 #[derive(Clone, Debug)]
-struct Turn {
+pub(crate) struct Turn {
     board: Board,
     ejected: [u8; 2],
     no_ejection_plies: u32,
@@ -271,6 +273,17 @@ impl Game {
         Ok(())
     }
 
+    /// Turns the rogue-lite flag on, before the first move: the fight takes special marbles, relics, affinities and
+    /// tactics (an act boss fight of a run, docs/specs/roguelite.md section 28).
+    pub fn set_rogue_lite(&mut self) -> Result<(), PlaceError> {
+        if !self.history.is_empty() {
+            return Err(PlaceError::Started);
+        }
+        self.board.set_rogue_lite();
+        self.start_hash = position_hash(&self.board, self.to_move);
+        Ok(())
+    }
+
     /// Why no tactic can be played now, if so.
     fn closed(&self) -> Option<TacticError> {
         if !self.board.rogue_lite() {
@@ -372,7 +385,7 @@ impl Game {
     }
 
     /// The fight as it stands, when the army is about to move in a rogue-lite fight.
-    fn turn(&self) -> Option<Turn> {
+    pub(crate) fn turn(&self) -> Option<Turn> {
         (self.board.rogue_lite() && self.to_move == Player::Black).then(|| Turn {
             board: self.board.clone(),
             ejected: self.ejected,
@@ -381,6 +394,12 @@ impl Game {
             win: self.win,
             frozen: self.frozen,
         })
+    }
+
+    /// Keeps the fight as it stood before the army's move that was just played, for Fall back (a mode that plays its
+    /// plies itself, an act boss fight).
+    pub(crate) fn keep_turn(&mut self, turn: Option<Turn>) {
+        self.turns.extend(turn);
     }
 
     /// A Freeze waiting is spent: the bot's turn passes, as a blocked side's does.

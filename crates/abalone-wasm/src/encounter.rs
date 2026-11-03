@@ -1,8 +1,9 @@
 //! Boss encounter mode bridge to WebAssembly.
 
 use crate::convert::{
-    board_bytes, board_cells, cells, code, decode, draw_reason_code, encode, player, result_code,
-    side_code, status_code,
+    board_bytes, board_cells, cells, code, decode, decode_tactic, draw_reason_code, encode,
+    fuse_records, player, relic_set, result_code, side_code, special, special_records, status_code,
+    tactic_mask,
 };
 use abalone_core::board::{Board, Cell};
 use abalone_core::encounter::alien::{alien_boss, alien_move, alien_start};
@@ -77,6 +78,11 @@ fn ejection_notches(game: &Game, thresholds: &[u8], phase: usize) -> Vec<u8> {
 /// One boss of the roster. Adding a boss is one line in [`BOSSES`].
 struct BossEntry {
     id: &'static str,
+    /// Whether the fight takes the army's build in a rogue-lite run (docs/specs/roguelite.md section 28): its special
+    /// marbles, relics and affinities and the Reinforce and Fall back tactics. Only a boss that plays standard Abalone
+    /// and whose hooks remove marbles (and move none) can: a special mark moves with its marble, which a hook would
+    /// not carry. Not the Echo (its free moves and memory), the Choir and the Swarm (their own fights).
+    builds: bool,
     /// The goal the player reads before the first move: the rule that differs, and how it is won or lost.
     goal: &'static str,
     def: fn() -> BossDef,
@@ -186,6 +192,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
 const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "echo",
+        builds: false,
         goal: "Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
         def: echo_boss,
         start: echo_fight,
@@ -195,6 +202,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "hull",
+        builds: true,
         goal:
             "One cell cracks at a time and ejects marbles. Eject 6 to win; lose 6 or draw to lose.",
         def: hull_boss,
@@ -205,6 +213,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "choir",
+        builds: false,
         goal: "One army moves per turn; the weakest army leaves after 3 and 5 ejections. Eject 6 to win; lose 6 or draw to lose.",
         def: choir_boss,
         start: choir_fight,
@@ -214,6 +223,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "chaplain",
+        builds: true,
         goal: "A marble beside 4 foes switches sides: a boss marble that joins you counts as an ejection, one that joins it takes one back. At 4 ejections a martyr explodes. Eject 6 to win; lose 6 or draw to lose.",
         def: chaplain_boss,
         start: plain_fight,
@@ -223,6 +233,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "ballast",
+        builds: false,
         goal:
             "Void pillars; every 2 turns it borrows a crack, a pulse, a polarity, a conversion or a wave. Eject 12 to win; lose 12 or draw to lose.",
         def: ballast_boss,
@@ -233,6 +244,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "alien",
+        builds: true,
         goal: "Its eggs hatch; land on one to crush it. Eject 6 to win; lose 6 or draw to lose.",
         def: alien_boss,
         start: alien_fight,
@@ -242,6 +254,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "railyard",
+        builds: true,
         goal: "Trains sweep the marked lines. Eject 6 to win; lose 6 or draw to lose.",
         def: railyard_boss,
         start: railyard_fight,
@@ -251,6 +264,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "magnetizer",
+        builds: false,
         goal:
             "Your + and − marbles repel and push any line. Eject 6 to win; lose 6 or draw to lose.",
         def: magnetizer_boss,
@@ -261,6 +275,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "pulsar",
+        builds: false,
         goal: "Pulses push every lone marble or pair away. Eject 6 to win; lose 6 or draw to lose.",
         def: pulsar_boss,
         start: pulsar_fight,
@@ -270,6 +285,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "overseer",
+        builds: true,
         goal:
             "Push its cores onto or next to the vents. Eject 6 to win, cores count; lose 6, draw or 40 turns.",
         def: overseer_boss,
@@ -280,6 +296,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "assembly",
+        builds: false,
         goal: "Belts carry every marble off the board; later, presses strike. Eject 6 to win; lose 6 or draw to lose.",
         def: assembly_boss,
         start: assembly_fight,
@@ -289,6 +306,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "core",
+        builds: false,
         goal: "Centre cells charge marbles, a charged marble weighs more in a push, 4 blow it off. Eject 6 to win; lose 6 or draw to lose.",
         def: unstable_boss,
         start: unstable_fight,
@@ -298,6 +316,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "dual",
+        builds: false,
         goal: "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose.",
         def: dual_boss,
         start: dual_fight,
@@ -307,6 +326,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "stalker",
+        builds: true,
         goal: "The stalker sees your whole army. You see its marbles only near your own, and a move may be stopped by one you cannot see. Eject 6 to win; lose 6 or draw to lose.",
         def: stalker_boss,
         start: stalker_fight,
@@ -316,6 +336,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "swarm",
+        builds: false,
         goal: "You start in the centre, no swarm marble yet: a wave lands on its marks on the rim every turn, and the swarm moves. Survive 40 turns to win, each swarm marble you eject brings the evac 2 turns closer; the swarm wins once it ejects 2 of your marbles.",
         def: swarm_boss,
         start: swarm_fight,
@@ -418,6 +439,57 @@ impl Encounter {
         (self.entry.def)().name.to_string()
     }
 
+    /// Whether this boss takes the army's build in a run (see `BossEntry::builds`).
+    pub fn takes_build(&self) -> bool {
+        self.entry.builds
+    }
+
+    /// The fight of a boss that takes the build, `Err` for the others.
+    fn building(&mut self) -> Result<&mut CoreEncounter, String> {
+        match &mut self.fight {
+            Fight::Plain(e) if self.entry.builds => Ok(e),
+            _ => Err(format!("{} takes no build", self.entry.id)),
+        }
+    }
+
+    /// Gives the army of a rogue-lite run its relics and affinities in this fight, before its first move (the mask of
+    /// `Engine::set_relics`), and turns the rogue-lite flag on: the special marbles, their rules and the tactics.
+    /// `Err` when the boss takes no build, or the fight has started.
+    pub fn set_relics(&mut self, mask: u32) -> Result<(), String> {
+        let (relics, levels) = relic_set(mask);
+        self.building()?
+            .equip(&relics, levels)
+            .map_err(|e| format!("{e:?}"))
+    }
+
+    /// Makes the marble on `(q, r)` a special marble of the run, before the first move, after `set_relics`: `kind` as
+    /// `Engine::place_special`. `Err` carries the reason.
+    pub fn place_special(&mut self, q: i32, r: i32, kind: u8) -> Result<(), String> {
+        let kind = special(kind).ok_or_else(|| format!("unknown kind {kind}"))?;
+        self.building()?
+            .place_special((q, r), kind)
+            .map_err(|e| format!("{e:?}"))
+    }
+
+    /// The special marbles, records of 3 integers `[q, r, kind]`, as `Engine::specials`.
+    pub fn specials(&self) -> Vec<i32> {
+        special_records(self.fight.game().board())
+    }
+
+    /// The fuses of the Bombs, records of 3 integers `[q, r, turns]`, as `Engine::fuses`.
+    pub fn fuses(&self) -> Vec<i32> {
+        fuse_records(self.fight.game().board())
+    }
+
+    /// The tactics the player can play now, a bit mask as `Engine::tactics`: Reinforce (bit 0) and Fall back (bit 3),
+    /// never Freeze nor Swap, and none in a fight with no build.
+    pub fn tactics(&self) -> u8 {
+        match &self.fight {
+            Fight::Plain(e) => tactic_mask(e.tactics()),
+            _ => 0,
+        }
+    }
+
     pub fn goal(&self) -> String {
         self.entry.goal.to_string()
     }
@@ -511,6 +583,14 @@ impl Encounter {
 
     /// Plays one move record for the side to move. `Err` carries the reason.
     pub fn play(&mut self, mv: &[i32]) -> Result<(), String> {
+        if mv.first() == Some(&0) {
+            self.bonuses.clear();
+            let tactic = decode_tactic(mv)?;
+            return match &mut self.fight {
+                Fight::Plain(e) => e.play_tactic(tactic).map_err(|e| format!("{e:?}")),
+                _ => Err("tactics need a boss that takes the build".to_string()),
+            };
+        }
         let mv = decode(mv)?;
         let before = self.fight.game().history().len();
         match &mut self.fight {
@@ -2837,7 +2917,7 @@ mod tests {
         let mut f = Encounter::new(id, seed).unwrap();
         f.set_relics(MASK).unwrap();
         let board = f.board();
-        let black = cells_of(5).zip(board.iter()).filter(|(_, &c)| c == 1);
+        let black = cells().zip(board.iter()).filter(|(_, &c)| c == 1);
         for ((q, r), kind) in black.map(|(cell, _)| cell).zip(1..=10) {
             f.place_special(q, r, kind).unwrap();
         }
@@ -2873,23 +2953,21 @@ mod tests {
         for id in BUILDING {
             let run = |seed: u32| {
                 let mut f = armed(id, seed);
+                f.scale_node_budget(2); // a quick boss: the rules are under test, not its play
                 assert_eq!(f.specials().len(), 30, "{id}");
                 assert_eq!(f.fuses().len(), 3, "{id}: the Bomb's fuse");
-                for ply in 0..80 {
-                    let moves = if f.to_move() == 1 {
+                for ply in 0..60 {
+                    let mv = if f.to_move() == 1 {
                         let seen = f.seen_moves();
                         let n = seen.len() / MOVE_STRIDE;
-                        (n > 0).then(|| seen[ply * 7 % n * MOVE_STRIDE..][..MOVE_STRIDE].to_vec())
+                        seen[ply * 7 % n * MOVE_STRIDE..][..MOVE_STRIDE].to_vec()
                     } else {
-                        Some(f.boss_move()).filter(|m| !m.is_empty())
+                        f.boss_move()
                     };
-                    let Some(mv) = moves else { break };
-                    if f.play(&mv).is_err() {
-                        continue; // a move a hidden marble stops (The Stalker)
-                    }
+                    f.play(&mv).unwrap();
                     let board = f.board();
                     for mark in f.specials().chunks(3) {
-                        let at = cells_of(5).position(|c| c == (mark[0], mark[1])).unwrap();
+                        let at = cells().position(|c| c == (mark[0], mark[1])).unwrap();
                         assert!(board[at] == 1 || board[at] == 2, "{id}: a mark on a marble");
                     }
                     if f.result() != 0 {
@@ -2922,5 +3000,8 @@ mod tests {
         assert!(f.last_bonuses().is_empty());
         assert_eq!(f.to_move(), 1);
         assert!(f.play(&tactic(9)).is_err(), "no such tactic");
+        f.play(&mv).unwrap();
+        assert!(f.set_relics(0).unwrap_err().contains("Started"));
+        assert!(f.place_special(0, 4, 1).unwrap_err().contains("Started"));
     }
 }

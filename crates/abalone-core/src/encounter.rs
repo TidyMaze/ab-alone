@@ -22,12 +22,13 @@ pub mod swarm;
 pub mod telemetry;
 pub mod unstable;
 
-use crate::board::{Board, Cell};
+use crate::board::{Board, Cell, PlaceError, Special};
 use crate::encounter::dual::carried_dual;
 use crate::encounter::magnetizer::{carried_announce, carried_poles, settle, Repulsion};
 use crate::encounter::unstable::carried_unstable;
-use crate::game::{Game, GameError, Outcome};
+use crate::game::{Game, GameError, Outcome, Tactic, TacticError};
 use crate::moves::{Move, Player};
+use crate::run::Relic;
 use crate::search::{search, SearchResult};
 
 /// `special(ply, phase)`: the special that fires at the end of ply number `ply` (1 is the first
@@ -287,6 +288,47 @@ impl Encounter {
         &self.game
     }
 
+    /// The same fight carrying the army's build (docs/specs/roguelite.md section 28): the rogue-lite flag with the
+    /// army's `relics` and affinity `affinities`, before the first move. A boss with a hook that moves marbles (a pulse,
+    /// a belt) would leave the special marks behind: the roster keeps such a boss out.
+    pub fn equip(&mut self, relics: &[Relic], affinities: [u8; 3]) -> Result<(), PlaceError> {
+        self.game.set_rogue_lite()?;
+        self.game
+            .set_relics(relics)
+            .and_then(|()| self.game.set_affinities(affinities))
+    }
+
+    /// Makes the marble on `cell` a `kind` special marble, before the first move of a fight that took the build.
+    pub fn place_special(&mut self, cell: (i32, i32), kind: Special) -> Result<(), PlaceError> {
+        self.game.place_special(cell, kind)
+    }
+
+    /// Whether Reinforce, Freeze, Swap and Fall back can be played now: Freeze and Swap never, they skip a turn the
+    /// boss's clock counts.
+    pub fn tactics(&self) -> [bool; 4] {
+        let [reinforce, _, _, fall_back] = self.game.tactics();
+        [reinforce, false, false, fall_back]
+    }
+
+    /// Plays `tactic` for the player on its turn, before a move (section 11 of the spec). Fall back also forgets what
+    /// the undone plies showed: the boss's hook records.
+    pub fn play_tactic(&mut self, tactic: Tactic) -> Result<(), TacticError> {
+        if matches!(tactic, Tactic::Freeze | Tactic::Swap(..)) {
+            return Err(TacticError::BossClock);
+        }
+        self.game.play_tactic(tactic)?;
+        if tactic == Tactic::FallBack {
+            self.repulsions.clear();
+            self.assigned.clear();
+            self.hooked = None;
+            self.removed.clear();
+            self.revealed.clear();
+            self.phase_reached = 0;
+            self.latch_phase();
+        }
+        Ok(())
+    }
+
     /// Current phase, 0 at the start.
     pub fn phase(&self) -> usize {
         let left = marbles(self.game.board(), Cell::White);
@@ -333,6 +375,7 @@ impl Encounter {
         }
         dual::refuse(self.game.board(), self.game.to_move(), mv)?;
         let told = self.tell();
+        let turn = self.game.turn();
         let before = self.game.board().clone();
         self.game.play_ply(mv)?;
         self.revealed.clear();
@@ -372,6 +415,7 @@ impl Encounter {
             echo::play_bonuses(self, mv);
         }
         self.game.pass_when_blocked();
+        self.game.keep_turn(turn);
         self.latch_phase();
         Ok(())
     }
@@ -1005,14 +1049,14 @@ mod tests {
     fn a_special_marble_keeps_its_rules_and_follows_its_move_in_a_boss_fight() {
         // The Heavy pushes the lone White marble alone, as in an army fight (section 5).
         let mut enc = built(
-            &[(0, 3)],
-            &[(1, 3), (4, 0)],
-            &[((0, 3), Special::Heavy)],
+            &[(-2, 2)],
+            &[(-1, 2), (4, 0)],
+            &[((-2, 2), Special::Heavy)],
             boss(no_special),
         );
-        enc.play(&mv(&[(0, 3)], E)).unwrap();
-        assert_eq!(enc.game().board().specials(), [((1, 3), Special::Heavy)]);
-        assert_eq!(enc.game().board().get(2, 3), Some(Cell::White));
+        enc.play(&mv(&[(-2, 2)], E)).unwrap();
+        assert_eq!(enc.game().board().specials(), [((-1, 2), Special::Heavy)]);
+        assert_eq!(enc.game().board().get(0, 2), Some(Cell::White));
     }
 
     #[test]
@@ -1055,10 +1099,10 @@ mod tests {
         assert_eq!(enc.game().board().get(-4, 4), Some(Cell::Black));
         assert_eq!(
             enc.game().win_ejections(Player::White),
-            4,
-            "the army is a marble further from losing"
+            6,
+            "a boss wins at its own count, at most the usual 6"
         );
-        assert_eq!(enc.play_tactic(Tactic::Reinforce).is_ok(), true);
+        enc.play_tactic(Tactic::Reinforce).unwrap();
         assert_eq!(enc.game().board().get(-3, 4), Some(Cell::Black));
     }
 

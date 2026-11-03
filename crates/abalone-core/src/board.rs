@@ -331,6 +331,16 @@ impl Board {
     pub fn set(&mut self, q: i32, r: i32, cell: Cell) {
         if let Some(slot) = self.cells.get_mut(&(q, r)) {
             *slot = cell;
+            if cell == Cell::Empty {
+                self.drop_special((q, r));
+            }
+        }
+    }
+
+    /// Drops the special mark on `cell`, once no marble stands there: a boss's hook that removes a marble takes its mark.
+    fn drop_special(&mut self, cell: (i32, i32)) {
+        if let Some(specials) = self.specials.as_mut() {
+            specials.retain(|s| s.0 != cell);
         }
     }
 
@@ -338,6 +348,7 @@ impl Board {
     /// `set` is ignored, so moves onto it are refused and pushes onto it eject.
     pub fn void(&mut self, q: i32, r: i32) {
         self.cells.remove(&(q, r));
+        self.drop_special((q, r));
     }
 
     /// Adds `(q, r)` to the board as an empty cell (The Dual Room's bridge). A cell on the board

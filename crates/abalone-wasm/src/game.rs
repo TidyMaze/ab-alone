@@ -1,15 +1,12 @@
 //! Standard 1v1 Abalone game instance exposed to WebAssembly.
 
 use crate::convert::{
-    board_bytes, decode, decode_tactic, draw_reason_code, encode, player, side_code, special,
-    special_code, status_code, MOVE_STRIDE,
+    board_bytes, decode, decode_tactic, draw_reason_code, encode, fuse_records, player, relic_set,
+    side_code, special, special_records, status_code, tactic_mask, MOVE_STRIDE,
 };
-use abalone_core::board::Special;
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
-use abalone_core::run::{
-    army_game_against, army_game_formed, trainer_game, FoePlan, Formation, Relic,
-};
+use abalone_core::run::{army_game_against, army_game_formed, trainer_game, FoePlan, Formation};
 use abalone_core::search::{best_move, position_score};
 use abalone_core::world::Biome;
 use wasm_bindgen::prelude::*;
@@ -93,48 +90,26 @@ impl Engine {
     /// the bit of each relic's code and, from bit 16, the level of each affinity on 2 bits (see the
     /// module docs); a bit no relic has is ignored.
     pub fn set_relics(&mut self, mask: u32) -> Result<(), String> {
-        let relics: Vec<Relic> = Relic::ALL
-            .into_iter()
-            .filter(|r| mask & r.bit() != 0)
-            .collect();
-        let level = |a: u32| ((mask >> (16 + 2 * a)) & 3) as u8;
+        let (relics, levels) = relic_set(mask);
         self.game
             .set_relics(&relics)
-            .and_then(|()| self.game.set_affinities([level(0), level(1), level(2)]))
+            .and_then(|()| self.game.set_affinities(levels))
             .map_err(|e| format!("{e:?}"))
     }
 
     /// The special marbles, records of 3 integers `[q, r, kind]`, see the module docs.
     pub fn specials(&self) -> Vec<i32> {
-        self.game
-            .board()
-            .specials()
-            .iter()
-            .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))])
-            .collect()
+        special_records(self.game.board())
     }
 
     /// The fuses of the Bombs, records of 3 integers `[q, r, turns]`, see the module docs.
     pub fn fuses(&self) -> Vec<i32> {
-        self.game
-            .board()
-            .specials()
-            .iter()
-            .filter_map(|&((q, r), kind)| match kind {
-                Special::Bomb(turns) => Some([q, r, i32::from(turns)]),
-                _ => None,
-            })
-            .flatten()
-            .collect()
+        fuse_records(self.game.board())
     }
 
     /// The tactics the army can play now, a bit mask (see the module docs).
     pub fn tactics(&self) -> u8 {
-        self.game
-            .tactics()
-            .iter()
-            .enumerate()
-            .fold(0, |mask, (i, &on)| mask | (u8::from(on) << i))
+        tactic_mask(self.game.tactics())
     }
 
     /// Side to move: `1` Black, `2` White.
@@ -238,6 +213,7 @@ mod tests {
     use super::*;
     use abalone_core::board::Board;
     use abalone_core::moves::Player;
+    use abalone_core::run::Relic;
 
     fn count(cells: &[u8], value: u8) -> usize {
         cells.iter().filter(|&&c| c == value).count()

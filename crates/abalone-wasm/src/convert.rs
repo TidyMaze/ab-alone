@@ -7,6 +7,7 @@ use abalone_core::board::{Board, Cell, Special, FUSE, RADIUS};
 use abalone_core::encounter::PveResult;
 use abalone_core::game::{DrawReason, Outcome, Tactic};
 use abalone_core::moves::{Direction, Move, Player};
+use abalone_core::run::Relic;
 
 /// Integers per move record.
 pub const MOVE_STRIDE: usize = 8;
@@ -127,6 +128,47 @@ pub(crate) fn decode(record: &[i32]) -> Result<Move, String> {
         .map(|i| (record[2 + 2 * i], record[3 + 2 * i]))
         .collect();
     Ok(Move { cells, dir })
+}
+
+/// The relics and the affinity levels (Force, Tactics, Chaos) of a mask: the bit of each relic's code, and from bit 16 the
+/// level of each affinity on 2 bits. A bit no relic has is ignored.
+pub(crate) fn relic_set(mask: u32) -> (Vec<Relic>, [u8; 3]) {
+    let relics = Relic::ALL
+        .into_iter()
+        .filter(|r| mask & r.bit() != 0)
+        .collect();
+    let level = |a: u32| ((mask >> (16 + 2 * a)) & 3) as u8;
+    (relics, [level(0), level(1), level(2)])
+}
+
+/// The tactics a game can play now as a bit mask: bit `code - 1` of each, see the module docs of the bridge.
+pub(crate) fn tactic_mask(tactics: [bool; 4]) -> u8 {
+    tactics
+        .iter()
+        .enumerate()
+        .fold(0, |mask, (i, &on)| mask | (u8::from(on) << i))
+}
+
+/// The special marbles of a board, records of 3 integers `[q, r, kind]`.
+pub(crate) fn special_records(board: &Board) -> Vec<i32> {
+    board
+        .specials()
+        .iter()
+        .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))])
+        .collect()
+}
+
+/// The fuses of the Bombs of a board, records of 3 integers `[q, r, turns]`.
+pub(crate) fn fuse_records(board: &Board) -> Vec<i32> {
+    board
+        .specials()
+        .iter()
+        .filter_map(|&((q, r), kind)| match kind {
+            Special::Bomb(turns) => Some([q, r, i32::from(turns)]),
+            _ => None,
+        })
+        .flatten()
+        .collect()
 }
 
 /// The tactic of a record `[0, code, q0, r0, q1, r1, 0, 0]`: `1` Reinforce, `2` Freeze, `3` Swap of
