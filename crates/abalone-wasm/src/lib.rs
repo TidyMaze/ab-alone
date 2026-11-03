@@ -99,7 +99,7 @@
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md). `formation` is how the bot's marbles stand in
 //!   a fight or an elite: `0` standard, `1` Belgian daisy, `2` German daisy, `3` snake, `4` wedge (`0` on the other nodes); `elite` is
 //!   `0` for a node that is no elite, else `1` The Wall, `2` The Artificer, `3` The Brute (section 14).
-//! - The bot's army of a fight (`run_foes(seed, node, less, biome, more)`, `more` optional special marbles for the ascension levels, section 19): `[count, formation, biome, ...]` then a record `[q, r, kind]` per
+//! - The bot's army of a fight (`run_foes(seed, node, less, biome, more)`, `more` optional special marbles for the ascension levels, section 20): `[count, formation, biome, ...]` then a record `[q, r, kind]` per
 //!   special marble it holds; `Engine::with_foes(army, plan)` stands it, the biome's holes opened (sections 14 and 18). `biome` is
 //!   the Open world's code below (`0` meadow, the act 1 default, which opens none).
 //! - The exits at the end of an act (`run_exits(seed, act, from)`): the codes of the two biomes the exits lead to for act `act`

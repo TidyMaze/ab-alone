@@ -55,7 +55,7 @@ links of the last node.
 
 The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on
 the fight on and its moves, a reward waiting to be picked, an event, a rest site or a shop waiting for its
-choice (with what the shop sold), a relic offer waiting to be taken, the commander picked (section 17), the ascension level (section 19), the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
+choice (with what the shop sold), a relic offer waiting to be taken, the commander picked (section 17), the ascension level (section 20), the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -651,7 +651,7 @@ client's run, and a test checks it on a short scripted path. The tools are in `d
 - **Special marbles kept**: only the army's, not the bot's (bug #1492 counts both in `main.ts`).
 - **Left out**: nothing of the page's looks. No UI changes.
 
-## 19. Ascension (#1465)
+## 20. Ascension (#1465)
 
 Slay the Spire's ascension and Dead Cells' boss cells: a run won opens a harder one. There are **ten levels**; a run starts
 at level 0 (the run as sections 1 to 17 describe it) or at a level picked on the start screen, and **each level adds one

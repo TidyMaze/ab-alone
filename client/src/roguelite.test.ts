@@ -1917,7 +1917,7 @@ describe('roguelite biomes (#1472)', () => {
   });
 });
 
-// Ascension (#1465, docs/specs/roguelite.md section 19): a run won at level N unlocks level N + 1, each level adds a handicap.
+// Ascension (#1465, docs/specs/roguelite.md section 20): a run won at level N unlocks level N + 1, each level adds a handicap.
 describe('roguelite ascension', () => {
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   // One act: a fight 0 leads to an elite 1, a rest 2 and an event 3, each to the boss 4; a fight 5 opens the next act, a boss 6 ends it.

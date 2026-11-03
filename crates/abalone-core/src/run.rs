@@ -660,7 +660,7 @@ pub fn foe_plan(seed: u64, index: usize, less: u8, biome: Biome) -> FoePlan {
 }
 
 /// `foe_plan` with `more` special marbles added to a fight's or an elite's (the ascension levels,
-/// docs/specs/roguelite.md section 19): a fight's are other kinds of its act's pool while the pool
+/// docs/specs/roguelite.md section 20): a fight's are other kinds of its act's pool while the pool
 /// lasts, an elite's more of its own style. At most one to a marble; `more` 0 is `foe_plan`.
 pub fn foe_plan_with(seed: u64, index: usize, less: u8, biome: Biome, more: u8) -> FoePlan {
     let map = run_map(seed);

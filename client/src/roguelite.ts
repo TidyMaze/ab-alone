@@ -250,7 +250,7 @@ export const COMMANDERS: readonly { name: string; line: string; relic: number; s
 ];
 /** The most ascension level. */
 export const MAX_ASCENSION = 10;
-/** The ascension levels (#1465, docs/specs/roguelite.md section 19), each adding its handicap to the ones before it: a name and its
+/** The ascension levels (#1465, docs/specs/roguelite.md section 20), each adding its handicap to the ones before it: a name and its
  * rule in one line. Level N + 1 unlocks by winning a run at level N. */
 export const ASCENSIONS: readonly { name: string; help: string }[] = [
   { name: 'Sharper elites', help: 'an elite bot searches 3 times the positions of a fight, not 2' },

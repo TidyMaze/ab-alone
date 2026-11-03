@@ -1016,7 +1016,7 @@ describe('main.ts, the biome exits between acts (#1472)', () => {
   });
 });
 
-// Ascension (#1465, docs/specs/roguelite.md section 19): the level is picked on the start screen next to the commander, a run won
+// Ascension (#1465, docs/specs/roguelite.md section 20): the level is picked on the start screen next to the commander, a run won
 // at level N unlocks N + 1.
 describe('main.ts, the ascension levels of a run (#1465)', () => {
   const levels = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-ascension]')];
