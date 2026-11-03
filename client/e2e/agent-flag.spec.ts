@@ -8,9 +8,9 @@ import { shot } from './shot';
 // It carries the page's engine version, or the page refuses it (#526).
 const signedHello = (game: string, agent: boolean, engine: number) => {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  const pub = (publicKey.export({ format: 'der', type: 'spki' }) as Buffer).subarray(-32).toString('base64');
+  const pub = (publicKey.export({ format: 'der', type: 'spki' }) as Buffer).subarray(-32).toString('base64url');
   const fields = ['hello', game, 2, [], pub, ...(agent ? ['agent'] : []), 'engine', engine];
-  const sig = sign(null, Buffer.from(JSON.stringify(fields)), privateKey).toString('base64');
+  const sig = sign(null, Buffer.from(JSON.stringify(fields)), privateKey).toString('base64url');
   return { kind: 'hello', game, seat: 2, roster: [], ...(agent ? { agent: true } : {}), engine, pub, sig };
 };
 
