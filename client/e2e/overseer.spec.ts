@@ -20,6 +20,16 @@ const FIXTURE: Axial[][] = [
   [[-3, 2], [-2, 2]], [[0, -1], [1, -1], [2, -1]],
 ];
 
+// The recorded moves of the first 21 plies (the page's __history after FIXTURE, #1481): __playMoves loads them in one call,
+// no slide per ply, and only the ply a test watches is clicked.
+const RECORDS: number[][] = [
+  [1, 4, 0, 2, 0, 0, 0, 0], [1, 5, 4, -3, 0, 0, 0, 0], [1, 4, -1, 2, 0, 0, 0, 0], [1, 5, 4, -2, 0, 0, 0, 0], [2, 0, -1, 1, 0, 1, 0, 0],
+  [1, 5, 4, -4, 0, 0, 0, 0], [2, 0, 0, 1, 1, 1, 0, 0], [1, 5, 4, -3, 0, 0, 0, 0], [1, 2, -2, 2, 0, 0, 0, 0], [1, 5, 4, -2, 0, 0, 0, 0],
+  [1, 2, -1, 3, 0, 0, 0, 0], [1, 5, 3, -3, 0, 0, 0, 0], [1, 4, 0, 2, 0, 0, 0, 0], [1, 0, 3, -2, 0, 0, 0, 0], [2, 1, -1, 1, 0, 1, 0, 0],
+  [1, 5, 4, -2, 0, 0, 0, 0], [2, 1, -2, 1, -1, 1, 0, 0], [1, 5, 0, -2, 0, 0, 0, 0], [1, 2, -4, 3, 0, 0, 0, 0], [1, 5, 1, -2, 0, 0, 0, 0],
+  [1, 0, -3, 2, 0, 0, 0, 0],
+];
+
 const cores = (page: Page) => page.evaluate(() => (window as any).__overseer().cores.length) as Promise<number>;
 
 // Waits for a draw that began after this call. It is asked of the page, so the draw throttle does not hold it (#435).
@@ -39,9 +49,13 @@ async function startOverseer(page: Page): Promise<void> {
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'chapel');
 }
 
-/** Plies `from` to `to` (excluded) of the fixture, each after the slides of the one before. */
+/**
+ * Plies `from` to `to` (excluded) of the fixture. The ones before the last are loaded in one call (RECORDS); the last is
+ * clicked, after the slides of the ply before, so its own slide and burn play as they do under a mouse.
+ */
 async function plies(page: Page, from: number, to: number): Promise<void> {
-  for (const cells of FIXTURE.slice(from, to)) {
+  if (to - 1 > from) await page.evaluate((list) => (window as any).__playMoves(list), RECORDS.slice(from, to - 1));
+  for (const cells of FIXTURE.slice(to - 1, to)) {
     await expect(page.locator('body')).not.toHaveAttribute('data-sliding', '1');
     await page.evaluate((list) => list.forEach(([q, r]) => (window as any).__click(q, r)), cells);
   }
@@ -77,8 +91,8 @@ test('The Overseer: the boss pushing the 6th core in wins the fight for the play
   await shot(page, { path: testInfo.outputPath('overseer-victory.png') });
 });
 
-// The defeated Overseer (#789): its marble explodes, then its bubble types the farewell instead of an angry line.
-test('The Overseer: on victory its marble explodes, then the bubble types the farewell, #789', async ({ page }, testInfo) => {
+// The defeated Overseer (#789): its marble explodes, and no angry line shows while it blows.
+test('The Overseer: on victory its marble explodes, with no angry line, #789', async ({ page }, testInfo) => {
   await page.clock.install();
   await startOverseer(page);
   await plies(page, 0, 21);
@@ -92,12 +106,8 @@ test('The Overseer: on victory its marble explodes, then the bubble types the fa
   await expect(page.locator('#bubble')).toBeHidden(); // no angry line while it blows
   await stepClock(page, 200);
   await shot(page, { path: testInfo.outputPath('overseer-explosion.png') });
-  await stepClock(page, 900); // BLAST_MS: the marble is gone, the farewell starts
-  await expect(page.locator('body')).not.toHaveAttribute('data-exploding');
-  await stepClock(page, 4000); // the farewell is typed
-  await expect(page.locator('#bubble-text')).toHaveText('Well done. You broke the last thing that cared about you.');
-  await expect(page.locator('#bubble')).not.toHaveClass(/angry/);
-  await shot(page, { path: testInfo.outputPath('overseer-farewell.png') });
+  // The blast's end, the farewell typed in place of the angry line, and the 3 s hold are unit tested (main.overseer.test.ts):
+  // 1.5 s more of stepped clock here would cost 5 draws on a CI runner (#1481).
 });
 
 // The Overseer speaks and its vents turn toxic (#741, docs/specs/ui.md).
@@ -113,7 +123,9 @@ const bubbleText = (page: Page) => page.locator('#bubble-text').textContent() as
 
 // The bubble runs on the page clock (page.clock): paused after the setup and stepped by hand, so the typed length does
 // not depend on how fast a loaded machine draws (#836, #891).
-test('The Overseer: its taunt is typed in a bubble over its marble, with a flicker, then fades, #741', async ({ page }, testInfo) => {
+// Only the first 350 ms of the typing run here: the whole line, its flicker, the 3 s hold and the fade are unit tested
+// (main.overseer.test.ts), and each 300 ms step costs a draw, seconds on a CI runner (#1481).
+test('The Overseer: its taunt is typed in a bubble over its marble, on screen, #741', async ({ page }, testInfo) => {
   await page.clock.install();
   await startOverseer(page);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -123,26 +135,17 @@ test('The Overseer: its taunt is typed in a bubble over its marble, with a flick
   const bubble = page.locator('#bubble');
   await expect(bubble).toBeVisible();
   await stepClock(page, 50); // the old line is gone from the bubble: the new one starts typing
-  const lengths: number[] = [];
-  for (let n = 0; n < 3; n++) {
-    lengths.push((await bubbleText(page)).length);
-    await stepClock(page, 300);
-  }
-  expect(lengths[0]).toBeLessThan(lengths[2]!);
-  expect(lengths[2]).toBeLessThan('Take your time. The neurotoxin will wait.'.length);
-  await stepClock(page, 50);
-  await shot(page, { path: testInfo.outputPath('overseer-typing.png') });
-  await stepClock(page, 2500); // the rest of the line is typed
-  await expect(page.locator('#bubble-text')).toHaveText('Take your time. The neurotoxin will wait.');
+  const first = (await bubbleText(page)).length;
+  await stepClock(page, 300);
+  const second = (await bubbleText(page)).length;
+  expect(first).toBeLessThan(second);
+  expect(second).toBeLessThan('Take your time. The neurotoxin will wait.'.length);
   const box = (await bubble.boundingBox())!;
   const view = page.viewportSize()!;
   expect(box.x).toBeGreaterThan(0);
   expect(box.x + box.width).toBeLessThan(view.width);
   expect(box.y).toBeGreaterThan(0);
-  await stepClock(page, 50);
-  await shot(page, { path: testInfo.outputPath('overseer-taunt.png') });
-  await stepClock(page, 3500); // 3 s after the last character, then the fade
-  await expect(bubble).toBeHidden();
+  await shot(page, { path: testInfo.outputPath('overseer-typing.png') });
 });
 
 test('The Overseer: a burnt core makes the bubble angry and shaking, and the vents turn toxic in P2, #741', async ({ page }, testInfo) => {
