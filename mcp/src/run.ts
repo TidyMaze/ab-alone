@@ -90,6 +90,12 @@ export interface RunEngine extends EngineLike {
   specials(): Int32Array;
 }
 
+/** What a run uses of an act boss `Encounter`: whether it takes the army's build (#1494) and the special marbles still on its board. */
+export interface RunBoss extends EncounterLike {
+  takes_build(): boolean;
+  specials(): Int32Array;
+}
+
 /** What a run uses of abalone-wasm. */
 export interface RunRules {
   /** The map of a run seed of a player who owns the runes `runes` (default none): records of `[act, row, col, kind, links, formation, elite]`. */
@@ -100,8 +106,8 @@ export interface RunRules {
   run_exits(seed: number, act: number, from: number, runes?: number): Uint8Array;
   /** The army's fight: `army` marbles, the bot's `foes` (a count, or a plan of `run_foes`), the special marbles `placed` as `[q, r, kind]`, the relics as a bit mask. */
   fight(army: number, foes: number | number[], placed: number[][], relics: number): RunEngine;
-  /** The act boss `id` of fight seed `seed`, at `percent` of its strength. */
-  boss(id: string, seed: number, percent: number): EncounterLike;
+  /** The act boss `id` of fight seed `seed`, at `percent` of its strength, with the special marbles `placed` and the relics of the army as a bit mask when it takes them. */
+  boss(id: string, seed: number, percent: number, placed: number[][], relics: number): RunBoss;
 }
 
 type Cell = [q: number, r: number];
@@ -226,7 +232,7 @@ export interface Tactic {
 
 /** The fight on: the engine, the moves played on it (both sides, tactics too) and the id of its game. */
 interface Fight {
-  engine: RunEngine | EncounterLike;
+  engine: RunEngine | RunBoss;
   moves: number[][];
   game: string;
   boss: boolean;
@@ -253,7 +259,7 @@ const fail = (code: ErrorCode, message: string): Result<never> => ({ ok: false, 
 const text = ([q, r]: Cell): string => `(${q},${r})`;
 
 /** The special marbles of the army on the board (the bot's own are not the army's, #1492), by type: the bridge's kind less 1. */
-function kinds(engine: RunEngine): number[] {
+function kinds(engine: RunEngine | RunBoss): number[] {
   const board = engine.board();
   const mine = parseSpecials(engine.specials()).filter((s) => board[cellIndex(s.cell[0], s.cell[1])] === 1);
   return SPECIAL_LOOKS.map((_, k) => mine.filter((s) => s.kind === k + 1).length);
@@ -357,7 +363,7 @@ export class RogueRun {
   tactic({ tactic, a, b }: TacticInput): Result<Tactic> {
     return this.withRun((active) => {
       const screen = this.screen(active);
-      if (screen !== 'fight' || active.fight!.boss) return fail('not_now', 'tactics are played in an army fight, after the special marbles are placed');
+      if (screen !== 'fight') return fail('not_now', 'tactics are played in a fight, after the special marbles are placed');
       const code = TACTICS.findIndex((t) => t.name === tactic) + 1;
       if (code === 0 || !active.state.tactics.includes(code)) return fail('bad_choice', `the run holds no tactic ${tactic}`);
       if (code === 3 && !(a && b)) return fail('bad_choice', 'a Swap names two cells of the army: a and b');
@@ -399,7 +405,7 @@ export class RogueRun {
    * the run as main.ts `runMoved` does. */
   private played(active: Active): void {
     const { engine, boss, moves } = active.fight!;
-    const result = boss ? (engine as EncounterLike).result() : (engine as RunEngine).status(); // 1 won, 2 lost: a draw is a loss
+    const result = boss ? (engine as RunBoss).result() : (engine as RunEngine).status(); // 1 won, 2 lost: a draw is a loss
     if (result === 0) active.state = { ...active.state, moves: moves.map((mv) => [...mv]) };
     else this.settle(active, result === 1);
   }
@@ -408,7 +414,7 @@ export class RogueRun {
    * are those still on the board. */
   private settle(active: Active, won: boolean): void {
     const { engine, boss, moves } = active.fight!;
-    active.state = fightOver(active.map, { ...active.state, moves: moves.map((mv) => [...mv]) }, won, engine.ejected(2), boss ? undefined : kinds(engine as RunEngine)); // its last move counts (#1473)
+    active.state = fightOver(active.map, { ...active.state, moves: moves.map((mv) => [...mv]) }, won, engine.ejected(2), kinds(engine)); // its last move counts (#1473)
     active.fight = null;
   }
 
@@ -417,15 +423,15 @@ export class RogueRun {
   }
 
   /** The fight of the run's last node, as main.ts `runEngine` stands it: the act's boss, or the army against the bot's plan. */
-  private engineFor(state: Run, map: MapNode[]): RunEngine | EncounterLike {
+  private engineFor(state: Run, map: MapNode[]): RunEngine | RunBoss {
     const boss = actBoss(map, state, this.bossIds());
-    if (boss) return this.rules.boss(boss.id, boss.seed, boss.percent);
+    if (boss) return this.rules.boss(boss.id, boss.seed, boss.percent, state.placed, relicMask(state));
     const plan = foePlan(map, state, (node, less, biome) => this.rules.run_foes(state.seed, node, less, biome));
     return this.rules.fight(state.army, plan, state.placed, relicMask(state));
   }
 
   /** Starts the fight of `engine` as the session's game, `moves` already played on it. */
-  private begin(active: Active, engine: RunEngine | EncounterLike, moves: number[][]): void {
+  private begin(active: Active, engine: RunEngine | RunBoss, moves: number[][]): void {
     const boss = actBoss(active.map, active.state, this.bossIds());
     const recorded = recording(engine, moves, () => this.played(active));
     const started = boss ? this.session.runBoss(boss.id, recorded as EncounterLike) : this.session.runFight(recorded as RunEngine, fightBudget(active.map, active.state, active.nodes));
@@ -444,7 +450,7 @@ export class RogueRun {
     if (state.scroll) return 'scroll';
     if (state.collector) return 'collector';
     if (state.exit) return 'exit';
-    if (placing(state) && !fight!.boss) return 'place';
+    if (placing(state) && (!fight!.boss || (fight!.engine as RunBoss).takes_build())) return 'place';
     return state.fighting ? 'fight' : 'map';
   }
 

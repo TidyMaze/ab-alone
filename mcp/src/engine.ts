@@ -1,6 +1,6 @@
 // Loads the Node build of abalone-wasm (`bun run wasm`, in engine/), the only judge of the game.
 import { createRequire } from 'node:module';
-import { engineFor } from '../../client/src/bot';
+import { encounterFor, engineFor } from '../../client/src/bot';
 import type { EncounterLike, EngineLike } from './game';
 import type { RunRules } from './run';
 import type { WorldRules } from './world';
@@ -47,15 +47,15 @@ export function worldRules(): WorldRules {
 }
 
 /** The rogue-lite rules of the engine (docs/specs/roguelite.md): the map, the bot's army and the exits of a run seed, the army's fight as the
- * client stands it (`engineFor` of client/src/bot.ts, the one the bot's worker uses too) and an act boss at its act's strength. */
+ * client stands it (`engineFor` of client/src/bot.ts, the one the bot's worker uses too) and an act boss at its act's strength, with the army's build when it takes it (`encounterFor`). */
 export function runRules(): RunRules {
   return {
     run_map: wasm.run_map,
     run_foes: wasm.run_foes,
     run_exits: wasm.run_exits,
     fight: (army, foes, placed, relics) => engineFor(wasm.Engine, army, placed, foes, undefined, relics),
-    boss: (id, seed, percent) => {
-      const boss = new wasm.Encounter(id, seed);
+    boss: (id, seed, percent, placed, relics) => {
+      const boss = encounterFor(wasm.Encounter, id, seed, placed, relics); // the army's build, when the boss takes it (#1494)
       boss.scale_node_budget(percent);
       return boss;
     },
