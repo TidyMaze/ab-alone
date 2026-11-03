@@ -107,6 +107,25 @@ describe('specialCues', () => {
     expect(cues(before, [mark([0, 0], MAGNET)], [], move, after).pulls).toEqual([{ from: [-2, -1], to: [-1, -1], dir: 0 }]);
   });
 
+  it('two Magnets pull in cell order, one marble each', () => {
+    // Side by side on (0, 0) and (1, 0) they step up: each pulls the marble two cells off on its own side.
+    const wide: [Axial, number][] = [[[0, 0], BLACK], [[1, 0], BLACK], [[-2, -1], WHITE], [[3, -1], WHITE]];
+    const up = { cells: [[1, 0], [0, 0]] as Axial[], dir: 4 };
+    const marks = [mark([1, 0], MAGNET), mark([0, 0], MAGNET)];
+    const wideAfter: [Axial, number][] = [[[0, -1], BLACK], [[1, -1], BLACK], [[-1, -1], WHITE], [[2, -1], WHITE]];
+    expect(cues(wide, marks, [], up, wideAfter).pulls).toEqual([
+      { from: [-2, -1], to: [-1, -1], dir: 0 },
+      { from: [3, -1], to: [2, -1], dir: 1 },
+    ]);
+    // One above the other on (0, 1) and (0, 2) they step up too, the upper one first.
+    const tall: [Axial, number][] = [[[0, 1], BLACK], [[0, 2], BLACK], [[-2, 0], WHITE], [[-2, 1], WHITE]];
+    const tallAfter: [Axial, number][] = [[[0, 0], BLACK], [[0, 1], BLACK], [[-1, 0], WHITE], [[-1, 1], WHITE]];
+    expect(cues(tall, [mark([0, 1], MAGNET), mark([0, 2], MAGNET)], [], { cells: [[0, 2], [0, 1]], dir: 4 }, tallAfter).pulls).toEqual([
+      { from: [-2, 0], to: [-1, 0], dir: 0 },
+      { from: [-2, 1], to: [-1, 1], dir: 0 },
+    ]);
+  });
+
   it('a Medic thrown off comes back on the first back row cell that was free and holds a marble of its side now', () => {
     const lost: Special[] = [mark([1, 3], MEDIC)];
     const away: Move = { cells: [[3, -4]], dir: 5 };

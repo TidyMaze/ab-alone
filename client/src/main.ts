@@ -185,7 +185,7 @@ import { coopStatus, duelStatus, onlineStatus, type OnlineStatus } from './prese
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
-import { fuseDigit, fuseNote, parseFuses } from './specialcues';
+import { fuseDigit, fuseNote, parseFuses, pullTrack, specialCues, type Pull } from './specialcues';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
@@ -2805,18 +2805,30 @@ const ejecting: Ejecting[] = [];
 function playMove(record: number[]): void {
   leaveReplay(); // a bot reply or a peer's move shows the live game
   const before = Array.from(engine.board());
-  const specials = run && !(engine instanceof Encounter) ? parseSpecials(engine.specials()) : [];
+  const army = run && !(engine instanceof Encounter) ? engine : null;
+  const specials = army ? parseSpecials(army.specials()) : [];
+  const fuses = army ? parseFuses(army.fuses()) : [];
   engine.play(Int32Array.from(record));
-  afterPlay(before, record);
+  // What the ply did to the special marbles (#1490), read from the engine's own result.
+  const cues = army ? specialCues(before, specials, fuses, parseMoves(record)[0]!, army.board(), parseSpecials(army.specials())) : null;
+  afterPlay(before, record, true, cues?.pulls);
   const spark = sparkBurst(before, specials, parseMoves(record)[0]!);
-  if (spark && !reducedMotion()) burstSpark(spark);
+  const reduced = reducedMotion();
+  if (spark && !reduced) ringAt(spark, 3, 'spark-burst', false, 'sparks');
+  for (const cell of reduced ? [] : cues?.bursts ?? []) ringAt(cell, 9, 'bomb-burst', false, 'bombs');
+  for (const cell of cues?.flashes ?? []) ringAt(cell, 8, 'shield-flash', reduced, 'shields');
+  const back = cues?.returns[0]; // the Medic comes back: it drops onto its row as the Dual Room's marble (#947)
+  if (back && !reduced) {
+    drop = { cell: back, start: performance.now(), reduced, y: dropAt(0, reduced).y };
+    document.body.dataset.medics = String(Number(document.body.dataset.medics ?? 0) + 1); // read by the e2e tests
+  }
   if (!online && (!fight || stalkerSaved()) && !run && !trainer) void saves.save(savedGame(), engine.status() !== 0);
   if (run?.state.fighting) runMoved();
   analyse();
 }
 
 // `live` false: a move replayed by a catch-up shows at once, without its ejection effect and sound (#232).
-function afterPlay(before: number[], record: number[], live = true): void {
+function afterPlay(before: number[], record: number[], live = true, pulls: Pull[] = []): void {
   history.push(record);
   if (engine.passed()) diag.passed(engine.passed(), history.length); // the move log keeps the pass (#1301)
   const mv = parseMoves(record)[0]!;
@@ -2842,7 +2854,14 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const tracks = slideTracks(before, after, mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
+  // A Magnet's pull (#1490): the pulled marble slides with the move, rolling the way it is pulled.
+  for (const pull of pulls) {
+    const slid = pullTrack(pull, reduced);
+    turns.map = carryTurns(turns.map, fight?.seed ?? 0, [slid], pull.dir);
+    tracks.push(slid);
+  }
   if (!live) return;
+  if (pulls.length > 0 && !reduced) document.body.dataset.pulls = String(Number(document.body.dataset.pulls ?? 0) + pulls.length); // read by the e2e tests
   lastMoveStart = NaN;
   lastMovePlaying = true;
   delete document.body.dataset.repulsions;
@@ -3107,15 +3126,17 @@ function fireUnstable(events: UnstableEvents, reduced: boolean): void {
   }
 }
 
-/** A Spark thrown off bursts from its last cell (#961): a ring in its colour, drawn as the Core's bursts. */
-function burstSpark(cell: Axial): void {
+/** A ring in the colour of the special type `kind` over `cell`, drawn as the Core's bursts: a Spark thrown off bursts from
+ * its last cell (#961), a Bomb from where it stood (#1490), a Shield that holds a push flashes (#1490, `reduced`: a flash
+ * in place, not a ring that grows). `count` is the counter of the e2e tests. */
+function ringAt(cell: Axial, kind: number, name: string, reduced: boolean, count: 'sparks' | 'bombs' | 'shields'): void {
   const p = axialTo3D(...cell);
-  const material = new THREE.MeshBasicMaterial({ color: SPECIAL_LOOKS[2]!.color, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-  const mesh = Object.assign(new THREE.Mesh(shockGeometry, material), { name: 'spark-burst' });
+  const material = new THREE.MeshBasicMaterial({ color: SPECIAL_LOOKS[kind - 1]!.color, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const mesh = Object.assign(new THREE.Mesh(shockGeometry, material), { name });
   mesh.position.set(p.x, 0.3, p.z);
   scene.add(mesh);
-  bursts.push({ mesh, start: performance.now(), reduced: false, skipped: false });
-  document.body.dataset.sparks = String(Number(document.body.dataset.sparks ?? 0) + 1); // read by the e2e tests
+  bursts.push({ mesh, start: performance.now(), reduced, skipped: false });
+  document.body.dataset[count] = String(Number(document.body.dataset[count] ?? 0) + 1); // read by the e2e tests
 }
 
 /** Draws the bursts and the sweep `elapsedMs` into their effects, and takes them away once they are over. */

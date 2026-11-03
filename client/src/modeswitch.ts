@@ -8,11 +8,11 @@ export const STRAY_CONTROLS = ['boss-retry', 'boss-goal', 'goal-sheet', 'boss-ba
 
 /** The body data of the board's draw and its effects (main.ts refresh, afterPlay), read by the e2e tests: dropped. */
 export const STRAY_DATA = [
-  'announceBlink', 'armies', 'beltCounter', 'beltDirs', 'beltStrikes', 'beltTurns', 'blood', 'bonusSlides', 'boss', 'bridge',
+  'announceBlink', 'armies', 'beltCounter', 'beltDirs', 'beltStrikes', 'beltTurns', 'blood', 'bombs', 'bonusSlides', 'boss', 'bridge',
   'burns', 'bursts', 'converted', 'cracks', 'dualRoom', 'echoBonus', 'echoFree', 'echoFreeTarget', 'echoLanded', 'echoSkipped',
-  'eggCounters', 'eggs', 'ejecting', 'ejections', 'exploding', 'explosions', 'fired', 'flips', 'ghosts', 'haze', 'hazeY',
-  'knock', 'lastMove', 'martyr', 'nextArmy', 'over', 'passing', 'pulseCounter', 'pulses', 'pulsing', 'repulsions', 'returns',
-  'ripples', 'shockwaves', 'slams', 'sliding', 'sparks', 'specials', 'sunk', 'swarmMarks', 'trainCounters', 'trains', 'vanished',
+  'eggCounters', 'eggs', 'ejecting', 'ejections', 'exploding', 'explosions', 'fired', 'flips', 'fuses', 'ghosts', 'haze', 'hazeY',
+  'knock', 'lastMove', 'martyr', 'medics', 'nextArmy', 'over', 'passing', 'pulseCounter', 'pulses', 'pulls', 'pulsing', 'repulsions', 'returns',
+  'ripples', 'shields', 'shockwaves', 'slams', 'sliding', 'sparks', 'specials', 'sunk', 'swarmMarks', 'trainCounters', 'trains', 'vanished',
 ] as const;
 
 /** Hides the stray controls of `doc` and drops its stray body data. */

@@ -399,8 +399,16 @@ Bomb's fuse is part of its mark, so it is part of the position too.
   shell's ink (3:1 on the pink, seven bars, not a font), and the HUD line of the fight says it (`Bomb: 2 turns left`,
   `Bombs: 3, 1 turns left`). The bridge's `Engine.fuses()` gives them (`[q, r, turns]` per Bomb); the page never counts
   turns itself.
-- **Not in this slice**: no upgraded form of the new four, and no ring or slide drawn for a Bomb's burst, a Magnet's
-  pull or a Medic's return (the marbles are on their new cell when the ply is over).
+- **Cues** (#1490), each read from the engine's own result (`client/src/specialcues.ts`), never a rule of its own:
+  - **A Bomb's burst** draws the Spark's ring (section 6) in the Bomb's colour over the cell where it stood. Reduced
+    motion: no ring.
+  - **A Magnet's pull** slides the pulled marble to its new cell with the move, in the time of a move's slide, rolling the
+    way it is pulled. Reduced motion: it jumps, as every move does.
+  - **A Medic's return** drops the marble onto its back row cell, the Dual Room's returning marble (`DROP_MS`). Reduced
+    motion: it is there at once. When two come back in one ply, the first shows the drop.
+  - **A Shield that holds a push** flashes: a ring in the Shield's colour on it. Reduced motion: the ring does not grow, it
+    shows in place and fades (the Core's reduced burst).
+- **Not in this slice**: no upgraded form of the new four.
 
 ## 14. Varied enemy armies (#1462)
 
