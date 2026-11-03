@@ -18,7 +18,8 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
   has 3 rows of nodes then its boss: 12 nodes on a path through a run, the bosses included.
 - **Nodes** (section 7): fight (the bot), elite (a stronger bot, a better reward), rest (marbles
   back up to 14, or a special marble upgraded, section 10), event (a short text choice with a gain and a cost), treasure (a relic, section 9),
-  boss (a boss of the roster at the act's strength, ends the act). No shop and no currency.
+  shop (section 12), boss (a boss of the roster at the act's strength, ends the act). The only currency is the
+  scrap of section 12, which lives and ends with the run.
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
   back row first; the bot has its 14 against an elite, 10 against a fight node (#1145): its
@@ -37,24 +38,23 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 
 Generated in the engine from the seed (`abalone-core` `run::run_map`, `run_map` on the bridge).
 A row has 2 to 4 nodes, the boss row one. The first row of an act is fights; each node of the
-two rows after it is a fight, an elite, an event, a treasure or a rest (2, 1, 1, 1 and 1 chances in
-6), its own draw from the seed and its index in the map, apart from the links: the map's shape is the
+two rows after it is a fight, an elite, an event, a treasure, a rest or a shop (1 chance in 6 each), its own draw from the seed and its index in the map, apart from the links: the map's shape is the
 one of slice 1, so a run saved before the kinds still walks its map. The treasure (#1457) took the
-place of a second event in the draw: a run saved before it keeps its other kinds. Between two rows the links are a walk from the
+place of a second event in the draw and the shop (#1459) the place of a second fight: a run saved before them keeps its other kinds. Between two rows the links are a walk from the
 first pair of nodes to the last that steps one row, the other or both at random: every node leads
 on, every node of the next row is reached, and no two paths cross. A boss leads to every node of the
 next act's first row.
 
 The map screen shows the acts from the top, each node named by its kind (Fight, Elite, Rest,
-Event, Treasure, Boss), the links under the nodes, the path taken in the
+Event, Treasure, Shop, Boss), the links under the nodes, the path taken in the
 accent colour, and enables only the nodes the player may pick: the first row of act 1, then the
 links of the last node.
 
 ## 3. Saving
 
-The run (seed, army, its special marbles, its relics, its tactics, the nodes picked, the special marbles placed on
-the fight on and its moves, a reward waiting to be picked, an event or a rest site waiting for its
-choice, and a relic offer waiting to be taken) is saved in IndexedDB after
+The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on
+the fight on and its moves, a reward waiting to be picked, an event, a rest site or a shop waiting for its
+choice (with what the shop sold), and a relic offer waiting to be taken) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -242,7 +242,7 @@ relic at most once, in the order taken, and starts with none: only variety carri
   "Boss beaten · pick a relic".
 - **Saving**: the relics and a waiting offer are saved with the run; a run saved before the relics
   has none.
-- **Later relics** plug in by a code: the shop (#1459) sells relics the run does not hold, the
+- **Later relics** plug in by a code: the shop (section 12) sells relics the run does not hold, the
   commanders (#1464) start with one, and boss relics (#1467) join a boss's offer.
 
 ## 10. The rest site (#1458)
@@ -306,7 +306,7 @@ Decision #934) and loses one when it is played.
   node (a 32-bit hash, as the reward offers) as an extra button after the other offers, which are the same as
   before; taking it replaces the reward. It is not offered with 3 held, and a reward is still there for it
   when no other offer is. The **Field manual** event (section 7, a 6th event) teaches one tactic, dealt the
-  same way, for 1 marble; its trade is refused with 3 held. The shop (#1459) will sell them.
+  same way, for 1 marble; its trade is refused with 3 held. The shop (section 12) sells them.
 - **On screen**: in the HUD of an army fight a glyph button per tactic held (a line icon in the accent colour,
   3:1 on the plate in both themes), its name and rule as its tooltip (and its accessible name). A tactic the
   engine cannot play now is disabled and dimmed, all of them during the placement of special marbles and a
@@ -316,3 +316,35 @@ Decision #934) and loses one when it is played.
 - **Saving**: the tactics held are saved with the run (`tactics`, the codes in the order gained); a run saved
   before this change loads with none. A Field manual waiting in a save made before this change may show
   another event, as the pool grew.
+
+## 12. Scrap and the shop (#1459)
+
+A currency turns rewards into choices (Slay the Spire's gold, Dead Cells' cells). Owner decision of 2026-11-02: an
+in-run economy is approved for the rogue-lite only, and it lifts the "no economy" line of #313.
+
+- **Scrap**: a won fight earns 10, a won elite 20 and a beaten act boss 30 (`SCRAP`), on top of its marbles
+  and reward. A lost fight earns none. The run line, in the HUD and on the map, ends with "N scrap" once the
+  run holds some.
+- **Lost with the run**: scrap is not carried over. A new run starts with none (only variety carries
+  between runs, Decision #934), and the summary of a run over says how much was left ("Scrap left: 40, lost
+  with the run").
+- **The Shop node** joins the map's draw (section 2) and holds no fight. Picking it opens its screen, the map
+  waits until Leave. It sells, at prices dealt by the run seed and the node (a 32-bit hash, as the reward offers),
+  so a reload sells the same:
+
+  | Id | For sale | Price | Taken when |
+  |---|---|---|---|
+  | 0 | one marble | 15 to 20 | the army is below 14 |
+  | 1 | a special marble of a type unlocked (Heavy, Anchor or Spark, section 8), plain | 25 to 35 | the army has a plain marble to make special |
+  | 2 | a relic the run does not hold (section 9); none for sale with all 12 held | 60 to 80 | always |
+  | 3 | a tactic (section 11) | 30 to 40 | fewer than 3 are held |
+
+  Each item is sold once per shop and leaves it once bought. An item that cannot be taken or paid is disabled and
+  says why ("army full", "no plain marble left", "hand full", "not enough scrap").
+- **Remove**: one special marble of the army, of the type the player picks (a button per type held, upgraded
+  types too), becomes a plain marble again for 20 to 30 scrap, once per shop. The army keeps its count. With no
+  special marble the button is disabled: "none to remove".
+- **Determinism and saving**: scrap, the shop waiting (`shop`) and the ids it sold (`bought`) are saved with the
+  run, so a reload shows the same shop as it was. A run saved before this change loads with no scrap and no shop
+  waiting. The rules live in the client with the rest of the run; the bridge only draws the Shop node (kind `6`).
+- **Not in this slice**: no way to sell or reroll, and no scrap from events.
