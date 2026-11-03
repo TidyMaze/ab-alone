@@ -198,6 +198,9 @@ export async function hashRecord(r: MoveRecord): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** The most integers a move record carries (a move is 8). */
+const MAX_MOVE_INTS = 16;
+
 /** Shape check for anything that came off the wire. Returns a clean copy or null. */
 export function parseRecord(x: unknown): MoveRecord | null {
   if (typeof x !== 'object' || x === null) return null;
@@ -208,6 +211,7 @@ export function parseRecord(x: unknown): MoveRecord | null {
     (r.seq as number) >= 0 &&
     typeof r.prev === 'string' &&
     Array.isArray(r.move) &&
+    r.move.length <= MAX_MOVE_INTS &&
     r.move.every((n) => typeof n === 'number') &&
     typeof r.pub === 'string' &&
     typeof r.sig === 'string';
@@ -266,6 +270,8 @@ export function parseReport(x: unknown): Report | null {
     Number.isInteger(r.status) &&
     Number.isInteger(r.side) &&
     Number.isFinite(r.rating) &&
+    (r.rating as number) >= 0 &&
+    (r.rating as number) <= 4000 &&
     typeof r.pub === 'string' &&
     typeof r.sig === 'string';
   if (!ok) return null;

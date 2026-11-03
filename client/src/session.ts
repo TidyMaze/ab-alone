@@ -344,6 +344,7 @@ export class OnlineSession {
   // gap, so we ask again. An answer never does, so a bad answer cannot make two peers loop (#226).
   private async receiveRecord(r: MoveRecord | null, live: boolean): Promise<void> {
     if (!r) return this.o.onRefuse('malformed');
+    if (this.seats.seatOf(r.pub) === 0) return this.o.onRefuse('wrong-key'); // a key with no seat costs no signature check
     const verdict = await this.now.log.verify(r);
     if (!verdict.ok) {
       const ahead = verdict.reason === 'out-of-order' || (verdict.reason === 'wrong-game' && !this.known(r.game));
@@ -351,7 +352,6 @@ export class OnlineSession {
       return this.o.onRefuse(verdict.reason);
     }
     const seat = this.seats.seatOf(r.pub);
-    if (seat === 0) return this.o.onRefuse('wrong-key');
     if (!this.toMove(seat)) return this.o.onRefuse('not-their-turn');
     try {
       await this.o.judge.play(Int32Array.from(r.move), live);
@@ -380,6 +380,7 @@ export class OnlineSession {
     const seat = this.seats.seatOf(r.pub);
     if (seat === 0 || r.pub === this.o.keys.pub) return this.o.onRefuse('wrong-key');
     if (r.side !== colourOf(seat, this.games.length - 1, this.seats.count)) return this.o.onRefuse('bad-report');
+    if (this.o.judge.status() === 0) return this.o.onRefuse('bad-report'); // a report says a result: a game still running has none
     this.o.onReport?.(r);
   }
 

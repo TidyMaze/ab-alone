@@ -1531,6 +1531,7 @@ describe('OnlineSession match reports, #1317', { timeout: 30_000 }, () => {
 
   it('signs our report with our key for this game and delivers it to the other seat only', async () => {
     const { black, white } = await ready();
+    black.judge.winner = white.judge.winner = 1; // a report says the result of a game that is over
     const sent = await black.session.report(ours);
     expect(sent).toMatchObject({ kind: 'report', game: 'g', side: 1, pub: black.keys.pub, ...ours });
     await until(() => expect(white.reports).toEqual([sent]));
@@ -1550,6 +1551,7 @@ describe('OnlineSession match reports, #1317', { timeout: 30_000 }, () => {
 
   it('refuses a forged report, one for another game, one from a key without a seat, one with the wrong colour, our own echo, and a malformed one', async () => {
     const { r, black, white } = await hostWithWhite();
+    black.judge.winner = 1;
     const good = await signReport(white, { game: 'g', ...ours, side: 2 });
     r.from('b', { ...good, rating: 3000 });
     r.from('b', await signReport(white, { game: 'other', ...ours, side: 2 }));
