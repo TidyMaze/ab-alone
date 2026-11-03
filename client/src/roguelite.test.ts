@@ -1844,6 +1844,22 @@ describe('roguelite biomes (#1472)', () => {
     expect([biomeOf(fresh(), 0), biomeOf(fresh(), 1), biomeOf(fresh(), 2)]).toEqual([0, 0, 0]);
   });
 
+  it('a boss node says before the fight whether its boss takes the army\'s build, once the biome of its act is known (#1495)', () => {
+    const bosses = { ids: IDS, name: (id: string) => `The ${id}`, builds: (id: string) => id === 'hull' };
+    const tips = (run: Run, given?: typeof bosses): string[][] =>
+      [...parse(mapHtml(THREE, run, '', given)).querySelectorAll<HTMLButtonElement>('button[data-node-kind="boss"]')].map((b) => b.dataset.tip!.split('\n'));
+    const far = { path: [0, 1, 2, 3, 4] };
+    const [meadow, tundra, desert] = tips(fresh({ ...far, biomes: [2, 3] }), bosses);
+    expect(meadow!.find((l) => l.startsWith('Boss: '))).toMatch(/^Boss: The \w+ · (takes your build|fights without your build)$/); // the one the run seed deals
+    expect(tundra).toEqual(['Boss', 'Act 2 · Tundra', 'Boss: The hull · takes your build']);
+    expect(desert).toEqual(['Boss', 'Act 3 · Desert', 'Boss: The pulsar · fights without your build']);
+    expect(tips(fresh({ ...far, biomes: [2] }), bosses)[2]).toEqual(['Boss', 'Act 3']); // the exit of act 3 is not picked: its boss is not known
+    expect(tips(fresh({ ...far, exits: false }), bosses)[1]!.join()).toMatch(/Boss: The \w+/); // a run without exits knows them all
+    expect(tips(fresh({ ...far, biomes: [2, 3] }))[1]).toEqual(['Boss', 'Act 2 · Tundra']); // no roster given, no line
+    const nodes = [...parse(mapHtml(THREE, fresh({ ...far, biomes: [2, 3] }), '', bosses)).querySelectorAll<HTMLButtonElement>('button[data-node-kind="fight"]')];
+    expect(nodes.every((b) => !b.dataset.tip!.includes('Boss'))).toBe(true);
+  });
+
   it('the biome of an act is the exit picked before it, the Meadow in act 1 and for a run without exits', () => {
     const run = fresh({ biomes: [2, 5] });
     expect([0, 1, 2].map((act) => biomeOf(run, act))).toEqual([0, 2, 5]);

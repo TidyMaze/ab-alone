@@ -2960,6 +2960,14 @@ mod tests {
     }
 
     #[test]
+    fn a_boss_id_says_whether_it_takes_the_build_before_any_fight() {
+        for id in boss_ids() {
+            assert_eq!(boss_takes_build(&id), BUILDING.contains(&id.as_str()), "{id}");
+        }
+        assert!(!boss_takes_build("nobody"), "an unknown boss takes none");
+    }
+
+    #[test]
     fn a_build_boss_fights_to_the_end_with_every_special_mark_on_a_marble_and_the_same_every_time()
     {
         for id in BUILDING {
