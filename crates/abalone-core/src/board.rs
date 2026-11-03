@@ -1012,4 +1012,28 @@ mod tests {
         board.set_magnetizer_ply(None);
         assert_eq!(board, Board::empty());
     }
+    #[test]
+    fn a_cell_emptied_or_voided_loses_its_special_mark_and_a_filled_one_keeps_it() {
+        let mut board = Board::standard();
+        board.set_rogue_lite();
+        for cell in [(0, 4), (0, 3), (1, 3)] {
+            board.place_special(cell, Special::Heavy).unwrap();
+        }
+        board.set(0, 4, Cell::White);
+        assert_eq!(
+            board.special((0, 4)),
+            Some(Special::Heavy),
+            "a flip keeps it"
+        );
+        board.set(0, 3, Cell::Empty);
+        assert_eq!(board.special((0, 3)), None, "no marble, no mark");
+        board.void(1, 3);
+        assert_eq!(board.special((1, 3)), None, "a cell gone takes its mark");
+        let mut plain = Board::standard();
+        plain.set(0, 3, Cell::Empty);
+        assert!(
+            !plain.rogue_lite(),
+            "a board without the flag has no mark to drop"
+        );
+    }
 }

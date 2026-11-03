@@ -1654,4 +1654,18 @@ mod tactic_tests {
         assert_eq!(a.board(), b.board());
         assert_eq!(a.history(), b.history());
     }
+    #[test]
+    fn the_rogue_lite_flag_is_set_before_the_first_move_only() {
+        let mut game = Game::new();
+        assert_eq!(
+            game.place_special((0, 3), Special::Heavy),
+            Err(PlaceError::NotRogueLite)
+        );
+        game.set_rogue_lite().unwrap();
+        game.place_special((0, 3), Special::Heavy).unwrap();
+        assert!(game.board().rogue_lite());
+        let mv = first(&game);
+        game.play(&mv).unwrap();
+        assert_eq!(game.set_rogue_lite(), Err(PlaceError::Started));
+    }
 }

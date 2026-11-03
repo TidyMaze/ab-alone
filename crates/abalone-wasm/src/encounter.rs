@@ -2824,4 +2824,103 @@ mod tests {
             "no marble left on (0, 0)"
         );
     }
+    /// The bosses that take the army's build (#1494): plain Abalone moves, hooks that only remove marbles.
+    const BUILDING: [&str; 6] = [
+        "hull", "chaplain", "alien", "railyard", "overseer", "stalker",
+    ];
+    /// The Gyroscope, Force 1 and Chaos 2.
+    const MASK: u32 = 1 | (1 << 16) | (2 << 20);
+
+    /// A boss fight with the whole build: the relics and one special marble of each kind (1 to 10) on the first
+    /// Black marbles of the board.
+    fn armed(id: &str, seed: u32) -> Encounter {
+        let mut f = Encounter::new(id, seed).unwrap();
+        f.set_relics(MASK).unwrap();
+        let board = f.board();
+        let black = cells_of(5).zip(board.iter()).filter(|(_, &c)| c == 1);
+        for ((q, r), kind) in black.map(|(cell, _)| cell).zip(1..=10) {
+            f.place_special(q, r, kind).unwrap();
+        }
+        f
+    }
+
+    fn tactic(code: i32) -> Vec<i32> {
+        vec![0, code, 0, 0, 0, 0, 0, 0]
+    }
+
+    #[test]
+    fn only_the_standard_bosses_with_removing_hooks_take_the_army_build() {
+        for id in boss_ids() {
+            let mut f = Encounter::new(&id, 1).unwrap();
+            let takes = BUILDING.contains(&id.as_str());
+            assert_eq!(f.takes_build(), takes, "{id}");
+            assert_eq!(f.set_relics(0).is_ok(), takes, "{id}");
+            if !takes {
+                assert!(f.place_special(0, 0, 1).is_err(), "{id}");
+                assert!(f.play(&tactic(1)).is_err(), "{id}: a tactic needs the flag");
+            }
+            assert!(f.specials().is_empty() && f.fuses().is_empty(), "{id}");
+            assert_eq!(f.tactics(), 0, "{id}");
+        }
+        let mut f = Encounter::new("hull", 1).unwrap();
+        assert!(f.place_special(0, 4, 1).is_err(), "no flag yet");
+        assert!(f.place_special(0, 4, 99).is_err(), "unknown kind");
+    }
+
+    #[test]
+    fn a_build_boss_fights_to_the_end_with_every_special_mark_on_a_marble_and_the_same_every_time()
+    {
+        for id in BUILDING {
+            let run = |seed: u32| {
+                let mut f = armed(id, seed);
+                assert_eq!(f.specials().len(), 30, "{id}");
+                assert_eq!(f.fuses().len(), 3, "{id}: the Bomb's fuse");
+                for ply in 0..80 {
+                    let moves = if f.to_move() == 1 {
+                        let seen = f.seen_moves();
+                        let n = seen.len() / MOVE_STRIDE;
+                        (n > 0).then(|| seen[ply * 7 % n * MOVE_STRIDE..][..MOVE_STRIDE].to_vec())
+                    } else {
+                        Some(f.boss_move()).filter(|m| !m.is_empty())
+                    };
+                    let Some(mv) = moves else { break };
+                    if f.play(&mv).is_err() {
+                        continue; // a move a hidden marble stops (The Stalker)
+                    }
+                    let board = f.board();
+                    for mark in f.specials().chunks(3) {
+                        let at = cells_of(5).position(|c| c == (mark[0], mark[1])).unwrap();
+                        assert!(board[at] == 1 || board[at] == 2, "{id}: a mark on a marble");
+                    }
+                    if f.result() != 0 {
+                        break;
+                    }
+                }
+                (f.board(), f.specials(), f.ejected(1), f.ejected(2))
+            };
+            assert_eq!(run(3), run(3), "{id}");
+        }
+    }
+
+    #[test]
+    fn a_tactic_record_plays_freeze_and_swap_are_refused_and_fall_back_gives_the_turn_back() {
+        let mut f = armed("hull", 5);
+        let start = f.board();
+        for code in [2, 3] {
+            let error = f.play(&tactic(code)).unwrap_err();
+            assert!(error.contains("BossClock"), "{error}");
+        }
+        assert!(f.play(&tactic(4)).unwrap_err().contains("NothingToUndo"));
+        assert_eq!(f.tactics() & 0b1010, 0, "never Freeze nor Swap");
+        let mv = first_move(&f);
+        f.play(&mv).unwrap();
+        let reply = f.boss_move();
+        f.play(&reply).unwrap();
+        assert_eq!(f.tactics() & 0b1000, 0b1000, "Fall back is on offer");
+        f.play(&tactic(4)).unwrap();
+        assert_eq!(f.board(), start);
+        assert!(f.last_bonuses().is_empty());
+        assert_eq!(f.to_move(), 1);
+        assert!(f.play(&tactic(9)).is_err(), "no such tactic");
+    }
 }

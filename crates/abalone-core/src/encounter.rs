@@ -502,9 +502,11 @@ impl Encounter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::MAX_RADIUS;
+    use crate::board::{PlaceError, Special, MAX_RADIUS};
+    use crate::game::{Tactic, TacticError};
     use crate::moves::Direction::{E, NE, SW, W};
     use crate::moves::{legal_moves, Direction, Player};
+    use crate::run::Relic;
 
     type P = (i32, i32);
 
@@ -953,5 +955,140 @@ mod tests {
         let mut enc = Encounter::new(game, boss(no_special), 0);
         enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
         assert_eq!(enc.result(), None);
+    }
+    /// A boss fight carrying the army's build (#1494): the rogue-lite flag, `relics`, and `marks` placed on Black marbles.
+    fn built(black: &[P], white: &[P], marks: &[(P, Special)], boss: BossDef) -> Encounter {
+        let mut enc = Encounter::new(position(black, white, Player::Black, [0, 0]), boss, 0);
+        enc.equip(&[Relic::Gyroscope], [1, 0, 2]).unwrap();
+        for &(cell, kind) in marks {
+            enc.place_special(cell, kind).unwrap();
+        }
+        enc
+    }
+
+    #[test]
+    fn a_boss_fight_takes_the_build_before_its_first_move_only() {
+        let mut enc = built(
+            &[(0, 3), (0, 2)],
+            &[(3, 0)],
+            &[((0, 3), Special::Heavy)],
+            boss(no_special),
+        );
+        let board = enc.game().board();
+        assert!(board.rogue_lite());
+        assert!(board.has_relic(Relic::Gyroscope));
+        assert_eq!(board.affinities(), [1, 0, 2]);
+        assert_eq!(board.specials(), [((0, 3), Special::Heavy)]);
+        assert_eq!(
+            enc.place_special((3, 3), Special::Spark),
+            Err(PlaceError::NoMarble)
+        );
+        enc.play(&mv(&[(0, 2)], E)).unwrap();
+        assert_eq!(enc.equip(&[], [0; 3]), Err(PlaceError::Started));
+        assert_eq!(
+            enc.place_special((0, 3), Special::Anchor),
+            Err(PlaceError::Started)
+        );
+        let mut plain = Encounter::new(
+            position(&[(0, 3)], &[(3, 0)], Player::Black, [0, 0]),
+            boss(no_special),
+            0,
+        );
+        assert_eq!(
+            plain.place_special((0, 3), Special::Heavy),
+            Err(PlaceError::NotRogueLite)
+        );
+        assert_eq!(plain.tactics(), [false; 4], "no tactic without the build");
+    }
+
+    #[test]
+    fn a_special_marble_keeps_its_rules_and_follows_its_move_in_a_boss_fight() {
+        // The Heavy pushes the lone White marble alone, as in an army fight (section 5).
+        let mut enc = built(
+            &[(0, 3)],
+            &[(1, 3), (4, 0)],
+            &[((0, 3), Special::Heavy)],
+            boss(no_special),
+        );
+        enc.play(&mv(&[(0, 3)], E)).unwrap();
+        assert_eq!(enc.game().board().specials(), [((1, 3), Special::Heavy)]);
+        assert_eq!(enc.game().board().get(2, 3), Some(Cell::White));
+    }
+
+    #[test]
+    fn a_hook_that_removes_a_special_marble_takes_its_mark_with_it() {
+        let mut hooked = boss(every_ply);
+        hooked.hook = clear_black;
+        let mut enc = built(
+            &[(-3, 3), (0, 3)],
+            &[(3, -3)],
+            &[((-3, 3), Special::Anchor), ((0, 3), Special::Spark)],
+            hooked,
+        );
+        enc.play(&mv(&[(0, 3)], E)).unwrap();
+        assert_eq!(enc.game().board().specials(), [((1, 3), Special::Spark)]);
+    }
+
+    #[test]
+    fn a_boss_fight_offers_reinforce_and_fall_back_but_never_freeze_or_swap() {
+        let mut enc = built(
+            &[(0, 3), (0, 2)],
+            &[(3, 0)],
+            &[((0, 3), Special::Heavy)],
+            boss(no_special),
+        );
+        assert_eq!(
+            enc.tactics(),
+            [true, false, false, false],
+            "Reinforce only, before the first move"
+        );
+        assert_eq!(enc.play_tactic(Tactic::Freeze), Err(TacticError::BossClock));
+        assert_eq!(
+            enc.play_tactic(Tactic::Swap((0, 3), (0, 2))),
+            Err(TacticError::BossClock)
+        );
+        assert_eq!(
+            enc.play_tactic(Tactic::FallBack),
+            Err(TacticError::NothingToUndo)
+        );
+        enc.play_tactic(Tactic::Reinforce).unwrap();
+        assert_eq!(enc.game().board().get(-4, 4), Some(Cell::Black));
+        assert_eq!(
+            enc.game().win_ejections(Player::White),
+            4,
+            "the army is a marble further from losing"
+        );
+        assert_eq!(enc.play_tactic(Tactic::Reinforce).is_ok(), true);
+        assert_eq!(enc.game().board().get(-3, 4), Some(Cell::Black));
+    }
+
+    #[test]
+    fn fall_back_gives_the_army_its_last_move_and_the_boss_answer_back_with_the_boss_state() {
+        let mut hooked = boss(every_ply);
+        hooked.hook = clear_white;
+        let mut enc = built(
+            &[(0, 3), (0, 2)],
+            &[(3, 0), (3, -1), (2, -3)],
+            &[((0, 3), Special::Heavy)],
+            hooked,
+        );
+        let start = enc.game().board().clone();
+        enc.play(&mv(&[(0, 2)], E)).unwrap();
+        let reply = enc.boss_search().unwrap().mv;
+        enc.play(&reply).unwrap();
+        assert_eq!(enc.tactics(), [true, false, false, true]);
+        assert!(!enc.removed().is_empty() && enc.hooked().is_some());
+        enc.play_tactic(Tactic::FallBack).unwrap();
+        assert_eq!(enc.game().board(), &start);
+        assert_eq!(enc.game().history().len(), 0);
+        assert_eq!(enc.game().to_move(), Player::Black);
+        assert!(enc.removed().is_empty() && enc.hooked().is_none() && enc.repulsions().is_empty());
+        assert_eq!(
+            enc.play_tactic(Tactic::FallBack),
+            Err(TacticError::NothingToUndo)
+        );
+        // The fight goes on as the first time: the same move, the same answer.
+        enc.play(&mv(&[(0, 2)], E)).unwrap();
+        assert_eq!(enc.boss_search().unwrap().mv, reply);
     }
 }
