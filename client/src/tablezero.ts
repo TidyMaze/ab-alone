@@ -89,6 +89,7 @@ const BOARD_PART = /^scene_(slab_arena|ao_plinth|post_\d+)$/;
 const SLAB = /^scene_(slab_arena|ballast_slab|dual_slab_[ns])$/;
 
 const unlit = new Map<boolean, THREE.MeshBasicMaterial>();
+const WHITE = new THREE.Color(1, 1, 1);
 /** The lit materials already multiplied by TERRACE_TINT: a material is shared by every mesh of its file, whoever draws it first. */
 const tinted = new WeakSet<THREE.Material>();
 /**
@@ -172,6 +173,7 @@ export function mergeByMaterial(root: THREE.Object3D, split = false, neon = fals
     const voids = neon ? Object.assign(new THREE.InstancedMesh(neonVoidGeometry(), neonVoidMaterial(), dishes.length), { frustumCulled: false, name: 'terrace_voids' }) : null; // a pale outline where a cell is gone
     mesh.frustumCulled = false;
     mesh.name = 'terrace_dishes';
+    if (!neon) for (let i = 0; i < dishes.length; i++) mesh.setColorAt(i, WHITE); // an instance colour for a look to tint the cell tops by, without a new shader later (#1496)
     mesh.castShadow = mesh.receiveShadow = true; // the lit board (#1364)
     const spot = new THREE.Vector3();
     mesh.userData.show = (shown: (x: number, z: number) => boolean): void => {

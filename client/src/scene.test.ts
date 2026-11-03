@@ -582,7 +582,9 @@ describe('SceneRenderer (#632)', () => {
     const haze = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ name: 'terrace_blended', color: 0x123456 })), { name: 'haze' });
     const edges = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ name: 'terrace_edge' })), { name: 'terrace_edges', visible: false });
     const bare = Object.assign(new THREE.Group(), { name: 'bare' }); // not a mesh
-    sr.terrace.add(lit, dome, haze, edges, bare);
+    const dishes = Object.assign(new THREE.InstancedMesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial(), 3), { name: 'terrace_dishes' });
+    for (let i = 0; i < 3; i++) dishes.setColorAt(i, new THREE.Color(1, 1, 1));
+    sr.terrace.add(lit, dome, haze, edges, bare, dishes);
     sr.setBoardLook(BOARD_LOOKS.night); // the terrace is not on: nothing is touched yet
     expect(sr.sun.color.getHex()).toBe(TERRACE_LOOK.sun);
     sr.setTerrace(true);
@@ -595,6 +597,9 @@ describe('SceneRenderer (#632)', () => {
     expect((lit.material as THREE.MeshStandardMaterial).color.r).toBeCloseTo((0x80 / 255) ** 2.2 * new THREE.Color(night.tint).r, 1);
     expect((dome.material as THREE.MeshBasicMaterial).color.b).toBeGreaterThan(0);
     expect((haze.material as THREE.MeshBasicMaterial).color.getHex()).toBe(0x123456); // the haze is nobody's tint
+    const cell = new THREE.Color();
+    dishes.getColorAt(2, cell);
+    expect(cell.getHex()).toBe(night.cell); // the cell tops are multiplied apart from the rest of the board
     expect(edges.visible).toBe(true);
     expect((edges.material as THREE.MeshBasicMaterial).color.getHex()).not.toBe(0xffffff);
     sr.setBoardLook(null); // already so: nothing redone
@@ -605,6 +610,8 @@ describe('SceneRenderer (#632)', () => {
     expect((lit.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0x808080);
     expect((dome.material as THREE.MeshBasicMaterial).color.r).toBeCloseTo(1 / TERRACE_EXPOSURE);
     expect(edges.visible).toBe(false);
+    dishes.getColorAt(0, cell);
+    expect(cell.getHex()).toBe(0xffffff);
   });
 
   it('puts the look on when the terrace comes on after it was asked for, and leaves the neon look alone (#1496)', () => {

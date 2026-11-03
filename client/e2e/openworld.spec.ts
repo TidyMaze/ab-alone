@@ -160,10 +160,11 @@ shared('the wheel zooms the Open world out far and back, and the hero still roll
 });
 
 // #976: the loaded chunks cover the ground in view at every zoom, so the edge of the loaded area never shows: on a 32:9 screen
-// at the widest zoom, the four edge strips of a screenshot have no pixel of the background colour (the neon look's sky, #04050c, #1424).
+// at the widest zoom, the four edge strips of a screenshot have no pixel of the background colour (the neon look's sky, #04050c, #1424; the
+// terrace look's sky at the start of day, #93b5d9, drawn as (172, 190, 205) once graded, #1496).
 for (const [look, query, [br, bg, bb], allowed] of [
   ['neon', '&look=neon', [4, 5, 12], 3],
-  ['terrace', '', [11, 18, 32], 0],
+  ['terrace', '', [172, 190, 205], 0],
 ] as const)
 test(`the widest zoom on a 32:9 screen shows no black background at its edges in the ${look} look, #976`, async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 270 }); // 32:9 at a quarter of the pixels: the ratio sets the reach, the software tier draws it faster

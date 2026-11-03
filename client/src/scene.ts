@@ -545,6 +545,7 @@ export class SceneRenderer {
     this.renderer.toneMappingExposure = look.exposure;
     // The materials are the file's, shared with the next fight: each is multiplied from the colour it had when first dressed.
     const tint = new THREE.Color(look.tint);
+    const cell = new THREE.Color(look.cell);
     const dome = new THREE.Color(look.dome).multiplyScalar(TERRACE_EXPOSURE / look.exposure);
     this.terrace.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -553,9 +554,17 @@ export class SceneRenderer {
       if (mesh.name === 'terrace_edges') {
         mesh.visible = look.edge !== null;
         if (look.edge !== null) material.color.setHex(look.edge);
-      } else if (material.isMeshStandardMaterial) this.paint(material, tint);
-      else if (material.name === 'terrace_solid') this.paint(material, dome);
+      } else if (material.isMeshStandardMaterial) {
+        this.paint(material, tint); // the dishes' material is the board's: its tint is theirs too
+        if (mesh.name === 'terrace_dishes') this.paintCells(mesh as THREE.InstancedMesh, cell);
+      } else if (material.name === 'terrace_solid') this.paint(material, dome);
     });
+  }
+
+  /** Multiplies every cell top by `by`, on top of the board's tint: the colour of each instance (white until a look asks). */
+  private paintCells(dishes: THREE.InstancedMesh, by: THREE.Color): void {
+    for (let i = 0; i < dishes.instanceMatrix.count; i++) dishes.setColorAt(i, by);
+    dishes.instanceColor!.needsUpdate = true;
   }
 
   /** Sets a material's colour to the one it had at first, multiplied by `by`. */

@@ -106,6 +106,12 @@ describe('the time of day in the Open world mode', () => {
     expect(m.phase).toBe('night'); // the lair that started a fight reads it after the world is left
   });
 
+  it('leaving a world that is not open saves nothing and throws nothing', () => {
+    const m = made();
+    expect(() => m.leave()).not.toThrow();
+    expect(m.timeOfDay).toBe(0);
+  });
+
   it('saves the time of day when the world is left, and opens at it again', async () => {
     const saves = worldSaves(memoryStore(), 1);
     const m = made(true, saves);

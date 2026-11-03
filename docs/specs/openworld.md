@@ -203,7 +203,7 @@ The world (seed), the hero and troop cells, and the enemy groups beaten are save
 `ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
 
 **What is saved.** One record per seed, under the key `openworld:<seed>`:
-`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], yaw, savedAt }`, where `fight` is the
+`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], time, yaw, savedAt }`, where `fight` is the
 `FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
 The last world played is kept apart under `openworld:last` (`{ seed }`).
 
@@ -226,7 +226,8 @@ either (a bad `fight` makes a bad record). Both are deleted, and the world start
 **Record versions.** `record` 3 adds `lairs`, the numbers of the boss lairs beaten (section 7). A record of version 1 (no `record`
 field) or 2 loads with no lair beaten, so an old save is kept; an unknown later version, or a `lairs` that is not a list of
 whole numbers, is deleted like any garbage. `record` 4 adds `discovered`, the cells discovered (section 9): a record before it loads
-with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is garbage.
+with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is garbage. `record` 5 adds `time`,
+the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage.
 
 ## 6. Tests
 
@@ -238,7 +239,9 @@ with the Playwright MCP before its PR, with a screenshot.
 
 Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, enemies })` puts the
 hero, the troop and the enemies of the loaded square (the generated ones are hidden), and
-`window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them.
+`window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them. `window.__openworldTime(ms)` sets the time of
+day in ms of the 12 minute cycle (section 11); `body[data-openworld-phase]` reads `day`, `dusk` or `night`, and `body[data-fight-board]`
+the same on a lair fight.
 
 ## 7. Boss lairs (#1170, #1171, epic #1177)
 
@@ -353,3 +356,36 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   own, one not discovered, one with an enemy on it, or with no room for the whole troop is refused, the reason in the caption, and
   nothing moves. The rules are `client/src/openworldteleport.ts`, which loads no engine, so the MCP server (`world_teleport`) runs the
   same code.
+
+## 11. Day and night (#1496)
+
+The Open world goes through day, dusk and night, and a lair is fought on a hexagonal board dressed for the hour it was entered at.
+
+- **Cycle.** 12 minutes of play in the world (`client/src/daynight.ts`): day 6 min, dusk 1.5 min, night 3 min, dusk again 1.5 min (the dawn
+  uses the dusk look). The time counts only while the world is open and a frame is drawn: not in a fight, not in the menu, and a frame
+  that follows a stall counts a quarter second at most. It is saved with the world (`time`, section 5: an older save or a new world starts at
+  the start of day), when the world is left too, so a fight and the way back to the world keep the hour. `body[data-openworld-phase]`
+  reads the phase; `window.__openworldTime(ms)` sets the time (section 6).
+- **World look.** The sun's colour, strength and place (the angle of its light and its shadow), the ambient light, the sky and the fog
+  colour (they are one) and the tint of the water follow the time of day (`WORLD_LOOKS`: one look per phase). Over the last 30 s of a
+  phase the look blends into the next one's, smoothly (a smoothstep, in 255 steps: the scene is drawn again only when a step changes it,
+  so a blend costs no more than a frame that moves), ending on that look, so the change of phase is no jump. Night stays readable: the
+  moon is a real key light, the ambient is not black, and the hero, the troop (an emission of their own colour), the lairs and the
+  teleporters (an emissive that grows with the dark) shine of their own. The minimap and the map keep their colours: no darkening. The
+  neon look (`?look=neon`) has a sky of its own and keeps it. No light is added and no object is made per frame: the view's own sun,
+  hemisphere, fog and background are written in place (`Sky.set`, `OpenWorldView.setTime`).
+- **Three boards.** A lair starts the normal boss fight (section 7), now on a board of one of three looks, fixed by the phase of the
+  world when the hero stepped on the lair (`body[data-fight-board]` reads `day`, `dusk` or `night`; Retry keeps it, Back to the Open
+  world and any other mode take it off). `BOARD_LOOKS` in `client/src/boardlook.ts` is data: the sun's colour, strength and place, the
+  hemisphere, the colour beyond the board, the exposure, a tint for the lit board and one for the sky dome of the arena file, a tint
+  for the cell tops, and the colour of the glowing cell edges. **Day**: bright warm ground, a high warm sun. **Dusk**: an orange sun
+  low over the board (long shadows) and a violet hemisphere. **Night**: a dark blue ground, a pale moonlight key and a glowing cyan
+  line round every cell (a hidden ring under each dish that only the night look shows). A fight outside the Open world keeps the
+  terrace as it was (`TERRACE_LOOK`); the neon look is left alone.
+- **Contrast.** Both sides stay readable on all three boards: each marble is at least 3:1 against the cells, measured on the rendered
+  start of the first lair's fight with the cells' tint set for it (`cell` of the look): the white ones 3.07 to 3.77, the black ones 3.10
+  to 4.45 (`e2e/openworld-daynight.spec.ts`, `bun run e2e:contrast`).
+- **Reduced motion.** The phases still change; there is no blend: the look switches where the phase changes.
+- **Tests.** Unit: the phase from the time, the blend and its steps, the save, the sky of the view, the board looks, the terrace's look
+  and the mark of the fight. E2E (`openworld-daynight.spec.ts`): a world at each phase set with the hook, a lair entered at each phase on
+  its board, and the contrast at each.

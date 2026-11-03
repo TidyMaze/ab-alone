@@ -223,6 +223,8 @@ describe('the boss fights on the terrace (#1374)', () => {
     const dishes = merged.getObjectByName('terrace_dishes') as THREE.InstancedMesh;
     expect([edges.visible, edges.count, edges.frustumCulled]).toEqual([false, 3, false]); // hidden until a look shows it
     expect((edges.material as THREE.MeshBasicMaterial).name).toBe('terrace_edge');
+    expect(dishes.instanceColor!.count).toBe(3); // and a white colour per dish, for a look to tint the cell tops by
+    expect((mergeByMaterial(root, false, true).getObjectByName('terrace_dishes') as THREE.InstancedMesh).instanceColor).toBeNull(); // not in the neon look
     dishes.userData.show((x: number) => x !== 2); // a cell gone: its edge goes with it
     expect(edges.count).toBe(2);
     expect(mergeByMaterial(root, false, true).getObjectByName('terrace_edges')).toBeDefined(); // the neon look keeps its own

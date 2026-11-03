@@ -9,7 +9,9 @@ export const PHASE_MS: Readonly<Record<Phase, number>> = { day: 360_000, dusk: 9
 
 /** The phases round one cycle: day, dusk, night, then dusk again (the dawn uses the dusk look). */
 const ROUND: readonly Phase[] = ['day', 'dusk', 'night', 'dusk'];
-export const CYCLE_MS = ROUND.reduce((sum, phase) => sum + PHASE_MS[phase], 0);
+/** Where each phase of the round ends, in ms into the cycle. */
+const ENDS: readonly number[] = ROUND.map((_, i) => ROUND.slice(0, i + 1).reduce((sum, phase) => sum + PHASE_MS[phase], 0));
+export const CYCLE_MS = ENDS[ENDS.length - 1]!;
 /** The end of each phase is a blend into the next one's look, over this long. */
 export const BLEND_MS = 30_000;
 /** The blend moves in this many steps: a colour changes by about a level a step, so a step is the finest change to draw. */
@@ -20,16 +22,14 @@ export const wrapTime = (ms: number): number => (Number.isFinite(ms) ? ((ms % CY
 
 /** The phase at time `ms` of the cycle. */
 export function phaseOf(ms: number): Phase {
-  return ROUND[at(wrapTime(ms)).index]!;
+  return ROUND[indexAt(wrapTime(ms))]!;
 }
 
-/** The place of time `t` (already wrapped) in the round: the number of its phase in it, and how long is left of that phase. */
-function at(t: number): { index: number; left: number } {
-  let end = 0;
-  for (let index = 0; ; index++) {
-    end += PHASE_MS[ROUND[index]!];
-    if (t < end) return { index, left: end - t };
-  }
+/** The number in the round of the phase that time `t` (already wrapped) is in. */
+function indexAt(t: number): number {
+  let index = 0;
+  while (t >= ENDS[index]!) index++;
+  return index;
 }
 
 /** What the world looks like at one time of day. */
@@ -54,7 +54,7 @@ export interface WorldLook {
 /** The three looks. Night stays readable: the moon is a real key light, the ambient is not black, and the things that matter glow. */
 export const WORLD_LOOKS: Readonly<Record<Phase, WorldLook>> = {
   day: { sky: 0x93b5d9, sun: SUN.colour, sunIntensity: 3.2, elevation: SUN.elevation, azimuth: SUN.azimuth, hemiSky: 0xcfe0ff, hemiGround: 0x2a2418, hemiIntensity: 0.9, water: 0xffffff, glow: 0 },
-  dusk: { sky: 0x7a4f73, sun: 0xff8a4a, sunIntensity: 2.8, elevation: 9, azimuth: 62, hemiSky: 0xa07ab0, hemiGround: 0x3a2218, hemiIntensity: 0.75, water: 0xf0b0b8, glow: 0.4 },
+  dusk: { sky: 0x9a5f7a, sun: 0xff9a50, sunIntensity: 3.6, elevation: 14, azimuth: 62, hemiSky: 0xc8a0d0, hemiGround: 0x5a3a40, hemiIntensity: 1.2, water: 0xf0b0b8, glow: 0.4 },
   night: { sky: 0x060a1c, sun: 0x9db8ff, sunIntensity: 1.3, elevation: 38, azimuth: -30, hemiSky: 0x6a82c8, hemiGround: 0x141a2c, hemiIntensity: 0.65, water: 0x8aa4e0, glow: 1 },
 };
 
@@ -78,7 +78,9 @@ export class Sky {
 
   /** Moves the look to time `ms`; whether it changed. */
   set(ms: number, blend: boolean): boolean {
-    const { index, left } = at(wrapTime(ms));
+    const t = wrapTime(ms);
+    const index = indexAt(t);
+    const left = ENDS[index]! - t;
     const x = blend && left < BLEND_MS ? 1 - left / BLEND_MS : 0;
     const step = Math.round(x * x * (3 - 2 * x) * STEPS);
     const stamp = index * (STEPS + 1) + step;

@@ -19,6 +19,8 @@ export interface BoardLook {
   /** What the lit board (cells, rim, plinth) and the sky dome of the arena file are multiplied by. */
   tint: number;
   dome: number;
+  /** What the cell tops are multiplied by on top of the tint: the marbles read 3:1 on them (the contrast of the game), whatever the light. */
+  cell: number;
   /** The glow of the cell edges, none by day. */
   edge: number | null;
 }
@@ -36,12 +38,13 @@ export const TERRACE_LOOK: BoardLook = {
   exposure: TERRACE_EXPOSURE,
   tint: 0xffffff,
   dome: 0xffffff,
+  cell: 0xffffff,
   edge: null,
 };
 
 /** Day: bright, warm ground. Dusk: orange and violet light from low, long shadows. Night: a dark blue ground, a moonlight key, glowing cell edges. */
 export const BOARD_LOOKS: Readonly<Record<Phase, BoardLook>> = {
-  day: { sun: 0xffe0b0, sunIntensity: 5.6, elevation: 34, azimuth: 25, sky: 0xb4ccea, ground: 0x9a8466, hemisphere: 1.7, background: 0x6f93b8, exposure: 1.65, tint: 0xfff5e0, dome: 0xffffff, edge: null },
-  dusk: { sun: 0xff7a38, sunIntensity: 4.6, elevation: 8, azimuth: 62, sky: 0xa584b8, ground: 0x5a3a30, hemisphere: 1.3, background: 0x3a2a4a, exposure: 1.35, tint: 0xffd8c0, dome: 0xd0a090, edge: null },
-  night: { sun: 0x8fb0ff, sunIntensity: 2.6, elevation: 40, azimuth: -35, sky: 0x5a72c0, ground: 0x1a2238, hemisphere: 1.4, background: 0x070a16, exposure: 1.25, tint: 0xa8b8ff, dome: 0x303a60, edge: 0x4fc8ff },
+  day: { sun: 0xffe0b0, sunIntensity: 11, elevation: 34, azimuth: 25, sky: 0xb4ccea, ground: 0x9a8466, hemisphere: 1.7, background: 0x6f93b8, exposure: 0.85, tint: 0xfff5e0, dome: 0xffffff, cell: 0xa4a4a4, edge: null },
+  dusk: { sun: 0xffd0a0, sunIntensity: 12, elevation: 18, azimuth: 35, sky: 0xb8a0e8, ground: 0x805868, hemisphere: 1.8, background: 0x3a2a4a, exposure: 1.3, tint: 0xd8d0e8, dome: 0xd0a090, cell: 0xffffff, edge: null },
+  night: { sun: 0xe8f0ff, sunIntensity: 6, elevation: 40, azimuth: -35, sky: 0x7f90d0, ground: 0x2a3250, hemisphere: 1.2, background: 0x070a16, exposure: 1.5, tint: 0xa8b8e8, dome: 0x303a60, cell: 0xcadaff, edge: 0x4fc8ff },
 };
