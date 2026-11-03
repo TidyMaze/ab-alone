@@ -17,7 +17,7 @@ export const NAME_MAX = 16;
 
 /** The text decided by the legal role on #1287: public, permanent, third party relays, no erasure, a name that is not you, 16+. */
 export const BOARD_TEXT =
-  'The shared ranked board publishes your ranked results (with the moves of each game and your opponent\'s key), a random key and the name you pick on public Nostr relays run by third parties (nos.lol, relay.piazza.today, relay.bitmacro.cloud). ' +
+  'The shared ranked board publishes your ranked results (with the moves of each game and your opponent\'s key and name), a random key and the name you pick on public Nostr relays run by third parties (nos.lol, relay.piazza.today, relay.bitmacro.cloud). ' +
   'Opening the board connects your browser to these relays, which see your IP address. ' +
   'It is public and permanent: we cannot delete it, and the relays keep what they keep. Leaving the board stops new results, it does not erase old ones. ' +
   'Pick a name that does not identify you.';
