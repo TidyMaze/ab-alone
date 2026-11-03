@@ -31,7 +31,7 @@ const open = async (page: Page) => {
 const seated = (page: Page) => expect(page.locator('body')).toHaveAttribute('data-seat', 'player', { timeout: 15_000 });
 const reveal = (page: Page) => page.locator('#hud .reveal li');
 
-test('three players: a round resolves at its deadline, the silent player holds, then the bot plays its seat until it is back (#504, #673, #674)', async ({ browser }) => {
+test('three players: a round resolves at its deadline, the silent player holds (#504, #673)', async ({ browser }) => {
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const commits: number[] = [];
   await relay({ a, b, c }, commits);
@@ -85,22 +85,9 @@ test('three players: a round resolves at its deadline, the silent player holds, 
   await expect(reveal(a).nth(2)).toHaveText('Player 3: held');
   await expect(reveal(c).nth(0)).toHaveText('Player 1: moved');
   await expect(reveal(c).nth(2)).toHaveText('You: held');
-  // c says nothing in round 2 either: from round 3 on, the bot plays its seat on every page (#674).
-  const seat3 = (p: Page, name: string) => reveal(p).filter({ hasText: new RegExp(`^${name}: `) });
-  for (const round of [2, 3]) {
-    for (const p of [a, b]) await expect(p.locator('body')).toHaveAttribute('data-net', 'choosing');
-    for (const p of [a, b]) await p.getByRole('button', { name: 'Hold' }).click();
-    await kept(round, 2);
-    await deadlinePasses();
-    for (const p of [a, b, c]) await expect(p.locator('body')).toHaveAttribute('data-royale', String(round + 1));
-  }
-  await expect(seat3(a, 'Player 3')).toHaveText(/^Player 3: (moved|fizzled)/);
-  await expect(seat3(c, 'You')).toHaveText(/^You: (moved|fizzled)/);
-  // c is back: its Hold retakes the seat. Every seat committed: the round resolves with no deadline.
-  for (const p of [a, b, c]) await p.getByRole('button', { name: 'Hold' }).click();
-  for (const p of [a, b, c]) await expect(p.locator('body')).toHaveAttribute('data-royale', '5');
-  await expect(seat3(a, 'Player 3')).toHaveText('Player 3: held');
-  await expect(seat3(c, 'You')).toHaveText('You: held');
+  // The bot plays a silent seat from round 3 and retakes it when the seat is back: the rounds, the dropped seat and its
+  // return are unit tested on the relay (royale-net.test.ts, 'RoyaleNet dropped seat (#674)'). Not replayed here: each
+  // round costs a deadline pass on every page, seconds on a CI runner (#1481).
   for (const p of [a, b, c]) await expect(p.locator('body')).toHaveAttribute('data-desync', '0');
   for (const p of [a, b, c]) await p.context().close(); // their WebGL pages would slow the next test (#120)
 });
