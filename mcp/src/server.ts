@@ -291,6 +291,7 @@ export function createServer(
           .array(z.int().min(0).max(BLUEPRINTS.length - 1))
           .optional()
           .describe('The blueprints banked in earlier runs (banked of a run over): relics, tactics and special marbles in the pools, default none.'),
+        runes: z.int().min(0).max(7).optional().describe('The runes owned, a bit mask (1 Rune of Stone, 2 Rune of Spark, 4 Rune of Might; found by beating The Wall, The Artificer and The Brute for the first time): a secret room, a shortcut and a secret exit on the map, default none.'),
         commander: z.int().min(0).max(COMMANDERS.length - 1).optional().describe('The commander, 0 the Captain (default), the others unlocked by best: its special marbles and its starting relic.'),
         bot_nodes: z.int().min(1).max(200000).optional().describe('Positions the bot searches per move in a fight, default 20000. An elite searches twice as many.'),
         save: z.record(z.string(), z.unknown()).optional().describe('Resume this run instead: the output of save_run, or a save of the client. bad_save when it is not one.'),

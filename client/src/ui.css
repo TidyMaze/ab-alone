@@ -809,6 +809,7 @@ body[data-reading] #log { visibility: visible; }
 #run-map .run-graph { position: relative; width: 100%; height: calc(var(--slots) * 3.75rem * var(--ui-scale)); flex: none; }
 #run-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 #run-map line { stroke: var(--edge); stroke-width: 2; vector-effect: non-scaling-stroke; }
+#run-map line.shortcut { stroke: var(--hazard); stroke-width: 3; stroke-dasharray: 1 6; stroke-linecap: round; } /* the shortcut of the rune of the shortcut (#1476) */
 #run-map line.next { stroke: var(--accent); stroke-dasharray: 4 4; } /* the links to the nodes to pick (#1468) */
 #run-map line.taken { stroke: var(--accent); stroke-width: 4; }
 #run-map button {
@@ -828,6 +829,8 @@ body[data-reading] #log { visibility: visible; }
 #run-map button.node.boss { transform: translate(-50%, -1.375rem); }
 #run-map button.node.boss svg.glyph { width: 2.75rem; height: 2.75rem; padding: 0.5625rem; border-width: 3px; }
 #run-map button.unknown svg.glyph { border-style: dashed; } /* a "?" node (#1463) */
+#run-map button.secret svg.glyph { border-style: dotted; border-width: 3px; } /* a secret room (#1476) */
+#run-map .run-exits button[data-secret] { border-style: dashed; } /* the secret exit (#1476) */
 #run-map button.node small { display: block; font-size: 0.85em; font-weight: 400; } /* an elite's archetype under its kind (#1462) */
 #run-map button:disabled { cursor: default; color: var(--muted); }
 #run-map button.node:not(:disabled) svg.glyph { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }

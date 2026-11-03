@@ -18,7 +18,7 @@ export const RUN_KEY = 'run';
 
 /** What a node holds, by the bridge's kind code (#800, the treasure #1457, the shop #1459). An `unknown` node (#1463, drawn
  * as a "?") turns into an event, a fight or a treasure when it is entered; the bridge no longer draws an `event` node. */
-const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop', 'unknown'] as const;
+const KINDS = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop', 'unknown', 'secret'] as const;
 export type NodeKind = (typeof KINDS)[number];
 
 /** How the bot's marbles stand in a fight or an elite (#1462, docs/specs/roguelite.md section 14), by the bridge's code. */
@@ -29,6 +29,16 @@ export const ELITES: readonly { name: string; help: string }[] = [
   { name: 'The Artificer', help: 'Sparks and Bombs' },
   { name: 'The Brute', help: 'Heavies' },
 ];
+
+/** The runes (#1476, docs/specs/roguelite.md section 27), by their bit in the mask the bridge takes (`1 << code`): rune `k` is found by
+ * beating the elite of archetype `k + 1` (ELITES) for the first time and opens one kind of hidden branch on the maps of the runs after it. */
+export const RUNES: readonly { name: string; opens: string; icon: string }[] = [
+  { name: 'Rune of Stone', opens: 'a secret room in every act', icon: 'M12 3l7 9-7 9-7-9zM12 8v8' },
+  { name: 'Rune of Spark', opens: 'a shortcut in every act that skips a row', icon: 'M13 3L5 14h6l-1 7 8-11h-6z' },
+  { name: 'Rune of Might', opens: 'a third, secret exit between acts', icon: 'M12 3v18M7 8l5-5 5 5M7 21h10' },
+];
+const ALL_RUNES = (1 << RUNES.length) - 1;
+const heldRunes = (mask: number): number[] => RUNES.flatMap((_, k) => (mask & (1 << k) ? [k] : []));
 
 /** A biome of an act (#1472, docs/specs/roguelite.md section 18), by the bridge's code, the Open world's: its look id (the tint is
  * in ui.css), its name, the roster boss that ends its act (`boss_ids`; none for the Meadow, whose act 1 boss is dealt as before), the
@@ -42,8 +52,8 @@ export const BIOMES: readonly { id: string; name: string; boss: string; hazard: 
   { id: 'archipelago', name: 'Archipelago', boss: 'ballast', hazard: '5 water holes around the centre', foes: 'Magnets' },
 ];
 
-/** One node of the map: a fight, an elite, a rest, an event, a treasure, a shop, an unknown "?", or the boss that ends its act. `links` are the columns of
- * the next row it leads to. A fight or an elite has the bridge's `formation` of the bot's army, an elite its archetype
+/** One node of the map: a fight, an elite, a rest, an event, a treasure, a shop, an unknown "?", a secret room (#1476), or the boss that ends its act. `links` are the columns of
+ * the next row it leads to, `skips` the columns of the row after the next it leads to: the shortcut of the rune of the shortcut. A fight or an elite has the bridge's `formation` of the bot's army, an elite its archetype
  * (`elite`, `0` for none). */
 export interface MapNode {
   act: number;
@@ -51,6 +61,7 @@ export interface MapNode {
   col: number;
   kind: NodeKind;
   links: number[];
+  skips: number[];
   formation: number;
   elite: number;
 }
@@ -80,7 +91,9 @@ export interface MapNode {
  * `flasks` are the charges it can drink on the map (#1475): FLASKS at the start, refilled at each act; a run saved before has FLASKS.
  * `affinities` are the levels of Force, Tactics and Chaos (#1471, docs/specs/roguelite.md section 23), 0 to MAX_AFFINITY, and `scroll` is on
  * while the choice of the scroll that grows one waits after an act boss; a run saved before has no affinity.
- * `spent` counts the army's moves in the fights of each act so far (#1473), `[]` for a run saved before it, which has no bonus room; `bonus` is on while the bonus room before an act boss waits. */
+ * `spent` counts the army's moves in the fights of each act so far (#1473), `[]` for a run saved before it, which has no bonus room; `bonus` is on while the bonus room before an act boss waits.
+ * `runes` is the mask of the runes the player owned when the run began (#1476, docs/specs/roguelite.md section 27), which shapes its
+ * map and its exits, and `found` the mask of those it found for the first time; a run saved before has neither. */
 export interface Run {
   seed: number;
   army: number;
@@ -123,6 +136,8 @@ export interface Run {
   scroll: boolean;
   spent: number[];
   bonus: boolean;
+  runes: number;
+  found: number;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -281,13 +296,14 @@ export function armyKept(board: ArrayLike<number>, flat: ArrayLike<number>): num
   return SPECIAL_LOOKS.map((_, k) => mine.filter((s) => s.kind === k + 1).length);
 }
 
-/** The map of the bridge's records `[act, row, col, kind, links, formation, elite]`. */
+/** The map of the bridge's records `[act, row, col, kind, links, formation, elite]`, `links` holding the shortcut in its bits 8 and up (#1476). */
 export function parseMap(flat: ArrayLike<number>): MapNode[] {
   const nodes: MapNode[] = [];
   for (let i = 0; i < flat.length; i += NODE_STRIDE) {
     const mask = flat[i + 4]!;
     const links = [0, 1, 2, 3, 4, 5].filter((c) => mask & (1 << c));
-    nodes.push({ act: flat[i]!, row: flat[i + 1]!, col: flat[i + 2]!, kind: KINDS[flat[i + 3]!]!, links, formation: flat[i + 5]!, elite: flat[i + 6]! });
+    const skips = [0, 1, 2, 3, 4, 5].filter((c) => mask & (1 << (8 + c)));
+    nodes.push({ act: flat[i]!, row: flat[i + 1]!, col: flat[i + 2]!, kind: KINDS[flat[i + 3]!]!, links, skips, formation: flat[i + 5]!, elite: flat[i + 6]! });
   }
   return nodes;
 }
@@ -341,10 +357,10 @@ const kindOn = (run: Run, kind: number): boolean => isOn(run, 'special', kind);
 /** The tactics the run's pools hold, by code. */
 const tacticPool = (run: Run): number[] => TACTICS.flatMap((_, k) => (isOn(run, 'tactic', k + 1) ? [k + 1] : []));
 
-/** A new run of `seed`, with what `best` acts won in one run unlocked, the blueprints `unlocked` (readUnlocked) and the
- * ascension levels up to `top` (readAscension), at level 0 (chooseAscension), no commander yet (chooseCommander): the standard
+/** A new run of `seed`, with what `best` acts won in one run unlocked, the blueprints `unlocked` (readUnlocked), the
+ * ascension levels up to `top` (readAscension) and the `runes` owned (readRunes), at level 0 (chooseAscension), no commander yet (chooseCommander): the standard
  * army and no relic. */
-export const newRun = (seed: number, best: number, unlocked: readonly number[], top = 0): Run => ({
+export const newRun = (seed: number, best: number, unlocked: readonly number[], top = 0, runes = 0): Run => ({
   seed,
   army: START_ARMY,
   path: [],
@@ -386,6 +402,8 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   scroll: false,
   spent: MOVE_BUDGET.map(() => 0),
   bonus: false,
+  runes,
+  found: 0,
 });
 
 /** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
@@ -413,7 +431,7 @@ const countOf = (placed: number[][]): number[] => SPECIAL_LOOKS.map((_, k) => pl
 
 /** The last act the run plays on `map`: the map's own, but the fourth act (#1467) only with the three keys. */
 export const lastAct = (map: MapNode[], run: Run): number => {
-  const last = map[map.length - 1]!.act;
+  const last = Math.max(...map.map((n) => n.act)); // the secret rooms (#1476) come after the fourth act on the map
   return last === FINAL_ACT && run.keys.length < KEYS.length ? FINAL_ACT - 1 : last;
 };
 
@@ -436,7 +454,7 @@ function next(map: MapNode[], path: number[], max: number): number[] {
       ? n.act === 0 && n.row === 0
       : last.kind === 'boss'
         ? n.act === last.act + 1 && n.row === 0
-        : n.act === last.act && n.row === last.row + 1 && last.links.includes(n.col));
+        : n.act === last.act && ((n.row === last.row + 1 && last.links.includes(n.col)) || (n.row === last.row + 2 && last.skips.includes(n.col))));
   return map.flatMap((n, i) => (open(n) ? [i] : []));
 }
 
@@ -479,8 +497,9 @@ function became(run: Run, node: number): 'event' | 'fight' | 'treasure' {
   const draw = hash(hash(run.seed, node * 8 + 3), 9) % 10;
   return draw < 7 ? 'event' : draw < 9 ? 'fight' : 'treasure';
 }
-/** The kind of node `node` of `map` for `run`: what an unknown node turned into, else its own. */
-const kindOf = (map: MapNode[], run: Run, node: number): NodeKind => (map[node]!.kind === 'unknown' ? became(run, node) : map[node]!.kind);
+/** The kind of node `node` of `map` for `run`: what an unknown node turned into, a secret room (#1476) a treasure, else its own. */
+const kindOf = (map: MapNode[], run: Run, node: number): NodeKind =>
+  map[node]!.kind === 'unknown' ? became(run, node) : map[node]!.kind === 'secret' ? 'treasure' : map[node]!.kind;
 
 /** The moves the fights of each act may take for the bonus room before its boss to open (#1473, docs/specs/roguelite.md section 26):
  * a fixed budget per act, growing with the act's fights. */
@@ -838,8 +857,10 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const exit = run.exits && earns && tier === 'boss' && node.act < Math.min(final, FINAL_ACT - 1); // the exits wait after the Collector (#1472); none leads to the fourth act
   const emerald = end === '' && node.kind === 'elite' && bearsKey(map, run, run.path[run.path.length - 1]!); // the marked elite fell (#1467)
   const keys = emerald ? [...run.keys, Key.Emerald] : run.keys;
-  const told = emerald ? `${KEYS[Key.Emerald]!.name} key taken, ${keysLeft(keys.length)}` : run.told;
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, scroll, exit, keys, told, flawless: run.flawless + Number(won && lost === 0), curse: Math.max(0, run.curse - 1), spent: run.spent.map((n, act) => n + (act === node.act ? rounds(run.moves) : 0)) };
+  const rune = won && run.enemies && node.kind === 'elite' && node.elite ? (1 << (node.elite - 1)) & ~(run.runes | run.found) : 0; // an archetype beaten for the first time (#1476)
+  const news = [...(emerald ? [`${KEYS[Key.Emerald]!.name} key taken, ${keysLeft(keys.length)}`] : []), ...(rune ? [`${RUNES[node.elite - 1]!.name} found: ${RUNES[node.elite - 1]!.opens}, on the maps of your next runs`] : [])];
+  const told = news.length ? news.join('. ') : run.told;
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, scroll, exit, keys, told, flawless: run.flawless + Number(won && lost === 0), curse: Math.max(0, run.curse - 1), spent: run.spent.map((n, act) => n + (act === node.act ? rounds(run.moves) : 0)), found: run.found | rune };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
@@ -1099,8 +1120,8 @@ function scoreLine(map: MapNode[], run: Run): string {
   return `<p class="run-score">Score: ${runScore(map, run)}${parts.length ? ` (${parts.join(', ')})` : ''}</p>`;
 }
 
-/** The unlocks of a run over: the special marble types and commanders of the acts it won past its `best`, and the next
- * ascension level of a run won at its top one (#1465). */
+/** The unlocks of a run over: the special marble types and commanders of the acts it won past its `best`, the next
+ * ascension level of a run won at its top one (#1465) and the runes it found (#1476). */
 export function earned(map: MapNode[], run: Run): string[] {
   const won = actsWon(map, run);
   const fresh = (acts: number): boolean => acts > run.best && acts <= won;
@@ -1108,6 +1129,7 @@ export function earned(map: MapNode[], run: Run): string[] {
     ...DEALT.flatMap((k) => (fresh(KIND_ACTS[k - 1]!) ? [`${SPECIAL_LOOKS[k - 1]!.name} marbles`] : [])),
     ...COMMANDERS.flatMap((c) => (fresh(c.acts) ? [`${c.name} commander`] : [])),
     ...(run.end === 'won' && run.ascension === run.top && run.top < MAX_ASCENSION ? [`Ascension ${run.top + 1}`] : []),
+    ...heldRunes(run.found).map((k) => RUNES[k]!.name),
   ];
 }
 
@@ -1141,6 +1163,21 @@ export function recordAscension(store: Store, run: Run): void {
   if (run.end === 'won' && next > readAscension(store)) write(store, ASCENSION_KEY, String(next));
 }
 
+/** Where the runes owned are kept, next to the acts won (#1476): the mask of `RUNES`. */
+const RUNES_KEY = 'ab-alone.roguelite.runes';
+
+/** The mask of the runes owned, 0 when none is saved or the storage is blocked. */
+export function readRunes(store: Store): number {
+  const owned = Number(read(store, RUNES_KEY));
+  return isInt(owned, ALL_RUNES) ? owned : 0;
+}
+
+/** Keeps the runes in `found` for good, with the ones owned before. */
+export function recordRunes(store: Store, found: number): void {
+  const owned = readRunes(store);
+  if ((owned | found) !== owned) write(store, RUNES_KEY, String(owned | found));
+}
+
 /** What the start of a run unlocked shows: the special marble types in its rewards, the locked ones with what unlocks
  * them, a button per commander with its portrait, the one picked pressed, the picked one's line and relic, a button per
  * ascension level (the locked ones off) with the rule of the one picked (#1465). */
@@ -1162,7 +1199,9 @@ function startHtml(run: Run): string {
   const ascension = `<div class="run-ascension" role="group" aria-label="Ascension">${levels.join('')}</div><p class="run-help">${rule}</p>`;
   const left = BLUEPRINTS.filter((b) => !isOn(run, b.type, b.code)).length;
   const bank = left ? `<p class="run-help">Blueprints to bank: ${left} · elites and act bosses drop them, the Collector between acts banks them for good</p>` : '';
-  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-commanders">${commanders.join('')}</div>${line}${ascension}${bank}`;
+  const unfound = RUNES.flatMap((r, k) => (run.runes & (1 << k) ? [] : [`${r.name} (beat ${ELITES[k]!.name}: ${r.opens})`]));
+  const runes = unfound.length ? `<p class="run-help">Runes to find: ${unfound.join(' · ')}</p>` : '';
+  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-commanders">${commanders.join('')}</div>${line}${ascension}${runes}${bank}`;
 }
 
 /** The summary of a run over (#801): the path act by act, the fights won and lost, the army at the end, the unlocks. */
@@ -1296,13 +1335,14 @@ const NODE_LOOKS: Record<NodeKind, { name: string; icon: string }> = {
   treasure: { name: 'Treasure', icon: 'M4 9a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10H4zM4 12h16M11 12v3h2v-3' },
   shop: { name: 'Shop', icon: 'M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2' },
   unknown: { name: 'Unknown', icon: 'M9 9a3 3 0 1 1 4 2.8c-1 .5-1 1.2-1 2.2M12 18h.01' },
+  secret: { name: 'Secret', icon: 'M6 21V11a6 6 0 0 1 12 0v10zM12 13v3' }, // a door: a room only a rune shows (#1476)
   boss: { name: 'Boss', icon: 'M5 20v-8a7 7 0 0 1 14 0v8zM5 12L3 5l5 3M19 12l2-7-5 3M9 14h.01M15 14h.01M10 20v-2h4v2' },
   event: { name: 'Event', icon: 'M12 4v9M12 18h.01' }, // no map draws an event node any more (#1463); a run saved before still may
 };
 /** The legend of the map (#1468): the kinds a map draws, then what a node's ring and a link say. */
 const LEGEND: readonly NodeKind[] = ['fight', 'elite', 'rest', 'treasure', 'shop', 'unknown', 'boss'];
-const legendHtml = (): string =>
-  `<ul class="run-legend" aria-label="Legend">${LEGEND.map((k) => `<li>${lineGlyph(NODE_LOOKS[k].icon)}${NODE_LOOKS[k].name}</li>`).join('')}<li class="open">Open</li><li class="taken">Taken</li></ul>`;
+const legendHtml = (run: Run): string =>
+  `<ul class="run-legend" aria-label="Legend">${LEGEND.flatMap((k) => (k === 'boss' && run.runes & 1 ? (['secret', k] as const) : [k])).map((k) => `<li>${lineGlyph(NODE_LOOKS[k].icon)}${NODE_LOOKS[k].name}</li>`).join('')}<li class="open">Open</li><li class="taken">Taken</li></ul>`;
 export const tacticText = (code: number): string => `${TACTICS[code - 1]!.name}: ${TACTICS[code - 1]!.help}`;
 export const relicText = (code: number): string => `${RELICS[code]!.name}: ${RELICS[code]!.help}`;
 
@@ -1375,9 +1415,10 @@ export function collectorHtml(run: Run): string {
  * hold and the boss that ends its act (`bossName` is the bridge's boss_name; unknown when it has none), each wearing its tint. */
 export function exitHtml(map: MapNode[], run: Run, exitsOf: (act: number, from: number) => ArrayLike<number>, bossName: (id: string) => string | undefined): string {
   const act = lastNode(map, run)!.act + 1;
-  const buttons = exitOffers(map, run, exitsOf).map((code) => {
+  const buttons = exitOffers(map, run, exitsOf).map((code, i) => {
     const biome = BIOMES[code]!;
-    return `<button type="button" data-exit="${code}" data-biome="${biome.id}">${biome.name} · ${biome.hazard} · foes: ${biome.foes} · boss: ${bossName(biome.boss) ?? 'unknown'}</button>`;
+    const secret = i === 2; // the third exit is the rune of the exit's (#1476)
+    return `<button type="button" data-exit="${code}" data-biome="${biome.id}"${secret ? ' data-secret' : ''}>${secret ? 'Secret exit · ' : ''}${biome.name} · ${biome.hazard} · foes: ${biome.foes} · boss: ${bossName(biome.boss) ?? 'unknown'}</button>`;
   });
   return (
     `<p class="run-line">Act ${act} done · pick the exit to act ${act + 1}</p>` +
@@ -1484,6 +1525,10 @@ export function keysHtml(run: Run): string {
   return `<p class="run-help run-keys">Act 4 · ${run.keys.length} of ${KEYS.length} keys · ${held} · missing: ${missing}</p>`;
 }
 
+/** The runes owned, on the map (#1476): each with what it opened; nothing without one. */
+export const runesHtml = (run: Run): string =>
+  run.runes ? `<p class="run-help run-runes">Runes: ${heldRunes(run.runes).map((k) => `${lineGlyph(RUNES[k]!.icon)}${RUNES[k]!.name} (${RUNES[k]!.opens})`).join(' · ')}</p>` : '';
+
 /** The map screen: the run line, the unlocks and commanders before the first pick, a legend, the nodes act by act from the
  * top under the header of their act (half a row), each placed on its row with the icon of its kind, the links between them
  * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
@@ -1509,7 +1554,8 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
   const lines = map.flatMap((n, i) =>
     next(map, [i], max).map((j) => {
       const [[x1, y1], [x2, y2]] = [spot(n), spot(map[j]!)];
-      const mark = taken(i, j) ? ' class="taken"' : i === here && open.includes(j) ? ' class="next"' : '';
+      const classes = [...(map[j]!.act === n.act && map[j]!.row === n.row + 2 ? ['shortcut'] : []), ...(taken(i, j) ? ['taken'] : i === here && open.includes(j) ? ['next'] : [])];
+      const mark = classes.length ? ` class="${classes.join(' ')}"` : '';
       return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${mark}/>`;
     }),
   );
@@ -1533,7 +1579,7 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
   const moves = movesLine(map, run);
-  return `${head}${told}${keysHtml(run)}${flaskHtml(run)}${run.path.length ? '' : startHtml(run) + book}${moves && `<p class="run-help run-moves">${moves}</p>`}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
+  return `${head}${told}${keysHtml(run)}${runesHtml(run)}${flaskHtml(run)}${run.path.length ? '' : startHtml(run) + book}${moves && `<p class="run-help run-moves">${moves}</p>`}${legendHtml(run)}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */
@@ -1556,10 +1602,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room, one saved before the runes (#1476) none. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, spent = [], bonus = false } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, runes = 0, found = 0, spent = [], bonus = false } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1613,6 +1659,8 @@ function decodeRun(raw: unknown): Run | null {
     keys.every((k, i) => isInt(k, KEYS.length - 1) && keys.indexOf(k) === i) &&
     isInt(curse, CURSE_FIGHTS) &&
     isInt(flasks, MAX_FLASKS) &&
+    isInt(runes, ALL_RUNES) &&
+    isInt(found, ALL_RUNES) &&
     typeof scroll === 'boolean' &&
     Array.isArray(affinities) &&
     affinities.length === AFFINITIES.length &&
@@ -1621,7 +1669,7 @@ function decodeRun(raw: unknown): Run | null {
     (spent.length === 0 || (spent.length === MOVE_BUDGET.length && spent.every((n) => isInt(n, MAX_SPENT)))) &&
     typeof bonus === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll, spent: [...spent], bonus }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll, runes, found, spent: [...spent], bonus }
     : null;
 }
 
@@ -1644,19 +1692,19 @@ export async function clearRun(store: KeyStore): Promise<void> {
   }
 }
 
-/** The saved run with its map (`mapOf` its seed) and, during a fight, the fight replayed on `make` of the run and its
+/** The saved run with its map (`mapOf` its seed and runes) and, during a fight, the fight replayed on `make` of the run and its
  * map (the army and its special marbles placed, or the act's boss). A save that does not decode, walks off its map or
  * does not replay is deleted, but a boss fight that does not replay starts over. */
 export async function loadRun<E extends ReplayEngine>(
   store: KeyStore,
-  mapOf: (seed: number) => MapNode[],
+  mapOf: (seed: number, runes: number) => MapNode[],
   make: (run: Run, map: MapNode[]) => E,
 ): Promise<{ state: Run; map: MapNode[]; engine: E | null } | null> {
   try {
     const raw = await store.get(RUN_KEY);
     if (raw === undefined) return null;
     const state = decodeRun(raw);
-    const map = state ? mapOf(state.seed) : [];
+    const map = state ? mapOf(state.seed, state.runes) : [];
     const walked = state !== null && state.path.every((n, i) => next(map, state.path.slice(0, i), lastAct(map, state)).includes(n));
     const fight = walked && state.fighting && state.path.length ? replay(state.moves, () => make(state, map)) : null;
     // A boss node's fight saved when it was an army fight (before #800) does not replay on the boss's board: it starts over.

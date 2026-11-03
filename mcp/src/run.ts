@@ -53,6 +53,7 @@ import {
   relicMask,
   relicOffers,
   RELICS,
+  RUNES,
   relicText,
   removable,
   removalPrice,
@@ -91,12 +92,12 @@ export interface RunEngine extends EngineLike {
 
 /** What a run uses of abalone-wasm. */
 export interface RunRules {
-  /** The map of a run seed: records of `[act, row, col, kind, links, formation, elite]`. */
-  run_map(seed: number): Int32Array;
+  /** The map of a run seed of a player who owns the runes `runes` (default none): records of `[act, row, col, kind, links, formation, elite]`. */
+  run_map(seed: number, runes?: number): Int32Array;
   /** The bot's army at a node, `less` marbles short, in a biome: `[count, formation, biome, ...]` then `[q, r, kind]` per special marble. */
   run_foes(seed: number, node: number, less: number, biome: number): Int32Array;
-  /** The codes of the two biomes the exits lead to for act `act` (1 or 2) of a run that left the biome `from`. */
-  run_exits(seed: number, act: number, from: number): Uint8Array;
+  /** The codes of the two biomes the exits lead to for act `act` (1 or 2) of a run that left the biome `from`, a third with the rune of the exit. */
+  run_exits(seed: number, act: number, from: number, runes?: number): Uint8Array;
   /** The army's fight: `army` marbles, the bot's `foes` (a count, or a plan of `run_foes`), the special marbles `placed` as `[q, r, kind]`, the relics as a bit mask. */
   fight(army: number, foes: number | number[], placed: number[][], relics: number): RunEngine;
   /** The act boss `id` of fight seed `seed`, at `percent` of its strength. */
@@ -113,6 +114,8 @@ export interface NewRunInput {
   best?: number;
   /** The blueprints banked in earlier runs, by id (`banked` of a run over): they widen the pools, default none. */
   unlocked?: number[];
+  /** The runes the player owns, a bit mask (1 Rune of Stone, 2 Rune of Spark, 4 Rune of Might; the browser keeps them): they open a secret room, a shortcut and a secret exit on the map, default none. */
+  runes?: number;
   /** The commander of the run, an index of COMMANDERS (0 the Captain), unlocked by `best` acts won: its special marbles and its relic. */
   commander?: number;
   /** Positions the bot searches per move in a fight (an elite twice that), default 20000. */
@@ -180,6 +183,8 @@ export interface RunState {
   relics: string[];
   /** The levels of the affinities grown by scrolls (Force, Tactics, Chaos), none before the first scroll: the engine plays them in the army's fights. */
   affinities?: Record<string, number>;
+  /** The runes owned (Rune of Stone, Spark, Might), none without one: a secret room, a shortcut and a secret exit on this run's map (#1476). */
+  runes?: string[];
   /** The keys taken (Ruby, Sapphire, Emerald), none before the first: the three open act 4 (#1467). */
   keys?: string[];
   /** The fights left of a cursed chest's curse, none without it: each marble lost costs 2 (#1474). */
@@ -282,16 +287,16 @@ export class RogueRun {
   ) {}
 
   /** Starts the run of `seed`, or resumes `save`, and drops the run in progress. A bad save keeps it. */
-  async newRun({ seed = 0, best = 0, unlocked = [], commander = 0, bot_nodes = BOT_NODES, save }: NewRunInput): Promise<Result<RunState>> {
+  async newRun({ seed = 0, best = 0, unlocked = [], runes = 0, commander = 0, bot_nodes = BOT_NODES, save }: NewRunInput): Promise<Result<RunState>> {
     if (save === undefined) {
-      const state = chooseCommander(newRun(seed, best, unlocked), commander);
+      const state = chooseCommander(newRun(seed, best, unlocked, 0, runes), commander);
       if (state.commander !== commander) return fail('bad_choice', `commander ${commander} is not unlocked: best is ${best}`);
-      this.active = { map: this.mapOf(seed), state, fight: null, nodes: bot_nodes };
+      this.active = { map: this.mapOf(seed, runes), state, fight: null, nodes: bot_nodes };
       return ok(this.describe(this.active));
     }
     const store = memoryStore();
     await store.put(RUN_KEY, save);
-    const loaded = await loadRun(store, (s) => this.mapOf(s), (state, map) => this.engineFor(state, map));
+    const loaded = await loadRun(store, (s, owned) => this.mapOf(s, owned), (state, map) => this.engineFor(state, map));
     if (!loaded) return fail('bad_save', 'not a run of the client, or it does not walk its map, or its fight does not replay');
     const active: Active = { map: loaded.map, state: loaded.state, fight: null, nodes: bot_nodes };
     if (loaded.engine) this.begin(active, loaded.engine, loaded.state.moves.map((mv) => [...mv]));
@@ -407,8 +412,8 @@ export class RogueRun {
     active.fight = null;
   }
 
-  private mapOf(seed: number): MapNode[] {
-    return parseMap(this.rules.run_map(seed));
+  private mapOf(seed: number, runes: number): MapNode[] {
+    return parseMap(this.rules.run_map(seed, runes));
   }
 
   /** The fight of the run's last node, as main.ts `runEngine` stands it: the act's boss, or the army against the bot's plan. */
@@ -490,9 +495,9 @@ export class RogueRun {
       ];
     }
     if (state.exit) {
-      return exitOffers(map, state, this.exitsOf(state)).map((code) => {
+      return exitOffers(map, state, this.exitsOf(state)).map((code, i) => {
         const biome = BIOMES[code]!;
-        return { text: `${biome.name} · ${biome.hazard} · foes: ${biome.foes} · boss: ${biome.boss}`, apply: () => chooseExit(map, state, code, this.exitsOf(state)) };
+        return { text: `${i === 2 ? 'Secret exit · ' : ''}${biome.name} · ${biome.hazard} · foes: ${biome.foes} · boss: ${biome.boss}`, apply: () => chooseExit(map, state, code, this.exitsOf(state)) };
       });
     }
     return null;
@@ -500,7 +505,7 @@ export class RogueRun {
 
   /** The exits at the end of an act of the run (`exitsFor` of main.ts). */
   private exitsOf(state: Run): (act: number, from: number) => ArrayLike<number> {
-    return (act, from) => this.rules.run_exits(state.seed, act, from);
+    return (act, from) => this.rules.run_exits(state.seed, act, from, state.runes);
   }
 
   private foes(node: MapNode): string {
@@ -513,7 +518,9 @@ export class RogueRun {
     return map.flatMap((n, i) => {
       if (n.act > last) return []; // the fourth act is hidden until the three keys (#1467)
       const next = map.flatMap((m, j) =>
-        n.kind === 'boss' ? (m.act === n.act + 1 && m.row === 0 ? [j] : []) : m.act === n.act && m.row === n.row + 1 && n.links.includes(m.col) ? [j] : [],
+        n.kind === 'boss'
+          ? m.act === n.act + 1 && m.row === 0 ? [j] : []
+          : m.act === n.act && ((m.row === n.row + 1 && n.links.includes(m.col)) || (m.row === n.row + 2 && n.skips.includes(m.col))) ? [j] : [],
       );
       const foes = (n.kind === 'fight' || n.kind === 'elite') && this.foes(n);
       return [`${i}: act ${n.act + 1} row ${n.row + 1} ${n.kind}${foes ? ` (${foes})` : ''} -> ${n.act === last && n.kind === 'boss' ? 'end' : next.join(',')}`];
@@ -537,6 +544,7 @@ export class RogueRun {
       ...(currentBiome(map, state) ? { biome: BIOMES[currentBiome(map, state)]!.name } : {}),
       relics: state.relics.map((r) => RELICS[r]!.name),
       ...(state.affinities.some(Boolean) ? { affinities: Object.fromEntries(AFFINITIES.map((a, k) => [a.name, state.affinities[k]!])) } : {}),
+      ...(state.runes ? { runes: RUNES.flatMap((r, k) => (state.runes & (1 << k) ? [r.name] : [])) } : {}),
       ...(state.keys.length ? { keys: state.keys.map((k) => KEYS[k]!.name) } : {}),
       ...(state.curse ? { curse: state.curse } : {}),
       ...(counted ? { moves: counted.count, budget: counted.budget } : {}),

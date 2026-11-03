@@ -31,7 +31,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
   and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
   fight never goes on after the run is lost; the army wins at the usual 6 ejections, also against the 10 marbles of a fight node (4 are left).
 - **Meta**: unlocks only, between runs (section 8, #801, and the Collector's blueprints of section 15): other special
-  marble types, relics, tactics and commanders (section 17), never power. Every run starts from zero.
+  marble types, relics, tactics and commanders (section 17), and the runes of section 27 that open hidden branches on the map, never power. Every run starts from zero.
 - **Determinism**: the map comes from a run seed (engine splitmix64), so a run can be replayed and
   shared.
 
@@ -922,3 +922,46 @@ no change to the bridge (`run_map`, `engine_version`). Only the rules change wha
   the run state has `moves` (the count) and `budget` while the count shows, and `save_run` carries `spent` and `bonus`.
 - **Turn it against the bot**: the budget is the player's gamble against time, not the bot's: a Freeze (the bot skips its answer)
   or a quick push saves moves, and the fast player is paid in relics and scrap for the boss, never in a stronger bot.
+
+## 27. Runes (#1476)
+
+Dead Cells' runes unlock places, not power: a reason to come back. Three runes, each found for good by beating one elite archetype
+(section 14) for the first time, each opening one kind of hidden branch on the maps of the runs after it. Only variety carries between
+runs (Decision #934): a branch is one more way across an act, never a stronger army, and a run without a rune is the run of section 1.
+
+| Bit | Rune | Found by beating | Opens |
+|---|---|---|---|
+| 1 | Rune of Stone | The Wall | a secret room in every act |
+| 2 | Rune of Spark | The Artificer | a shortcut in every act that skips a row |
+| 4 | Rune of Might | The Brute | a third, secret exit between acts |
+
+- **Found**: a won elite fight of an archetype whose rune the player neither owns nor found earlier in the run (`fightOver`, a run with
+  the plain army of an old save finds none). The rune is kept for good in the browser (`ab-alone.roguelite.runes`, the mask, 0 to 7,
+  read by `readRunes`, kept by `recordRunes` as the run shows) and the line the map tells reads `Rune of Stone found: a secret room in
+  every act, on the maps of your next runs`. The run summary lists the runes it found. A rune found changes nothing in the run that
+  found it: it opens its branch on the next runs (`Run.runes`, the mask owned when the run began, shapes the map and the exits
+  of the whole run, so a run replays; `Run.found`, those it found). The Daily run owns none, as it is the same for everyone.
+- **The secret room** (`NodeKind::Secret`, code 8; `RUNE_ROOM`): one per act, at the end of the second row, reached from the last
+  node of the first row and leading to the last node of the third, so no path crosses another. It is a door on the map, named
+  "Secret" in the legend only once the rune is owned, and played as a **treasure**: a relic to take, or the Sapphire key (section 22)
+  in place of it. It is one more choice in its row, not an extra node on the way, so it is a route and not a reward on top of one. The
+  secret rooms come after every other node on the map (after the fourth act's two), so no node of a map without a rune changes index.
+- **The shortcut** (`RUNE_SHORTCUT`): one per act, a link from a node of the first row to a node of the third (`Node::skips`, the
+  columns of the row after the next), both drawn from the seed and the act. The path skips the second row. It is drawn as a dotted
+  line in the hazard colour (`line.shortcut`), and the nodes to pick after the first one include the end of its link.
+- **The secret exit** (`RUNE_EXIT`): the exit screen of section 18 offers a third biome, drawn from the same shuffle as the two
+  others (`exits_with`: the first two are unchanged, the third is another biome that is neither the Meadow nor the one left),
+  its button marked `Secret exit ·`.
+- **On screen**: the start screen lists the runes still to find with how (`Runes to find: Rune of Spark (beat The Artificer: a shortcut
+  in every act that skips a row) · ...`), and the map names the runes owned (`Runes: Rune of Stone (a secret room in every act)`).
+- **In the engine and the bridge**: `run_map_with(seed, runes)` and `exits_with(seed, act, from, runes)` take the mask; `run_map(seed)`
+  and `exits` are the same with 0. The bridge's `run_map(seed, runes)` and `run_exits(seed, act, from, runes)` take it as an optional
+  last argument (none is 0); the `links` mask of a node carries its shortcut in bits 8 to 13 (bit `8 + c`: column `c` of the row after
+  the next). `engine_version` is unchanged (no fight changes).
+- **Saving**: `runes` and `found` (0 to 7) are saved with the run. A run saved before has neither, so it loads with the map of no
+  rune, which is the map it was saved on; a mask above 7 does not load.
+- **The MCP server** (section 19): `new_run` takes `runes` (the mask the browser would keep), `run_state` names them (`runes`), the
+  secret room is a node of kind `secret` (a relic to take) and the shortcut one more target of its node in `map`, the third exit is the
+  last option of the exit screen (`Secret exit · ...`) and a run over lists the runes it found in `unlocked`.
+- **Turn it against the bot**: nothing here changes a fight; the hidden branches are the player's routes (a treasure sooner, a row
+  less of fights, one more biome to choose), the bot stays the bot of its node.

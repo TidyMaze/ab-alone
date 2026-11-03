@@ -343,8 +343,10 @@ import {
   PLUS_POINTS,
   readAscension,
   readBest,
+  readRunes,
   recordAscension,
   recordBest,
+  recordRunes,
   resolve,
   rest,
   restHtml,
@@ -2559,14 +2561,14 @@ const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? n
 // The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
 const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less, biome, more) => run_foes(state.seed, node, less, biome, more));
 // The exits at the end of an act (#1472) and the roster names of their bosses.
-const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from);
+const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from, state.runes);
 const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesFor(map, state), undefined, relicMask(state));
 // The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
 const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
   const boss = actBoss(map, state, boss_ids());
   return boss ? new Encounter(boss.id, boss.seed) : armyEngine(state, map);
 };
-const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), runEngine);
+const loadSavedRun = () => loadRun(gameStore, (seed, runes) => parseMap(run_map(seed, runes)), runEngine);
 const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
@@ -5797,7 +5799,8 @@ const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
 function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store), readAscension(store)), 0), parseMap(run_map(seed))); // the Captain until another is picked (#1464)
+  const runes = readRunes(store); // the runes found in earlier runs open hidden branches on this map (#1476)
+  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store), readAscension(store), runes), 0), parseMap(run_map(seed, runes))); // the Captain until another is picked (#1464)
 }
 // The daily run (#1466): the seed of the day for everyone, one try a day (its button is shut once tried), its score kept when it ends.
 function beginDailyRun(): void {
@@ -5837,6 +5840,7 @@ function showRun(): void {
   const { map, state } = run!;
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
   recordAscension(store, state); // a run won unlocks the next ascension level (#1465)
+  recordRunes(store, state.found); // an elite archetype beaten for the first time keeps its rune for good (#1476)
   recordSeen(store, state); // the compendium (#1466)
   const done = finished(map, state);
   if (done) recordFinished(store, done); // the history, and the daily run's score
@@ -6274,7 +6278,7 @@ addEventListener('blur', () => openWorld.release()); // no key stays held once t
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
 // shows its summary (#801), what it leaves out taken from a new run, as a save is decoded (no relic before #1457).
 hookHost.__run = async (state: Run) => {
-  if (state.end) return startRun({ ...newRun(state.seed, state.best, LEGACY_UNLOCKED), ...state }, parseMap(run_map(state.seed)));
+  if (state.end) return startRun({ ...newRun(state.seed, state.best, LEGACY_UNLOCKED), ...state }, parseMap(run_map(state.seed, state.runes)));
   await saveRun(gameStore, state);
   resumeRun((await loadSavedRun())!); // the browser checks load valid runs
 };
