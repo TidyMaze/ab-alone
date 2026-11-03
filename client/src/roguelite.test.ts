@@ -82,6 +82,7 @@ import {
   useTactic,
   type MapNode,
   type Run,
+  type RunEvent,
 } from './roguelite';
 import { memoryStore, type KeyStore } from './savegame';
 
@@ -110,19 +111,26 @@ const engine = ({ army, placed }: Run) => {
   };
 };
 const MV = [1, 0, 0, 0, 0, 0, 0, 0];
+/** The run `run`, waiting at an event, with a seed that deals the event `title`. */
+const waitingAt = (title: string, run: Run): Run => ({
+  ...run,
+  seed: Array.from({ length: 600 }, (_, seed) => seed).find((seed) => eventOf({ ...run, seed })!.title === title)!,
+});
+/** The special marble types an event can give (the bridge's kinds). */
+const grants = (e: RunEvent): number[] => e.choices.flatMap((c) => [c.win.special, c.fail.special]).filter(Boolean);
 
 describe('roguelite', () => {
   it('parses the map records of the bridge', () => {
     expect(MAP).toHaveLength(6);
     expect(MAP[0]).toEqual({ act: 0, row: 0, col: 0, kind: 'fight', links: [0], formation: 0, elite: 0 });
     expect(MAP[2]).toEqual({ act: 0, row: 1, col: 0, kind: 'boss', links: [], formation: 0, elite: 0 });
-    expect(parseMap([0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0]).map((n) => n.kind)).toEqual(['elite', 'rest', 'event']);
+    expect(parseMap([0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 3, 7, 0, 0, 0]).map((n) => n.kind)).toEqual(['elite', 'rest', 'event', 'unknown']);
     expect(parseMap([0, 0, 1, 0, 0b101, 0, 0])[0]!.links).toEqual([0, 2]);
   });
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -198,7 +206,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -259,6 +267,9 @@ describe('roguelite', () => {
     ['an unknown banked blueprint', { ...newRun(1, 3, LEGACY_UNLOCKED), banked: [-1] }],
     ['a bad drop', { ...newRun(1, 3, LEGACY_UNLOCKED), drop: 15 }],
     ['a bad collector flag', { ...newRun(1, 3, LEGACY_UNLOCKED), collector: 1 }],
+    ['a told line that is no text', { ...newRun(1, 3, LEGACY_UNLOCKED), told: 3 }],
+    ['a told line with markup', { ...newRun(1, 3, LEGACY_UNLOCKED), told: '<b>' }],
+    ['a told line too long', { ...newRun(1, 3, LEGACY_UNLOCKED), told: 'x'.repeat(201) }],
   ])('drops a saved run with %s', async (_, raw) => {
     const store = memoryStore();
     await store.put(RUN_KEY, raw);
@@ -502,59 +513,210 @@ describe('roguelite', () => {
     expect(parse(rewardHtml(ACT, won(newRun(1, 3, LEGACY_UNLOCKED)))).querySelector('.run-line')!.textContent).toBe('Fight won · pick a reward');
   });
 
+  // Events (#800, #1463): about twenty, each with 2 or 3 choices, some of them gambles drawn from the run seed and the node.
+  const EVENT_NODE = visit(ACT, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] }, 3);
+  const waiting = (title: string, run: Run = EVENT_NODE): Run => waitingAt(title, run);
+
   it('an event waits for its choice, seeded by the run seed and the node', () => {
-    const run = visit(ACT, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] }, 3);
-    expect(run).toMatchObject({ path: [0, 3], fighting: false, event: true });
-    expect(choices(ACT, run)).toEqual([]);
-    expect(EVENTS).toHaveLength(10);
-    expect(EVENTS).toContain(eventOf(run));
-    expect(eventOf(run)).toBe(eventOf({ ...run }));
-    const seen = new Set(Array.from({ length: 200 }, (_, seed) => eventOf({ ...run, seed })));
-    expect(seen.size).toBe(10); // every event shows up
-    const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => eventOf({ ...run, seed }) !== eventOf({ ...run, seed, path: [0, 7] }));
+    expect(EVENT_NODE).toMatchObject({ path: [0, 3], fighting: false, event: true });
+    expect(choices(ACT, EVENT_NODE)).toEqual([]);
+    expect(EVENTS).toHaveLength(20);
+    expect(EVENTS).toContain(eventOf(EVENT_NODE));
+    expect(eventOf(EVENT_NODE)).toBe(eventOf({ ...EVENT_NODE }));
+    const seen = new Set(Array.from({ length: 400 }, (_, seed) => eventOf({ ...EVENT_NODE, seed })));
+    expect(seen.size).toBe(20); // every event shows up
+    const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => eventOf({ ...EVENT_NODE, seed }) !== eventOf({ ...EVENT_NODE, seed, path: [0, 7] }));
     expect(nodes.length).toBeGreaterThan(0);
+    expect(new Set(EVENTS.map((e) => e.title)).size).toBe(20);
   });
 
-  it('each event trades marbles for special marbles or back, only when the army can pay and gains', () => {
+  it('every event has a title, a line of lore, 2 or 3 choices ending on Leave, and about a third hold a gamble', () => {
+    for (const e of EVENTS) {
+      expect(e.title && e.text).toBeTruthy();
+      expect([2, 3]).toContain(e.choices.length);
+      expect(e.choices[e.choices.length - 1]!.verb).toBe('Leave');
+      expect(e.choices.filter((c) => c.verb === 'Leave')).toHaveLength(1);
+      for (const c of e.choices) expect(c.odds > 0 && c.odds <= 100).toBe(true);
+    }
+    expect(EVENTS.filter((e) => e.choices.some((c) => c.odds < 100)).length).toBeGreaterThanOrEqual(6);
+    expect(EVENTS.slice(0, 10).map((e) => e.title)).toEqual(['Scrap forge', 'Mooring clamps', 'Live wiring', 'Salvage drone', 'Cryo pods', 'Field manual', 'Lodestone', 'Bulkhead', 'Unexploded charge', 'Sick bay']);
+  });
+
+  it('each trade gives marbles for special marbles or back, only when the army can pay and gains', () => {
     const [forge, clamps, wiring, drone, pods] = EVENTS;
     const full = newRun(1, 3, LEGACY_UNLOCKED);
-    expect(takeEvent(full, forge!)).toMatchObject({ army: 12, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
-    expect(takeEvent(full, clamps!)).toMatchObject({ army: 12, specials: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0] });
-    expect(takeEvent(full, wiring!)).toMatchObject({ army: 13, specials: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] });
-    expect(takeEvent(full, drone!)).toMatchObject({ army: 11, specials: [0, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
-    expect(takeEvent({ ...full, army: 10, specials: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0] }, pods!)).toMatchObject({ army: 13, specials: [1, 1, 0, 0, 0, 0, 0, 0, 0, 0] }); // a Spark first
-    expect(takeEvent({ ...full, army: 12, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, pods!)).toMatchObject({ army: 14, specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }); // up to 14
-    expect(takeEvent({ ...full, army: 10, specials: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0] }, pods!)).toMatchObject({ specials: [0, 0, 0, 0, 0, 1, 0, 0, 0, 0] }); // a plain one first
-    expect(takeEvent({ ...full, army: 10, specials: [0, 0, 0, 1, 1, 0, 0, 0, 0, 0] }, pods!)).toMatchObject({ specials: [0, 0, 0, 1, 0, 0, 0, 0, 0, 0] }); // then the Anchor+
-    expect(takeEvent({ ...full, army: 10 }, pods!)).toBeNull(); // no special marble to give
-    expect(takeEvent({ ...full, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, pods!)).toBeNull(); // a full army gains nothing
-    expect(takeEvent({ ...full, army: 5 }, forge!)).toBeNull(); // 3 marbles left would end the run
-    expect(takeEvent({ ...full, army: 6, specials: [2, 1, 1, 0, 0, 0, 0, 0, 0, 0] }, forge!)).toBeNull(); // no plain marble left to make special
-    for (const e of EVENTS) expect(e.title && e.text && e.take).toBeTruthy();
+    expect(takeEvent(full, forge!, 0)).toMatchObject({ army: 12, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], told: 'Scrap forge: +1 Heavy, -2 marbles' });
+    expect(takeEvent(full, clamps!, 0)).toMatchObject({ army: 12, specials: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(takeEvent(full, wiring!, 0)).toMatchObject({ army: 13, specials: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0], told: 'Live wiring: +1 Spark, -1 marble' });
+    expect(takeEvent(full, drone!, 0)).toMatchObject({ army: 11, specials: [0, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
+    expect(takeEvent({ ...full, army: 10, specials: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0] }, pods!, 0)).toMatchObject({ army: 13, specials: [1, 1, 0, 0, 0, 0, 0, 0, 0, 0] }); // a Spark first
+    expect(takeEvent({ ...full, army: 12, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, pods!, 0)).toMatchObject({ army: 14, specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }); // up to 14
+    expect(takeEvent({ ...full, army: 10, specials: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0] }, pods!, 0)).toMatchObject({ specials: [0, 0, 0, 0, 0, 1, 0, 0, 0, 0] }); // a plain one first
+    expect(takeEvent({ ...full, army: 10, specials: [0, 0, 0, 1, 1, 0, 0, 0, 0, 0] }, pods!, 0)).toMatchObject({ specials: [0, 0, 0, 1, 0, 0, 0, 0, 0, 0] }); // then the Anchor+
+    expect(takeEvent({ ...full, army: 10 }, pods!, 0)).toBeNull(); // no special marble to give
+    expect(takeEvent({ ...full, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, pods!, 0)).toBeNull(); // a full army gains nothing
+    expect(takeEvent({ ...full, army: 5 }, forge!, 0)).toBeNull(); // 3 marbles left would end the run
+    expect(takeEvent({ ...full, army: 6, specials: [2, 1, 1, 0, 0, 0, 0, 0, 0, 0] }, forge!, 0)).toBeNull(); // no plain marble left to make special
+    expect(takeEvent(full, forge!, 2)).toBeNull(); // no such choice
   });
 
-  it('an event resolved: taken it pays and gains, left it changes nothing, and the map goes on', () => {
-    const run = visit(ACT, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] }, 3);
-    const taken = resolve(run, true);
-    expect(taken).toEqual({ ...takeEvent(run, eventOf(run)!)!, event: false });
-    expect(choices(ACT, taken)).toEqual([4]);
-    expect(resolve(run, false)).toEqual({ ...run, event: false });
+  it('Leave changes nothing and says nothing', () => {
+    const run = { ...newRun(1, 3, LEGACY_UNLOCKED), army: 9, scrap: 12, told: 'old news' };
+    for (const e of EVENTS) expect(takeEvent(run, e, e.choices.length - 1)).toEqual({ ...run, told: '' });
+  });
+
+  it('the new events: scrap, tactics, relics, healing and a special marble given away', () => {
+    const rich = { ...EVENT_NODE, army: 10, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], scrap: 100, event: true };
+    const take = (title: string, choice: number, run: Run = rich): Run => takeEvent(waiting(title, run), EVENTS.find((e) => e.title === title)!, choice)!;
+    expect(take('Slag-glass vein', 1)).toMatchObject({ army: 9, scrap: 125, told: 'Slag-glass vein: +25 scrap, -1 marble' });
+    expect(take('Ledger terminal', 0)).toMatchObject({ army: 9, tactics: [expect.any(Number)] });
+    expect(take('Ledger terminal', 1)).toMatchObject({ army: 12, scrap: 80, told: 'Ledger terminal: +2 marbles, -20 scrap' });
+    expect(take('Shelled crewmate', 0)).toMatchObject({ army: 11, scrap: 100 });
+    expect(take('Shelled crewmate', 1)).toMatchObject({ army: 10, scrap: 130 });
+    expect(take('Chapel box', 0)).toMatchObject({ specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], relics: [expect.any(Number)] });
+    expect(take('Chapel box', 1)).toMatchObject({ scrap: 75, tactics: [expect.any(Number)] });
+    expect(take('Furnace vent', 1)).toMatchObject({ army: 9, specials: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(take('Foreman crate', 1)).toMatchObject({ army: 10, scrap: 110 });
+    expect(take('Ship relay', 0)).toMatchObject({ scrap: 120 });
+    expect(take('Cold locker', 1)).toMatchObject({ scrap: 115 });
+    expect(take('Airlock', 1)).toMatchObject({ scrap: 115 });
+    // The scrap a trade asks, the relic and the tactic it gives: none of them without the means.
+    expect(take('Ledger terminal', 1, { ...rich, scrap: 19 })).toBeNull();
+    expect(take('Ledger terminal', 0, { ...rich, tactics: [1, 2, 3] })).toBeNull(); // a full hand gains nothing
+    expect(take('Chapel box', 0, { ...rich, relics: RELICS.map((_, code) => code) })).toBeNull(); // no relic left
+    expect(take('Chapel box', 0, { ...rich, specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] })).toBeNull(); // no special marble to give
+    expect(take('Chapel box', 1, { ...rich, scrap: 24 })).toBeNull();
+  });
+
+  it('a relic given by an event is dealt by the run seed and the node, one the run does not hold', () => {
+    const chapel = EVENTS.find((e) => e.title === 'Chapel box')!;
+    const run = { ...EVENT_NODE, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
+    const relic = (seed: number, relics: number[] = []): number => takeEvent({ ...run, seed, relics }, chapel, 0)!.relics.at(-1)!;
+    expect(relic(1)).toBe(relic(1));
+    expect(new Set(Array.from({ length: 30 }, (_, seed) => relic(seed))).size).toBeGreaterThan(3);
+    expect(relic(1, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toBe(Relic.Quartermaster); // the only one left
+  });
+
+  it('a gamble is drawn from the run seed and the node: the same draw twice, both sides over seeds', () => {
+    const vein = EVENTS.find((e) => e.title === 'Slag-glass vein')!;
+    expect(vein.choices[0]).toMatchObject({ verb: 'Touch the vein', odds: 50 });
+    const base = { ...EVENT_NODE, army: 12 };
+    const results = Array.from({ length: 60 }, (_, seed) => takeEvent({ ...base, seed }, vein, 0)!);
+    const won = results.filter((r) => r.specials[0] === 1);
+    expect(won.length).toBeGreaterThan(15);
+    expect(won.length).toBeLessThan(45);
+    expect(won[0]).toMatchObject({ army: 12, told: 'Slag-glass vein: it paid off, +1 Heavy' });
+    const lost = results.find((r) => r.specials[0] === 0)!;
+    expect(lost).toMatchObject({ army: 10, told: 'Slag-glass vein: it went wrong, -2 marbles' });
+    expect(takeEvent({ ...base, seed: 4 }, vein, 0)).toEqual(takeEvent({ ...base, seed: 4 }, vein, 0));
+    const nodes = new Set(Array.from({ length: 30 }, (_, n) => takeEvent({ ...base, path: [0, n] }, vein, 0)!.army));
+    expect(nodes.size).toBe(2); // another node, another draw
+    // A gamble is taken only when both of its sides can be paid.
+    expect(takeEvent({ ...base, army: 5 }, vein, 0)).toBeNull(); // losing 2 would end the run
+    const dice = EVENTS.find((e) => e.title === 'Dice')!;
+    expect(takeEvent({ ...base, scrap: 19 }, dice, 0)).toBeNull(); // the stake is 20
+    expect(takeEvent({ ...base, scrap: 20 }, dice, 0)).not.toBeNull();
+  });
+
+  it('a locker heals, a vent warms, a crate pays: gambles on healing, marbles and scrap', () => {
+    const run = { ...EVENT_NODE, army: 8, scrap: 5 };
+    const outcomes = (title: string, choice: number): Run[] => {
+      const e = EVENTS.find((x) => x.title === title)!;
+      return Array.from({ length: 40 }, (_, seed) => takeEvent({ ...run, seed: seed + 1000 }, e, choice)!);
+    };
+    expect(new Set(outcomes('Cold locker', 0).map((r) => r.army))).toEqual(new Set([START_ARMY, 7]));
+    expect(new Set(outcomes('Foreman crate', 0).map((r) => [r.army, r.scrap].join()))).toEqual(new Set(['9,35', '7,5']));
+    const warm = { ...run, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
+    const sides = new Set(
+      Array.from({ length: 40 }, (_, seed) => takeEvent({ ...warm, seed: seed + 1000 }, EVENTS.find((e) => e.title === 'Furnace vent')!, 0)!).map((r) => [r.army, r.specials[0]].join()),
+    );
+    expect(sides).toEqual(new Set(['12,1', '8,0'])); // warmed up, or the glass fused to a special marble
+    expect(takeEvent(run, EVENTS.find((e) => e.title === 'Furnace vent')!, 0)).toBeNull(); // no special marble for the glass to fuse to
+  });
+
+  it('an event resolved: a choice pays and gains, Leave changes nothing but the event, and the map goes on', () => {
+    const run = waiting('Scrap forge');
+    const first = resolve(run, 0);
+    expect(first).toEqual({ ...takeEvent(run, eventOf(run)!, 0)!, event: false });
+    expect(first).toMatchObject({ army: 12, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(choices(ACT, first)).toEqual([4]);
+    expect(resolve(run, 1)).toEqual({ ...run, event: false });
     const poor = { ...run, army: MIN_ARMY };
-    expect(resolve(poor, true)).toBe(poor); // it cannot pay: the event waits
-    expect(resolve(newRun(1, 3, LEGACY_UNLOCKED), true)).toEqual(newRun(1, 3, LEGACY_UNLOCKED)); // no event
+    expect(resolve(poor, 0)).toBe(poor); // it cannot pay: the event waits
+    expect(resolve(run, 9)).toBe(run); // no such choice
+    expect(resolve(newRun(1, 3, LEGACY_UNLOCKED), 0)).toEqual(newRun(1, 3, LEGACY_UNLOCKED)); // no event
     expect(eventOf(newRun(1, 3, LEGACY_UNLOCKED))).toBeNull();
   });
 
-  it('draws the event screen: its title, its text, the trade, disabled when it cannot be paid, and Leave', () => {
-    const run = visit(ACT, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] }, 3);
+  it('draws the event screen: its title, its text, a button per choice with what it gives, disabled when it cannot be paid', () => {
+    const run = waiting('Slag-glass vein');
     const e = eventOf(run)!;
     const doc = parse(eventHtml(run));
-    expect(doc.querySelector('.run-line')!.textContent).toBe(`Event · ${e.title}`);
+    expect(doc.querySelector('.run-line')!.textContent).toBe('Event · Slag-glass vein');
     expect(doc.querySelector('.run-help')!.textContent).toBe(e.text);
     const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-choice]')];
-    expect(buttons.map((b) => [b.dataset.choice, b.textContent, b.disabled])).toEqual([['1', e.take, false], ['0', 'Leave', false]]);
-    const poor = parse(eventHtml({ ...run, army: MIN_ARMY }));
-    expect(poor.querySelector<HTMLButtonElement>('button[data-choice="1"]')!.disabled).toBe(true);
+    expect(buttons.map((b) => [b.dataset.choice, b.textContent, b.disabled])).toEqual([
+      ['0', 'Touch the vein · 50 %: +1 Heavy, otherwise -2 marbles', false],
+      ['1', 'Chip off a shard · +25 scrap, -1 marble', false],
+      ['2', 'Leave', false],
+    ]);
+    const poor = [...parse(eventHtml({ ...run, army: 5 })).querySelectorAll<HTMLButtonElement>('button[data-choice]')];
+    expect(poor.map((b) => b.disabled)).toEqual([true, false, false]); // 3 marbles left would end the run
+    const forge = waiting('Scrap forge');
+    expect(parse(eventHtml({ ...forge, army: MIN_ARMY })).querySelector<HTMLButtonElement>('button[data-choice="0"]')!.disabled).toBe(true);
+  });
+
+  it('an Unknown node turns into an event most often, else a fight or a treasure, drawn from the run seed and the node', () => {
+    const UNKNOWN = parseMap([0, 0, 0, 7, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0]);
+    const entered = (seed: number, node = 0): Run => visit(UNKNOWN, { ...newRun(seed, 3, LEGACY_UNLOCKED), path: [] }, node);
+    expect(entered(1)).toEqual(entered(1)); // deterministic
+    const kinds = Array.from({ length: 300 }, (_, seed) => entered(seed)).map((r) => (r.event ? 'event' : r.fighting ? 'fight' : r.relic ? 'treasure' : 'none'));
+    const count = (kind: string): number => kinds.filter((k) => k === kind).length;
+    expect(count('event')).toBeGreaterThan(count('fight') * 2); // most often an event
+    expect(count('fight')).toBeGreaterThan(count('treasure'));
+    expect(count('treasure')).toBeGreaterThan(5);
+    expect(count('none')).toBe(0);
+    expect(entered(1).path).toEqual([0]);
+    const MANY = parseMap(Array.from({ length: 40 }, () => [0, 0, 0, 7, 0, 0, 0]).flat());
+    const byNode = new Set(Array.from({ length: 40 }, (_, node) => visit(MANY, newRun(2, 3, LEGACY_UNLOCKED), node)).map((r) => [r.event, r.fighting, r.relic].join()));
+    expect(byNode.size).toBeGreaterThan(1); // another node, another draw
+  });
+
+  it('a fight an Unknown node turned into is a plain fight: 10 foes, scrap, the Jammer, and the run line says fight', () => {
+    const UNKNOWN = parseMap([0, 0, 0, 7, 0, 0, 0]);
+    const fight = Array.from({ length: 60 }, (_, seed) => visit(UNKNOWN, newRun(seed, 3, LEGACY_UNLOCKED), 0)).find((r) => r.fighting)!;
+    expect(foesOf(UNKNOWN, fight)).toBe(FIGHT_FOES);
+    expect(foesOf(UNKNOWN, { ...fight, relics: [Relic.Saboteur] })).toBe(FIGHT_FOES - 1);
+    expect(fightBudget(UNKNOWN, fight, 1000)).toBe(1000);
+    expect(fightBudget(UNKNOWN, { ...fight, relics: [Relic.Jammer] }, 1000)).toBe(750);
+    expect(runLine(UNKNOWN, fight)).toBe('Rogue-lite run · act 1 fight · army 14 marbles');
+    expect(fightOver(UNKNOWN, fight, true, 1)).toMatchObject({ army: 13, scrap: SCRAP.fight, reward: true, relic: false });
+    expect(foePlan(UNKNOWN, fight, (node, less) => [10 - less, node])).toEqual([10, 0]);
+  });
+
+  it('a treasure an Unknown node turned into offers one relic, and the path names what the node became', () => {
+    const UNKNOWN = parseMap([0, 0, 0, 7, 0, 0, 0]);
+    const chest = Array.from({ length: 80 }, (_, seed) => visit(UNKNOWN, newRun(seed, 3, LEGACY_UNLOCKED), 0)).find((r) => r.relic)!;
+    expect(relicOffers(UNKNOWN, chest)).toHaveLength(1);
+    expect(parse(relicHtml(UNKNOWN, chest)).querySelector('.run-line')!.textContent).toBe('Treasure · a chest holds a relic');
+    expect(takeRelic(UNKNOWN, chest, relicOffers(UNKNOWN, chest)[0]!).relics).toHaveLength(1);
+    const over = parse(mapHtml(UNKNOWN, { ...chest, relic: false, end: 'lost' as const }));
+    expect(over.querySelector('.run-help')!.textContent).toBe('Path: act 1 Treasure');
+    const fought = Array.from({ length: 60 }, (_, seed) => visit(UNKNOWN, newRun(seed, 3, LEGACY_UNLOCKED), 0)).find((r) => r.fighting)!;
+    const lost = parse(mapHtml(UNKNOWN, { ...fought, fighting: false, end: 'lost' as const }));
+    expect([...lost.querySelectorAll('.run-help')].map((p) => p.textContent).slice(0, 2)).toEqual(['Path: act 1 Fight', 'Fights: 0 won, 1 lost']);
+  });
+
+  it('draws an Unknown node as a ? that names itself unknown, and what an event told shows on the map until the next pick', () => {
+    const UNKNOWN = parseMap([0, 0, 0, 7, 0, 0, 0]);
+    const node = parse(mapHtml(UNKNOWN, newRun(1, 3, LEGACY_UNLOCKED))).querySelector<HTMLButtonElement>('button[data-node]')!;
+    expect([node.textContent, node.className, node.getAttribute('aria-label')]).toEqual(['?', 'node unknown', 'Act 1, unknown']);
+    const told = { ...newRun(1, 3, LEGACY_UNLOCKED), told: 'Scrap forge: +1 Heavy, -2 marbles' };
+    expect(parse(mapHtml(UNKNOWN, told)).querySelector('.run-help')!.textContent).toBe('Scrap forge: +1 Heavy, -2 marbles');
+    expect(parse(mapHtml(UNKNOWN, newRun(1, 3, LEGACY_UNLOCKED))).querySelector('.run-help')).toBeNull();
+    expect(visit(UNKNOWN, told, 0).told).toBe('');
+    expect(visit(ACT, { ...told, path: [0] }, 2).told).toBe(''); // a rest site too
+    expect(pick(told, 0).told).toBe('');
   });
 
   it('draws elites, rests and events on the map', () => {
@@ -616,11 +778,11 @@ describe('roguelite', () => {
     const gains = new Set(
       [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].flatMap((seed) => {
         const e = eventOf({ ...at(newRun(seed, 0, LEGACY_UNLOCKED), 0), event: true })!;
-        return e.gain.flatMap((g, k) => (g ? [k + 1] : []));
+        return grants(e);
       }),
     );
     expect([...gains]).toEqual([1]); // never an Anchor nor a Spark
-    expect(EVENTS.filter((e) => e.gain[0] || !e.gain.some(Boolean))).toHaveLength(3); // the Heavy forge, the Cryo pods and the Field manual
+    expect(EVENTS.filter((e) => grants(e).every((k) => k === 1))).toHaveLength(13); // the 3 old ones that give a Heavy or none, and the 10 new
   });
 
   it('counts the acts a run over won: its bosses beaten', () => {
@@ -829,11 +991,15 @@ describe('roguelite relics', () => {
   it('Bargain: an event trade costs a marble less', () => {
     const [forge, , wiring, , pods] = EVENTS;
     const cheap = run({ relics: [Relic.Bargain] });
-    expect(takeEvent(cheap, forge!)).toMatchObject({ army: 13, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
-    expect(takeEvent(cheap, wiring!)).toMatchObject({ army: 14, specials: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] }); // free
-    expect(takeEvent({ ...cheap, army: 10, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, pods!)).toMatchObject({ army: 13 }); // a gain, no marble paid
-    const event = { ...visit(ACT, cheap, 3), seed: [1, 2, 3, 4, 5, 6, 7, 8].find((seed) => eventOf({ ...visit(ACT, cheap, 3), seed })!.army < 0)! };
-    expect(parse(eventHtml(event)).querySelector('button[data-choice="1"]')!.textContent).toBe(`${eventOf(event)!.take} · Bargain: 1 marble less`);
+    expect(takeEvent(cheap, forge!, 0)).toMatchObject({ army: 13, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(takeEvent(cheap, wiring!, 0)).toMatchObject({ army: 14, specials: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] }); // free
+    expect(takeEvent({ ...cheap, army: 10, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, pods!, 0)).toMatchObject({ army: 13 }); // a gain, no marble paid
+    const vein = EVENTS.find((e) => e.title === 'Slag-glass vein')!;
+    expect(takeEvent({ ...cheap, army: 5, seed: 1 }, vein, 0)).not.toBeNull(); // the loss of a gamble is a trade too: 2 less 1 leaves 4
+    const event = waitingAt('Scrap forge', visit(ACT, cheap, 3));
+    expect(parse(eventHtml(event)).querySelector('button[data-choice="0"]')!.textContent).toBe('Forge a Heavy · +1 Heavy, -2 marbles · Bargain: 1 marble less');
+    expect(parse(eventHtml(waitingAt('Dice', visit(ACT, cheap, 3)))).querySelector('button[data-choice="1"]')!.textContent).toBe('Wager a marble · 40 %: +1 relic, otherwise -1 marble · Bargain: 1 marble less');
+    expect(parse(eventHtml(waitingAt('Shelled crewmate', visit(ACT, cheap, 3)))).querySelector('button[data-choice="0"]')!.textContent).toBe('Take it along · +1 marble'); 
   });
 
   it('Saboteur: the bot has a marble fewer in fights and elites', () => {
@@ -945,20 +1111,19 @@ describe('roguelite tactics', () => {
     const manual = EVENTS[5]!;
     expect(manual.title).toBe('Field manual');
     const full = { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0, 3] };
-    expect(takeEvent(full, manual)).toMatchObject({ army: 13, specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
-    expect(takeEvent(full, manual)!.tactics).toHaveLength(1);
-    expect(takeEvent({ ...full, tactics: [1, 1, 1] }, manual)).toBeNull();
-    expect(takeEvent({ ...full, army: MIN_ARMY }, manual)).toBeNull();
+    expect(takeEvent(full, manual, 0)).toMatchObject({ army: 13, specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(takeEvent(full, manual, 0)!.tactics).toHaveLength(1);
+    expect(takeEvent({ ...full, tactics: [1, 1, 1] }, manual, 0)).toBeNull();
+    expect(takeEvent({ ...full, army: MIN_ARMY }, manual, 0)).toBeNull();
     const run = visit(ACT_EVENT, { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] }, 3);
-    const seed = Array.from({ length: 60 }, (_, n) => n).find((n) => eventOf({ ...run, seed: n })!.tactic)!;
-    const event = { ...run, seed };
-    const code = takeEvent(event, eventOf(event)!)!.tactics[0]!;
-    expect(takeEvent({ ...event }, eventOf(event)!)!.tactics).toEqual([code]); // deterministic
-    expect(resolve(event, true).tactics).toEqual([code]);
-    const take = parse(eventHtml(event)).querySelector('button[data-choice="1"]')!;
-    expect(take.textContent).toBe(`Learn ${TACTICS[code - 1]!.name} · lose 1 marble`);
-    expect(parse(eventHtml({ ...event, tactics: [1, 1, 1] })).querySelector<HTMLButtonElement>('button[data-choice="1"]')!.disabled).toBe(true);
-    const codes = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => takeEvent({ ...run, seed: n }, manual)!.tactics[0]));
+    const event = waitingAt('Field manual', run);
+    const code = takeEvent(event, eventOf(event)!, 0)!.tactics[0]!;
+    expect(takeEvent({ ...event }, eventOf(event)!, 0)!.tactics).toEqual([code]); // deterministic
+    expect(resolve(event, 0).tactics).toEqual([code]);
+    const take = parse(eventHtml(event)).querySelector('button[data-choice="0"]')!;
+    expect(take.textContent).toBe(`Learn from the manual · learn ${TACTICS[code - 1]!.name}, -1 marble`);
+    expect(parse(eventHtml({ ...event, tactics: [1, 1, 1] })).querySelector<HTMLButtonElement>('button[data-choice="0"]')!.disabled).toBe(true);
+    const codes = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => takeEvent({ ...run, seed: n }, manual, 0)!.tactics[0]));
     expect(codes.size).toBeGreaterThan(1); // other seeds, other tactics
   });
 
@@ -1205,22 +1370,21 @@ describe('roguelite Magnet, Shield, Bomb and Medic', () => {
   });
 
   it('every event gains one count per special marble type, and four events give the new ones', () => {
-    expect(EVENTS.every((e) => e.gain.length === SPECIAL_LOOKS.length)).toBe(true);
     const [lodestone, bulkhead, charge, sickbay] = EVENTS.slice(6);
     expect([lodestone, bulkhead, charge, sickbay].map((e) => e!.title)).toEqual(['Lodestone', 'Bulkhead', 'Unexploded charge', 'Sick bay']);
     const full = newRun(1, 3, LEGACY_UNLOCKED);
-    expect(takeEvent(full, lodestone!)).toMatchObject({ army: 12, specials: counts(7) });
-    expect(takeEvent(full, bulkhead!)).toMatchObject({ army: 12, specials: counts(8) });
-    expect(takeEvent(full, charge!)).toMatchObject({ army: 13, specials: counts(9) });
-    expect(takeEvent(full, sickbay!)).toMatchObject({ army: 12, specials: counts(10) });
-    expect(takeEvent({ ...full, army: 6, specials: counts(1, 1, 1, 1, 2, 2) }, charge!)).toBeNull(); // no plain marble left
+    expect(takeEvent(full, lodestone!, 0)).toMatchObject({ army: 12, specials: counts(7) });
+    expect(takeEvent(full, bulkhead!, 0)).toMatchObject({ army: 12, specials: counts(8) });
+    expect(takeEvent(full, charge!, 0)).toMatchObject({ army: 13, specials: counts(9) });
+    expect(takeEvent(full, sickbay!, 0)).toMatchObject({ army: 12, specials: counts(10) });
+    expect(takeEvent({ ...full, army: 6, specials: counts(1, 1, 1, 1, 2, 2) }, charge!, 0)).toBeNull(); // no plain marble left
   });
 
   it('a type is dealt in events only once unlocked, and every one shows up at 3 acts', () => {
     const gains = (best: number): number[] => [
       ...new Set(
         Array.from({ length: 200 }, (_, seed) => eventOf({ ...at(newRun(seed, best, LEGACY_UNLOCKED), 0), event: true })!).flatMap((e) =>
-          e.gain.flatMap((g, k) => (g ? [k + 1] : [])),
+          grants(e),
         ),
       ),
     ].sort((a, b) => a - b);

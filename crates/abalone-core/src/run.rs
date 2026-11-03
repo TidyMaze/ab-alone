@@ -733,7 +733,7 @@ mod tests {
     }
 
     #[test]
-    fn an_act_opens_on_fights_then_mixes_elites_rests_events_treasures_and_shops() {
+    fn an_act_opens_on_fights_then_mixes_elites_rests_unknowns_treasures_and_shops() {
         let mut seen = Vec::new();
         for seed in 0..50 {
             let map = run_map(seed);
@@ -748,7 +748,7 @@ mod tests {
         }
         seen.sort_by_key(|k| *k as u8);
         use NodeKind::*;
-        assert_eq!(seen, [Fight, Elite, Rest, Event, Treasure, Shop]);
+        assert_eq!(seen, [Fight, Elite, Rest, Treasure, Shop, Unknown]);
     }
 
     #[test]
@@ -1667,6 +1667,25 @@ mod relics {
         let (after, _) = apply(&b, Player::Black, &mv(&[(2, -2), (3, -2)], E)).unwrap();
         assert_eq!(cells(&after, Cell::White), vec![(1, 1)]);
         assert_eq!(cells(&after, Cell::Black), vec![(1, -2), (4, -2)]);
+    }
+
+    #[test]
+    fn an_unknown_node_takes_the_place_of_the_event_in_the_draw_and_fights_when_it_turns_into_one() {
+        assert_eq!(NodeKind::Unknown as u8, 7);
+        assert!((0..50).any(|seed| run_map(seed).iter().any(|n| n.kind == NodeKind::Unknown)));
+        assert!((0..50).all(|seed| run_map(seed).iter().all(|n| n.kind != NodeKind::Event)));
+        for seed in 0..50 {
+            let Some((i, node)) = node_of(seed, NodeKind::Unknown, 0) else {
+                continue;
+            };
+            // The page turns an unknown node into a fight, an event or a treasure: its fight is
+            // a plain fight of its act (docs/specs/roguelite.md section 15).
+            assert_eq!((node.formation, node.elite), (Formation::Standard, None));
+            let plan = foe_plan(seed, i, 0);
+            assert_eq!(plan.count, FIGHT_FOES);
+            assert_eq!(plan.specials.len(), 1);
+            assert_eq!(foe_plan(seed, i, 1).count, FIGHT_FOES - 1);
+        }
     }
 
     #[test]

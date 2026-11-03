@@ -67,6 +67,7 @@ mod tests {
                 NodeKind::Event => 4,
                 NodeKind::Treasure => 5,
                 NodeKind::Shop => 6,
+                NodeKind::Unknown => 7,
             };
             assert_eq!(record[3], code);
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
@@ -77,8 +78,8 @@ mod tests {
         assert_eq!(flat[flat.len() - NODE_STRIDE + 3], 1); // the act 3 boss closes the map
         let kinds: Vec<i32> = flat.chunks(NODE_STRIDE).map(|r| r[3]).collect();
         assert!(
-            (2..=6).all(|k| kinds.contains(&k)),
-            "seed 3 has an elite, a rest, an event, a treasure and a shop"
+            [2, 3, 5, 6, 7].iter().all(|k| kinds.contains(k)),
+            "seed 3 has an elite, a rest, a treasure, a shop and an unknown"
         );
     }
 
