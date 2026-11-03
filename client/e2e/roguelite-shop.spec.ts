@@ -17,11 +17,11 @@ test('the rogue-lite shop: scrap on the map, buy a marble, make a Heavy plain, l
 
   await panel.getByRole('button', { name: 'Act 1, shop' }).click();
   await expect(line).toHaveText('Shop · 120 scrap');
-  await expect(panel.locator('button[data-buy]')).toHaveCount(4);
+  await expect(panel.locator('button[data-buy]')).toHaveCount(5);
   await shot(page, { path: testInfo.outputPath('roguelite-shop.png') });
 
   await panel.locator('button[data-buy="0"]').click(); // a marble
-  await expect(panel.locator('button[data-buy]')).toHaveCount(3);
+  await expect(panel.locator('button[data-buy]')).toHaveCount(4);
   await panel.getByRole('button', { name: /^Remove a Heavy/ }).click(); // the Heavy is plain again
   await expect(panel.locator('button[data-remove]')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Leave' }).click();

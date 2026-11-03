@@ -354,6 +354,7 @@ in-run economy is approved for the rogue-lite only, and it lifts the "no economy
   | 1 | a special marble of a type unlocked (section 8), plain | 25 to 35 | the army has a plain marble to make special |
   | 2 | a relic the run does not hold (section 9); none for sale with all 12 held | 60 to 80 | always |
   | 3 | a tactic (section 11) | 30 to 40 | fewer than 3 are held |
+  | 5 | one flask charge (section 25) | 20 to 30 | fewer than 4 are held |
 
   Each item is sold once per shop and leaves it once bought. An item that cannot be taken or paid is disabled and
   says why ("army full", "no plain marble left", "hand full", "not enough scrap").
@@ -649,7 +650,7 @@ client's run, and a test checks it on a short scripted path. The tools are in `d
 - **The fight is the session's game**: `run_pick` on a fight, an elite or a boss node starts it as the game of `get_state`,
   `legal_moves` and `play_move` (the agent is Black, the bot or the boss replies in `play_move`), with the army, the bot's plan,
   the relics and the budget of the client (an elite twice, the Jammer a quarter less) or the act boss at its act's strength.
-  `run_place` puts the special marbles before the first move and `run_tactic` plays a tactic. The run reads the fight's end
+  `run_place` puts the special marbles before the first move, `run_tactic` plays a tactic and `run_flask` drinks a flask on the map (section 25). The run reads the fight's end
   after every move and folds it in as `runMoved` does (`fightOver`); `resign` loses it, a draw loses it. Starting another game
   while a fight is on leaves the run, as another mode does in the client.
 - **Saving**: `save_run` is the client's save (`Run`), `new_run` with it as `save` resumes it, a fight in progress replayed
@@ -820,3 +821,25 @@ change to the bridge (`run_map`, `engine_version`). Only the rules change what a
   state has `curse` (the fights left) while it lasts, and `line` carries the curse.
 - **Turn it against the bot**: the chest is the player's gamble: the curse makes the fights riskier, never the bot stronger, and
   the player who keeps the army out of trouble (the Hull plating, a Medic, the Anchors) is paid its reward for nothing.
+
+## 25. Flasks (#1475)
+
+Dead Cells' flasks free the route from always seeking rests: the player carries a few heals, refilled at each act. Only variety
+carries between runs (Decision #934): nothing here is kept after the run.
+
+- **Charges**: a run starts with 2 flask charges (`FLASKS`) and can hold at most 4 (`MAX_FLASKS`).
+- **Drink**: a button on the map, "Drink a flask: 3 marbles back · N left", gives 3 marbles back (`FLASK_MARBLES`), never above
+  START_ARMY (14, the cap of a fight's reward and an event's heal), and spends a charge. It is drunk on the map between two nodes
+  only: not in a fight, not on the reward, relic, event, rest, shop, Collector or exit screen, not once the run is over. It is
+  disabled, with its reason, when the army is full ("army full") or no charge is left ("no flask left"). It shows on the map
+  from the start of the run.
+- **Refilled at each act**: picking the first node of an act after the first refills the charges to 2 (`visit`); the charges the
+  shop sold above 2 are kept, never lowered. The first act starts with 2 from the new run, so a drink before the first node is
+  not refilled. A player who has charges left before the boss may drink them there, the act start refills them.
+- **The shop** sells one more charge (id 5, `CHARGE_TEXT`) for 20 to 30 scrap, dealt by the run seed and the node as the other
+  items, once per shop, until 4 are held ("flasks full"). No relic or event adds a charge: the shop is the one source (KISS, no
+  new relic code, which the bridge's relic mask would have to know).
+- **Determinism and saving**: `flasks` is saved with the run and nothing in it is random: a drink and a refill are functions of the
+  run. A run saved before this change loads with 2 charges; a count above 4 does not load. The `bought` ids go to 5.
+- **The MCP server** (section 19): `run_state` shows `flasks`, and `run_flask` drinks one on the map (`not_now` on any other screen,
+  `bad_choice` with the army full or no charge left). The shop lists the charge as an option.

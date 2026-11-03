@@ -322,7 +322,7 @@ World state: `seed`, `hero`, `troop` (the hero's trail, 6 cells), `broken` (obst
 
 ### Rogue-lite tools (#1469)
 
-An agent plays a rogue-lite run (`roguelite.md` section 19) with seven tools. Every rule is the client's own (`client/src/roguelite.ts`) or the bridge's, so the same seed and the same choices give the browser's run. A run is separate from the Open world; its fight is the game of `new_game` (a new game while a fight is on leaves the run, `no_run`).
+An agent plays a rogue-lite run (`roguelite.md` section 19) with eight tools. Every rule is the client's own (`client/src/roguelite.ts`) or the bridge's, so the same seed and the same choices give the browser's run. A run is separate from the Open world; its fight is the game of `new_game` (a new game while a fight is on leaves the run, `no_run`).
 
 | Tool | Input | Output |
 |---|---|---|
@@ -332,12 +332,13 @@ An agent plays a rogue-lite run (`roguelite.md` section 19) with seven tools. Ev
 | `run_place` | `q`, `r`, `kind` (Heavy, Anchor, Spark, ...) | the run state, the fight restarted with the marble placed (or taken back) |
 | `run_choose` | `choice` (an option number) | the run state |
 | `run_tactic` | `tactic` (Reinforce, Freeze, Swap, Fall back), `a`, `b` (a Swap's two cells) | `{ played, reply, state }` |
+| `run_flask` | none | the run state, a flask drunk on the map (3 marbles back, a charge spent; `roguelite.md` section 25) |
 | `save_run` | none | the run in the client's save format |
 
-Run state: `screen` (`map`, `place`, `fight`, `reward`, `relic`, `event`, `rest`, `shop`, `collector`, `exit`, `won`, `lost`), `line`, `seed`, `army`, `specials`, `biome`, `relics`, `keys`, `tactics`, `scrap`, `cells`, `carried`, `banked`, `told`; on the map `nodes` (`{ node, kind }`, the ones to pick); in a fight `fight` (`kind`, `foes`, `boss`, `bot_nodes`, `game`, `placed`, `left`); on a screen with a choice `options` (`{ choice, text, ok }`, plus `title` for an event); once over `acts_won` and `unlocked`. With `map`, `map` lists `"5: act 1 row 3 elite (The Wall) -> 9,10"` for every node.
+Run state: `screen` (`map`, `place`, `fight`, `reward`, `relic`, `event`, `rest`, `shop`, `collector`, `exit`, `won`, `lost`), `line`, `seed`, `army`, `specials`, `biome`, `relics`, `keys`, `tactics`, `flasks`, `scrap`, `cells`, `carried`, `banked`, `told`; on the map `nodes` (`{ node, kind }`, the ones to pick); in a fight `fight` (`kind`, `foes`, `boss`, `bot_nodes`, `game`, `placed`, `left`); on a screen with a choice `options` (`{ choice, text, ok }`, plus `title` for an event); once over `acts_won` and `unlocked`. With `map`, `map` lists `"5: act 1 row 3 elite (The Wall) -> 9,10"` for every node.
 
 - Play the fight with `get_state`, `legal_moves` and `play_move`. The run folds the fight in once the game is over (a draw or `resign` loses it); read `run_state` for the reward.
-- Errors: `no_run`, `not_now` (the tool is for another screen), `bad_choice` (nothing changes), `bad_save`, and the game errors of `run_tactic` (`illegal_move`: the engine refused it, the tactic is kept).
+- Errors: `no_run`, `not_now` (the tool is for another screen), `bad_choice` (nothing changes, a flask with the army full included), `bad_save`, and the game errors of `run_tactic` (`illegal_move`: the engine refused it, the tactic is kept).
 
 ## 6. Errors
 

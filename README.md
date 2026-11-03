@@ -47,7 +47,7 @@ First to eject 6 wins. On top of it, the ship:
   every marble lost is lost for the run, relics, passive effects for the whole run, from elites,
   act bosses and treasure nodes, and rest sites where you rest or upgrade a special marble (Heavy+,
   Anchor+, Spark+), up to 3 one-use tactics to play in a fight (Reinforce, Freeze, Swap, Fall back),
-  scrap earned in fights and spent at shop nodes on marbles, special marbles, relics and tactics, and
+  scrap earned in fights and spent at shop nodes on marbles, special marbles, relics, tactics and flask charges, 2 flasks an act (refilled at each act) that heal 3 marbles on the map between nodes, and
   seven special marbles in all (Heavy, Anchor, Spark, Magnet, Shield, Bomb, Medic), enemy armies
   that vary (five formations, special marbles of their own, more in later acts, and the named elites The
   Wall, The Artificer and The Brute), twenty-one events with two or three choices, some of them gambles, one of them a cursed chest (a relic or three Heavies, but the marbles lost in the next 2 fights cost 2 each), "?" nodes
@@ -145,7 +145,7 @@ use the notation of `abalone-cli`, for example `(1,3)>NE`. Tools, fields and err
 an optional `seed` starts a boss fight: `get_state` then shows the boss phase, tell and marks.
 
 An agent can also walk the Open world (`new_world`, `world_step`, `world_walk`) and play a whole rogue-lite run
-(`new_run`, `run_state`, `run_pick`, `run_place`, `run_choose`, `run_tactic`, `save_run`): the map, rewards, relics, events,
+(`new_run`, `run_state`, `run_pick`, `run_place`, `run_choose`, `run_tactic`, `run_flask`, `save_run`): the map, rewards, relics, events,
 rests, shops, the Collector and the exits are the client's own code, and a fight is played with `get_state`, `legal_moves`
 and `play_move`. The same seed and choices give the browser's run.
 
