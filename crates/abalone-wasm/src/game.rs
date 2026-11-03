@@ -326,6 +326,20 @@ mod tests {
     }
 
     #[test]
+    fn a_bomb_reports_the_turns_left_on_its_fuse() {
+        let mut engine = Engine::with_army(14, 14);
+        assert!(engine.fuses().is_empty());
+        engine.place_special(0, 4, 9).unwrap();
+        engine.place_special(-1, 4, 10).unwrap();
+        // Only the Bomb has a fuse, 3 turns at the start (#1490).
+        assert_eq!(engine.fuses(), vec![0, 4, 3]);
+        let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&first).unwrap();
+        assert_eq!(engine.fuses()[2], 2);
+        assert_eq!(engine.fuses().len(), 3);
+    }
+
+    #[test]
     fn set_relics_takes_the_relics_of_a_run_by_their_bit_before_the_first_move() {
         let mut engine = Engine::with_army(14, 14);
         // Gyroscope (0) and Detonator (4), and a bit no relic has.

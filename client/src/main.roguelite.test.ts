@@ -242,16 +242,25 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(map().classList.contains('place')).toBe(true);
     expect([...map().querySelectorAll('button[data-kind]')].map((b) => b.textContent)).toEqual(['Magnet · 0 left', 'Shield · 0 left', 'Bomb · 0 left', 'Medic · 0 left']);
     expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10 0,4,9');
+    // The Bomb shows its fuse, 3 turns of its side at the start, on the marble and in the HUD (#1490).
+    expect(document.body.dataset.fuses).toBe('0,4,3');
+    expect(document.getElementById('hud')!.textContent).toContain('Bomb: 3 turns left');
     play(game, [[-2, 2]], [-3, 2]);
+    expect(document.body.dataset.fuses).toBe('0,4,2');
+    expect(document.getElementById('hud')!.textContent).toContain('Bomb: 2 turns left');
     playMove(game);
     play(game, [[-3, 2]], [-2, 2]);
     playMove(game);
     expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10 0,4,9');
+    expect(document.body.dataset.fuses).toBe('0,4,1');
+    expect(document.getElementById('hud')!.textContent).toContain('Bomb: 1 turn left');
     await game.settle();
     const again = await boot('?bot=off', { indexedDB }); // a reload replays the two turns: the fuse has one left
     expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10 0,4,9');
     play(again, [[-2, 2]], [-3, 2]); // the army's third turn: the Bomb bursts where it stands and is gone
     expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10');
+    expect(document.body.dataset.fuses).toBe(''); // the Bomb is gone with its fuse
+    expect(document.getElementById('hud')!.textContent).not.toContain('Bomb:');
   });
 
   it('a won fight offers a reward, its pick goes back to the map', async () => {
