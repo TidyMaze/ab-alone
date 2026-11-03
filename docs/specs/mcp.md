@@ -320,6 +320,25 @@ World state: `seed`, `hero`, `troop` (the hero's trail, 6 cells), `broken` (obst
 - **The ending.** Once every lair is beaten, `ending` is Tally's line of the client (#1175, `endingLine` of `client/src/tally.ts`): `Variance noted. Clamp: open. Crew attached: 6.`
 - **No loss state.** The hero cannot lose, as in the client (`openworld.md` section 4, "Loss (deferred, not built)"); the `world_state` description says so.
 
+### Rogue-lite tools (#1469)
+
+An agent plays a rogue-lite run (`roguelite.md` section 19) with seven tools. Every rule is the client's own (`client/src/roguelite.ts`) or the bridge's, so the same seed and the same choices give the browser's run. A run is separate from the Open world; its fight is the game of `new_game` (a new game while a fight is on leaves the run, `no_run`).
+
+| Tool | Input | Output |
+|---|---|---|
+| `new_run` | `seed` default 0, `best` 0 to 3, `unlocked` (blueprint ids), `commander` 0 to 3 (default the Captain), `bot_nodes`, or `save` | the run state; drops the run in progress |
+| `run_state` | `map` (also list every node) | the run state |
+| `run_pick` | `node` | the run state: the node's screen, or its fight started as the session's game |
+| `run_place` | `q`, `r`, `kind` (Heavy, Anchor, Spark, ...) | the run state, the fight restarted with the marble placed (or taken back) |
+| `run_choose` | `choice` (an option number) | the run state |
+| `run_tactic` | `tactic` (Reinforce, Freeze, Swap, Fall back), `a`, `b` (a Swap's two cells) | `{ played, reply, state }` |
+| `save_run` | none | the run in the client's save format |
+
+Run state: `screen` (`map`, `place`, `fight`, `reward`, `relic`, `event`, `rest`, `shop`, `collector`, `exit`, `won`, `lost`), `line`, `seed`, `army`, `specials`, `biome`, `relics`, `tactics`, `scrap`, `cells`, `carried`, `banked`, `told`; on the map `nodes` (`{ node, kind }`, the ones to pick); in a fight `fight` (`kind`, `foes`, `boss`, `bot_nodes`, `game`, `placed`, `left`); on a screen with a choice `options` (`{ choice, text, ok }`, plus `title` for an event); once over `acts_won` and `unlocked`. With `map`, `map` lists `"5: act 1 row 3 elite (The Wall) -> 9,10"` for every node.
+
+- Play the fight with `get_state`, `legal_moves` and `play_move`. The run folds the fight in once the game is over (a draw or `resign` loses it); read `run_state` for the reward.
+- Errors: `no_run`, `not_now` (the tool is for another screen), `bad_choice` (nothing changes), `bad_save`, and the game errors of `run_tactic` (`illegal_move`: the engine refused it, the tactic is kept).
+
 ## 6. Errors
 
 An error is `{ "code": "...", "message": "..." }`. `message` is the engine's reason or the `ParseError` text when there is one.
@@ -339,7 +358,10 @@ An error is `{ "code": "...", "message": "..." }`. `message` is the engine's rea
 | `no_world` | No Open world started (`new_world` first) |
 | `blocked` | `world_step`: the hero cannot enter the cell; `world_teleport`: the teleport is refused. `message` says why |
 | `no_path` | `world_walk`: no way to the cell |
-| `bad_save` | `new_world`: the save is of another world version |
+| `bad_save` | `new_world`: the save is of another world version; `new_run`: the save is not a run of the client |
+| `no_run` | No run started (`new_run`), or another game replaced its fight |
+| `not_now` | A run tool for another screen of the run |
+| `bad_choice` | A run choice, node, marble or tactic that cannot be taken now |
 
 ## 7. Online rooms
 

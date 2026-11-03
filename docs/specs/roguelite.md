@@ -624,3 +624,30 @@ like and asks, never what a run keeps.
   picked for act 2 then act 3). A run saved before it loads with `exits` off: no exit is offered, every act is the Meadow, and its
   fight in progress replays on the board it started on.
 - **Turn it against the bot**: a hole takes the bot's marbles as it takes the army's; push its marbles toward the middle band.
+
+## 19. The run through the MCP server (#1469)
+
+An AI agent reaches every mode a player reaches, to play it and to test it. `mcp/src/run.ts` plays a run with the client's own
+rules: the pure functions of `client/src/roguelite.ts` and `collector.ts` (the nodes, rewards, relics, tactics, shop, rest,
+events, "?" nodes, Collector, exits and the end of a fight) and the bridge's (`run_map`, `run_foes`, `run_exits`, the army's
+`Engine`, the act boss), called in the order of `main.ts`. Nothing is copied: the same seed and the same choices give the
+client's run, and a test checks it on a short scripted path. The tools are in `docs/specs/mcp.md` section 5 (Rogue-lite tools).
+
+- **One run at a time**, separate from the Open world. `new_run` takes a seed, the `best` acts won and the blueprints `unlocked`
+  that a browser would have banked, a `commander` (the Captain by default) and the bot's search budget (`bot_nodes`).
+  The agent carries nothing but what it passes in (only variety carries between runs, Decision #934): the `banked` blueprints
+  of a run over are the `unlocked` of the next.
+- **Screens, as the page shows them** (`showRun`): `map`, `place`, `fight`, `reward`, `relic`, `event`, `rest`, `shop`,
+  `collector`, `exit`, `won`, `lost`. A screen with a choice lists its `options`; `run_choose` takes one, and one that cannot be
+  taken now (an event choice that cannot be paid, a purchase short of scrap) is listed `ok: false` and refused.
+- **The fight is the session's game**: `run_pick` on a fight, an elite or a boss node starts it as the game of `get_state`,
+  `legal_moves` and `play_move` (the agent is Black, the bot or the boss replies in `play_move`), with the army, the bot's plan,
+  the relics and the budget of the client (an elite twice, the Jammer a quarter less) or the act boss at its act's strength.
+  `run_place` puts the special marbles before the first move and `run_tactic` plays a tactic. The run reads the fight's end
+  after every move and folds it in as `runMoved` does (`fightOver`); `resign` loses it, a draw loses it. Starting another game
+  while a fight is on leaves the run, as another mode does in the client.
+- **Saving**: `save_run` is the client's save (`Run`), `new_run` with it as `save` resumes it, a fight in progress replayed
+  (`loadRun`). A save of the client loads, and the client loads the server's.
+- **Special marbles kept**: only the army's, not the bot's (bug #1492 counts both in `main.ts`).
+- **Left out**: nothing of the page's looks. No UI changes.
+

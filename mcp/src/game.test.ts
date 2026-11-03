@@ -535,7 +535,7 @@ describe('a fight of a rogue-lite run (docs/specs/mcp.md section 5, Rogue-lite t
     expect(played.reply).not.toBeNull(); // a Swap costs the move: the bot answers
     expect(played.state.last_moves[0]).toBe('Swap (0,2)(-1,2)');
     expect(played.state.to_move).toBe('black');
-    const refused = failure(game.playTactic(Int32Array.of(0, 4, 0, 0, 0, 0, 0, 0), 'Fall back'));
+    const refused = failure(game.playTactic(Int32Array.of(0, 3, -4, 3, -3, 3, 0, 0), 'Swap (-4,3)(-3,3)')); // two plain marbles
     expect(refused.code).toBe('illegal_move');
   });
 

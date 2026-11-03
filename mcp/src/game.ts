@@ -95,7 +95,10 @@ export type ErrorCode =
   | 'already_in_world_room'
   | 'world_changed'
   | 'unknown_hero'
-  | 'bad_target';
+  | 'bad_target'
+  | 'no_run'
+  | 'not_now'
+  | 'bad_choice';
 
 export interface ToolError {
   code: ErrorCode;
@@ -224,22 +227,34 @@ export class Session {
    * moves first. An unknown boss keeps the game in progress.
    */
   newGame({ boss, seed = 0, bot_nodes = BOT_NODES }: NewGameInput): Result<State> {
-    const game = { id: randomUUID(), resigned: false, plies: [], room: null };
-    let next: Game;
-    if (boss === undefined) {
-      const engine = this.newEngine();
-      next = { ...game, engine, reply: () => engine.best_move(bot_nodes), boss: null };
-    } else {
-      let encounter: EncounterLike;
-      try {
-        encounter = this.newEncounter(boss, seed);
-      } catch (reason) {
-        return fail('unknown_boss', String(reason));
-      }
-      next = { ...game, engine: encounter, reply: () => encounter.boss_move(), boss: { id: boss, encounter } };
+    if (boss === undefined) return ok(this.runFight(this.newEngine(), bot_nodes));
+    let encounter: EncounterLike;
+    try {
+      encounter = this.newEncounter(boss, seed);
+    } catch (reason) {
+      return fail('unknown_boss', String(reason));
     }
-    this.replace(next);
-    return ok(state(next));
+    return ok(this.runBoss(boss, encounter));
+  }
+
+  /** Drops any game in progress and starts the fight of `engine` against the bot, which searches `nodes` positions per
+   * move: a game, or the army's fight of a rogue-lite run (mcp/src/run.ts). The agent is Black. */
+  runFight(engine: EngineLike, nodes: number): State {
+    return this.begin({ ...this.fresh(), engine, reply: () => engine.best_move(nodes), boss: null });
+  }
+
+  /** Drops any game in progress and starts the fight of `encounter`, the boss `id`: a boss fight, or an act boss of a run. */
+  runBoss(id: string, encounter: EncounterLike): State {
+    return this.begin({ ...this.fresh(), engine: encounter, reply: () => encounter.boss_move(), boss: { id, encounter } });
+  }
+
+  private fresh() {
+    return { id: randomUUID(), resigned: false, plies: [], room: null };
+  }
+
+  private begin(game: Game): State {
+    this.replace(game);
+    return state(game);
   }
 
   /**
@@ -306,32 +321,41 @@ export class Session {
       if (over(game)) return gameOver();
       const parsed = parseMove(move);
       if (!parsed.ok) return fail('bad_move', parsed.message);
-      if (game.room && !game.room.session.canPlay()) {
-        return fail('not_your_turn', 'the opponent is to move, or not seated: call wait_for_opponent_move');
-      }
-      const mine = toRecord(parsed.move);
-      try {
-        game.engine.play(mine);
-      } catch (reason) {
-        return fail('illegal_move', String(reason));
-      }
-      const played = formatMove(parsed.move);
-      game.plies.push(played);
-      const echoed = game.boss ? fromRecords(game.boss.encounter.last_bonuses()).map(formatMove) : [];
-      let reply: string | null = null;
-      if (game.room) void game.room.session.send(Array.from(mine));
-      // A free move of The Echo keeps the agent to move: no reply (#958). A bot with no move passes: no reply, and an
-      // agent with no move passes too, so the bot replies again (#1301).
-      else {
-        while (!over(game) && game.engine.to_move() !== BLACK) {
-          const record = game.reply!();
-          game.engine.play(record);
-          reply = formatMove(fromRecord(record));
-          game.plies.push(reply);
-        }
-      }
-      return ok({ played, reply, bonuses: echoed, state: state(game) });
+      return this.deliver(game, toRecord(parsed.move), formatMove(parsed.move));
     });
+  }
+
+  /** Plays a tactic of a rogue-lite run, `record` (client/src/roguelite.ts `tacticRecord`) named `name` in the plies: the
+   * engine judges it, and the bot replies when the tactic costs the move (a Swap). */
+  playTactic(record: Int32Array, name: string): Result<Played> {
+    return this.withGame((game) => (over(game) ? gameOver() : this.deliver(game, record, name)));
+  }
+
+  /** Plays the record `mine`, then the bot's or boss's replies, and says what was played as `played`. */
+  private deliver(game: Game, mine: Int32Array, played: string): Result<Played> {
+    if (game.room && !game.room.session.canPlay()) {
+      return fail('not_your_turn', 'the opponent is to move, or not seated: call wait_for_opponent_move');
+    }
+    try {
+      game.engine.play(mine);
+    } catch (reason) {
+      return fail('illegal_move', String(reason));
+    }
+    game.plies.push(played);
+    const echoed = game.boss ? fromRecords(game.boss.encounter.last_bonuses()).map(formatMove) : [];
+    let reply: string | null = null;
+    if (game.room) void game.room.session.send(Array.from(mine));
+    // A free move of The Echo keeps the agent to move: no reply (#958). A bot with no move passes: no reply, and an
+    // agent with no move passes too, so the bot replies again (#1301).
+    else {
+      while (!over(game) && game.engine.to_move() !== BLACK) {
+        const record = game.reply!();
+        game.engine.play(record);
+        reply = formatMove(fromRecord(record));
+        game.plies.push(reply);
+      }
+    }
+    return ok({ played, reply, bonuses: echoed, state: state(game) });
   }
 
   /** The bot or boss wins. The engine is not asked, it has no resign. Online it waits for rules.md OPEN-12. */

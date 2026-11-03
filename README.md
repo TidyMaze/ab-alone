@@ -54,7 +54,7 @@ First to eject 6 wins. On top of it, the ship:
   that turn into an event, a fight or a treasure when entered, two exits at the end of each act to biomes (Forest, Tundra, Desert,
   Badlands, Archipelago) with holes in their boards, a signature enemy and a boss of their own, and cells and blueprints dropped by elites and act bosses,
   banked at the Collector between acts to unlock relics, tactics and special marbles for good, and four commanders to start a run with
-  (The Captain, The Warden, The Saboteur, The Juggernaut), each with a starting relic and special marbles of its own, unlocked by acts won ([spec](docs/specs/roguelite.md)); Auto-play can play a fight.
+  (The Captain, The Warden, The Saboteur, The Juggernaut), each with a starting relic and special marbles of its own, unlocked by acts won ([spec](docs/specs/roguelite.md)); Auto-play can play a fight, and an AI agent can play a whole run through the MCP server (below).
 - **Trainer**: waves against the bot, one more marble each wave.
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.
@@ -143,6 +143,11 @@ replies in the same call) until the game is over, or `resign`. `get_state` shows
 use the notation of `abalone-cli`, for example `(1,3)>NE`. Tools, fields and error codes:
 [docs/specs/mcp.md](docs/specs/mcp.md). `new_game` with `boss` (one of the ids in its input schema) and
 an optional `seed` starts a boss fight: `get_state` then shows the boss phase, tell and marks.
+
+An agent can also walk the Open world (`new_world`, `world_step`, `world_walk`) and play a whole rogue-lite run
+(`new_run`, `run_state`, `run_pick`, `run_place`, `run_choose`, `run_tactic`, `save_run`): the map, rewards, relics, events,
+rests, shops, the Collector and the exits are the client's own code, and a fight is played with `get_state`, `legal_moves`
+and `play_move`. The same seed and choices give the browser's run.
 
 Online, the agent plays a human or another agent over the same P2P rooms as the browser:
 `create_room` gives an invite link a human opens, `join_room` takes a link or a room code. Then

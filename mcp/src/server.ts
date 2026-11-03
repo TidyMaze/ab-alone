@@ -2,8 +2,11 @@
 // tool returns JSON as text content, a failure sets `isError` with the error object of section 6.
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import { bossIds, worldRules } from './engine';
+import { BLUEPRINTS } from '../../client/src/collector';
+import { COMMANDERS, TACTICS } from '../../client/src/roguelite';
+import { bossIds, runRules, worldRules } from './engine';
 import type { Result, Session } from './game';
+import { RogueRun } from './run';
 import { OpenWorld } from './world';
 import { refusePeers, WorldRoom } from './worldroom';
 
@@ -43,6 +46,7 @@ export function createServer(
   session: Session,
   world: OpenWorld = new OpenWorld(worldRules(), bossIds, session),
   worldRoom: WorldRoom = new WorldRoom(world, worldRules(), refusePeers),
+  rogue: RogueRun = new RogueRun(runRules(), session, bossIds),
 ): McpServer {
   const server = new McpServer({ name: 'ab-alone', version: '0.1.0' });
 
@@ -270,6 +274,105 @@ export function createServer(
     'leave_world_room',
     { description: 'Leave the public world room: the players stop seeing you after about 10 s. Do it when you are done.' },
     () => toolResult(worldRoom.leave()),
+  );
+
+  server.registerTool(
+    'new_run',
+    {
+      description:
+        'Start a rogue-lite run of a seed and drop the run in progress: a 3-act map of nodes, an army of 14 marbles, the bot to beat in each ' +
+        'fight. Same seed and same choices give the same run as the client (docs/specs/roguelite.md), and save_run is its save. Returns the run ' +
+        'state (see run_state). Pick a node with run_pick, play its fight with get_state, legal_moves and play_move (resign loses it), take ' +
+        'what waits after it with run_choose. Only variety carries between runs: best and unlocked are what a browser would have banked.',
+      inputSchema: z.strictObject({
+        seed: z.int().min(0).max(4294967295).optional().describe('Seed of the run, default 0.'),
+        best: z.int().min(0).max(3).optional().describe('The most acts won in one run before this one: it unlocks special marble types, default 0.'),
+        unlocked: z
+          .array(z.int().min(0).max(BLUEPRINTS.length - 1))
+          .optional()
+          .describe('The blueprints banked in earlier runs (banked of a run over): relics, tactics and special marbles in the pools, default none.'),
+        commander: z.int().min(0).max(COMMANDERS.length - 1).optional().describe('The commander, 0 the Captain (default), the others unlocked by best: its special marbles and its starting relic.'),
+        bot_nodes: z.int().min(1).max(200000).optional().describe('Positions the bot searches per move in a fight, default 20000. An elite searches twice as many.'),
+        save: z.record(z.string(), z.unknown()).optional().describe('Resume this run instead: the output of save_run, or a save of the client. bad_save when it is not one.'),
+      }),
+    },
+    async (input) => toolResult(await rogue.newRun(input)),
+  );
+
+  server.registerTool(
+    'run_state',
+    {
+      description:
+        'The run: screen (map, place, fight, reward, relic, event, rest, shop, collector, exit, won, lost), army, special marbles, relics, tactics, scrap, ' +
+        'cells, blueprints, and what the screen holds: on the map the nodes to pick; in a fight the bot, the boss or the elite, the game id and the ' +
+        'special marbles placed; on a screen with a choice (reward, relic, event, rest, shop, collector) the options to take with run_choose, ok ' +
+        'false for one that cannot be taken now; once over the acts won and what it unlocked. With map, every node of the map: its act, row, kind ' +
+        'and the nodes it leads to.',
+      inputSchema: z.strictObject({ map: z.boolean().optional().describe('Also list every node of the map.') }),
+    },
+    (input) => toolResult(rogue.state(input)),
+  );
+
+  server.registerTool(
+    'run_pick',
+    {
+      description:
+        'Pick a node of the map (run_state lists the ones to pick): a fight, an elite or a boss starts its fight as the game of the server ' +
+        '(you are Black, the bot or the act boss replies in play_move); a rest, shop, treasure or event waits for run_choose; a "?" turns into ' +
+        'one of them. Before the first move, run_place puts the special marbles on the army.',
+      inputSchema: z.strictObject({ node: z.int().min(0).describe('The node, its number in run_state.') }),
+    },
+    (input) => toolResult(rogue.pick(input)),
+  );
+
+  server.registerTool(
+    'run_place',
+    {
+      description:
+        'Place a special marble of the army on one of its marbles before the first move of a fight, or take it back by placing the same type ' +
+        'on the same marble again: kind is Heavy, Anchor, Spark, Heavy+, Anchor+, Spark+, Magnet, Shield, Bomb or Medic, (q,r) a cell of the ' +
+        'army (get_state shows the board). At most 3 of each type. Returns the run state; the fight restarts with the marbles placed. The first ' +
+        'move starts the fight.',
+      inputSchema: z.strictObject({ q: z.int(), r: z.int(), kind: z.string().describe('The type of special marble.') }),
+    },
+    (input) => toolResult(rogue.place(input)),
+  );
+
+  server.registerTool(
+    'run_choose',
+    {
+      description:
+        'Take an option of the screen (run_state, options): a reward, a relic, an event choice (the last is Leave), Rest or an upgrade at a rest ' +
+        'site, a purchase or a removal at a shop or Leave, a blueprint to bank at the Collector or Leave, the exit (biome) to take after an act boss. Refused (bad_choice, nothing changes) ' +
+        'when it cannot be taken now. Returns the run state.',
+      inputSchema: z.strictObject({ choice: z.int().min(0).describe('The number of the option.') }),
+    },
+    (input) => toolResult(rogue.choose(input)),
+  );
+
+  server.registerTool(
+    'run_tactic',
+    {
+      description:
+        'Play a tactic the run holds during an army fight, after the special marbles are placed (not against an act boss): Reinforce adds a marble ' +
+        'to your back row, Freeze makes the bot skip its next turn, Swap trades two of your marbles, one of them special, and costs your move (the ' +
+        'bot replies), Fall back undoes your last move and the bot answer. The engine judges it; one it refuses is kept. Returns the reply and the run state.',
+      inputSchema: z.strictObject({
+        tactic: z.enum(TACTICS.map((t) => t.name) as [string, ...string[]]),
+        a: CELL.optional().describe('Swap: the first marble, [q, r].'),
+        b: CELL.optional().describe('Swap: the second marble, [q, r].'),
+      }),
+    },
+    (input) => toolResult(rogue.tactic(input)),
+  );
+
+  server.registerTool(
+    'save_run',
+    {
+      description:
+        "The run in the client's save format: give it to new_run as save to resume the run later, fight in progress included.",
+    },
+    () => toolResult(rogue.save()),
   );
 
   return server;

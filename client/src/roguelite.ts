@@ -560,7 +560,7 @@ function describe(run: Run, o: Outcome): string {
 }
 
 /** The label of choice `c`: its verb and what it gives, with the odds of a gamble. */
-function choiceText(run: Run, c: EventChoice): string {
+export function choiceText(run: Run, c: EventChoice): string {
   const effects = c.odds < 100 ? `${c.odds} %: ${describe(run, c.win)}, otherwise ${describe(run, c.fail)}` : describe(run, c.win);
   return effects ? `${c.verb} · ${effects}` : c.verb;
 }
@@ -721,7 +721,7 @@ const shopDraw = (run: Run, id: number): number => hash(run.seed, run.path[run.p
 /** A price from `base` up to `spread - 1` more, dealt by the run seed and the node. */
 const priced = (run: Run, id: number, base: number, spread: number): number => base + (shopDraw(run, id) % spread);
 /** What the shop asks to make a special marble plain again. */
-const removalPrice = (run: Run): number => priced(run, REMOVAL, 20, 11);
+export const removalPrice = (run: Run): number => priced(run, REMOVAL, 20, 11);
 
 /** What the shop at the run's last node still sells, dealt by the run seed and the node: a marble, a special marble of an
  * unlocked type, a relic the run does not hold (none when it holds them all) and a tactic. Nothing when no shop waits. */
@@ -968,16 +968,16 @@ export function eventHtml(run: Run): string {
 const lineGlyph = (icon: string): string =>
   `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const relicGlyph = (code: number): string => lineGlyph(RELICS[code]!.icon);
-const tacticText = (code: number): string => `${TACTICS[code - 1]!.name}: ${TACTICS[code - 1]!.help}`;
-const relicText = (code: number): string => `${RELICS[code]!.name}: ${RELICS[code]!.help}`;
+export const tacticText = (code: number): string => `${TACTICS[code - 1]!.name}: ${TACTICS[code - 1]!.help}`;
+export const relicText = (code: number): string => `${RELICS[code]!.name}: ${RELICS[code]!.help}`;
 
 const BLUEPRINT_LABELS = { relic: 'Relic', tactic: 'Tactic', special: 'Special marble' } as const;
 /** A blueprint's name, its line (type, name and rule) and its glyph (#1470). */
-function blueprintName(id: number): string {
+export function blueprintName(id: number): string {
   const { type, code } = BLUEPRINTS[id]!;
   return type === 'relic' ? RELICS[code]!.name : type === 'tactic' ? TACTICS[code - 1]!.name : SPECIAL_LOOKS[code - 1]!.name;
 }
-function blueprintText(id: number): string {
+export function blueprintText(id: number): string {
   const { type, code } = BLUEPRINTS[id]!;
   const rule = type === 'relic' ? relicText(code) : type === 'tactic' ? tacticText(code) : `${SPECIAL_LOOKS[code - 1]!.name}: ${SPECIAL_LOOKS[code - 1]!.help}`;
   return `${BLUEPRINT_LABELS[type]} blueprint · ${rule}`;
