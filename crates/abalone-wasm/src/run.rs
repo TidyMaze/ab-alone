@@ -28,6 +28,7 @@ pub fn run_map(seed: u32) -> Vec<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::convert::special_code;
     use abalone_core::run::NodeKind;
 
     #[test]
@@ -52,6 +53,8 @@ mod tests {
             assert_eq!(record[3], code);
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
             assert_eq!(record[4], links);
+            assert_eq!(record[5], node.formation as i32);
+            assert_eq!(record[6], node.elite.map_or(0, |e| e as i32));
         }
         assert_eq!(flat[flat.len() - 2], 1); // the act 3 boss closes the map
         let kinds: Vec<i32> = flat.chunks(NODE_STRIDE).map(|r| r[3]).collect();
@@ -59,5 +62,24 @@ mod tests {
             (2..=6).all(|k| kinds.contains(&k)),
             "seed 3 has an elite, a rest, an event, a treasure and a shop"
         );
+    }
+
+    #[test]
+    fn run_foes_flattens_the_core_plan() {
+        let core = run::run_map(5);
+        let (index, _) = core
+            .iter()
+            .enumerate()
+            .find(|(_, n)| n.kind == NodeKind::Elite)
+            .expect("seed 5 has an elite");
+        let plan = run::foe_plan(5, index, 1);
+        let flat = run_foes(5, index as u32, 1);
+        assert_eq!(flat[..2], [i32::from(plan.count), plan.formation as i32]);
+        assert_eq!(plan.count, run::FULL_ARMY - 1);
+        assert_eq!(flat.len(), 2 + 3 * plan.specials.len());
+        for (record, ((q, r), kind)) in flat[2..].chunks(3).zip(&plan.specials) {
+            assert_eq!(record, [*q, *r, i32::from(special_code(*kind))]);
+        }
+        assert!(!plan.specials.is_empty());
     }
 }

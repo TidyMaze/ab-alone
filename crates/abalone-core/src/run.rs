@@ -1759,3 +1759,278 @@ mod new_specials {
         assert_eq!(a.history(), b.history());
     }
 }
+
+#[cfg(test)]
+mod foes {
+    use super::*;
+    use crate::board::{PlaceError, Special, FUSE};
+    use crate::search::best_move;
+
+    fn count(board: &Board, cell: Cell) -> usize {
+        (-4..=4)
+            .flat_map(|q| (-4..=4).map(move |r| (q, r)))
+            .filter(|&(q, r)| board.get(q, r) == Some(cell))
+            .count()
+    }
+
+    fn centre_distance((q, r): (i32, i32)) -> i32 {
+        q.abs().max(r.abs()).max((q + r).abs())
+    }
+
+    /// The node of `seed` that is the first of `kind` in act `act`, with its index in the map.
+    fn node_of(seed: u64, kind: NodeKind, act: usize) -> Option<(usize, Node)> {
+        run_map(seed)
+            .into_iter()
+            .enumerate()
+            .find(|(_, n)| n.kind == kind && n.act == act)
+    }
+
+    #[test]
+    fn every_formation_is_14_distinct_cells_of_the_bots_half_clear_of_the_army() {
+        assert_eq!(Formation::ALL.len(), 5);
+        let army: Vec<_> = STANDARD_BLACK.to_vec();
+        let board = Board::empty();
+        for formation in Formation::ALL {
+            let cells = formation.cells(FULL_ARMY);
+            assert_eq!(cells.len(), 14, "{formation:?}");
+            let mut sorted = cells.clone();
+            sorted.sort();
+            sorted.dedup();
+            assert_eq!(sorted.len(), 14, "{formation:?} repeats a cell");
+            for cell in &cells {
+                assert!(board.get(cell.0, cell.1).is_some(), "{formation:?} {cell:?}");
+                assert!(!army.contains(cell), "{formation:?} {cell:?} is the army's");
+            }
+        }
+    }
+
+    #[test]
+    fn the_standard_formation_is_the_layout_of_before_and_fewer_marbles_lose_the_front() {
+        let standard: Vec<_> = STANDARD_BLACK.iter().map(|&(q, r)| (-q, -r)).collect();
+        assert_eq!(Formation::Standard.cells(14), standard);
+        assert_eq!(Formation::Standard.cells(10), standard[..10]);
+        // The others drop the marbles nearest the centre first.
+        for formation in Formation::ALL {
+            let all = formation.cells(14);
+            let ten = formation.cells(10);
+            assert_eq!(ten.len(), 10);
+            assert!(ten.iter().all(|c| all.contains(c)), "{formation:?}");
+            let kept = ten.iter().map(|&c| centre_distance(c)).min().unwrap();
+            let dropped = all
+                .iter()
+                .filter(|c| !ten.contains(c))
+                .map(|&c| centre_distance(c))
+                .max()
+                .unwrap();
+            assert!(dropped <= kept, "{formation:?} drops a far marble first");
+        }
+        assert_eq!(Formation::Snake.cells(99).len(), 14); // clamped
+        assert_eq!(Formation::Wedge.cells(0).len(), usize::from(MIN_ARMY));
+    }
+
+    #[test]
+    fn the_formation_codes_are_their_bridge_codes() {
+        for (code, formation) in Formation::ALL.into_iter().enumerate() {
+            assert_eq!(formation as usize, code);
+            assert_eq!(Formation::from_code(code as u8), Some(formation));
+        }
+        assert_eq!(Formation::from_code(5), None);
+        for (code, elite) in Elite::ALL.into_iter().enumerate() {
+            assert_eq!(elite as usize, code + 1);
+        }
+    }
+
+    #[test]
+    fn only_fight_and_elite_nodes_have_a_formation_and_only_elites_an_archetype() {
+        let (mut formations, mut elites) = (Vec::new(), Vec::new());
+        for seed in 0..100 {
+            for node in run_map(seed) {
+                let fights = matches!(node.kind, NodeKind::Fight | NodeKind::Elite);
+                if !fights {
+                    assert_eq!(node.formation, Formation::Standard);
+                }
+                assert_eq!(node.elite.is_some(), node.kind == NodeKind::Elite);
+                if fights && !formations.contains(&node.formation) {
+                    formations.push(node.formation);
+                }
+                if let Some(e) = node.elite {
+                    if !elites.contains(&e) {
+                        elites.push(e);
+                    }
+                }
+            }
+        }
+        assert_eq!(formations.len(), Formation::ALL.len(), "every formation is dealt");
+        assert_eq!(elites.len(), Elite::ALL.len(), "every archetype is dealt");
+    }
+
+    #[test]
+    fn a_node_keeps_its_enemies_for_a_seed_and_another_seed_deals_others() {
+        assert_eq!(run_map(9), run_map(9));
+        let plan = |s| {
+            let (i, _) = node_of(s, NodeKind::Fight, 1).unwrap();
+            foe_plan(s, i, 0)
+        };
+        assert_eq!(plan(9), plan(9));
+        assert!((0..20).any(|s| plan(s) != plan(9)));
+    }
+
+    #[test]
+    fn a_fight_node_has_10_foes_an_elite_14_and_the_saboteur_takes_one() {
+        for seed in 0..30 {
+            let (fight, _) = node_of(seed, NodeKind::Fight, 0).unwrap();
+            assert_eq!(foe_plan(seed, fight, 0).count, FIGHT_FOES);
+            assert_eq!(foe_plan(seed, fight, 1).count, FIGHT_FOES - 1);
+            if let Some((elite, _)) = node_of(seed, NodeKind::Elite, 0).or(node_of(seed, NodeKind::Elite, 1)) {
+                assert_eq!(foe_plan(seed, elite, 0).count, FULL_ARMY);
+                assert_eq!(foe_plan(seed, elite, 1).count, FULL_ARMY - 1);
+            }
+        }
+    }
+
+    #[test]
+    fn fights_hold_more_special_foes_in_later_acts_of_kinds_never_repeated() {
+        let early = [Special::Heavy, Special::Anchor, Special::Spark];
+        let mid = [Special::Magnet, Special::Shield];
+        for seed in 0..60 {
+            for act in 0..ACTS {
+                let Some((i, _)) = node_of(seed, NodeKind::Fight, act) else { continue };
+                let plan = foe_plan(seed, i, 0);
+                assert_eq!(plan.specials.len(), act + 1, "seed {seed} act {act}");
+                let kinds: Vec<_> = plan.specials.iter().map(|s| s.1).collect();
+                for (k, kind) in kinds.iter().enumerate() {
+                    assert!(!kinds[..k].contains(kind), "a kind twice, seed {seed}");
+                    let known = early.contains(kind)
+                        || (act >= 1 && mid.contains(kind))
+                        || (act == 2 && matches!(kind, Special::Bomb(FUSE) | Special::Medic));
+                    assert!(known, "{kind:?} too early in act {act}");
+                }
+            }
+        }
+        // Every kind is dealt somewhere in the third act.
+        let mut seen = Vec::new();
+        for seed in 0..60 {
+            if let Some((i, _)) = node_of(seed, NodeKind::Fight, 2) {
+                for (_, kind) in foe_plan(seed, i, 0).specials {
+                    if !seen.contains(&kind) {
+                        seen.push(kind);
+                    }
+                }
+            }
+        }
+        assert_eq!(seen.len(), 7);
+    }
+
+    #[test]
+    fn the_foe_specials_sit_on_distinct_marbles_of_the_formation() {
+        for seed in 0..40 {
+            for kind in [NodeKind::Fight, NodeKind::Elite] {
+                for act in 0..ACTS {
+                    let Some((i, node)) = node_of(seed, kind, act) else { continue };
+                    let plan = foe_plan(seed, i, 0);
+                    assert_eq!(plan.formation, node.formation);
+                    let cells = plan.formation.cells(plan.count);
+                    let mut marked: Vec<_> = plan.specials.iter().map(|s| s.0).collect();
+                    assert!(marked.iter().all(|c| cells.contains(c)));
+                    marked.sort();
+                    marked.dedup();
+                    assert_eq!(marked.len(), plan.specials.len(), "a marble twice");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_elite_plays_its_archetype_with_two_more_specials_than_a_fight() {
+        let mut seen = [false; 3];
+        for seed in 0..120 {
+            for act in 0..ACTS {
+                let Some((i, node)) = node_of(seed, NodeKind::Elite, act) else { continue };
+                let plan = foe_plan(seed, i, 0);
+                let kinds: Vec<_> = plan.specials.iter().map(|s| s.1).collect();
+                assert_eq!(kinds.len(), act + 2, "seed {seed} act {act}");
+                let elite = node.elite.unwrap();
+                seen[elite as usize - 1] = true;
+                let (a, b) = match elite {
+                    Elite::Wall => (Special::Anchor, Special::Anchor),
+                    Elite::Brute => (Special::Heavy, Special::Heavy),
+                    Elite::Artificer => (Special::Spark, Special::Bomb(FUSE)),
+                };
+                assert!(kinds.iter().all(|k| *k == a || *k == b), "{elite:?} {kinds:?}");
+                if elite == Elite::Artificer {
+                    // Sparks first, then Bombs: as many Sparks as Bombs, the odd one a Spark.
+                    let sparks = kinds.iter().filter(|k| **k == a).count();
+                    assert_eq!(sparks, kinds.len().div_ceil(2));
+                }
+            }
+        }
+        assert_eq!(seen, [true; 3]);
+    }
+
+    #[test]
+    fn a_node_that_is_no_fight_or_out_of_the_map_has_the_plain_army() {
+        let plain = |s, i| foe_plan(s, i, 0);
+        for seed in 0..40 {
+            for (i, node) in run_map(seed).iter().enumerate() {
+                if !matches!(node.kind, NodeKind::Fight | NodeKind::Elite) {
+                    let plan = plain(seed, i);
+                    assert_eq!((plan.count, plan.formation), (FULL_ARMY, Formation::Standard));
+                    assert!(plan.specials.is_empty());
+                }
+            }
+        }
+        let out = plain(1, 9999);
+        assert_eq!((out.count, out.formation, out.specials.len()), (FULL_ARMY, Formation::Standard, 0));
+    }
+
+    #[test]
+    fn a_plan_game_stands_the_formation_with_its_specials_and_the_army_as_before() {
+        for seed in 0..30 {
+            let (i, _) = node_of(seed, NodeKind::Elite, 2).or(node_of(seed, NodeKind::Fight, 2)).unwrap();
+            let plan = foe_plan(seed, i, 0);
+            let game = army_game_formed(9, &plan).unwrap();
+            let board = game.board();
+            assert_eq!(count(board, Cell::White), usize::from(plan.count));
+            assert_eq!(count(board, Cell::Black), 9);
+            for cell in plan.formation.cells(plan.count) {
+                assert_eq!(board.get(cell.0, cell.1), Some(Cell::White));
+            }
+            assert_eq!(board.specials().len(), plan.specials.len());
+            for (cell, kind) in &plan.specials {
+                assert_eq!(board.special(*cell), Some(*kind));
+            }
+            assert!(board.rogue_lite());
+            let mine = army_game(9);
+            assert_eq!(game.win_ejections(Player::White), mine.win_ejections(Player::White));
+            assert_eq!(game.win_ejections(Player::Black), WIN_EJECTIONS);
+        }
+        // The standard formation without a special is the fight of before.
+        let plain = FoePlan { count: 10, formation: Formation::Standard, specials: Vec::new() };
+        assert_eq!(army_game_formed(12, &plain).unwrap().board(), army_game_against(12, 10).board());
+    }
+
+    #[test]
+    fn a_special_on_a_cell_without_a_marble_is_refused() {
+        let plan = FoePlan { count: 10, formation: Formation::Snake, specials: vec![((0, 0), Special::Anchor)] };
+        assert_eq!(army_game_formed(14, &plan).err(), Some(PlaceError::NoMarble));
+    }
+
+    #[test]
+    fn the_bot_plays_every_kind_of_enemy_army() {
+        for seed in 0..12 {
+            for kind in [NodeKind::Fight, NodeKind::Elite] {
+                for act in 0..ACTS {
+                    let Some((i, _)) = node_of(seed, kind, act) else { continue };
+                    let mut game = army_game_formed(14, &foe_plan(seed, i, 0)).unwrap();
+                    for _ in 0..6 {
+                        if game.outcome().is_some() {
+                            break;
+                        }
+                        let mv = best_move(&game, 300).expect("a legal move or a pass");
+                        game.play(&mv).unwrap();
+                    }
+                }
+            }
+        }
+    }
+}

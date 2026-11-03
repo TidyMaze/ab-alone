@@ -233,6 +233,23 @@ mod tests {
     }
 
     #[test]
+    fn with_foes_stands_the_bots_formation_with_its_special_marbles() {
+        // A plan is `[count, formation, q, r, kind, ...]` (run_foes).
+        let engine = Engine::with_foes(14, &[10, 3, 4, -4, 2, 0, -4, 3]).unwrap();
+        assert_eq!(count(&engine.board(), 1), 14);
+        assert_eq!(count(&engine.board(), 2), 10);
+        assert_eq!(engine.specials(), vec![0, -4, 3, 4, -4, 2]);
+        let plain = Engine::with_foes(14, &[14, 0]).unwrap();
+        assert_eq!(plain.board(), Engine::with_army(14, 14).board());
+        assert_eq!(Engine::with_foes(5, &[10, 4]).unwrap().win_ejections(2), 2);
+        // A plan the engine cannot stand is refused: no plan, an unknown formation or special, a cell with no marble.
+        assert!(Engine::with_foes(14, &[]).is_err());
+        assert!(Engine::with_foes(14, &[10, 9]).is_err());
+        assert!(Engine::with_foes(14, &[10, 0, 4, -4, 99]).is_err());
+        assert!(Engine::with_foes(14, &[10, 0, 0, 0, 2]).is_err());
+    }
+
+    #[test]
     fn trainer_starts_a_wave_of_that_many_white_marbles() {
         let engine = Engine::trainer(3, 4);
         assert_eq!(count(&engine.board(), 1), 14);
