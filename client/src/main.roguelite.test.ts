@@ -553,7 +553,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
       'Path: act 1 Fight, Elite, Elite, Boss · act 2 Fight',
       'Fights: 4 won, 1 lost',
       'Army at the end: 3 marbles',
-      'Unlocked: Anchor marbles, Bulwark army',
+      'Unlocked: Anchor marbles, Shield marbles, Bulwark army',
     ]);
     expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
     byId('run-new').click();

@@ -394,9 +394,13 @@ describe('roguelite', () => {
     expect(buttons.map((b) => Number(b.dataset.offer))).toEqual(offers(run));
     expect(doc.querySelector('.run-line')!.textContent).toBe('Fight won · pick a reward');
     expect(rewardHtml(MAP, won({ ...newRun(1, 3), army: 4, specials: [2, 1, 1, 0, 0, 0, 0, 0, 0, 0] }))).toContain('One more marble');
-    expect(rewardHtml(MAP, won(newRun(1, 3)))).toContain('Heavy: weighs 2 in a push');
-    expect(rewardHtml(MAP, won(newRun(1, 3)))).toContain('Anchor: never pushed off');
-    expect(rewardHtml(MAP, won(newRun(1, 3)))).toContain('Spark: bursts when pushed off');
+    const offering = (kind: number): string => {
+      const seed = Array.from({ length: 60 }, (_, n) => n).find((n) => offers(won(newRun(n, 3))).includes(kind))!;
+      return rewardHtml(MAP, won(newRun(seed, 3)));
+    };
+    expect(offering(1)).toContain('Heavy: weighs 2 in a push');
+    expect(offering(2)).toContain('Anchor: never pushed off');
+    expect(offering(3)).toContain('Spark: bursts when pushed off');
   });
   // Elites, rests, events and act bosses (#800). One act: a fight leads to an elite, a rest and an event, each to the
   // boss. Indices: 0 fight, 1 elite, 2 rest, 3 event, 4 boss.
@@ -800,7 +804,10 @@ describe('roguelite relics', () => {
   it('Lucky coin: a reward offers 4 instead of 3', () => {
     const short = { ...run({ army: 12 }), reward: true };
     expect(offers(short)).toHaveLength(3);
-    expect(offers({ ...short, relics: [Relic.LuckyCoin] }).sort()).toEqual([0, 1, 2, 3]);
+    const coin = offers({ ...short, relics: [Relic.LuckyCoin] });
+    expect(coin).toHaveLength(4);
+    expect(new Set(coin).size).toBe(4);
+    expect(coin.slice(0, 3)).toEqual(offers(short)); // the same three first
   });
 
   it('Bargain: an event trade costs a marble less', () => {
@@ -927,7 +934,7 @@ describe('roguelite tactics', () => {
     expect(takeEvent({ ...full, tactics: [1, 1, 1] }, manual)).toBeNull();
     expect(takeEvent({ ...full, army: MIN_ARMY }, manual)).toBeNull();
     const run = visit(ACT_EVENT, { ...newRun(1, 3), path: [0] }, 3);
-    const seed = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].find((n) => eventOf({ ...run, seed: n })!.tactic)!;
+    const seed = Array.from({ length: 60 }, (_, n) => n).find((n) => eventOf({ ...run, seed: n })!.tactic)!;
     const event = { ...run, seed };
     const code = takeEvent(event, eventOf(event)!)!.tactics[0]!;
     expect(takeEvent({ ...event }, eventOf(event)!)!.tactics).toEqual([code]); // deterministic
@@ -1251,9 +1258,11 @@ describe('roguelite Magnet, Shield, Bomb and Medic', () => {
   });
 
   it('a smaller army loses them first: the Medic, the Bomb, the Shield, then the Magnet, then the older types', () => {
-    const fight = { ...pick({ ...newRun(1, 3), army: 8, specials: counts(1, 3, 7, 8, 9, 10) }, 0), placed: [] };
-    expect(fightOver(MAP, fight, true, 2).specials).toEqual(counts(1, 3, 7, 8)); // 6 marbles: the Medic and the Bomb go
-    expect(fightOver(MAP, fight, true, 4).specials).toEqual(counts(1, 3)); // 4 marbles: the Shield and the Magnet too
+    const fight = { ...pick({ ...newRun(1, 3), army: 10, specials: counts(1, 2, 3, 7, 8, 9, 10) }, 0), placed: [] };
+    expect(fightOver(MAP, fight, true, 4).specials).toEqual(counts(1, 2, 3, 7, 8, 9)); // 6 marbles: the Medic goes
+    expect(fightOver(MAP, fight, true, 6).specials).toEqual(counts(1, 2, 3, 7)); // 4 marbles: the Bomb and the Shield too
+    const many = { ...pick({ ...newRun(1, 3), army: 10, specials: counts(1, 1, 2, 3, 7, 8, 9, 10) }, 0), placed: [] };
+    expect(fightOver(MAP, many, true, 6).specials).toEqual(counts(1, 1, 2, 3)); // 4 marbles: the Magnet too, before any older type
     const bombed = { ...pick({ ...newRun(1, 3), army: 8, specials: counts(9) }, 0), placed: [[0, 4, 9]] };
     expect(fightOver(MAP, bombed, true, 1, counts()).specials).toEqual(counts()); // the Bomb burst: gone with its marble
     const medic = { ...pick({ ...newRun(1, 3), army: 8, specials: counts(10) }, 0), placed: [[0, 4, 10]] };

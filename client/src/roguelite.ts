@@ -31,7 +31,7 @@ export interface MapNode {
 
 /** A run: its seed, its army, the nodes picked (indices in the map), the fight of the last one while it is on and its
  * moves, and how it ended. `specials` counts the army's Heavy, Anchor and Spark marbles (#961), then its Heavy+, Anchor+
- * and Spark+ (#1458), by the bridge's kind less 1, `placed` the ones on
+ * and Spark+ (#1458), then its Magnet, Shield, Bomb and Medic (#1461), by the bridge's kind less 1, `placed` the ones on
  * the fight's board `[q, r, kind]`, `reward` is on while the reward of a won fight waits to be picked, and `event` while
  * the choice of an event node waits (#800). `best` is the most acts won in one run before this one, which unlocks its
  * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
@@ -124,6 +124,10 @@ export const PLUS_POINTS: readonly [number, number][] = [
   [-0.1, -0.35], [-0.1, -0.1], [-0.35, -0.1], [-0.35, 0.1], [-0.1, 0.1], [-0.1, 0.35],
 ];
 const anchorPoints: readonly [number, number][] = [[0, -1], [0.866, 0.5], [-0.866, 0.5]]; // pointing down
+const magnetPoints: readonly [number, number][] = [
+  [-0.8, 0.9], [-0.3, 0.9], [-0.3, -0.1], [0.3, -0.1], [0.3, 0.9], [0.8, 0.9], [0.8, -0.3], [0.45, -0.85], [-0.45, -0.85], [-0.8, -0.3],
+]; // a horseshoe, its poles up
+const shieldPoints: readonly [number, number][] = [[-0.8, 0.8], [0.8, 0.8], [0.8, -0.1], [0, -0.95], [-0.8, -0.1]]; // flat top, pointed foot
 /** The looks of the special marbles, by the bridge's kind less 1 (#961): a flat glyph over the marble, its own shape
  * and a colour 3:1 on both marbles, never the colour alone. Its outline in units of its radius, y up. An upgraded type
  * (#1458) has its type's glyph with a `+` on it. */
@@ -134,12 +138,21 @@ export const SPECIAL_LOOKS: readonly { name: string; color: number; points: read
   { name: 'Heavy+', color: 0xc8ccd0, points: SEAT_GLYPHS[2]!.points, help: 'weighs 3 in a push', plus: true },
   { name: 'Anchor+', color: 0x56b4e9, points: anchorPoints, help: 'never pushed off, nor the marble in front of it', plus: true },
   { name: 'Spark+', color: 0xf0e442, points: SEAT_GLYPHS[4]!.points, help: 'bursts 2 cells', plus: true },
+  // The four of #1461, no upgraded form: a vermillion horseshoe, an orange shield, a pink round bomb and a green cross.
+  { name: 'Magnet', color: 0xd55e00, points: magnetPoints, help: 'pulls an enemy two cells away one cell closer after it moves', plus: false },
+  { name: 'Shield', color: 0xe69f00, points: shieldPoints, help: 'the first push that would move it fails', plus: false },
+  { name: 'Bomb', color: 0xcc79a7, points: SEAT_GLYPHS[0]!.points, help: 'bursts after your third turn and is lost', plus: false }, // a disc
+  { name: 'Medic', color: 0x009e73, points: SEAT_GLYPHS[3]!.points, help: 'comes back once on your back row when ejected', plus: false }, // a cross
 ];
-/** The plain special marble types, by the bridge's kind: Heavy, Anchor, Spark; kind + 3 is the upgraded one. */
+/** The special marble types a rest site can upgrade, by the bridge's kind: Heavy, Anchor, Spark; kind + 3 is the upgraded one. */
 const PLAIN = [1, 2, 3];
-/** The order the special marbles go in when the army falls below their count or pays one: the plain Sparks, Anchors and
- * Heavies first, then the upgraded ones in the same order (indices of `Run.specials`). */
-const FALL = [2, 1, 0, 5, 4, 3];
+/** The special marble types rewards, events, the shop and the unlocks deal, by the bridge's kind: the three above, then
+ * Magnet, Shield, Bomb and Medic (#1461). */
+const DEALT = [...PLAIN, 7, 8, 9, 10];
+/** The order the special marbles go in when the army falls below their count or pays one: the Medics, Bombs, Shields and
+ * Magnets first (#1461), then the plain Sparks, Anchors and Heavies, then the upgraded ones in the same order (indices
+ * of `Run.specials`). */
+const FALL = [9, 8, 7, 6, 2, 1, 0, 5, 4, 3];
 
 /** A special marble of the bridge's records `[q, r, kind]`. */
 export interface Special {
@@ -163,16 +176,22 @@ export function parseMap(flat: ArrayLike<number>): MapNode[] {
   return nodes;
 }
 
+/** `n` special marbles of the bridge's kind `kind` and none of the other types. */
+const only = (kind: number, n: number): number[] => SPECIAL_LOOKS.map((_, k) => (k === kind - 1 ? n : 0));
+/** No special marble. */
+const noSpecials = (): number[] => only(0, 0);
+
 /** The starting armies (#801): 14 marbles each, some of them special, never more; `acts` is the most acts won in one
  * run that unlocks it. */
 export const ARMIES: readonly { name: string; specials: number[]; acts: number }[] = [
-  { name: 'Standard', specials: [0, 0, 0, 0, 0, 0], acts: 0 },
-  { name: 'Bulwark', specials: [0, 2, 0, 0, 0, 0], acts: 1 },
-  { name: 'Volatile', specials: [0, 0, 2, 0, 0, 0], acts: 2 },
-  { name: 'Ironclad', specials: [2, 0, 0, 0, 0, 0], acts: 3 },
+  { name: 'Standard', specials: noSpecials(), acts: 0 },
+  { name: 'Bulwark', specials: only(2, 2), acts: 1 },
+  { name: 'Volatile', specials: only(3, 2), acts: 2 },
+  { name: 'Ironclad', specials: only(1, 2), acts: 3 },
 ];
-/** The most acts won in one run that brings each special marble type into the rewards and events: Heavy, Anchor, Spark. */
-export const KIND_ACTS = [0, 1, 2];
+/** The most acts won in one run that brings each special marble type into the rewards, events and the shop, by the bridge's
+ * kind less 1: Heavy 0, Anchor 1, Spark 2 (the upgraded types are never dealt), Magnet 3, Shield 1, Bomb 3, Medic 2 (#1461). */
+export const KIND_ACTS = [0, 1, 2, 0, 0, 0, 3, 1, 3, 2];
 /** The most acts won in a run. */
 const ALL_ACTS = 3;
 const kindOn = (run: Run, kind: number): boolean => KIND_ACTS[kind - 1]! <= run.best;
@@ -185,7 +204,7 @@ export const newRun = (seed: number, best: number): Run => ({
   fighting: false,
   moves: [],
   end: '',
-  specials: [0, 0, 0, 0, 0, 0],
+  specials: noSpecials(),
   placed: [],
   reward: false,
   event: false,
@@ -318,12 +337,16 @@ export interface RunEvent {
   tactic: boolean;
 }
 export const EVENTS: readonly RunEvent[] = [
-  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: [1, 0, 0, 0, 0, 0], lose: false, tactic: false },
-  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: [0, 1, 0, 0, 0, 0], lose: false, tactic: false },
-  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: [0, 0, 1, 0, 0, 0], lose: false, tactic: false },
-  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: [0, 0, 2, 0, 0, 0], lose: false, tactic: false },
-  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: [0, 0, 0, 0, 0, 0], lose: true, tactic: false },
-  { title: 'Field manual', text: 'A battered manual of old tricks lies open.', take: 'Learn {tactic} · lose 1 marble', army: -1, gain: [0, 0, 0, 0, 0, 0], lose: false, tactic: true },
+  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: only(1, 1), lose: false, tactic: false },
+  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: only(2, 1), lose: false, tactic: false },
+  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: only(3, 1), lose: false, tactic: false },
+  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: only(3, 2), lose: false, tactic: false },
+  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: noSpecials(), lose: true, tactic: false },
+  { title: 'Field manual', text: 'A battered manual of old tricks lies open.', take: 'Learn {tactic} · lose 1 marble', army: -1, gain: noSpecials(), lose: false, tactic: true },
+  { title: 'Lodestone', text: 'A lodestone hums in a split crate.', take: 'Fit a Magnet · lose 2 marbles', army: -2, gain: only(7, 1), lose: false, tactic: false },
+  { title: 'Bulkhead', text: 'A spare bulkhead plate leans on the wall.', take: 'Plate a Shield · lose 2 marbles', army: -2, gain: only(8, 1), lose: false, tactic: false },
+  { title: 'Unexploded charge', text: 'A live charge ticks in the rubble.', take: 'Arm a Bomb · lose 1 marble', army: -1, gain: only(9, 1), lose: false, tactic: false },
+  { title: 'Sick bay', text: 'A cot and a medic kit, still stocked.', take: 'Staff a Medic · lose 2 marbles', army: -2, gain: only(10, 1), lose: false, tactic: false },
 ];
 
 /** The event of the run's last node while its choice waits, seeded by the run seed and the node, else null. */
@@ -407,7 +430,7 @@ function hash(a: number, b: number): number {
  * unlocked). */
 export function offers(run: Run): number[] {
   if (!run.reward) return [];
-  const pool = [...(run.army < START_ARMY ? [0] : []), ...(sum(run.specials) < run.army ? [1, 2, 3].filter((k) => kindOn(run, k)) : [])];
+  const pool = [...(run.army < START_ARMY ? [0] : []), ...(sum(run.specials) < run.army ? DEALT.filter((k) => kindOn(run, k)) : [])];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = hash(run.seed, run.path[run.path.length - 1]! * 8 + i) % (i + 1); // the node won, an index of the map
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
@@ -473,7 +496,7 @@ const removalPrice = (run: Run): number => priced(run, REMOVAL, 20, 11);
  * unlocked type, a relic the run does not hold (none when it holds them all) and a tactic. Nothing when no shop waits. */
 export function shopStock(run: Run): ShopItem[] {
   if (!run.shop) return [];
-  const types = PLAIN.filter((k) => kindOn(run, k));
+  const types = DEALT.filter((k) => kindOn(run, k));
   const relics = unheld(run);
   const deal = (id: number, n: number): number => hash(shopDraw(run, id), 1) % n;
   const items: ShopItem[] = [
@@ -566,7 +589,7 @@ export function earned(map: MapNode[], run: Run): string[] {
   const won = actsWon(map, run);
   const fresh = (acts: number): boolean => acts > run.best && acts <= won;
   return [
-    ...SPECIAL_LOOKS.slice(0, PLAIN.length).flatMap((l, k) => (fresh(KIND_ACTS[k]!) ? [`${l.name} marbles`] : [])),
+    ...DEALT.flatMap((k) => (fresh(KIND_ACTS[k - 1]!) ? [`${SPECIAL_LOOKS[k - 1]!.name} marbles`] : [])),
     ...ARMIES.flatMap((a) => (fresh(a.acts) ? [`${a.name} army`] : [])),
   ];
 }
@@ -589,9 +612,8 @@ export function recordBest(store: Store, acts: number): void {
  * them, and a button per starting army, the one picked pressed. */
 function startHtml(run: Run): string {
   const after = (acts: number): string => (acts === ALL_ACTS ? 'after a run won' : `after ${acts} act${acts === 1 ? '' : 's'} won in a run`);
-  const plain = SPECIAL_LOOKS.slice(0, PLAIN.length);
-  const on = plain.filter((_, k) => kindOn(run, k + 1)).map((l) => l.name);
-  const off = plain.flatMap((l, k) => (kindOn(run, k + 1) ? [] : [` · ${l.name} ${after(KIND_ACTS[k]!)}`]));
+  const on = DEALT.filter((k) => kindOn(run, k)).map((k) => SPECIAL_LOOKS[k - 1]!.name);
+  const off = DEALT.filter((k) => !kindOn(run, k)).map((k) => ` · ${SPECIAL_LOOKS[k - 1]!.name} ${after(KIND_ACTS[k - 1]!)}`);
   const armies = ARMIES.map((a, i) => {
     const locked = a.acts > run.best;
     const pressed = a.specials.every((n, k) => n === run.specials[k]);
@@ -804,11 +826,13 @@ const isInt = (v: unknown, max: number): v is number => Number.isInteger(v) && (
 const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MOVE_STRIDE && mv.every((v) => Number.isInteger(v));
 
 const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.length === n && v.every((x) => isInt(x, START_ARMY));
+/** Special marble counts of a save: 3 (before the upgrades), 6 (before the new four, #1461) or one per type. */
+const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length, SPECIAL_LOOKS.length].some((n) => isInts(v, n));
 
 /** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none, one
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
- * shop waiting. */
+ * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [] } =
@@ -821,7 +845,7 @@ function decodeRun(raw: unknown): Run | null {
     Array.isArray(moves) &&
     moves.every(isRecord) &&
     (end === '' || end === 'won' || end === 'lost') &&
-    (isInts(specials, PLAIN.length) || isInts(specials, SPECIAL_LOOKS.length)) &&
+    isCounts(specials) &&
     Array.isArray(placed) &&
     placed.every((p) => Array.isArray(p) && p.length === 3 && p.every((v) => Number.isInteger(v))) &&
     typeof reward === 'boolean' &&
