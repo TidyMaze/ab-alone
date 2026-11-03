@@ -166,7 +166,7 @@ for (const [look, query, [br, bg, bb], allowed] of [
   ['terrace', '', [11, 18, 32], 0],
 ] as const)
 test(`the widest zoom on a 32:9 screen shows no black background at its edges in the ${look} look, #976`, async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 540 });
+  await page.setViewportSize({ width: 960, height: 270 }); // 32:9 at a quarter of the pixels: the ratio sets the reach, the software tier draws it faster
   await page.goto(`./?bot=off&openworld=7${query}`);
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const box = (await page.locator('canvas:not(#openworld-minimap)').boundingBox())!;
