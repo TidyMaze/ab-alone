@@ -201,6 +201,18 @@ describe('RoyaleNet lobby', () => {
     expect(b.net.phase).toBe('choosing');
     expect([a.net.phase, other.net.phase]).toEqual(['lobby', 'lobby']);
   });
+
+  it('ignores a start that seats a key off the roster, or the same key twice', async () => {
+    const room = table();
+    const a = await room.join('a', 0);
+    const b = await room.join('b', 1);
+    const guest = await room.join('g', 2);
+    const stranger = await room.join('s', -1);
+    room.deliver(a, { kind: 'start', game: ROOM, round: 1, seats: [a.keys.pub, b.keys.pub, stranger.keys.pub, ''] });
+    room.deliver(a, { kind: 'start', game: ROOM, round: 1, seats: [a.keys.pub, b.keys.pub, b.keys.pub, ''] });
+    await room.settle();
+    expect([b.net.phase, guest.net.phase]).toEqual(['lobby', 'lobby']);
+  });
 });
 
 describe('RoyaleNet rounds', () => {

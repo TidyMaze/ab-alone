@@ -277,6 +277,8 @@ export class RoyaleNet<G extends NetGame> {
 
   private async started(m: Start, from: string): Promise<void> {
     if (!this.mayOpen(from) || m.seats.length !== this.o.roster().length) return;
+    const keys = m.seats.filter((k) => k !== '');
+    if (new Set(keys).size !== keys.length || !keys.every((k) => this.o.roster().includes(k))) return; // only keys of the room, each seated once
     this.seats ??= m.seats;
     if (m.round < this.round || (m.round === this.round && this.book)) return; // a round played or open here
     if (m.round === this.round) return this.openBook();
