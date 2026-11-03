@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import init, { Engine, replay_score } from 'abalone-wasm';
 import banned from './bannedkeys.json';
-import { BANNED, banSet, LIMIT, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import { BANNED, banSet, LIMIT, MIN_OPPONENTS, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
 import { generateKeys, type Keys } from './moverecord';
 
 // The replay is the real rules engine (crates/abalone-wasm replay_score), as antistalling.test.ts: Node's fetch cannot read a file:// URL.
@@ -130,15 +130,37 @@ describe('the shared board read side (#1287)', () => {
     const w = (game: string, ts: number, status: number, a = 'A', b = 'B'): SharedResult =>
       result({ game, ts, status, black: { pub: a, name: a }, white: { pub: b, name: b } });
     // A beats B, A beats C (white), then A and B draw.
-    const rows = deriveBoard([w('g3', 3, 3), w('g1', 1, 1), w('g2', 2, 2, 'C', 'A')]);
+    const rows = deriveBoard([w('g3', 3, 3), w('g1', 1, 1), w('g2', 2, 2, 'C', 'A')], 0);
     expect(rows.map((r) => [r.rank, r.pub, r.rating])).toEqual([[1, 'A', 1229], [2, 'B', 1186], [3, 'C', 1185]]);
     expect(deriveBoard([])).toEqual([]);
     // Two games at the same second: the game id orders them, whatever the order they arrived in.
     const same = [w('s2', 5, 1, 'P', 'Q'), w('s1', 5, 2, 'P', 'Q')];
-    expect(deriveBoard(same)).toEqual(deriveBoard([...same].reverse()));
+    expect(deriveBoard(same, 0)).toEqual(deriveBoard([...same].reverse(), 0));
     // Same rating: the name decides. The latest name a key gave is the one shown.
-    const tie = deriveBoard([w('t1', 1, 3, 'X', 'Y'), result({ game: 't2', ts: 2, status: 3, black: { pub: 'X', name: 'Zed' }, white: { pub: 'Y', name: 'Yan' } })]);
+    const tie = deriveBoard([w('t1', 1, 3, 'X', 'Y'), result({ game: 't2', ts: 2, status: 3, black: { pub: 'X', name: 'Zed' }, white: { pub: 'Y', name: 'Yan' } })], 0);
     expect(tie.map((r) => r.name)).toEqual(['Yan', 'Zed']);
+  });
+
+  it('counts at most 3 results a day for one pair of keys, in either colour, first ones first', () => {
+    const w = (game: string, ts: number, a = 'A', b = 'B'): SharedResult => result({ game, ts, status: 1, black: { pub: a, name: a }, white: { pub: b, name: b } });
+    const day = 86400;
+    const five = [w('1', 10), w('2', 20, 'B', 'A'), w('3', 30), w('4', 40), w('5', 50, 'B', 'A')];
+    expect(capPairs(five).map((r) => r.game)).toEqual(['1', '2', '3']);
+    expect(capPairs([...five].reverse()).map((r) => r.game)).toEqual(['1', '2', '3']);
+    // A new UTC day and another pair start again.
+    expect(capPairs([...five, w('6', day + 1), w('7', 60, 'A', 'C')]).map((r) => r.game)).toEqual(['1', '2', '3', '7', '6']);
+    expect(deriveBoard(five, 0).map((r) => r.rating)).toEqual(deriveBoard(five.slice(0, 3), 0).map((r) => r.rating));
+  });
+
+  it('ranks a key only after counted results against 5 distinct opponents', () => {
+    const w = (game: string, a: string, b: string): SharedResult => result({ game, ts: 1, status: 1, black: { pub: a, name: a }, white: { pub: b, name: b } });
+    const four = ['B', 'C', 'D', 'E'].map((o) => w(`g${o}`, 'A', o));
+    expect(deriveBoard(four)).toEqual([]);
+    const five = [...four, w('gF', 'A', 'F')];
+    expect(deriveBoard(five).map((r) => [r.rank, r.pub])).toEqual([[1, 'A']]);
+    // The same opponent three times in a day is one opponent.
+    expect(deriveBoard([...four, w('x1', 'A', 'B'), w('x2', 'A', 'B')])).toEqual([]);
+    expect(MIN_OPPONENTS).toBe(5);
   });
 
   it('shows the rows with names escaped, and mine marked', () => {
@@ -239,7 +261,7 @@ describe('reading the relays (#1287, read only)', () => {
       });
       return s;
     };
-    const rows = await readBoard(open, 1000, score);
+    const rows = await readBoard(open, 1000, score, RELAYS, new Set(), 0);
     expect(socks.map((s) => s.url)).toEqual([...RELAYS]);
     expect(rows.map((r) => r.name)).toEqual(ended.status === 2 ? ['Bob', 'Ann'] : ['Ann', 'Bob']);
     for (const s of socks) expect(s.sent.every((m) => ['REQ', 'CLOSE'].includes((JSON.parse(m) as string[])[0]!))).toBe(true);

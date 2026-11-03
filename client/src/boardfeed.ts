@@ -132,12 +132,32 @@ export async function verifiedResults(contents: readonly string[], score: Score,
   return kept;
 }
 
-/** Every rating from the valid results in order (time, then game), from the default rating: a rating anyone could write is never read. */
-export function deriveBoard(results: readonly SharedResult[]): SharedRow[] {
+/** At most this many results count for one unordered pair of keys in one UTC day: throwaway keys cannot farm each other. */
+export const PAIR_DAY_CAP = 3;
+/** A key is ranked only after counted results against this many distinct opponent keys. */
+export const MIN_OPPONENTS = 5;
+
+/** The results in order (time, then game) without the ones past `PAIR_DAY_CAP` for their pair of keys and UTC day: the first ones count. */
+export function capPairs(results: readonly SharedResult[]): SharedResult[] {
+  const count = new Map<string, number>();
+  return [...results]
+    .sort((a, b) => a.ts - b.ts || a.game.localeCompare(b.game))
+    .filter((r) => {
+      const key = JSON.stringify([[r.black.pub, r.white.pub].sort(), Math.floor(r.ts / 86400)]);
+      const n = (count.get(key) ?? 0) + 1;
+      count.set(key, n);
+      return n <= PAIR_DAY_CAP;
+    });
+}
+
+/** Every rating from the valid results in order (time, then game), from the default rating: a rating anyone could write is never read.
+ * The pair cap applies; only keys with counted results against `minOpponents` distinct opponents get a row. */
+export function deriveBoard(results: readonly SharedResult[], minOpponents = MIN_OPPONENTS): SharedRow[] {
   const ratings = new Map<string, number>();
   const names = new Map<string, string>();
-  const ordered = [...results].sort((a, b) => a.ts - b.ts || a.game.localeCompare(b.game));
-  for (const r of ordered) {
+  const opponents = new Map<string, Set<string>>();
+  const met = (a: string, b: string): void => void opponents.set(a, (opponents.get(a) ?? new Set<string>()).add(b));
+  for (const r of capPairs(results)) {
     const a = ratings.get(r.black.pub) ?? DEFAULT_RATING;
     const b = ratings.get(r.white.pub) ?? DEFAULT_RATING;
     const next = update1v1Elo(a, b, { 1: 1, 2: 0, 3: 0.5 }[r.status]!);
@@ -145,8 +165,11 @@ export function deriveBoard(results: readonly SharedResult[]): SharedRow[] {
     ratings.set(r.white.pub, next.ratingB);
     names.set(r.black.pub, r.black.name);
     names.set(r.white.pub, r.white.name);
+    met(r.black.pub, r.white.pub);
+    met(r.white.pub, r.black.pub);
   }
   return [...ratings]
+    .filter(([pub]) => opponents.get(pub)!.size >= minOpponents)
     .map(([pub, rating]) => ({ pub, name: names.get(pub)!, rating }))
     .sort((a, b) => b.rating - a.rating || (a.name < b.name ? -1 : 1))
     .map((r, i) => ({ rank: i + 1, ...r }));
@@ -212,7 +235,7 @@ export function readRelay(open: (url: string) => Socket, nowS: number, url = '')
 }
 
 /** The board: the three relays read, the results that replay kept, the ratings derived. Reads only. */
-export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS): Promise<SharedRow[]> {
+export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS, ban: ReadonlySet<string> = BANNED, minOpponents = MIN_OPPONENTS): Promise<SharedRow[]> {
   const all = await Promise.all(relays.map((url) => readRelay(open, nowS, url)));
-  return deriveBoard(await verifiedResults(all.flat(), score));
+  return deriveBoard(await verifiedResults(all.flat(), score, ban), minOpponents);
 }
