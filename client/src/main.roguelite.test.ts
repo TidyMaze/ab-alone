@@ -91,6 +91,23 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(again.hud()).toContain('Rogue-lite run · act 1 fight');
   });
 
+  it('a pick of a node plays the pick sound once the sound is on, and reports it for the tests (#1468)', async () => {
+    const game = await boot('?nodes=50&bot=off', { audio: true });
+    game.openModes();
+    byId('roguelite').click();
+    expect(document.body.dataset.pick).toBeUndefined();
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'a' })); // a gesture starts the sound
+    open()[0]!.click();
+    expect(document.body.dataset.pick).toBe('pick');
+    expect(game.hook('__audio')).toBe('running');
+  });
+
+  it('a pick is silent without a sound: nothing reported', async () => {
+    await startRun('?nodes=50&bot=off');
+    open()[0]!.click();
+    expect(document.body.dataset.pick).toBe('none');
+  });
+
   it('Auto-play plays the player side of a run fight, the bot answers, and a tactic held stays unplayed (#1489)', async () => {
     const game = await boot('?nodes=50');
     await game.hook('__run', pick({ ...plainRun(3, 3), tactics: [2, 3, 4] }, 0));

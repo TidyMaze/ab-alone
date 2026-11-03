@@ -23,6 +23,7 @@ import {
   ejectionVoices,
   knockPitch,
   knockVoices,
+  PICK,
   layerGains,
   tellVoices,
   type Bus,
@@ -96,8 +97,8 @@ describe('the mix: four buses into one master (world.md section 7, Mix; #438)', 
     expect(BUSES).toEqual(['music', 'ambience', 'effects', 'voice']);
   });
 
-  it('routes the hum to ambience, the drones to music, the knock, the ejection and the tells to effects, the audio logs to voice', () => {
-    expect(ROUTE).toEqual({ hum: 'ambience', tension: 'music', knock: 'effects', ejection: 'effects', tell: 'effects', log: 'voice' });
+  it('routes the hum to ambience, the drones to music, the knock, the ejection, the tells and the map pick to effects, the audio logs to voice', () => {
+    expect(ROUTE).toEqual({ hum: 'ambience', tension: 'music', knock: 'effects', ejection: 'effects', tell: 'effects', pick: 'effects', log: 'voice' });
   });
 
   it('turns a slider percentage into a gain: 0 silent, 100 full', () => {
@@ -252,6 +253,33 @@ describe('Sfx.knock, the move sound', () => {
     const before = ctx.sources.length;
     expect(sfx.knock(2)).toBeNull();
     expect(ctx.sources.length).toBe(before);
+  });
+});
+
+describe('Sfx.pick, the sound of a node picked on the rogue-lite map (#1468)', () => {
+  it('is a short soft rising blip, silent at both ends', () => {
+    expect(PICK.length).toBeGreaterThan(0);
+    for (const v of PICK) {
+      expect(start(v)).toBe(0);
+      expect(v.env.at(-1)![1]).toBe(0);
+      expect(end(v)).toBeLessThanOrEqual(0.3);
+      expect(peak(v)).toBeLessThanOrEqual(0.5);
+    }
+    expect(JSON.stringify(PICK)).not.toBe(JSON.stringify(tellVoices('blip'))); // not the Overseer's
+  });
+
+  it('stays silent before a gesture, plays once the sound is on, and is silent with the effects at 0', () => {
+    const { make, ctx, sfx } = setup();
+    expect(sfx.pick()).toBe(false);
+    expect(make).not.toHaveBeenCalled();
+    sfx.unlock();
+    const before = ctx.sources.length;
+    expect(sfx.pick()).toBe(true);
+    expect(ctx.sources.length).toBeGreaterThan(before);
+    sfx.setVolume('effects', 0);
+    const after = ctx.sources.length;
+    expect(sfx.pick()).toBe(false);
+    expect(ctx.sources.length).toBe(after);
   });
 });
 
