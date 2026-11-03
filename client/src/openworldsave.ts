@@ -50,6 +50,11 @@ export interface WorldSaves {
 const LAST = 'openworld:last';
 const keyOf = (seed: number): string => `openworld:${seed}`;
 
+/** The most broken cells and lair numbers a save holds, and how far (hex steps) a troop cell may be from the hero. */
+const MAX_BROKEN = 100_000;
+const MAX_LAIRS = 100_000;
+const TROOP_REACH = 20;
+
 /** The save in `raw` when it is a whole save of `seed` for `version`; `null` otherwise. */
 export function decodeWorld(raw: unknown, seed: number, version: number): WorldSave | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -59,12 +64,14 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
   const yaw = save.record === undefined ? 0 : save.yaw; // version 1: no turn yet (#1026)
   if (typeof yaw !== 'number' || !Number.isFinite(yaw)) return null;
   const broken = save.broken ?? []; // saved before the broken obstacles (#1147): none
-  if (!Array.isArray(broken) || !broken.every(isCell)) return null;
+  if (!Array.isArray(broken) || broken.length > MAX_BROKEN || !broken.every(isCell)) return null;
   const lairs = save.record === 3 || save.record === RECORD ? save.lairs : []; // saved before the lairs: none beaten (#1170)
-  if (!Array.isArray(lairs) || !lairs.every((n) => Number.isInteger(n) && n >= 0)) return null;
+  if (!Array.isArray(lairs) || lairs.length > MAX_LAIRS || !lairs.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_LAIRS)) return null;
   const discovered = decodeDiscovered(save.record === RECORD ? save.discovered : []); // saved before the discovery: none (#1411)
   if (!discovered) return null;
   if (!isCell(save.hero) || !Array.isArray(save.troop) || save.troop.length > TROOP || !save.troop.every(isCell)) return null;
+  const [hq, hr] = save.hero;
+  if (!save.troop.every(([q, r]) => Math.max(Math.abs(q! - hq!), Math.abs(r! - hr!), Math.abs(q! - hq! + r! - hr!)) <= TROOP_REACH)) return null; // the troop is the hero's trail
   const fight = decodeFight(save.fight);
   if (!fight || !Number.isFinite(save.savedAt)) return null;
   return {

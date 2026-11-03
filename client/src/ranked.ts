@@ -35,6 +35,11 @@ export function defaultRankedProfile(): RankedProfile {
   };
 }
 
+const isMatch = (x: unknown): x is RankedMatchRecord => {
+  const m = x as RankedMatchRecord | null;
+  return !!m && (m.mode === '1v1' || m.mode === 'royale') && isRating(m.newRating);
+};
+
 export function loadRankedProfile(store: RankedStore): RankedProfile {
   try {
     const raw = store?.getItem(RANKED_STORAGE_KEY);
@@ -44,9 +49,9 @@ export function loadRankedProfile(store: RankedStore): RankedProfile {
     if (parsed && parsed.version === 1) {
       return {
         version: 1,
-        rating1v1: typeof parsed.rating1v1 === 'number' ? parsed.rating1v1 : DEFAULT_RATING,
-        ratingRoyale: typeof parsed.ratingRoyale === 'number' ? parsed.ratingRoyale : DEFAULT_RATING,
-        matches: Array.isArray(parsed.matches) ? parsed.matches : [],
+        rating1v1: isRating(parsed.rating1v1) ? parsed.rating1v1 : DEFAULT_RATING,
+        ratingRoyale: isRating(parsed.ratingRoyale) ? parsed.ratingRoyale : DEFAULT_RATING,
+        matches: Array.isArray(parsed.matches) ? parsed.matches.filter(isMatch).slice(-MAX_MATCH_HISTORY) : [],
       };
     }
   } catch {
@@ -138,6 +143,8 @@ function reportOf(r: Report, other: Report): MatchReport {
 const RIVAL_SPREAD = 400;
 /** The rival's rating as listed on the local board: what it signed, within the range ratings can really have. */
 const RATING_RANGE: readonly [number, number] = [0, 3000];
+/** A stored rating: a finite number within the range ratings can really have. */
+export const isRating = (x: unknown): x is number => typeof x === 'number' && x >= RATING_RANGE[0] && x <= RATING_RANGE[1];
 
 /**
  * Settles a finished 1v1 ranked match from the two signed reports, ours and the opponent's (#1317). Both must agree

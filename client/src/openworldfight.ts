@@ -15,8 +15,11 @@ export interface FightSave {
   beaten: number;
 }
 
-/** Whether `raw` is a cell: two integers. */
-export const isCell = (raw: unknown): raw is Axial => Array.isArray(raw) && raw.length === 2 && raw.every((v) => Number.isSafeInteger(v));
+/** The farthest a cell of a save may be from the origin: far past any world a player walks, far below the integers the maths loses. */
+const CELL_MAX = 1_000_000;
+
+/** Whether `raw` is a cell: two integers within CELL_MAX. */
+export const isCell = (raw: unknown): raw is Axial => Array.isArray(raw) && raw.length === 2 && raw.every((v) => Number.isSafeInteger(v) && Math.abs(v) <= CELL_MAX);
 
 /** The saved form of a fight read back from `raw` (a save read from the store), `null` when it is not one. */
 export function decodeFight(raw: unknown): FightSave | null {
@@ -25,7 +28,7 @@ export function decodeFight(raw: unknown): FightSave | null {
   const keyed = (k: unknown): boolean => typeof k === 'string' && /^-?\d+,-?\d+$/.test(k);
   if (!Array.isArray(save.removed) || !save.removed.every(keyed)) return null;
   if (!Array.isArray(save.added) || !save.added.every(isCell)) return null;
-  if (!Number.isSafeInteger(save.beaten) || (save.beaten as number) < 0) return null;
+  if (!Number.isSafeInteger(save.beaten) || (save.beaten as number) < 0 || (save.beaten as number) > CELL_MAX) return null;
   return { removed: save.removed as string[], added: save.added as Axial[], beaten: save.beaten as number };
 }
 

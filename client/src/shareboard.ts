@@ -80,7 +80,7 @@ export const verifyRetire = (e: RetireEvent): Promise<boolean> => signedBy(e.pub
 export function readRetires(store: Store): RetireEvent[] {
   try {
     const saved = JSON.parse(read(store, RETIRE_KEY) ?? '') as { v?: number; events?: RetireEvent[] };
-    if (saved.v === RETIRE_VERSION && Array.isArray(saved.events)) return saved.events;
+    if (saved.v === RETIRE_VERSION && Array.isArray(saved.events)) return saved.events.filter((e) => !!e && typeof e.pub === 'string' && typeof e.sig === 'string' && Number.isSafeInteger(e.at));
   } catch {
     // none
   }

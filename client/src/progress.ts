@@ -4,6 +4,7 @@
 import { DECK_NAMES } from './deck';
 import { HUB_CELLS, START, type Spot } from './hub';
 import { read, write, type Store } from './quality';
+import { BOSS_IDS } from './tally';
 
 export interface Progress {
   at: Spot;
@@ -18,7 +19,8 @@ function parse(text: string): Progress | null {
     const { version, deck, cell, beaten } = JSON.parse(text) ?? {};
     const onMap = Array.isArray(cell) && cell.length === 2 && HUB_CELLS.some(([q, r]) => q === cell[0] && r === cell[1]);
     const bosses = Array.isArray(beaten) && beaten.every((id) => typeof id === 'string');
-    return version === VERSION && DECK_NAMES.includes(deck) && onMap && bosses ? { at: { deck, cell: [cell[0], cell[1]] }, beaten } : null;
+    const known = bosses ? [...new Set(beaten as string[])].filter((id) => (BOSS_IDS as readonly string[]).includes(id)) : []; // known bosses, once each
+    return version === VERSION && DECK_NAMES.includes(deck) && onMap && bosses ? { at: { deck, cell: [cell[0], cell[1]] }, beaten: known } : null;
   } catch {
     return null;
   }

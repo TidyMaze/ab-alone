@@ -71,9 +71,11 @@ export interface Socket {
 
 const isSide = (x: unknown): x is Side => {
   const s = x as Side | null;
-  return !!s && typeof s.pub === 'string' && typeof s.name === 'string';
+  return !!s && typeof s.pub === 'string' && s.pub.length <= MAX_ID && typeof s.name === 'string';
 };
-const isMove = (m: unknown): m is number[] => Array.isArray(m) && m.length === STRIDE && m.every((n) => Number.isInteger(n));
+const isMove = (m: unknown): m is number[] => Array.isArray(m) && m.length === STRIDE && m.every((n) => Number.isInteger(n) && n === (n | 0)); // int32, as the rules engine reads them
+/** The longest key or game id a result may carry (a key is 43 characters). */
+const MAX_ID = 64;
 
 /** The bytes both seats sign: the game, both keys and names, a SHA-256 of the move log, the score and the time. A seat that signs this
  * has agreed to be that key, under that name, in that game, with that outcome. A refusal to sign gives no result at all: an unsigned
@@ -103,11 +105,11 @@ export function parseResult(content: string): SharedResult | null {
   } catch {
     return null;
   }
-  if (!x || x.v !== 1 || typeof x.game !== 'string' || !isSide(x.black) || !isSide(x.white) || x.black.pub === x.white.pub) return null;
+  if (!x || x.v !== 1 || typeof x.game !== 'string' || x.game.length > MAX_ID || !isSide(x.black) || !isSide(x.white) || x.black.pub === x.white.pub) return null;
   if (!Array.isArray(x.moves) || x.moves.length > MAX_PLIES || !x.moves.every(isMove)) return null;
   if (x.status !== 1 && x.status !== 2 && x.status !== 3) return null;
   if (!Array.isArray(x.ejected) || x.ejected.length !== 2 || !x.ejected.every((n) => Number.isInteger(n))) return null;
-  if (typeof x.ts !== 'number' || !Number.isFinite(x.ts)) return null;
+  if (typeof x.ts !== 'number' || !Number.isFinite(x.ts) || Math.abs(x.ts) > 2 ** 40) return null;
   if (!x.sigs || typeof x.sigs.black !== 'string' || typeof x.sigs.white !== 'string') return null;
   return {
     sigs: { black: x.sigs.black, white: x.sigs.white },

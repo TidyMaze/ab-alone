@@ -1,4 +1,4 @@
-import { renderRankBadge, type RankedStore } from './ranked';
+import { isRating, renderRankBadge, type RankedStore } from './ranked';
 
 /** The 1v1 leaderboard a no-server game can show today (#1287): you, among the opponents whose signed reports you
  * settled a ranked match with. Their rating is the one they signed in that match, so it is "as last seen", not live. */
@@ -20,13 +20,13 @@ export interface BoardRow {
 
 const isRival = (x: unknown): x is Rival => {
   const r = x as Rival | null;
-  return !!r && typeof r.pub === 'string' && typeof r.rating === 'number' && typeof r.timestamp === 'number';
+  return !!r && typeof r.pub === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(r.pub) && isRating(r.rating) && typeof r.timestamp === 'number';
 };
 
 export function loadRivals(store: RankedStore): Rival[] {
   try {
     const parsed = JSON.parse(store?.getItem(RIVALS_STORAGE_KEY) ?? 'null') as { version?: number; rivals?: unknown } | null;
-    if (parsed?.version === 1 && Array.isArray(parsed.rivals)) return parsed.rivals.filter(isRival);
+    if (parsed?.version === 1 && Array.isArray(parsed.rivals)) return parsed.rivals.filter(isRival).slice(-MAX_RIVALS);
   } catch {
     // Malformed JSON or blocked storage: no opponents known
   }

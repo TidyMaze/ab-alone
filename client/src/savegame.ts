@@ -44,7 +44,7 @@ export function decodeGame(raw: unknown): LocalGame | null {
   if (save.version !== SAVE_VERSION || save.mode !== 'local' || save.stalker !== undefined) return null; // the old `stalker: true` mode is dropped
   if (!Array.isArray(save.moves) || !save.moves.every(isRecord)) return null;
   const moves = save.moves.map((mv) => [...mv]);
-  if (save.boss !== undefined) return save.boss === 'stalker' && typeof save.seed === 'number' ? { bot: true, moves, boss: { id: 'stalker', seed: save.seed } } : null;
+  if (save.boss !== undefined) return save.boss === 'stalker' && Number.isInteger(save.seed) && (save.seed as number) >= 0 && (save.seed as number) <= 0xffffffff ? { bot: true, moves, boss: { id: 'stalker', seed: save.seed as number } } : null;
   if (save.layout !== 'standard' || typeof save.bot !== 'boolean') return null;
   return { bot: save.bot, moves };
 }

@@ -29,9 +29,12 @@ function decodeBits(text: string): Uint8Array | null {
   }
 }
 
+/** The most chunks a save holds: a world a player explores for days stays far below. */
+const MAX_CHUNKS = 10_000;
+
 /** The save in `raw` when it is a list of chunks with whole coordinates and whole bitsets; `null` otherwise. */
 export function decodeDiscovered(raw: unknown): DiscoveredSave | null {
-  if (!Array.isArray(raw)) return null;
+  if (!Array.isArray(raw) || raw.length > MAX_CHUNKS) return null;
   const ok = raw.every(
     (entry) => Array.isArray(entry) && entry.length === 3 && Number.isInteger(entry[0]) && Number.isInteger(entry[1]) && typeof entry[2] === 'string' && decodeBits(entry[2]) !== null,
   );
