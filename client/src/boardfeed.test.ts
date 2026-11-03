@@ -316,4 +316,24 @@ describe('reading the relays (#1287, read only)', () => {
     expect(rows.map((r) => r.name)).toEqual(ended.status === 2 ? ['Bob', 'Ann'] : ['Ann', 'Bob']);
     for (const s of socks) expect(s.sent.every((m) => ['REQ', 'CLOSE'].includes((JSON.parse(m) as string[])[0]!))).toBe(true);
   });
+
+  it('ignores a result dated outside the window: far in the future, or older than 7 days', async () => {
+    const mk = async (game: string, ts: number) => JSON.stringify(await signed({ game, ts }));
+    const contents = [await mk('ok', 1000), await mk('future', 9e15), await mk('old', 1000 - WINDOW_S - 1), await mk('edge', 1000 + 600)];
+    const open = (url: string): Socket => {
+      const s = new Fake(url);
+      queueMicrotask(() => {
+        s.emit('open');
+        for (const c of contents) s.emit('message', event(c));
+        s.emit('message', JSON.stringify(['EOSE', 'ab-board']));
+      });
+      return s;
+    };
+    const rows = await readBoard(open, 1000, score, ['x'], new Set(), 1);
+    // two games between the same pair kept (ok, edge): the other two never reach the ratings
+    expect(rows.reduce((n, r) => n + r.rating, 0)).toBe(2400);
+    const only = await readBoard(open, 1000, score, ['x'], new Set(), 1);
+    expect(only).toHaveLength(2);
+    expect(await readBoard((url) => open(url), 1000 + 2 * WINDOW_S, score, ['x'], new Set(), 1)).toEqual([]);
+  });
 });
