@@ -1311,3 +1311,365 @@ mod relics {
         assert_eq!(NodeKind::Treasure as u8, 5);
     }
 }
+
+#[cfg(test)]
+mod new_specials {
+    use super::*;
+    use crate::board::Special::{self, Anchor, Bomb, Heavy, Magnet, Medic, Shield, Spark};
+    use crate::game::Outcome;
+    use crate::moves::Direction::{self, E, NW, SE, SW};
+    use crate::moves::{apply, legal_moves, Move, MoveError};
+    use crate::search::best_move;
+
+    type P = (i32, i32);
+
+    /// A rogue-lite board: Black and White marbles, then the special ones among them.
+    fn board(black: &[P], white: &[P], specials: &[(P, Special)]) -> Board {
+        let mut b = Board::empty();
+        b.set_rogue_lite();
+        for &(q, r) in black {
+            b.set(q, r, Cell::Black);
+        }
+        for &(q, r) in white {
+            b.set(q, r, Cell::White);
+        }
+        for &(cell, kind) in specials {
+            b.place_special(cell, kind).unwrap();
+        }
+        b
+    }
+
+    fn mv(cells: &[P], dir: Direction) -> Move {
+        Move {
+            cells: cells.to_vec(),
+            dir,
+        }
+    }
+
+    fn cells(b: &Board, cell: Cell) -> Vec<P> {
+        let mut v: Vec<P> = (-4..=4)
+            .flat_map(|q| (-4..=4).map(move |r| (q, r)))
+            .filter(|&(q, r)| b.get(q, r) == Some(cell))
+            .collect();
+        v.sort();
+        v
+    }
+
+    fn plays(b: &Board, player: Player, m: &Move) -> Board {
+        apply(b, player, m).unwrap().0
+    }
+
+    #[test]
+    fn a_magnet_that_moved_pulls_an_enemy_two_cells_away_one_cell_toward_it() {
+        // The Magnet steps from (0,0) to (1,0): the Heavy on (3,0) comes to (2,0) with its mark.
+        let b = board(
+            &[(0, 0), (-4, 4)],
+            &[(3, 0)],
+            &[((0, 0), Magnet), ((3, 0), Heavy)],
+        );
+        let after = plays(&b, Player::Black, &mv(&[(0, 0)], E));
+        assert_eq!(cells(&after, Cell::White), vec![(2, 0)]);
+        assert_eq!(after.specials(), [((1, 0), Magnet), ((2, 0), Heavy)]);
+        // An enemy next to it has no cell to come to, nor has one behind a marble.
+        let near = board(&[(0, 0), (-4, 4)], &[(2, 0)], &[((0, 0), Magnet)]);
+        let after = plays(&near, Player::Black, &mv(&[(0, 0)], E));
+        assert_eq!(cells(&after, Cell::White), vec![(2, 0)]);
+        let blocked = board(&[(0, 0), (2, 0)], &[(3, 0)], &[((0, 0), Magnet)]);
+        let after = plays(&blocked, Player::Black, &mv(&[(0, 0)], E));
+        assert_eq!(cells(&after, Cell::White), vec![(3, 0)]);
+        // Nor does it pull one of its own side.
+        let own = board(&[(0, 0), (3, 0)], &[(-4, 0)], &[((0, 0), Magnet)]);
+        let after = plays(&own, Player::Black, &mv(&[(0, 0)], E));
+        assert_eq!(cells(&after, Cell::Black), vec![(1, 0), (3, 0)]);
+    }
+
+    #[test]
+    fn a_magnet_pulls_one_enemy_only_the_first_in_direction_order() {
+        // From (0,0) two enemies are in line, to the west and to the east: the west one comes.
+        let b = board(&[(0, 1)], &[(-2, 0), (2, 0)], &[((0, 1), Magnet)]);
+        let after = plays(&b, Player::Black, &mv(&[(0, 1)], NW));
+        assert_eq!(cells(&after, Cell::White), vec![(-1, 0), (2, 0)]);
+    }
+
+    #[test]
+    fn a_magnet_that_did_not_move_does_not_pull() {
+        let b = board(&[(0, 0), (-4, 4)], &[(2, 0)], &[((0, 0), Magnet)]);
+        let after = plays(&b, Player::Black, &mv(&[(-4, 4)], NW));
+        assert_eq!(cells(&after, Cell::White), vec![(2, 0)]);
+    }
+
+    #[test]
+    fn a_magnet_moved_in_a_group_or_pushed_pulls_for_its_side() {
+        // The trio steps SE with the Magnet in the middle: (0,3) comes to (0,2).
+        let trio = [(-1, 0), (0, 0), (1, 0)];
+        let b = board(&trio, &[(0, 3)], &[((0, 0), Magnet)]);
+        let after = plays(&b, Player::Black, &mv(&trio, SE));
+        assert_eq!(cells(&after, Cell::White), vec![(0, 2)]);
+        assert_eq!(after.specials(), [((0, 1), Magnet)]);
+        // White pushes the army's Magnet from (-1,0) to (0,0): it pulls the White marble on (2,0).
+        let b = board(
+            &[(-1, 0)],
+            &[(-3, 0), (-2, 0), (2, 0)],
+            &[((-1, 0), Magnet)],
+        );
+        let after = plays(&b, Player::White, &mv(&[(-3, 0), (-2, 0)], E));
+        assert_eq!(cells(&after, Cell::Black), vec![(0, 0)]);
+        assert_eq!(cells(&after, Cell::White), vec![(-2, 0), (-1, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn the_enemys_magnet_pulls_the_armys_marble() {
+        let b = board(&[(3, 0)], &[(0, 0), (-4, 0)], &[((0, 0), Magnet)]);
+        let after = plays(&b, Player::White, &mv(&[(0, 0)], E));
+        assert_eq!(cells(&after, Cell::Black), vec![(2, 0)]);
+    }
+
+    #[test]
+    fn the_first_push_that_would_move_a_shield_fails_and_spends_it() {
+        let push = mv(&[(2, 0), (3, 0)], E);
+        let b = board(&[(2, 0), (3, 0)], &[(4, 0)], &[((4, 0), Shield)]);
+        assert!(legal_moves(&b, Player::Black).contains(&push));
+        let (after, ejected) = apply(&b, Player::Black, &push).unwrap();
+        assert!(!ejected);
+        assert_eq!(cells(&after, Cell::Black), vec![(2, 0), (3, 0)]);
+        assert_eq!(cells(&after, Cell::White), vec![(4, 0)]);
+        assert!(after.specials().is_empty(), "a plain marble now");
+        // The second push goes through.
+        let (after, ejected) = apply(&after, Player::Black, &push).unwrap();
+        assert!(ejected && cells(&after, Cell::White).is_empty());
+    }
+
+    #[test]
+    fn a_shield_in_the_pushed_line_stops_the_whole_push() {
+        let trio = [(0, 0), (1, 0), (2, 0)];
+        let b = board(&trio, &[(3, 0), (4, 0)], &[((3, 0), Shield)]);
+        let (after, ejected) = apply(&b, Player::Black, &mv(&trio, E)).unwrap();
+        assert!(!ejected);
+        assert_eq!(cells(&after, Cell::Black), trio.to_vec());
+        assert_eq!(cells(&after, Cell::White), vec![(3, 0), (4, 0)]);
+        assert!(after.specials().is_empty());
+        // The same on a free cell behind it, and a Shield outside the line keeps its mark.
+        let free = board(
+            &[(1, 0), (2, 0)],
+            &[(3, 0), (-4, 0)],
+            &[((3, 0), Shield), ((-4, 0), Shield)],
+        );
+        let after = plays(&free, Player::Black, &mv(&[(1, 0), (2, 0)], E));
+        assert_eq!(cells(&after, Cell::White), vec![(-4, 0), (3, 0)]);
+        assert_eq!(after.specials(), [((-4, 0), Shield)]);
+    }
+
+    #[test]
+    fn a_shield_moves_itself_and_both_sides_hold_one() {
+        let b = board(&[(0, 0)], &[(4, 0)], &[((0, 0), Shield)]);
+        let after = plays(&b, Player::Black, &mv(&[(0, 0)], SE));
+        assert_eq!(after.specials(), [((0, 1), Shield)]);
+        // White's push on the army's Shield fails too.
+        let b = board(&[(2, 0)], &[(0, 0), (1, 0)], &[((2, 0), Shield)]);
+        let after = plays(&b, Player::White, &mv(&[(0, 0), (1, 0)], E));
+        assert_eq!(cells(&after, Cell::Black), vec![(2, 0)]);
+        assert!(after.specials().is_empty());
+    }
+
+    #[test]
+    fn a_push_into_a_shield_still_needs_the_strength() {
+        let b = board(&[(0, 0)], &[(1, 0)], &[((1, 0), Shield)]);
+        assert_eq!(
+            apply(&b, Player::Black, &mv(&[(0, 0)], E)),
+            Err(MoveError::NotStrongEnough)
+        );
+    }
+
+    #[test]
+    fn a_failed_push_into_a_shield_keeps_the_gyroscope_and_passes_the_turn() {
+        let pair = mv(&[(0, 0), (1, 0)], E);
+        let mut b = board(&[(0, 0), (1, 0)], &[(2, 0), (3, 0)], &[((2, 0), Shield)]);
+        b.set_relics(&[Relic::Gyroscope]).unwrap();
+        let mut game = Game::from_position(b, Player::Black, [0, 0]);
+        game.play(&pair).unwrap();
+        assert!(
+            game.board().has_relic(Relic::Gyroscope),
+            "a tie that failed"
+        );
+        assert_eq!(game.to_move(), Player::White);
+        assert_eq!(game.history().len(), 1);
+        assert!(game.board().specials().is_empty());
+        assert_eq!(game.ejected(Player::Black), 0);
+    }
+
+    #[test]
+    fn a_bomb_bursts_at_the_end_of_its_sides_third_turn_and_is_gone() {
+        // The Bomb on (3,0) throws (4,0) and (4,-1) off the rim and pushes (2,1) away.
+        let b = board(
+            &[(3, 0), (-4, 4)],
+            &[(4, 0), (4, -1), (2, 1), (4, -4)],
+            &[((3, 0), Bomb(3))],
+        );
+        let b = plays(&b, Player::Black, &mv(&[(-4, 4)], NW));
+        assert_eq!(b.special((3, 0)), Some(Bomb(2)));
+        let b = plays(&b, Player::White, &mv(&[(4, -4)], SW));
+        assert_eq!(b.special((3, 0)), Some(Bomb(2)), "White's turn: no tick");
+        let b = plays(&b, Player::Black, &mv(&[(-4, 3)], NW));
+        assert_eq!(b.special((3, 0)), Some(Bomb(1)));
+        let b = plays(&b, Player::White, &mv(&[(3, -3)], SW));
+        let (after, ejected) = apply(&b, Player::Black, &mv(&[(-4, 2)], NW)).unwrap();
+        assert!(ejected, "a marble left the board");
+        assert_eq!(cells(&after, Cell::Black), vec![(-4, 1)]);
+        assert_eq!(cells(&after, Cell::White), vec![(1, 2), (2, -2)]);
+        assert!(after.specials().is_empty());
+        // Two White marbles out for Black, the Bomb's own marble out for White.
+        assert_eq!(credits(&b, Player::Black, ejected, &after), [2, 1]);
+    }
+
+    #[test]
+    fn a_bomb_keeps_its_fuse_when_it_moves() {
+        let b = board(&[(0, 0), (-4, 4)], &[(4, 0)], &[((0, 0), Bomb(3))]);
+        let after = plays(&b, Player::Black, &mv(&[(0, 0)], SE));
+        assert_eq!(after.specials(), [((0, 1), Bomb(2))]);
+        // Pushed by the other side, it keeps its fuse too.
+        let b = board(&[(2, 0)], &[(0, 0), (1, 0)], &[((2, 0), Bomb(2))]);
+        let after = plays(&b, Player::White, &mv(&[(0, 0), (1, 0)], E));
+        assert_eq!(after.specials(), [((3, 0), Bomb(2))]);
+    }
+
+    #[test]
+    fn each_side_burns_only_its_own_bombs() {
+        let b = board(&[(-4, 4)], &[(4, -4), (4, 0)], &[((4, 0), Bomb(3))]);
+        let after = plays(&b, Player::Black, &mv(&[(-4, 4)], NW));
+        assert_eq!(after.special((4, 0)), Some(Bomb(3)));
+        let after = plays(&after, Player::White, &mv(&[(4, -4)], SW));
+        assert_eq!(after.special((4, 0)), Some(Bomb(2)));
+    }
+
+    #[test]
+    fn a_bombs_burst_does_not_chain_and_an_anchor_stays() {
+        // The Bomb on (3,-1) throws the Spark on (4,-2) off, which does not burst: (4,-3) stays.
+        let b = board(
+            &[(3, -1), (-4, 4)],
+            &[(4, -2), (4, -3), (4, -1), (2, 0)],
+            &[
+                ((3, -1), Bomb(1)),
+                ((4, -2), Spark),
+                ((4, -1), Anchor),
+                ((2, 0), Bomb(2)),
+            ],
+        );
+        let (after, ejected) = apply(&b, Player::Black, &mv(&[(-4, 4)], NW)).unwrap();
+        assert!(ejected);
+        assert_eq!(cells(&after, Cell::White), vec![(1, 1), (4, -3), (4, -1)]);
+        // The Anchor stays and the other Bomb is moved with its fuse.
+        assert_eq!(after.specials(), [((1, 1), Bomb(2)), ((4, -1), Anchor)]);
+    }
+
+    #[test]
+    fn a_bomb_that_throws_the_armys_own_marbles_off_can_lose_the_fight() {
+        let b = board(&[(3, 0), (4, 0), (-4, 4)], &[(0, 0)], &[((3, 0), Bomb(1))]);
+        let mut game = Game::from_position(b, Player::Black, [0, 0]).with_win([6, 2]);
+        game.play(&mv(&[(-4, 4)], NW)).unwrap();
+        assert_eq!(game.ejected(Player::White), 2);
+        assert_eq!(game.outcome(), Some(Outcome::Win(Player::White)));
+    }
+
+    #[test]
+    fn the_bot_moves_its_bomb_next_to_the_marbles_it_throws_off() {
+        // The Bomb bursts after the next move wherever it stands: from (3,0) it takes (4,0) and (4,-1).
+        let b = board(
+            &[(2, 0), (-4, 4)],
+            &[(4, 0), (4, -1), (-4, 0)],
+            &[((2, 0), Bomb(1))],
+        );
+        let mut game = Game::from_position(b, Player::Black, [0, 0]);
+        let found = best_move(&game, 3000).unwrap();
+        assert_eq!(found, mv(&[(2, 0)], E));
+        game.play(&found).unwrap();
+        assert_eq!(game.ejected(Player::Black), 2);
+    }
+
+    #[test]
+    fn a_medic_thrown_off_comes_back_on_the_first_free_cell_of_its_back_row() {
+        let push = mv(&[(2, 0), (3, 0)], E);
+        let b = board(&[(4, 0)], &[(2, 0), (3, 0)], &[((4, 0), Medic)]);
+        let (after, ejected) = apply(&b, Player::White, &push).unwrap();
+        assert!(ejected);
+        assert_eq!(cells(&after, Cell::Black), vec![(-4, 4)]);
+        assert!(after.specials().is_empty(), "plain once back");
+        assert_eq!(credits(&b, Player::White, ejected, &after), [0, 0]);
+        // The next free cell when the first is taken.
+        let b = board(
+            &[(4, 0), (-4, 4), (-3, 4)],
+            &[(2, 0), (3, 0)],
+            &[((4, 0), Medic)],
+        );
+        let after = plays(&b, Player::White, &push);
+        assert_eq!(cells(&after, Cell::Black), vec![(-4, 4), (-3, 4), (-2, 4)]);
+        // A Medic that is only pushed along keeps its mark.
+        let b = board(&[(3, 0)], &[(1, 0), (2, 0)], &[((3, 0), Medic)]);
+        let after = plays(&b, Player::White, &push_of(1));
+        assert_eq!(after.specials(), [((4, 0), Medic)]);
+    }
+
+    fn push_of(q: i32) -> Move {
+        mv(&[(q, 0), (q + 1, 0)], E)
+    }
+
+    #[test]
+    fn a_medic_of_the_bot_comes_back_on_its_own_back_row() {
+        let b = board(&[(2, -2), (3, -2)], &[(4, -2)], &[((4, -2), Medic)]);
+        let after = plays(&b, Player::Black, &mv(&[(2, -2), (3, -2)], E));
+        assert_eq!(cells(&after, Cell::White), vec![(4, -4)]);
+        assert_eq!(cells(&after, Cell::Black), vec![(3, -2), (4, -2)]);
+    }
+
+    #[test]
+    fn a_medic_with_no_free_cell_in_the_back_row_is_lost() {
+        let back = [(-4, 4), (-3, 4), (-2, 4), (-1, 4), (0, 4)];
+        let mut black = back.to_vec();
+        black.push((4, 0));
+        let b = board(&black, &[(2, 0), (3, 0)], &[((4, 0), Medic)]);
+        let (after, ejected) = apply(&b, Player::White, &mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(cells(&after, Cell::Black), back.to_vec());
+        assert_eq!(credits(&b, Player::White, ejected, &after), [0, 1]);
+    }
+
+    #[test]
+    fn a_medic_thrown_off_by_a_burst_comes_back_too() {
+        // White pushes the army's Spark off from (4,-1): the burst throws the Medic on (4,0) off.
+        let b = board(
+            &[(4, -1), (4, 0)],
+            &[(2, -1), (3, -1)],
+            &[((4, -1), Spark), ((4, 0), Medic)],
+        );
+        let (after, ejected) = apply(&b, Player::White, &mv(&[(2, -1), (3, -1)], E)).unwrap();
+        assert_eq!(cells(&after, Cell::Black), vec![(-4, 4)]);
+        assert!(after.specials().is_empty());
+        assert_eq!(credits(&b, Player::White, ejected, &after), [0, 1]);
+    }
+
+    #[test]
+    fn two_medics_thrown_off_by_a_bomb_both_come_back() {
+        let b = board(
+            &[(3, 0), (4, 0), (4, -1), (0, 0)],
+            &[(-4, 0)],
+            &[((3, 0), Bomb(1)), ((4, 0), Medic), ((4, -1), Medic)],
+        );
+        let (after, ejected) = apply(&b, Player::Black, &mv(&[(0, 0)], E)).unwrap();
+        assert!(ejected);
+        assert_eq!(cells(&after, Cell::Black), vec![(-4, 4), (-3, 4), (1, 0)]);
+        assert!(after.specials().is_empty());
+        assert_eq!(credits(&b, Player::Black, ejected, &after), [0, 1]);
+    }
+
+    #[test]
+    fn the_fuse_is_part_of_the_position_and_a_fight_is_the_same_every_time() {
+        let play = |fuse| {
+            let b = board(&[(0, 0), (-4, 4)], &[(4, 0)], &[((0, 0), Bomb(fuse))]);
+            let mut game = Game::from_position(b, Player::Black, [0, 0]);
+            game.play(&mv(&[(-4, 4)], NW)).unwrap();
+            game
+        };
+        assert_ne!(play(3).history()[0].hash, play(2).history()[0].hash);
+        let (a, b) = (play(3), play(3));
+        assert_eq!(a.board(), b.board());
+        assert_eq!(a.history(), b.history());
+    }
+}

@@ -214,12 +214,18 @@ mod tests {
             (Special::HeavyPlus, 4),
             (Special::AnchorPlus, 5),
             (Special::SparkPlus, 6),
+            (Special::Magnet, 7),
+            (Special::Shield, 8),
+            (Special::Bomb(FUSE), 9),
+            (Special::Medic, 10),
         ] {
             assert_eq!(special_code(kind), code);
             assert_eq!(special(code), Some(kind));
         }
+        // A Bomb is code 9 whatever its fuse, and starts with the full one.
+        assert_eq!(special_code(Special::Bomb(1)), 9);
         assert_eq!(special(0), None);
-        assert_eq!(special(7), None);
+        assert_eq!(special(11), None);
     }
 
     #[test]

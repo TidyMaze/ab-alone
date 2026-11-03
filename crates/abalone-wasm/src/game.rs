@@ -252,9 +252,17 @@ mod tests {
         // The upgraded types (#1458): Heavy+ 4, Anchor+ 5, Spark+ 6.
         assert_eq!(engine.place_special(1, 3, 6), Ok(()));
         assert_eq!(engine.specials()[9..], [1, 3, 6]);
+        // Magnet 7, Shield 8, Bomb 9 and Medic 10 (#1461).
+        for (i, kind) in (7..=10).enumerate() {
+            assert_eq!(engine.place_special(i as i32 - 4, 4, kind), Ok(()));
+        }
         assert_eq!(
-            engine.place_special(0, 4, 7),
-            Err("unknown kind 7".to_string())
+            engine.specials()[..12],
+            [-4, 4, 7, -3, 4, 8, -2, 4, 9, -1, 4, 10]
+        );
+        assert_eq!(
+            engine.place_special(0, 4, 11),
+            Err("unknown kind 11".to_string())
         );
         assert_eq!(engine.place_special(0, 0, 1), Err("NoMarble".to_string()));
         let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
@@ -284,10 +292,18 @@ mod tests {
 
     #[test]
     fn the_same_fight_gives_the_same_game_through_the_bridge() {
-        // Two Sparks and a Heavy in a bot game: the same placement and moves give the same game.
+        // Two Sparks, a Heavy, a Magnet, a Shield, a Bomb and a Medic in a bot game: the same placement and moves give the same game.
         let run = || {
             let mut engine = Engine::with_army(14, 14);
-            for (q, r, kind) in [(-4, 4, 3), (4, -4, 3), (0, 2, 1)] {
+            for (q, r, kind) in [
+                (-4, 4, 3),
+                (4, -4, 3),
+                (0, 2, 1),
+                (-2, 4, 7),
+                (-1, 3, 8),
+                (-3, 3, 9),
+                (1, 3, 10),
+            ] {
                 engine.place_special(q, r, kind).unwrap();
             }
             for _ in 0..40 {
