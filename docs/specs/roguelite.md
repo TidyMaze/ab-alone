@@ -183,7 +183,8 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 
 - **Act boss**: a boss of the roster (the bridge's `boss_ids`), dealt by the run seed, a new one each
   act, played as from the boss menu (`Encounter`, its deck, view and rules, its own layout: the army
-  count and the special marbles stay off its board) at its act's strength: the boss's search budget
+  count stays off its board; the army's special marbles, relics and tactics come into the fights of the
+  bosses that take them, section 28) at its act's strength: the boss's search budget
   at 50 %, 100 % and 200 % (the difficulty setting's easy, normal and hard) for acts 1, 2 and 3,
   whatever the setting. Its seed comes from the run seed and the node. Lost (a draw too), the run is
   lost; won, the army loses the marbles the boss ejected and the run goes on (the reward screen), or
@@ -335,8 +336,8 @@ Decision #934) and loses one when it is played.
   3:1 on the plate in both themes), its name and rule as its tooltip (and its accessible name). A tactic the
   engine cannot play now is disabled and dimmed, all of them during the placement of special marbles and a
   replay, and when the bot is to move. Swap is pressed, then the army's two marbles; pressing Swap again
-  cancels, and two marbles that cannot swap say so in the HUD line. Act boss fights (an `Encounter`, not an
-  army fight) have no tactics for now.
+  cancels, and two marbles that cannot swap say so in the HUD line. Act boss fights (an `Encounter`) play
+  Reinforce and Fall back only, in the bosses that take the build (section 28).
 - **Saving**: the tactics held are saved with the run (`tactics`, the codes in the order gained); a run saved
   before this change loads with none. A Field manual waiting in a save made before this change may show
   another event, as the pool grew.
@@ -834,7 +835,7 @@ carries between runs (Decision #934): nothing here is kept after the run.
 - **The MCP server** (section 19): the screen `scroll` with one option per scroll (`Force 1 (Heavy, Heavy+): Heavy and Heavy+ weigh 1
   more in a push`), and `affinities` in the run state once a scroll was taken.
 - **Turn it against the bot**: the bot's marbles keep the rules of sections 5 and 13; the player's scrolls are their edge against
-  fights and elites of the acts to come (a boss fight has no special marble of the army, so the scrolls change nothing there).
+  fights and elites of the acts to come, and in the act bosses that take the army's build (section 28).
 
 ## 24. The cursed chest (#1474)
 
@@ -965,3 +966,48 @@ runs (Decision #934): a branch is one more way across an act, never a stronger a
   last option of the exit screen (`Secret exit · ...`) and a run over lists the runes it found in `unlocked`.
 - **Turn it against the bot**: nothing here changes a fight; the hidden branches are the player's routes (a treasure sooner, a row
   less of fights, one more biome to choose), the bot stays the bot of its node.
+
+## 28. The build in an act boss fight (#1494)
+
+The special marbles, relics, affinities and tactics a run built over its act count in its hardest fight too. An act boss fight
+(`Encounter`) carries them as an army fight does, inside the boss's own rules.
+
+- **What carries**: the rogue-lite flag of section 5 on the boss's board (`Encounter::equip`: `Game::set_rogue_lite`, then the relics
+  and the affinity levels of `Engine::set_relics`), the army's special marbles placed on its Black marbles before the first move
+  (`place_special`), and the tactics. Their rules, the Gyroscope and the Detonator, and the affinities' bonuses are the engine's
+  and play on the army's marbles as in a fight. The boss's search plays the same moves and rules (it searches the game the
+  `Encounter` holds, as the bot does in a fight), so it pushes, avoids and answers the Heavies, Anchors, Sparks and the rest. Boss-only
+  relic effects (section 22: the Dampener, the War banner, the Boss breaker) are the page's and unchanged.
+- **Which bosses take it**: those that play standard Abalone on their board with hooks that only remove marbles, because a special
+  mark moves with its marble and a hook that moves marbles would leave it behind: **The Hull, The Chaplain, The Alien, The Rail
+  Yard, The Overseer and The Stalker** (`takes_build` on the bridge, one flag per boss in the roster). A hook that removes a marble
+  (a crack that vanishes a cell, a train, an incinerator, the Chaplain's martyr) takes its mark with it (`Board::set` to Empty and
+  `Board::void` drop the mark of the cell). The Chaplain's conversion keeps the mark on the marble, so a converted Heavy is the
+  boss's. **The others fight as before** (no placement, no special marble, no tactic bar), each for its own reason: The Echo (its
+  free moves and memory of moves), The Choir and The Swarm (their own fights, not a plain `Encounter`), The Magnetizer, The
+  Pulsar, The Assembly Line, The Unstable Core, The Dual Room and The Ballast Mind (their pulses, belts, repulsions, shockwaves,
+  rooms and borrowed effects move or replace marbles, and The Unstable Core's weighted push already is a rule of its own).
+- **Placement**: a run with special marbles shows the placement of section 6 on the boss's board before the first move, on the
+  army's marbles of that board (the Black ones: the layout is the boss's own, so a placement made for an army fight does not
+  carry). A boss that takes no build starts its fight at once. The `placed` of the run are saved with it.
+- **Tactics**: Reinforce (a marble joins the first free cell of the standard back row) and Fall back (the player's last move and
+  the boss's answer are undone, with what the hooks of those plies showed) are played as in section 11. Freeze and Swap are not
+  played in a boss fight (`TacticError::BossClock`, disabled in the bar): they skip a turn, and every boss counts its clock in
+  plies (its cracks, trains, eggs, pulses and waves fire on the player's plies and the boss's), which a skipped ply would break.
+  A tactic record joins the move list as in section 11, `Encounter.play` takes it, and the bot's worker, the replay and the save
+  play it again. A boss wins at its own count (6): Reinforce does not move it.
+- **Special marbles kept**: the army's special marbles still on the board at the end of the boss fight are kept, as after a fight
+  (`armyKept`); a boss that takes no build leaves them all.
+- **Saving**: nothing new is saved, the `placed` and the tactics of the run already are. A run saved in an act boss fight before this
+  change loads as it was: its moves replay on the boss with the relics of the run (the Gyroscope only adds legal pushes), no special
+  marble was placed and the tactics held can be played from the next turn. Deterministic: the same seed, placement and moves give
+  the same fight. `engine_version` is unchanged: no game of another mode changes.
+- **The bridge**: `Encounter.takes_build()`, `set_relics(mask)` (the mask of `Engine::set_relics`; it turns the flag on), then
+  `place_special(q, r, kind)`, `specials()`, `fuses()` and `tactics()` (the mask of `Engine::tactics`, only Reinforce and Fall back),
+  and `play` takes a tactic record. An `Err` for a boss that takes no build. The client builds the fight with `encounterFor`
+  (`client/src/bot.ts`, shared by the page and the bot's worker).
+- **The MCP server** (section 19): `run_pick` on an act boss that takes the build shows the `place` screen, `run_place` puts the
+  marbles on the boss's board, `run_tactic` plays Reinforce and Fall back (`illegal_move`, the tactic kept, for the others), and
+  `save_run` carries the same.
+- **Turn it against the boss**: the build is the player's edge in the fight, and the boss gets none of it, but a converted special
+  marble (The Chaplain) is the boss's, and the player's Heavies and Anchors push and block the boss's marbles as they do the bot's.

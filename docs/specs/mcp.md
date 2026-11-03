@@ -329,9 +329,9 @@ An agent plays a rogue-lite run (`roguelite.md` section 19) with eight tools. Ev
 | `new_run` | `seed` default 0, `best` 0 to 3, `unlocked` (blueprint ids), `commander` 0 to 3 (default the Captain), `bot_nodes`, or `save` | the run state; drops the run in progress |
 | `run_state` | `map` (also list every node) | the run state |
 | `run_pick` | `node` | the run state: the node's screen, or its fight started as the session's game |
-| `run_place` | `q`, `r`, `kind` (Heavy, Anchor, Spark, ...) | the run state, the fight restarted with the marble placed (or taken back) |
+| `run_place` | `q`, `r`, `kind` (Heavy, Anchor, Spark, ...) | the run state, the fight restarted with the marble placed (or taken back); in an army fight or an act boss that takes the build (`roguelite.md` section 28) |
 | `run_choose` | `choice` (an option number) | the run state |
-| `run_tactic` | `tactic` (Reinforce, Freeze, Swap, Fall back), `a`, `b` (a Swap's two cells) | `{ played, reply, state }` |
+| `run_tactic` | `tactic` (Reinforce, Freeze, Swap, Fall back), `a`, `b` (a Swap's two cells) | `{ played, reply, state }`; an act boss plays Reinforce and Fall back only |
 | `run_flask` | none | the run state, a flask drunk on the map (3 marbles back, a charge spent; `roguelite.md` section 25) |
 | `save_run` | none | the run in the client's save format |
 
