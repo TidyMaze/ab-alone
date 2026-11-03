@@ -267,6 +267,7 @@ export class OnlineSession {
     this.queue = this.queue.then(async () => {
       if (this.current !== 'player') return;
       this.o.transport.send(await this.now.log.sign(this.o.keys, move));
+      this.deliverHeld();
     });
     return this.queue;
   }
@@ -360,6 +361,7 @@ export class OnlineSession {
     }
     await this.now.log.append(r);
     this.o.onMove(r.move);
+    this.deliverHeld();
     await this.restartIfAgreed(); // the asks may have come before the last move
   }
 
@@ -380,8 +382,18 @@ export class OnlineSession {
     const seat = this.seats.seatOf(r.pub);
     if (seat === 0 || r.pub === this.o.keys.pub) return this.o.onRefuse('wrong-key');
     if (r.side !== colourOf(seat, this.games.length - 1, this.seats.count)) return this.o.onRefuse('bad-report');
-    if (this.o.judge.status() === 0) return this.o.onRefuse('bad-report'); // a report says a result: a game still running has none
-    this.o.onReport?.(r);
+    this.held = r; // a report says a result: it is passed on once our game is over too (it may arrive just before the last move)
+    this.deliverHeld();
+  }
+
+  private held: Report | null = null;
+  /** Passes the held report on when its game is over here. A new game drops it. */
+  private deliverHeld(): void {
+    const r = this.held;
+    if (r && this.o.judge.status() !== 0) {
+      this.held = null;
+      this.o.onReport?.(r);
+    }
   }
 
   /** A record or an ask we missed: checked exactly as a live one. One we already have came from another
@@ -423,6 +435,7 @@ export class OnlineSession {
 
   private async restartIfAgreed(): Promise<void> {
     if (this.o.judge.status() === 0 || !this.seats.roster().every((pub) => this.now.asks.has(pub))) return;
+    this.held = null;
     this.games.push(this.newGame(await nextGameId(this.now.id)));
     this.o.judge.restart();
     this.o.onRematch?.();

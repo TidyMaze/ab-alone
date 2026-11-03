@@ -1565,6 +1565,16 @@ describe('OnlineSession match reports, #1317', { timeout: 30_000 }, () => {
     await until(() => expect(black.reports).toEqual([good]));
   });
 
+  it('holds a report that arrives just before the last move and passes it on once the game is over', async () => {
+    const { r, black, white } = await hostWithWhite();
+    const early = await signReport(white, { game: 'g', ...ours, side: 2 });
+    r.from('b', early);
+    await new Promise((done) => setTimeout(done, 30));
+    expect(black.reports).toEqual([]); // the game still runs here
+    await blackWins(black);
+    await until(() => expect(black.reports).toEqual([early]));
+  });
+
   it('ignores a report when the session has no onReport', async () => {
     const r = room();
     const black = new OnlineSession({
