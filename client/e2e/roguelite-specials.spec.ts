@@ -20,13 +20,13 @@ test('the rogue-lite special marbles: placement, looks and reward, #961', async 
   await panel.getByRole('button', { name: /Heavy/ }).click();
   await page.evaluate(() => (window as any).__click(0, 4));
   await expect(panel.getByRole('button', { name: /Heavy/ })).toHaveText('Heavy · 2 left');
-  expect(await marks()).toBe('0,4,1');
+  await expect.poll(marks).toBe('0,4,1'); // set by the next draw
   await freshDraw(page);
   await shot(page, { path: 'test-results/roguelite-placement.png' });
   await page.reload();
   await page.waitForFunction(() => (window as any).__run);
   await expect(panel.locator('.run-line')).toHaveText('Place your special marbles');
-  expect(await marks()).toBe('0,4,1');
+  await expect.poll(marks).toBe('0,4,1'); // set by the next draw
 
   // The three looks, the fight on: its first move closes the placement.
   const placed = [[0, 4, 1], [-1, 4, 1], [1, 3, 2], [-2, 4, 2], [-2, 2, 3], [-1, 3, 3]];
@@ -37,7 +37,7 @@ test('the rogue-lite special marbles: placement, looks and reward, #961', async 
     w.__click(0, 1);
   });
   await expect(panel).toBeHidden();
-  expect((await marks())!.split(' ')).toHaveLength(6);
+  await expect.poll(async () => (await marks())!.split(' ').length).toBe(6);
   await freshDraw(page);
   await shot(page, { path: 'test-results/roguelite-specials.png' });
 
