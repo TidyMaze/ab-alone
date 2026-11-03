@@ -28,7 +28,7 @@ import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consen
 import { readBoard, sharedHtml, type SharedResult } from './boardfeed';
 import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
-import { BOARD_TEXT, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
+import { BOARD_TEXT, publishFlag, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -5430,7 +5430,7 @@ function sealed(step: Step): void {
   if (step.send) link?.send(step.send);
   if (step.result) {
     sealedResult = step.result; // both seats signed it: it goes to the relays, a relay that refuses only means it is not on the board
-    void publishResult((url) => new WebSocket(url), step.result, Math.floor(Date.now() / 1000));
+    if (publishFlag(location.search)) void publishResult((url) => new WebSocket(url), step.result, Math.floor(Date.now() / 1000));
   }
 }
 /** The pair of reports agreed: our intro goes out, and the final is offered to the seal. */

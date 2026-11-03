@@ -266,7 +266,7 @@ describe('Play online', () => {
   });
 
   /** A ranked draw with a White opponent that listens for seals (#1287). `whiteJoins`: the opponent plays under a board key too. */
-  async function sealedDraw(joined: boolean, whiteJoins: boolean) {
+  async function sealedDraw(joined: boolean, whiteJoins: boolean, search = '?bot=off&board=publish') {
     const relays: { url: string; sent: string[] }[] = [];
     // The relays are stubs, whatever the page opens: a test never reaches a real one.
     vi.stubGlobal('WebSocket', class { // eslint-disable-line @typescript-eslint/no-extraneous-class
@@ -285,7 +285,7 @@ describe('Play online', () => {
       }
       close(): void {}
     });
-    const game = await boot('?bot=off&board');
+    const game = await boot(search);
     localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 3, choice: joined ? 'joined' : 'declined' }));
     game.openModes();
     byId('ranked').click();
@@ -324,6 +324,13 @@ describe('Play online', () => {
     expect(mine).toMatchObject({ status: 3, ejected: [0, 0] });
     expect(mine.moves).toHaveLength(8);
     expect(heard.map((s) => s.step)).toEqual(['intro', 'result']);
+  });
+
+  it('plain ?board signs but never writes to a relay: publishing needs ?board=publish (#1287)', async () => {
+    const { game, relays } = await sealedDraw(true, true, '?bot=off&board');
+    await until(game, () => game.hook('__sealed') !== null);
+    await game.settle();
+    expect(relays).toEqual([]);
   });
 
   it('a seat that did not join sends no seal and takes none: nothing is signed (#1287)', async () => {

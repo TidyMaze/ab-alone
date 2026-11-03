@@ -63,6 +63,10 @@ export function sendEvent(open: (url: string) => Socket, url: string, event: Nos
 
 /** Publishes a result both seats signed to the relays; the number of relays that accepted it. Never throws. */
 export async function publishResult(open: (url: string) => Socket, result: SharedResult, nowS: number, relays: readonly string[] = RELAYS): Promise<number> {
-  const event = await resultEvent(result, nowS);
-  return (await Promise.all(relays.map((url) => sendEvent(open, url, event)))).filter(Boolean).length;
+  try {
+    const event = await resultEvent(result, nowS);
+    return (await Promise.all(relays.map((url) => sendEvent(open, url, event)))).filter(Boolean).length;
+  } catch {
+    return 0; // the event could not be made: nothing was sent
+  }
 }

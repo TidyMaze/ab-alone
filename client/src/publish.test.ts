@@ -67,6 +67,12 @@ describe('publishing a ranked result (#1287)', () => {
     expect([a.closed, b.closed, c.closed]).toEqual([1, 1, 1]);
   });
 
+  it('publishes nothing when the event cannot be made', async () => {
+    vi.spyOn(crypto.subtle, 'digest').mockRejectedValueOnce(new Error('no'));
+    expect(await publishResult(open, result, 7)).toBe(0);
+    expect(Fake.all).toHaveLength(0);
+  });
+
   it('gives up on a relay that stays silent for 8 s', async () => {
     vi.useFakeTimers();
     const p = sendEvent(open, 'wss://x', await resultEvent(result, 1));

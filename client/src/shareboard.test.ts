@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generateKeys } from './moverecord';
 import {
-  BOARD_TEXT, BOARD_VERSION, boardAskNeeded, boardKeys, cleanName, joinBoard, leaveBoard, newKey, readChoice, readBoardName, readRetires,
+  BOARD_TEXT, BOARD_VERSION, publishFlag, boardAskNeeded, boardKeys, cleanName, joinBoard, leaveBoard, newKey, readChoice, readBoardName, readRetires,
   signRetire, verifyRetire, writeChoice,
 } from './shareboard';
 import { worldKeys } from './worldevents';
@@ -14,6 +14,10 @@ const memory = (): Storage => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the board opt-in (#1287)', () => {
+  it('writing to the relays needs ?board=publish, plain ?board does not', () => {
+    expect([publishFlag('?board=publish'), publishFlag('?board'), publishFlag(''), publishFlag('?board=1')]).toEqual([true, false, false, false]);
+  });
+
   it('says what the law asks: public, permanent, third party relays, no deletion, a name that is not you, 16+', () => {
     expect(BOARD_VERSION).toBe(3); // the answers given before the moves-and-opponent-key words are asked again
     expect(BOARD_TEXT).toContain('your ranked results (with the moves of each game and your opponent\'s key and name), a random key');

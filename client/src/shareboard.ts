@@ -49,6 +49,9 @@ export const writeChoice = (store: Store, choice: BoardChoice): void =>
 /** The whole feature is behind `?board`, off for everyone else (unfinished work, nothing is published yet). */
 export const boardFlag = (search: string): boolean => new URLSearchParams(search).has('board');
 
+/** The write side has its own switch, `?board=publish`: plain `?board` only reads, so testing the board never writes to a public relay. */
+export const publishFlag = (search: string): boolean => new URLSearchParams(search).get('board') === 'publish';
+
 /** Whether ranked entry must ask first: the flag is on and there is no answer yet. */
 export const boardAskNeeded = (store: Store, search: string): boolean => boardFlag(search) && readChoice(store) === null;
 
