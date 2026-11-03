@@ -581,3 +581,46 @@ portrait (a line icon) and a line. Only variety carries over between runs, never
 - **Summary**: a commander is an unlock of section 8 (`The Warden commander`), listed in the run's summary when an act won
   earned it.
 - **Turn it against the boss**: not a boss mechanic; no boss has a commander.
+
+## 18. Biomes and exits (#1472)
+
+Dead Cells' branching biomes make the route between acts a choice, not only the nodes inside one. At the end of an act (not
+the last) two exits lead to two different biomes for the next. The biomes are the Open world's (`world::Biome`, section 2 of
+openworld-terrain.md), the Meadow first. Only variety carries between runs (Decision #934): a biome changes what an act looks
+like and asks, never what a run keeps.
+
+- **Act 1 is the Meadow**, the default: no hazard, no signature, the boss dealt as before. It is never an exit.
+- **Exits**: `run::exits(seed, act, from)` (`run_exits` on the bridge) returns two different biomes for act `act` (1 or 2), never
+  the Meadow nor the biome `from` the run leaves, drawn from the run seed and the act (a pure function, so a run replays).
+- **Hazard**: every fight and elite of the act opens the biome's **holes** on the board, cells removed with `Board::void`, the
+  rule The Hull and The Ballast Mind already play with (their cracked cells and pillars): no marble walks onto a hole (a move
+  there is refused), a marble pushed onto one goes off the board, an ejection for the other side. Each pattern is symmetric
+  under the board's point reflection (fair to both sides), in the middle band `|r| <= 1` where no army stands, and a hole is
+  never opened on a cell holding a marble (a formation of section 14 that stands there keeps its marble).
+
+  | Biome | Holes (cells) | Signature special marble of its fights | Boss |
+  |---|---|---|---|
+  | Meadow | none | none | dealt by the seed |
+  | Forest | 2 ponds: `(-2, 1)`, `(2, -1)` | Anchor | The Alien |
+  | Tundra | a crevasse across: `(-1, 1)`, `(0, 0)`, `(1, -1)` | Shield | The Hull |
+  | Desert | 2 sinkholes: `(-1, 0)`, `(1, 0)` | Spark | The Pulsar |
+  | Badlands | 4 canyon holes on the flanks: `(-3, 1)`, `(-2, 0)`, `(2, 0)`, `(3, -1)` | Heavy | The Unstable Core |
+  | Archipelago | 5 water holes around the centre: `(0, 1)`, `(-1, 0)`, `(0, 0)`, `(1, 0)`, `(0, -1)` | Magnet | The Ballast Mind |
+
+- **Foes**: a fight of a biome always holds its signature among its special marbles (section 14): when the dealt mix lacks it,
+  it takes the place of the first kind, the marbles and the other kinds unchanged. An elite keeps its archetype's marbles. The
+  signature is one of the first five kinds, which every act from the second deals.
+- **Boss**: the act's boss is the biome's, a roster boss at the act's strength (section 7), played on its own board (the holes
+  are the fights'). When the roster lacks it the dealt boss stays. The Meadow's act keeps the dealt boss.
+- **The exit screen** comes at the transition, after the boss's relic and reward screens and after the Collector (section 15)
+  when the run carries a blueprint: the map waits until one exit is picked. Each button names the biome, its holes, its foes and its
+  boss.
+- **Look**: the page tints the map plate and the board (`body[data-biome]`) with the biome's colour while the run is in it; the
+  Meadow has none, and the run line names the biome (`act 2 fight · Tundra · Snake`). The summary lists the biomes of the run.
+- **Bridge**: `run_exits(seed, act, from)` gives the codes of the two exits; `run_foes(seed, node, less, biome)` and the plan
+  `[count, formation, biome, ...]` that `Engine::with_foes` stands carry the biome (the Open world's codes: `0` Meadow, `1` Forest,
+  `2` Tundra, `3` Desert, `4` Badlands, `5` Archipelago). `engine_version` is unchanged (no game of another mode changes).
+- **Saving**: the run keeps `exits` (on for a run started after this change), `exit` (the screen waiting) and `biomes` (the codes
+  picked for act 2 then act 3). A run saved before it loads with `exits` off: no exit is offered, every act is the Meadow, and its
+  fight in progress replays on the board it started on.
+- **Turn it against the bot**: a hole takes the bot's marbles as it takes the army's; push its marbles toward the middle band.

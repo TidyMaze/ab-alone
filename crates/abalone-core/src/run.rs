@@ -6,6 +6,7 @@ use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::marbles;
 use crate::game::{Game, WIN_EJECTIONS};
 use crate::moves::Player;
+use crate::world::Biome;
 
 /// Acts of a run, each ending on its boss node.
 pub const ACTS: usize = 3;
@@ -238,6 +239,75 @@ impl Elite {
                 .collect(),
         }
     }
+}
+
+/// Where the point-symmetric holes of each biome open on a fight's board (docs/specs/roguelite.md section 18):
+/// the cells The Hull and The Ballast Mind remove (`Board::void`), in the middle band where no army stands. A hole
+/// is never opened on a marble.
+const FOREST_HOLES: [(i32, i32); 2] = [(-2, 1), (2, -1)];
+const TUNDRA_HOLES: [(i32, i32); 3] = [(-1, 1), (0, 0), (1, -1)];
+const DESERT_HOLES: [(i32, i32); 2] = [(-1, 0), (1, 0)];
+const BADLANDS_HOLES: [(i32, i32); 4] = [(-3, 1), (-2, 0), (2, 0), (3, -1)];
+const ARCHIPELAGO_HOLES: [(i32, i32); 5] = [(0, 1), (-1, 0), (0, 0), (1, 0), (0, -1)];
+
+/// The biomes of a run's acts (docs/specs/roguelite.md section 18), the Open world's: its code is the world's. Act 1 is the
+/// Meadow; at the end of an act two exits lead to other biomes for the next.
+impl Biome {
+    /// Every biome, in the order of its code.
+    pub const ALL: [Biome; 6] = [
+        Biome::Meadow,
+        Biome::Forest,
+        Biome::Tundra,
+        Biome::Desert,
+        Biome::Badlands,
+        Biome::Archipelago,
+    ];
+
+    /// The biome of a bridge code, `None` for an unknown one.
+    pub fn from_code(code: u8) -> Option<Biome> {
+        Self::ALL.get(usize::from(code)).copied()
+    }
+
+    /// The cells it opens on the board of a fight: none in the Meadow.
+    fn holes(self) -> &'static [(i32, i32)] {
+        match self {
+            Biome::Meadow => &[],
+            Biome::Forest => &FOREST_HOLES,
+            Biome::Tundra => &TUNDRA_HOLES,
+            Biome::Desert => &DESERT_HOLES,
+            Biome::Badlands => &BADLANDS_HOLES,
+            Biome::Archipelago => &ARCHIPELAGO_HOLES,
+        }
+    }
+
+    /// The special marble every fight of the biome holds among the bot's, one of the first five kinds so it is dealt
+    /// from act 2 on; the Meadow has none.
+    pub fn signature(self) -> Option<Special> {
+        match self {
+            Biome::Meadow => None,
+            Biome::Forest => Some(Special::Anchor),
+            Biome::Tundra => Some(Special::Shield),
+            Biome::Desert => Some(Special::Spark),
+            Biome::Badlands => Some(Special::Heavy),
+            Biome::Archipelago => Some(Special::Magnet),
+        }
+    }
+}
+
+/// The two biomes the exits at the end of act `act - 1` lead to, for act `act` (1 or 2) of the run `seed` that
+/// left the biome `from`: two different ones, never the Meadow nor `from`, drawn from the seed and the act.
+pub fn exits(seed: u64, act: usize, from: Biome) -> [Biome; 2] {
+    let mut pool: Vec<Biome> = Biome::ALL[1..]
+        .iter()
+        .copied()
+        .filter(|&b| b != from)
+        .collect();
+    let mut state = mix(seed ^ mix(act as u64 | 4 << 32));
+    for i in 0..2 {
+        let j = i + (draw(&mut state) % (pool.len() - i) as u64) as usize;
+        pool.swap(i, j);
+    }
+    [pool[0], pool[1]]
 }
 
 /// One node of the map. `links` are the columns of the next row of the same act it leads to,
@@ -541,11 +611,12 @@ pub fn army_game(army: u8) -> Game {
 /// first, the bot's front row first. The bot wins once the army is down to 3 marbles, which ends
 /// the run; the army wins at the usual 6 ejections.
 pub fn army_game_against(army: u8, foes: u8) -> Game {
-    army_fight(army, &Formation::Standard.cells(foes))
+    army_fight(army, &Formation::Standard.cells(foes), Biome::Meadow)
 }
 
-/// The army's fight against White marbles on `foes`.
-fn army_fight(army: u8, foes: &[(i32, i32)]) -> Game {
+/// The army's fight against White marbles on `foes`, on the board of `biome`: its holes opened on the cells no marble
+/// stands on.
+fn army_fight(army: u8, foes: &[(i32, i32)], biome: Biome) -> Game {
     let army = army.clamp(MIN_ARMY, FULL_ARMY);
     let mut board = Board::standard();
     for &(q, r) in &STANDARD_BLACK[..usize::from(FULL_ARMY - army)] {
@@ -557,27 +628,34 @@ fn army_fight(army: u8, foes: &[(i32, i32)]) -> Game {
     for &(q, r) in foes {
         board.set(q, r, Cell::White);
     }
+    for &(q, r) in biome.holes() {
+        if board.get(q, r) == Some(Cell::Empty) {
+            board.void(q, r);
+        }
+    }
     board.set_rogue_lite();
     Game::from_position(board, Player::Black, [0, 0])
         .with_win([WIN_EJECTIONS, (army - (MIN_ARMY - 1)).min(WIN_EJECTIONS)])
 }
 
 /// The bot's army in a fight or an elite (docs/specs/roguelite.md section 14): how many marbles,
-/// their formation and the special ones among them.
+/// their formation and the special ones among them, and the biome whose holes the board opens (section 18).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FoePlan {
     pub count: u8,
     pub formation: Formation,
     pub specials: Vec<((i32, i32), Special)>,
+    pub biome: Biome,
 }
 
 /// The bot's army at node `index` of the map of `seed`, `less` marbles short (the Saboteur): a
 /// pure function of the seed and the node. A fight, or an Unknown node the page turned into
 /// one (#1463), has `FIGHT_FOES` marbles and an elite `FULL_ARMY`, in the node's formation. A fight holds `act + 1` special marbles of different
 /// kinds, from the Heavy, Anchor and Spark in act 1, with the Magnet and Shield in act 2 and the
-/// Bomb and Medic in act 3; an elite holds its archetype's. Any other node, or an index off the
-/// map, has the plain army.
-pub fn foe_plan(seed: u64, index: usize, less: u8) -> FoePlan {
+/// Bomb and Medic in act 3; an elite holds its archetype's. In a `biome` (section 18) a fight also always holds the
+/// biome's signature special marble, in place of its first kind when it was not dealt. Any other node, or an index off
+/// the map, has the plain army.
+pub fn foe_plan(seed: u64, index: usize, less: u8, biome: Biome) -> FoePlan {
     let map = run_map(seed);
     let Some(node) = map.get(index).filter(|n| {
         matches!(
@@ -589,6 +667,7 @@ pub fn foe_plan(seed: u64, index: usize, less: u8) -> FoePlan {
             count: FULL_ARMY,
             formation: Formation::Standard,
             specials: Vec::new(),
+            biome,
         };
     };
     let base = if node.kind == NodeKind::Elite {
@@ -612,13 +691,17 @@ pub fn foe_plan(seed: u64, index: usize, less: u8) -> FoePlan {
                 Special::Medic,
             ];
             pool.truncate(3 + 2 * node.act);
-            (0..=node.act)
+            let mut kinds: Vec<Special> = (0..=node.act)
                 .map(|i| {
                     let j = i + (draw(&mut state) % (pool.len() - i) as u64) as usize;
                     pool.swap(i, j);
                     pool[i]
                 })
-                .collect()
+                .collect();
+            if let Some(signature) = biome.signature().filter(|s| !kinds.contains(s)) {
+                kinds[0] = signature;
+            }
+            kinds
         }
     };
     let specials = kinds
@@ -634,13 +717,14 @@ pub fn foe_plan(seed: u64, index: usize, less: u8) -> FoePlan {
         count,
         formation: node.formation,
         specials,
+        biome,
     }
 }
 
 /// A fight of an army of `army` marbles against the bot's army of `plan`, its special marbles
 /// placed. Refused when a special marble sits on a cell with no marble.
 pub fn army_game_formed(army: u8, plan: &FoePlan) -> Result<Game, PlaceError> {
-    let mut game = army_fight(army, &plan.formation.cells(plan.count));
+    let mut game = army_fight(army, &plan.formation.cells(plan.count), plan.biome);
     for &(cell, kind) in &plan.specials {
         game.place_special(cell, kind)?;
     }
@@ -2082,10 +2166,10 @@ mod foes {
             // The page turns an unknown node into a fight, an event or a treasure: its fight is
             // a plain fight of its act (docs/specs/roguelite.md section 16).
             assert_eq!((node.formation, node.elite), (Formation::Standard, None));
-            let plan = foe_plan(seed, i, 0);
+            let plan = foe_plan(seed, i, 0, Biome::Meadow);
             assert_eq!(plan.count, FIGHT_FOES);
             assert_eq!(plan.specials.len(), 1);
-            assert_eq!(foe_plan(seed, i, 1).count, FIGHT_FOES - 1);
+            assert_eq!(foe_plan(seed, i, 1, Biome::Meadow).count, FIGHT_FOES - 1);
         }
     }
 
@@ -2187,7 +2271,7 @@ mod foes {
         assert_eq!(run_map(9), run_map(9));
         let plan = |s| {
             let (i, _) = node_of(s, NodeKind::Fight, 1).unwrap();
-            foe_plan(s, i, 0)
+            foe_plan(s, i, 0, Biome::Meadow)
         };
         assert_eq!(plan(9), plan(9));
         assert!((0..20).any(|s| plan(s) != plan(9)));
@@ -2197,13 +2281,16 @@ mod foes {
     fn a_fight_node_has_10_foes_an_elite_14_and_the_saboteur_takes_one() {
         for seed in 0..30 {
             let (fight, _) = node_of(seed, NodeKind::Fight, 0).unwrap();
-            assert_eq!(foe_plan(seed, fight, 0).count, FIGHT_FOES);
-            assert_eq!(foe_plan(seed, fight, 1).count, FIGHT_FOES - 1);
+            assert_eq!(foe_plan(seed, fight, 0, Biome::Meadow).count, FIGHT_FOES);
+            assert_eq!(
+                foe_plan(seed, fight, 1, Biome::Meadow).count,
+                FIGHT_FOES - 1
+            );
             if let Some((elite, _)) =
                 node_of(seed, NodeKind::Elite, 0).or(node_of(seed, NodeKind::Elite, 1))
             {
-                assert_eq!(foe_plan(seed, elite, 0).count, FULL_ARMY);
-                assert_eq!(foe_plan(seed, elite, 1).count, FULL_ARMY - 1);
+                assert_eq!(foe_plan(seed, elite, 0, Biome::Meadow).count, FULL_ARMY);
+                assert_eq!(foe_plan(seed, elite, 1, Biome::Meadow).count, FULL_ARMY - 1);
             }
         }
     }
@@ -2222,7 +2309,7 @@ mod foes {
         for seed in 0..60 {
             for act in 0..ACTS {
                 let (i, _) = node_of(seed, NodeKind::Fight, act).unwrap(); // the first row fights
-                let plan = foe_plan(seed, i, 0);
+                let plan = foe_plan(seed, i, 0, Biome::Meadow);
                 assert_eq!(plan.specials.len(), act + 1, "seed {seed} act {act}");
                 let kinds: Vec<_> = plan.specials.iter().map(|s| s.1).collect();
                 for (k, kind) in kinds.iter().enumerate() {
@@ -2236,7 +2323,7 @@ mod foes {
         let mut seen = Vec::new();
         for seed in 0..60 {
             let (i, _) = node_of(seed, NodeKind::Fight, 2).unwrap();
-            for (_, kind) in foe_plan(seed, i, 0).specials {
+            for (_, kind) in foe_plan(seed, i, 0, Biome::Meadow).specials {
                 if !seen.contains(&kind) {
                     seen.push(kind);
                 }
@@ -2253,7 +2340,7 @@ mod foes {
                     let Some((i, node)) = node_of(seed, kind, act) else {
                         continue;
                     };
-                    let plan = foe_plan(seed, i, 0);
+                    let plan = foe_plan(seed, i, 0, Biome::Meadow);
                     assert_eq!(plan.formation, node.formation);
                     let cells = plan.formation.cells(plan.count);
                     let mut marked: Vec<_> = plan.specials.iter().map(|s| s.0).collect();
@@ -2274,7 +2361,7 @@ mod foes {
                 let Some((i, node)) = node_of(seed, NodeKind::Elite, act) else {
                     continue;
                 };
-                let plan = foe_plan(seed, i, 0);
+                let plan = foe_plan(seed, i, 0, Biome::Meadow);
                 let kinds: Vec<_> = plan.specials.iter().map(|s| s.1).collect();
                 assert_eq!(kinds.len(), act + 2, "seed {seed} act {act}");
                 let elite = node.elite.unwrap();
@@ -2300,7 +2387,7 @@ mod foes {
 
     #[test]
     fn a_node_that_is_no_fight_or_unknown_or_out_of_the_map_has_the_plain_army() {
-        let plain = |s, i| foe_plan(s, i, 0);
+        let plain = |s, i| foe_plan(s, i, 0, Biome::Meadow);
         for seed in 0..40 {
             for (i, node) in run_map(seed).iter().enumerate() {
                 if !matches!(
@@ -2329,7 +2416,7 @@ mod foes {
             let (i, _) = node_of(seed, NodeKind::Elite, 2)
                 .or(node_of(seed, NodeKind::Fight, 2))
                 .unwrap();
-            let plan = foe_plan(seed, i, 0);
+            let plan = foe_plan(seed, i, 0, Biome::Meadow);
             let game = army_game_formed(9, &plan).unwrap();
             let board = game.board();
             assert_eq!(count(board, Cell::White), usize::from(plan.count));
@@ -2354,6 +2441,7 @@ mod foes {
             count: 10,
             formation: Formation::Standard,
             specials: Vec::new(),
+            biome: Biome::Meadow,
         };
         assert_eq!(
             army_game_formed(12, &plain).unwrap().board(),
@@ -2367,6 +2455,7 @@ mod foes {
             count: 10,
             formation: Formation::Snake,
             specials: vec![((0, 0), Special::Anchor)],
+            biome: Biome::Meadow,
         };
         assert_eq!(
             army_game_formed(14, &plan).err(),
@@ -2382,7 +2471,8 @@ mod foes {
                     let Some((i, _)) = node_of(seed, kind, act) else {
                         continue;
                     };
-                    let mut game = army_game_formed(14, &foe_plan(seed, i, 0)).unwrap();
+                    let mut game =
+                        army_game_formed(14, &foe_plan(seed, i, 0, Biome::Meadow)).unwrap();
                     for _ in 0..6 {
                         let mv = best_move(&game, 300).expect("a legal move or a pass");
                         game.play(&mv).unwrap();
@@ -2410,10 +2500,9 @@ mod biomes {
 
     /// The cells of the radius 4 board that a fight removed.
     fn holes(board: &Board) -> Vec<(i32, i32)> {
-        let mut holes: Vec<_> = (-4..=4)
+        let mut holes: Vec<(i32, i32)> = (-4i32..=4)
             .flat_map(|q| (-4..=4).map(move |r| (q, r)))
-            .filter(|&(q, r)| q.abs().max(r.abs()).max((q + r).abs()) <= 4)
-            .filter(|&(q, r)| board.get(q, r).is_none())
+            .filter(|&(q, r)| (q + r).abs() <= 4 && board.get(q, r).is_none())
             .collect();
         holes.sort();
         holes

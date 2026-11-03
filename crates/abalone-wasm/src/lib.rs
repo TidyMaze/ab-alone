@@ -99,8 +99,11 @@
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md). `formation` is how the bot's marbles stand in
 //!   a fight or an elite: `0` standard, `1` Belgian daisy, `2` German daisy, `3` snake, `4` wedge (`0` on the other nodes); `elite` is
 //!   `0` for a node that is no elite, else `1` The Wall, `2` The Artificer, `3` The Brute (section 14).
-//! - The bot's army of a fight (`run_foes(seed, node, less)`): `[count, formation, ...]` then a record `[q, r, kind]` per special marble
-//!   it holds; `Engine::with_foes(army, plan)` stands it (section 14).
+//! - The bot's army of a fight (`run_foes(seed, node, less, biome)`): `[count, formation, biome, ...]` then a record `[q, r, kind]` per
+//!   special marble it holds; `Engine::with_foes(army, plan)` stands it, the biome's holes opened (sections 14 and 18). `biome` is
+//!   the Open world's code below (`0` meadow, the act 1 default, which opens none).
+//! - The exits at the end of an act (`run_exits(seed, act, from)`): the codes of the two biomes the exits lead to for act `act`
+//!   (1 or 2) of a run that left the biome `from`, never the meadow nor `from` (section 18).
 //! - Open world chunk (`world_chunk(seed, cx, cy)`): 3 bytes `[height, terrain, biome]` per cell of the
 //!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. The world is a hexagon (`WORLD_RADIUS`): in a
 //!   chunk its edge crosses, a cell past the edge is `[0, 255, 0]`, `255` off the world. `height` `0` to `7`;
@@ -130,7 +133,7 @@ pub use convert::{draw_reason_code, result_code, status_code, MOVE_STRIDE};
 pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::{replay_score, Engine};
 pub use royale::Royale;
-pub use run::{run_foes, run_map};
+pub use run::{run_exits, run_foes, run_map};
 pub use world::{world_chunk, world_lairs, world_teleporters, world_version};
 
 #[cfg(test)]

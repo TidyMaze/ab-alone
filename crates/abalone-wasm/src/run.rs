@@ -3,6 +3,7 @@
 
 use crate::convert::special_code;
 use abalone_core::run;
+use abalone_core::world::Biome;
 use wasm_bindgen::prelude::*;
 
 /// Integers per map node: `[act, row, col, kind, links, formation, elite]`.
@@ -28,19 +29,35 @@ pub fn run_map(seed: u32) -> Vec<i32> {
         .collect()
 }
 
-/// The bot's army at node `node` of the map of `seed`, `less` marbles short: `[count, formation,
-/// ...]` then a record `[q, r, kind]` per special marble, the plan `Engine::with_foes` stands.
+/// The bot's army at node `node` of the map of `seed`, `less` marbles short, in the biome of code `biome` (`0`, the Meadow,
+/// for an unknown code): `[count, formation, biome, ...]` then a record `[q, r, kind]` per special marble, the plan
+/// `Engine::with_foes` stands.
 #[wasm_bindgen]
-pub fn run_foes(seed: u32, node: u32, less: u8) -> Vec<i32> {
-    let plan = run::foe_plan(u64::from(seed), node as usize, less);
-    [i32::from(plan.count), plan.formation as i32]
-        .into_iter()
-        .chain(
-            plan.specials
-                .iter()
-                .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))]),
-        )
-        .collect()
+pub fn run_foes(seed: u32, node: u32, less: u8, biome: u8) -> Vec<i32> {
+    let biome = Biome::from_code(biome).unwrap_or(Biome::Meadow);
+    let plan = run::foe_plan(u64::from(seed), node as usize, less, biome);
+    [
+        i32::from(plan.count),
+        plan.formation as i32,
+        plan.biome as i32,
+    ]
+    .into_iter()
+    .chain(
+        plan.specials
+            .iter()
+            .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))]),
+    )
+    .collect()
+}
+
+/// The codes of the two biomes the exits lead to for act `act` (1 or 2, `0` for the Meadow when out of range) of the run
+/// `seed` that left the biome of code `from` (docs/specs/roguelite.md section 18).
+#[wasm_bindgen]
+pub fn run_exits(seed: u32, act: u8, from: u8) -> Vec<u8> {
+    let from = Biome::from_code(from).unwrap_or(Biome::Meadow);
+    run::exits(u64::from(seed), usize::from(act), from)
+        .map(|b| b as u8)
+        .to_vec()
 }
 
 #[cfg(test)]
@@ -93,14 +110,30 @@ mod tests {
             .enumerate()
             .find(|(_, n)| n.kind == NodeKind::Elite)
             .expect("seed 5 has an elite");
-        let plan = run::foe_plan(5, index, 1);
-        let flat = run_foes(5, index as u32, 1);
-        assert_eq!(flat[..2], [i32::from(plan.count), plan.formation as i32]);
+        let plan = run::foe_plan(5, index, 1, Biome::Meadow);
+        let flat = run_foes(5, index as u32, 1, 0);
+        assert_eq!(flat[..3], [i32::from(plan.count), plan.formation as i32, 0]);
         assert_eq!(plan.count, run::FULL_ARMY - 1);
-        assert_eq!(flat.len(), 2 + 3 * plan.specials.len());
-        for (record, ((q, r), kind)) in flat[2..].chunks(3).zip(&plan.specials) {
+        assert_eq!(flat.len(), 3 + 3 * plan.specials.len());
+        for (record, ((q, r), kind)) in flat[3..].chunks(3).zip(&plan.specials) {
             assert_eq!(record, [*q, *r, i32::from(special_code(*kind))]);
         }
         assert!(!plan.specials.is_empty());
+    }
+
+    #[test]
+    fn run_foes_carries_the_biome_and_an_unknown_one_is_the_meadow() {
+        let flat = run_foes(5, 0, 0, 3);
+        assert_eq!(flat[2], 3);
+        assert_eq!(run_foes(5, 0, 0, 99), run_foes(5, 0, 0, 0));
+        let plan = run::foe_plan(5, 0, 0, Biome::Desert);
+        assert_eq!(flat[3..].len(), 3 * plan.specials.len());
+    }
+
+    #[test]
+    fn run_exits_flattens_the_core_exits() {
+        let core = run::exits(7, 2, Biome::Tundra).map(|b| b as u8);
+        assert_eq!(run_exits(7, 2, 2), core);
+        assert_eq!(run_exits(7, 2, 99), run_exits(7, 2, 0));
     }
 }

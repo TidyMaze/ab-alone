@@ -11,6 +11,7 @@ use abalone_core::run::{
     army_game_against, army_game_formed, trainer_game, FoePlan, Formation, Relic,
 };
 use abalone_core::search::{best_move, position_score};
+use abalone_core::world::Biome;
 use wasm_bindgen::prelude::*;
 
 /// One opaque game instance handed to JavaScript.
@@ -35,13 +36,17 @@ impl Engine {
         }
     }
 
-    /// A rogue-lite fight against the bot's army of a plan from `run_foes`: `[count, formation, q, r,
-    /// kind, ...]`, its formation and special marbles stood (docs/specs/roguelite.md section 14).
-    /// `Err` carries why the plan cannot stand.
+    /// A rogue-lite fight against the bot's army of a plan from `run_foes`: `[count, formation, biome,
+    /// q, r, kind, ...]`, its formation and special marbles stood and the biome's holes opened
+    /// (docs/specs/roguelite.md sections 14 and 18). `Err` carries why the plan cannot stand.
     pub fn with_foes(army: u8, plan: &[i32]) -> Result<Engine, String> {
-        let [count, formation, marks @ ..] = plan else {
-            return Err("a plan starts with a count and a formation".to_string());
+        let [count, formation, biome, marks @ ..] = plan else {
+            return Err("a plan starts with a count, a formation and a biome".to_string());
         };
+        let biome = u8::try_from(*biome)
+            .ok()
+            .and_then(Biome::from_code)
+            .ok_or_else(|| format!("unknown biome {biome}"))?;
         let formation = u8::try_from(*formation)
             .ok()
             .and_then(Formation::from_code)
@@ -60,6 +65,7 @@ impl Engine {
             count: u8::try_from(*count).unwrap_or(u8::MAX),
             formation,
             specials,
+            biome,
         };
         let game = army_game_formed(army, &plan).map_err(|e| format!("{e:?}"))?;
         Ok(Engine { game })
@@ -281,19 +287,35 @@ mod tests {
 
     #[test]
     fn with_foes_stands_the_bots_formation_with_its_special_marbles() {
-        // A plan is `[count, formation, q, r, kind, ...]` (run_foes).
-        let engine = Engine::with_foes(14, &[10, 3, 4, -4, 2, 0, -4, 3]).unwrap();
+        // A plan is `[count, formation, biome, q, r, kind, ...]` (run_foes).
+        let engine = Engine::with_foes(14, &[10, 3, 0, 4, -4, 2, 0, -4, 3]).unwrap();
         assert_eq!(count(&engine.board(), 1), 14);
         assert_eq!(count(&engine.board(), 2), 10);
         assert_eq!(engine.specials(), vec![0, -4, 3, 4, -4, 2]);
-        let plain = Engine::with_foes(14, &[14, 0]).unwrap();
+        let plain = Engine::with_foes(14, &[14, 0, 0]).unwrap();
         assert_eq!(plain.board(), Engine::with_army(14, 14).board());
-        assert_eq!(Engine::with_foes(5, &[10, 4]).unwrap().win_ejections(2), 2);
-        // A plan the engine cannot stand is refused: no plan, an unknown formation or special, a cell with no marble.
+        assert_eq!(
+            Engine::with_foes(5, &[10, 4, 0]).unwrap().win_ejections(2),
+            2
+        );
+        // A plan the engine cannot stand is refused: no plan, an unknown formation, biome or special, a cell with no marble.
         assert!(Engine::with_foes(14, &[]).is_err());
-        assert!(Engine::with_foes(14, &[10, 9]).is_err());
-        assert!(Engine::with_foes(14, &[10, 0, 4, -4, 99]).is_err());
-        assert!(Engine::with_foes(14, &[10, 0, 0, 0, 2]).is_err());
+        assert!(Engine::with_foes(14, &[10, 0]).is_err());
+        assert!(Engine::with_foes(14, &[10, 9, 0]).is_err());
+        assert!(Engine::with_foes(14, &[10, 0, 9]).is_err());
+        assert!(Engine::with_foes(14, &[10, 0, -1]).is_err());
+        assert!(Engine::with_foes(14, &[10, 0, 0, 4, -4, 99]).is_err());
+        assert!(Engine::with_foes(14, &[10, 0, 0, 0, 0, 2]).is_err());
+    }
+
+    #[test]
+    fn with_foes_opens_the_holes_of_the_biome() {
+        // The Desert (3) removes (-1, 0) and (1, 0); the Meadow (0) none.
+        let desert = Engine::with_foes(14, &[10, 0, 3]).unwrap();
+        let meadow = Engine::with_foes(14, &[10, 0, 0]).unwrap();
+        assert_ne!(desert.board(), meadow.board());
+        assert_eq!(count(&desert.board(), 1), 14);
+        assert_eq!(count(&desert.board(), 2), 10);
     }
 
     #[test]
