@@ -4,6 +4,8 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
 import css from './ui.css?raw';
+import { boss_ids } from 'abalone-wasm';
+import './test/openworldwasm'; // inits the wasm at collection, the mode list reads it
 
 // One mode at a time (#1275, docs/specs/ui.md): a mode left for another leaves nothing behind, not a HUD block, a body data
 // key, a mesh of the scene, nor a timer. The clean base is the Hub, where every mode can be picked: each mode of the
@@ -118,45 +120,45 @@ async function bootHub(url = '/'): Promise<{ game: Game; probe: Probe }> {
 }
 
 describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
-  it('every mode of the mode menu, left for the Hub, leaves the hub as the boot showed it', async () => {
+  // One test per mode, each on its own boot: no mode shares a budget with the others, and a slow machine times out one mode
+  // alone, not the sum of all (#1275). The mode list is read from the wasm, so a new boss gets its test.
+  type Enter = (game: Game) => Promise<void>;
+  const modes: [string, Enter][] = [
+    ...boss_ids().map((id, i): [string, Enter] => [
+      `the boss fight ${id}`,
+      async (game) => {
+        pick(game, 'boss-fight');
+        byId('boss-list').querySelectorAll('button')[i]!.click();
+        await play(game);
+      },
+    ]),
+    ['the daily challenge, lost', async (game) => (pick(game, 'daily'), await endFight(game, 2))],
+    ['the rogue-lite map', async (game) => (pick(game, 'roguelite'), await game.settle())],
+    ['a rogue-lite fight', async (game) => (pick(game, 'roguelite'), byId('run-map').querySelector<HTMLButtonElement>('button[data-node]')!.click(), await move(game))],
+    ['the Trainer', async (game) => (pick(game, 'trainer'), await move(game))],
+    ['the battle royale', async (game) => (pick(game, 'battle-royale'), byId('royale-hold').click(), await game.settle())],
+    ['the online battle royale', async (game) => (pick(game, 'battle-royale'), byId('royale-invite').click(), await game.online())],
+    ['the Open world', async (game) => (pick(game, 'openworld'), await game.settle(), game.frame(400))],
+    ['Play online', async (game) => (pick(game, 'play-online'), await game.online())],
+    ['Ranked', async (game) => (pick(game, 'ranked'), await game.online())],
+    ['Fight together', async (game) => (pick(game, 'fight-together'), byId('coop-list').querySelector('button')!.click(), await game.online())],
+  ];
+  it.each(modes)('%s, left for the Hub, leaves the hub as the boot showed it', async (name, enter) => {
     const { game, probe } = await bootHub();
     const base = snapshot(probe);
-    const { boss_ids } = await import('abalone-wasm');
-    const modes: [string, () => Promise<void>][] = [
-      ...boss_ids().map((id, i): [string, () => Promise<void>] => [
-        `the boss fight ${id}`,
-        async () => {
-          pick(game, 'boss-fight');
-          byId('boss-list').querySelectorAll('button')[i]!.click();
-          await play(game);
-        },
-      ]),
-      ['the daily challenge, lost', async () => (pick(game, 'daily'), await endFight(game, 2))],
-      ['the rogue-lite map', async () => (pick(game, 'roguelite'), await game.settle())],
-      ['a rogue-lite fight', async () => (pick(game, 'roguelite'), byId('run-map').querySelector<HTMLButtonElement>('button[data-node]')!.click(), await move(game))],
-      ['the Trainer', async () => (pick(game, 'trainer'), await move(game))],
-      ['the battle royale', async () => (pick(game, 'battle-royale'), byId('royale-hold').click(), await game.settle())],
-      ['the online battle royale', async () => (pick(game, 'battle-royale'), byId('royale-invite').click(), await game.online())],
-      ['the Open world', async () => (pick(game, 'openworld'), await game.settle(), game.frame(400))],
-      ['Play online', async () => (pick(game, 'play-online'), await game.online())],
-      ['Ranked', async () => (pick(game, 'ranked'), await game.online())],
-      ['Fight together', async () => (pick(game, 'fight-together'), byId('coop-list').querySelector('button')!.click(), await game.online())],
-    ];
+    await enter(game);
+    await ship(game);
+    const left = snapshot(probe);
     const leaks: string[] = [];
-    for (const [name, enter] of modes) {
-      await enter();
-      await ship(game);
-      const left = snapshot(probe);
-      for (const key of ['shown', 'data'] as const) {
-        for (const x of left[key]) if (!base[key].includes(x)) leaks.push(`${name}: ${key} ${x} stays`);
-        for (const x of base[key]) if (!left[key].includes(x)) leaks.push(`${name}: ${key} ${x} goes`);
-      }
-      for (const kind of new Set([...Object.keys(base.objects), ...Object.keys(left.objects)]))
-        if (base.objects[kind] !== left.objects[kind]) leaks.push(`${name}: ${kind.trim()} ${base.objects[kind] ?? 0} -> ${left.objects[kind] ?? 0}`);
-      if (left.intervals !== base.intervals) leaks.push(`${name}: intervals ${base.intervals} -> ${left.intervals}`);
+    for (const key of ['shown', 'data'] as const) {
+      for (const x of left[key]) if (!base[key].includes(x)) leaks.push(`${name}: ${key} ${x} stays`);
+      for (const x of base[key]) if (!left[key].includes(x)) leaks.push(`${name}: ${key} ${x} goes`);
     }
+    for (const kind of new Set([...Object.keys(base.objects), ...Object.keys(left.objects)]))
+      if (base.objects[kind] !== left.objects[kind]) leaks.push(`${name}: ${kind.trim()} ${base.objects[kind] ?? 0} -> ${left.objects[kind] ?? 0}`);
+    if (left.intervals !== base.intervals) leaks.push(`${name}: intervals ${base.intervals} -> ${left.intervals}`);
     expect(leaks).toEqual([]);
-  }, 60_000);
+  });
 
   it('a boss door of the hub, the fight lost and Back to the hub: the hub as it was', async () => {
     const { game, probe } = await bootHub();
