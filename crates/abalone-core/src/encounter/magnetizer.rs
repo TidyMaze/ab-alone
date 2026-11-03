@@ -1056,4 +1056,33 @@ mod tests {
         assert!(out.polarities().is_empty(), "ply 3 assigns nothing");
         assert_eq!(out.magnetizer_ply(), Some(3));
     }
+
+    #[test]
+    fn a_special_mark_follows_its_marble_in_a_repulsion_and_goes_with_the_one_pushed_off() {
+        use crate::board::Special;
+        let mut b = board(
+            &[(0, -1), (0, 0)],
+            &[(0, -2), (0, -3), (0, -4)],
+            &[((0, -1), -1), ((0, 0), 1)],
+        );
+        b.set_rogue_lite();
+        for (cell, kind) in [
+            ((0, 0), Special::Heavy),
+            ((0, -2), Special::Shield),
+            ((0, -3), Special::Spark),
+            ((0, -4), Special::Anchor),
+        ] {
+            b.place_special(cell, kind).unwrap();
+        }
+        let (out, _, _) = settled(&b, 9);
+        assert_eq!(
+            out.specials(),
+            [
+                ((0, -4), Special::Spark),
+                ((0, -3), Special::Shield),
+                ((0, 1), Special::Heavy)
+            ],
+            "the pair and the line move, the marble pushed off loses its mark"
+        );
+    }
 }

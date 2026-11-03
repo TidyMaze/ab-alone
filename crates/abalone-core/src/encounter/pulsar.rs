@@ -720,4 +720,28 @@ mod tests {
         assert!(enc.hooked().is_some(), "the Rail Yard's hook ran");
         assert_eq!(last_pulse(&enc), None);
     }
+
+    #[test]
+    fn a_special_mark_moves_with_its_marble_in_a_pulse_and_goes_with_one_thrown_off() {
+        use crate::board::Special;
+        let mut start = board(
+            &[(-4, 0), (-3, 0), (-2, 0)],
+            &[(1, 0), (2, 0), (3, 0), (4, 0)],
+            None,
+        );
+        start.set_rogue_lite();
+        for (cell, kind) in [
+            ((-2, 0), Special::Heavy),
+            ((3, 0), Special::Spark),
+            ((4, 0), Special::Anchor),
+        ] {
+            start.place_special(cell, kind).unwrap();
+        }
+        let (out, _) = pulse(&start, E, None);
+        assert_eq!(
+            out.specials(),
+            [((-1, 0), Special::Heavy), ((4, 0), Special::Spark)],
+            "the marks follow their marbles, the one thrown off is gone"
+        );
+    }
 }

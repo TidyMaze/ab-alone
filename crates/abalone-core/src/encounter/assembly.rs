@@ -884,4 +884,34 @@ mod tests {
         assert_eq!(enc.game().ejected(Player::White), 1);
         assert_eq!(enc.result(), None);
     }
+
+    #[test]
+    fn a_special_mark_rides_the_belt_with_its_marble_and_is_gone_when_it_falls_or_is_struck() {
+        use crate::board::Special;
+        let mut start = board(&[(4, 0), STEP.0], &[(3, 0), (-4, 0)], belts(true, 0));
+        start.set_rogue_lite();
+        for (cell, kind) in [
+            ((4, 0), Special::Anchor),
+            ((3, 0), Special::Spark),
+            ((-4, 0), Special::Heavy),
+        ] {
+            start.place_special(cell, kind).unwrap();
+        }
+        let (out, _) = turn(&start, 0, 0);
+        assert_eq!(
+            out.specials(),
+            [((-3, 0), Special::Heavy), ((4, 0), Special::Spark)],
+            "the one that fell has no mark left, the one that took its cell has its own"
+        );
+        let mut struck = start.clone();
+        let mut gone = belts(true, 0);
+        gone.strike[0] = Some(7); // the cell the Spark moved to, once the belt has turned
+        struck.set_belts(Some(gone));
+        let (out, _) = turn(&struck, 0, 0);
+        assert_eq!(
+            out.specials(),
+            [((-3, 0), Special::Heavy)],
+            "the press took the Spark and its mark"
+        );
+    }
 }

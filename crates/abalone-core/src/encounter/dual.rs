@@ -942,4 +942,26 @@ mod tests {
         }
         assert_eq!(enc.tell(), Some(0));
     }
+
+    #[test]
+    fn a_special_marble_pushed_into_the_void_comes_back_special() {
+        use crate::board::Special;
+        let mut start = board(&[(-3, 7), (3, -5)], &[(-3, 5), (-3, 6)], Dual::default());
+        start.set_rogue_lite();
+        start.place_special((-3, 7), Special::Spark).unwrap();
+        let mut enc = fight(start, Player::White, [0, 0]);
+        enc.play(&mv(&[(-3, 5), (-3, 6)], SE)).unwrap();
+        assert_eq!(
+            enc.game().board().specials(),
+            [],
+            "off the board with its mark"
+        );
+        enc.play(&mv(&[(3, -5)], E)).unwrap();
+        assert_eq!(enc.game().board().get(4, -7), Some(Cell::Black), "it lands");
+        assert_eq!(
+            enc.game().board().specials(),
+            [((4, -7), Special::Spark)],
+            "and keeps its mark"
+        );
+    }
 }

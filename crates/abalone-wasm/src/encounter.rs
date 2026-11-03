@@ -2904,9 +2904,21 @@ mod tests {
             "no marble left on (0, 0)"
         );
     }
-    /// The bosses that take the army's build (#1494): plain Abalone moves, hooks that only remove marbles.
-    const BUILDING: [&str; 6] = [
-        "hull", "chaplain", "alien", "railyard", "overseer", "stalker",
+    /// The bosses that take the army's build (#1494, #1495): plain Abalone moves, and hooks that remove marbles or move
+    /// them with their special marks.
+    const BUILDING: [&str; 12] = [
+        "hull",
+        "chaplain",
+        "alien",
+        "railyard",
+        "overseer",
+        "stalker",
+        "magnetizer",
+        "pulsar",
+        "assembly",
+        "core",
+        "dual",
+        "ballast",
     ];
     /// The Gyroscope, Force 1 and Chaos 2.
     const MASK: u32 = 1 | (1 << 16) | (2 << 20);
@@ -2929,7 +2941,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_standard_bosses_with_removing_hooks_take_the_army_build() {
+    fn only_the_standard_bosses_whose_hooks_carry_special_marks_take_the_army_build() {
         for id in boss_ids() {
             let mut f = Encounter::new(&id, 1).unwrap();
             let takes = BUILDING.contains(&id.as_str());

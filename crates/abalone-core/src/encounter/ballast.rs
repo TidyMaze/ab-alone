@@ -1014,4 +1014,17 @@ mod tests {
         assert_eq!(new, mv(&[(0, -3), (1, -4)], Direction::NE));
         assert_ne!(new, frozen);
     }
+
+    #[test]
+    fn a_borrowed_pulse_takes_the_special_mark_of_the_marble_it_moves() {
+        use crate::board::Special;
+        use crate::encounter::pulsar::PULSAR_PUSH;
+        let (seed, dir) = pulse_seed();
+        let mut board = open_board();
+        board.set_rogue_lite();
+        board.place_special((0, 0), Special::Heavy).unwrap();
+        let (dq, dr) = PULSAR_PUSH[usize::from(dir)];
+        let pushed = hook(&board, BALLAST_FIRE, seed);
+        assert_eq!(pushed.specials(), [((dq, dr), Special::Heavy)]);
+    }
 }

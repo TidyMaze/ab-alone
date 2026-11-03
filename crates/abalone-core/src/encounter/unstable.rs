@@ -1035,4 +1035,19 @@ mod tests {
         let (_, events) = last_events(&enc).unwrap();
         assert!(events.shock.unwrap().1.len() > 3);
     }
+
+    #[test]
+    fn a_shoved_marble_takes_its_special_mark_along_and_an_ejected_one_loses_it() {
+        use crate::board::Special;
+        let mut chain = board(&[(3, 0)], &[(4, 0)], &[]);
+        chain.set_rogue_lite();
+        chain.place_special((3, 0), Special::Heavy).unwrap();
+        chain.place_special((4, 0), Special::Spark).unwrap();
+        let moved = shove(&mut chain, &mut vec![], 0, 0);
+        assert_eq!(
+            chain.specials(),
+            [(moved[1].1, Special::Heavy)],
+            "the Heavy goes where its marble went, the Spark went off the board"
+        );
+    }
 }
