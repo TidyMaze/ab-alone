@@ -1502,6 +1502,7 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
     const width = map.filter((o) => o.act === n.act && o.row === n.row).length;
     return [((n.col + 0.5) / width) * 100, ((n.act * slot + 0.5 + n.row + 0.5) * 100) / total];
   };
+  const biome = (act: number): string => (run.exits && act <= run.biomes.length ? ` · ${BIOMES[biomeOf(run, act)]!.name}` : ''); // the biome of an act not yet picked is not named
   const here = run.path[run.path.length - 1];
   const taken = (i: number, j: number): boolean => run.path.some((p, k) => p === i && run.path[k + 1] === j);
   const marked = markedElites(map).filter(() => !run.keys.includes(Key.Emerald));
@@ -1519,15 +1520,15 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
     const kind = n.kind === 'unknown' ? '?' : n.kind[0]!.toUpperCase() + n.kind.slice(1);
     const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
     const key = marked.includes(i);
+    const tip = [elite ? `Elite: ${elite} (${ELITES[n.elite - 1]!.help})` : NODE_LOOKS[n.kind].name, run.enemies && n.formation ? `Formation: ${FORMATIONS[n.formation]}` : '', `Act ${n.act + 1}${biome(n.act)}`]; // what hovering or focusing the node shows (#1468)
     const note = [elite.replace('The ', ''), key ? 'key' : ''].filter(Boolean).join(' · ');
     return [
-      `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}${key ? ' marked' : ''}" data-node="${i}" data-node-kind="${n.kind}" style="left:${x}%;top:${y}%" ` +
+      `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}${key ? ' marked' : ''}" data-node="${i}" data-node-kind="${n.kind}" data-tip="${tip.filter(Boolean).join('&#10;')}" data-tip-side="${x < 34 ? 'left' : x > 66 ? 'right' : 'mid'}" style="left:${x}%;top:${y}%" ` +
         `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}${key ? ', marked: its key' : ''}"${open.includes(i) ? '' : ' disabled'}>${lineGlyph(NODE_LOOKS[n.kind].icon)}${kind}${note && `<small>${note}</small>`}</button>`,
     ];
   });
   const heads = Array.from({ length: acts }, (_, act) => {
-    const biome = run.exits && act <= run.biomes.length ? ` · ${BIOMES[biomeOf(run, act)]!.name}` : ''; // the biome of an act not yet picked is not named
-    return `<span class="act-head" style="top:${((act * slot + 0.25) * 100) / total}%">Act ${act + 1}${biome}</span>`;
+    return `<span class="act-head" style="top:${((act * slot + 0.25) * 100) / total}%">Act ${act + 1}${biome(act)}</span>`;
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';

@@ -833,6 +833,18 @@ body[data-reading] #log { visibility: visible; }
 #run-map button.node:not(:disabled) svg.glyph { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
 #run-map button.node:is(.taken, .here) svg.glyph { color: var(--bg); background: var(--accent); border-color: var(--accent); box-shadow: none; }
 #run-map button.node.here svg.glyph { box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--accent); }
+/* The node picked last pops when the map is drawn (#1468); the Reduced motion setting (data-motion on the root) keeps it still. */
+@keyframes node-pop { from { transform: scale(1.4); } to { transform: scale(1); } }
+:root:not([data-motion='reduced']) #run-map button.node.here svg.glyph { animation: node-pop 0.35s ease-out; }
+/* The preview of a node on hover and focus (#1468): its kind, the elite and its formation, its act and biome, from data-tip. It
+   sits under the node, centred in the middle of the plate and pinned to the edge of the node near a side so it stays inside. */
+#run-map button.node:is(:hover, :focus-visible) { z-index: 2; } /* over the nodes after it in the page */
+#run-map button.node:is(:hover, :focus-visible)::after {
+  content: attr(data-tip); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 8rem; margin-top: 0.25rem; padding: 0.25rem 0.5rem;
+  color: var(--text); background: var(--panel); border: 1px solid var(--accent); border-radius: 2px; font-weight: 400; text-align: left; text-shadow: none; white-space: pre-line; pointer-events: none;
+}
+#run-map button.node[data-tip-side='left']:is(:hover, :focus-visible)::after { left: 0; transform: none; }
+#run-map button.node[data-tip-side='right']:is(:hover, :focus-visible)::after { left: auto; right: 0; transform: none; }
 #run-map .act-head {
   position: absolute; left: 0; z-index: 1; transform: translateY(-50%); padding: 0 0.375rem; color: var(--muted); background: var(--panel);
   border-left: 3px solid var(--biome, var(--accent)); font: 600 0.75em/1.4 var(--display); text-transform: uppercase; letter-spacing: 0.05em;

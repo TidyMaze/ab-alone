@@ -6047,6 +6047,7 @@ runPanel.addEventListener('click', (e) => {
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button) {
+    document.body.dataset.pick = sfx.pick() ? 'pick' : 'none'; // the pick's sound (#1468), read by the e2e tests
     run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
     void saveRun(gameStore, run!.state);
     if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));

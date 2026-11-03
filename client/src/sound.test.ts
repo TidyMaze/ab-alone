@@ -259,8 +259,9 @@ describe('Sfx.knock, the move sound', () => {
 describe('Sfx.pick, the sound of a node picked on the rogue-lite map (#1468)', () => {
   it('is a short soft rising blip, silent at both ends', () => {
     expect(PICK.length).toBeGreaterThan(0);
+    expect(start(PICK[0]!)).toBe(0); // the second note follows at once
     for (const v of PICK) {
-      expect(start(v)).toBe(0);
+      expect(v.env[0]![1]).toBe(0);
       expect(v.env.at(-1)![1]).toBe(0);
       expect(end(v)).toBeLessThanOrEqual(0.3);
       expect(peak(v)).toBeLessThanOrEqual(0.5);

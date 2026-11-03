@@ -11,7 +11,7 @@ export const STRAY_DATA = [
   'announceBlink', 'armies', 'beltCounter', 'beltDirs', 'beltStrikes', 'beltTurns', 'blood', 'bombs', 'bonusSlides', 'boss', 'bridge',
   'burns', 'bursts', 'converted', 'cracks', 'dualRoom', 'echoBonus', 'echoFree', 'echoFreeTarget', 'echoLanded', 'echoSkipped',
   'eggCounters', 'eggs', 'ejecting', 'ejections', 'exploding', 'explosions', 'fired', 'flips', 'fuses', 'ghosts', 'haze', 'hazeY',
-  'knock', 'lastMove', 'martyr', 'medics', 'nextArmy', 'over', 'passing', 'pulseCounter', 'pulses', 'pulls', 'pulsing', 'repulsions', 'returns',
+  'knock', 'lastMove', 'martyr', 'medics', 'nextArmy', 'over', 'passing', 'pick', 'pulseCounter', 'pulses', 'pulls', 'pulsing', 'repulsions', 'returns',
   'ripples', 'shields', 'shockwaves', 'slams', 'sliding', 'sparks', 'specials', 'sunk', 'swarmMarks', 'trainCounters', 'trains', 'vanished',
 ] as const;
 

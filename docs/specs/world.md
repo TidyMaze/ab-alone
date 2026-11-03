@@ -222,7 +222,7 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
 - **Mix.** Four sliders: music, ambience, effects, voice (#438), each the gain of its bus into one
   master gain, 0 to 100 %, at 100 % by default and saved locally. The hum is ambience, the
-  tension drones music, the knock, the ejection and the tells effects, the audio logs voice (#516).
+  tension drones music, the knock, the ejection, the tells and the pick of a rogue-lite map node (#1468) effects, the audio logs voice (#516).
   A Sound off saved by the old toggle sets every slider to 0. With every slider at 0 no audio
   context is made. The game is fully playable on mute: every audio cue has a visual twin (the
   ejection animation for the ejection sound, the tells on the board for their sounds, the transcript for an

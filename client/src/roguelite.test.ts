@@ -252,7 +252,7 @@ describe('roguelite', () => {
 
   it('previews a node on hover and focus: its kind, the elite archetype, the formation if known and the biome (#1468)', () => {
     // Act 1: a Snake fight, a Wall elite of the Wedge formation and a rest on a row of three, then the boss.
-    const flat = [0, 0, 0, 0, 1, 3, 0, 0, 0, 1, 2, 1, 1, 1, 0, 0, 2, 3, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0];
+    const flat = [0, 0, 0, 0, 1, 3, 0, /**/ 0, 0, 1, 2, 1, 1, 1, /**/ 0, 0, 2, 3, 1, 0, 0, /**/ 0, 1, 0, 1, 0, 0, 0];
     const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
     const preview = (run: Run): string[] =>
       [...parse(mapHtml(parseMap(flat), run)).querySelectorAll<HTMLButtonElement>('button[data-node]')].map((b) => b.dataset.tip!);
@@ -262,7 +262,7 @@ describe('roguelite', () => {
       'Rest\nAct 1 · Meadow',
       'Boss\nAct 1 · Meadow',
     ]);
-    expect(preview({ ...newRun(1, 3, LEGACY_UNLOCKED), enemies: false, exits: false })).toEqual(['Fight', 'Elite', 'Rest', 'Boss']); // a run saved before the varied enemies and the biomes
+    expect(preview({ ...newRun(1, 3, LEGACY_UNLOCKED), enemies: false, exits: false })).toEqual(['Fight\nAct 1', 'Elite\nAct 1', 'Rest\nAct 1', 'Boss\nAct 1']); // a run saved before the varied enemies and the biomes
     const sides = [...parse(mapHtml(parseMap(flat), newRun(1, 3, LEGACY_UNLOCKED))).querySelectorAll<HTMLButtonElement>('button[data-node]')].map((b) => b.dataset.tipSide);
     expect(sides).toEqual(['left', 'mid', 'right', 'mid']); // the preview keeps inside the plate
     expect(parse(mapHtml(parseMap([0, 0, 0, 7, 0, 0, 0]), newRun(1, 3, LEGACY_UNLOCKED))).querySelector<HTMLButtonElement>('button[data-node]')!.dataset.tip).toBe('Unknown\nAct 1 · Meadow'); // what it hides stays hidden

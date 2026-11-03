@@ -57,6 +57,14 @@ pick, the plate scrolls to put the first of them in the middle (before the first
 phone the plate sits above the thumb dock and scrolls inside itself (#1477); on a desktop it keeps clear of the toolbar. Every node
 button keeps its `aria-label` (`Act 1, elite, The Wall`) and `data-node`, and holds its kind in `data-node-kind`.
 
+A pick has its sound: a short soft rising blip on the effects bus (silent with the effects slider at 0 or before the first gesture; the
+page reports it in `data-pick`, `pick` or `none`). The node picked last pops (a 0.35 s scale from 1.4 to 1) each time the map is drawn,
+and stays still under the Reduced motion setting. Hovering a node, taken or not, or focusing it with the keyboard, previews it in a small
+box under it (`data-tip`): its kind, for an elite its archetype and what it brings (`Elite: The Wall (Anchors)`), the formation of its
+army when it is known (not for a run saved before the varied enemies), and its act with its biome once picked. An unknown node shows only
+its kind: what it hides stays hidden. The box stays inside the plate (`data-tip-side`), and the node under the pointer is drawn over its
+neighbours.
+
 ## 3. Saving
 
 The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on

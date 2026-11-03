@@ -130,6 +130,12 @@ const TELLS: Record<Tell, Voice[]> = {
   ),
 };
 
+/** The pick of a node on the rogue-lite map (#1468): a short soft blip that rises, a low note and a bright one a fifth above. */
+export const PICK: Voice[] = [
+  { source: 'triangle', freq: [330, 440], env: strike(0, 0.3, 0.14) },
+  { source: 'sine', freq: [660, 880], env: strike(0.05, 0.15, 0.2) },
+];
+
 /** Every voice of the sound twin of `tell`. */
 export const tellVoices = (tell: Tell): Voice[] => TELLS[tell];
 
@@ -152,13 +158,14 @@ export const BUSES: readonly Bus[] = ['music', 'ambience', 'effects', 'voice'];
 /** The volume of each bus, 0 to 100 %, as its slider shows it. */
 export type Mix = Record<Bus, number>;
 /** The bus each sound goes through: the hum is ambience, the tension drones music, the knock, the ejection and the
- * tells effects, the audio logs voice (#516). */
+ * tells and the pick of a map node effects, the audio logs voice (#516). */
 export const ROUTE = {
   hum: 'ambience',
   tension: 'music',
   knock: 'effects',
   ejection: 'effects',
   tell: 'effects',
+  pick: 'effects',
   log: 'voice',
 } as const satisfies Record<string, Bus>;
 /** The gain of a bus at `percent` of its slider. */
@@ -379,6 +386,11 @@ export class Sfx {
   /** Plays the sound twin of `tell` from now. The tell, or null when silent (effects at 0, or no gesture yet). */
   tell(tell: Tell): Tell | null {
     return this.playAll(ROUTE.tell, tellVoices(tell)) ? tell : null;
+  }
+
+  /** Plays the pick of a map node from now. False when silent (effects at 0, or no gesture yet). */
+  pick(): boolean {
+    return this.playAll(ROUTE.pick, PICK);
   }
 
   /** Plays `voices` from now through `bus`. False when silent: the bus at 0, or no gesture yet. */
