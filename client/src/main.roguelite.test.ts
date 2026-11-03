@@ -1075,3 +1075,87 @@ describe('main.ts, the map scrolls to the nodes to pick (#1468)', () => {
     rect.mockRestore();
   });
 });
+
+describe('main.ts the rogue-lite score, daily run, history and compendium (#1466)', () => {
+  const today = (): string => new Date().toISOString().slice(0, 10);
+  const bookButton = (name: string): HTMLButtonElement => map().querySelector<HTMLButtonElement>(`button[data-book="${name}"]`)!;
+  const dailyButton = (): HTMLButtonElement => map().querySelector<HTMLButtonElement>('button[data-daily]')!;
+  // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6, and leads to the first fight 10 of act 2, lost here.
+  const lostRun = (state: Partial<Run> = {}): Run => ({ ...plainRun(3, 0), army: 3, path: [0, 2, 6, 9, 10], end: 'lost', ...state });
+
+  it('the start screen offers the daily run, the run history and the compendium; the first pick takes them away', async () => {
+    const game = await startRun('?bot=off');
+    expect(dailyButton().textContent).toBe(`Daily run ${today()}`);
+    expect(dailyButton().disabled).toBe(false);
+    expect(bookButton('history').textContent).toBe('Run history');
+    expect(bookButton('compendium').textContent).toBe('Compendium');
+    open()[0]!.click();
+    expect(map().querySelector('.run-book')).toBeNull();
+    await game.settle();
+  });
+
+  it('the daily run plays the seed of the day, once: it is saved, resumed, and its button is spent', async () => {
+    const { dailySeed } = await import('./daily');
+    const indexedDB = new IDBFactory();
+    const game = await startRun('?bot=off', indexedDB);
+    dailyButton().click();
+    expect(line()).toBe(`Daily run ${today()} · army 14 marbles · pick a fight`);
+    expect(map().querySelectorAll('button[data-commander]')).toHaveLength(4);
+    expect([...map().querySelectorAll<HTMLButtonElement>('button[data-commander]')].every((b) => !b.disabled)).toBe(true); // everything unlocked, for everyone
+    expect(dailyButton().textContent).toBe(`Daily run ${today()} · tried today, back tomorrow`); // one try a day
+    expect(dailyButton().disabled).toBe(true);
+    const { run_map } = await import('abalone-wasm');
+    const expected = parseMap(run_map(dailySeed(today()))).filter((n) => n.act === 0 && n.row === 0).map((n) => `Act 1, ${n.kind}`);
+    expect(open().map((b) => b.getAttribute('aria-label'))).toEqual(expected); // the map of the seed of the day
+    await game.settle();
+    const again = await boot('?bot=off', { indexedDB });
+    expect(line()).toBe(`Daily run ${today()} · army 14 marbles · pick a fight`); // resumed
+    expect(localStorage.getItem('ab-alone.roguelite.daily')).toBe(JSON.stringify({ day: today(), score: null }));
+    expect(dailyButton().disabled).toBe(true);
+    expect(again.hook).toBeDefined();
+  });
+
+  it('a daily run over keeps its score, the button then shows it and stays shut, and the history lists the run', async () => {
+    const game = await startRun('?bot=off');
+    const { dailyRun } = await import('./roguelite');
+    localStorage.setItem('ab-alone.roguelite.daily', JSON.stringify({ day: today(), score: null }));
+    await game.hook('__run', { ...dailyRun(today(), 3), army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
+    expect(map().querySelector('.run-score')!.textContent).toBe('Score: 180 (acts 1 × 100, elites 2 × 25, marbles 3 × 10)');
+    expect(JSON.parse(localStorage.getItem('ab-alone.roguelite.daily')!)).toEqual({ day: today(), score: 180 });
+    byId('run-new').click();
+    expect(dailyButton().textContent).toBe(`Daily run ${today()} · score 180, back tomorrow`);
+    expect(dailyButton().disabled).toBe(true);
+    bookButton('history').click();
+    expect(map().querySelector('.run-line')!.textContent).toBe('Run history');
+    expect([...map().querySelectorAll('li')].map((li) => li.textContent)).toEqual([`The Captain · lost · score 180 · daily ${today()}`]);
+    map().querySelector<HTMLButtonElement>('button[data-book="map"]')!.click();
+    expect(line()).toContain('Rogue-lite run');
+    expect(bookButton('history')).not.toBeNull();
+  });
+
+  it('a run over is in the history once, with its score, newest first', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', lostRun());
+    expect(map().querySelector('.run-score')!.textContent).toBe('Score: 180 (acts 1 × 100, elites 2 × 25, marbles 3 × 10)');
+    await game.hook('__run', lostRun()); // shown again: not twice
+    await game.hook('__run', lostRun({ seed: 4, path: [0], army: 3 }));
+    byId('run-new').click();
+    bookButton('history').click();
+    expect([...map().querySelectorAll('li')].map((li) => li.textContent)).toEqual(['No commander · lost · score 30', 'No commander · lost · score 180']);
+  });
+
+  it('the compendium shows what the runs held, the rest as silhouettes', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...plainRun(3, 0), relics: [Relic.Jammer], path: [0] });
+    game.openModes();
+    byId('roguelite').click();
+    bookButton('compendium').click();
+    expect(map().querySelector('.run-line')!.textContent).toMatch(/^Compendium · 1 of \d+ seen$/);
+    const seen = [...map().querySelectorAll('li.seen')].map((li) => li.textContent);
+    expect(seen).toEqual([`${RELICS[Relic.Jammer]!.name}: ${RELICS[Relic.Jammer]!.help}`]);
+    expect(map().querySelectorAll('li.unseen svg.silhouette').length).toBeGreaterThan(10);
+    map().querySelector<HTMLButtonElement>('button[data-book="map"]')!.click();
+    expect(bookButton('compendium')).not.toBeNull();
+    expect(localStorage.getItem('ab-alone.roguelite.seen')).toContain('"relics":[3]');
+  });
+});

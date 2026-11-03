@@ -12,6 +12,10 @@ import {
   MAX_ASCENSION,
   readAscension,
   recordAscension,
+  dailyRun,
+  runScore,
+  SCORE,
+  scoreParts,
   actsWon,
   BIOMES,
   biomeOf,
@@ -142,7 +146,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [] });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '' });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -246,7 +250,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -2106,6 +2110,78 @@ describe('roguelite ascension', () => {
     for (const bad of [{ ascension: 11 }, { ascension: -1 }, { ascension: 1.5 }, { top: 11 }, { top: 'x' }]) {
       await saved.put(RUN_KEY, { ...run, ...bad });
       expect(await loadRun(saved, () => ACT, engine)).toBeNull();
+describe('roguelite score and daily run (#1466)', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  // Act 1: a fight 0 leads to an elite 1, then the boss 2. Act 2: a fight 3, then the boss 4.
+  const TWO = parseMap([[0, 0, 0, 0, 1, 0, 0], [0, 1, 0, 2, 1, 0, 1], [0, 2, 0, 1, 0, 0, 0], [1, 0, 0, 0, 1, 0, 0], [1, 1, 0, 1, 0, 0, 0]].flat());
+  const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), ...state });
+
+  it('a new run has no flawless fight and is no daily run', () => {
+    expect(newRun(1, 3, [])).toMatchObject({ flawless: 0, daily: '' });
+  });
+
+  it('a fight, an elite or a boss won with no marble lost is flawless, a loss or a lost marble is not', () => {
+    const fight = pick(fresh(), 0);
+    expect(fightOver(TWO, fight, true, 0).flawless).toBe(1);
+    expect(fightOver(TWO, { ...fight, flawless: 2 }, true, 0).flawless).toBe(3);
+    expect(fightOver(TWO, fight, true, 1).flawless).toBe(0);
+    expect(fightOver(TWO, pick(fresh({ relics: [Relic.HullPlating] }), 0), true, 1).flawless).toBe(0); // Hull plating brings the marble back, the fight was not flawless
+    expect(fightOver(TWO, fight, false, 0).flawless).toBe(0);
+  });
+
+  it('the score is 100 per act won, 25 per elite beaten, 10 per marble left, 15 per flawless fight', () => {
+    expect(SCORE).toEqual({ act: 100, elite: 25, marble: 10, flawless: 15, ascension: 50 });
+    expect(runScore(TWO, fresh({ path: [0, 1, 2], army: 10, flawless: 2 }))).toBe(100 + 25 + 100 + 30);
+    expect(runScore(TWO, fresh({ path: [0, 1, 2, 3, 4], army: 12, flawless: 3, end: 'won' }))).toBe(200 + 25 + 120 + 45);
+  });
+
+  it('an elite or a boss still fought, or lost to, does not count', () => {
+    expect(runScore(TWO, fresh({ path: [0, 1], fighting: true, army: 14 }))).toBe(140);
+    expect(runScore(TWO, fresh({ path: [0, 1], end: 'lost', army: 3 }))).toBe(30);
+    expect(runScore(TWO, fresh({ path: [0, 1, 2], fighting: true, army: 8 }))).toBe(25 + 80);
+    expect(runScore(TWO, fresh({ path: [0, 1, 2, 3, 4], end: 'lost', army: 3 }))).toBe(100 + 25 + 30);
+  });
+
+  it('the ascension level of the run is worth 50 points a level, none at level 0', () => {
+    expect(scoreParts(TWO, fresh({ path: [0], army: 5, ascension: 3 }))).toContainEqual(['ascension', 3, 50]);
+    expect(runScore(TWO, fresh({ path: [0], army: 5, ascension: 3 }))).toBe(50 + 150);
+    expect(scoreParts(TWO, fresh({ path: [0], army: 5 })).map(([label]) => label)).not.toContain('ascension');
+  });
+
+  it('the summary of a run over shows its score and where it comes from', () => {
+    const over = fresh({ path: [0, 1, 2, 3], army: 3, flawless: 1, end: 'lost' });
+    const doc = parse(mapHtml(TWO, over));
+    expect(doc.querySelector('.run-score')!.textContent).toBe('Score: 170 (acts 1 × 100, elites 1 × 25, marbles 3 × 10, flawless fights 1 × 15)');
+    expect([...doc.querySelectorAll('.run-help')].map((p) => p.textContent)[0]).toBe('Path: act 1 Fight, Elite, Boss · act 2 Fight');
+    expect(parse(mapHtml(TWO, fresh({ path: [0], army: 3, end: 'lost' }))).querySelector('.run-score')!.textContent).toBe('Score: 30 (marbles 3 × 10)');
+    expect(parse(mapHtml(TWO, fresh({ path: [0] }))).querySelector('.run-score')).toBeNull(); // only a run over
+  });
+
+  it('a daily run plays the seed of the day with everything unlocked, the same for everyone', () => {
+    const daily = dailyRun('2026-11-03', 77);
+    expect(daily).toMatchObject({ seed: 77, daily: '2026-11-03', best: 3, army: START_ARMY, commander: 0, relics: [Relic.Gyroscope] });
+    expect(daily.unlocked).toEqual(BLUEPRINTS.map((_, id) => id));
+    expect(runLine(TWO, daily)).toBe('Daily run 2026-11-03 · army 14 marbles · pick a fight');
+    expect(runLine(TWO, pick(daily, 0))).toBe('Daily run 2026-11-03 · act 1 fight · army 14 marbles');
+    expect(runLine(TWO, { ...daily, end: 'won' })).toBe('Run won with 14 marbles');
+  });
+
+  it('the start screen holds the book buttons it is given, and only before the first pick', () => {
+    const book = '<div class="run-book"><button type="button" data-book="history">Run history</button></div>';
+    expect(parse(mapHtml(TWO, fresh(), book)).querySelector('.run-book button')!.textContent).toBe('Run history');
+    expect(parse(mapHtml(TWO, fresh())).querySelector('.run-book')).toBeNull();
+    expect(parse(mapHtml(TWO, fresh({ path: [0] }), book)).querySelector('.run-book')).toBeNull();
+    expect(parse(mapHtml(TWO, fresh({ path: [0], end: 'lost' }), book)).querySelector('.run-book')).toBeNull();
+  });
+
+  it('a run saved with a daily day or a flawless count loads, a bad one is dropped', async () => {
+    const store = memoryStore();
+    const mapOf = (): MapNode[] => TWO;
+    await saveRun(store, fresh({ daily: '2026-11-03', flawless: 4 }));
+    expect((await loadRun(store, mapOf, engine))!.state).toMatchObject({ daily: '2026-11-03', flawless: 4 });
+    for (const bad of [{ daily: '3 Nov' }, { daily: 3 }, { flawless: -1 }, { flawless: 1.5 }, { flawless: 99999 }]) {
+      await store.put(RUN_KEY, { ...fresh(), ...bad });
+      expect(await loadRun(store, mapOf, engine)).toBeNull();
     }
   });
 });

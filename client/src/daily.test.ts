@@ -5,6 +5,7 @@ import {
   dailyCard,
   dailyFor,
   dailyLine,
+  dailySeed,
   dailyTitle,
   hash32,
   readAttempts,
@@ -63,6 +64,13 @@ describe('hash32', () => {
       expect(h).toBeGreaterThanOrEqual(0);
       expect(h).toBeLessThan(2 ** 32);
     }
+  });
+});
+
+describe('dailySeed', () => {
+  it('is the seed of the daily challenge of the day, the rogue-lite daily run (#1466) plays it too', () => {
+    expect(dailySeed('2026-10-24')).toBe(2374354862);
+    expect(dailySeed('2026-10-25')).toBe(dailyFor('2026-10-25', IDS).seed);
   });
 });
 
