@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, replay_score, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -307,8 +307,12 @@ import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
   actBoss,
   actsWon,
+  BIOMES,
   buy,
   chooseCommander,
+  chooseExit,
+  currentBiome,
+  exitHtml,
   claim,
   clearRun,
   collect,
@@ -2539,7 +2543,9 @@ const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? n
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 // The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
-const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less) => run_foes(state.seed, node, less));
+const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less, biome) => run_foes(state.seed, node, less, biome));
+// The exits at the end of an act (#1472) and the roster names of their bosses.
+const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from);
 const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesFor(map, state), undefined, relicMask(state));
 // The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
 const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
@@ -5821,13 +5827,18 @@ function showRun(): void {
             ? shopHtml(state)
             : state.collector
               ? collectorHtml(state)
-              : placed
+              : state.exit
+                ? exitHtml(map, state, exitsFor(state), boss_name)
+                : placed
               ? placeHtml(state, armed)
               : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
-  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.collector ? 'collector' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.collector ? 'collector' : state.exit ? 'exit' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
+  const biome = currentBiome(map, state); // the tint of the map and the board (#1472); the Meadow has none
+  if (biome) document.body.dataset.biome = BIOMES[biome]!.id;
+  else delete document.body.dataset.biome;
   hud();
 }
 // A press on one of the army's marbles (Black) during the placement places the type armed, or takes it back.
@@ -5926,6 +5937,7 @@ function leaveRun(): void {
   delete document.body.dataset.tactics;
   runPanel.hidden = true;
   delete document.body.dataset.run;
+  delete document.body.dataset.biome;
   newGameButton.hidden = false;
   void clearRun(gameStore);
 }
@@ -5967,6 +5979,10 @@ runPanel.addEventListener('click', (e) => {
     showRun();
   } else if (button?.dataset.commander) {
     run!.state = chooseCommander(run!.state, Number(button.dataset.commander));
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.exit) {
+    run!.state = chooseExit(run!.map, run!.state, Number(button.dataset.exit), exitsFor(run!.state));
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.kind) {

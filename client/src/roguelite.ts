@@ -30,6 +30,18 @@ export const ELITES: readonly { name: string; help: string }[] = [
   { name: 'The Brute', help: 'Heavies' },
 ];
 
+/** A biome of an act (#1472, docs/specs/roguelite.md section 18), by the bridge's code, the Open world's: its look id (the tint is
+ * in ui.css), its name, the roster boss that ends its act (`boss_ids`; none for the Meadow, whose act 1 boss is dealt as before), the
+ * hole pattern its fights open on the board and the special marble every one of its fights holds. */
+export const BIOMES: readonly { id: string; name: string; boss: string; hazard: string; foes: string }[] = [
+  { id: 'meadow', name: 'Meadow', boss: '', hazard: 'no hazard', foes: 'as dealt' },
+  { id: 'forest', name: 'Forest', boss: 'alien', hazard: '2 ponds', foes: 'Anchors' },
+  { id: 'tundra', name: 'Tundra', boss: 'hull', hazard: 'a crevasse across the board', foes: 'Shields' },
+  { id: 'desert', name: 'Desert', boss: 'pulsar', hazard: '2 sinkholes in the middle row', foes: 'Sparks' },
+  { id: 'badlands', name: 'Badlands', boss: 'core', hazard: '4 canyon holes on the flanks', foes: 'Heavies' },
+  { id: 'archipelago', name: 'Archipelago', boss: 'ballast', hazard: '5 water holes around the centre', foes: 'Magnets' },
+];
+
 /** One node of the map: a fight, an elite, a rest, an event, a treasure, a shop, an unknown "?", or the boss that ends its act. `links` are the columns of
  * the next row it leads to. A fight or an elite has the bridge's `formation` of the bot's army, an elite its archetype
  * (`elite`, `0` for none). */
@@ -57,7 +69,9 @@ export interface MapNode {
  * army, so its fight in progress replays. `told` is the line of what the last event gave or cost, on the map until the next node is picked (#1463). `unlocked` are the blueprints banked before this run (#1470), which widen its pools
  * (a run keeps the ones it started with, so its offers replay); `cells` are what it can spend at the Collector, `carried`
  * the blueprints dropped and not yet banked, `banked` the ones it banked, `drop` the blueprint (id + 1) the last fight
- * dropped, 0 for none, and `collector` is on while the Collector's room waits between two acts. */
+ * dropped, 0 for none, and `collector` is on while the Collector's room waits between two acts. `exits` is on for a run that
+ * offers a biome at the end of each act but the last (#1472); a run saved before has it off and stays in the Meadow. `exit` is on
+ * while the choice between the two exits waits, and `biomes` are the codes picked for act 2 then act 3. */
 export interface Run {
   seed: number;
   army: number;
@@ -86,6 +100,9 @@ export interface Run {
   drop: number;
   collector: boolean;
   told: string;
+  exits: boolean;
+  exit: boolean;
+  biomes: number[];
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -265,6 +282,9 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[]):
   drop: 0,
   collector: false,
   told: '',
+  exits: true,
+  exit: false,
+  biomes: [],
 });
 
 /** The run with the commander `commander` (an index of COMMANDERS): its special marbles and its relic, before the first pick
@@ -295,7 +315,7 @@ function next(map: MapNode[], path: number[]): number[] {
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
 export const choices = (map: MapNode[], run: Run): number[] =>
-  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop || run.collector ? [] : next(map, run.path);
+  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop || run.collector || run.exit ? [] : next(map, run.path);
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [], told: '' });
@@ -347,6 +367,31 @@ function lastNode(map: MapNode[], run: Run): MapNode | undefined {
   return map[node] && { ...map[node]!, kind: kindOf(map, run, node) };
 }
 
+/** The biome of act `act` (0 for the first) of the run (#1472): the Meadow in act 1, the exit picked before it later, and the
+ * Meadow throughout for a run saved before the exits. */
+export const biomeOf = (run: Run, act: number): number => (run.exits && act > 0 ? (run.biomes[act - 1] ?? 0) : 0);
+
+/** The biome the run is in: its last node's act, or the next act's once that node is a boss beaten and the exit picked; the
+ * Meadow once the run is over. */
+export function currentBiome(map: MapNode[], run: Run): number {
+  const node = lastNode(map, run);
+  if (!node || run.end) return 0;
+  return biomeOf(run, node.act + Number(node.kind === 'boss' && !run.fighting && !run.exit));
+}
+
+/** The biomes of the two exits that wait at the end of an act, from `exitsOf(act, from)` (`run_exits`) for the act after the last
+ * node's, none when no exit waits. */
+export function exitOffers(map: MapNode[], run: Run, exitsOf: (act: number, from: number) => ArrayLike<number>): number[] {
+  const node = lastNode(map, run);
+  return run.exit && node ? Array.from(exitsOf(node.act + 1, biomeOf(run, node.act))) : [];
+}
+
+/** The run once the exit to `biome` is taken: it is the next act's, and the map goes on. Unchanged when it is not one of the exits
+ * that wait. */
+export function chooseExit(map: MapNode[], run: Run, biome: number, exitsOf: (act: number, from: number) => ArrayLike<number>): Run {
+  return exitOffers(map, run, exitsOf).includes(biome) ? { ...run, biomes: [...run.biomes, biome], exit: false } : run;
+}
+
 /** The marbles of a fight node's bot (#1145): its standard layout less the 4 of its front row. */
 export const FIGHT_FOES = 10;
 
@@ -356,9 +401,10 @@ export const foesOf = (map: MapNode[], run: Run): number =>
   (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY) - Number(has(run, Relic.Saboteur));
 
 /** The bot's army in the run's fight as `Engine.with_foes` takes it (#1462): the bridge's plan for the node, `planOf(node,
- * less)` (`run_foes`), `less` being 1 with the Saboteur; the count alone (`foesOf`) for a run saved before. */
-export const foePlan = (map: MapNode[], run: Run, planOf: (node: number, less: number) => ArrayLike<number>): number | number[] =>
-  run.enemies ? Array.from(planOf(run.path[run.path.length - 1]!, Number(has(run, Relic.Saboteur)))) : foesOf(map, run);
+ * less, biome)` (`run_foes`), `less` being 1 with the Saboteur and `biome` the one of the node's act (#1472); the count alone
+ * (`foesOf`) for a run saved before. */
+export const foePlan = (map: MapNode[], run: Run, planOf: (node: number, less: number, biome: number) => ArrayLike<number>): number | number[] =>
+  run.enemies ? Array.from(planOf(run.path[run.path.length - 1]!, Number(has(run, Relic.Saboteur)), biomeOf(run, lastNode(map, run)!.act))) : foesOf(map, run);
 
 /** An elite's bot searches this many times the positions of a fight's (#800). */
 export const ELITE_BUDGET = 2;
@@ -380,7 +426,8 @@ export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
 export const ACT_PERCENT = [50, 100, 200];
 
 /** The roster boss of the run's fight when its node is a boss (#800), one of `ids` (the bridge's boss_ids): the run seed
- * deals them, a new one each act, the act's strength, and the fight's seed from the run seed and the node. */
+ * deals them, a new one each act, the act's strength, and the fight's seed from the run seed and the node. The boss of an act
+ * in a biome is the biome's (#1472), when the roster has it. */
 export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; seed: number; percent: number } | null {
   const node = lastNode(map, run);
   if (!run.fighting || node?.kind !== 'boss') return null;
@@ -390,7 +437,8 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
   }
   const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1);
-  return { id: dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
+  const own = BIOMES[biomeOf(run, node.act)]!.boss;
+  return { id: ids.includes(own) ? own : dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
 }
 
 /** What one side of an event choice gives and costs (#1463): `army` marbles more or less (up to START_ARMY), `count`
@@ -575,7 +623,8 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const found = earns && tier !== 'fight' && node.act < lastAct(map) ? dropOf(run) : -1; // no Collector follows the last act
   const carried = found < 0 ? run.carried : [...run.carried, found];
   const collector = earns && tier === 'boss' && node.act < lastAct(map) && carried.length > 0;
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector };
+  const exit = run.exits && earns && tier === 'boss' && node.act < lastAct(map); // the exits wait after the Collector (#1472)
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
@@ -822,6 +871,7 @@ function summaryHtml(map: MapNode[], run: Run): string {
   const unlocks = [...earned(map, run), ...run.banked.map(blueprintName)];
   return [
     `Path: ${acts.join(' · ')}`,
+    ...(run.biomes.length ? [`Biomes: ${['Meadow', ...run.biomes.slice(0, new Set(run.path.map((n) => map[n]!.act)).size - 1).map((b) => BIOMES[b]!.name)].join(', ')}`] : []),
     `Fights: ${fights - lost} won, ${lost} lost`,
     `Army at the end: ${owned(run.army, run.specials)}`,
     ...(run.scrap ? [`Scrap left: ${run.scrap}, lost with the run`] : []),
@@ -842,11 +892,13 @@ export function runLine(map: MapNode[], run: Run): string {
   if (run.end === 'lost') return `Run lost · ${run.army} marbles left`;
   const node = run.fighting ? lastNode(map, run)! : null;
   const foes = node && run.enemies ? [...(node.elite ? [ELITES[node.elite - 1]!.name] : []), ...(node.formation ? [FORMATIONS[node.formation]!] : [])] : [];
-  const where = node ? [`act ${node.act + 1} ${node.kind}`, ...foes].join(' · ') : '';
+  const biome = currentBiome(map, run);
+  const place = biome ? [BIOMES[biome]!.name] : [];
+  const where = node ? [`act ${node.act + 1} ${node.kind}`, ...place, ...foes].join(' · ') : '';
   const bag = [run.scrap && `${run.scrap} scrap`, run.cells && `${run.cells} cells`, run.carried.length && `${run.carried.length} blueprint${run.carried.length === 1 ? '' : 's'}`];
   const army = `army ${owned(run.army, run.specials)}${bag.flatMap((b) => (b ? [` · ${b}`] : [])).join('')}`;
   const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
-  return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
+  return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${place.map((p) => `${p} · `).join('')}${army} · pick a fight`;
 }
 
 const polygon = (points: readonly [number, number][]): string => points.map(([x, y]) => `${x},${-y}`).join(' ');
@@ -955,6 +1007,21 @@ export function collectorHtml(run: Run): string {
     `<p class="run-line">Collector · ${run.cells} cells</p>` +
     '<p class="run-help">Bank a blueprint: it joins the pools of your next runs for good. Blueprints and cells left here wait for the next Collector, and are lost if the run ends first.</p>' +
     `${banked}<div class="run-kinds">${buttons.join('')}<button type="button" data-depart="1">Leave</button></div>`
+  );
+}
+
+/** The exit screen between two acts (#1472): a button per exit with its biome, the holes its fights open, the special marble they
+ * hold and the boss that ends its act (`bossName` is the bridge's boss_name; unknown when it has none), each wearing its tint. */
+export function exitHtml(map: MapNode[], run: Run, exitsOf: (act: number, from: number) => ArrayLike<number>, bossName: (id: string) => string | undefined): string {
+  const act = lastNode(map, run)!.act + 1;
+  const buttons = exitOffers(map, run, exitsOf).map((code) => {
+    const biome = BIOMES[code]!;
+    return `<button type="button" data-exit="${code}" data-biome="${biome.id}">${biome.name} · ${biome.hazard} · foes: ${biome.foes} · boss: ${bossName(biome.boss) ?? 'unknown'}</button>`;
+  });
+  return (
+    `<p class="run-line">Act ${act} done · pick the exit to act ${act + 1}</p>` +
+    '<p class="run-help">Each exit leads to a biome for the next act: its fights open holes in the board, where a marble pushed in is lost, hold its special marble, and its boss ends the act.</p>' +
+    `<div class="run-kinds run-exits">${buttons.join('')}</div>`
   );
 }
 
@@ -1067,10 +1134,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the commanders (#1464) none. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '' } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [] } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1109,9 +1176,14 @@ function decodeRun(raw: unknown): Run | null {
     typeof collector === 'boolean' &&
     typeof told === 'string' &&
     told.length <= MAX_TOLD &&
-    !/[<>&"]/.test(told);
+    !/[<>&"]/.test(told) &&
+    typeof exits === 'boolean' &&
+    typeof exit === 'boolean' &&
+    Array.isArray(biomes) &&
+    biomes.length < ALL_ACTS &&
+    biomes.every((b, i) => isInt(b, BIOMES.length - 1) && b > 0 && biomes.indexOf(b) === i);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes }
     : null;
 }
 

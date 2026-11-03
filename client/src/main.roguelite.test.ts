@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import { cellIndex, type Axial, type Move } from './board';
-import { actBoss, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
+import { actBoss, BIOMES, ELITES, FORMATIONS, newRun, parseMap, pick, Relic, RELICS, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
 import { LEGACY_UNLOCKED } from './collector';
 import type { View } from './camera';
@@ -835,7 +835,7 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
   /** The plan the bridge deals for a node as the board dataset lists its special marbles: `q,r,kind`, cell by cell. */
   async function listed(seed: number, index: number): Promise<string> {
     const { run_foes } = await import('abalone-wasm');
-    const plan = Array.from(run_foes(seed, index, 0)).slice(2);
+    const plan = Array.from(run_foes(seed, index, 0, 0)).slice(3);
     const marks = Array.from({ length: plan.length / 3 }, (_, i) => plan.slice(3 * i, 3 * i + 3));
     return marks.sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!).map((m) => m.join(',')).join(' ');
   }
@@ -930,5 +930,88 @@ describe('main.ts, the Collector between acts (#1470)', () => {
     game.openModes();
     byId('roguelite').click();
     expect(map().textContent).toContain('Blueprints to bank: 12');
+  });
+});
+
+describe('main.ts, the biome exits between acts (#1472)', () => {
+  /** The path of the run of seed 1 from the first node of act `act` (0 or 1) to its boss, by first links. */
+  async function actPath(act: number): Promise<{ nodes: MapNode[]; path: number[] }> {
+    const { run_map } = await import('abalone-wasm');
+    const nodes = parseMap(run_map(1));
+    const path = [nodes.findIndex((n) => n.act === act && n.row === 0)];
+    for (let n = nodes[path[0]!]!; n.kind !== 'boss'; ) {
+      path.push(nodes.findIndex((m) => m.act === act && m.row === n.row + 1 && m.col === n.links[0]));
+      n = nodes[path[path.length - 1]!]!;
+    }
+    return { nodes, path };
+  }
+  /** The run at its act 1 boss beaten, the exits waiting. */
+  async function atExits(game: Game): Promise<void> {
+    await game.hook('__run', { ...newRun(1, 3, LEGACY_UNLOCKED), path: (await actPath(0)).path, exit: true });
+  }
+  const exitButtons = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-exit]')];
+
+  it('shows the two exits after the act boss; a pick tints the map, names the biome, is saved, and opens the biome\'s holes in the next fights', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    const { run_exits } = await import('abalone-wasm');
+    await atExits(game);
+    expect(document.body.dataset.run).toBe('exit');
+    expect(document.body.dataset.biome).toBeUndefined(); // act 1 is the Meadow
+    expect(line()).toBe('Act 1 done · pick the exit to act 2');
+    expect(open()).toHaveLength(0); // the map waits
+    expect(exitButtons().map((b) => b.dataset.exit)).toEqual(Array.from(run_exits(1, 1, 0)).map(String));
+    for (const b of exitButtons()) expect(b.textContent).toMatch(/ · boss: [A-Z]/);
+    const exit = exitButtons()[1]!;
+    const biome = BIOMES[Number(exit.dataset.exit)]!;
+    expect(exit.dataset.biome).toBe(biome.id);
+    exit.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(document.body.dataset.biome).toBe(biome.id);
+    expect(line()).toBe(`Rogue-lite run · ${biome.name} · army 14 marbles · pick a fight`);
+    expect(open().length).toBeGreaterThanOrEqual(2);
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the pick
+    expect(document.body.dataset.biome).toBe(biome.id);
+    open()[0]!.click();
+    expect(document.body.dataset.run).toBe('fight');
+    expect(document.body.dataset.biome).toBe(biome.id);
+    expect(document.body.dataset.specials).toContain(',');
+    expect(byId('hud').textContent).toContain(`act 2 fight · ${biome.name}`);
+  });
+
+  it('a reload at the exits keeps them waiting, and a run saved before them goes on with no exit', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await atExits(game);
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(document.body.dataset.run).toBe('exit');
+    expect(exitButtons()).toHaveLength(2);
+    const old = await boot('?bot=off');
+    await old.hook('__run', { ...newRun(1, 3, LEGACY_UNLOCKED), exits: false, path: (await actPath(0)).path });
+    expect(document.body.dataset.run).toBe('map'); // the first row of act 2, in the Meadow
+    expect(document.body.dataset.biome).toBeUndefined();
+  });
+
+  it('the fight of a biome stands its holes on the board: a hole is not a cell', async () => {
+    const game = await boot('?bot=off');
+    const first = (await actPath(1)).path[0]!;
+    for (const biome of [1, 2, 3, 4, 5]) {
+      await game.hook('__run', pick({ ...newRun(1, 3, LEGACY_UNLOCKED), path: (await actPath(0)).path, biomes: [biome] }, first));
+      const board = game.hook<number[]>('__board');
+      expect(board.filter((c) => c === 3).length, BIOMES[biome]!.name).toBeGreaterThan(0); // 3: a vanished cell
+    }
+    await game.hook('__run', pick({ ...newRun(1, 3, LEGACY_UNLOCKED), path: (await actPath(0)).path }, first));
+    expect(game.hook<number[]>('__board').filter((c) => c === 3)).toHaveLength(0);
+  });
+
+  it('the act boss of a biome is the biome\'s, and the tint stays on its fight', async () => {
+    const { path, nodes } = await actPath(1);
+    const game = await boot('?bot=off');
+    await game.hook('__run', pick({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [...(await actPath(0)).path, ...path.slice(0, -1)], biomes: [2] }, path[path.length - 1]!));
+    expect(nodes[path[path.length - 1]!]!.kind).toBe('boss');
+    expect(document.body.dataset.boss).toBe(BIOMES[2]!.boss);
+    expect(document.body.dataset.biome).toBe('tundra');
   });
 });

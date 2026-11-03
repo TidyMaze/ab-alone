@@ -833,6 +833,15 @@ body[data-reading] #log { visibility: visible; }
 #run-map button[data-commander][aria-pressed="true"] svg.glyph { color: inherit; } /* the picked commander's portrait, on the accent fill (#1464) */
 /* The commanders before the first pick (#801, #1464): two by two, so the map keeps its height on a 720 px window. */
 #run-map .run-commanders { display: grid; grid-template-columns: 1fr 1fr; gap: 0.375rem; width: 100%; flex: none; }
+/* The biomes of the acts (#1472): each tints the map plate and the board while the run is in it, and its exit button; the Meadow has no tint. */
+[data-biome='forest'] { --biome: #3f9a45; }
+[data-biome='tundra'] { --biome: #5fb4e8; }
+[data-biome='desert'] { --biome: #e0a93a; }
+[data-biome='badlands'] { --biome: #d2653a; }
+[data-biome='archipelago'] { --biome: #26b5ad; }
+body[data-biome]::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: var(--biome); opacity: 0.2; }
+body[data-biome] #run-map { border-color: var(--biome); background: color-mix(in srgb, var(--biome) 10%, var(--panel)); }
+#run-map button[data-exit] { border-left: 6px solid var(--biome); text-align: left; flex: 1 1 100%; }
 
 /* The Open world mode (#962) draws its own scene: the board's HUD steps aside for its plate. */
 #openworld-hud { --accent: var(--plate-accent); --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px); display: none; position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background-color: var(--panel); background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet); background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px; background-size: 6px 6px; background-repeat: no-repeat; border: 1px solid var(--edge); border-radius: var(--r-card); font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s; }
