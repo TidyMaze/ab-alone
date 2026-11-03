@@ -158,7 +158,7 @@ impl Engine {
 #[wasm_bindgen]
 pub fn replay_score(moves: &[i32]) -> Vec<u8> {
     let mut engine = Engine::new();
-    if moves.len() % MOVE_STRIDE != 0 {
+    if !moves.len().is_multiple_of(MOVE_STRIDE) {
         return Vec::new();
     }
     for mv in moves.chunks(MOVE_STRIDE) {
