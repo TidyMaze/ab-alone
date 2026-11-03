@@ -163,7 +163,7 @@ export class RoyaleNet<G extends NetGame> {
   private commitBy = 0; // the open round's commit deadline, on our clock
   private readonly missed: number[] = []; // by arena seat: the resolved rounds in a row it committed nothing in
   private stale = false; // the open round's deadline passed while we were cut off: only a catch-up resolves it
-  private asked = false; // a `behind` was sent: only then is a `played` answer taken
+  private askedUntil = -Infinity; // a `behind` was sent: a `played` answer is taken until then (one round), not after
   private readonly sealed: Sealed[] = []; // what we kept of each resolved round, for a peer behind
   private readonly hashes: string[] = []; // ours after each round
   private heard: Hash[] = []; // the peers' hashes of the rounds we have not resolved yet
@@ -282,7 +282,7 @@ export class RoyaleNet<G extends NetGame> {
 
   /** Says we are behind, and from now on believes a catch-up answer. */
   private ask(): void {
-    this.asked = true;
+    this.askedUntil = this.o.now() + this.o.roundMs;
     this.o.send({ kind: 'behind', game: this.o.game, round: this.round });
   }
 
@@ -401,11 +401,11 @@ export class RoyaleNet<G extends NetGame> {
     // Only a seated key we asked (`behind`) is heard, and a round we hold commits for is not resolved without them: a stranger cannot force it.
     if (JSON.stringify(m.seats) !== JSON.stringify(this.lineup)) return;
     this.seats ??= m.seats;
-    if (!this.asked || !this.seats.includes(from)) return;
+    if (this.o.now() > this.askedUntil || !this.seats.includes(from)) return;
     const was = this.round;
     for (const s of m.rounds) {
       if (s.round !== this.round || this.phase === 'over') continue;
-      if (this.book && this.kept.commits.some((c) => !s.commits.some((k) => k.pub === c.pub))) continue; // it lacks a commit we hold
+      if (this.book && (this.kept.commits.some((c) => !s.commits.some((k) => k.pub === c.pub)) || this.kept.reveals.some((r) => !s.reveals.some((k) => k.pub === r.pub)))) continue; // it lacks a commit or reveal we hold
       this.resolve(await replayed(this.o.game, s, this.humans), s, false);
     }
     if (m.open?.round === this.round) {

@@ -697,4 +697,33 @@ describe('a catch-up answer (online F1)', () => {
     await room.settle();
     expect(b.net.round).toBe(1);
   });
+
+  it('an answer is taken for one round after the ask, not for the rest of the game', async () => {
+    const { room, a, b } = await started();
+    await b.net.resync();
+    await room.pass(3 * MS); // the ask is old
+    const round = b.net.round;
+    room.deliver(a, { kind: 'played', game: ROOM, seats: a.net.seats!, rounds: [{ round, commits: [], reveals: [] }], open: null }, 'b');
+    await room.settle();
+    expect(b.net.round).toBe(round);
+  });
+
+  it('an answer that lacks a reveal we hold does not resolve our open round either', async () => {
+    const { room, a, b, c } = await started();
+    for (const p of [a, c]) await p.net.play(firstOrder(p));
+    await room.settle();
+    room.lost.add('a');
+    room.lost.add('c'); // their reveals never reach b
+    await b.net.play(firstOrder(b)); // b holds all 3 commits, so it reveals at once; the others' reveals are lost
+    await room.settle();
+    const commits = room.sent.filter((x) => (x.m as { kind: string }).kind === 'commit').map((x) => x.m);
+    const others = [await signReveal(a.keys, { game: ROOM, round: 1, order: firstOrder(a), nonce: '00' })];
+    await b.net.resync();
+    const round = b.net.round;
+    expect(round).toBe(1);
+    room.lost.delete('a');
+    room.deliver(a, { kind: 'played', game: ROOM, seats: a.net.seats!, rounds: [{ round, commits, reveals: others }], open: null } as unknown as RoyaleMessage, 'b');
+    await room.settle();
+    expect(b.net.round).toBe(round);
+  });
 });
