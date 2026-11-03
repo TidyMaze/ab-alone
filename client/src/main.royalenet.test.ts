@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parseLog } from './royale';
 import { generateKeys, type Wire } from './moverecord';
 import { parseRoyale, ROOM_JUDGE, RoyaleNet, seedOf } from './royale-net';
 import { OnlineSession } from './session';
@@ -161,6 +162,22 @@ describe('Battle royale online (#504)', () => {
     await until(game, () => other.royale.state_hash() !== '' && data().desync === '0' && other.net.round === 2);
     expect(other.net.desync).toBe(0);
     expect(game.hook('__rings')).toEqual([]);
+  });
+
+  it('the second page takes round 1 the same: seat 1 moved, seat 2 held, and its board is the first page\'s (#1481)', async () => {
+    // The second page is a session with its own engine: a second DOM page cannot share this window. Its reveal is read from
+    // its round log, the same log the page's reveal is built from (main.ts parseLog(game.round_log())).
+    const { game, other } = await started();
+    game.click(-2, 6);
+    game.click(-2, 5);
+    await until(game, () => data().net === 'locked');
+    await other.net.play([]);
+    await until(game, () => data().royale === '2');
+    await until(game, () => other.net.round === 2 && data().desync === '0');
+    const turns = parseLog(other.royale.round_log())!.turns.sort((x, y) => x.seat - y.seat);
+    expect(turns.slice(0, 2).map((t) => t.outcome)).toEqual(['moved', 'held']);
+    expect(other.royale.state_hash()).not.toBe('');
+    expect(other.net.desync).toBe(0);
   });
 
   it('Hold commits a hold, a silent player holds at the deadline, and the round plays out on the arena', async () => {

@@ -516,6 +516,23 @@ describe('the view and the fog', () => {
     expect(localStorage.getItem('ab-alone.clear-board')).toBe('on');
   });
 
+  it('Clear board off, then on again, brings back the same fog and saves the choice as off (#1481)', async () => {
+    const game = await boot('?bot=off&scene=room');
+    const { scene } = await drawn(game);
+    const before = scene.fog as THREE.Fog;
+    const { near, far, color } = { near: before.near, far: before.far, color: before.color.getHex() };
+    row('clear-board').click();
+    expect(scene.fog).toBeNull();
+    row('clear-board').click();
+    const again = scene.fog as THREE.Fog;
+    expect(again.near).toBe(near);
+    expect(again.far).toBe(far);
+    expect(again.color.getHex()).toBe(color);
+    expect(document.body.dataset.clear).toBe('off');
+    expect(row('clear-board').getAttribute('aria-pressed')).toBe('false');
+    expect(localStorage.getItem('ab-alone.clear-board')).toBe('off');
+  });
+
   it('tints the fog to match the active deck atmosphere (#665)', async () => {
     const game = await boot('?bot=off&scene=room');
     const { scene } = await drawn(game);
