@@ -189,14 +189,42 @@ describe('roguelite', () => {
     expect(nodes.map((b) => b.textContent)).toEqual(['Fight', 'Fight', 'Boss', 'Fight', 'Fight', 'Boss']);
     expect(nodes.map((b) => b.disabled)).toEqual([true, true, true, false, false, true]);
     expect(nodes.map((b) => b.className)).toEqual(['node taken', 'node', 'node boss here', 'node', 'node', 'node boss']);
+    expect(nodes.map((b) => b.dataset.kind)).toEqual(['fight', 'fight', 'boss', 'fight', 'fight', 'boss']);
     expect(nodes[3]!.getAttribute('aria-label')).toBe('Act 2, fight');
-    expect(nodes[0]!.getAttribute('style')).toBe('left:25%;top:12.5%');
-    expect(nodes[4]!.getAttribute('style')).toBe('left:75%;top:62.5%');
+    expect(nodes[0]!.getAttribute('style')).toBe('left:25%;top:20%'); // below its act's header, which takes half a row
+    expect(nodes[4]!.getAttribute('style')).toBe('left:75%;top:70%');
     const lines = [...doc.querySelectorAll('line')];
     expect(lines).toHaveLength(6); // 2 fights to the boss in each act, the act 1 boss to the 2 fights of act 2
     expect(lines.filter((l) => l.classList.contains('taken'))).toHaveLength(1);
     expect(doc.querySelector('.run-line')!.textContent).toBe('Rogue-lite run · army 14 marbles · pick a fight');
     expect(doc.getElementById('run-new')).toBeNull();
+  });
+
+  it('draws each node kind with its own icon above its name, and a header per act', () => {
+    const doc = new DOMParser().parseFromString(mapHtml(parseMap([0, 0, 0, 7, 0, 0, 0]), newRun(1, 3, LEGACY_UNLOCKED)), 'text/html');
+    expect(doc.querySelectorAll('button[data-node] > svg.glyph')).toHaveLength(2);
+    const kinds = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop', 'unknown'];
+    const paths = kinds.map((kind) => {
+      const one = new DOMParser().parseFromString(mapHtml(parseMap([0, 0, 0, kinds.indexOf(kind), 0, 0, 0]), newRun(1, 3, LEGACY_UNLOCKED)), 'text/html');
+      return one.querySelector('button[data-node] > svg.glyph path')!.getAttribute('d');
+    });
+    expect(new Set(paths).size).toBe(kinds.length); // one icon a kind, none alike
+    const heads = [...new DOMParser().parseFromString(mapHtml(MAP, newRun(1, 3, LEGACY_UNLOCKED)), 'text/html').querySelectorAll('.act-head')];
+    expect(heads.map((h) => h.textContent)).toEqual(['Act 1 · Meadow', 'Act 2']); // the biome of an act not yet picked is not named
+    expect(heads.map((h) => h.getAttribute('style'))).toEqual(['top:5%', 'top:55%']);
+    const picked = new DOMParser().parseFromString(mapHtml(MAP, { ...newRun(1, 3, LEGACY_UNLOCKED), biomes: [2], path: [0, 2] }), 'text/html');
+    expect([...picked.querySelectorAll('.act-head')].map((h) => h.textContent)).toEqual(['Act 1 · Meadow', 'Act 2 · Tundra']);
+    const old = new DOMParser().parseFromString(mapHtml(MAP, { ...newRun(1, 3, LEGACY_UNLOCKED), exits: false }), 'text/html');
+    expect([...old.querySelectorAll('.act-head')].map((h) => h.textContent)).toEqual(['Act 1', 'Act 2']); // a run saved before the biomes
+  });
+
+  it('marks the links to the nodes that can be picked next, and lists the icons in a legend', () => {
+    const doc = new DOMParser().parseFromString(mapHtml(MAP, at(newRun(1, 3, LEGACY_UNLOCKED), 0, 2)), 'text/html');
+    const lines = [...doc.querySelectorAll('line')];
+    expect(lines.filter((l) => l.classList.contains('next'))).toHaveLength(2); // the boss 2 to the two fights of act 2
+    expect(lines.filter((l) => l.classList.contains('taken'))).toHaveLength(1);
+    expect([...doc.querySelectorAll('.run-legend li')].map((li) => li.textContent)).toEqual(['Fight', 'Elite', 'Rest', 'Treasure', 'Shop', 'Unknown', 'Boss', 'Open', 'Taken']);
+    expect(doc.querySelectorAll('.run-legend li svg.glyph')).toHaveLength(7);
   });
 
   it('a run over offers a new run', () => {
