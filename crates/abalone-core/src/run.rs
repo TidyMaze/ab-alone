@@ -2392,3 +2392,217 @@ mod foes {
         }
     }
 }
+
+#[cfg(test)]
+mod biomes {
+    use super::*;
+    use crate::board::Special;
+    use crate::moves::{apply, Direction, Move, MoveError};
+    use crate::search::best_move;
+    use crate::world::Biome;
+
+    fn count(board: &Board, cell: Cell) -> usize {
+        (-4..=4)
+            .flat_map(|q| (-4..=4).map(move |r| (q, r)))
+            .filter(|&(q, r)| board.get(q, r) == Some(cell))
+            .count()
+    }
+
+    /// The cells of the radius 4 board that a fight removed.
+    fn holes(board: &Board) -> Vec<(i32, i32)> {
+        let mut holes: Vec<_> = (-4..=4)
+            .flat_map(|q| (-4..=4).map(move |r| (q, r)))
+            .filter(|&(q, r)| q.abs().max(r.abs()).max((q + r).abs()) <= 4)
+            .filter(|&(q, r)| board.get(q, r).is_none())
+            .collect();
+        holes.sort();
+        holes
+    }
+
+    /// A fight of the standard formation in `biome`.
+    fn standard(biome: Biome) -> Game {
+        let plan = FoePlan {
+            count: FIGHT_FOES,
+            formation: Formation::Standard,
+            specials: Vec::new(),
+            biome,
+        };
+        army_game_formed(FULL_ARMY, &plan).unwrap()
+    }
+
+    /// The first fight (or elite) node of act `act` of `seed`, its index in the map.
+    fn fight_of(seed: u64, act: usize, kind: NodeKind) -> Option<usize> {
+        run_map(seed)
+            .iter()
+            .position(|n| n.act == act && n.kind == kind)
+    }
+
+    #[test]
+    fn the_biome_codes_are_the_open_worlds_and_the_meadow_is_the_first() {
+        assert_eq!(Biome::ALL.len(), 6);
+        for (code, biome) in Biome::ALL.into_iter().enumerate() {
+            assert_eq!(biome as usize, code);
+            assert_eq!(Biome::from_code(code as u8), Some(biome));
+        }
+        assert_eq!(Biome::ALL[0], Biome::Meadow);
+        assert_eq!(Biome::from_code(6), None);
+    }
+
+    #[test]
+    fn two_exits_lead_to_two_other_biomes_never_the_meadow_nor_the_one_left() {
+        for seed in 0..120 {
+            for act in 1..ACTS {
+                for from in Biome::ALL {
+                    let [a, b] = exits(seed, act, from);
+                    assert_ne!(a, b, "seed {seed}");
+                    for exit in [a, b] {
+                        assert_ne!(exit, Biome::Meadow);
+                        assert_ne!(exit, from);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_exits_come_from_the_seed_the_act_and_where_the_run_is_and_every_biome_is_offered() {
+        assert_eq!(exits(9, 1, Biome::Meadow), exits(9, 1, Biome::Meadow));
+        assert!((0..20).any(|s| exits(s, 1, Biome::Meadow) != exits(9, 1, Biome::Meadow)));
+        assert!((0..20).any(|s| exits(s, 2, Biome::Meadow) != exits(s, 1, Biome::Meadow)));
+        assert!(Biome::ALL
+            .into_iter()
+            .any(|from| exits(9, 2, from) != exits(9, 2, Biome::Meadow)));
+        let mut offered = Vec::new();
+        for seed in 0..40 {
+            offered.extend(exits(seed, 1, Biome::Meadow));
+        }
+        for biome in &Biome::ALL[1..] {
+            assert!(offered.contains(biome), "{biome:?} is never offered");
+        }
+    }
+
+    #[test]
+    fn the_meadow_has_no_hole_and_every_other_biome_its_own_point_symmetric_holes_in_the_middle() {
+        assert!(holes(standard(Biome::Meadow).board()).is_empty());
+        let mut seen: Vec<Vec<(i32, i32)>> = Vec::new();
+        for &biome in &Biome::ALL[1..] {
+            let found = holes(standard(biome).board());
+            assert!(!found.is_empty(), "{biome:?}");
+            for &(q, r) in &found {
+                assert!(found.contains(&(-q, -r)), "{biome:?} {q},{r} is unfair");
+                assert!(r.abs() <= 1, "{biome:?} {q},{r} is by the armies");
+            }
+            assert!(!seen.contains(&found), "{biome:?} repeats a pattern");
+            seen.push(found);
+        }
+    }
+
+    #[test]
+    fn a_hole_never_takes_a_marble_of_any_army_formation_or_special() {
+        for seed in 0..30 {
+            for kind in [NodeKind::Fight, NodeKind::Elite] {
+                for act in 0..ACTS {
+                    let Some(i) = fight_of(seed, act, kind) else {
+                        continue;
+                    };
+                    for biome in Biome::ALL {
+                        let plan = foe_plan(seed, i, 0, biome);
+                        assert_eq!(plan.biome, biome);
+                        let game = army_game_formed(11, &plan).unwrap();
+                        assert_eq!(count(game.board(), Cell::Black), 11);
+                        assert_eq!(count(game.board(), Cell::White), usize::from(plan.count));
+                        assert_eq!(game.board().specials().len(), plan.specials.len());
+                        assert!(game.board().rogue_lite());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_marble_pushed_toward_a_hole_goes_off_and_one_walking_in_is_refused() {
+        // The Desert's holes are (-1, 0) and (1, 0).
+        let mut board = standard(Biome::Desert).board().clone();
+        for (q, r) in [(0, 2), (0, -2), (-1, 2), (1, -2)] {
+            board.set(q, r, Cell::Empty);
+        }
+        board.set(1, 3, Cell::Black);
+        board.set(1, 2, Cell::Black);
+        board.set(1, 1, Cell::White);
+        let push = Move {
+            cells: vec![(1, 2), (1, 3)],
+            dir: Direction::NW,
+        };
+        let (after, ejected) = apply(&board, Player::Black, &push).unwrap();
+        assert!(ejected);
+        assert_eq!(after.get(1, 1), Some(Cell::Black));
+        assert_eq!(after.get(1, 0), None);
+        let mut walk = board.clone();
+        walk.set(1, 1, Cell::Black);
+        let step = Move {
+            cells: vec![(1, 1)],
+            dir: Direction::NW,
+        };
+        assert_eq!(
+            apply(&walk, Player::Black, &step).err(),
+            Some(MoveError::OffBoard)
+        );
+    }
+
+    #[test]
+    fn a_biome_fight_holds_its_signature_among_the_same_marbles_as_the_meadow_and_an_elite_is_unchanged(
+    ) {
+        let signatures = [
+            (Biome::Meadow, None),
+            (Biome::Forest, Some(Special::Anchor)),
+            (Biome::Tundra, Some(Special::Shield)),
+            (Biome::Desert, Some(Special::Spark)),
+            (Biome::Badlands, Some(Special::Heavy)),
+            (Biome::Archipelago, Some(Special::Magnet)),
+        ];
+        for (biome, signature) in signatures {
+            assert_eq!(biome.signature(), signature);
+        }
+        let mut changed = false;
+        for seed in 0..60 {
+            for act in 1..ACTS {
+                let i = fight_of(seed, act, NodeKind::Fight).unwrap();
+                let meadow = foe_plan(seed, i, 0, Biome::Meadow);
+                for &biome in &Biome::ALL[1..] {
+                    let plan = foe_plan(seed, i, 0, biome);
+                    let kinds: Vec<_> = plan.specials.iter().map(|s| s.1).collect();
+                    assert_eq!(kinds.len(), act + 1);
+                    assert!(kinds.contains(&biome.signature().unwrap()));
+                    for (k, kind) in kinds.iter().enumerate() {
+                        assert!(!kinds[..k].contains(kind), "a kind twice");
+                    }
+                    let cells = |p: &FoePlan| p.specials.iter().map(|s| s.0).collect::<Vec<_>>();
+                    assert_eq!(cells(&plan), cells(&meadow), "the marbles move");
+                    assert_eq!(plan.specials[1..], meadow.specials[1..]);
+                    changed |= plan.specials != meadow.specials;
+                }
+                if let Some(e) = fight_of(seed, act, NodeKind::Elite) {
+                    let meadow = foe_plan(seed, e, 0, Biome::Meadow).specials;
+                    assert_eq!(foe_plan(seed, e, 0, Biome::Tundra).specials, meadow);
+                }
+            }
+        }
+        assert!(changed, "no biome ever changes the mix");
+    }
+
+    #[test]
+    fn the_bot_plays_every_biome() {
+        for seed in 0..6 {
+            for act in 1..ACTS {
+                let i = fight_of(seed, act, NodeKind::Fight).unwrap();
+                for &biome in &Biome::ALL[1..] {
+                    let mut game = army_game_formed(14, &foe_plan(seed, i, 0, biome)).unwrap();
+                    for _ in 0..6 {
+                        let mv = best_move(&game, 300).expect("a legal move or a pass");
+                        game.play(&mv).unwrap();
+                    }
+                }
+            }
+        }
+    }
+}
