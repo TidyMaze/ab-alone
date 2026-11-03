@@ -37,6 +37,7 @@ import {
   ELITE_BUDGET,
   eventHtml,
   eventOf,
+  CURSE_FIGHTS,
   EVENTS,
   fightBudget,
   FIGHT_FOES,
@@ -147,7 +148,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [] });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0 });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -251,7 +252,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily', 'curse']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -580,14 +581,14 @@ describe('roguelite', () => {
   it('an event waits for its choice, seeded by the run seed and the node', () => {
     expect(EVENT_NODE).toMatchObject({ path: [0, 3], fighting: false, event: true });
     expect(choices(ACT, EVENT_NODE)).toEqual([]);
-    expect(EVENTS).toHaveLength(20);
+    expect(EVENTS).toHaveLength(21);
     expect(EVENTS).toContain(eventOf(EVENT_NODE));
     expect(eventOf(EVENT_NODE)).toBe(eventOf({ ...EVENT_NODE }));
     const seen = new Set(Array.from({ length: 400 }, (_, seed) => eventOf({ ...EVENT_NODE, seed })));
-    expect(seen.size).toBe(20); // every event shows up
+    expect(seen.size).toBe(21); // every event shows up
     const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => eventOf({ ...EVENT_NODE, seed }) !== eventOf({ ...EVENT_NODE, seed, path: [0, 7] }));
     expect(nodes.length).toBeGreaterThan(0);
-    expect(new Set(EVENTS.map((e) => e.title)).size).toBe(20);
+    expect(new Set(EVENTS.map((e) => e.title)).size).toBe(21);
   });
 
   it('every event has a title, a line of lore, 2 or 3 choices ending on Leave, and about a third hold a gamble', () => {
@@ -848,7 +849,7 @@ describe('roguelite', () => {
       }),
     );
     expect([...gains]).toEqual([1]); // never an Anchor nor a Spark
-    expect(EVENTS.filter((e) => grants(e).every((k) => k === 1))).toHaveLength(13); // the 3 old ones that give a Heavy or none, and the 10 new
+    expect(EVENTS.filter((e) => grants(e).every((k) => k === 1))).toHaveLength(14); // the 3 old ones that give a Heavy or none, the 10 new and the cursed chest
   });
 
   it('counts the acts a run over won: its bosses beaten', () => {
@@ -2190,4 +2191,76 @@ describe('roguelite score and daily run (#1466)', () => {
       expect(await loadRun(store, mapOf, engine)).toBeNull();
     }
   });
+});
+
+describe('roguelite cursed chest (#1474)', () => {
+  const chest = EVENTS.find((e) => e.title === 'Cursed chest')!;
+  const fresh = newRun(1, 3, LEGACY_UNLOCKED);
+  const waiting = (run: Run = fresh): Run => ({ ...waitingAt('Cursed chest', { ...run, path: [0, 3], event: true }) });
+
+  it('is an event with two strong openings and Leave, dealt like the others', () => {
+    expect(chest.choices.map((c) => c.verb)).toEqual(['Open it for its relic', 'Open it for its arms', 'Leave']);
+    expect(CURSE_FIGHTS).toBe(2);
+    expect(eventOf(waiting())).toBe(chest);
+    expect(eventHtml(waiting())).toContain('Open it for its relic · +1 relic, cursed: marbles lost cost 2 for the next 2 fights');
+  });
+
+  it('opening it gives a relic or 3 Heavies and a curse of 2 fights, saved with the run', () => {
+    const relic = takeEvent(waiting(), chest, 0)!;
+    expect(relic).toMatchObject({ curse: 2, relics: [expect.any(Number)], army: 14, told: 'Cursed chest: +1 relic, cursed: marbles lost cost 2 for the next 2 fights' });
+    expect(takeEvent(waiting(), chest, 1)).toMatchObject({ curse: 2, specials: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0], relics: [] });
+    expect(takeEvent(waiting(), chest, 0)).toEqual(relic); // deterministic
+    expect(resolve(waiting(), 0)).toMatchObject({ curse: 2, event: false });
+  });
+
+  it('Leave is always offered and takes no curse', () => {
+    expect(takeEvent(waiting(), chest, 2)).toEqual({ ...waiting(), told: '' });
+    expect(takeEvent({ ...waiting(), curse: 1 }, chest, 2)!.curse).toBe(1);
+    expect(eventHtml({ ...waiting(), relics: RELICS.map((_, code) => code) })).toContain('data-choice="0" disabled'); // no relic left: that opening cannot be taken
+    expect(eventHtml({ ...waiting(), relics: RELICS.map((_, code) => code) })).not.toContain('data-choice="2" disabled');
+  });
+
+  it('a second chest renews the curse, it does not stack', () => {
+    expect(takeEvent({ ...waiting(), curse: 1 }, chest, 1)!.curse).toBe(2);
+  });
+
+  it('each marble lost in the next 2 fights costs 2, then fights cost 1 again', () => {
+    const cursed = { ...pick(fresh, 0), curse: 2 };
+    const first = fightOver(MAP, cursed, true, 2);
+    expect(first).toMatchObject({ army: 10, curse: 1 });
+    const second = fightOver(MAP, pick({ ...first, reward: false }, 1), true, 1);
+    expect(second).toMatchObject({ army: 8, curse: 0 });
+    expect(fightOver(MAP, pick({ ...second, reward: false }, 1), true, 1)).toMatchObject({ army: 7, curse: 0 });
+    expect(fightOver(MAP, cursed, true, 0)).toMatchObject({ army: 14, curse: 1 }); // a clean fight still spends a fight of the curse
+  });
+
+  it('the curse doubles what is lost after Hull plating, and can end the run', () => {
+    expect(fightOver(MAP, { ...cursedFight(), relics: [Relic.HullPlating] }, true, 2)).toMatchObject({ army: 12 }); // 1 lost after the plating, costs 2
+    expect(fightOver(MAP, { ...cursedFight(), army: 6 }, true, 2)).toMatchObject({ army: 2, end: 'lost' });
+  });
+
+  it('shows on the map and in the fight HUD line with its fights left', () => {
+    expect(runLine(MAP, { ...cursedFight(), curse: 2 })).toBe('Rogue-lite run · act 1 fight · army 14 marbles · cursed: marbles lost cost 2, 2 fights left');
+    expect(runLine(MAP, { ...fresh, curse: 1 })).toBe('Rogue-lite run · army 14 marbles · cursed: marbles lost cost 2, 1 fight left · pick a fight');
+    expect(runLine(MAP, fresh)).not.toContain('cursed');
+    expect(mapHtml(MAP, { ...fresh, curse: 2 })).toContain('cursed: marbles lost cost 2, 2 fights left');
+  });
+
+  it('is saved and loaded, a run saved before it has no curse, a bad curse does not load', async () => {
+    const store = memoryStore();
+    const mapOf = (): MapNode[] => MAP;
+    await saveRun(store, { ...fresh, curse: 1 });
+    expect((await loadRun(store, mapOf, engine))!.state.curse).toBe(1);
+    const { curse: _gone, ...older } = { ...fresh, curse: 1 };
+    await store.put(RUN_KEY, older);
+    expect((await loadRun(store, mapOf, engine))!.state.curse).toBe(0);
+    for (const bad of [3, -1, 1.5, 'x']) {
+      await store.put(RUN_KEY, { ...fresh, curse: bad });
+      expect(await loadRun(store, mapOf, engine)).toBeNull();
+    }
+  });
+
+  function cursedFight(): Run {
+    return { ...pick(fresh, 0), curse: 2 };
+  }
 });
