@@ -126,6 +126,7 @@ describe('the rogue-lite run tools (#1469)', () => {
     expect(JSON.parse((await call('run_choose', { choice: 0 })).text).code).toBe('not_now');
     expect(JSON.parse((await call('run_place', { q: 0, r: 2, kind: 'Heavy' })).text).code).toBe('not_now');
     expect(JSON.parse((await call('run_tactic', { tactic: 'Freeze' })).text).code).toBe('not_now');
+    expect(JSON.parse((await call('run_flask')).text).code).toBe('bad_choice'); // the army is full
     expect(JSON.parse((await call('run_pick', { node: 5 })).text).code).toBe('bad_choice');
     expect((await call('run_tactic', { tactic: 'Teleport' })).isError).toBe(true);
     expect((await call('run_choose', { choice: -1 })).isError).toBe(true);
@@ -208,6 +209,7 @@ describe('the MCP server', () => {
       'run_place',
       'run_choose',
       'run_tactic',
+      'run_flask',
       'save_run',
     ]);
     for (const tool of tools) expect(tool.description).toBeTruthy();

@@ -145,6 +145,7 @@ describe('before a run is started', () => {
       run.place({ q: 0, r: 2, kind: 'Heavy' }),
       run.choose({ choice: 0 }),
       run.tactic({ tactic: 'Freeze' }),
+      run.flask(),
       run.save(),
     ];
     for (const result of refused) expect(failure(result).code).toBe('no_run');
@@ -162,6 +163,7 @@ describe('new_run', () => {
       specials: {},
       relics: ['Gyroscope'], // the Captain's
       tactics: [],
+      flasks: 2,
       scrap: 0,
       cells: 0,
       carried: [],
@@ -814,5 +816,44 @@ describe('save and resume', () => {
     const { run } = setup();
     expect(value(await run.newRun({ save: old })).screen).toBe('map');
     expect(value(run.save()).unlocked.length).toBeGreaterThan(0);
+  });
+});
+
+describe('flasks (#1475)', () => {
+  test('the run state names the flasks left, and run_flask drinks one on the map: 3 marbles back, a charge spent', async () => {
+    const { save } = before('fight', { army: 8 });
+    const { run } = setup();
+    expect(value(await run.newRun({ save }))).toMatchObject({ screen: 'map', army: 8, flasks: 2 });
+    expect(value(run.flask())).toMatchObject({ screen: 'map', army: 11, flasks: 1 });
+    expect(value(run.flask())).toMatchObject({ army: 14, flasks: 0 });
+    expect(value(run.save())).toMatchObject({ army: 14, flasks: 0 });
+  });
+
+  test('a flask is refused with the army full or no charge left, and nothing changes', async () => {
+    const { run } = setup();
+    value(await run.newRun({ seed: 0 }));
+    expect(failure(run.flask())).toMatchObject({ code: 'bad_choice', message: expect.stringContaining('army full') });
+    value(await run.newRun({ save: { ...before('fight').save, army: 8, flasks: 0 } }));
+    expect(failure(run.flask())).toMatchObject({ code: 'bad_choice', message: expect.stringContaining('no flask left') });
+    expect(value(run.state({}))).toMatchObject({ army: 8, flasks: 0 });
+  });
+
+  test('a flask is drunk on the map only: not at a choice screen or in a fight', async () => {
+    const { run } = setup();
+    value(await run.newRun({ save: at('fight', { reward: true, army: 8 }) }));
+    expect(failure(run.flask()).code).toBe('not_now');
+    value(await run.newRun({ save: at('fight', { fighting: true, army: 8 }) }));
+    expect(failure(run.flask()).code).toBe('not_now');
+    expect(value(run.state({})).army).toBe(8);
+  });
+
+  test('the first node of the next act refills the flasks to 2', async () => {
+    const { run } = setup();
+    const map = mapOf(0);
+    const boss = map.findIndex((n) => n.kind === 'boss' && n.act === 0);
+    const path = pathTo(map, (_, i) => i === boss)!;
+    value(await run.newRun({ save: { ...newRun(0, 3, []), path, flasks: 0, army: 8 } }));
+    const next = value(run.state({})).nodes![0]!.node;
+    expect(value(run.pick({ node: next })).flasks).toBe(2);
   });
 });
