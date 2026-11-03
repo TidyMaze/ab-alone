@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   GENESIS,
+  b64,
+  signedBy,
   generateKeys,
   hashRecord,
   parseCoordinator,
@@ -333,5 +335,23 @@ describe('Hello order and Coordinator, #359', () => {
     for (const bad of [{ kind: 'sync' }, { game: 1 }, { coordinator: 1 }, { pub: 1 }, { sig: 1 }]) {
       expect(parseCoordinator({ ...c, ...bad })).toBeNull();
     }
+  });
+});
+
+describe('one key, one spelling', () => {
+  it('a public key written another way than b64() writes it signs nothing', async () => {
+    const keys = await generateKeys();
+    const bytes = new TextEncoder().encode('x');
+    const sig = b64(await crypto.subtle.sign({ name: 'Ed25519' }, keys.priv, bytes));
+    const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const last = abc.indexOf(keys.pub.at(-1)!);
+    const aliases = [
+      keys.pub + '=', // padded
+      keys.pub.slice(0, -1) + abc[last ^ 1], // same bytes, other unused trailing bits
+      keys.pub.replace(/-/g, '+').replace(/_/g, '/') + '=', // standard alphabet, padded
+      keys.pub.slice(0, 40), // too short
+    ];
+    expect(await signedBy(keys.pub, sig, bytes)).toBe(true);
+    for (const a of aliases) expect(await signedBy(a, sig, bytes)).toBe(false);
   });
 });

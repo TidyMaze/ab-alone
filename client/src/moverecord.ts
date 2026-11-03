@@ -119,7 +119,9 @@ const reportPayload = (r: Omit<Report, 'sig'>): Uint8Array<ArrayBuffer> =>
 /** Whether `sig` is `pub`'s signature of `bytes`. Malformed base64 or key bytes are a refusal, never a throw. */
 export async function signedBy(pub: string, sig: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean> {
   try {
-    const key = await crypto.subtle.importKey('raw', unb64(pub), ED, false, ['verify']);
+    const raw = unb64(pub);
+    if (b64(raw.buffer) !== pub) return false; // one key, one spelling: padding, the standard alphabet or spare bits would make aliases of it
+    const key = await crypto.subtle.importKey('raw', raw, ED, false, ['verify']);
     return await crypto.subtle.verify(ED, key, unb64(sig), bytes);
   } catch {
     return false;
