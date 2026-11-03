@@ -15,7 +15,8 @@ test('the rogue-lite run: the map from the mode menu, a pick starts its fight, t
   await shot(page, { path: testInfo.outputPath('roguelite-map.png') });
   await map.getByRole('button', { name: 'Act 1, fight' }).and(page.locator(':enabled')).first().click();
   await expect(map).toBeHidden();
-  await expect(note).toContainText('Rogue-lite run · act 1 fight · army 14 marbles');
+  // The foes' formation is drawn from the run seed (#1462), so any of them may sit between the node and the army.
+  await expect(note).toContainText(/Rogue-lite run · act 1 fight · ((Standard|Belgian daisy|German daisy|Snake|Wedge) · )?army 14 marbles/);
 
   // An army of 9 in the fight of its first node: the back row and four more are gone, and a reload keeps it.
   await page.evaluate(() => (window as any).__run({ seed: 7, army: 9, path: [0], fighting: true, moves: [], end: '' }));
