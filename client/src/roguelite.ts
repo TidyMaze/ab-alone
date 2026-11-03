@@ -1045,6 +1045,21 @@ export function eventHtml(run: Run): string {
 const lineGlyph = (icon: string): string =>
   `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const relicGlyph = (code: number): string => lineGlyph(RELICS[code]!.icon);
+/** The icon and the legend name of each kind of node on the map (#1468): a line drawing on the 24 grid, as the relics' are. */
+const NODE_LOOKS: Record<NodeKind, { name: string; icon: string }> = {
+  fight: { name: 'Fight', icon: 'M6 18L19 5M5 13l6 6M18 18L5 5M19 13l-6 6' },
+  elite: { name: 'Elite', icon: 'M12 3a7 7 0 0 0-4 12.7V19h8v-3.3A7 7 0 0 0 12 3M8.5 10.5h2v2h-2zM13.5 10.5h2v2h-2zM10.5 16v3M13.5 16v3' },
+  rest: { name: 'Rest', icon: 'M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4-1-6 1-9M5 21h14' },
+  treasure: { name: 'Treasure', icon: 'M4 9a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10H4zM4 12h16M11 12v3h2v-3' },
+  shop: { name: 'Shop', icon: 'M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2' },
+  unknown: { name: 'Unknown', icon: 'M9 9a3 3 0 1 1 4 2.8c-1 .5-1 1.2-1 2.2M12 18h.01' },
+  boss: { name: 'Boss', icon: 'M5 20v-8a7 7 0 0 1 14 0v8zM5 12L3 5l5 3M19 12l2-7-5 3M9 14h.01M15 14h.01M10 20v-2h4v2' },
+  event: { name: 'Event', icon: 'M12 4v9M12 18h.01' }, // no map draws an event node any more (#1463); a run saved before still may
+};
+/** The legend of the map (#1468): the kinds a map draws, then what a node's ring and a link say. */
+const LEGEND: readonly NodeKind[] = ['fight', 'elite', 'rest', 'treasure', 'shop', 'unknown', 'boss'];
+const legendHtml = (): string =>
+  `<ul class="run-legend" aria-label="Legend">${LEGEND.map((k) => `<li>${lineGlyph(NODE_LOOKS[k].icon)}${NODE_LOOKS[k].name}</li>`).join('')}<li class="open">Open</li><li class="taken">Taken</li></ul>`;
 export const tacticText = (code: number): string => `${TACTICS[code - 1]!.name}: ${TACTICS[code - 1]!.help}`;
 export const relicText = (code: number): string => `${RELICS[code]!.name}: ${RELICS[code]!.help}`;
 
@@ -1158,25 +1173,29 @@ export function shopHtml(run: Run): string {
   );
 }
 
-/** The map screen: the run line, the unlocks and commanders before the first pick, the nodes act by act from the
- * top, each placed on its row, the links between them (the path taken marked), the nodes to pick enabled; once the run
- * is over, its summary and New run. */
+/** The map screen: the run line, the unlocks and commanders before the first pick, a legend, the nodes act by act from the
+ * top under the header of their act (half a row), each placed on its row with the icon of its kind, the links between them
+ * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
+ * summary and New run. */
 export function mapHtml(map: MapNode[], run: Run): string {
   const head = `<p class="run-line">${runLine(map, run)}</p>`;
   if (run.end) return `${head}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
   const rows = Math.max(...map.map((n) => n.row)) + 1;
-  const total = (lastAct(map) + 1) * rows;
+  const acts = lastAct(map) + 1;
+  const slot = rows + 0.5; // the rows of an act and its header
+  const total = acts * slot;
   const spot = (n: MapNode): [number, number] => {
     const width = map.filter((o) => o.act === n.act && o.row === n.row).length;
-    return [((n.col + 0.5) / width) * 100, ((n.act * rows + n.row + 0.5) / total) * 100];
+    return [((n.col + 0.5) / width) * 100, ((n.act * slot + 0.5 + n.row + 0.5) * 100) / total];
   };
   const here = run.path[run.path.length - 1];
   const taken = (i: number, j: number): boolean => run.path.some((p, k) => p === i && run.path[k + 1] === j);
   const lines = map.flatMap((n, i) =>
     next(map, [i]).map((j) => {
       const [[x1, y1], [x2, y2]] = [spot(n), spot(map[j]!)];
-      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${taken(i, j) ? ' class="taken"' : ''}/>`;
+      const mark = taken(i, j) ? ' class="taken"' : i === here && open.includes(j) ? ' class="next"' : '';
+      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${mark}/>`;
     }),
   );
   const nodes = map.map((n, i) => {
@@ -1185,13 +1204,17 @@ export function mapHtml(map: MapNode[], run: Run): string {
     const kind = n.kind === 'unknown' ? '?' : n.kind[0]!.toUpperCase() + n.kind.slice(1);
     const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
     return (
-      `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}" data-node="${i}" style="left:${x}%;top:${y}%" ` +
-      `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}"${open.includes(i) ? '' : ' disabled'}>${kind}${elite && `<small>${elite.replace('The ', '')}</small>`}</button>`
+      `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}" data-node="${i}" data-node-kind="${n.kind}" style="left:${x}%;top:${y}%" ` +
+      `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}"${open.includes(i) ? '' : ' disabled'}>${lineGlyph(NODE_LOOKS[n.kind].icon)}${kind}${elite && `<small>${elite.replace('The ', '')}</small>`}</button>`
     );
+  });
+  const heads = Array.from({ length: acts }, (_, act) => {
+    const biome = run.exits && act <= run.biomes.length ? ` · ${BIOMES[biomeOf(run, act)]!.name}` : ''; // the biome of an act not yet picked is not named
+    return `<span class="act-head" style="top:${((act * slot + 0.25) * 100) / total}%">Act ${act + 1}${biome}</span>`;
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
-  return `${head}${told}${run.path.length ? '' : startHtml(run)}<div class="run-graph">${svg}${nodes.join('')}</div>`;
+  return `${head}${told}${run.path.length ? '' : startHtml(run)}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */

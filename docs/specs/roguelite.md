@@ -46,10 +46,16 @@ first pair of nodes to the last that steps one row, the other or both at random:
 on, every node of the next row is reached, and no two paths cross. A boss leads to every node of the
 next act's first row.
 
-The map screen shows the acts from the top, each node named by its kind (Fight, Elite, Rest,
-Unknown, Treasure, Shop, Boss), the links under the nodes, the path taken in the
-accent colour (an unknown node is a dashed "?"), and enables only the nodes the player may pick: the first row of act 1, then the
-links of the last node.
+The map screen (#1468) is an illustrated map. From the top: the run line, a legend (the icon and name of each kind of node, then
+what an open ring and a filled one mean), and the acts one under the other, each under a header (`Act 2 · Tundra`: the biome is named
+once it is picked, and for every act of a run that has exits, section 18). A node is a round line icon with its name under it (a
+fight's crossed swords, an elite's skull with its archetype under the name, a rest's flame, a treasure's chest, a shop's bag, an
+unknown's dashed "?", a boss's horned head, larger). The links are drawn under the nodes. The nodes a pick may take next have an accent
+ring, and the links to them are dashed; the nodes taken are filled with the accent colour, the last of them with a second ring, and the
+links taken are thick. Only the nodes that may be picked are enabled: the first row of act 1, then the links of the last node. After a
+pick, the plate scrolls to put the first of them in the middle (before the first pick the commanders stay in view). Held upright on a
+phone the plate sits above the thumb dock and scrolls inside itself (#1477); on a desktop it keeps clear of the toolbar. Every node
+button keeps its `aria-label` (`Act 1, elite, The Wall`) and `data-node`, and holds its kind in `data-node-kind`.
 
 ## 3. Saving
 

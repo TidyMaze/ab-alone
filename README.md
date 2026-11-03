@@ -43,7 +43,7 @@ First to eject 6 wins. On top of it, the ship:
   The Stalker and The Swarm. A medal per beaten boss, with your fewest turns. Die, read the tell,
   retry with the same seed. Rules per boss: [docs/specs/boss-balance.md](docs/specs/boss-balance.md).
 - **Daily challenge**: one boss and one seed for everyone each UTC day.
-- **Rogue-lite run**: 3 acts of a branching map of fights, your army carried from fight to fight,
+- **Rogue-lite run**: 3 acts of an illustrated branching map (an icon per kind of node, a legend, the path taken and the nodes to pick marked) of fights, your army carried from fight to fight,
   every marble lost is lost for the run, relics, passive effects for the whole run, from elites,
   act bosses and treasure nodes, and rest sites where you rest or upgrade a special marble (Heavy+,
   Anchor+, Spark+), up to 3 one-use tactics to play in a fight (Reinforce, Freeze, Swap, Fall back),

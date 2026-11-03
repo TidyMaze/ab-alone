@@ -1060,12 +1060,14 @@ describe('main.ts, the ascension levels of a run (#1465)', () => {
 });
 
 describe('main.ts, the map scrolls to the nodes to pick (#1468)', () => {
-  it('puts the first node that can be picked in the middle of the plate, and leaves a screen without nodes at its top', async () => {
+  it('after a pick, puts the first node that can be picked in the middle of the plate, and leaves a screen without nodes at its top', async () => {
     const game = await boot('?bot=off');
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       return { top: this.matches('button.node:not(:disabled)') ? 700 : 100 } as DOMRect;
     });
     Object.defineProperty(map(), 'clientHeight', { configurable: true, value: 200 });
+    await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [] });
+    expect(map().scrollTop).toBe(0); // before the first pick the commanders stay in view above the map
     await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [0, 2, 6, 9] });
     expect(map().scrollTop).toBe(500); // 700 - 100 - half of 200
     await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [0, 2, 6, 9], end: 'lost' });

@@ -189,7 +189,7 @@ describe('roguelite', () => {
     expect(nodes.map((b) => b.textContent)).toEqual(['Fight', 'Fight', 'Boss', 'Fight', 'Fight', 'Boss']);
     expect(nodes.map((b) => b.disabled)).toEqual([true, true, true, false, false, true]);
     expect(nodes.map((b) => b.className)).toEqual(['node taken', 'node', 'node boss here', 'node', 'node', 'node boss']);
-    expect(nodes.map((b) => b.dataset.kind)).toEqual(['fight', 'fight', 'boss', 'fight', 'fight', 'boss']);
+    expect(nodes.map((b) => b.dataset.nodeKind)).toEqual(['fight', 'fight', 'boss', 'fight', 'fight', 'boss']);
     expect(nodes[3]!.getAttribute('aria-label')).toBe('Act 2, fight');
     expect(nodes[0]!.getAttribute('style')).toBe('left:25%;top:20%'); // below its act's header, which takes half a row
     expect(nodes[4]!.getAttribute('style')).toBe('left:75%;top:70%');
@@ -202,7 +202,7 @@ describe('roguelite', () => {
 
   it('draws each node kind with its own icon above its name, and a header per act', () => {
     const doc = new DOMParser().parseFromString(mapHtml(parseMap([0, 0, 0, 7, 0, 0, 0]), newRun(1, 3, LEGACY_UNLOCKED)), 'text/html');
-    expect(doc.querySelectorAll('button[data-node] > svg.glyph')).toHaveLength(2);
+    expect(doc.querySelectorAll('button[data-node] > svg.glyph')).toHaveLength(1);
     const kinds = ['fight', 'boss', 'elite', 'rest', 'event', 'treasure', 'shop', 'unknown'];
     const paths = kinds.map((kind) => {
       const one = new DOMParser().parseFromString(mapHtml(parseMap([0, 0, 0, kinds.indexOf(kind), 0, 0, 0]), newRun(1, 3, LEGACY_UNLOCKED)), 'text/html');
