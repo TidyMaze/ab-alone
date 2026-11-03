@@ -1637,24 +1637,24 @@ describe('OnlineSession Hello bound to its sender id', () => {
 });
 
 describe('OnlineSession creator order and refused Hello', () => {
-  it('a key that gets no seat is not in the coordinator order, and the roster goes to it alone', async () => {
+  it('a key that gets no seat joins the coordinator order once, up to 8 of them, past that the roster goes to it alone', async () => {
     const r = room();
     const keys = await generateKeys();
     const session = new OnlineSession({
       game: 'g', side: 1, seatCount: 2, engine: ENGINE, keys, transport: r.transport, judge: new FakeJudge(), onMove() {}, onRefuse() {},
       beat: { ms: 5000, now: Date.now, every: () => {} },
     });
-    const [b, d] = [await generateKeys(), await generateKeys()];
+    const b = await generateKeys();
     r.from('pb', await hello(b, 2));
     await session.settled;
     const at = r.sent.length;
-    r.from('pd', await hello(d, 2)); // the room is full
+    const spectators = await Promise.all(Array.from({ length: 12 }, () => generateKeys()));
+    for (const [i, d] of spectators.entries()) r.from(`p${i}`, await hello(d, 2)); // the room is full
+    r.from('p0', await hello(spectators[0]!, 2)); // twice
     await session.settled;
-    const last = r.sent.at(-1) as { kind: string; order?: string[] };
-    expect(r.sent.length).toBe(at + 1);
-    expect(last.kind).toBe('hello');
-    expect(last.order).toEqual([keys.pub, b.pub]);
-    expect(r.to.at(-1)).toBe('pd');
+    const hellos = r.sent.slice(at).filter((m) => kindOf(m) === 'hello') as { order?: string[] }[];
+    expect(hellos.at(-1)!.order).toEqual([keys.pub, b.pub, ...spectators.slice(0, 8).map((k) => k.pub)]);
+    expect(r.to.slice(at).filter((to) => to === undefined)).toHaveLength(8); // the room hears the 8 that joined the order, the rest is answered to its sender alone
     expect(r.to[at - 1]).toBeUndefined(); // the seated joiner's answer went to the room
   });
 });

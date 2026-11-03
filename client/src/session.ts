@@ -97,6 +97,9 @@ interface Game {
  * After its Hello a peer sends a Sync, and a peer ahead of it answers with the signed records and asks
  * it missed: a peer back after a drop or joining late catches up, an ask lost in a drop included (#198, #226).
  */
+/** The keys without a seat that the coordinator order keeps, for the migration (#359). */
+const SPECTATORS_MAX = 8;
+
 export class OnlineSession {
   readonly seats: Seats;
   private readonly presence = new Presence();
@@ -502,10 +505,12 @@ export class OnlineSession {
       // the refused included, gets the new roster.
       const free = this.seats.roster().indexOf('') + 1;
       if (!this.seats.claim(h.seat, h.pub) && !this.seats.claim(free, h.pub)) {
-        // No seat: not in the coordinator's order (a spectator is never elected, nor does a flood of keys grow it), and the
-        // roster goes back to that peer alone, not to the room.
+        // No seat: the key may still be elected (#359), but the order holds seats plus SPECTATORS_MAX keys, each once, so a flood of
+        // keys neither grows it nor the creator's broadcasts; a key that adds nothing gets the roster alone.
         this.o.onRefuse('seat-refused');
-        return this.hello(peer);
+        const joins = this.order.length < (this.o.seatCount ?? 2) + SPECTATORS_MAX && !this.order.includes(h.pub);
+        if (joins) this.order.push(h.pub);
+        return this.hello(joins ? undefined : peer); // the room hears a new order, at most SPECTATORS_MAX times
       }
       if (!this.order.includes(h.pub)) this.order.push(h.pub);
       return this.hello();
