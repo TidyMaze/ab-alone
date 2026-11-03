@@ -232,6 +232,26 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(specials()).toBe('0,4,1 1,3,3');
   });
 
+  it('fields a Magnet, a Shield, a Bomb and a Medic: placed, drawn, saved, and the Bomb bursts on the third army turn (#1461)', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    const counts = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1];
+    await game.hook('__run', { ...pick({ ...newRun(3, 3), specials: counts }, 0), placed: [[-4, 4, 7], [-3, 4, 8], [0, 4, 9], [-1, 4, 10]] });
+    expect(map().classList.contains('place')).toBe(true);
+    expect([...map().querySelectorAll('button[data-kind]')].map((b) => b.textContent)).toEqual(['Magnet · 0 left', 'Shield · 0 left', 'Bomb · 0 left', 'Medic · 0 left']);
+    expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10 0,4,9');
+    play(game, [[-2, 2]], [-3, 2]);
+    playMove(game);
+    play(game, [[-3, 2]], [-2, 2]);
+    playMove(game);
+    expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10 0,4,9');
+    await game.settle();
+    const again = await boot('?bot=off', { indexedDB }); // a reload replays the two turns: the fuse has one left
+    expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10 0,4,9');
+    play(again, [[-2, 2]], [-3, 2]); // the army's third turn: the Bomb bursts where it stands and is gone
+    expect(specials()).toBe('-4,4,7 -3,4,8 -1,4,10');
+  });
+
   it('a won fight offers a reward, its pick goes back to the map', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
