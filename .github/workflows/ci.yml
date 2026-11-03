@@ -210,9 +210,12 @@ jobs:
     outputs:
       rust: ${{ steps.diff.outputs.rust }}
     steps:
+      # Commits and trees only (#1493): `git diff --name-only` reads no blob, and a full clone of every branch (the proof
+      # images of pr-screenshots too) once ran past the 5 minute timeout and cancelled the whole run.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: blob:none
       - id: diff
         env:
           GH_TOKEN: ${{ github.token }}
