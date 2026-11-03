@@ -163,6 +163,7 @@ export class RoyaleNet<G extends NetGame> {
   private commitBy = 0; // the open round's commit deadline, on our clock
   private readonly missed: number[] = []; // by arena seat: the resolved rounds in a row it committed nothing in
   private stale = false; // the open round's deadline passed while we were cut off: only a catch-up resolves it
+  private asked = false; // a `behind` was sent: only then is a `played` answer taken
   private readonly sealed: Sealed[] = []; // what we kept of each resolved round, for a peer behind
   private readonly hashes: string[] = []; // ours after each round
   private heard: Hash[] = []; // the peers' hashes of the rounds we have not resolved yet
@@ -232,7 +233,7 @@ export class RoyaleNet<G extends NetGame> {
   /** Asks the peers for what we may have missed, once the connection is back after a drop. Nothing in the lobby. */
   resync(): Promise<void> {
     return this.run(async () => {
-      if (this.seats) this.o.send({ kind: 'behind', game: this.o.game, round: this.round });
+      if (this.seats) this.ask();
     });
   }
 
@@ -263,7 +264,7 @@ export class RoyaleNet<G extends NetGame> {
     if (m.game !== this.o.game) return;
     if (m.kind === 'start') return this.started(m, from);
     if (m.kind === 'behind') return this.answer(m, peer);
-    if (m.kind === 'played') return this.catchUp(m);
+    if (m.kind === 'played') return this.catchUp(m, from);
     if (m.kind === 'hash') return this.compare(m, from);
     return this.order(m, from);
   }
@@ -276,7 +277,13 @@ export class RoyaleNet<G extends NetGame> {
     this.pending.push({ m, from });
     // The next round while ours is still open is a peer ahead of us by a few messages; anything later, or anything once
     // our round went stale, we missed rounds.
-    if (m.round > this.round + (this.book && !this.stale ? 1 : 0)) this.o.send({ kind: 'behind', game: this.o.game, round: this.round });
+    if (m.round > this.round + (this.book && !this.stale ? 1 : 0)) this.ask();
+  }
+
+  /** Says we are behind, and from now on believes a catch-up answer. */
+  private ask(): void {
+    this.asked = true;
+    this.o.send({ kind: 'behind', game: this.o.game, round: this.round });
   }
 
   private async open(): Promise<void> {
@@ -390,19 +397,22 @@ export class RoyaleNet<G extends NetGame> {
   /** Replays the rounds we missed, then opens the round open on the peer that answered, if it is not open here yet, and
    * takes what that peer kept of it. Any peer may answer, so its seats are believed only when they are the coordinator's
    * start, or in the lobby the roster of the session: anything else changes nothing (#1322). */
-  private async catchUp(m: Played): Promise<void> {
+  private async catchUp(m: Played, from: string): Promise<void> {
+    // Only a seated key we asked (`behind`) is heard, and a round we hold commits for is not resolved without them: a stranger cannot force it.
     if (JSON.stringify(m.seats) !== JSON.stringify(this.lineup)) return;
     this.seats ??= m.seats;
-    const from = this.round;
+    if (!this.asked || !this.seats.includes(from)) return;
+    const was = this.round;
     for (const s of m.rounds) {
       if (s.round !== this.round || this.phase === 'over') continue;
+      if (this.book && this.kept.commits.some((c) => !s.commits.some((k) => k.pub === c.pub))) continue; // it lacks a commit we hold
       this.resolve(await replayed(this.o.game, s, this.humans), s, false);
     }
     if (m.open?.round === this.round) {
       if (!this.book) await this.openBook();
       for (const c of m.open.commits) await this.order(c, c.pub);
       for (const r of m.open.reveals) await this.order(r, r.pub);
-    } else if (this.round > from) await this.replay();
+    } else if (this.round > was) await this.replay();
   }
 }
 

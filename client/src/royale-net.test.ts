@@ -493,7 +493,7 @@ describe('RoyaleNet catch-up', () => {
     room.lost.add('b'); // b's reveal of round 2 is lost
     await room.pass(MS); // a reveals and waits for b's reveal
     room.lost.delete('c');
-    room.deliver(c, { kind: 'behind', game: ROOM, round: 1 }, 'a');
+    await c.net.resync();
     await room.settle();
     expect(room.sent.at(-1)?.m).toMatchObject({ kind: 'reveal', pub: a.keys.pub }); // c forwards a's reveal
     expect([c.net.round, c.net.phase]).toEqual([2, 'choosing']);
@@ -578,7 +578,7 @@ describe('RoyaleNet catch-up', () => {
     room.lost.delete('c');
     const rounds = (room.sent.find((s) => s.m.kind === 'played') ?? { m: null }).m;
     expect(rounds).toBeNull();
-    room.deliver(c, { kind: 'behind', game: ROOM, round: 1 }, 'a');
+    await c.net.resync();
     await room.settle();
     const played = room.sent.find((s) => s.m.kind === 'played')!.m;
     room.deliver(a, { ...(played as object), rounds: [...(played as { rounds: Sealed[] }).rounds, { round: a.net.round, commits: [], reveals: [] }] } as RoyaleMessage);
@@ -594,6 +594,7 @@ describe('RoyaleNet catch-up', () => {
     const watcher = await room.join('w');
     await a.net.start();
     await room.settle();
+    await watcher.net.resync();
     const stray = await signReveal(b.keys, { game: ROOM, round: 1, order: firstOrder(b), nonce: '00' });
     room.deliver(a, { kind: 'played', game: ROOM, seats: [a.keys.pub, b.keys.pub, '', ''], rounds: [{ round: 1, commits: [], reveals: [stray] }], open: null }, 'w');
     await room.settle();
@@ -666,5 +667,34 @@ describe('netStatus', () => {
     expect(netStatus('waiting', false, 3, 0)).toEqual({ text: 'Waiting for the round...', tone: 'watching' });
     expect(netStatus('over', false, 3, 0)).toEqual({ text: '3 players, game over', tone: 'watching' });
     expect(netStatus('choosing', false, 3, 4)).toEqual({ text: "Desync after round 4: a peer's game differs", tone: 'gone' });
+  });
+});
+
+describe('a catch-up answer (online F1)', () => {
+  it('is believed only from a seated key and only when we asked, and never resolves our open round without the commits we hold', async () => {
+    const { room, a, b, c } = await started();
+    const d = await room.join('d'); // no seat
+    const empty = { kind: 'played', game: ROOM, seats: a.net.seats!, rounds: [{ round: 1, commits: [], reveals: [] }], open: null } as RoyaleMessage;
+    await a.net.play(firstOrder(a));
+    await c.net.play(firstOrder(c));
+    await room.settle();
+    const before = b.net.round;
+    // an outsider, then a seated key nobody asked: the round stays
+    room.deliver(d, structuredClone(empty), 'b');
+    room.deliver(a, structuredClone(empty), 'b');
+    await room.settle();
+    expect(before).toBe(1);
+    expect(b.net.round).toBe(1);
+  });
+
+  it('a seated peer we asked cannot make us drop the commit we hold', async () => {
+    const { room, a, b } = await started();
+    await b.net.play(firstOrder(b));
+    await room.settle();
+    await b.net.resync(); // b asks, a answers with its own state
+    const sealedWithoutB = { kind: 'played', game: ROOM, seats: a.net.seats!, rounds: [{ round: 1, commits: [], reveals: [] }], open: null } as RoyaleMessage;
+    room.deliver(a, sealedWithoutB, 'b');
+    await room.settle();
+    expect(b.net.round).toBe(1);
   });
 });
