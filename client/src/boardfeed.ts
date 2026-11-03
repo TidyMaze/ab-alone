@@ -2,6 +2,7 @@
 // A result is shown only if the Rust rules replay its move log to the same status and ejections (`replay_score`, crates/abalone-wasm);
 // ratings are derived from the valid results, never read. A result also needs the signature of BOTH seats over the game (#1317),
 // proved with the seats' keys: the Nostr signature of the event proves nothing about who played, so it is not checked.
+import banned from './bannedkeys.json';
 import { DEFAULT_RATING, update1v1Elo } from './elo';
 import { b64, signedBy, type Keys } from './moverecord';
 import { cleanName } from './shareboard';
@@ -15,6 +16,14 @@ export const TAG = 'ab-alone-ranked';
 export const MAX_PLIES = 1000;
 /** The plies replayed in one read at most, whatever the relays send: a stranger cannot make the page replay for long. */
 export const REPLAY_BUDGET = 20_000;
+/** One banned key of `bannedkeys.json`: a PR to that file bans a key, with a reason and a date (docs/specs/multiplayer.md section 7). */
+export interface BanEntry {
+  readonly pub: string;
+  readonly reason: string;
+  readonly date: string;
+}
+export const banSet = (list: readonly BanEntry[]): ReadonlySet<string> => new Set(list.map((b) => b.pub));
+export const BANNED = banSet((banned as { banned: readonly BanEntry[] }).banned);
 const STRIDE = 8; // integers per move record, crates/abalone-wasm/src/lib.rs
 
 export interface Side {
@@ -105,14 +114,14 @@ export function parseResult(content: string): SharedResult | null {
 
 /** The results both seats signed whose log the rules replay to the claimed score, one per game and pair of seats (the first seen). The rest is not shown.
  * A result with a bad signature is dropped before the replay and does not use up its game id, so nobody can squat a game. */
-export async function verifiedResults(contents: readonly string[], score: Score): Promise<SharedResult[]> {
+export async function verifiedResults(contents: readonly string[], score: Score, ban: ReadonlySet<string> = BANNED): Promise<SharedResult[]> {
   const seen = new Set<string>(); // every (game, black, white) met, a refused one too: a game is replayed once. The seats are in the key so that
   // another pair of keys reusing a public game id cannot spend it.
   const kept: SharedResult[] = [];
   let budget = REPLAY_BUDGET;
   for (const content of contents) {
     const r = parseResult(content);
-    if (!r) continue;
+    if (!r || ban.has(r.black.pub) || ban.has(r.white.pub)) continue; // a banned key's results are ignored
     const id = JSON.stringify([r.game, r.black.pub, r.white.pub]);
     if (seen.has(id) || r.moves.length > budget || !(await bothSigned(r))) continue;
     seen.add(id);

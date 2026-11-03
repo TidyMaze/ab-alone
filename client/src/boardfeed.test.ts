@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import init, { Engine, replay_score } from 'abalone-wasm';
-import { LIMIT, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
+import banned from './bannedkeys.json';
+import { BANNED, banSet, LIMIT, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
 import { generateKeys, type Keys } from './moverecord';
 
 // The replay is the real rules engine (crates/abalone-wasm replay_score), as antistalling.test.ts: Node's fetch cannot read a file:// URL.
@@ -97,6 +98,19 @@ describe('the shared board read side (#1287)', () => {
     const squat = await signed({ moves: [[1, 0, 0, 0, 0, 0, 0, 0]], black: { pub: kC.pub, name: 'X' }, white: { pub: kB.pub, name: 'Y' } }, ended, [kC, kB]);
     expect(squat.game).toBe(good.game);
     expect(await verifiedResults([JSON.stringify(squat), JSON.stringify(good)], score)).toEqual([good]);
+  });
+
+  it('ignores the results of a banned key, in either seat, and ships a well formed list', async () => {
+    const good = await signed();
+    const other = await signed({ game: 'g9', black: { pub: kC.pub, name: 'Cy' } }, ended, [kC, kB]);
+    const raw = [JSON.stringify(good), JSON.stringify(other)];
+    expect(await verifiedResults(raw, score, new Set([kA.pub]))).toEqual([other]);
+    expect(await verifiedResults(raw, score, new Set([kB.pub]))).toEqual([]);
+    expect(await verifiedResults(raw, score, new Set())).toHaveLength(2);
+    expect(banned.v).toBe(1);
+    for (const b of banned.banned as { pub: string; reason: string; date: string }[]) expect([typeof b.pub, b.reason.length > 0, /^\d{4}-\d\d-\d\d$/.test(b.date)]).toEqual(['string', true, true]);
+    expect(BANNED.size).toBe(banned.banned.length);
+    expect([...banSet([{ pub: 'P', reason: 'r', date: '2026-11-03' }])]).toEqual(['P']);
   });
 
   it('replays a game once even when it is refused, and stops at the budget of plies', async () => {
