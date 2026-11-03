@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import {
   actBoss,
   BIOMES,
@@ -73,7 +73,7 @@ function rules(won = true, lost = 0) {
     ...real,
     fight: (...args) => {
       calls.fights.push(args);
-      const engine = real.fight(...args);
+      const engine = tracked(real.fight(...args));
       const spied = new Proxy(engine, {
         get(target, key) {
           if (key === 'best_move') {
@@ -91,15 +91,30 @@ function rules(won = true, lost = 0) {
     },
     boss: (...args) => {
       calls.bosses.push(args);
-      const boss = real.boss(...args);
+      const boss = tracked(real.boss(...args));
       return won ? wonOnFirstMove(boss, lost) : boss;
     },
   };
   return { made, calls };
 }
 
+/** Every wasm object a test makes, freed after it: a leaked one is freed by the GC after the wasm teardown ("memory access out of bounds"). */
+const leaks: { free(): void }[] = [];
+afterEach(() => {
+  for (const o of leaks.splice(0)) {
+    try {
+      o.free();
+    } catch {
+      // the code under test already freed it: the engine refuses a second free
+    }
+  }
+});
+const tracked = <T extends { free(): void }>(o: T): T => (leaks.push(o), o);
+const trackedEngine = () => tracked(newEngine());
+const trackedEncounter = (boss: string, seed: number) => tracked(newEncounter(boss, seed));
+
 function setup(won = true, lost = 0) {
-  const session = new Session(newEngine, newEncounter, noNetwork);
+  const session = new Session(trackedEngine, trackedEncounter, noNetwork);
   const { made, calls } = rules(won, lost);
   return { session, run: new RogueRun(made, session, bossIds), calls };
 }
@@ -261,7 +276,7 @@ describe('the same seed and the same choices give the same run as the client', (
     // the save is the client's: it loads it back, the map walked
     const store = memoryStore();
     await store.put(RUN_KEY, value(run.save()));
-    const loaded = await loadRun(store, (seed) => mapOf(seed), () => newEngine());
+    const loaded = await loadRun(store, (seed) => mapOf(seed), () => trackedEngine());
     expect(loaded?.state).toEqual(expected);
   });
 
