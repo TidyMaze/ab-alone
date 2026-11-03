@@ -242,7 +242,7 @@ test('an enemy beaten by another hero is gone here, once, and a forged one does 
 });
 
 // #1305: a boss lair another hero took. The lair is the world's own (`world_lairs`), read through the test hook.
-test('a boss lair another hero took is seen beaten here, once, and a forged one does nothing, #1305', async ({ page }) => {
+test('a boss lair another hero took is heard here, once, not counted, and a forged one does nothing, #1305', async ({ page }) => {
   await enter(page, PUBLIC);
   const lair = await page.evaluate(
     (seed) => (window as unknown as Hook & { __openworldLairs: (seed: number) => [number, number][] }).__openworldLairs(seed)[0],
@@ -275,12 +275,13 @@ test('a boss lair another hero took is seen beaten here, once, and a forged one 
     );
   await send(true);
   await page.waitForTimeout(300);
-  await expect(page.locator('body')).not.toHaveAttribute('data-openworld-lairs-beaten', '0');
+  await expect(page.locator('body')).not.toHaveAttribute('data-openworld-lairs-heard', '0');
   await send(false);
-  await expect(page.locator('body')).toHaveAttribute('data-openworld-lairs-beaten', '0');
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-lairs-heard', '0'); // heard, shown beaten, never counted here
   await send(false); // the same lair again
   await page.waitForTimeout(300);
-  await expect(page.locator('body')).toHaveAttribute('data-openworld-lairs-beaten', '0');
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-lairs-heard', '0');
+  await expect(page.locator('body')).not.toHaveAttribute('data-openworld-lairs-beaten', '0'); // the victim's own count does not move
 });
 
 test('the obstacle the hero breaks goes out signed, 106 bytes, #1305', async ({ page }) => {
