@@ -321,6 +321,7 @@ import {
   eventHtml,
   leaveShop,
   fightBudget,
+  armyKept,
   fightOver,
   foePlan,
   left,
@@ -5875,7 +5876,7 @@ function runMoved(): void {
   const boss = engine instanceof Encounter;
   const status = engine instanceof Encounter ? engine.result() : engine.status(); // a boss fight: 1 won, 2 lost
   const kept = (): number[] | undefined =>
-    boss ? undefined : SPECIAL_LOOKS.map((_, k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k + 1).length);
+    boss ? undefined : armyKept(engine.board(), (engine as Engine).specials());
   const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2), kept());
   run!.state = state;
   armed = 0;

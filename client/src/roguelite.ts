@@ -211,6 +211,13 @@ export function parseSpecials(flat: ArrayLike<number>): Special[] {
   return specials;
 }
 
+/** The army's special marbles still on `board` (code 1, the army's side), by type: the bridge's kind less 1. The bot's own
+ * special marbles are not the army's (#1492). */
+export function armyKept(board: ArrayLike<number>, flat: ArrayLike<number>): number[] {
+  const mine = parseSpecials(flat).filter((s) => board[cellIndex(s.cell[0], s.cell[1])] === 1);
+  return SPECIAL_LOOKS.map((_, k) => mine.filter((s) => s.kind === k + 1).length);
+}
+
 /** The map of the bridge's records `[act, row, col, kind, links, formation, elite]`. */
 export function parseMap(flat: ArrayLike<number>): MapNode[] {
   const nodes: MapNode[] = [];
