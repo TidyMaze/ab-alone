@@ -898,6 +898,39 @@ mod tests {
         assert_eq!(enc.result(), None);
     }
 
+    /// Puts Black back on the centre when it steps east of it: a hook that rewrites the board after
+    /// the player's move, like the Chaplain's conversions.
+    fn snap_back(board: &Board, _id: u8, _seed: u64) -> Board {
+        let mut out = board.clone();
+        if board.get(1, 0) == Some(Cell::Black) {
+            out.set(1, 0, Cell::Empty);
+            out.set(0, 0, Cell::Black);
+        }
+        out
+    }
+
+    #[test]
+    fn the_player_search_counts_a_repeat_after_the_hook_not_before() {
+        // Black stepping east is put back on the centre by the hook, so a second visit of the position
+        // after the hook looks fresh to the position after the move alone (#1501). White shuffles.
+        let mut boss = boss(every_ply);
+        boss.hook = snap_back;
+        boss.node_budget = 300;
+        let game = position(&[(0, 0)], &[(3, -3)], Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, boss, 0);
+        let shuffle = [mv(&[(3, -3)], W), mv(&[(2, -3)], E)];
+        for n in 0..6 {
+            let black = if n < 3 {
+                mv(&[(0, 0)], E)
+            } else {
+                enc.player_search().unwrap().mv
+            };
+            enc.play(&black).unwrap();
+            enc.play(&shuffle[n % 2]).unwrap();
+            assert_eq!(enc.result(), None, "ply {n}: {black:?} led to a draw");
+        }
+    }
+
     #[test]
     fn scale_node_budget_scales_the_budget_proportionally() {
         let mut enc = Encounter::new(Game::new(), trivial_boss(), 0);
