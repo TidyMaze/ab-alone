@@ -1,6 +1,6 @@
 // The day/night cycle of the Open world (docs/specs/openworld.md section 11, #1496). Data and arithmetic only: the view applies the
 // look (openworldview.ts `setTime`), the mode counts the time (openworldmode.ts) and the lair fights read the phase (boardlook.ts).
-import { SUN } from './tablezero';
+import { SUN } from './sun';
 
 export type Phase = 'day' | 'dusk' | 'night';
 

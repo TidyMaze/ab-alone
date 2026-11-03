@@ -76,7 +76,7 @@ describe('the Open world tools', () => {
     await call('new_world', { seed: 3 });
     await call('world_step', { direction: 'E' });
     const save = JSON.parse((await call('save_world')).text);
-    expect(save).toMatchObject({ record: 4, seed: 3, hero: [1, 0], lairs: [] });
+    expect(save).toMatchObject({ record: 5, seed: 3, hero: [1, 0], lairs: [] });
     await call('new_world', { seed: 0 });
     // The cells discovered come back too (#1411): the spawn's disc and the 21 cells the step uncovered.
     expect(JSON.parse((await call('new_world', { save })).text)).toMatchObject({ seed: 3, hero: '(1,0)', discovered: 352 });

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fitView, type View } from './camera';
+import { SUN } from './sun';
 import { NEON_HIDDEN, NEON_CELL_SCALE, neonVoidGeometry, neonVoidMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonMaterial, neonPaint } from './neonlook';
 
 /** The palette the port must match (notes-round4.md). */
@@ -26,8 +27,7 @@ export const PALETTE = {
 /** AgX, the Blender render's own view transform, at the exposure that lands the dish near #b6ab82 and the gap on #2d3539. */
 export const TERRACE_EXPOSURE = 1.5;
 
-/** One sun, elevation 28 (the Blender render's, lights_camera.json), 25 degrees left of the camera axis at yaw 0, fixed in the world; a hemisphere; no point light. */
-export const SUN = { colour: 0xffd9a8, intensity: 5.0, elevation: 28, azimuth: 25, sky: 0x9db8d8, ground: 0x8a7a66, hemisphere: 1.6 } as const;
+export { SUN }; // its data lives in sun.ts, free of three.js (#1498)
 
 /** The direction from the board to the sun, a unit vector written into `out`: x is left of the axis, the camera looks from +z at yaw 0. The Open
  * world's time of day and the lair boards move the sun (`elevation` and `azimuth` in degrees, #1496). */

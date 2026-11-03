@@ -67,6 +67,8 @@ export interface WorldSave {
   lairs: number[];
   /** The cells discovered (#1411), a bitset per chunk; a save from before has none, and the cells round the hero are discovered. */
   discovered?: DiscoveredSave;
+  /** The time of day (#1496), ms into the client's 12 minute cycle, kept as it was: the server's world has no clock. A save from before has none (the start of day). */
+  time?: number;
   savedAt?: number;
 }
 
@@ -153,7 +155,7 @@ const LETTERS = '~sgrPotW';
 const NAMES = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall'];
 /** The record of the client's save (`RECORD` of client/src/openworldsave.ts) and the crew of its ending line (`MARBLES` of
  * client/src/trainer.ts). */
-const RECORD = 4;
+const RECORD = 5;
 const CREW = 6;
 const BOULDER = 5;
 const TREE = 6;
@@ -187,6 +189,7 @@ interface Play {
   lairs: number[];
   yaw: number;
   discovered: Discovered;
+  time: number;
 }
 
 /** The one Open world of the server. */
@@ -218,9 +221,9 @@ export class OpenWorld {
     if (save) {
       const { removed, added, beaten } = save.fight;
       const fight = this.rules.WorldFight.restore(Int32Array.from(removed.flatMap((key) => key.split(',').map(Number))), flat(added), beaten);
-      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered) };
+      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered), time: save.time ?? 0 };
     } else {
-      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered() };
+      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered(), time: 0 };
     }
     this.play.discovered.reveal(this.play.hero); // a save from before the discovery: the cells round the hero, as the client
     this.lairCells = pairs(this.rules.world_lairs(this.play.seed));
@@ -239,10 +242,10 @@ export class OpenWorld {
     const play = this.play;
     if (!play) return this.none();
     this.back();
-    const { seed, hero, troop, broken, fight, lairs, yaw, discovered } = play;
+    const { seed, hero, troop, broken, fight, lairs, yaw, discovered, time } = play;
     const removed = pairs(fight.removed()).map(([q, r]) => `${q},${r}`);
     const added = pairs(fight.added());
-    return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added, beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], discovered: discovered.toJSON(), savedAt: Date.now() });
+    return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added, beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], discovered: discovered.toJSON(), time, savedAt: Date.now() });
   }
 
   /** Rolls the hero one cell, then the troop pushes. Water is sailed (#1441); an enemy, a wall, a peak or a tree beside a tree

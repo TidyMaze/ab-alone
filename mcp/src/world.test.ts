@@ -355,6 +355,7 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
       broken: [],
       lairs: [],
       discovered: save.discovered,
+      time: 0,
       savedAt: save.savedAt,
     });
     const seen = Discovered.from(save.discovered!);
