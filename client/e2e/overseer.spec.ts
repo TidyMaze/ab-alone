@@ -79,19 +79,24 @@ test('The Overseer: the boss pushing the 6th core in wins the fight for the play
 
 // The defeated Overseer (#789): its marble explodes, then its bubble types the farewell instead of an angry line.
 test('The Overseer: on victory its marble explodes, then the bubble types the farewell, #789', async ({ page }, testInfo) => {
+  await page.clock.install();
   await startOverseer(page);
   await plies(page, 0, 21);
   await expect(page.locator('#bubble')).toBeHidden(); // the angry line of an earlier burn has faded
   await page.emulateMedia({ reducedMotion: 'no-preference' }); // the explosion plays
   await page.mouse.move(2, 2);
-  await plies(page, 21, 22);
+  await pauseClock(page); // the explosion and the typing run on the page clock, stepped by hand: no wait for a slow software draw
+  await page.evaluate((list) => list.forEach(([q, r]) => (window as any).__click(q, r)), FIXTURE[21]!); // the last ply, not `plies`: it waits for a slide the paused clock never ends
+  await stepClock(page, 600); // the slide
   await expect(page.locator('body')).toHaveAttribute('data-exploding', '1');
   await expect(page.locator('#bubble')).toBeHidden(); // no angry line while it blows
-  await freshDraw(page);
+  await stepClock(page, 200);
   await shot(page, { path: testInfo.outputPath('overseer-explosion.png') });
+  await stepClock(page, 900); // BLAST_MS: the marble is gone, the farewell starts
+  await expect(page.locator('body')).not.toHaveAttribute('data-exploding');
+  await stepClock(page, 4000); // the farewell is typed
   await expect(page.locator('#bubble-text')).toHaveText('Well done. You broke the last thing that cared about you.');
   await expect(page.locator('#bubble')).not.toHaveClass(/angry/);
-  await freshDraw(page);
   await shot(page, { path: testInfo.outputPath('overseer-farewell.png') });
 });
 
