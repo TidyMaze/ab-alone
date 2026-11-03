@@ -546,6 +546,37 @@ describe('the screens that wait for a choice', () => {
     expect(left.screen).toBe('map');
   });
 
+  test('the scroll of power (#1471): one affinity grows a level, the fights of the army play it, the Collector waits', async () => {
+    const save = at('boss', { scroll: true, collector: true, cells: 7, carried: [0] });
+    const { run, calls } = setup();
+    const state = value(await run.newRun({ save }));
+    expect(state.screen).toBe('scroll');
+    expect(state.affinities).toBeUndefined();
+    expect(state.options!.map((o) => o.text)).toEqual([
+      'Force 1 (Heavy, Heavy+): Heavy and Heavy+ weigh 1 more in a push',
+      'Tactics 1 (Anchor, Anchor+, Shield): the Anchor keeps the marble in front of it on the board, like an Anchor+',
+      'Chaos 1 (Spark, Spark+, Bomb): Spark and Bomb bursts push 1 cell further',
+    ]);
+    expect(state.options!.every((o) => o.ok)).toBe(true);
+    expect(failure(run.pick({ node: 0 })).code).toBe('not_now');
+    const next = value(run.choose({ choice: 1 }));
+    expect(next).toMatchObject({ screen: 'collector', affinities: { Tactics: 1 } });
+    expect(value(run.save()).affinities).toEqual([0, 1, 0]);
+    // The bridge gets the levels with the relics.
+    const second = at('fight', { affinities: [2, 0, 1], relics: [3] });
+    value(await run.newRun({ save: { ...second, path: second.path.slice(0, -1) } }));
+    value(run.pick({ node: second.path[second.path.length - 1]! }));
+    expect(calls.fights.at(-1)![3]).toBe((1 << 3) | (2 << 16) | (1 << 20));
+  });
+
+  test('a save from before the scrolls still loads, with no affinity', async () => {
+    const old: Record<string, unknown> = { ...newRun(2, 0, []) };
+    for (const key of ['affinities', 'scroll']) delete old[key];
+    const { run } = setup();
+    expect(value(await run.newRun({ save: old })).screen).toBe('map');
+    expect(value(run.save())).toMatchObject({ affinities: [0, 0, 0], scroll: false });
+  });
+
   test('a choice that does not exist is refused, the screen stays', async () => {
     const save = at('rest', { rest: true });
     const { run } = setup();

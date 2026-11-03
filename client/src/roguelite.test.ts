@@ -102,6 +102,12 @@ import {
   tacticRecord,
   TACTICS,
   useTactic,
+  AFFINITIES,
+  affinityBarHtml,
+  MAX_AFFINITY,
+  scrollHtml,
+  scrollOffers,
+  takeScroll,
   type MapNode,
   type Run,
   type RunEvent,
@@ -152,7 +158,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2 });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -256,7 +262,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily', 'curse']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily', 'curse', 'affinities', 'scroll']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -323,6 +329,11 @@ describe('roguelite', () => {
     ['an unknown banked blueprint', { ...newRun(1, 3, LEGACY_UNLOCKED), banked: [-1] }],
     ['a bad drop', { ...newRun(1, 3, LEGACY_UNLOCKED), drop: 15 }],
     ['a bad collector flag', { ...newRun(1, 3, LEGACY_UNLOCKED), collector: 1 }],
+    ['a bad scroll flag', { ...newRun(1, 3, LEGACY_UNLOCKED), scroll: 1 }],
+    ['affinities that are no list', { ...newRun(1, 3, LEGACY_UNLOCKED), affinities: 1 }],
+    ['two affinities', { ...newRun(1, 3, LEGACY_UNLOCKED), affinities: [1, 0] }],
+    ['an affinity above its top level', { ...newRun(1, 3, LEGACY_UNLOCKED), affinities: [0, 3, 0] }],
+    ['a negative affinity', { ...newRun(1, 3, LEGACY_UNLOCKED), affinities: [0, 0, -1] }],
     ['a told line that is no text', { ...newRun(1, 3, LEGACY_UNLOCKED), told: 3 }],
     ['a told line with markup', { ...newRun(1, 3, LEGACY_UNLOCKED), told: '<b>' }],
     ['a told line too long', { ...newRun(1, 3, LEGACY_UNLOCKED), told: 'x'.repeat(201) }],
@@ -2369,5 +2380,85 @@ describe('roguelite flasks (#1475)', () => {
     }
     await store.put(RUN_KEY, { ...fresh(), bought: [5] }); // the flask in a shop's sold list
     expect((await loadRun(store, mapOf, engine))!.state.bought).toEqual([5]);
+  });
+});
+
+describe('roguelite scrolls of power (#1471)', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  // The two-act map of the Collector tests: a fight 0, an elite 1, the boss 2; then a fight 3, an elite 4, the last boss 5.
+  const TWO = parseMap([[0, 0, 0, 0, 1, 0, 0], [0, 1, 0, 2, 1, 0, 0], [0, 2, 0, 1, 0, 0, 0], [1, 0, 0, 0, 1, 0, 0], [1, 1, 0, 2, 1, 0, 0], [1, 2, 0, 1, 0, 0, 0]].flat());
+  const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 0, []), exits: false, ...state });
+  const won = (path: number[], state: Partial<Run> = {}): Run => fightOver(TWO, { ...pick(fresh(state), path[path.length - 1]!), path }, true, 0);
+
+  it('names three affinities, each with the rule of its two levels', () => {
+    expect(AFFINITIES.map((a) => a.name)).toEqual(['Force', 'Tactics', 'Chaos']);
+    expect(AFFINITIES.map((a) => a.kinds)).toEqual(['Heavy, Heavy+', 'Anchor, Anchor+, Shield', 'Spark, Spark+, Bomb']);
+    expect(AFFINITIES.every((a) => a.levels.length === MAX_AFFINITY)).toBe(true);
+    expect(AFFINITIES[0]!.levels).toEqual(['Heavy and Heavy+ weigh 1 more in a push', 'Heavy and Heavy+ weigh 2 more in a push']);
+  });
+
+  it('an act boss beaten opens the scroll, an elite, a fight, the last boss and a lost fight do not', () => {
+    expect(won([0, 1, 2])).toMatchObject({ scroll: true, end: '' });
+    expect(won([0, 1])).toMatchObject({ scroll: false });
+    expect(won([0])).toMatchObject({ scroll: false });
+    expect(won([0, 1, 2, 3, 4])).toMatchObject({ scroll: false });
+    expect(won([0, 1, 2, 3, 4, 5])).toMatchObject({ scroll: false, end: 'won' });
+    expect(fightOver(TWO, { ...pick(fresh(), 2), path: [0, 1, 2] }, false, 0)).toMatchObject({ scroll: false, end: 'lost' });
+    expect(won([0, 1, 2], { affinities: [2, 2, 2] }).scroll).toBe(false); // nothing left to grow
+  });
+
+  it('offers the affinities below their top level, in order, only while a scroll waits', () => {
+    expect(scrollOffers(fresh())).toEqual([]);
+    expect(scrollOffers(fresh({ scroll: true }))).toEqual([0, 1, 2]);
+    expect(scrollOffers(fresh({ scroll: true, affinities: [2, 1, 0] }))).toEqual([1, 2]);
+    expect(scrollOffers(fresh({ scroll: true, affinities: [2, 2, 2] }))).toEqual([]);
+  });
+
+  it('a scroll taken grows its affinity by one level and closes the offer', () => {
+    const room = fresh({ scroll: true, affinities: [0, 1, 0] });
+    expect(takeScroll(room, 1)).toEqual({ ...room, affinities: [0, 2, 0], scroll: false });
+    expect(takeScroll(room, 0).affinities).toEqual([1, 1, 0]);
+    expect(takeScroll({ ...room, affinities: [0, 2, 0] }, 1)).toEqual({ ...room, affinities: [0, 2, 0] }); // at its top
+    expect(takeScroll(room, 3)).toBe(room); // no such affinity
+    expect(takeScroll({ ...room, scroll: false }, 0)).toEqual({ ...room, scroll: false }); // no scroll waits
+  });
+
+  it('the map waits for the scroll', () => {
+    const room = won([0, 1, 2], { reward: false });
+    expect(choices(TWO, { ...room, reward: false, relic: false })).toEqual([]);
+    expect(choices(TWO, { ...room, reward: false, relic: false, scroll: false })).toEqual([3]);
+  });
+
+  it('the engine gets the levels with the relics, 2 bits each from bit 16', () => {
+    expect(relicMask(fresh())).toBe(0);
+    expect(relicMask(fresh({ affinities: [1, 2, 0] }))).toBe((1 << 16) | (2 << 18));
+    expect(relicMask(fresh({ relics: [Relic.Gyroscope], affinities: [0, 0, 2] }))).toBe(1 | (2 << 20));
+  });
+
+  it('the scroll screen: a button per scroll with the rule of the next level, the kinds it grows and its glyph', () => {
+    const doc = parse(scrollHtml(fresh({ scroll: true, affinities: [1, 0, 0], path: [0, 1, 2] })));
+    expect(doc.querySelector('.run-line')!.textContent).toBe('Act 1 done · pick a scroll of power');
+    const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-scroll]')];
+    expect(buttons.map((b) => b.dataset.scroll)).toEqual(['0', '1', '2']);
+    expect(buttons[0]!.textContent).toBe('Force 2 (Heavy, Heavy+): Heavy and Heavy+ weigh 2 more in a push');
+    expect(buttons[1]!.textContent).toBe('Tactics 1 (Anchor, Anchor+, Shield): the Anchor keeps the marble in front of it on the board, like an Anchor+');
+    expect(buttons[2]!.textContent).toBe('Chaos 1 (Spark, Spark+, Bomb): Spark and Bomb bursts push 1 cell further');
+    expect(buttons.every((b) => b.querySelector('svg') !== null)).toBe(true);
+    const topped = parse(scrollHtml(fresh({ scroll: true, affinities: [2, 0, 2] })));
+    expect([...topped.querySelectorAll<HTMLButtonElement>('button[data-scroll]')].map((b) => b.dataset.scroll)).toEqual(['1']);
+  });
+
+  it('the affinity bar: nothing before the first scroll, then a glyph and level per affinity grown, its rule as its tooltip', () => {
+    expect(affinityBarHtml(fresh())).toBe('');
+    const bar = parse(affinityBarHtml(fresh({ affinities: [2, 0, 1] })));
+    const chips = [...bar.querySelectorAll<HTMLElement>('.affinity')];
+    expect(chips.map((c) => c.textContent)).toEqual(['2', '1']);
+    expect(chips.map((c) => c.title)).toEqual([
+      'Force 2: Heavy and Heavy+ weigh 2 more in a push',
+      'Chaos 1: Spark and Bomb bursts push 1 cell further',
+    ]);
+    expect(chips[0]!.getAttribute('aria-label')).toBe(chips[0]!.title);
+    expect(chips[0]!.querySelector('svg')).not.toBeNull();
+    expect(bar.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Affinities');
   });
 });

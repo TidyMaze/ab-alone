@@ -986,6 +986,43 @@ describe('main.ts, the Collector between acts (#1470)', () => {
   });
 });
 
+describe('main.ts, the scroll of power between acts (#1471)', () => {
+  const scrolls = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-scroll]')];
+  const chips = (): string[] => [...document.querySelectorAll<HTMLElement>('#hud .affinities .affinity')].map((c) => c.title);
+
+  it('waits after the act boss, saved; a scroll grows its affinity, joins the bar next to the relics, and the map goes on', async () => {
+    const { run_map } = await import('abalone-wasm');
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...plainRun(1, 3), path: toBoss(parseMap(run_map(1))), scroll: true, relics: [Relic.Jammer] });
+    expect(document.body.dataset.run).toBe('scroll');
+    expect(line()).toBe('Act 1 done · pick a scroll of power');
+    expect(scrolls()).toHaveLength(3);
+    expect(open()).toHaveLength(0); // the map waits
+    expect(chips()).toEqual([]);
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the scroll waiting
+    expect(document.body.dataset.run).toBe('scroll');
+    scrolls()[2]!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(chips()).toEqual(['Chaos 1: Spark and Bomb bursts push 1 cell further']);
+    expect(document.querySelector('#hud .relics')!.nextElementSibling!.classList.contains('affinities')).toBe(true);
+    expect(open().length).toBeGreaterThanOrEqual(2); // the first row of act 2
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // and keeps the affinity
+    expect(chips()).toEqual(['Chaos 1: Spark and Bomb bursts push 1 cell further']);
+  });
+
+  it('comes before the Collector', async () => {
+    const { run_map } = await import('abalone-wasm');
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...plainRun(1, 3), path: toBoss(parseMap(run_map(1))), scroll: true, collector: true, cells: 12, carried: [0] });
+    expect(document.body.dataset.run).toBe('scroll');
+    scrolls()[0]!.click();
+    expect(document.body.dataset.run).toBe('collector');
+  });
+});
+
 describe('main.ts, the biome exits between acts (#1472)', () => {
   /** The path of the run of seed 1 from the first node of act `act` (0 or 1) to its boss, by first links. */
   async function actPath(act: number): Promise<{ nodes: MapNode[]; path: number[] }> {
