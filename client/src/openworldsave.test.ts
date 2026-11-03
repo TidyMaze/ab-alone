@@ -47,7 +47,7 @@ describe('the save of the camera yaw (#1026)', () => {
 
   it('discards a record of a record version this build does not know, a later one', async () => {
     const store = memoryStore();
-    store.data.set('openworld:7', { ...record(7), record: 5, yaw: 0 });
+    store.data.set('openworld:7', { ...record(7), record: 6, yaw: 0 });
     expect(await worldSaves(store, 1).load(7)).toBeNull();
     expect(store.data.has('openworld:7')).toBe(false);
   });
@@ -174,6 +174,39 @@ describe('the save of the discovered cells (#1411)', () => {
     await saves.put(7, hero, troop, new FightState(), 0, [], [], discovered());
     await saves.beat(7, 3);
     expect((await saves.load(7))!.discovered).toEqual(discovered());
+  });
+});
+
+describe('the save of the time of day (#1496)', () => {
+  it('saves the time of day with the world and loads it back', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], [], 8 * 60_000);
+    expect((await saves.load(7))!.time).toBe(8 * 60_000);
+  });
+
+  it('loads a record of the record version 4 or before, saved before the cycle, at the start of day: old saves still load', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', { ...record(7), record: 4, yaw: 0, lairs: [], discovered: [] });
+    expect((await worldSaves(store, 1).load(7))!.time).toBe(0);
+    store.data.set('openworld:7', record(7));
+    expect((await worldSaves(store, 1).load(7))!.time).toBe(0);
+  });
+
+  it('discards a record of this record version whose time is not inside one cycle', async () => {
+    for (const bad of ['x', -1, Number.NaN, 12 * 60_000, undefined]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...record(7), record: 5, yaw: 0, lairs: [], discovered: [], time: bad });
+      expect(await worldSaves(store, 1).load(7), String(bad)).toBeNull();
+      expect(store.data.has('openworld:7')).toBe(false);
+    }
+  });
+
+  it('beat keeps the time of day', async () => {
+    const store = memoryStore();
+    const saves = worldSaves(store, 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], [], 9 * 60_000);
+    await saves.beat(7, 2);
+    expect((await saves.load(7))!.time).toBe(9 * 60_000);
   });
 });
 

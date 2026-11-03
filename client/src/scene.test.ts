@@ -8,7 +8,9 @@ import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
+import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
 import { NEON, NEON_LIGHT } from './neonlook';
+import { TERRACE_EXPOSURE } from './tablezero';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
@@ -571,6 +573,49 @@ describe('SceneRenderer (#632)', () => {
     expect([sr.renderer.toneMapping, sr.renderer.toneMappingExposure, sr.sun.intensity]).toEqual([THREE.NoToneMapping, NEON_LIGHT.exposure, NEON_LIGHT.sunIntensity]);
     const plain = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
     expect(plain.sun.intensity).not.toBe(NEON_LIGHT.sunIntensity); // nothing changes without the look
+  });
+
+  it('dresses the terrace for a lair fight: the light, the sky, the exposure, the tint and the cell edges follow the look, and null gives the terrace back (#1496)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const lit = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ color: 0x808080 })), { name: 'lit' });
+    const dome = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ name: 'terrace_solid', color: new THREE.Color().setScalar(1 / TERRACE_EXPOSURE) })), { name: 'dome' });
+    const haze = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ name: 'terrace_blended', color: 0x123456 })), { name: 'haze' });
+    const edges = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ name: 'terrace_edge' })), { name: 'terrace_edges', visible: false });
+    const bare = Object.assign(new THREE.Group(), { name: 'bare' }); // not a mesh
+    sr.terrace.add(lit, dome, haze, edges, bare);
+    sr.setBoardLook(BOARD_LOOKS.night); // the terrace is not on: nothing is touched yet
+    expect(sr.sun.color.getHex()).toBe(TERRACE_LOOK.sun);
+    sr.setTerrace(true);
+    const night = BOARD_LOOKS.night;
+    expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([night.sun, night.sunIntensity]);
+    expect(sr.sun.position.clone().normalize().y).toBeCloseTo(Math.sin((night.elevation * Math.PI) / 180));
+    expect([sr.hemisphere.color.getHex(), sr.hemisphere.groundColor.getHex(), sr.hemisphere.intensity]).toEqual([night.sky, night.ground, night.hemisphere]);
+    expect((sr.scene.background as THREE.Color).getHex()).toBe(night.background);
+    expect(sr.renderer.toneMappingExposure).toBe(night.exposure);
+    expect((lit.material as THREE.MeshStandardMaterial).color.r).toBeCloseTo((0x80 / 255) ** 2.2 * new THREE.Color(night.tint).r, 1);
+    expect((dome.material as THREE.MeshBasicMaterial).color.b).toBeGreaterThan(0);
+    expect((haze.material as THREE.MeshBasicMaterial).color.getHex()).toBe(0x123456); // the haze is nobody's tint
+    expect(edges.visible).toBe(true);
+    expect((edges.material as THREE.MeshBasicMaterial).color.getHex()).not.toBe(0xffffff);
+    sr.setBoardLook(BOARD_LOOKS.day); // another look over it: the tint is of the file's colour, not of the last look
+    sr.setBoardLook(null);
+    expect([sr.sun.color.getHex(), sr.sun.intensity, sr.renderer.toneMappingExposure]).toEqual([TERRACE_LOOK.sun, TERRACE_LOOK.sunIntensity, TERRACE_EXPOSURE]);
+    expect((sr.scene.background as THREE.Color).getHex()).toBe(TERRACE_LOOK.background);
+    expect((lit.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0x808080);
+    expect((dome.material as THREE.MeshBasicMaterial).color.r).toBeCloseTo(1 / TERRACE_EXPOSURE);
+    expect(edges.visible).toBe(false);
+  });
+
+  it('puts the look on when the terrace comes on after it was asked for, and leaves the neon look alone (#1496)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    sr.setBoardLook(BOARD_LOOKS.dusk);
+    sr.setTerrace(true);
+    expect(sr.sun.color.getHex()).toBe(BOARD_LOOKS.dusk.sun);
+    const neon = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    neon.setTerrace(true);
+    neon.setNeon();
+    neon.setBoardLook(BOARD_LOOKS.dusk);
+    expect(neon.sun.intensity).toBe(NEON_LIGHT.sunIntensity);
   });
 
   it('casts the sun shadow on the terrace on the high tier only, and a tier change moves it (#1364)', () => {

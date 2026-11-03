@@ -32,6 +32,12 @@ describe('the light of the terrace', () => {
     expect(Math.hypot(x, y, z)).toBeCloseTo(10);
     expect(sunPosition()).toHaveLength(3);
   });
+  it('puts the sun at an elevation and an azimuth asked for, the arena\'s by default (#1496)', () => {
+    const [x, y, z] = sunPosition(10, 10, -40);
+    expect(Math.asin(y / 10) * (180 / Math.PI)).toBeCloseTo(10);
+    expect(Math.atan2(-x, z) * (180 / Math.PI)).toBeCloseTo(-40);
+    expect(sunPosition(10)).toEqual(sunPosition(10, SUN.elevation, SUN.azimuth));
+  });
   it('keeps the palette of the direction', () => {
     expect([PALETTE.dish, PALETTE.gap, PALETTE.whiteClamp]).toEqual([0xb4aa81, 0x2c3438, 0xe8e4d6]);
   });
@@ -206,6 +212,21 @@ describe('the boss fights on the terrace (#1374)', () => {
     expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBe(4); // compacted: the third cell took the second place
     expect(mergeByMaterial(new THREE.Group()).getObjectByName('terrace_dishes')).toBeUndefined();
   });
+  it('lays a hidden edge glow under every dish: the lair fight at night lights it (#1496)', () => {
+    const material = new THREE.MeshStandardMaterial();
+    const root = new THREE.Group();
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geometry.attributes.position!.count * 3).fill(0.5), 3));
+    for (const [i, x] of [0, 2, 4].entries()) { const cell = Object.assign(new THREE.Mesh(geometry, material), { name: `scene_cell_0${i}` }); cell.position.set(x, 0, 1); root.add(cell); }
+    const merged = mergeByMaterial(root);
+    const edges = merged.getObjectByName('terrace_edges') as THREE.InstancedMesh;
+    const dishes = merged.getObjectByName('terrace_dishes') as THREE.InstancedMesh;
+    expect([edges.visible, edges.count, edges.frustumCulled]).toEqual([false, 3, false]); // hidden until a look shows it
+    expect((edges.material as THREE.MeshBasicMaterial).name).toBe('terrace_edge');
+    dishes.userData.show((x: number) => x !== 2); // a cell gone: its edge goes with it
+    expect(edges.count).toBe(2);
+    expect(mergeByMaterial(root, false, true).getObjectByName('terrace_edges')).toBeDefined(); // the neon look keeps its own
+  });
   it('draws the slab, the plinth shadow, the posts and the dishes as a board of their own, for a bigger board to replace', () => {
     const material = new THREE.MeshStandardMaterial();
     const root = new THREE.Group();
@@ -219,7 +240,7 @@ describe('the boss fights on the terrace (#1374)', () => {
     root.add(piece('scene_slab_arena', 0), piece('scene_post_0', 1), piece('scene_cell_00', 2), piece('scene_tower_body_0', 3));
     const merged = mergeByMaterial(root, true);
     const board = merged.getObjectByName('terrace_board')!;
-    expect(board.children.map((c) => c.name)).toEqual(['', 'terrace_dishes']); // the slab and posts as one mesh, then the dishes
+    expect(board.children.map((c) => c.name)).toEqual(['', 'terrace_dishes', 'terrace_edges']); // the slab and posts as one mesh, then the dishes and their hidden edge glow (#1496)
     expect(merged.children).toHaveLength(2); // the rest of the scene, and the board
     expect((board.children[0] as THREE.Mesh).geometry.attributes.position!.count).toBe(48); // the slab and the post
     expect(material.color.r).toBeCloseTo(TERRACE_TINT.r); // tinted once, though it is in both groups

@@ -102,6 +102,66 @@ describe('the boss lairs of the Open world (#1170)', () => {
   });
 });
 
+describe('the day and the night of the Open world (#1496)', () => {
+  const setTime = (ms: number): void => (window as unknown as { __openworldTime: (ms: number) => void }).__openworldTime(ms);
+  const MIN = 60_000;
+
+  it('the test hook sets the time of day and the page reads the phase', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(data().openworldPhase).toBe('day');
+    setTime(6.5 * MIN);
+    expect(data().openworldPhase).toBe('dusk');
+    setTime(9 * MIN);
+    expect(data().openworldPhase).toBe('night');
+  });
+
+  it('a lair entered at night starts the fight on the night board, Retry keeps it, and Back returns to the same hour', async () => {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    setTime(9 * MIN);
+    await walkOnto(game, 0);
+    expect(data().openworld).toBeUndefined();
+    expect(data().fightBoard).toBe('night');
+    byId('boss-retry').click();
+    expect(data().fightBoard).toBe('night');
+    const { Encounter } = await import('abalone-wasm');
+    vi.spyOn(Encounter.prototype, 'status').mockImplementation(() => 2);
+    vi.spyOn(Encounter.prototype, 'result').mockImplementation(() => 2);
+    const move = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4))!;
+    const [q, r] = move.cells[0]!;
+    game.click(q, r);
+    game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
+    byId('ship-back').click();
+    await settle();
+    expect(data().fightBoard).toBeUndefined(); // the world is back, the board is nobody's
+    expect(data().openworldPhase).toBe('night');
+  });
+
+  it('a lair entered at dusk and at day takes their boards; a boss picked from the menu keeps the ordinary board', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    await walkOnto(game, 0);
+    expect(data().fightBoard).toBe('day');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    setTime(6.5 * MIN);
+    await walkOnto(game, 1);
+    expect(data().fightBoard).toBe('dusk');
+    game.openModes();
+    byId('boss-fight').click();
+    (byId('boss-list').querySelector('button') as HTMLButtonElement).click();
+    expect(data().fightBoard).toBeUndefined();
+  });
+});
+
 describe("Tally's line in the Open world (#1171)", () => {
   it('shows "Claim 0412: unworked." the first time the player opens an Open world, and never again', async () => {
     const game = await boot('?bot=off&openworld=7'); // the link opens the world at the load (#1361)
