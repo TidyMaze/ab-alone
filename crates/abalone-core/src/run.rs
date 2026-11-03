@@ -36,7 +36,16 @@ pub enum NodeKind {
     /// A "?" node (#1463): the page turns it into an event, a fight or a treasure when it is
     /// entered. It took the place of the Event in the draw, so no map holds an `Event` any more.
     Unknown = 7,
+    /// A secret room (docs/specs/roguelite.md section 27), drawn only on the map of a run that holds the rune of the room. The page
+    /// plays it as a treasure.
+    Secret = 8,
 }
+
+/// The runes a player owns, as a bit mask (docs/specs/roguelite.md section 27): each opens one kind of hidden branch on the maps
+/// of later runs. The room adds a secret room to each act, the shortcut a link that skips a row, the exit a third biome exit.
+pub const RUNE_ROOM: u8 = 1;
+pub const RUNE_SHORTCUT: u8 = 2;
+pub const RUNE_EXIT: u8 = 4;
 
 /// A relic of a rogue-lite run (docs/specs/roguelite.md section 9): a passive effect for the rest of
 /// the run, its value its code on the bridge. The engine plays the two that act inside a fight, on
@@ -355,7 +364,8 @@ pub fn exits(seed: u64, act: usize, from: Biome) -> [Biome; 2] {
 }
 
 /// One node of the map. `links` are the columns of the next row of the same act it leads to,
-/// ascending; a boss node has none (it leads to the first row of the next act). A fight or an
+/// ascending; a boss node has none (it leads to the first row of the next act). `skips` are the columns of the
+/// row after the next it leads to, the shortcut of a run with its rune (section 27). A fight or an
 /// elite has the `formation` of the bot's army, an elite its archetype.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node {
@@ -364,6 +374,7 @@ pub struct Node {
     pub col: usize,
     pub kind: NodeKind,
     pub links: Vec<usize>,
+    pub skips: Vec<usize>,
     pub formation: Formation,
     pub elite: Option<Elite>,
 }
@@ -457,6 +468,7 @@ pub fn run_map(seed: u64) -> Vec<Node> {
                     col,
                     kind,
                     links,
+                    skips: Vec::new(),
                     formation,
                     elite,
                 }
@@ -471,11 +483,22 @@ pub fn run_map(seed: u64) -> Vec<Node> {
             col: 0,
             kind,
             links: if row == 0 { vec![0] } else { Vec::new() },
+            skips: Vec::new(),
             formation,
             elite,
         });
     }
     map
+}
+
+/// The map of the run `seed` for a player who owns the runes `runes` (`RUNE_*`, section 27).
+pub fn run_map_with(seed: u64, _runes: u8) -> Vec<Node> {
+    run_map(seed)
+}
+
+/// The biomes the exits at the end of an act lead to, with the secret exit the rune of the exit opens.
+pub fn exits_with(seed: u64, act: usize, from: Biome, _runes: u8) -> Vec<Biome> {
+    exits(seed, act, from).to_vec()
 }
 
 /// The special marbles of `next`, the board after a ply of the `mover` on `board` that moved the
@@ -3250,5 +3273,143 @@ mod affinities {
         assert_eq!(found, mv(&[(2, 0)], E));
         game.play(&found).unwrap();
         assert_eq!(game.ejected(Player::Black), 1);
+    }
+}
+
+#[cfg(test)]
+mod runes {
+    use super::*;
+    use crate::world::Biome;
+
+    fn cols(map: &[Node], act: usize, row: usize) -> usize {
+        map.iter().filter(|n| n.act == act && n.row == row).count()
+    }
+
+    #[test]
+    fn no_rune_gives_the_map_and_the_exits_of_a_run_without_runes() {
+        for seed in 0..60 {
+            assert_eq!(run_map_with(seed, 0), run_map(seed));
+            assert!(run_map(seed)
+                .iter()
+                .all(|n| n.kind != NodeKind::Secret && n.skips.is_empty()));
+            for from in Biome::ALL {
+                assert_eq!(exits_with(seed, 1, from, 0), exits(seed, 1, from).to_vec());
+            }
+        }
+        assert_eq!(NodeKind::Secret as u8, 8);
+        assert_eq!([RUNE_ROOM, RUNE_SHORTCUT, RUNE_EXIT], [1, 2, 4]);
+    }
+
+    #[test]
+    fn the_rune_of_the_room_adds_a_secret_room_to_the_second_row_of_each_act() {
+        for seed in 0..120 {
+            let base = run_map(seed);
+            let map = run_map_with(seed, RUNE_ROOM);
+            // The nodes of a run without runes keep their index, the secret rooms come after them.
+            assert_eq!(map.len(), base.len() + ACTS, "seed {seed}");
+            for (i, node) in base.iter().enumerate() {
+                assert_eq!(
+                    (node.kind, node.formation, node.elite),
+                    (map[i].kind, map[i].formation, map[i].elite)
+                );
+            }
+            for act in 0..ACTS {
+                let secret = &map[base.len() + act];
+                let (w0, w1, w2) = (
+                    cols(&base, act, 0),
+                    cols(&base, act, 1),
+                    cols(&base, act, 2),
+                );
+                assert_eq!(secret.kind, NodeKind::Secret);
+                assert_eq!((secret.act, secret.row, secret.col), (act, 1, w1));
+                assert_eq!(secret.links, [w2 - 1]);
+                assert!(secret.skips.is_empty() && secret.elite.is_none());
+                // It is reached from the last node of the first row, past the links it had.
+                let from = map
+                    .iter()
+                    .find(|n| (n.act, n.row, n.col) == (act, 0, w0 - 1))
+                    .unwrap();
+                assert_eq!(from.links.last(), Some(&w1));
+                assert_eq!(
+                    from.links[..from.links.len() - 1],
+                    base[from_index(&base, act, w0 - 1)].links
+                );
+            }
+        }
+    }
+
+    fn from_index(map: &[Node], act: usize, col: usize) -> usize {
+        map.iter()
+            .position(|n| (n.act, n.row, n.col) == (act, 0, col))
+            .unwrap()
+    }
+
+    #[test]
+    fn the_rune_of_the_shortcut_links_a_first_row_node_to_the_third_row_of_each_act() {
+        let mut sources = Vec::new();
+        for seed in 0..120 {
+            let base = run_map(seed);
+            let map = run_map_with(seed, RUNE_SHORTCUT);
+            assert_eq!(map.len(), base.len(), "seed {seed}");
+            for act in 0..ACTS {
+                let skipping: Vec<&Node> = map
+                    .iter()
+                    .filter(|n| n.act == act && !n.skips.is_empty())
+                    .collect();
+                assert_eq!(skipping.len(), 1, "seed {seed} act {act}");
+                let node = skipping[0];
+                assert_eq!(node.row, 0);
+                assert_eq!(node.skips.len(), 1);
+                assert!(node.skips[0] < cols(&base, act, 2));
+                sources.push((node.col, node.skips[0]));
+            }
+            // Only the shortcut is new.
+            for (a, b) in base.iter().zip(&map) {
+                assert_eq!((&a.links, a.kind), (&b.links, b.kind));
+            }
+            assert_eq!(map, run_map_with(seed, RUNE_SHORTCUT));
+        }
+        assert!(sources.iter().any(|s| s.0 > 0) && sources.iter().any(|s| s.1 > 0));
+    }
+
+    #[test]
+    fn the_runes_of_the_room_and_the_shortcut_open_both_on_the_same_map() {
+        for seed in 0..60 {
+            let map = run_map_with(seed, RUNE_ROOM | RUNE_SHORTCUT);
+            assert_eq!(
+                map.iter().filter(|n| n.kind == NodeKind::Secret).count(),
+                ACTS
+            );
+            assert_eq!(map.iter().filter(|n| !n.skips.is_empty()).count(), ACTS);
+            // The exit rune changes no node.
+            assert_eq!(
+                map,
+                run_map_with(seed, RUNE_ROOM | RUNE_SHORTCUT | RUNE_EXIT)
+            );
+        }
+    }
+
+    #[test]
+    fn the_rune_of_the_exit_adds_a_third_biome_to_the_exits() {
+        for seed in 0..60 {
+            for act in 1..ACTS {
+                for from in Biome::ALL {
+                    let two = exits(seed, act, from);
+                    let three = exits_with(seed, act, from, RUNE_EXIT);
+                    assert_eq!(three.len(), 3);
+                    assert_eq!(three[..2], two);
+                    assert!(three[2] != two[0] && three[2] != two[1]);
+                    assert!(three[2] != Biome::Meadow && three[2] != from);
+                    assert_eq!(
+                        exits_with(seed, act, from, RUNE_ROOM | RUNE_SHORTCUT).len(),
+                        2
+                    );
+                }
+            }
+        }
+        let offered: Vec<Biome> = (0..40)
+            .map(|seed| exits_with(seed, 1, Biome::Meadow, RUNE_EXIT)[2])
+            .collect();
+        assert!(Biome::ALL[1..].iter().all(|b| offered.contains(b)));
     }
 }
