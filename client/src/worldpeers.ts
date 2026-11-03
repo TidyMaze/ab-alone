@@ -270,6 +270,11 @@ export class Peers {
     return true;
   }
 
+  /** The last place `peer` reported, null when none. */
+  cellOf(peer: string): Axial | null {
+    return this.table.get(peer)?.cell ?? null;
+  }
+
   leave(peer: string): void {
     this.table.delete(peer);
   }

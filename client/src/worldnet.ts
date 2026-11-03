@@ -9,7 +9,7 @@ import { joinErrorCause } from './netcounters';
 import type { Keys } from './moverecord';
 import type { Store } from './quality';
 import { BreakSet, SYNC_MAX, SYNC_MS, signBeaten, signBreak, signLair, verifyBreak } from './worldevents';
-import { type BreakEvent, decode, encodeBreak, encodeHello, Peers, PUBLIC_SEED, roomOf, Sender } from './worldpeers';
+import { type BreakEvent, decode, encodeBreak, encodeHello, Peers, hexDistance, PUBLIC_SEED, roomOf, Sender } from './worldpeers';
 import { PeersLayer } from './worldpeersview';
 
 /** What the Open world mode needs of the online layer. */
@@ -43,6 +43,8 @@ export interface BreakHooks {
 
 /** Breaks from one peer closer together than this are dropped (flood guard; the sync of a newcomer goes at SYNC_MS). */
 const BREAK_GAP_MS = 100;
+/** A hero acts within this many cells of where it stands; an event further than that from its sender is a relayed one (a sync). */
+const NEAR = 12;
 
 /** What the HUD shows of the connection: `available` is false outside the public world (no controls), `hidden` when the player hides. */
 export interface NetStatus {
@@ -77,6 +79,8 @@ export class WorldPeersHost implements PeerHost {
   private syncing: { peer: string; events: BreakEvent[] }[] = [];
   private lastSync = -Infinity;
   private readonly lastBreak = new Map<string, number>();
+  /** How many events far from their sender each peer reported: no more than a sync (SYNC_MAX), since nothing proves its key was there. */
+  private readonly far = new Map<string, number>();
   /** The lairs taken while the room was closed (the fight leaves the world): told when it opens. Kept across a leave. */
   private owed: Axial[] = [];
 
@@ -141,6 +145,7 @@ export class WorldPeersHost implements PeerHost {
     net.onLeave((peer) => {
       peers.leave(peer);
       this.lastBreak.delete(peer);
+      this.far.delete(peer);
       this.syncing = this.syncing.filter((s) => s.peer !== peer);
     });
     net.onError((message) => {
@@ -214,6 +219,12 @@ export class WorldPeersHost implements PeerHost {
     const now = this.clock();
     if (now - (this.lastBreak.get(peer) ?? -Infinity) < BREAK_GAP_MS) return;
     this.lastBreak.set(peer, now);
+    const at = run?.peers.cellOf(peer);
+    if (!at || hexDistance(at, [event.q, event.r]) > NEAR) {
+      const used = this.far.get(peer) ?? 0;
+      if (used >= SYNC_MAX) return;
+      this.far.set(peer, used + 1);
+    }
     const allowed = event.kind === 'beaten' ? this.hooks.canBeaten : event.kind === 'lair' ? this.hooks.canLair : this.hooks.canBreak;
     if (!allowed(event.seed, event.q, event.r) || !(await verifyBreak(event))) return;
     if (this.running !== run || !this.held.add(event)) return; // the room closed meanwhile, or the same cell came first
@@ -268,6 +279,7 @@ export class WorldPeersHost implements PeerHost {
     this.running = null;
     this.syncing = [];
     this.lastBreak.clear();
+    this.far.clear();
     run.net.close();
     run.layer.dispose();
   }

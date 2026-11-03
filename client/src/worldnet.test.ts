@@ -11,7 +11,7 @@ import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
 import { generateKeys } from './moverecord';
 import type { Store } from './quality';
-import { EVENTS_KEY, signBeaten, signBreak, signLair } from './worldevents';
+import { EVENTS_KEY, SYNC_MAX, signBeaten, signBreak, signLair } from './worldevents';
 import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
 import { PeersLayer } from './worldpeersview';
@@ -351,6 +351,26 @@ describe('WorldPeersHost', () => {
       await flush();
       expect(applied).toEqual([[8, 8]]);
     });
+
+    it('a peer reports events far from where it stands only up to the sync cap; near its own place there is no cap', async () => {
+      const { nets, applied, clock, enter, keysOnce } = setup();
+      enter();
+      const keys = await keysOnce;
+      const net = nets[0]!;
+      net.data(encodeHello(), 'p');
+      net.data(encodePos(20, 0, 1), 'p');
+      for (let i = 0; i < SYNC_MAX + 1; i++) {
+        clock.now += 1000;
+        net.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 100 + i, 0)), 'p'); // far from (20, 0)
+      }
+      clock.now += 1000;
+      net.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 22, 0)), 'p'); // two cells from it
+      await vi.waitFor(() => expect(applied.length).toBe(SYNC_MAX + 1), { timeout: 20000 });
+      await flush();
+      expect(applied.length).toBe(SYNC_MAX + 1);
+      expect(applied).toContainEqual([22, 0]);
+      expect(applied).not.toContainEqual([100 + SYNC_MAX, 0]);
+    }, 30000);
 
     it('sends a beaten enemy signed as type 5 to every peer, and only one the rules allow', async () => {
       const { nets, host, enter, keysOnce } = setup();
