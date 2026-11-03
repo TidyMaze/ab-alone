@@ -70,11 +70,11 @@ pub fn run_exits(seed: u32, act: u8, from: u8) -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::convert::special_code;
-    use abalone_core::run::NodeKind;
+    use abalone_core::run::{NodeKind, RUNE_EXIT, RUNE_ROOM, RUNE_SHORTCUT};
 
     #[test]
     fn run_map_flattens_the_core_map() {
-        let flat = run_map(3);
+        let flat = run_map(3, None);
         let core = run::run_map(3);
         assert_eq!(flat.len(), core.len() * NODE_STRIDE);
         for (record, node) in flat.chunks(NODE_STRIDE).zip(&core) {
@@ -139,8 +139,29 @@ mod tests {
     #[test]
     fn run_exits_flattens_the_core_exits() {
         let core = run::exits(7, 2, Biome::Tundra).map(|b| b as u8);
-        assert_eq!(run_exits(7, 2, 2), core);
-        assert_eq!(run_exits(7, 2, 99), run_exits(7, 2, 0));
+        assert_eq!(run_exits(7, 2, 2, None), core);
+        assert_eq!(run_exits(7, 2, 99, None), run_exits(7, 2, 0, None));
+        assert_eq!(run_exits(7, 2, 2, Some(RUNE_ROOM)), core);
+    }
+
+    #[test]
+    fn the_runes_reach_the_bridge_as_a_secret_room_a_shortcut_mask_and_a_third_exit() {
+        let plain = run_map(3, None);
+        assert_eq!(run_map(3, Some(0)), plain);
+        let core = run::run_map_with(3, RUNE_ROOM | RUNE_SHORTCUT);
+        let flat = run_map(3, Some(RUNE_ROOM | RUNE_SHORTCUT));
+        assert_eq!(flat.len(), core.len() * NODE_STRIDE);
+        let secret = flat.chunks(NODE_STRIDE).filter(|r| r[3] == 8).count();
+        assert_eq!(secret, run::ACTS);
+        for (record, node) in flat.chunks(NODE_STRIDE).zip(&core) {
+            let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
+            let skips: i32 = node.skips.iter().map(|&c| 1 << (8 + c)).sum();
+            assert_eq!(record[4], links | skips);
+        }
+        assert!(flat.chunks(NODE_STRIDE).any(|r| r[4] >> 8 != 0));
+        let exits = run_exits(7, 2, 2, Some(RUNE_EXIT));
+        assert_eq!(exits.len(), 3);
+        assert_eq!(exits[..2], run_exits(7, 2, 2, None));
     }
 
     #[test]
