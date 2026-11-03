@@ -9,8 +9,6 @@ export interface AutoMode {
   online: boolean;
   /** The name of the boss when the fight is a boss fight, null otherwise. */
   boss: string | null;
-  /** A rogue-lite run's fight (#798): the run is the player's own army, never auto-played. */
-  run?: boolean;
   /** The Trainer (#1159): the score is the player's own, never auto-played. */
   trainer?: boolean;
 }
@@ -18,12 +16,11 @@ export interface AutoMode {
 /** Not shown, or shown with `reason` when it is greyed. */
 export type AutoState = { shown: false } | { shown: true; reason: string | null };
 
-/** The state of the toggle: hidden online, greyed in a rogue-lite run and against a boss whose medal (#791) the player has
+/** The state of the toggle: hidden online, greyed in the Trainer and against a boss whose medal (#791) the player has
  * not earned yet. */
 export function autoPlayState(mode: AutoMode, medal: boolean): AutoState {
   if (mode.online) return { shown: false };
   if (mode.trainer) return { shown: true, reason: 'Not in the Trainer' };
-  if (mode.run) return { shown: true, reason: 'Not in a rogue-lite run' };
   if (mode.boss !== null && !medal) return { shown: true, reason: `Beat ${mode.boss} once to unlock Auto-play against it` };
   return { shown: true, reason: null };
 }

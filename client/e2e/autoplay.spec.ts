@@ -40,3 +40,16 @@ test('Auto-play is greyed with its reason against a boss without a medal, and pl
   await toggle(page).click();
   await expect.poll(() => plies(page)).toBeGreaterThanOrEqual(2);
 });
+
+test("Auto-play plays the army's side of a rogue-lite run fight, loaded through the test hook (#1489)", async ({ page }) => {
+  await page.goto('./?nodes=50');
+  await page.waitForFunction(() => typeof (window as any).__run === 'function');
+  await page.evaluate((s) => (window as any).__run(s), { seed: 3, army: 14, path: [0], fighting: true, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false });
+  await expect(page.locator('body')).toHaveAttribute('data-run', 'fight');
+  await expect(toggle(page)).toBeEnabled();
+  await shot(page, { path: 'test-results/autoplay-run-off.png' });
+  await toggle(page).click();
+  await expect.poll(() => plies(page)).toBeGreaterThanOrEqual(2);
+  await shot(page, { path: 'test-results/autoplay-run-on.png' });
+  await toggle(page).click();
+});

@@ -412,7 +412,7 @@ until a game leaves it (#583).
 
 An Auto-play toggle in the fight HUD, next to Hint, lets the bot play the player's side (#792). It is on offer in
 a bot game, at the hot-seat table (the bot plays whichever side is to move), in the offline battle royale and in a boss
-fight, never online (a versus room, a co-op fight, an online battle royale: the button is hidden), not in the hub and not with
+fight and a rogue-lite run's fight, never online (a versus room, a co-op fight, an online battle royale: the button is hidden), not in the hub and not with
 `?bot=off`, the test flag that takes the bot away.
 
 - **Play.** With it on, the bot (Web Worker, the current difficulty, `answer` with `player` for a boss fight) plays the
@@ -423,6 +423,9 @@ fight, never online (a versus room, a co-op fight, an online battle royale: the 
   is over, replaced (New game, Retry, an import, another mode) or left for the hub.
 - **Boss.** A boss fight needs that boss's medal (the medals, #791): without it the button is greyed
   and the reason is written next to it: "Beat The Echo once to unlock Auto-play against it".
+- **Rogue-lite run** (#1489). Every fight of a run offers it: fight, elite and act boss (the boss rule above applies to an act
+  boss). The bot plays the army's side with the run's rules, as its own reply does, and never a tactic. It covers the fight
+  only and turns itself off when the fight ends.
 - **Source.** The rule of availability lives in `client/src/autoplay.ts`. The boss move for the player's side is
   `Encounter.player_move` (the search of the boss budget, so the difficulty scales it), a plain game asks `best_move`.
 - The label "Auto-play" is kept verbatim for the e2e tests.

@@ -89,8 +89,8 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   });
 
   it('Auto-play plays the player side of a run fight, the bot answers, and a tactic held stays unplayed (#1489)', async () => {
-    const game = await startRun('?nodes=50');
-    open()[0]!.click();
+    const game = await boot('?nodes=50');
+    await game.hook('__run', pick({ ...newRun(3, 3), tactics: [2, 3, 4] }, 0));
     expect(byId<HTMLButtonElement>('auto-play').hidden).toBe(false);
     expect(byId<HTMLButtonElement>('auto-play').disabled).toBe(false);
     expect(byId('auto-reason').hidden).toBe(true);
@@ -102,6 +102,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
       await vi.advanceTimersByTimeAsync(0);
     }
     expect(game.hook<number>('__plies')).toBeGreaterThanOrEqual(3);
+    expect(document.body.dataset.tactics).toBe('2,3,4'); // a tactic is the player's to play
     byId('auto-play').click();
     vi.useRealTimers();
   });

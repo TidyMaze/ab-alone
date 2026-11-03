@@ -108,6 +108,10 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   loses the fight.
 - **The bot** plays these rules in its search: Heavy weights and Anchors in its legal moves, a
   burst's ejections in its score, and a side with no legal move as a pass.
+- **Auto-play** (#1489, ui.md section 4.3) is on offer in every fight of a run: fight, elite and act boss (an act
+  boss needs that boss's medal). The bot plays the army's side through the search of its own reply, with the run's
+  specials and relics, and never a tactic: tactics stay the player's. The map, rewards, rests, shops and events stay the
+  player's too, and Auto-play turns itself off when the fight ends.
 - **Bridge**: `Engine::place_special(q, r, kind)` and `Engine::specials()` (records `[q, r, kind]`,
   `1` Heavy, `2` Anchor, `3` Spark, and the upgraded `4` Heavy+, `5` Anchor+, `6` Spark+ of section
   10).
