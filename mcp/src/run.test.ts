@@ -18,6 +18,7 @@ import {
   RUN_KEY,
   tacticOffer,
   takeEvent,
+  relicMask,
   visit,
   type MapNode,
   type Run,
@@ -130,6 +131,16 @@ function at(kind: MapNode['kind'], patch: Partial<Run> = {}, accept: (run: Run) 
 /** A run standing before the first node of `kind`, and that node. It has no count of moves, so no bonus room before a boss (#1473), unless `patch` sets one. */
 function before(kind: MapNode['kind'], patch: Partial<Run> = {}): { save: Run; node: number } {
   const full = at(kind);
+  return { save: { ...full, path: full.path.slice(0, -1), spent: [], ...patch }, node: full.path[full.path.length - 1]! };
+}
+
+/** The bosses that take the army's build (#1494), and the others. */
+const BUILD = ['hull', 'chaplain', 'alien', 'railyard', 'overseer', 'stalker'];
+const NO_BUILD = bossIds().filter((id) => !BUILD.includes(id));
+
+/** A run standing before the act boss of the first seed that deals one of `ids`, and that node, with `patch`. */
+function bossBefore(ids: string[], patch: Partial<Run> = {}): { save: Run; node: number } {
+  const full = at('boss', {}, (run) => ids.includes(actBoss(mapOf(run.seed), { ...run, fighting: true }, bossIds())!.id));
   return { save: { ...full, path: full.path.slice(0, -1), spent: [], ...patch }, node: full.path[full.path.length - 1]! };
 }
 
@@ -336,18 +347,17 @@ describe('pick', () => {
     expect(value(run.pick({ node })).fight!.bot_nodes).toBe(150);
   });
 
-  test('a boss node is the act boss of the run at its act strength, with no placement', async () => {
-    const { save, node } = before('boss', { specials: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+  test('a boss node is the act boss of the run at its act strength; one that takes no build starts at once, with no placement', async () => {
+    const { save, node } = bossBefore(NO_BUILD, { specials: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
     const { run, calls, session } = setup(false);
     value(await run.newRun({ save }));
     const state = value(run.pick({ node }));
     const boss = actBoss(mapOf(save.seed), { ...save, path: [...save.path, node], fighting: true }, bossIds())!;
     expect(state.screen).toBe('fight');
     expect(state.fight).toMatchObject({ kind: 'boss', boss: { id: boss.id, strength: boss.percent } });
-    expect(calls.bosses).toEqual([[boss.id, boss.seed, boss.percent]]);
+    expect(calls.bosses).toEqual([[boss.id, boss.seed, boss.percent, [], relicMask(save)]]);
     expect(value(session.getState())).toMatchObject({ mode: 'boss', boss: { id: boss.id } });
     expect(failure(run.place({ q: 0, r: 2, kind: 'Heavy' })).code).toBe('not_now');
-    expect(failure(run.tactic({ tactic: 'Freeze' })).code).toBe('not_now');
   });
 
   test.each([
@@ -1008,5 +1018,65 @@ describe('the runes (#1476)', () => {
     const state = value(run.state({}));
     expect(state.told ?? '').toMatch(/Rune of (Stone|Spark|Might) found/);
     expect(value(run.save()).found).toBeGreaterThan(0);
+  });
+});
+
+describe('an act boss fight carries the army build (#1494)', () => {
+  const heavy = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+  test('a boss that takes it waits for the placement of the special marbles, and gets them with the run\'s relics', async () => {
+    const { save, node } = bossBefore(BUILD, { specials: heavy, relics: [0, 4] });
+    const { run, calls, session } = setup(false);
+    value(await run.newRun({ save, bot_nodes: CHEAP }));
+    const state = value(run.pick({ node }));
+    expect(state.screen).toBe('place');
+    expect(state.fight).toMatchObject({ kind: 'boss', placed: [], left: { Heavy: 1 } });
+    expect(failure(run.place({ q: 0, r: 0, kind: 'Heavy' })).code).toBe('bad_choice'); // an empty cell
+    const placed = value(run.place({ q: 0, r: 4, kind: 'Heavy' }));
+    expect(placed.fight).toMatchObject({ placed: ['(0,4) Heavy'] });
+    expect(calls.bosses.at(-1)![3]).toEqual([[0, 4, 1]]);
+    expect(calls.bosses.at(-1)![4]).toBe(0b10001);
+    value(session.playMove({ move: '(1,3)>NE' }));
+    expect(value(run.state({})).screen).toBe('fight');
+    expect(failure(run.place({ q: 0, r: 4, kind: 'Heavy' })).code).toBe('not_now');
+  });
+
+  test('Fall back undoes the agent\'s move and the boss\'s answer, Freeze and Swap are refused and kept; the save resumes with the record', async () => {
+    const { save, node } = bossBefore(BUILD, { tactics: [2, 4] });
+    const first = setup(false);
+    value(await first.run.newRun({ save, bot_nodes: CHEAP }));
+    value(first.run.pick({ node }));
+    const start = value(first.session.getState()).board;
+    value(first.session.playMove({ move: '(1,3)>NE' }));
+    expect(failure(first.run.tactic({ tactic: 'Freeze' })).code).toBe('illegal_move'); // a skipped turn breaks the boss's clock
+    expect(value(first.run.state({})).tactics).toEqual(['Freeze', 'Fall back']);
+    const played = value(first.run.tactic({ tactic: 'Fall back' }));
+    expect(played).toMatchObject({ played: 'Fall back', reply: null });
+    expect(played.state.tactics).toEqual(['Freeze']);
+    expect(value(first.session.getState()).board).toBe(start);
+    const saved = value(first.run.save());
+    expect(saved.moves.at(-1)).toEqual([0, 4, 0, 0, 0, 0, 0, 0]);
+    const second = setup(false);
+    value(await second.run.newRun({ save: saved, bot_nodes: CHEAP }));
+    expect(value(second.session.getState()).board).toBe(start); // the boss fight replays the tactic
+  });
+
+  test('a boss that takes no build refuses a tactic, which is kept', async () => {
+    const { save, node } = bossBefore(NO_BUILD, { tactics: [4] });
+    const { run } = setup(false);
+    value(await run.newRun({ save, bot_nodes: CHEAP }));
+    value(run.pick({ node }));
+    expect(failure(run.tactic({ tactic: 'Fall back' })).code).toBe('illegal_move');
+    expect(value(run.state({})).tactics).toEqual(['Fall back']);
+  });
+
+  test('a boss won with its special marbles on the board keeps them for the run', async () => {
+    const { save, node } = bossBefore(BUILD, { specials: heavy });
+    const { run, session } = setup(true);
+    value(await run.newRun({ save, bot_nodes: CHEAP }));
+    value(run.pick({ node }));
+    value(run.place({ q: 0, r: 4, kind: 'Heavy' }));
+    value(session.playMove({ move: '(1,3)>NE' }));
+    expect(value(run.state({})).specials).toEqual({ Heavy: 1 });
   });
 });
