@@ -2,6 +2,7 @@
 // bridge (run_map) and the result of each fight, and draws the map, placement and reward screens they describe.
 
 import { cellIndex, DIRECTIONS, isMarble, MOVE_STRIDE, RADIUS, type Axial, type Move } from './board';
+import { BLUEPRINTS, blueprintId, CELLS, COLLECT_COST, LEGACY_UNLOCKED, type BlueprintType } from './collector';
 import { SEAT_GLYPHS, SHELL } from './marbles';
 import { read, write, type Store } from './quality';
 import { replay, type KeyStore, type ReplayEngine } from './savegame';
@@ -51,7 +52,10 @@ export interface MapNode {
  * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). `scrap` is what it can
  * spend at a shop (#1459), `shop` is on while the shop's screen waits and `bought` are the ids of what that shop sold.
  * `enemies` is on for a run that fights the varied armies of #1462; a run saved before them has it off and fights the plain
- * army, so its fight in progress replays. */
+ * army, so its fight in progress replays. `unlocked` are the blueprints banked before this run (#1470), which widen its pools
+ * (a run keeps the ones it started with, so its offers replay); `cells` are what it can spend at the Collector, `carried`
+ * the blueprints dropped and not yet banked, `banked` the ones it banked, `drop` the blueprint (id + 1) the last fight
+ * dropped, 0 for none, and `collector` is on while the Collector's room waits between two acts. */
 export interface Run {
   seed: number;
   army: number;
@@ -72,6 +76,12 @@ export interface Run {
   shop: boolean;
   bought: number[];
   enemies: boolean;
+  unlocked: number[];
+  cells: number;
+  carried: number[];
+  banked: number[];
+  drop: number;
+  collector: boolean;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -110,8 +120,8 @@ export const RELICS: readonly { name: string; help: string; icon: string }[] = [
 const has = (run: Run, relic: number): boolean => run.relics.includes(relic);
 /** The run's relics as the bridge's bit mask (Engine.set_relics): the engine plays the Gyroscope and the Detonator. */
 export const relicMask = (run: Run): number => run.relics.reduce((mask, r) => mask | (1 << r), 0);
-/** The relics the run does not hold yet, by code: no relic twice in a run. */
-const unheld = (run: Run): number[] => RELICS.flatMap((_, code) => (has(run, code) ? [] : [code]));
+/** The relics the run does not hold yet and its pools hold (#1470), by code: no relic twice in a run. */
+const unheld = (run: Run): number[] => RELICS.flatMap((_, code) => (has(run, code) || !isOn(run, 'relic', code) ? [] : [code]));
 
 /** At most this many tactics held at once (#1460). */
 export const MAX_TACTICS = 3;
@@ -209,10 +219,19 @@ export const ARMIES: readonly { name: string; specials: number[]; acts: number }
 export const KIND_ACTS = [0, 1, 2, 0, 0, 0, 3, 1, 3, 2];
 /** The most acts won in a run. */
 const ALL_ACTS = 3;
-const kindOn = (run: Run, kind: number): boolean => KIND_ACTS[kind - 1]! <= run.best;
+/** Whether the run's pools hold the relic, tactic or special marble type `code` (#1470): all but the blueprints not banked
+ * yet, and a special marble type also once the acts won in one run unlock it (#801). */
+function isOn(run: Run, type: BlueprintType, code: number): boolean {
+  const id = blueprintId(type, code);
+  return id < 0 || run.unlocked.includes(id) || (type === 'special' && KIND_ACTS[code - 1]! <= run.best);
+}
+const kindOn = (run: Run, kind: number): boolean => isOn(run, 'special', kind);
+/** The tactics the run's pools hold, by code. */
+const tacticPool = (run: Run): number[] => TACTICS.flatMap((_, k) => (isOn(run, 'tactic', k + 1) ? [k + 1] : []));
 
-/** A new run of `seed`, with what `best` acts won in one run unlocked, the standard army. */
-export const newRun = (seed: number, best: number): Run => ({
+/** A new run of `seed`, with what `best` acts won in one run unlocked and the blueprints `unlocked` (readUnlocked), the
+ * standard army. */
+export const newRun = (seed: number, best: number, unlocked: readonly number[]): Run => ({
   seed,
   army: START_ARMY,
   path: [],
@@ -232,6 +251,12 @@ export const newRun = (seed: number, best: number): Run => ({
   shop: false,
   bought: [],
   enemies: true,
+  unlocked: [...unlocked],
+  cells: 0,
+  carried: [],
+  banked: [],
+  drop: 0,
+  collector: false,
 });
 
 /** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
@@ -261,7 +286,7 @@ function next(map: MapNode[], path: number[]): number[] {
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
 export const choices = (map: MapNode[], run: Run): number[] =>
-  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop ? [] : next(map, run.path);
+  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop || run.collector ? [] : next(map, run.path);
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [] });
@@ -377,7 +402,10 @@ export function eventOf(run: Run): RunEvent | null {
 }
 
 /** The tactic a Field manual teaches at the run's last node: a code, dealt by the run seed and the node. */
-const taught = (run: Run): number => 1 + (hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 7), 2) % TACTICS.length);
+const taught = (run: Run): number => {
+  const pool = tacticPool(run);
+  return pool[hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 7), 2) % pool.length]!;
+};
 
 /** The run once the trade of `e` is taken, or null when the army cannot pay it (below MIN_ARMY, no special marble to
  * lose, more special marbles than marbles) or would gain nothing. */
@@ -431,12 +459,35 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
     specials[k]! -= drop;
     over -= drop;
   }
-  const earn = node.kind === 'boss' ? SCRAP.boss : node.kind === 'elite' ? SCRAP.elite : SCRAP.fight;
-  const scrap = run.scrap + (end === 'lost' ? 0 : earn);
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap };
+  const tier = node.kind === 'boss' ? 'boss' : node.kind === 'elite' ? 'elite' : 'fight';
+  const earns = end !== 'lost';
+  const scrap = run.scrap + (earns ? SCRAP[tier] : 0);
+  const cells = run.cells + (earns ? CELLS[tier] : 0);
+  const found = earns && tier !== 'fight' && node.act < lastAct(map) ? dropOf(run) : -1; // no Collector follows the last act
+  const carried = found < 0 ? run.carried : [...run.carried, found];
+  const collector = earns && tier === 'boss' && node.act < lastAct(map) && carried.length > 0;
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
+
+/** The blueprint a won elite or act boss drops at the run's last node (#1470): one the run's pools do not hold, that it does
+ * not carry and has not banked, dealt by the run seed and the node, as the reward offers; -1 when none is left. */
+function dropOf(run: Run): number {
+  const pool = BLUEPRINTS.flatMap((b, id) => (isOn(run, b.type, b.code) || run.carried.includes(id) || run.banked.includes(id) ? [] : [id]));
+  return pool.length ? pool[hash(hash(run.seed, run.path[run.path.length - 1]! * 8 + 3), 11) % pool.length]! : -1;
+}
+
+/** The run once the blueprint `id` it carries is banked at the Collector (#1470): `COLLECT_COST` cells paid, unlocked for
+ * the next runs (main.ts keeps it), not for this one. Unchanged when no Collector waits, the blueprint is not carried or the
+ * cells fall short. */
+export function collect(run: Run, id: number): Run {
+  if (!run.collector || !run.carried.includes(id) || run.cells < COLLECT_COST) return run;
+  return { ...run, cells: run.cells - COLLECT_COST, carried: run.carried.filter((c) => c !== id), banked: [...run.banked, id] };
+}
+
+/** The run once it leaves the Collector: the map goes on; the blueprints not banked wait for the next one. */
+export const leaveCollector = (run: Run): Run => ({ ...run, collector: false });
 
 /** A 32-bit hash of two integers (murmur3's finaliser): the reward offers' only randomness. */
 function hash(a: number, b: number): number {
@@ -462,7 +513,8 @@ export function offers(run: Run): number[] {
 /** The tactic a won fight also offers (#1460): its code, dealt by the run seed and the node, or 0 when no reward waits or
  * the hand is full. The other offers are the same as before it. */
 export function tacticOffer(run: Run): number {
-  return run.reward && run.tactics.length < MAX_TACTICS ? 1 + (hash(run.seed, run.path[run.path.length - 1]! * 8 + 7) % TACTICS.length) : 0;
+  const pool = tacticPool(run);
+  return run.reward && run.tactics.length < MAX_TACTICS ? pool[hash(run.seed, run.path[run.path.length - 1]! * 8 + 7) % pool.length]! : 0;
 }
 
 /** The run once the tactic offered is taken in place of the other rewards. */
@@ -524,7 +576,7 @@ export function shopStock(run: Run): ShopItem[] {
     { id: 0, kind: 'marble', code: 0, price: priced(run, 0, 15, 6) },
     { id: 1, kind: 'special', code: types[deal(1, types.length)]!, price: priced(run, 1, 25, 11) },
     ...(relics.length ? [{ id: 2, kind: 'relic' as const, code: relics[deal(2, relics.length)]!, price: priced(run, 2, 60, 21) }] : []),
-    { id: 3, kind: 'tactic', code: 1 + deal(3, TACTICS.length), price: priced(run, 3, 30, 11) },
+    { id: 3, kind: 'tactic', code: tacticPool(run)[deal(3, tacticPool(run).length)]!, price: priced(run, 3, 30, 11) },
   ];
   return items.filter((i) => !run.bought.includes(i.id));
 }
@@ -643,7 +695,9 @@ function startHtml(run: Run): string {
       `${a.name} · ${locked ? after(a.acts) : owned(START_ARMY, a.specials)}</button>`
     );
   });
-  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-armies">${armies.join('')}</div>`;
+  const left = BLUEPRINTS.filter((b) => !isOn(run, b.type, b.code)).length;
+  const bank = left ? `<p class="run-help">Blueprints to bank: ${left} · elites and act bosses drop them, the Collector between acts banks them for good</p>` : '';
+  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-armies">${armies.join('')}</div>${bank}`;
 }
 
 /** The summary of a run over (#801): the path act by act, the fights won and lost, the army at the end, the unlocks. */
@@ -654,12 +708,14 @@ function summaryHtml(map: MapNode[], run: Run): string {
   );
   const fights = run.path.filter((n) => ['fight', 'elite', 'boss'].includes(map[n]!.kind)).length;
   const lost = Number(run.end === 'lost');
-  const unlocks = earned(map, run);
+  const unlocks = [...earned(map, run), ...run.banked.map(blueprintName)];
   return [
     `Path: ${acts.join(' · ')}`,
     `Fights: ${fights - lost} won, ${lost} lost`,
     `Army at the end: ${owned(run.army, run.specials)}`,
     ...(run.scrap ? [`Scrap left: ${run.scrap}, lost with the run`] : []),
+    ...(run.cells ? [`Cells left: ${run.cells}, lost with the run`] : []),
+    ...(run.carried.length ? [`Blueprints lost with the run: ${run.carried.map(blueprintName).join(', ')}`] : []),
     unlocks.length ? `Unlocked: ${unlocks.join(', ')}` : 'No new unlock',
   ]
     .map((line) => `<p class="run-help">${line}</p>`)
@@ -676,7 +732,8 @@ export function runLine(map: MapNode[], run: Run): string {
   const node = run.fighting ? lastNode(map, run)! : null;
   const foes = node && run.enemies ? [...(node.elite ? [ELITES[node.elite - 1]!.name] : []), ...(node.formation ? [FORMATIONS[node.formation]!] : [])] : [];
   const where = node ? [`act ${node.act + 1} ${node.kind}`, ...foes].join(' · ') : '';
-  const army = `army ${owned(run.army, run.specials)}${run.scrap ? ` · ${run.scrap} scrap` : ''}`;
+  const bag = [run.scrap && `${run.scrap} scrap`, run.cells && `${run.cells} cells`, run.carried.length && `${run.carried.length} blueprint${run.carried.length === 1 ? '' : 's'}`];
+  const army = `army ${owned(run.army, run.specials)}${bag.flatMap((b) => (b ? [` · ${b}`] : [])).join('')}`;
   const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
   return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
 }
@@ -714,7 +771,7 @@ export function rewardHtml(map: MapNode[], run: Run): string {
   const tactic = tacticOffer(run);
   if (tactic) buttons.push(`<button type="button" data-tactic-offer="${tactic}">${lineGlyph(TACTICS[tactic - 1]!.icon)}${tacticText(tactic)}</button>`);
   const title = lastNode(map, run)?.kind === 'elite' ? `Elite beaten · up to ${ELITE_MARBLES} marbles back` : 'Fight won';
-  return `<p class="run-line">${title} · pick a reward</p><div class="run-kinds">${buttons.join('')}</div>`;
+  return `<p class="run-line">${title} · pick a reward</p>${dropHtml(map, run)}<div class="run-kinds">${buttons.join('')}</div>`;
 }
 
 /** The rest site's screen (#1458): Rest, and an Upgrade per plain special marble type the army holds, or Upgrade
@@ -752,12 +809,51 @@ const relicGlyph = (code: number): string => lineGlyph(RELICS[code]!.icon);
 const tacticText = (code: number): string => `${TACTICS[code - 1]!.name}: ${TACTICS[code - 1]!.help}`;
 const relicText = (code: number): string => `${RELICS[code]!.name}: ${RELICS[code]!.help}`;
 
+const BLUEPRINT_LABELS = { relic: 'Relic', tactic: 'Tactic', special: 'Special marble' } as const;
+/** A blueprint's name, its line (type, name and rule) and its glyph (#1470). */
+function blueprintName(id: number): string {
+  const { type, code } = BLUEPRINTS[id]!;
+  return type === 'relic' ? RELICS[code]!.name : type === 'tactic' ? TACTICS[code - 1]!.name : SPECIAL_LOOKS[code - 1]!.name;
+}
+function blueprintText(id: number): string {
+  const { type, code } = BLUEPRINTS[id]!;
+  const rule = type === 'relic' ? relicText(code) : type === 'tactic' ? tacticText(code) : `${SPECIAL_LOOKS[code - 1]!.name}: ${SPECIAL_LOOKS[code - 1]!.help}`;
+  return `${BLUEPRINT_LABELS[type]} blueprint · ${rule}`;
+}
+function blueprintGlyph(id: number): string {
+  const { type, code } = BLUEPRINTS[id]!;
+  return type === 'relic' ? relicGlyph(code) : type === 'tactic' ? lineGlyph(TACTICS[code - 1]!.icon) : glyph(code);
+}
+
+/** The line that names the blueprint an elite or an act boss just dropped, on its reward and relic screens (#1470). */
+function dropHtml(map: MapNode[], run: Run): string {
+  const kind = lastNode(map, run)?.kind;
+  return run.drop && (kind === 'elite' || kind === 'boss')
+    ? `<p class="run-help">Blueprint found · ${blueprintText(run.drop - 1)} · kept for the Collector, lost if the run ends first</p>`
+    : '';
+}
+
+/** The Collector's room between two acts (#1470): a button per blueprint carried with its cost in cells (disabled when the
+ * cells fall short), what this run banked, and Leave. */
+export function collectorHtml(run: Run): string {
+  const buttons = run.carried.map((id) => {
+    const short = run.cells < COLLECT_COST;
+    return `<button type="button" data-collect="${id}"${short ? ' disabled' : ''}>${blueprintGlyph(id)}${blueprintText(id)} · ${COLLECT_COST} cells${short ? ' · not enough cells' : ''}</button>`;
+  });
+  const banked = run.banked.length ? `<p class="run-help">Banked this run: ${run.banked.map(blueprintName).join(', ')}</p>` : '';
+  return (
+    `<p class="run-line">Collector · ${run.cells} cells</p>` +
+    '<p class="run-help">Bank a blueprint: it joins the pools of your next runs for good. Blueprints and cells left here wait for the next Collector, and are lost if the run ends first.</p>' +
+    `${banked}<div class="run-kinds">${buttons.join('')}<button type="button" data-depart="1">Leave</button></div>`
+  );
+}
+
 /** The relic screen (#1457): a treasure's relic, an elite's, or the act boss's 3 to pick from, a button each. */
 export function relicHtml(map: MapNode[], run: Run): string {
   const kind = lastNode(map, run)!.kind;
   const title = kind === 'treasure' ? 'Treasure · a chest holds a relic' : kind === 'elite' ? 'Elite beaten · take its relic' : 'Boss beaten · pick a relic';
   const buttons = relicOffers(map, run).map((r) => `<button type="button" data-relic="${r}">${relicGlyph(r)}${relicText(r)}</button>`);
-  return `<p class="run-line">${title}</p><div class="run-kinds">${buttons.join('')}</div>`;
+  return `<p class="run-line">${title}</p>${dropHtml(map, run)}<div class="run-kinds">${buttons.join('')}</div>`;
 }
 
 /** The relic bar (#1457), in the HUD on the map and in the fights: a glyph per relic the run holds, its name and rule
@@ -848,6 +944,8 @@ const MAX_SCRAP = 99999;
 const isInt = (v: unknown, max: number): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max;
 const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MOVE_STRIDE && mv.every((v) => Number.isInteger(v));
 
+/** Blueprint ids of a save: each of a blueprint, none twice. */
+const isIds = (v: unknown): v is number[] => Array.isArray(v) && v.every((id, i) => isInt(id, BLUEPRINTS.length - 1) && v.indexOf(id) === i);
 const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.length === n && v.every((x) => isInt(x, START_ARMY));
 /** Special marble counts of a save: 3 (before the upgrades), 6 (before the new four, #1461) or one per type. */
 const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length, SPECIAL_LOOKS.length].some((n) => isInts(v, n));
@@ -856,10 +954,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -886,9 +984,15 @@ function decodeRun(raw: unknown): Run | null {
     typeof shop === 'boolean' &&
     Array.isArray(bought) &&
     bought.every((b, i) => isInt(b, REMOVAL) && bought.indexOf(b) === i) &&
-    typeof enemies === 'boolean';
+    typeof enemies === 'boolean' &&
+    isIds(unlocked) &&
+    isInt(cells, MAX_SCRAP) &&
+    isIds(carried) &&
+    isIds(banked) &&
+    isInt(drop, BLUEPRINTS.length) &&
+    typeof collector === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought, enemies }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector }
     : null;
 }
 

@@ -18,8 +18,8 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
   has 3 rows of nodes then its boss: 12 nodes on a path through a run, the bosses included.
 - **Nodes** (section 7): fight (the bot), elite (a stronger bot, a better reward), rest (marbles
   back up to 14, or a special marble upgraded, section 10), event (a short text choice with a gain and a cost), treasure (a relic, section 9),
-  shop (section 12), boss (a boss of the roster at the act's strength, ends the act). The only currency is the
-  scrap of section 12, which lives and ends with the run.
+  shop (section 12), boss (a boss of the roster at the act's strength, ends the act). The currencies are the
+  scrap of section 12 and the cells of section 15, which live and end with the run.
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
   back row first; the bot has its 14 against an elite, 10 against a fight node (#1145): its
@@ -29,8 +29,8 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 - **End**: the run is lost when a fight is lost (a draw is a loss) or the army is below 4 marbles,
   and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
   fight never goes on after the run is lost; the army wins at the usual 6 ejections, also against the 10 marbles of a fight node (4 are left).
-- **Meta**: unlocks only, between runs (section 8, #801): other special marble types and starting
-  armies, never power. Every run starts from zero.
+- **Meta**: unlocks only, between runs (section 8, #801, and the Collector's blueprints of section 15): other special
+  marble types, relics, tactics and starting armies, never power. Every run starts from zero.
 - **Determinism**: the map comes from a run seed (engine splitmix64), so a run can be replayed and
   shared.
 
@@ -54,7 +54,7 @@ links of the last node.
 
 The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on
 the fight on and its moves, a reward waiting to be picked, an event, a rest site or a shop waiting for its
-choice (with what the shop sold), and a relic offer waiting to be taken) is saved in IndexedDB after
+choice (with what the shop sold), a relic offer waiting to be taken, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -460,3 +460,45 @@ the special marbles is the engine's, played by the bot's search like the army's.
   board it started on.
 - **Only variety**: the enemy's armies change what a fight looks like and asks, never what carries between runs
   (Decision #934).
+
+## 15. The Collector, cells and blueprints (#1470)
+
+Dead Cells' risk of losing what is not banked gives a run a stake beyond itself. Owner decision of 2026-11-02: this second
+currency is approved. Only variety carries between runs (Decision #934): a blueprint unlocked widens the pools of the
+next runs, it never makes a run stronger than another. Everything lives in the client (`collector.ts`, `roguelite.ts`) and
+changes no rule of the engine and no code of the bridge's map: the Collector is a room at the act transition, not a node.
+
+- **Cells**: a won fight earns 2, a won elite 4 and a beaten act boss 6 (`CELLS`), on top of its scrap, marbles and reward.
+  A lost fight earns none. The run line ends with "N cells" once the run holds some.
+- **Blueprints**: 14, each unlocking one item for good (`BLUEPRINTS`, a stable id each, the list only grows at its end).
+  A relic or a tactic is locked until its blueprint is banked, except the ones every run has always had:
+
+  | Ids | Blueprint | Where its item acts |
+  |---|---|---|
+  | 0 to 5 | the relics Lucky coin, Bargain, Saboteur, Dampener, War chest, Quartermaster (section 9, codes 6 to 11) | the relic screens, treasures and the shop |
+  | 6, 7 | the tactics Swap and Fall back (section 11) | the reward, the Field manual and the shop |
+  | 8 to 13 | the special marbles Anchor, Spark, Shield, Medic, Magnet, Bomb (sections 8 and 13) | rewards, events and the shop |
+
+  A special marble type is also unlocked by the acts won in one run (section 8): a blueprint banked unlocks it at once,
+  whatever the acts won. Gyroscope, Hull plating, Salvage magnet, Jammer, Detonator, Bunks, Reinforce, Freeze and Heavy are
+  never locked. The pools the sections 6, 9, 11 and 12 deal from, and the events that gain a special marble (section 7),
+  hold the items unlocked and no other; a pool dealt before keeps its order, so a run that has everything unlocked deals what
+  it dealt before this change.
+- **Drops**: a won elite and a beaten act boss drop one blueprint, in the acts that a Collector follows (acts 1 and 2). It
+  is dealt from the blueprints the run's pools do not hold, that it does not carry and has not banked, by the run seed and
+  the node (a 32-bit hash, as the reward offers), so a reload drops the same one; none when none is left. A fight drops none.
+  The relic and reward screens of that elite or boss name it ("Blueprint found"). The blueprint is **carried** with the run.
+- **The Collector** is a room after an act boss that is not the last, once its relic and reward screens are done, when the
+  run carries a blueprint (otherwise there is nothing to bank and the map goes on). The map waits until Leave. It lists the
+  blueprints carried, each for 5 cells (`COLLECT_COST`; disabled with "not enough cells" when the cells fall short). Banking
+  one spends the cells and unlocks it **for the next runs**, in the browser at once (`ab-alone.roguelite.blueprints`, a list of
+  ids, next to the acts won of section 8), so a run lost later still keeps it. The run in progress keeps the pools it started
+  with, so its offers replay. Blueprints and cells left at Leave wait for the next Collector.
+- **Lost**: a run lost, or won, with cells or blueprints not banked loses them; the summary says so ("Cells left: 9, lost with
+  the run", "Blueprints lost with the run: ...") and lists the ones banked in its unlocks. There is no Collector after act 3, so
+  nothing drops in the last act.
+- **Start**: before the first pick the map says how many blueprints are left to bank.
+- **Saving**: the run saves `unlocked` (the blueprints banked before it started), `cells`, `carried`, `banked`, `drop` (the
+  last drop, id + 1) and `collector` (the room waiting). A run saved before this change loads with its relics and tactics
+  unlocked (so it deals what it dealt), its special marbles by its acts, and no cells, blueprint or room. A browser with no
+  blueprint record, or an invalid one, has none banked.

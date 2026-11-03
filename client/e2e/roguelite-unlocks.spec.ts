@@ -12,7 +12,7 @@ test('the rogue-lite run: the start shows the unlocks, a run over its summary, #
   await page.evaluate(() => localStorage.setItem('ab-alone.roguelite', '1'));
   await openModes(page);
   await page.getByRole('button', { name: 'Rogue-lite run' }).click();
-  await expect(map.locator('.run-help')).toHaveText('Special marbles in rewards: Heavy, Anchor, Shield · Spark after 2 acts won in a run · Magnet after a run won · Bomb after a run won · Medic after 2 acts won in a run');
+  await expect(map.locator('.run-help').first()).toHaveText('Special marbles in rewards: Heavy, Anchor, Shield · Spark after 2 acts won in a run · Magnet after a run won · Bomb after a run won · Medic after 2 acts won in a run');
   await map.getByRole('button', { name: /^Bulwark/ }).click();
   await expect(map.locator('.run-line')).toHaveText('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
   await expect(map.getByRole('button', { name: /^Volatile/ })).toBeDisabled();

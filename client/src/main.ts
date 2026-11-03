@@ -300,6 +300,7 @@ import { labelsHtml, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
+import { LEGACY_UNLOCKED, readUnlocked, recordUnlocked } from './collector';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
@@ -310,6 +311,9 @@ import {
   chooseArmy,
   claim,
   clearRun,
+  collect,
+  collectorHtml,
+  leaveCollector,
   eventHtml,
   leaveShop,
   fightBudget,
@@ -5771,7 +5775,7 @@ const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
 function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-  startRun(newRun(seed, readBest(store)), parseMap(run_map(seed)));
+  startRun(newRun(seed, readBest(store), readUnlocked(store)), parseMap(run_map(seed)));
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
@@ -5815,12 +5819,14 @@ function showRun(): void {
           ? restHtml(state)
           : state.shop
             ? shopHtml(state)
-            : placed
+            : state.collector
+              ? collectorHtml(state)
+              : placed
               ? placeHtml(state, armed)
               : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
-  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  const screen = state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.collector ? 'collector' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
   hud();
 }
@@ -5952,6 +5958,11 @@ runPanel.addEventListener('click', (e) => {
   } else if (button?.dataset.buy || button?.dataset.remove || button?.dataset.leave) {
     const { state } = run!;
     run!.state = button.dataset.buy ? buy(state, Number(button.dataset.buy)) : button.dataset.remove ? removeSpecial(state, Number(button.dataset.remove)) : leaveShop(state);
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.collect || button?.dataset.depart) {
+    run!.state = button.dataset.collect ? collect(run!.state, Number(button.dataset.collect)) : leaveCollector(run!.state);
+    recordUnlocked(store, run!.state.banked); // a blueprint banked is unlocked for the next runs, even if this one is lost (#1470)
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.army) {
@@ -6188,7 +6199,7 @@ addEventListener('blur', () => openWorld.release()); // no key stays held once t
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
 // shows its summary (#801), what it leaves out taken from a new run, as a save is decoded (no relic before #1457).
 hookHost.__run = async (state: Run) => {
-  if (state.end) return startRun({ ...newRun(state.seed, state.best), ...state }, parseMap(run_map(state.seed)));
+  if (state.end) return startRun({ ...newRun(state.seed, state.best, LEGACY_UNLOCKED), ...state }, parseMap(run_map(state.seed)));
   await saveRun(gameStore, state);
   resumeRun((await loadSavedRun())!); // the browser checks load valid runs
 };

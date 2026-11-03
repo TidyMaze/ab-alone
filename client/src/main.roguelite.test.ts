@@ -896,7 +896,7 @@ describe('main.ts, the Collector between acts (#1470)', () => {
     map().querySelector<HTMLButtonElement>('button[data-depart]')!.click();
     expect(document.body.dataset.run).toBe('map');
     expect(open().length).toBeGreaterThanOrEqual(2); // the first row of act 2
-    expect(line()).toContain('2 cells');
+    expect(line()).toBe('Rogue-lite run · army 14 marbles · 7 cells · 1 blueprint · pick a fight');
   });
 
   it('a blueprint the cells cannot pay stays on the shelf', async () => {
@@ -908,12 +908,13 @@ describe('main.ts, the Collector between acts (#1470)', () => {
   });
 
   it('a new run starts with the blueprints banked before it', async () => {
-    localStorage.removeItem(KEY);
-    await startRun('?bot=off');
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('roguelite').click();
     expect(map().textContent).toContain('Blueprints to bank: 14');
-    localStorage.setItem(KEY, '[0,1]');
-    await startRun('?bot=off');
+    localStorage.setItem(KEY, '[0,1]'); // two banked in earlier runs
+    game.openModes();
+    byId('roguelite').click();
     expect(map().textContent).toContain('Blueprints to bank: 12');
-    localStorage.removeItem(KEY);
   });
 });

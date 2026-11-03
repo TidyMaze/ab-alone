@@ -1515,10 +1515,10 @@ describe('roguelite Collector (#1470)', () => {
   });
 
   it('the summary says what was lost with the run, and what was banked', () => {
-    const over = fresh({ path: [0, 1, 2], end: 'lost', cells: 9, carried: [0, 8], banked: [1] });
+    const over = fresh({ path: [0, 1, 2], end: 'lost', cells: 9, carried: [0, 6, 8], banked: [1] });
     const helps = [...parse(mapHtml(TWO, over)).querySelectorAll('.run-help')].map((p) => p.textContent);
     expect(helps).toContain('Cells left: 9, lost with the run');
-    expect(helps).toContain('Blueprints lost with the run: Lucky coin, Anchor');
+    expect(helps).toContain('Blueprints lost with the run: Lucky coin, Swap, Anchor');
     expect(helps.find((h) => h!.startsWith('Unlocked:'))).toContain('Bargain');
     const clean = [...parse(mapHtml(TWO, fresh({ path: [0], end: 'lost' }))).querySelectorAll('.run-help')].map((p) => p.textContent);
     expect(clean.join()).not.toMatch(/Cells|Blueprints/);
