@@ -28,17 +28,25 @@ const seat = (page: Page, role: 'player' | 'spectator') =>
 // Every page relays its records to the others with its own name as the sender, like a Trystero room,
 // or to the one page `to` names (a catch-up answer, #226). Whatever goes to or from a page named in
 // `lost` is lost, as on a connection that broke before anyone noticed.
+// Records handed to the other pages and not yet delivered: a test that moves a page clock waits for them (`delivered`).
+const inflight = new Set<Promise<unknown>>();
+const delivered = async () => {
+  while (inflight.size) await Promise.allSettled([...inflight]);
+};
 const room = async (pages: Record<string, Page>, lost = new Set<string>()) => {
   for (const [name, page] of Object.entries(pages)) {
-    await page.exposeFunction('__netOut', (rec: unknown, to?: string) =>
-      Promise.all(
+    await page.exposeFunction('__netOut', (rec: unknown, to?: string) => {
+      const sent = Promise.all(
         Object.entries(pages)
           .filter(([n, p]) => p !== page && !p.isClosed() && (!to || to === n) && !lost.has(n) && !lost.has(name))
           // A page whose session does not exist yet has no __netIn: like a Trystero room, drop the record for it
           // instead of throwing inside the sender's __netOut (an unhandled rejection, #249).
           .map(([, p]) => p.evaluate(([r, from]) => (window as any).__netIn?.(r, from), [rec, name] as const)),
-      ),
-    );
+      );
+      inflight.add(sent);
+      void sent.finally(() => inflight.delete(sent));
+      return sent;
+    });
   }
 };
 // What Trystero's onPeerLeave does on `page` when the peer `name` closed its page or lost its connection.
@@ -604,7 +612,13 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   for (const page of [a, ...rest]) await expect(page.locator('body')).toHaveAttribute('data-coordinator', '1');
 
   await a.context().close(); // no __netLeave anywhere
-  for (let beat = 0; beat < 6; beat++) for (const page of rest) await page.clock.fastForward(1200); // the heartbeats a closed tab no longer sends
+  // The heartbeats a closed tab no longer sends. A beat is delivered before the other page's clock moves: on a slow runner a
+  // beat that came late made a live peer look gone for 3 missed beats (seen once on CI: coordinator 3 instead of 2).
+  for (let beat = 0; beat < 6; beat++)
+    for (const page of rest) {
+      await page.clock.fastForward(1200);
+      await delivered();
+    }
   for (const page of rest) await expect(page.locator('body')).toHaveAttribute('data-coordinator', '2');
   await expect(b.locator('body')).toHaveAttribute('data-handover', 'done'); // the spectator acknowledged it
   for (const page of rest) await page.context().close();
