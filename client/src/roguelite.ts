@@ -50,6 +50,7 @@ export interface MapNode {
  * the choice of an event node waits (#800). `best` is the most acts won in one run before this one, which unlocks its
  * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
  * `relic` is on while a relic offer waits to be taken (#1457). `rest` is on while a rest site's choice waits (#1458).
+ * `commander` is the one picked at the start, an index of COMMANDERS, -1 for none: a run saved before them has none (#1464).
  * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). `scrap` is what it can
  * spend at a shop (#1459), `shop` is on while the shop's screen waits and `bought` are the ids of what that shop sold.
  * `enemies` is on for a run that fights the varied armies of #1462; a run saved before them has it off and fights the plain
@@ -70,6 +71,7 @@ export interface Run {
   event: boolean;
   best: number;
   relics: number[];
+  commander: number;
   relic: boolean;
   rest: boolean;
   tactics: number[];
@@ -208,13 +210,15 @@ const only = (kind: number, n: number): number[] => SPECIAL_LOOKS.map((_, k) => 
 /** No special marble. */
 const noSpecials = (): number[] => only(0, 0);
 
-/** The starting armies (#801): 14 marbles each, some of them special, never more; `acts` is the most acts won in one
- * run that unlocks it. */
-export const ARMIES: readonly { name: string; specials: number[]; acts: number }[] = [
-  { name: 'Standard', specials: noSpecials(), acts: 0 },
-  { name: 'Bulwark', specials: only(2, 2), acts: 1 },
-  { name: 'Volatile', specials: only(3, 2), acts: 2 },
-  { name: 'Ironclad', specials: only(1, 2), acts: 3 },
+/** The commanders (#1464, docs/specs/roguelite.md section 17), the starting armies of #801: each starts a run with 14 marbles,
+ * a style (some special marbles, never more than 2) and a relic of the first six (always in the pools), never more power
+ * than another (Decision #934); `acts` is the most acts won in one run that unlocks it. A line, and a portrait: an SVG
+ * path in a 24 unit square drawn as a line. */
+export const COMMANDERS: readonly { name: string; line: string; relic: number; specials: number[]; acts: number; icon: string }[] = [
+  { name: 'The Captain', line: 'Keeps a steady hand on the bridge and a plain army behind it.', relic: Relic.Gyroscope, specials: noSpecials(), acts: 0, icon: 'M4 17h16M5 17l-1-9 5 4 3-6 3 6 5-4-1 9' },
+  { name: 'The Warden', line: 'Holds the line with Anchors and mends what the fight takes.', relic: Relic.HullPlating, specials: only(2, 2), acts: 1, icon: 'M5 21V9l2-2V4h3v3h4V4h3v3l2 2v12zM10 21v-5h4v5' },
+  { name: 'The Saboteur', line: 'Packs Sparks and wants every burst to reach further.', relic: Relic.Detonator, specials: only(3, 2), acts: 2, icon: 'M11 9a6 6 0 1 0 0 12a6 6 0 1 0 0-12M15 9l3-3M17 4l3 2' },
+  { name: 'The Juggernaut', line: 'Leads Heavies and turns every rest into more weight.', relic: Relic.Bunks, specials: only(1, 2), acts: 3, icon: 'M4 6h16v6H4zM8 12v8M16 12v8M6 20h4M14 20h4' },
 ];
 /** The most acts won in one run that brings each special marble type into the rewards, events and the shop, by the bridge's
  * kind less 1: Heavy 0, Anchor 1, Spark 2 (the upgraded types are never dealt), Magnet 3, Shield 1, Bomb 3, Medic 2 (#1461). */
@@ -231,8 +235,8 @@ const kindOn = (run: Run, kind: number): boolean => isOn(run, 'special', kind);
 /** The tactics the run's pools hold, by code. */
 const tacticPool = (run: Run): number[] => TACTICS.flatMap((_, k) => (isOn(run, 'tactic', k + 1) ? [k + 1] : []));
 
-/** A new run of `seed`, with what `best` acts won in one run unlocked and the blueprints `unlocked` (readUnlocked), the
- * standard army. */
+/** A new run of `seed`, with what `best` acts won in one run unlocked and the blueprints `unlocked` (readUnlocked), no
+ * commander yet (chooseCommander): the standard army and no relic. */
 export const newRun = (seed: number, best: number, unlocked: readonly number[]): Run => ({
   seed,
   army: START_ARMY,
@@ -246,6 +250,7 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[]):
   event: false,
   best,
   relics: [],
+  commander: -1,
   relic: false,
   rest: false,
   tactics: [],
@@ -262,10 +267,11 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[]):
   told: '',
 });
 
-/** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
-export function chooseArmy(run: Run, army: number): Run {
-  const a = ARMIES[army];
-  return a && a.acts <= run.best && !run.path.length && !run.end ? { ...run, specials: [...a.specials] } : run;
+/** The run with the commander `commander` (an index of COMMANDERS): its special marbles and its relic, before the first pick
+ * and only once unlocked. Picking another commander drops the first one's. */
+export function chooseCommander(run: Run, commander: number): Run {
+  const c = COMMANDERS[commander];
+  return c && c.acts <= run.best && !run.path.length && !run.end ? { ...run, commander, specials: [...c.specials], relics: [c.relic] } : run;
 }
 
 const sum = (counts: number[]): number => counts.reduce((a, b) => a + b, 0);
@@ -760,13 +766,13 @@ export function actsWon(map: MapNode[], run: Run): number {
   return bosses - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'boss');
 }
 
-/** The unlocks of a run over: the special marble types and starting armies of the acts it won past its `best`. */
+/** The unlocks of a run over: the special marble types and commanders of the acts it won past its `best`. */
 export function earned(map: MapNode[], run: Run): string[] {
   const won = actsWon(map, run);
   const fresh = (acts: number): boolean => acts > run.best && acts <= won;
   return [
     ...DEALT.flatMap((k) => (fresh(KIND_ACTS[k - 1]!) ? [`${SPECIAL_LOOKS[k - 1]!.name} marbles`] : [])),
-    ...ARMIES.flatMap((a) => (fresh(a.acts) ? [`${a.name} army`] : [])),
+    ...COMMANDERS.flatMap((c) => (fresh(c.acts) ? [`${c.name} commander`] : [])),
   ];
 }
 
@@ -785,22 +791,23 @@ export function recordBest(store: Store, acts: number): void {
 }
 
 /** What the start of a run unlocked shows: the special marble types in its rewards, the locked ones with what unlocks
- * them, and a button per starting army, the one picked pressed. */
+ * them, a button per commander with its portrait, the one picked pressed, the picked one's line and relic. */
 function startHtml(run: Run): string {
   const after = (acts: number): string => (acts === ALL_ACTS ? 'after a run won' : `after ${acts} act${acts === 1 ? '' : 's'} won in a run`);
   const on = DEALT.filter((k) => kindOn(run, k)).map((k) => SPECIAL_LOOKS[k - 1]!.name);
   const off = DEALT.filter((k) => !kindOn(run, k)).map((k) => ` · ${SPECIAL_LOOKS[k - 1]!.name} ${after(KIND_ACTS[k - 1]!)}`);
-  const armies = ARMIES.map((a, i) => {
-    const locked = a.acts > run.best;
-    const pressed = a.specials.every((n, k) => n === run.specials[k]);
+  const commanders = COMMANDERS.map((c, i) => {
+    const locked = c.acts > run.best;
     return (
-      `<button type="button" data-army="${i}" aria-pressed="${pressed}"${locked ? ' disabled' : ''}>` +
-      `${a.name} · ${locked ? after(a.acts) : owned(START_ARMY, a.specials)}</button>`
+      `<button type="button" data-commander="${i}" aria-pressed="${i === run.commander}"${locked ? ' disabled' : ''}>` +
+      `${lineGlyph(c.icon)}${c.name} · ${locked ? after(c.acts) : `${owned(START_ARMY, c.specials)} · ${RELICS[c.relic]!.name}`}</button>`
     );
   });
+  const picked = COMMANDERS[run.commander];
+  const line = picked ? `<p class="run-help">${picked.name}: ${picked.line} Starts with ${RELICS[picked.relic]!.name}, ${RELICS[picked.relic]!.help}.</p>` : '';
   const left = BLUEPRINTS.filter((b) => !isOn(run, b.type, b.code)).length;
   const bank = left ? `<p class="run-help">Blueprints to bank: ${left} · elites and act bosses drop them, the Collector between acts banks them for good</p>` : '';
-  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-armies">${armies.join('')}</div>${bank}`;
+  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-commanders">${commanders.join('')}</div>${line}${bank}`;
 }
 
 /** The summary of a run over (#801): the path act by act, the fights won and lost, the army at the end, the unlocks. */
@@ -1007,7 +1014,7 @@ export function shopHtml(run: Run): string {
   );
 }
 
-/** The map screen: the run line, the unlocks and starting armies before the first pick, the nodes act by act from the
+/** The map screen: the run line, the unlocks and commanders before the first pick, the nodes act by act from the
  * top, each placed on its row, the links between them (the path taken marked), the nodes to pick enabled; once the run
  * is over, its summary and New run. */
 export function mapHtml(map: MapNode[], run: Run): string {
@@ -1060,10 +1067,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the commanders (#1464) none. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '' } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '' } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1081,6 +1088,9 @@ function decodeRun(raw: unknown): Run | null {
     isInt(best, ALL_ACTS) &&
     Array.isArray(relics) &&
     relics.every((r, i) => isInt(r, RELICS.length - 1) && relics.indexOf(r) === i) &&
+    Number.isInteger(commander) &&
+    (commander as number) >= -1 &&
+    (commander as number) < COMMANDERS.length &&
     typeof relic === 'boolean' &&
     typeof rest === 'boolean' &&
     Array.isArray(tactics) &&
@@ -1101,7 +1111,7 @@ function decodeRun(raw: unknown): Run | null {
     told.length <= MAX_TOLD &&
     !/[<>&"]/.test(told);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told }
     : null;
 }
 

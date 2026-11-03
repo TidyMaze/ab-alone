@@ -600,15 +600,15 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     byId('roguelite').click();
     expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
     expect(armies().map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false']); // the Captain, with his Gyroscope
-    expect(map().querySelectorAll('.relics .relic')).toHaveLength(1);
+    expect(bar()).toEqual([expect.stringContaining('Gyroscope')]);
     armies()[1]!.click();
     expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
     expect(armies()[1]!.getAttribute('aria-pressed')).toBe('true');
-    expect(map().querySelector('.relics .relic')!.getAttribute('title')).toContain('Hull plating');
+    expect(bar()).toEqual([expect.stringContaining('Hull plating')]);
     await game.settle();
     await boot('?bot=off', { indexedDB });
     expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
-    expect(map().querySelector('.relics .relic')!.getAttribute('title')).toContain('Hull plating');
+    expect(bar()).toEqual([expect.stringContaining('Hull plating')]);
     open()[0]!.click();
     expect(document.body.dataset.run).toBe('place');
   });

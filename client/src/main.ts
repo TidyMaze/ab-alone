@@ -308,7 +308,7 @@ import {
   actBoss,
   actsWon,
   buy,
-  chooseArmy,
+  chooseCommander,
   claim,
   clearRun,
   collect,
@@ -5770,12 +5770,12 @@ const playOnlineButton = document.getElementById('play-online') as HTMLButtonEle
 // its seed. A pick on the map starts that node's fight against the bot, the army's marbles on the standard layout less
 // those lost; once it is over the map shows again, or the run's summary and New run. The run is saved after every pick
 // and move and resumed on load; another mode abandons it. The most acts won in one run unlocks the next runs' special
-// marble types and starting armies (#801), picked on the map before the first node.
+// marble types and commanders (#801, #1464), picked on the map before the first node.
 const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
 function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-  startRun(newRun(seed, readBest(store), readUnlocked(store)), parseMap(run_map(seed)));
+  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store)), 0), parseMap(run_map(seed))); // the Captain until another is picked (#1464)
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
@@ -5965,8 +5965,8 @@ runPanel.addEventListener('click', (e) => {
     recordUnlocked(store, run!.state.banked); // a blueprint banked is unlocked for the next runs, even if this one is lost (#1470)
     void saveRun(gameStore, run!.state);
     showRun();
-  } else if (button?.dataset.army) {
-    run!.state = chooseArmy(run!.state, Number(button.dataset.army));
+  } else if (button?.dataset.commander) {
+    run!.state = chooseCommander(run!.state, Number(button.dataset.commander));
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.kind) {

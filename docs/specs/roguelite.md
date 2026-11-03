@@ -31,7 +31,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
   and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
   fight never goes on after the run is lost; the army wins at the usual 6 ejections, also against the 10 marbles of a fight node (4 are left).
 - **Meta**: unlocks only, between runs (section 8, #801, and the Collector's blueprints of section 15): other special
-  marble types, relics, tactics and starting armies, never power. Every run starts from zero.
+  marble types, relics, tactics and commanders (section 17), never power. Every run starts from zero.
 - **Determinism**: the map comes from a run seed (engine splitmix64), so a run can be replayed and
   shared.
 
@@ -55,7 +55,7 @@ links of the last node.
 
 The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on
 the fight on and its moves, a reward waiting to be picked, an event, a rest site or a shop waiting for its
-choice (with what the shop sold), a relic offer waiting to be taken, the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
+choice (with what the shop sold), a relic offer waiting to be taken, the commander picked (section 17), the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -189,17 +189,17 @@ marbles, and an unlock only widens what a run may hold.
   (`best`), so its rewards and events replay; a run saved before #801 has everything unlocked.
 - **Unlocks**:
 
-  | Acts won in one run | Special marble type in rewards and events | Starting army (14 marbles) |
+  | Acts won in one run | Special marble type in rewards and events | Commander (14 marbles, section 17) |
   |---|---|---|
-  | 0 | Heavy | Standard (14 plain) |
-  | 1 | Anchor, Shield | Bulwark (12 plain, 2 Anchors) |
-  | 2 | Spark, Medic | Volatile (12 plain, 2 Sparks) |
-  | 3 (a run won) | Magnet, Bomb | Ironclad (12 plain, 2 Heavies) |
+  | 0 | Heavy | The Captain (14 plain) |
+  | 1 | Anchor, Shield | The Warden (12 plain, 2 Anchors) |
+  | 2 | Spark, Medic | The Saboteur (12 plain, 2 Sparks) |
+  | 3 (a run won) | Magnet, Bomb | The Juggernaut (12 plain, 2 Heavies) |
 
   A locked type is never a reward offer, and an event that gains it is never dealt.
 - **Start**: before the first pick, the map shows the types in the rewards (the locked ones with
-  the acts that unlock them) and a button per starting army, the locked ones disabled with what
-  unlocks them. The Standard army is picked by default; the choice is saved with the run.
+  the acts that unlock them) and a button per commander, the locked ones disabled with what
+  unlocks them. The Captain is picked by default; the choice is saved with the run (section 17).
 - **Summary**: a run over shows, in place of the map, its line (won or lost, the marbles left), the
   path taken act by act, the fights won and lost (the run's last fight lost when it is lost), the
   army at the end with its special marbles, the unlocks this run earned (or No new unlock), and New
@@ -554,3 +554,30 @@ events, one trade each.
   pool and may show another event than before the update, as in section 13's save note.
 - **Bridge**: kind code `7` on `run_map` records; `run_foes` plans a fight for a `7` node as for a fight node. `engine_version`
   is unchanged (no game of another mode changes).
+
+## 17. Commanders (#1464)
+
+The starting armies of section 8 become **commanders**: a run starts with one, picked on the map before the first node.
+A commander is a different start, not a stronger one (Decision #934): all four have 14 marbles, **a starting relic**
+(one of section 9's first six, which every run has in its pools) and a **style**, at most 2 special marbles. Each has a
+portrait (a line icon) and a line. Only variety carries over between runs, never power.
+
+| Commander | Unlocked at (acts won in one run, section 8) | Style | Starting relic |
+|---|---|---|---|
+| The Captain | 0 | 14 plain marbles | Gyroscope |
+| The Warden | 1 | 2 Anchors | Hull plating |
+| The Saboteur | 2 | 2 Sparks | Detonator |
+| The Juggernaut | 3 (a run won) | 2 Heavies | Bunks |
+
+- **Pick**: the start screen has a button per commander (portrait, name, style and relic; a locked one is disabled with what
+  unlocks it), the one picked pressed, and under them its line and what its relic does. A new run starts with the Captain
+  picked. Picking another replaces the first one's marbles and relic: nothing of it stays. After the first node, or once the
+  run is over, a pick does nothing. The relic is in the relic bar from the start, the Gyroscope and the Detonator are played
+  by the engine as any relic (section 9), and a relic the run holds is never offered again.
+- **Deterministic**: a commander is a pure choice of the player, so the run is a function of its seed, the commander and
+  the moves, and replays. The commander changes no draw of the map, the reward offers or the events.
+- **Saving**: the run keeps `commander` (an index, -1 for none). A run saved before this change loads with `-1`: its
+  specials and relics stay as saved, so it plays as before.
+- **Summary**: a commander is an unlock of section 8 (`The Warden commander`), listed in the run's summary when an act won
+  earned it.
+- **Turn it against the boss**: not a boss mechanic; no boss has a commander.

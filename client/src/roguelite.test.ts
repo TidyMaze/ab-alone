@@ -130,7 +130,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -867,7 +867,7 @@ describe('roguelite', () => {
       'Path: act 1 Fight, Boss · act 2 Fight',
       'Fights: 2 won, 1 lost',
       'Army at the end: 3 marbles, 1 Heavy',
-      'Unlocked: Anchor marbles, Shield marbles, Bulwark army',
+      'Unlocked: Anchor marbles, Shield marbles, The Warden commander',
     ]);
     expect(doc.querySelector('.run-graph')).toBeNull();
     expect(doc.getElementById('run-new')!.textContent).toBe('New run');
