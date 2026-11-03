@@ -76,7 +76,8 @@ export interface MapNode {
  * while the choice between the two exits waits, and `biomes` are the codes picked for act 2 then act 3. `flawless` counts the fights
  * won with no marble lost (#1466), the score's; `daily` is the UTC day of a daily run, '' for any other, and a run saved before has
  * neither. `keys` are the codes of the keys it took, in order (#1467): with the three, an act 4 follows act 3; a run saved before has none.
- * `curse` is the fights left of a cursed chest's curse (#1474): while it is above 0, each marble lost in a fight costs 2; a run saved before has none. */
+ * `curse` is the fights left of a cursed chest's curse (#1474): while it is above 0, each marble lost in a fight costs 2; a run saved before has none.
+ * `flasks` are the charges it can drink on the map (#1475): FLASKS at the start, refilled at each act; a run saved before has FLASKS. */
 export interface Run {
   seed: number;
   army: number;
@@ -114,6 +115,7 @@ export interface Run {
   daily: string;
   keys: number[];
   curse: number;
+  flasks: number;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -356,6 +358,7 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   daily: '',
   keys: [],
   curse: 0,
+  flasks: FLASKS,
 });
 
 /** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
@@ -411,8 +414,34 @@ function next(map: MapNode[], path: number[], max: number): number[] {
 }
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
-export const choices = (map: MapNode[], run: Run): number[] =>
-  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop || run.collector || run.exit ? [] : next(map, run.path, lastAct(map, run));
+export const choices = (map: MapNode[], run: Run): number[] => (waiting(run) ? [] : next(map, run.path, lastAct(map, run)));
+
+/** Whether the run waits for more than the map: a fight, the end, or the screen of a reward, an event, a relic, a rest, a shop,
+ * the Collector or an exit. */
+const waiting = (run: Run): boolean => run.fighting || run.reward || run.event || run.relic || run.rest || run.shop || run.collector || run.exit || run.end !== '';
+
+/** The flask charges a run starts an act with (#1475), the marbles one gives back, and the most charges it can hold. */
+export const FLASKS = 2;
+export const FLASK_MARBLES = 3;
+export const MAX_FLASKS = 4;
+/** What the shop's flask charge says it is. */
+export const CHARGE_TEXT = `One more flask charge: ${FLASK_MARBLES} marbles back on the map`;
+const FLASK_ICON = 'M9 3h6M10 3v5l-4.5 9a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 8V3M7.5 14h9';
+
+/** Why a flask cannot be drunk now, or ''. */
+const flaskBlock = (run: Run): string => (run.flasks <= 0 ? 'no flask left' : run.army >= START_ARMY ? 'army full' : '');
+
+/** The run once a flask is drunk on the map: FLASK_MARBLES marbles back up to START_ARMY and a charge spent. Unchanged in a
+ * fight, on a choice screen, once the run is over, with no charge left or the army full. */
+export function drink(run: Run): Run {
+  return waiting(run) || flaskBlock(run) ? run : { ...run, army: Math.min(START_ARMY, run.army + FLASK_MARBLES), flasks: run.flasks - 1 };
+}
+
+/** The flask button of the map (#1475): the marbles it gives and the charges left, disabled with its reason. */
+const flaskHtml = (run: Run): string => {
+  const why = flaskBlock(run);
+  return `<div class="run-kinds"><button type="button" data-flask="1"${why ? ' disabled' : ''}>${lineGlyph(FLASK_ICON)}Drink a flask: ${FLASK_MARBLES} marbles back · ${run.flasks} left${why && ` · ${why}`}</button></div>`;
+};
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [], told: '' });
@@ -430,7 +459,8 @@ const kindOf = (map: MapNode[], run: Run, node: number): NodeKind => (map[node]!
  * treasure for its relic (#1457), a shop for its purchases (#1459), any other node starts its fight. An unknown node
  * (#1463) is the event, fight or treasure it turns into. What the last event told is gone. */
 export function visit(map: MapNode[], run: Run, node: number): Run {
-  const from = { ...run, told: '' };
+  const entering = run.path.length > 0 && map[node]!.act > lastNode(map, run)!.act; // the first node of the next act refills the flasks (#1475)
+  const from = { ...run, told: '', flasks: entering ? Math.max(run.flasks, FLASKS) : run.flasks };
   const path = [...run.path, node];
   const kind = kindOf(map, run, node);
   if (kind === 'rest') return { ...from, path, rest: true };
@@ -853,12 +883,14 @@ export function claim(run: Run, offer: number): Run {
  * marble) and its price in scrap. */
 export interface ShopItem {
   id: number;
-  kind: 'marble' | 'special' | 'relic' | 'tactic';
+  kind: 'marble' | 'special' | 'relic' | 'tactic' | 'flask';
   code: number;
   price: number;
 }
 /** The id of the shop's removal of a special marble in `Run.bought`: once per shop. */
 const REMOVAL = 4;
+/** The id of the shop's flask charge in `Run.bought` (#1475). */
+const CHARGE = 5;
 /** The shop's draw `id` of the run's last node: the run seed and the node, as the reward offers. */
 const shopDraw = (run: Run, id: number): number => hash(run.seed, run.path[run.path.length - 1]! * 8 + id);
 /** A price from `base` up to `spread - 1` more, dealt by the run seed and the node. */
@@ -881,6 +913,7 @@ export function shopStock(run: Run): ShopItem[] {
     { id: 1, kind: 'special', code: types[deal(1, types.length)]!, price: priced(run, 1, 25, 11) },
     ...(relics.length ? [{ id: 2, kind: 'relic' as const, code: relics[deal(2, relics.length)]!, price: priced(run, 2, 60, 21) }] : []),
     { id: 3, kind: 'tactic', code: tacticPool(run)[deal(3, tacticPool(run).length)]!, price: priced(run, 3, 30, 11) },
+    { id: CHARGE, kind: 'flask', code: 0, price: priced(run, CHARGE, 20, 11) },
   ];
   return items.filter((i) => !run.bought.includes(i.id));
 }
@@ -889,6 +922,7 @@ export function shopStock(run: Run): ShopItem[] {
 function blocked(run: Run, item: ShopItem): string {
   if (item.kind === 'marble') return run.army >= START_ARMY ? 'army full' : '';
   if (item.kind === 'special') return sum(run.specials) >= run.army ? 'no plain marble left' : '';
+  if (item.kind === 'flask') return run.flasks >= MAX_FLASKS ? 'flasks full' : '';
   return item.kind === 'tactic' && run.tactics.length >= MAX_TACTICS ? 'hand full' : '';
 }
 
@@ -900,6 +934,7 @@ export function buy(run: Run, id: number): Run {
   const paid = { ...run, scrap: run.scrap - item.price, bought: [...run.bought, id] };
   if (item.kind === 'marble') return { ...paid, army: run.army + 1 };
   if (item.kind === 'special') return { ...paid, specials: run.specials.map((n, k) => n + Number(k === item.code - 1)) };
+  if (item.kind === 'flask') return { ...paid, flasks: run.flasks + 1 };
   return item.kind === 'relic' ? { ...paid, relics: [...run.relics, item.code] } : { ...paid, tactics: [...run.tactics, item.code] };
 }
 
@@ -1293,9 +1328,11 @@ export function shopHtml(run: Run): string {
         ? `${SPECIAL_LOOKS[item.code - 1]!.name}: ${SPECIAL_LOOKS[item.code - 1]!.help}`
         : item.kind === 'relic'
           ? relicText(item.code)
-          : tacticText(item.code);
+          : item.kind === 'flask'
+            ? CHARGE_TEXT
+            : tacticText(item.code);
   const icon = (item: ShopItem): string =>
-    item.kind === 'marble' || item.kind === 'special' ? glyph(item.code) : item.kind === 'relic' ? relicGlyph(item.code) : lineGlyph(TACTICS[item.code - 1]!.icon);
+    item.kind === 'marble' || item.kind === 'special' ? glyph(item.code) : item.kind === 'relic' ? relicGlyph(item.code) : lineGlyph(item.kind === 'flask' ? FLASK_ICON : TACTICS[item.code - 1]!.icon);
   const button = (data: string, glyphs: string, label: string, price: number, block = ''): string => {
     const why = block || (run.scrap < price ? 'not enough scrap' : '');
     return `<button type="button" ${data}${why ? ' disabled' : ''}>${glyphs}${label} · ${price} scrap${why ? ` · ${why}` : ''}</button>`;
@@ -1369,7 +1406,7 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
-  return `${head}${told}${keysHtml(run)}${run.path.length ? '' : startHtml(run) + book}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
+  return `${head}${told}${keysHtml(run)}${flaskHtml(run)}${run.path.length ? '' : startHtml(run) + book}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */
@@ -1392,10 +1429,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0 } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1426,7 +1463,7 @@ function decodeRun(raw: unknown): Run | null {
     isInt(scrap, MAX_SCRAP) &&
     typeof shop === 'boolean' &&
     Array.isArray(bought) &&
-    bought.every((b, i) => isInt(b, REMOVAL) && bought.indexOf(b) === i) &&
+    bought.every((b, i) => isInt(b, CHARGE) && bought.indexOf(b) === i) &&
     typeof enemies === 'boolean' &&
     isIds(unlocked) &&
     isInt(cells, MAX_SCRAP) &&
@@ -1447,9 +1484,10 @@ function decodeRun(raw: unknown): Run | null {
     (daily === '' || DAY.test(daily)) &&
     Array.isArray(keys) &&
     keys.every((k, i) => isInt(k, KEYS.length - 1) && keys.indexOf(k) === i) &&
-    isInt(curse, CURSE_FIGHTS);
+    isInt(curse, CURSE_FIGHTS) &&
+    isInt(flasks, MAX_FLASKS);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks }
     : null;
 }
 

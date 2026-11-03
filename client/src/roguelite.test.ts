@@ -311,7 +311,7 @@ describe('roguelite', () => {
     ['tactics that are no list', { ...newRun(1, 3, LEGACY_UNLOCKED), tactics: 2 }],
     ['a bad scrap', { ...newRun(1, 3, LEGACY_UNLOCKED), scrap: -1 }],
     ['a bad shop flag', { ...newRun(1, 3, LEGACY_UNLOCKED), shop: 1 }],
-    ['an unknown purchase', { ...newRun(1, 3, LEGACY_UNLOCKED), bought: [5] }],
+    ['an unknown purchase', { ...newRun(1, 3, LEGACY_UNLOCKED), bought: [6] }],
     ['a purchase twice', { ...newRun(1, 3, LEGACY_UNLOCKED), bought: [1, 1] }],
     ['purchases that are no list', { ...newRun(1, 3, LEGACY_UNLOCKED), bought: 1 }],
     ['an unknown unlocked blueprint', { ...newRun(1, 3, LEGACY_UNLOCKED), unlocked: [14] }],
