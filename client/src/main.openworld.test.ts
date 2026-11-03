@@ -731,7 +731,8 @@ describe('the public Open world online', () => {
     const [q, r] = lairs[0]!;
     const event = await signLair(await generateKeys(), PUBLIC_SEED, q, r);
     room.data(encodeBreak(event), 'p');
-    await new Promise((done) => setTimeout(done, 150)); // long enough for the signature check and the event to be applied
+    for (let i = 0; i < 200 && data().openworldLairsHeard !== '0'; i++) await new Promise((done) => setTimeout(done, 10));
+    expect(data().openworldLairsHeard).toBe('0'); // the event landed
     expect(data().openworldLairsBeaten).toBe('');
   });
 });

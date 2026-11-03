@@ -262,6 +262,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldBroken;
     delete document.body.dataset.openworldLairs;
     delete document.body.dataset.openworldLairsBeaten;
+    delete document.body.dataset.openworldLairsHeard;
     delete document.body.dataset.openworldDrawn;
     delete document.body.dataset.openworldAnim;
     delete document.body.dataset.openworldGlide;
@@ -848,6 +849,7 @@ export class OpenWorldMode {
     document.body.dataset.openworldBroken = String(this.world!.broken.length); // the obstacles broken (#1147)
     document.body.dataset.openworldLairs = this.lairs.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldLairsBeaten = this.beaten.join(' ');
+    document.body.dataset.openworldLairsHeard = this.heard.join(' '); // reported by others, not counted
     document.body.dataset.openworldTeleporters = this.discoveredTeleporters().map((c) => c.join(',')).join(' '); // #1412
     this.showTeleport(this.onTeleporter());
     document.body.dataset.openworldYaw = String(Math.round((this.view!.yaw * 180) / Math.PI)); // the turn, in degrees (#1026)
