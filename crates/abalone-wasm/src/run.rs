@@ -29,13 +29,19 @@ pub fn run_map(seed: u32) -> Vec<i32> {
         .collect()
 }
 
-/// The bot's army at node `node` of the map of `seed`, `less` marbles short, in the biome of code `biome` (`0`, the Meadow,
-/// for an unknown code): `[count, formation, biome, ...]` then a record `[q, r, kind]` per special marble, the plan
-/// `Engine::with_foes` stands.
+/// The bot's army at node `node` of the map of `seed`, `less` marbles short and `more` special marbles more (the ascension
+/// levels, none when omitted), in the biome of code `biome` (`0`, the Meadow, for an unknown code): `[count, formation,
+/// biome, ...]` then a record `[q, r, kind]` per special marble, the plan `Engine::with_foes` stands.
 #[wasm_bindgen]
-pub fn run_foes(seed: u32, node: u32, less: u8, biome: u8) -> Vec<i32> {
+pub fn run_foes(seed: u32, node: u32, less: u8, biome: u8, more: Option<u8>) -> Vec<i32> {
     let biome = Biome::from_code(biome).unwrap_or(Biome::Meadow);
-    let plan = run::foe_plan(u64::from(seed), node as usize, less, biome);
+    let plan = run::foe_plan_with(
+        u64::from(seed),
+        node as usize,
+        less,
+        biome,
+        more.unwrap_or(0),
+    );
     [
         i32::from(plan.count),
         plan.formation as i32,

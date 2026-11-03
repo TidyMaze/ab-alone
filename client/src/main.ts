@@ -306,6 +306,7 @@ import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame'
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
   actBoss,
+  chooseAscension,
   actsWon,
   BIOMES,
   buy,
@@ -335,7 +336,9 @@ import {
   placing,
   PLUS_INK,
   PLUS_POINTS,
+  readAscension,
   readBest,
+  recordAscension,
   recordBest,
   resolve,
   rest,
@@ -2544,7 +2547,7 @@ const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? n
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 // The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
-const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less, biome) => run_foes(state.seed, node, less, biome));
+const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less, biome, more) => run_foes(state.seed, node, less, biome, more));
 // The exits at the end of an act (#1472) and the roster names of their bosses.
 const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from);
 const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesFor(map, state), undefined, relicMask(state));
@@ -5782,7 +5785,7 @@ const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
 function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store)), 0), parseMap(run_map(seed))); // the Captain until another is picked (#1464)
+  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store), readAscension(store)), 0), parseMap(run_map(seed))); // the Captain until another is picked (#1464)
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
@@ -5815,6 +5818,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
 function showRun(): void {
   const { map, state } = run!;
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
+  recordAscension(store, state); // a run won unlocks the next ascension level (#1465)
   const placed = placing(state) && !(engine instanceof Encounter);
   runPanel.innerHTML = state.relic
     ? relicHtml(map, state)
@@ -5984,6 +5988,10 @@ runPanel.addEventListener('click', (e) => {
     showRun();
   } else if (button?.dataset.exit) {
     run!.state = chooseExit(run!.map, run!.state, Number(button.dataset.exit), exitsFor(run!.state));
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.ascension) {
+    run!.state = chooseAscension(run!.state, Number(button.dataset.ascension));
     void saveRun(gameStore, run!.state);
     showRun();
   } else if (button?.dataset.kind) {

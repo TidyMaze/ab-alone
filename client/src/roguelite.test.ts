@@ -829,7 +829,7 @@ describe('roguelite', () => {
 
   it('the unlocks a run earned: the types and commanders of the acts it won past the best before it', () => {
     expect(earned(MAP, { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3), end: 'lost' })).toEqual(['Anchor marbles', 'Shield marbles', 'The Warden commander']);
-    expect(earned(MAP, { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3, 5), end: 'won' })).toEqual(['Anchor marbles', 'Spark marbles', 'Shield marbles', 'Medic marbles', 'The Warden commander', 'The Saboteur commander']);
+    expect(earned(MAP, { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3, 5), end: 'won' })).toEqual(['Anchor marbles', 'Spark marbles', 'Shield marbles', 'Medic marbles', 'The Warden commander', 'The Saboteur commander', 'Ascension 1']); // and the first level, a run won at level 0 (#1465)
     expect(earned(MAP, { ...at(newRun(1, 1, LEGACY_UNLOCKED), 0, 2, 3), end: 'lost' })).toEqual([]);
     expect(earned(MAP, { ...at(newRun(1, 2, LEGACY_UNLOCKED), 0), end: 'lost' })).toEqual([]);
   });
@@ -893,7 +893,7 @@ describe('roguelite', () => {
     expect(doc.querySelector('.run-graph')).toBeNull();
     expect(doc.getElementById('run-new')!.textContent).toBe('New run');
     expect(doc.querySelector('.run-tally')!.textContent).toBe('Run voided. Audit reopened.'); // Tally's audit (#1174)
-    const none = parse(mapHtml(MAP, { ...at(newRun(1, 3, LEGACY_UNLOCKED), 0, 2, 3, 5), end: 'won' }));
+    const none = parse(mapHtml(MAP, { ...at(newRun(1, 3, LEGACY_UNLOCKED, 1), 0, 2, 3, 5), end: 'won' })); // won at level 0, level 1 unlocked before
     expect([...none.querySelectorAll('.run-help')].map((p) => p.textContent).slice(1)).toEqual([
       'Fights: 4 won, 0 lost',
       'Army at the end: 14 marbles',
@@ -1914,8 +1914,10 @@ describe('roguelite biomes (#1472)', () => {
     await store.put(RUN_KEY, { ...fresh({ path: [0] }), ...bad });
     expect(await loadRun(store, () => THREE, engine)).toBeNull();
     expect(store.data.has(RUN_KEY)).toBe(false);
+  });
+});
 
-// Ascension (#1465, docs/specs/roguelite.md section 18): a run won at level N unlocks level N + 1, each level adds a handicap.
+// Ascension (#1465, docs/specs/roguelite.md section 19): a run won at level N unlocks level N + 1, each level adds a handicap.
 describe('roguelite ascension', () => {
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   // One act: a fight 0 leads to an elite 1, a rest 2 and an event 3, each to the boss 4; a fight 5 opens the next act, a boss 6 ends it.
@@ -1971,7 +1973,7 @@ describe('roguelite ascension', () => {
 
   it('levels 3 and 8: the bot has 1 then 2 special marbles more', () => {
     const calls: number[][] = [];
-    const planOf = (node: number, less: number, more: number): number[] => (calls.push([node, less, more]), [10, 0]);
+    const planOf = (node: number, less: number, _biome: number, more: number): number[] => (calls.push([node, less, more]), [10, 0]);
     for (const n of [0, 2, 3, 7, 8, 10]) foePlan(ACT, pick(level(n), 0), planOf);
     foePlan(ACT, pick(level(3, { relics: [Relic.Saboteur] }), 0), planOf);
     expect(calls).toEqual([[0, 0, 0], [0, 0, 0], [0, 0, 1], [0, 0, 1], [0, 0, 2], [0, 0, 2], [0, 1, 1]]);

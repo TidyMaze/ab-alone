@@ -630,7 +630,7 @@ describe('a fight ends the run or the node', () => {
     const state = value(run.state({}));
     expect(state.screen).toBe('won');
     expect(state.line).toMatch(/^Run won with 14 marbles/);
-    expect(state).toMatchObject({ acts_won: 3, unlocked: [] });
+    expect(state).toMatchObject({ acts_won: 3, unlocked: ['Ascension 1'] });
   });
 
   test('a boss beaten before the last act goes on to the next act', async () => {

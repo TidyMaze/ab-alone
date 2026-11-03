@@ -63,6 +63,8 @@ export interface MapNode {
  * special marble types and starting armies (#801). `relics` are the codes of the relics it holds, in the order taken, and
  * `relic` is on while a relic offer waits to be taken (#1457). `rest` is on while a rest site's choice waits (#1458).
  * `commander` is the one picked at the start, an index of COMMANDERS, -1 for none: a run saved before them has none (#1464).
+ * `ascension` is the level picked at the start, 0 to MAX_ASCENSION, and `top` the highest level unlocked when the run began
+ * (#1465): a run saved before them is at level 0.
  * `tactics` are the codes of the tactics it holds, up to MAX_TACTICS, in the order gained (#1460). `scrap` is what it can
  * spend at a shop (#1459), `shop` is on while the shop's screen waits and `bought` are the ids of what that shop sold.
  * `enemies` is on for a run that fights the varied armies of #1462; a run saved before them has it off and fights the plain
@@ -86,6 +88,8 @@ export interface Run {
   best: number;
   relics: number[];
   commander: number;
+  ascension: number;
+  top: number;
   relic: boolean;
   rest: boolean;
   tactics: number[];
@@ -244,6 +248,25 @@ export const COMMANDERS: readonly { name: string; line: string; relic: number; s
   { name: 'The Saboteur', line: 'Packs Sparks and wants every burst to reach further.', relic: Relic.Detonator, specials: only(3, 2), acts: 2, icon: 'M11 9a6 6 0 1 0 0 12a6 6 0 1 0 0-12M15 9l3-3M17 4l3 2' },
   { name: 'The Juggernaut', line: 'Leads Heavies and turns every rest into more weight.', relic: Relic.Bunks, specials: only(1, 2), acts: 3, icon: 'M4 6h16v6H4zM8 12v8M16 12v8M6 20h4M14 20h4' },
 ];
+/** The most ascension level. */
+export const MAX_ASCENSION = 10;
+/** The ascension levels (#1465, docs/specs/roguelite.md section 19), each adding its handicap to the ones before it: a name and its
+ * rule in one line. Level N + 1 unlocks by winning a run at level N. */
+export const ASCENSIONS: readonly { name: string; help: string }[] = [
+  { name: 'Sharper elites', help: 'an elite bot searches 3 times the positions of a fight, not 2' },
+  { name: 'Short rests', help: 'a rest brings the army back up to 12 marbles, not 14' },
+  { name: 'Armed foes', help: 'the bot has 1 more special marble in fights and elites' },
+  { name: 'Dearer shops', help: 'a shop asks a quarter more scrap' },
+  { name: 'Lean pickings', help: 'a won fight, elite or act boss gives 30 % less scrap' },
+  { name: 'Thin ranks', help: 'the run starts with 12 marbles' },
+  { name: 'Hardened bosses', help: 'act bosses play at a quarter more strength' },
+  { name: 'Armed to the teeth', help: 'the bot has 2 more special marbles in fights and elites' },
+  { name: 'Meagre rewards', help: 'a reward offers one choice fewer' },
+  { name: 'Hunted', help: 'the bot searches a quarter more positions in fights and elites' },
+];
+/** Whether the run plays at level `n` or above. */
+const from = (run: Run, n: number): boolean => run.ascension >= n;
+
 /** The most acts won in one run that brings each special marble type into the rewards, events and the shop, by the bridge's
  * kind less 1: Heavy 0, Anchor 1, Spark 2 (the upgraded types are never dealt), Magnet 3, Shield 1, Bomb 3, Medic 2 (#1461). */
 export const KIND_ACTS = [0, 1, 2, 0, 0, 0, 3, 1, 3, 2];
@@ -259,9 +282,10 @@ const kindOn = (run: Run, kind: number): boolean => isOn(run, 'special', kind);
 /** The tactics the run's pools hold, by code. */
 const tacticPool = (run: Run): number[] => TACTICS.flatMap((_, k) => (isOn(run, 'tactic', k + 1) ? [k + 1] : []));
 
-/** A new run of `seed`, with what `best` acts won in one run unlocked and the blueprints `unlocked` (readUnlocked), no
- * commander yet (chooseCommander): the standard army and no relic. */
-export const newRun = (seed: number, best: number, unlocked: readonly number[]): Run => ({
+/** A new run of `seed`, with what `best` acts won in one run unlocked, the blueprints `unlocked` (readUnlocked) and the
+ * ascension levels up to `top` (readAscension), at level 0 (chooseAscension), no commander yet (chooseCommander): the standard
+ * army and no relic. */
+export const newRun = (seed: number, best: number, unlocked: readonly number[], top = 0): Run => ({
   seed,
   army: START_ARMY,
   path: [],
@@ -275,6 +299,8 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[]):
   best,
   relics: [],
   commander: -1,
+  ascension: 0,
+  top,
   relic: false,
   rest: false,
   tactics: [],
@@ -299,6 +325,13 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[]):
 export function chooseCommander(run: Run, commander: number): Run {
   const c = COMMANDERS[commander];
   return c && c.acts <= run.best && !run.path.length && !run.end ? { ...run, commander, specials: [...c.specials], relics: [c.relic] } : run;
+}
+
+/** The run at ascension level `level`, before the first pick and only an unlocked one (0 to the run's `top`): from level 6 it
+ * starts with 12 marbles. Picking another level drops the first one's. */
+export function chooseAscension(run: Run, level: number): Run {
+  const ok = Number.isInteger(level) && level >= 0 && level <= run.top && !run.path.length && !run.end;
+  return ok ? { ...run, ascension: level, army: START_ARMY - (level >= 6 ? 2 : 0) } : run;
 }
 
 const sum = (counts: number[]): number => counts.reduce((a, b) => a + b, 0);
@@ -349,12 +382,15 @@ export function visit(map: MapNode[], run: Run, node: number): Run {
   return kind === 'event' ? { ...from, path, event: true } : pick(from, node);
 }
 
-/** The run once Rest is picked at its rest site: the army back up to START_ARMY (with Bunks, a plain marble becomes a
- * Heavy). Unchanged when no rest site waits. */
+/** The army a rest brings back: START_ARMY, 12 from ascension level 2. */
+const restTo = (run: Run): number => START_ARMY - (from(run, 2) ? 2 : 0);
+
+/** The run once Rest is picked at its rest site: the army back up to START_ARMY, never lowered (with Bunks, a plain marble
+ * becomes a Heavy). Unchanged when no rest site waits. */
 export function rest(run: Run): Run {
   if (!run.rest) return run;
   const bunk = Number(has(run, Relic.Bunks) && sum(run.specials) < START_ARMY);
-  return { ...run, army: START_ARMY, specials: [run.specials[0]! + bunk, ...run.specials.slice(1)], rest: false };
+  return { ...run, army: Math.max(run.army, restTo(run)), specials: [run.specials[0]! + bunk, ...run.specials.slice(1)], rest: false };
 }
 
 /** The plain special marble types the army holds, which its rest site may upgrade. */
@@ -408,10 +444,12 @@ export const foesOf = (map: MapNode[], run: Run): number =>
   (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY) - Number(has(run, Relic.Saboteur));
 
 /** The bot's army in the run's fight as `Engine.with_foes` takes it (#1462): the bridge's plan for the node, `planOf(node,
- * less, biome)` (`run_foes`), `less` being 1 with the Saboteur and `biome` the one of the node's act (#1472); the count alone
- * (`foesOf`) for a run saved before. */
-export const foePlan = (map: MapNode[], run: Run, planOf: (node: number, less: number, biome: number) => ArrayLike<number>): number | number[] =>
-  run.enemies ? Array.from(planOf(run.path[run.path.length - 1]!, Number(has(run, Relic.Saboteur)), biomeOf(run, lastNode(map, run)!.act))) : foesOf(map, run);
+ * less, biome, more)` (`run_foes`), `less` being 1 with the Saboteur, `biome` the one of the node's act (#1472) and `more` the special
+ * marbles more of ascension levels 3 and 8 (#1465); the count alone (`foesOf`) for a run saved before. */
+export const foePlan = (map: MapNode[], run: Run, planOf: (node: number, less: number, biome: number, more: number) => ArrayLike<number>): number | number[] =>
+  run.enemies
+    ? Array.from(planOf(run.path[run.path.length - 1]!, Number(has(run, Relic.Saboteur)), biomeOf(run, lastNode(map, run)!.act), Number(from(run, 3)) + Number(from(run, 8))))
+    : foesOf(map, run);
 
 /** An elite's bot searches this many times the positions of a fight's (#800). */
 export const ELITE_BUDGET = 2;
@@ -420,13 +458,16 @@ const ELITE_MARBLES = 2;
 
 /** What the Jammer and the Dampener leave of the bot's search budget, and of an act boss's strength (#1457). */
 const JAMMED = 0.75;
+/** What the bot's search budget is multiplied by from ascension level 10, and an act boss's strength from level 7 (#1465). */
+const HUNTED = 1.25;
 
-/** The bot's search budget in the run's fight: `nodes`, or ELITE_BUDGET times it against an elite, a quarter less in a
- * fight or an elite with the Jammer. */
+/** The bot's search budget in the run's fight: `nodes`, or ELITE_BUDGET times it against an elite (one more from ascension
+ * level 1), a quarter less in a fight or an elite with the Jammer, a quarter more from level 10. */
 export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
   const kind = run.fighting ? lastNode(map, run)!.kind : null;
-  const budget = kind === 'elite' ? nodes * ELITE_BUDGET : nodes;
-  return (kind === 'fight' || kind === 'elite') && has(run, Relic.Jammer) ? Math.round(budget * JAMMED) : budget;
+  const budget = kind === 'elite' ? nodes * (ELITE_BUDGET + Number(from(run, 1))) : nodes;
+  const factor = (has(run, Relic.Jammer) ? JAMMED : 1) * (from(run, 10) ? HUNTED : 1);
+  return kind === 'fight' || kind === 'elite' ? Math.round(budget * factor) : budget;
 }
 
 /** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, normal, hard. */
@@ -443,7 +484,7 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
     const j = hash(run.seed, i) % (i + 1);
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
   }
-  const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1);
+  const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1) * (from(run, 7) ? HUNTED : 1);
   const own = BIOMES[biomeOf(run, node.act)]!.boss;
   return { id: ids.includes(own) ? own : dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
 }
@@ -596,6 +637,9 @@ export function resolve(run: Run, choice: number): Run {
 /** Scrap earned by a won fight, a won elite and a beaten act boss (#1459). */
 export const SCRAP = { fight: 10, elite: 20, boss: 30 } as const;
 
+/** What a won fight, elite and act boss give of their scrap from ascension level 5 (#1465). */
+const LEAN = 0.7;
+
 /** Marbles back after an act boss beaten with the War chest (#1457). */
 const CHEST_MARBLES = 2;
 
@@ -625,7 +669,7 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   }
   const tier = node.kind === 'boss' ? 'boss' : node.kind === 'elite' ? 'elite' : 'fight';
   const earns = end !== 'lost';
-  const scrap = run.scrap + (earns ? SCRAP[tier] : 0);
+  const scrap = run.scrap + (earns ? Math.floor(SCRAP[tier] * (from(run, 5) ? LEAN : 1)) : 0);
   const cells = run.cells + (earns ? CELLS[tier] : 0);
   const found = earns && tier !== 'fight' && node.act < lastAct(map) ? dropOf(run) : -1; // no Collector follows the last act
   const carried = found < 0 ? run.carried : [...run.carried, found];
@@ -672,7 +716,7 @@ export function offers(run: Run): number[] {
     const j = hash(run.seed, run.path[run.path.length - 1]! * 8 + i) % (i + 1); // the node won, an index of the map
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
-  return pool.slice(0, has(run, Relic.LuckyCoin) ? 4 : 3);
+  return pool.slice(0, (has(run, Relic.LuckyCoin) ? 4 : 3) - Number(from(run, 9)));
 }
 
 /** The tactic a won fight also offers (#1460): its code, dealt by the run seed and the node, or 0 when no reward waits or
@@ -726,7 +770,10 @@ const REMOVAL = 4;
 /** The shop's draw `id` of the run's last node: the run seed and the node, as the reward offers. */
 const shopDraw = (run: Run, id: number): number => hash(run.seed, run.path[run.path.length - 1]! * 8 + id);
 /** A price from `base` up to `spread - 1` more, dealt by the run seed and the node. */
-const priced = (run: Run, id: number, base: number, spread: number): number => base + (shopDraw(run, id) % spread);
+const priced = (run: Run, id: number, base: number, spread: number): number =>
+  Math.round((base + (shopDraw(run, id) % spread)) * (from(run, 4) ? DEAR : 1));
+/** What a shop's prices are multiplied by from ascension level 4 (#1465). */
+const DEAR = 1.25;
 /** What the shop asks to make a special marble plain again. */
 export const removalPrice = (run: Run): number => priced(run, REMOVAL, 20, 11);
 
@@ -822,13 +869,15 @@ export function actsWon(map: MapNode[], run: Run): number {
   return bosses - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'boss');
 }
 
-/** The unlocks of a run over: the special marble types and commanders of the acts it won past its `best`. */
+/** The unlocks of a run over: the special marble types and commanders of the acts it won past its `best`, and the next
+ * ascension level of a run won at its top one (#1465). */
 export function earned(map: MapNode[], run: Run): string[] {
   const won = actsWon(map, run);
   const fresh = (acts: number): boolean => acts > run.best && acts <= won;
   return [
     ...DEALT.flatMap((k) => (fresh(KIND_ACTS[k - 1]!) ? [`${SPECIAL_LOOKS[k - 1]!.name} marbles`] : [])),
     ...COMMANDERS.flatMap((c) => (fresh(c.acts) ? [`${c.name} commander`] : [])),
+    ...(run.end === 'won' && run.ascension === run.top && run.top < MAX_ASCENSION ? [`Ascension ${run.top + 1}`] : []),
   ];
 }
 
@@ -846,8 +895,24 @@ export function recordBest(store: Store, acts: number): void {
   if (acts > readBest(store)) write(store, BEST_KEY, String(acts));
 }
 
+/** Where the highest ascension level unlocked is kept, next to the acts won. */
+const ASCENSION_KEY = 'ab-alone.roguelite.ascension';
+
+/** The highest ascension level unlocked, 0 when none is saved or the storage is blocked. */
+export function readAscension(store: Store): number {
+  const top = Number(read(store, ASCENSION_KEY));
+  return isInt(top, MAX_ASCENSION) ? top : 0;
+}
+
+/** Keeps the level after the one a run just won (up to MAX_ASCENSION) when it is the highest yet. */
+export function recordAscension(store: Store, run: Run): void {
+  const next = Math.min(run.ascension + 1, MAX_ASCENSION);
+  if (run.end === 'won' && next > readAscension(store)) write(store, ASCENSION_KEY, String(next));
+}
+
 /** What the start of a run unlocked shows: the special marble types in its rewards, the locked ones with what unlocks
- * them, a button per commander with its portrait, the one picked pressed, the picked one's line and relic. */
+ * them, a button per commander with its portrait, the one picked pressed, the picked one's line and relic, a button per
+ * ascension level (the locked ones off) with the rule of the one picked (#1465). */
 function startHtml(run: Run): string {
   const after = (acts: number): string => (acts === ALL_ACTS ? 'after a run won' : `after ${acts} act${acts === 1 ? '' : 's'} won in a run`);
   const on = DEALT.filter((k) => kindOn(run, k)).map((k) => SPECIAL_LOOKS[k - 1]!.name);
@@ -861,9 +926,12 @@ function startHtml(run: Run): string {
   });
   const picked = COMMANDERS[run.commander];
   const line = picked ? `<p class="run-help">${picked.name}: ${picked.line} Starts with ${RELICS[picked.relic]!.name}, ${RELICS[picked.relic]!.help}.</p>` : '';
+  const levels = Array.from({ length: MAX_ASCENSION + 1 }, (_, n) => `<button type="button" data-ascension="${n}" aria-pressed="${n === run.ascension}"${n > run.top ? ' disabled' : ''}>${n}</button>`);
+  const rule = run.ascension ? `Ascension ${run.ascension}: ${ASCENSIONS[run.ascension - 1]!.name}, ${ASCENSIONS[run.ascension - 1]!.help}, and every level before it.` : run.top ? 'Ascension 0: the run as it is. Pick a level to make it harder.' : 'Ascension: win a run to unlock the first level.';
+  const ascension = `<div class="run-ascension" role="group" aria-label="Ascension">${levels.join('')}</div><p class="run-help">${rule}</p>`;
   const left = BLUEPRINTS.filter((b) => !isOn(run, b.type, b.code)).length;
   const bank = left ? `<p class="run-help">Blueprints to bank: ${left} · elites and act bosses drop them, the Collector between acts banks them for good</p>` : '';
-  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-commanders">${commanders.join('')}</div>${line}${bank}`;
+  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-commanders">${commanders.join('')}</div>${line}${ascension}${bank}`;
 }
 
 /** The summary of a run over (#801): the path act by act, the fights won and lost, the army at the end, the unlocks. */
@@ -881,6 +949,7 @@ function summaryHtml(map: MapNode[], run: Run): string {
     ...(run.biomes.length ? [`Biomes: ${['Meadow', ...run.biomes.slice(0, new Set(run.path.map((n) => map[n]!.act)).size - 1).map((b) => BIOMES[b]!.name)].join(', ')}`] : []),
     `Fights: ${fights - lost} won, ${lost} lost`,
     `Army at the end: ${owned(run.army, run.specials)}`,
+    ...(run.ascension ? [`Ascension: ${run.ascension}`] : []),
     ...(run.scrap ? [`Scrap left: ${run.scrap}, lost with the run`] : []),
     ...(run.cells ? [`Cells left: ${run.cells}, lost with the run`] : []),
     ...(run.carried.length ? [`Blueprints lost with the run: ${run.carried.map(blueprintName).join(', ')}`] : []),
@@ -902,10 +971,11 @@ export function runLine(map: MapNode[], run: Run): string {
   const biome = currentBiome(map, run);
   const place = biome ? [BIOMES[biome]!.name] : [];
   const where = node ? [`act ${node.act + 1} ${node.kind}`, ...place, ...foes].join(' · ') : '';
+  const level = run.ascension ? `ascension ${run.ascension} · ` : '';
   const bag = [run.scrap && `${run.scrap} scrap`, run.cells && `${run.cells} cells`, run.carried.length && `${run.carried.length} blueprint${run.carried.length === 1 ? '' : 's'}`];
   const army = `army ${owned(run.army, run.specials)}${bag.flatMap((b) => (b ? [` · ${b}`] : [])).join('')}`;
   const rested = lastNode(map, run)?.kind === 'rest' && !run.rest ? 'rested · ' : '';
-  return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${place.map((p) => `${p} · `).join('')}${army} · pick a fight`;
+  return node ? `Rogue-lite run · ${level}${where} · ${army}` : `Rogue-lite run · ${level}${rested}${place.map((p) => `${p} · `).join('')}${army} · pick a fight`;
 }
 
 const polygon = (points: readonly [number, number][]): string => points.map(([x, y]) => `${x},${-y}`).join(' ');
@@ -956,7 +1026,7 @@ export function restHtml(run: Run): string {
   const none = '<button type="button" data-upgrade="0" disabled>Upgrade: no special marble left to upgrade</button>';
   return (
     `<p class="run-line">Rest site · rest or upgrade</p>` +
-    `<div class="run-kinds"><button type="button" data-rest="1">Rest: back up to ${START_ARMY} marbles${bunks}</button>${ups.join('') || none}</div>`
+    `<div class="run-kinds"><button type="button" data-rest="1">Rest: back up to ${restTo(run)} marbles${bunks}</button>${ups.join('') || none}</div>`
   );
 }
 
@@ -1141,10 +1211,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [] } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [] } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1165,6 +1235,8 @@ function decodeRun(raw: unknown): Run | null {
     Number.isInteger(commander) &&
     (commander as number) >= -1 &&
     (commander as number) < COMMANDERS.length &&
+    isInt(ascension, MAX_ASCENSION) &&
+    isInt(top, MAX_ASCENSION) &&
     typeof relic === 'boolean' &&
     typeof rest === 'boolean' &&
     Array.isArray(tactics) &&
@@ -1190,7 +1262,7 @@ function decodeRun(raw: unknown): Run | null {
     biomes.length < ALL_ACTS &&
     biomes.every((b, i) => isInt(b, BIOMES.length - 1) && b > 0 && biomes.indexOf(b) === i);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes }
     : null;
 }
 

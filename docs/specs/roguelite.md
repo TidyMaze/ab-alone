@@ -55,7 +55,7 @@ links of the last node.
 
 The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on
 the fight on and its moves, a reward waiting to be picked, an event, a rest site or a shop waiting for its
-choice (with what the shop sold), a relic offer waiting to be taken, the commander picked (section 17), the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
+choice (with what the shop sold), a relic offer waiting to be taken, the commander picked (section 17), the ascension level (section 19), the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -651,3 +651,43 @@ client's run, and a test checks it on a short scripted path. The tools are in `d
 - **Special marbles kept**: only the army's, not the bot's (bug #1492 counts both in `main.ts`).
 - **Left out**: nothing of the page's looks. No UI changes.
 
+## 19. Ascension (#1465)
+
+Slay the Spire's ascension and Dead Cells' boss cells: a run won opens a harder one. There are **ten levels**; a run starts
+at level 0 (the run as sections 1 to 17 describe it) or at a level picked on the start screen, and **each level adds one
+handicap and keeps the ones before it**. Only variety carries between runs (Decision #934): a level unlocks a harder run,
+never a stronger army.
+
+| Level | Name | Handicap |
+|---|---|---|
+| 1 | Sharper elites | an elite bot searches 3 times the positions of a fight, not 2 (section 7) |
+| 2 | Short rests | a rest brings the army back up to 12 marbles, not 14, and never lowers it (section 10) |
+| 3 | Armed foes | the bot has 1 more special marble in fights and elites (section 14) |
+| 4 | Dearer shops | every price of a shop, the removal too, is a quarter higher, rounded (section 12) |
+| 5 | Lean pickings | a won fight, elite and act boss give 7, 14 and 21 scrap, not 10, 20 and 30 (section 12) |
+| 6 | Thin ranks | the run starts with 12 marbles, not 14 |
+| 7 | Hardened bosses | act bosses play at a quarter more strength (section 7) |
+| 8 | Armed to the teeth | the bot has 2 more special marbles in fights and elites, one more than level 3 gave |
+| 9 | Meagre rewards | a reward offers one choice fewer (2, or 3 with the Lucky coin) |
+| 10 | Hunted | the bot searches a quarter more positions in fights and elites, the Jammer's quarter less (section 9) included |
+
+- **Unlock**: a run **won** at level N unlocks level N + 1, up to 10, kept next to the acts won (`ab-alone.roguelite.ascension`,
+  the highest level unlocked, 0 when none). A run lost unlocks nothing, and a win at a lower level than the highest never
+  lowers it. Winning is the run ending in `won` (the last act's boss), and it is recorded at once.
+- **Pick**: the start screen has a row of buttons 0 to 10 under the commanders, the levels not unlocked disabled, the one
+  picked pressed (a new run is at level 0), and under it the rule of the one picked and that every level before it applies.
+  Picking level 6 or more sets the army to 12, a lower level to 14. After the first node, or once the run is over,
+  a pick does nothing. The commander and the level are picked independently.
+- **Where each handicap acts**: the client (`roguelite.ts`) for the budgets, rests, prices, scrap, boss strength and offers,
+  all pure functions of the run; the bot's extra special marbles in the core: `run::foe_plan_with(seed, node, less, more)`
+  (`run_foes(seed, node, less, more)` on the bridge, `more` optional, `foe_plan` is `more` 0). A fight's extra special marbles
+  are other kinds of its act's pool while the pool lasts, an elite's more of its own style, none more than a marble each. The
+  plan for `more` 0 is the plan of before, so a run at level 0 is unchanged and `engine_version` stays.
+- **Deterministic**: the level is a choice of the player, so a run is a function of its seed, the commander, the level and the
+  moves; the extra foes are dealt by the seed and the node like the others, and the run replays.
+- **Saving**: the run keeps `ascension` (0 to 10) and `top`, the highest level unlocked when it began, which the picker
+  needs. A run saved before this change loads at level 0 with `top` 0: its fights and offers are those of before.
+- **Summary and HUD**: the run line says `ascension N` from level 1 (`Rogue-lite run · ascension 3 · act 1 fight ...`), the
+  summary of a run over an `Ascension: N` line, and a run won at its top level lists the level it unlocked (`Ascension 4`)
+  among its unlocks (section 8).
+- **Turn it against the boss**: not a boss mechanic; no boss has a level.
