@@ -591,20 +591,24 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   });
 
   // Unlocks between runs and the run summary (#801).
-  const armies = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-army]')];
-  it('the start shows the unlocks; an unlocked starting army is picked, saved, and placed before the first fight', async () => {
+  const armies = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-commander]')];
+  it('the start shows the unlocks; a new run starts with the Captain, an unlocked commander is picked, saved, and placed before the first fight', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
     localStorage.setItem('ab-alone.roguelite', '1'); // an act won in an earlier run
     game.openModes();
     byId('roguelite').click();
     expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
+    expect(armies().map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false']); // the Captain, with his Gyroscope
+    expect(map().querySelectorAll('.relics .relic')).toHaveLength(1);
     armies()[1]!.click();
     expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
     expect(armies()[1]!.getAttribute('aria-pressed')).toBe('true');
+    expect(map().querySelector('.relics .relic')!.getAttribute('title')).toContain('Hull plating');
     await game.settle();
     await boot('?bot=off', { indexedDB });
     expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
+    expect(map().querySelector('.relics .relic')!.getAttribute('title')).toContain('Hull plating');
     open()[0]!.click();
     expect(document.body.dataset.run).toBe('place');
   });
@@ -630,7 +634,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
       'Path: act 1 Fight, Elite, Elite, Boss · act 2 Fight',
       'Fights: 4 won, 1 lost',
       'Army at the end: 3 marbles',
-      'Unlocked: Anchor marbles, Shield marbles, Bulwark army',
+      'Unlocked: Anchor marbles, Shield marbles, The Warden commander',
     ]);
     expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
     byId('run-new').click();

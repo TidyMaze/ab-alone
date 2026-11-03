@@ -8,8 +8,8 @@ import {
   ACT_PERCENT,
   actBoss,
   actsWon,
-  ARMIES,
-  chooseArmy,
+  chooseCommander,
+  COMMANDERS,
   collect,
   collectorHtml,
   earned,
@@ -206,7 +206,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false }); // before the varied enemies (#1462): the plain army
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -215,6 +215,10 @@ describe('roguelite', () => {
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, specials: [1, 0, 2, 0, 1, 0, 0, 0, 0, 0] });
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2, 0, 1, 0, 3, 0, 1, 2] });
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, specials: [1, 0, 2, 0, 1, 0, 3, 0, 1, 2] });
+    const picked = chooseCommander(newRun(1, 3, LEGACY_UNLOCKED), 2); // the commander is saved with the run, its relic and its special marbles
+    await saveRun(store, picked);
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual(picked);
+    expect(picked).toMatchObject({ commander: 2, relics: [Relic.Detonator], specials: [0, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
     await saveRun(store, at(newRun(1, 3, LEGACY_UNLOCKED), 0));
     expect(await loadRun(store, mapOf, engine)).toMatchObject({ engine: null });
     await saveRun(store, { ...newRun(1, 3, LEGACY_UNLOCKED), end: 'won' });
@@ -245,6 +249,8 @@ describe('roguelite', () => {
     ['a bad reward flag', { ...newRun(1, 3, LEGACY_UNLOCKED), reward: 1 }],
     ['a bad event flag', { ...newRun(1, 3, LEGACY_UNLOCKED), event: 'x' }],
     ['a bad best', { ...newRun(1, 3, LEGACY_UNLOCKED), best: 4 }],
+    ['an unknown commander', { ...newRun(1, 3, LEGACY_UNLOCKED), commander: 4 }],
+    ['a commander below none', { ...newRun(1, 3, LEGACY_UNLOCKED), commander: -2 }],
     ['an unknown relic', { ...newRun(1, 3, LEGACY_UNLOCKED), relics: [12] }],
     ['a relic twice', { ...newRun(1, 3, LEGACY_UNLOCKED), relics: [3, 3] }],
     ['relics that are no list', { ...newRun(1, 3, LEGACY_UNLOCKED), relics: 3 }],
@@ -752,23 +758,28 @@ describe('roguelite', () => {
   });
 
   // Unlocks between runs and the run summary (#801): only variety carries over, never power.
-  it('every starting army has 14 marbles, some special, and each is unlocked by the acts won in one run', () => {
-    expect(ARMIES.map((a) => a.name)).toEqual(['Standard', 'Bulwark', 'Volatile', 'Ironclad']);
-    expect(ARMIES.map((a) => a.acts)).toEqual([0, 1, 2, 3]);
-    expect(ARMIES.map((a) => a.specials)).toEqual([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 2, 0, 0, 0, 0, 0, 0, 0], [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]]);
+  it('every commander starts a run with 14 marbles, a relic, some special marbles and a line, each unlocked by the acts won in one run', () => {
+    expect(COMMANDERS.map((c) => c.name)).toEqual(['The Captain', 'The Warden', 'The Saboteur', 'The Juggernaut']);
+    expect(COMMANDERS.map((c) => c.acts)).toEqual([0, 1, 2, 3]);
+    expect(COMMANDERS.map((c) => c.relic)).toEqual([Relic.Gyroscope, Relic.HullPlating, Relic.Detonator, Relic.Bunks]);
+    expect(COMMANDERS.map((c) => c.specials)).toEqual([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 2, 0, 0, 0, 0, 0, 0, 0], [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]]);
+    expect(new Set(COMMANDERS.map((c) => c.icon)).size).toBe(4); // a portrait each
+    expect(COMMANDERS.every((c) => c.line.length > 10 && !/[<>&"]/.test(c.line))).toBe(true);
     expect(KIND_ACTS).toEqual([0, 1, 2, 0, 0, 0, 3, 1, 3, 2]); // Heavy from the start, Anchor and Shield after 1 act won, Spark and Medic after 2, Magnet and Bomb after a run won (#1461)
-    expect(newRun(1, 3, LEGACY_UNLOCKED)).toMatchObject({ army: START_ARMY, specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], best: 3 });
+    expect(newRun(1, 3, LEGACY_UNLOCKED)).toMatchObject({ army: START_ARMY, specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], relics: [], commander: -1, best: 3 }); // no commander: the start of before (#1464)
     expect(newRun(1, 0, LEGACY_UNLOCKED).best).toBe(0);
   });
 
-  it('the starting army is picked on the map before the first node, only an unlocked one', () => {
+  it('the commander is picked on the map before the first node, only an unlocked one: its relic and its special marbles', () => {
     const run = newRun(1, 1, LEGACY_UNLOCKED);
-    expect(chooseArmy(run, 1)).toEqual({ ...run, specials: [0, 2, 0, 0, 0, 0, 0, 0, 0, 0] });
-    expect(chooseArmy(chooseArmy(run, 1), 0)).toEqual(run);
-    expect(chooseArmy(run, 2)).toBe(run); // locked
-    expect(chooseArmy(run, 9)).toBe(run); // no such army
-    expect(chooseArmy(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 1).specials).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); // the run is on
-    expect(chooseArmy({ ...newRun(1, 3, LEGACY_UNLOCKED), end: 'lost' }, 1).specials).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const warden = chooseCommander(run, 1);
+    expect(warden).toEqual({ ...run, commander: 1, specials: [0, 2, 0, 0, 0, 0, 0, 0, 0, 0], relics: [Relic.HullPlating] });
+    expect(relicMask(chooseCommander(newRun(1, 3, LEGACY_UNLOCKED), 2))).toBe(1 << Relic.Detonator); // the engine plays it
+    expect(chooseCommander(warden, 0)).toEqual({ ...run, commander: 0, relics: [Relic.Gyroscope] }); // the pick is changed: nothing of the first stays
+    expect(chooseCommander(run, 2)).toBe(run); // locked
+    expect(chooseCommander(run, 9)).toBe(run); // no such commander
+    expect(chooseCommander(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 1).commander).toBe(-1); // the run is on
+    expect(chooseCommander({ ...newRun(1, 3, LEGACY_UNLOCKED), end: 'lost' }, 1).commander).toBe(-1);
   });
 
   it('a special marble type is offered as a reward and by events only once unlocked', () => {
@@ -795,9 +806,9 @@ describe('roguelite', () => {
     expect(actsWon(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2))).toBe(0); // the boss fight on
   });
 
-  it('the unlocks a run earned: the types and armies of the acts it won past the best before it', () => {
-    expect(earned(MAP, { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3), end: 'lost' })).toEqual(['Anchor marbles', 'Shield marbles', 'Bulwark army']);
-    expect(earned(MAP, { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3, 5), end: 'won' })).toEqual(['Anchor marbles', 'Spark marbles', 'Shield marbles', 'Medic marbles', 'Bulwark army', 'Volatile army']);
+  it('the unlocks a run earned: the types and commanders of the acts it won past the best before it', () => {
+    expect(earned(MAP, { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3), end: 'lost' })).toEqual(['Anchor marbles', 'Shield marbles', 'The Warden commander']);
+    expect(earned(MAP, { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3, 5), end: 'won' })).toEqual(['Anchor marbles', 'Spark marbles', 'Shield marbles', 'Medic marbles', 'The Warden commander', 'The Saboteur commander']);
     expect(earned(MAP, { ...at(newRun(1, 1, LEGACY_UNLOCKED), 0, 2, 3), end: 'lost' })).toEqual([]);
     expect(earned(MAP, { ...at(newRun(1, 2, LEGACY_UNLOCKED), 0), end: 'lost' })).toEqual([]);
   });
@@ -818,31 +829,34 @@ describe('roguelite', () => {
     expect(() => recordBest(null, 1)).not.toThrow();
   });
 
-  it('draws the start: what is unlocked, the armies to pick, the locked ones with what unlocks them', () => {
-    const doc = parse(mapHtml(MAP, chooseArmy(newRun(1, 1, LEGACY_UNLOCKED), 1)));
+  it('draws the start: what is unlocked, the commanders to pick, the locked ones with what unlocks them', () => {
+    const doc = parse(mapHtml(MAP, chooseCommander(newRun(1, 1, LEGACY_UNLOCKED), 1)));
     const helps = [...doc.querySelectorAll('.run-help')].map((p) => p.textContent);
     expect(helps[0]).toBe(
       'Special marbles in rewards: Heavy, Anchor, Shield · Spark after 2 acts won in a run · Magnet after a run won · Bomb after a run won · Medic after 2 acts won in a run',
     );
-    const armies = [...doc.querySelectorAll<HTMLButtonElement>('button[data-army]')];
-    expect(armies.map((b) => [b.dataset.army, b.textContent, b.disabled, b.getAttribute('aria-pressed')])).toEqual([
-      ['0', 'Standard · 14 marbles', false, 'false'],
-      ['1', 'Bulwark · 14 marbles, 2 Anchor', false, 'true'],
-      ['2', 'Volatile · after 2 acts won in a run', true, 'false'],
-      ['3', 'Ironclad · after a run won', true, 'false'],
+    const commanders = [...doc.querySelectorAll<HTMLButtonElement>('button[data-commander]')];
+    expect(commanders.map((b) => [b.dataset.commander, b.textContent, b.disabled, b.getAttribute('aria-pressed')])).toEqual([
+      ['0', 'The Captain · 14 marbles · Gyroscope', false, 'false'],
+      ['1', 'The Warden · 14 marbles, 2 Anchor · Hull plating', false, 'true'],
+      ['2', 'The Saboteur · after 2 acts won in a run', true, 'false'],
+      ['3', 'The Juggernaut · after a run won', true, 'false'],
     ]);
+    expect(commanders.every((b) => b.querySelector('svg.glyph path'))).toBe(true); // the portrait
+    expect(helps[1]).toBe(`The Warden: ${COMMANDERS[1]!.line} Starts with ${RELICS[Relic.HullPlating]!.name}, ${RELICS[Relic.HullPlating]!.help}.`);
     expect(parse(mapHtml(MAP, newRun(1, 3, LEGACY_UNLOCKED))).querySelector('.run-help')!.textContent).toBe('Special marbles in rewards: Heavy, Anchor, Spark, Magnet, Shield, Bomb, Medic');
     const fresh = parse(mapHtml(MAP, newRun(1, 0, LEGACY_UNLOCKED)));
     expect(fresh.querySelector('.run-help')!.textContent).toBe(
       'Special marbles in rewards: Heavy · Anchor after 1 act won in a run · Spark after 2 acts won in a run · Magnet after a run won · Shield after 1 act won in a run · Bomb after a run won · Medic after 2 acts won in a run',
     );
-    expect([...fresh.querySelectorAll('button[data-army]')].map((b) => b.textContent)).toEqual([
-      'Standard · 14 marbles',
-      'Bulwark · after 1 act won in a run',
-      'Volatile · after 2 acts won in a run',
-      'Ironclad · after a run won',
+    expect([...fresh.querySelectorAll('button[data-commander]')].map((b) => b.textContent)).toEqual([
+      'The Captain · 14 marbles · Gyroscope',
+      'The Warden · after 1 act won in a run',
+      'The Saboteur · after 2 acts won in a run',
+      'The Juggernaut · after a run won',
     ]);
-    expect(parse(mapHtml(MAP, at(newRun(1, 3, LEGACY_UNLOCKED), 0))).querySelector('button[data-army]')).toBeNull(); // the run is on
+    expect(fresh.body.textContent).not.toContain('Starts with'); // no commander picked: no line
+    expect(parse(mapHtml(MAP, at(newRun(1, 3, LEGACY_UNLOCKED), 0))).querySelector('button[data-commander]')).toBeNull(); // the run is on
   });
 
   it('draws the summary of a run over: the path, the fights, the army, the unlocks, and New run', () => {
