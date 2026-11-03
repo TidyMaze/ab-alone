@@ -377,7 +377,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     const game = await boot('?bot=off', { indexedDB });
     await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [1] });
     expect(node(3).getAttribute('aria-label')).toBe('Act 1, rest');
-    expect(node(2).className).toBe('node elite');
+    expect(node(2).className).toBe('node elite marked');
     node(3).click();
     expect(document.body.dataset.run).toBe('rest');
     expect(line()).toBe('Rest site · rest or upgrade');
@@ -909,8 +909,8 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
     expect(game.hud()).toContain(`act 1 elite · ${elite.name}`);
     await game.hook('__run', { ...run, fighting: false, path: path.slice(0, -1) });
     const node = map().querySelector(`button[data-node="${index}"]`)!;
-    expect(node.getAttribute('aria-label')).toBe(`Act 1, elite, ${elite.name}`);
-    expect(node.textContent).toBe(`Elite${elite.name.replace('The ', '')}`);
+    expect(node.getAttribute('aria-label')).toBe(`Act 1, elite, ${elite.name}, marked: its key`);
+    expect(node.textContent).toBe(`Elite${elite.name.replace('The ', '')} · key`);
   });
 });
 

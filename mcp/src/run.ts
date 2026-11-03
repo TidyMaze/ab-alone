@@ -28,6 +28,9 @@ import {
   fightBudget,
   fightOver,
   foePlan,
+  keyOffers,
+  KEYS,
+  lastAct,
   FORMATIONS,
   leaveCollector,
   leaveShop,
@@ -56,12 +59,14 @@ import {
   tacticRecord,
   TACTICS,
   tacticText,
+  takeKey,
   takeRelic,
   upgrade,
   upgradable,
   useTactic,
   visit,
   removeSpecial,
+  restLabel,
   type MapNode,
   type Run,
   type ShopItem,
@@ -164,6 +169,8 @@ export interface RunState {
   /** The biome of the act, none in the Meadow. */
   biome?: string;
   relics: string[];
+  /** The keys taken (Ruby, Sapphire, Emerald), none before the first: the three open act 4 (#1467). */
+  keys?: string[];
   tactics: string[];
   scrap: number;
   cells: number;
@@ -275,7 +282,7 @@ export class RogueRun {
 
   /** The run's screen: what waits, the army, the relics and the tactics, and what to pick or choose. */
   state({ map = false }: StateInput): Result<RunState> {
-    return this.withRun((active) => ok({ ...this.describe(active), ...(map ? { map: this.rows(active.map) } : {}) }));
+    return this.withRun((active) => ok({ ...this.describe(active), ...(map ? { map: this.rows(active.map, active.state) } : {}) }));
   }
 
   /** The run in the client's save format (`saveRun` of client/src/roguelite.ts): `new_run` resumes it, the client loads it. */
@@ -405,7 +412,8 @@ export class RogueRun {
 
   /** What the screen offers, `null` on a screen with nothing to choose. */
   private menu({ state, map }: Active): Choice[] | null {
-    if (state.relic) return relicOffers(map, state).map((r) => ({ text: relicText(r), apply: () => takeRelic(map, state, r) }));
+    const keys = keyOffers(map, state).map((k) => ({ text: KEYS[k]!.offer, apply: () => takeKey(map, state, k) })); // a key in place of the rest or the relic (#1467)
+    if (state.relic) return [...relicOffers(map, state).map((r) => ({ text: relicText(r), apply: () => takeRelic(map, state, r) })), ...keys];
     if (state.reward) {
       const tactic = tacticOffer(state);
       return [
@@ -419,7 +427,7 @@ export class RogueRun {
         text: `Upgrade ${SPECIAL_LOOKS[k - 1]!.name}: ${SPECIAL_LOOKS[k + 2]!.name} ${SPECIAL_LOOKS[k + 2]!.help}`,
         apply: () => upgrade(state, k),
       }));
-      return [{ text: `Rest: back up to ${START_ARMY} marbles`, apply: () => rest(state) }, ...upgrades];
+      return [{ text: restLabel(state), apply: () => rest(state) }, ...upgrades, ...keys];
     }
     if (state.shop) {
       const sold = (i: ShopItem): string => (i.kind === 'marble' ? 'One more marble' : i.kind === 'special' ? specialText(i.code) : i.kind === 'relic' ? relicText(i.code) : tacticText(i.code));
@@ -457,14 +465,15 @@ export class RogueRun {
   }
 
   /** Every node of the map, the nodes it leads to by index. */
-  private rows(map: MapNode[]): string[] {
-    const last = map[map.length - 1]!.act;
-    return map.map((n, i) => {
+  private rows(map: MapNode[], state: Run): string[] {
+    const last = lastAct(map, state);
+    return map.flatMap((n, i) => {
+      if (n.act > last) return []; // the fourth act is hidden until the three keys (#1467)
       const next = map.flatMap((m, j) =>
         n.kind === 'boss' ? (m.act === n.act + 1 && m.row === 0 ? [j] : []) : m.act === n.act && m.row === n.row + 1 && n.links.includes(m.col) ? [j] : [],
       );
       const foes = (n.kind === 'fight' || n.kind === 'elite') && this.foes(n);
-      return `${i}: act ${n.act + 1} row ${n.row + 1} ${n.kind}${foes ? ` (${foes})` : ''} -> ${n.act === last && n.kind === 'boss' ? 'end' : next.join(',')}`;
+      return [`${i}: act ${n.act + 1} row ${n.row + 1} ${n.kind}${foes ? ` (${foes})` : ''} -> ${n.act === last && n.kind === 'boss' ? 'end' : next.join(',')}`];
     });
   }
 
@@ -483,6 +492,7 @@ export class RogueRun {
       specials: named(state.specials),
       ...(currentBiome(map, state) ? { biome: BIOMES[currentBiome(map, state)]!.name } : {}),
       relics: state.relics.map((r) => RELICS[r]!.name),
+      ...(state.keys.length ? { keys: state.keys.map((k) => KEYS[k]!.name) } : {}),
       tactics: state.tactics.map((t) => TACTICS[t - 1]!.name),
       scrap: state.scrap,
       cells: state.cells,

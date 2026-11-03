@@ -43,7 +43,7 @@ First to eject 6 wins. On top of it, the ship:
   The Stalker and The Swarm. A medal per beaten boss, with your fewest turns. Die, read the tell,
   retry with the same seed. Rules per boss: [docs/specs/boss-balance.md](docs/specs/boss-balance.md).
 - **Daily challenge**: one boss and one seed for everyone each UTC day.
-- **Rogue-lite run**: 3 acts of an illustrated branching map (an icon per kind of node, a legend, the path taken and the nodes to pick marked) of fights, your army carried from fight to fight,
+- **Rogue-lite run**: 3 acts (4 with the three keys) of an illustrated branching map (an icon per kind of node, a legend, the path taken and the nodes to pick marked) of fights, your army carried from fight to fight,
   every marble lost is lost for the run, relics, passive effects for the whole run, from elites,
   act bosses and treasure nodes, and rest sites where you rest or upgrade a special marble (Heavy+,
   Anchor+, Spark+), up to 3 one-use tactics to play in a fight (Reinforce, Freeze, Swap, Fall back),
@@ -54,7 +54,7 @@ First to eject 6 wins. On top of it, the ship:
   that turn into an event, a fight or a treasure when entered, two exits at the end of each act to biomes (Forest, Tundra, Desert,
   Badlands, Archipelago) with holes in their boards, a signature enemy and a boss of their own, and cells and blueprints dropped by elites and act bosses,
   banked at the Collector between acts to unlock relics, tactics and special marbles for good, and four commanders to start a run with
-  (The Captain, The Warden, The Saboteur, The Juggernaut), each with a starting relic and special marbles of its own, unlocked by acts won, and ten ascension levels, each unlocked by winning a run at the one before and adding a handicap to the next run ([spec](docs/specs/roguelite.md)); a score at the end of a run, a Daily run (the seed of the day for everyone, one try a day, its score kept), the history of your last runs and a compendium of the relics, special marbles, tactics and events you have seen, the rest as silhouettes; Auto-play can play a fight, and an AI agent can play a whole run through the MCP server (below).
+  (The Captain, The Warden, The Saboteur, The Juggernaut), each with a starting relic and special marbles of its own, unlocked by acts won, four double-edged boss relics (one of the three offered by an act boss), three keys taken by costly choices (the first elite of an act, a rest given up, a treasure given up) that open a fourth act, an elite then The Ballast Mind, and ten ascension levels, each unlocked by winning a run at the one before and adding a handicap to the next run ([spec](docs/specs/roguelite.md)); a score at the end of a run, a Daily run (the seed of the day for everyone, one try a day, its score kept), the history of your last runs and a compendium of the relics, special marbles, tactics and events you have seen, the rest as silhouettes; Auto-play can play a fight, and an AI agent can play a whole run through the MCP server (below).
 - **Trainer**: waves against the bot, one more marble each wave.
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.

@@ -20,6 +20,8 @@ import {
   relicMask,
   relicOffers,
   Relic,
+  readBest,
+  recordBest,
   RELICS,
   rest,
   restHtml,
@@ -32,6 +34,7 @@ import {
   type Run,
 } from './roguelite';
 import { memoryStore } from './savegame';
+import type { Store } from './quality';
 
 // Four acts in the bridge's shape: acts 1 to 3 hold a fight, then elites (or a rest and a treasure), then a boss; the
 // fourth holds an elite and its boss. Act 1: 0 fight, 1 elite, 2 rest, 3 treasure, 4 boss. Act 2: 5 fight, 6 elite,
@@ -88,10 +91,14 @@ describe('the keys and the fourth act', () => {
     expect(choices(MAP, { ...at(base(), 0, 1, 4, 5, 6, 8, 9, 10, 11, 12), keys: ALL_KEYS })).toEqual([13]);
   });
 
-  it('a win of the act 3 boss counts three acts, and the fourth boss no more', () => {
+  it('a win of the act 3 boss counts three acts and the fourth boss four, which unlock nothing more than three', () => {
     const keys = ALL_KEYS;
     expect(actsWon(MAP, { ...at(base(), 0, 1, 4, 5, 6, 8, 9, 10, 11), keys })).toBe(3);
-    expect(actsWon(MAP, { ...at(base(), 0, 1, 4, 5, 6, 8, 9, 10, 11, 12, 13), keys, end: 'won' })).toBe(3);
+    expect(actsWon(MAP, { ...at(base(), 0, 1, 4, 5, 6, 8, 9, 10, 11, 12, 13), keys, end: 'won' })).toBe(4);
+    const data = new Map<string, string>();
+    const store: Store = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) };
+    recordBest(store, 4);
+    expect(readBest(store)).toBe(3);
   });
 
   it('the fourth act boss is The Ballast Mind at 300 % of its strength, whatever the biome', () => {
@@ -129,6 +136,10 @@ describe('the Emerald key: a marked elite', () => {
     expect(fightBudget(MAP, first(base(), 0, 1, 4, 5, 7), 100)).toBe(200);
     expect(fightBudget(MAP, first({ ...base(), keys: [Key.Emerald] }, 0, 1, 4, 5, 6), 100)).toBe(200);
   });
+  it('on top of ascension level 1 the marked elite searches one more time again', () => {
+    expect(fightBudget(MAP, { ...first(base(), 0, 1), ascension: 1 }, 100)).toBe(400);
+    expect(fightBudget(MAP, { ...first(base(), 0, 1, 4, 5, 7), ascension: 1 }, 100)).toBe(300);
+  });
   it('the map shows the marked elite and the keys held', () => {
     const html = mapHtml(MAP, base());
     expect(html.match(/class="node elite marked"/g)).toHaveLength(3); // one per act, none in act 4
@@ -147,6 +158,11 @@ describe('the Ruby key: a rest given up, the Sapphire key: a treasure given up',
     expect(taken.told).toContain('Ruby');
     expect(takeKey(MAP, { ...site, keys: [Key.Ruby] }, Key.Ruby)).toEqual({ ...site, keys: [Key.Ruby] });
     expect(takeKey(MAP, at(base(), 0), Key.Ruby).keys).toEqual([]); // no rest site waits
+  });
+  it('the third key taken says that act 4 is open', () => {
+    const site = { ...visit(MAP, at(base(), 0), 2), keys: [Key.Sapphire, Key.Emerald] };
+    expect(takeKey(MAP, site, Key.Ruby).told).toBe('Ruby key taken, act 4 is open');
+    expect(takeKey(MAP, visit(MAP, at(base(), 0), 2), Key.Ruby).told).toBe('Ruby key taken, 2 more open act 4');
   });
   it('the treasure offers the Sapphire key in place of its relic, once', () => {
     const chest = visit(MAP, at(base(), 0), 3);
@@ -177,10 +193,12 @@ describe('the Ruby key: a rest given up, the Sapphire key: a treasure given up',
   it('act 4 is on the map only with the three keys', () => {
     const near = at(base(), 0, 1, 4, 5, 6, 8, 9, 10, 11);
     expect(mapHtml(MAP, near).match(/data-node="/g)).toHaveLength(12);
+    expect(mapHtml(MAP, near)).toContain('style="--slots:10.5"');
     const open = mapHtml(MAP, { ...near, keys: ALL_KEYS });
     expect(open.match(/data-node="/g)).toHaveLength(14);
+    expect(open).toContain('style="--slots:13"'); // the plate grows by act 4's two rows (a header, 3 rows an act, 2 rows in act 4)
     expect(open).toContain('aria-label="Act 4, boss"');
-    expect(open).toContain('Keys');
+    expect(open).toContain('Act 4 is open');
   });
 });
 
@@ -247,6 +265,9 @@ describe('the boss relics', () => {
     expect(rest({ ...site, army: 13 }).army).toBe(14);
     expect(restHtml(site)).toContain('Rest: 3 marbles back');
     expect(restHtml({ ...site, relics: [] })).toContain(`Rest: back up to 14 marbles`);
+    expect(rest({ ...site, ascension: 2, army: 6 }).army).toBe(9);
+    expect(rest({ ...site, ascension: 2, army: 11 }).army).toBe(12); // level 2 rests up to 12 only
+    expect(restHtml({ ...site, ascension: 2, relics: [] })).toContain('Rest: back up to 12 marbles');
   });
   it('Static shroud: the bot searches half the positions, but rewards offer one choice fewer', () => {
     const run = { ...fighting(base(), 0), relics: [Relic.StaticShroud] };
@@ -259,8 +280,8 @@ describe('the boss relics', () => {
     expect(offers({ ...reward, relics: [Relic.StaticShroud, Relic.LuckyCoin] })).toHaveLength(3);
   });
   it('Boss breaker: act bosses play at half their strength, but the bot searches 25 % more in fights and elites', () => {
-    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker] }, ['hull'])!.percent).toBe(100);
-    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker, Relic.WarBanner] }, ['hull'])!.percent).toBe(150);
+    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker] }, ['hull'])!.percent).toBe(50);
+    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker, Relic.WarBanner] }, ['hull'])!.percent).toBe(75);
     expect(fightBudget(MAP, { ...fighting(base(), 0), relics: [Relic.BossBreaker] }, 100)).toBe(125);
     expect(fightBudget(MAP, { ...fighting(base(), 0, 1, 4), relics: [Relic.BossBreaker] }, 100)).toBe(100);
   });

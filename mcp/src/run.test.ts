@@ -672,8 +672,8 @@ describe('a fight ends the run or the node', () => {
     for (let step = 0; step < 8 && state.screen !== 'map'; step++) state = value(run.choose({ choice: state.options!.findIndex((o) => o.ok) }));
     value(run.pick({ node: mapOf(0).length - 1 }));
     expect(calls.bosses.at(-1)).toMatchObject({ 0: 'ballast', 2: 300 });
-    value(session.playMove({ move: FIRST_MOVE }));
-    expect(value(run.state({}))).toMatchObject({ screen: 'won', acts_won: 3 });
+    value(session.playMove({ move: value(session.legalMoves()).moves[0]! }));
+    expect(value(run.state({}))).toMatchObject({ screen: 'won', acts_won: 4 });
   });
 
   test('a boss beaten before the last act goes on to the next act', async () => {

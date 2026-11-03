@@ -823,6 +823,7 @@ body[data-reading] #log { visibility: visible; }
 #run-map button.node svg.glyph { width: 2.25rem; height: 2.25rem; padding: 0.4375rem; box-sizing: border-box; border: 2px solid var(--edge); border-radius: 50%; background: var(--panel); }
 #run-map button.node:is(.boss, .elite) { font-weight: 600; }
 #run-map button.node:is(.boss, .elite) svg.glyph { border-color: var(--hazard); }
+#run-map button.node.marked svg.glyph { border-style: double; border-width: 4px; } /* the elite that holds a key (#1467) */
 #run-map button.node.boss { transform: translate(-50%, -1.375rem); }
 #run-map button.node.boss svg.glyph { width: 2.75rem; height: 2.75rem; padding: 0.5625rem; border-width: 3px; }
 #run-map button.unknown svg.glyph { border-style: dashed; } /* a "?" node (#1463) */

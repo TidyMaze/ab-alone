@@ -167,7 +167,7 @@ describe('the compendium', () => {
   it.each([
     ['not JSON', 'x'],
     ['not an object', '[]'],
-    ['a relic that does not exist', JSON.stringify({ relics: [12], specials: [], tactics: [], events: [] })],
+    ['a relic that does not exist', JSON.stringify({ relics: [RELICS.length], specials: [], tactics: [], events: [] })],
     ['a special marble that does not exist', JSON.stringify({ relics: [], specials: [0], tactics: [], events: [] })],
     ['a tactic that does not exist', JSON.stringify({ relics: [], specials: [], tactics: [5], events: [] })],
     ['an event that does not exist', JSON.stringify({ relics: [], specials: [], tactics: [], events: [EVENTS.length] })],

@@ -357,6 +357,7 @@ import {
   claimTactic,
   tacticBarHtml,
   tacticRecord,
+  takeKey,
   takeRelic,
   upgrade,
   useTactic,
@@ -5965,7 +5966,11 @@ function resumeRun(saved: NonNullable<Awaited<ReturnType<typeof loadSavedRun>>>)
 runPanel.addEventListener('click', (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
   if (button?.id === 'run-new') beginRun();
-  else if (button?.dataset.relic) {
+  else if (button?.dataset.key) {
+    run!.state = takeKey(run!.map, run!.state, Number(button.dataset.key));
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.relic) {
     run!.state = takeRelic(run!.map, run!.state, Number(button.dataset.relic));
     void saveRun(gameStore, run!.state);
     showRun();

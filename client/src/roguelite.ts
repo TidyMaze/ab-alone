@@ -75,7 +75,7 @@ export interface MapNode {
  * offers a biome at the end of each act but the last (#1472); a run saved before has it off and stays in the Meadow. `exit` is on
  * while the choice between the two exits waits, and `biomes` are the codes picked for act 2 then act 3. `flawless` counts the fights
  * won with no marble lost (#1466), the score's; `daily` is the UTC day of a daily run, '' for any other, and a run saved before has
- * neither. */
+ * neither. `keys` are the codes of the keys it took, in order (#1467): with the three, an act 4 follows act 3; a run saved before has none. */
 export interface Run {
   seed: number;
   army: number;
@@ -111,6 +111,7 @@ export interface Run {
   biomes: number[];
   flawless: number;
   daily: string;
+  keys: number[];
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -130,7 +131,14 @@ export const Relic = {
   Dampener: 9,
   WarChest: 10,
   Quartermaster: 11,
+  WarBanner: 12,
+  MendingCore: 13,
+  StaticShroud: 14,
+  BossBreaker: 15,
 } as const;
+/** The first boss relic's code (#1467): the codes from here on are offered after an act boss, one of its 3 relics, and are never
+ * dealt by a treasure, an elite, an event or a shop. */
+const BOSS_RELICS = 12;
 /** Each relic by its code: its name, its rule in one line, and its glyph, an SVG path in a 24 unit square drawn as a line. */
 export const RELICS: readonly { name: string; help: string; icon: string }[] = [
   { name: 'Gyroscope', help: 'once per fight, your first push of a tie goes through', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c4 3 4 15 0 18' },
@@ -145,12 +153,32 @@ export const RELICS: readonly { name: string; help: string; icon: string }[] = [
   { name: 'Dampener', help: 'act bosses play at 75 % of their strength', icon: 'M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6' },
   { name: 'War chest', help: 'an act boss beaten gives 2 marbles back', icon: 'M3 9h18v11H3zM3 9l2-5h14l2 5M10 13h4' },
   { name: 'Quartermaster', help: 'a fight holds 4 of each special marble type', icon: 'M8 3h8v3H8zM6 4H4v17h16V4h-2M8 11h8M8 16h8' },
+  { name: 'War banner', help: 'the bot has 2 marbles fewer in fights and elites, but act bosses play at 150 % of their strength', icon: 'M5 21V4M5 5h13l-3 4 3 4H5' },
+  { name: 'Mending core', help: 'a marble comes back after every won fight, but a rest brings back only 3', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 8v8M8 12h8' },
+  { name: 'Static shroud', help: 'the bot searches half the positions in fights and elites, but rewards offer one choice fewer', icon: 'M12 3c4 0 7 3 7 8v10l-2.5-2-2 2-2.5-2-2.5 2-2-2L5 21V11c0-5 3-8 7-8zM9.5 10h.01M14.5 10h.01' },
+  { name: 'Boss breaker', help: 'act bosses play at half their strength, but the bot searches 25 % more positions in fights and elites', icon: 'M4 18l2-10 4 4 2-6 2 6 4-4 2 10zM4 21h16' },
 ];
 const has = (run: Run, relic: number): boolean => run.relics.includes(relic);
 /** The run's relics as the bridge's bit mask (Engine.set_relics): the engine plays the Gyroscope and the Detonator. */
 export const relicMask = (run: Run): number => run.relics.reduce((mask, r) => mask | (1 << r), 0);
 /** The relics the run does not hold yet and its pools hold (#1470), by code: no relic twice in a run. */
-const unheld = (run: Run): number[] => RELICS.flatMap((_, code) => (has(run, code) || !isOn(run, 'relic', code) ? [] : [code]));
+const unheld = (run: Run): number[] => RELICS.slice(0, BOSS_RELICS).flatMap((_, code) => (has(run, code) || !isOn(run, 'relic', code) ? [] : [code]));
+/** The boss relics the run does not hold yet (#1467), by code. */
+const unheldBoss = (run: Run): number[] => RELICS.flatMap((_, code) => (code >= BOSS_RELICS && !has(run, code) ? [code] : []));
+
+/** The keys (#1467, docs/specs/roguelite.md section 22), by code: each is taken by a costly choice, and with the three an act 4
+ * follows act 3. Slay the Spire's Ruby (a rest given up), Sapphire (a treasure given up) and Emerald (a marked elite beaten). */
+export const Key = { Ruby: 0, Sapphire: 1, Emerald: 2 } as const;
+export const KEYS: readonly { name: string; cost: string; offer: string }[] = [
+  { name: 'Ruby', cost: 'a rest given up', offer: 'Give up the rest: take the Ruby key' },
+  { name: 'Sapphire', cost: 'a treasure given up', offer: 'Give up the relic: take the Sapphire key' },
+  { name: 'Emerald', cost: 'a marked elite beaten', offer: '' },
+];
+/** The index of the fourth act on the map, the one of the elite and the boss that come after the three. */
+export const FINAL_ACT = 3;
+/** The roster boss of the fourth act (#1467): The Ballast Mind, which borrows an effect of five other bosses. */
+export const FINAL_BOSS = 'ballast';
+const FINAL_BOSS_NAME = 'The Ballast Mind';
 
 /** At most this many tactics held at once (#1460). */
 export const MAX_TACTICS = 3;
@@ -324,6 +352,7 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   biomes: [],
   flawless: 0,
   daily: '',
+  keys: [],
 });
 
 /** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
@@ -349,24 +378,38 @@ const sum = (counts: number[]): number => counts.reduce((a, b) => a + b, 0);
 /** The special marbles of each type in `placed`. */
 const countOf = (placed: number[][]): number[] => SPECIAL_LOOKS.map((_, k) => placed.filter((p) => p[2] === k + 1).length);
 
-const lastAct = (map: MapNode[]): number => map[map.length - 1]!.act;
+/** The last act the run plays on `map`: the map's own, but the fourth act (#1467) only with the three keys. */
+export const lastAct = (map: MapNode[], run: Run): number => {
+  const last = map[map.length - 1]!.act;
+  return last === FINAL_ACT && run.keys.length < KEYS.length ? FINAL_ACT - 1 : last;
+};
+
+/** The elites that hold a key (#1467): the first elite of each of the three acts, found by the map alone. */
+const markedElites = (map: MapNode[]): number[] =>
+  [0, 1, 2].flatMap((act) => {
+    const i = map.findIndex((n) => n.act === act && n.kind === 'elite');
+    return i < 0 ? [] : [i];
+  });
+/** Whether the elite `node` is marked for the run: it holds the Emerald key while the run does not. */
+const bearsKey = (map: MapNode[], run: Run, node: number): boolean => !run.keys.includes(Key.Emerald) && markedElites(map).includes(node);
 
 /** The nodes reachable after `path`: the first row of act 1, the links of a fight, the first row of the next act after a
  * boss. */
-function next(map: MapNode[], path: number[]): number[] {
+function next(map: MapNode[], path: number[], max: number): number[] {
   const last = path.length ? map[path[path.length - 1]!]! : null;
   const open = (n: MapNode): boolean =>
-    !last
+    n.act <= max &&
+    (!last
       ? n.act === 0 && n.row === 0
       : last.kind === 'boss'
         ? n.act === last.act + 1 && n.row === 0
-        : n.act === last.act && n.row === last.row + 1 && last.links.includes(n.col);
+        : n.act === last.act && n.row === last.row + 1 && last.links.includes(n.col));
   return map.flatMap((n, i) => (open(n) ? [i] : []));
 }
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
 export const choices = (map: MapNode[], run: Run): number[] =>
-  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop || run.collector || run.exit ? [] : next(map, run.path);
+  run.fighting || run.end || run.reward || run.event || run.relic || run.rest || run.shop || run.collector || run.exit ? [] : next(map, run.path, lastAct(map, run));
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [], told: '' });
@@ -401,8 +444,26 @@ const restTo = (run: Run): number => START_ARMY - (from(run, 2) ? 2 : 0);
 export function rest(run: Run): Run {
   if (!run.rest) return run;
   const bunk = Number(has(run, Relic.Bunks) && sum(run.specials) < START_ARMY);
-  return { ...run, army: Math.max(run.army, restTo(run)), specials: [run.specials[0]! + bunk, ...run.specials.slice(1)], rest: false };
+  const to = has(run, Relic.MendingCore) ? Math.min(restTo(run), run.army + MENDED) : restTo(run);
+  return { ...run, army: Math.max(run.army, to), specials: [run.specials[0]! + bunk, ...run.specials.slice(1)], rest: false };
 }
+
+/** The marbles a rest brings back with the Mending core (#1467). */
+const MENDED = 3;
+
+/** The keys the run may take now (#1467): the Ruby at a rest site, the Sapphire at a treasure's relic, when it does not hold them. */
+export function keyOffers(map: MapNode[], run: Run): number[] {
+  const chest = run.relic && lastNode(map, run)?.kind === 'treasure';
+  return [...(run.rest ? [Key.Ruby] : []), ...(chest ? [Key.Sapphire] : [])].filter((k) => !run.keys.includes(k));
+}
+
+/** The run once the key `key` is taken in place of what waits (#1467): the rest given up or the treasure's relic; unchanged
+ * when it cannot be taken now. The Emerald is won by a marked elite (`fightOver`), never taken. */
+export function takeKey(map: MapNode[], run: Run, key: number): Run {
+  if (!keyOffers(map, run).includes(key)) return run;
+  return { ...run, keys: [...run.keys, key], rest: key === Key.Ruby ? false : run.rest, relic: key === Key.Sapphire ? false : run.relic, told: `${KEYS[key]!.name} key taken, ${keysLeft(run.keys.length + 1)}` };
+}
+const keysLeft = (held: number): string => (held === KEYS.length ? 'act 4 is open' : `${KEYS.length - held} more open act 4`);
 
 /** The plain special marble types the army holds, which its rest site may upgrade. */
 export const upgradable = (run: Run): number[] => PLAIN.filter((k) => run.specials[k - 1]! > 0);
@@ -451,15 +512,16 @@ export const FIGHT_FOES = 10;
 
 /** The marbles of the bot in the run's fight: FIGHT_FOES against a fight node, the full START_ARMY against an elite, one
  * fewer with the Saboteur. */
-export const foesOf = (map: MapNode[], run: Run): number =>
-  (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY) - Number(has(run, Relic.Saboteur));
+export const foesOf = (map: MapNode[], run: Run): number => (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY) - fewer(run);
+/** The marbles the bot lacks in fights and elites: 1 with the Saboteur, 2 with the War banner (#1467). */
+const fewer = (run: Run): number => Number(has(run, Relic.Saboteur)) + 2 * Number(has(run, Relic.WarBanner));
 
 /** The bot's army in the run's fight as `Engine.with_foes` takes it (#1462): the bridge's plan for the node, `planOf(node,
- * less, biome, more)` (`run_foes`), `less` being 1 with the Saboteur, `biome` the one of the node's act (#1472) and `more` the special
+ * less, biome, more)` (`run_foes`), `less` being 1 with the Saboteur and 2 with the War banner, `biome` the one of the node's act (#1472) and `more` the special
  * marbles more of ascension levels 3 and 8 (#1465); the count alone (`foesOf`) for a run saved before. */
 export const foePlan = (map: MapNode[], run: Run, planOf: (node: number, less: number, biome: number, more: number) => ArrayLike<number>): number | number[] =>
   run.enemies
-    ? Array.from(planOf(run.path[run.path.length - 1]!, Number(has(run, Relic.Saboteur)), biomeOf(run, lastNode(map, run)!.act), Number(from(run, 3)) + Number(from(run, 8))))
+    ? Array.from(planOf(run.path[run.path.length - 1]!, fewer(run), biomeOf(run, lastNode(map, run)!.act), Number(from(run, 3)) + Number(from(run, 8))))
     : foesOf(map, run);
 
 /** An elite's bot searches this many times the positions of a fight's (#800). */
@@ -473,20 +535,22 @@ const JAMMED = 0.75;
 const HUNTED = 1.25;
 
 /** The bot's search budget in the run's fight: `nodes`, or ELITE_BUDGET times it against an elite (one more from ascension
- * level 1), a quarter less in a fight or an elite with the Jammer, a quarter more from level 10. */
+ * level 1, one more against the marked elite of #1467), then in a fight or an elite a quarter less with the Jammer, half with the
+ * Static shroud, a quarter more with the Boss breaker and from ascension level 10. */
 export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
   const kind = run.fighting ? lastNode(map, run)!.kind : null;
-  const budget = kind === 'elite' ? nodes * (ELITE_BUDGET + Number(from(run, 1))) : nodes;
-  const factor = (has(run, Relic.Jammer) ? JAMMED : 1) * (from(run, 10) ? HUNTED : 1);
+  const marked = kind === 'elite' && bearsKey(map, run, run.path[run.path.length - 1]!);
+  const budget = kind === 'elite' ? nodes * (ELITE_BUDGET + Number(from(run, 1)) + Number(marked)) : nodes;
+  const factor = (has(run, Relic.Jammer) ? JAMMED : 1) * (has(run, Relic.StaticShroud) ? 0.5 : 1) * (has(run, Relic.BossBreaker) ? 1.25 : 1) * (from(run, 10) ? HUNTED : 1);
   return kind === 'fight' || kind === 'elite' ? Math.round(budget * factor) : budget;
 }
 
 /** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, normal, hard. */
-export const ACT_PERCENT = [50, 100, 200];
+export const ACT_PERCENT = [50, 100, 200, 300];
 
 /** The roster boss of the run's fight when its node is a boss (#800), one of `ids` (the bridge's boss_ids): the run seed
  * deals them, a new one each act, the act's strength, and the fight's seed from the run seed and the node. The boss of an act
- * in a biome is the biome's (#1472), when the roster has it. */
+ * in a biome is the biome's (#1472), when the roster has it; the fourth act's is FINAL_BOSS (#1467), at 300 %. */
 export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; seed: number; percent: number } | null {
   const node = lastNode(map, run);
   if (!run.fighting || node?.kind !== 'boss') return null;
@@ -495,8 +559,8 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
     const j = hash(run.seed, i) % (i + 1);
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
   }
-  const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1) * (from(run, 7) ? HUNTED : 1);
-  const own = BIOMES[biomeOf(run, node.act)]!.boss;
+  const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1) * (has(run, Relic.WarBanner) ? 1.5 : 1) * (has(run, Relic.BossBreaker) ? 0.5 : 1) * (from(run, 7) ? HUNTED : 1);
+  const own = node.act === FINAL_ACT ? FINAL_BOSS : BIOMES[biomeOf(run, node.act)]!.boss;
   return { id: ids.includes(own) ? own : dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
 }
 
@@ -662,13 +726,14 @@ const CHEST_MARBLES = 2;
 export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, kept = countOf(run.placed)): Run {
   const node = lastNode(map, run)!;
   const left = run.army - Math.max(0, lost - Number(has(run, Relic.HullPlating)));
-  const end = !won || left < MIN_ARMY ? 'lost' : node.kind === 'boss' && node.act === lastAct(map) ? 'won' : '';
+  const final = lastAct(map, run);
+  const end = !won || left < MIN_ARMY ? 'lost' : node.kind === 'boss' && node.act === final ? 'won' : '';
   const back =
-    node.kind === 'elite'
+    (node.kind === 'elite'
       ? ELITE_MARBLES + Number(has(run, Relic.SalvageMagnet))
       : node.kind === 'boss' && has(run, Relic.WarChest)
         ? CHEST_MARBLES
-        : 0;
+        : 0) + Number(has(run, Relic.MendingCore));
   const army = end === '' ? Math.min(START_ARMY, left + back) : left;
   const placed = countOf(run.placed);
   const specials = run.specials.map((n, k) => n - placed[k]! + kept[k]!);
@@ -682,11 +747,14 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const earns = end !== 'lost';
   const scrap = run.scrap + (earns ? Math.floor(SCRAP[tier] * (from(run, 5) ? LEAN : 1)) : 0);
   const cells = run.cells + (earns ? CELLS[tier] : 0);
-  const found = earns && tier !== 'fight' && node.act < lastAct(map) ? dropOf(run) : -1; // no Collector follows the last act
+  const found = earns && tier !== 'fight' && node.act < final ? dropOf(run) : -1; // no Collector follows the last act
   const carried = found < 0 ? run.carried : [...run.carried, found];
-  const collector = earns && tier === 'boss' && node.act < lastAct(map) && carried.length > 0;
-  const exit = run.exits && earns && tier === 'boss' && node.act < lastAct(map); // the exits wait after the Collector (#1472)
-  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit, flawless: run.flawless + Number(won && lost === 0) };
+  const collector = earns && tier === 'boss' && node.act < final && carried.length > 0;
+  const exit = run.exits && earns && tier === 'boss' && node.act < Math.min(final, FINAL_ACT - 1); // the exits wait after the Collector (#1472); none leads to the fourth act
+  const emerald = end === '' && node.kind === 'elite' && bearsKey(map, run, run.path[run.path.length - 1]!); // the marked elite fell (#1467)
+  const keys = emerald ? [...run.keys, Key.Emerald] : run.keys;
+  const told = emerald ? `${KEYS[Key.Emerald]!.name} key taken, ${keysLeft(keys.length)}` : run.told;
+  const after: Run = { ...run, army, specials, fighting: false, moves: [], placed: [], end, reward: end === '', scrap, cells, carried, drop: found + 1, collector, exit, keys, told, flawless: run.flawless + Number(won && lost === 0) };
   const relic = end === '' && (node.kind === 'elite' || node.kind === 'boss');
   return { ...after, relic: relic && unheld(after).length > 0, reward: offers(after).length > 0 || tacticOffer(after) > 0 };
 }
@@ -727,7 +795,7 @@ export function offers(run: Run): number[] {
     const j = hash(run.seed, run.path[run.path.length - 1]! * 8 + i) % (i + 1); // the node won, an index of the map
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
-  return pool.slice(0, (has(run, Relic.LuckyCoin) ? 4 : 3) - Number(from(run, 9)));
+  return pool.slice(0, 3 + Number(has(run, Relic.LuckyCoin)) - Number(has(run, Relic.StaticShroud)) - Number(from(run, 9)));
 }
 
 /** The tactic a won fight also offers (#1460): its code, dealt by the run seed and the node, or 0 when no reward waits or
@@ -744,7 +812,8 @@ export function claimTactic(run: Run): Run {
 }
 
 /** The relics a waiting offer holds (#1457): 3 after an act boss, 1 after an elite or in a treasure, of those the run
- * does not hold, dealt by the run seed and the node, as the reward offers. */
+ * does not hold, dealt by the run seed and the node, as the reward offers. After an act boss the last of the 3 is a boss relic
+ * the run does not hold (#1467) while any is left; the others are ordinary. */
 export function relicOffers(map: MapNode[], run: Run): number[] {
   if (!run.relic) return [];
   const node = run.path[run.path.length - 1]!;
@@ -753,7 +822,9 @@ export function relicOffers(map: MapNode[], run: Run): number[] {
     const j = hash(hash(run.seed, node * 8 + 6), i) % (i + 1);
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
-  return pool.slice(0, map[node]!.kind === 'boss' ? 3 : 1);
+  if (map[node]!.kind !== 'boss') return pool.slice(0, 1);
+  const bosses = unheldBoss(run);
+  return bosses.length ? [...pool.slice(0, 2), bosses[hash(hash(run.seed, node * 8 + 6), 99) % bosses.length]!] : pool.slice(0, 3);
 }
 
 /** The run once the offered relic `relic` is taken: it holds it for the rest of the run. */
@@ -877,7 +948,7 @@ const owned = (army: number, specials: number[]): string =>
 /** The acts a run won so far: its bosses beaten, not the one it fights or lost to (#801). */
 export function actsWon(map: MapNode[], run: Run): number {
   const bosses = run.path.filter((n) => map[n]!.kind === 'boss').length;
-  return bosses - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'boss');
+  return bosses - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'boss'); // 4 once the fourth act's boss is beaten (#1467)
 }
 
 /** The points of the score of a run (#1466, docs/specs/roguelite.md section 20), each. */
@@ -932,9 +1003,10 @@ export function readBest(store: Store): number {
   return isInt(best, ALL_ACTS) ? best : 0;
 }
 
-/** Keeps `acts` won in a run when it is the most yet. */
+/** Keeps `acts` won in a run when it is the most yet: the 3 acts that unlock something at most, the fourth act's boss adds none (#1467). */
 export function recordBest(store: Store, acts: number): void {
-  if (acts > readBest(store)) write(store, BEST_KEY, String(acts));
+  const won = Math.min(acts, ALL_ACTS);
+  if (won > readBest(store)) write(store, BEST_KEY, String(won));
 }
 
 /** Where the highest ascension level unlocked is kept, next to the acts won. */
@@ -1054,8 +1126,17 @@ export function rewardHtml(map: MapNode[], run: Run): string {
   const tactic = tacticOffer(run);
   if (tactic) buttons.push(`<button type="button" data-tactic-offer="${tactic}">${lineGlyph(TACTICS[tactic - 1]!.icon)}${tacticText(tactic)}</button>`);
   const title = lastNode(map, run)?.kind === 'elite' ? `Elite beaten · up to ${ELITE_MARBLES} marbles back` : 'Fight won';
-  return `<p class="run-line">${title} · pick a reward</p>${dropHtml(map, run)}<div class="run-kinds">${buttons.join('')}</div>`;
+  return `<p class="run-line">${title} · pick a reward</p>${toldHtml(run)}${dropHtml(map, run)}<div class="run-kinds">${buttons.join('')}</div>`;
 }
+
+/** What the last choice told (an event's, a key taken), as a line. */
+const toldHtml = (run: Run): string => (run.told ? `<p class="run-help">${run.told}</p>` : '');
+
+/** The button that takes the key `key` in place of what waits (#1467). */
+const keyButton = (key: number): string => `<button type="button" data-key="${key}">${KEYS[key]!.offer} · ${KEYS.length} keys open act 4, a final boss</button>`;
+
+/** What Rest does at the rest site: the army back up to `restTo`, or MENDED marbles with the Mending core (#1467). */
+export const restLabel = (run: Run): string => (has(run, Relic.MendingCore) ? `Rest: ${MENDED} marbles back (Mending core)` : `Rest: back up to ${restTo(run)} marbles`);
 
 /** The rest site's screen (#1458): Rest, and an Upgrade per plain special marble type the army holds, or Upgrade
  * disabled with its reason when it holds none. */
@@ -1067,9 +1148,10 @@ export function restHtml(run: Run): string {
     return `<button type="button" data-upgrade="${k}">${glyph(k + 3)}Upgrade ${a(from.name)} ${from.name}: ${to.name} ${to.help}</button>`;
   });
   const none = '<button type="button" data-upgrade="0" disabled>Upgrade: no special marble left to upgrade</button>';
+  const keys = run.keys.includes(Key.Ruby) ? '' : keyButton(Key.Ruby);
   return (
     `<p class="run-line">Rest site · rest or upgrade</p>` +
-    `<div class="run-kinds"><button type="button" data-rest="1">Rest: back up to ${restTo(run)} marbles${bunks}</button>${ups.join('') || none}</div>`
+    `<div class="run-kinds"><button type="button" data-rest="1">${restLabel(run)}${bunks}</button>${ups.join('') || none}${keys}</div>`
   );
 }
 
@@ -1164,8 +1246,11 @@ export function exitHtml(map: MapNode[], run: Run, exitsOf: (act: number, from: 
 export function relicHtml(map: MapNode[], run: Run): string {
   const kind = lastNode(map, run)!.kind;
   const title = kind === 'treasure' ? 'Treasure · a chest holds a relic' : kind === 'elite' ? 'Elite beaten · take its relic' : 'Boss beaten · pick a relic';
-  const buttons = relicOffers(map, run).map((r) => `<button type="button" data-relic="${r}">${relicGlyph(r)}${relicText(r)}</button>`);
-  return `<p class="run-line">${title}</p>${dropHtml(map, run)}<div class="run-kinds">${buttons.join('')}</div>`;
+  const boss = (r: number): boolean => r >= BOSS_RELICS;
+  const buttons = relicOffers(map, run).map(
+    (r) => `<button type="button" data-relic="${r}"${boss(r) ? ' data-boss-relic' : ''}>${relicGlyph(r)}${boss(r) ? 'Boss relic · ' : ''}${relicText(r)}</button>`,
+  );
+  return `<p class="run-line">${title}</p>${toldHtml(run)}${dropHtml(map, run)}<div class="run-kinds">${buttons.join('')}${keyOffers(map, run).map(keyButton).join('')}</div>`;
 }
 
 /** The relic bar (#1457), in the HUD on the map and in the fights: a glyph per relic the run holds, its name and rule
@@ -1216,41 +1301,56 @@ export function shopHtml(run: Run): string {
   );
 }
 
+/** The keys line of the map (#1467): how many of the three the run holds and what the others ask, or that act 4 is open;
+ * nothing before the first key. */
+export function keysHtml(run: Run): string {
+  if (!run.keys.length) return '';
+  const held = run.keys.map((k) => `${KEYS[k]!.name} key`).join(', ');
+  if (run.keys.length === KEYS.length) return `<p class="run-help run-keys">Act 4 is open · ${KEYS.length} of ${KEYS.length} keys · ${held} · an elite, then ${FINAL_BOSS_NAME}</p>`;
+  const missing = KEYS.flatMap((k, i) => (run.keys.includes(i) ? [] : [`${k.name} key (${k.cost})`])).join(', ');
+  return `<p class="run-help run-keys">Act 4 · ${run.keys.length} of ${KEYS.length} keys · ${held} · missing: ${missing}</p>`;
+}
+
 /** The map screen: the run line, the unlocks and commanders before the first pick, a legend, the nodes act by act from the
  * top under the header of their act (half a row), each placed on its row with the icon of its kind, the links between them
  * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
- * score, summary and New run. `book` is what the start screen holds besides (#1466): the daily run, the history and the
+ * score, summary and New run. The fourth act (#1467) is drawn once the run holds the three keys; an elite that holds a key is marked. `book` is what the start screen holds besides (#1466): the daily run, the history and the
  * compendium. */
 export function mapHtml(map: MapNode[], run: Run, book = ''): string {
   const head = `<p class="run-line">${runLine(map, run)}</p>`;
   if (run.end) return `${head}${scoreLine(map, run)}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
+  const max = lastAct(map, run);
   const rows = Math.max(...map.map((n) => n.row)) + 1;
-  const acts = lastAct(map) + 1;
+  const acts = max + 1;
   const slot = rows + 0.5; // the rows of an act and its header
-  const total = acts * slot;
+  const total = max * slot + Math.max(...map.filter((n) => n.act === max).map((n) => n.row)) + 1.5; // the fourth act has only 2 rows
   const spot = (n: MapNode): [number, number] => {
     const width = map.filter((o) => o.act === n.act && o.row === n.row).length;
     return [((n.col + 0.5) / width) * 100, ((n.act * slot + 0.5 + n.row + 0.5) * 100) / total];
   };
   const here = run.path[run.path.length - 1];
   const taken = (i: number, j: number): boolean => run.path.some((p, k) => p === i && run.path[k + 1] === j);
+  const marked = markedElites(map).filter(() => !run.keys.includes(Key.Emerald));
   const lines = map.flatMap((n, i) =>
-    next(map, [i]).map((j) => {
+    next(map, [i], max).map((j) => {
       const [[x1, y1], [x2, y2]] = [spot(n), spot(map[j]!)];
       const mark = taken(i, j) ? ' class="taken"' : i === here && open.includes(j) ? ' class="next"' : '';
       return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${mark}/>`;
     }),
   );
-  const nodes = map.map((n, i) => {
+  const nodes = map.flatMap((n, i) => {
+    if (n.act > max) return [];
     const [x, y] = spot(n);
     const mark = i === here ? ' here' : run.path.includes(i) ? ' taken' : '';
     const kind = n.kind === 'unknown' ? '?' : n.kind[0]!.toUpperCase() + n.kind.slice(1);
     const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
-    return (
-      `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}" data-node="${i}" data-node-kind="${n.kind}" style="left:${x}%;top:${y}%" ` +
-      `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}"${open.includes(i) ? '' : ' disabled'}>${lineGlyph(NODE_LOOKS[n.kind].icon)}${kind}${elite && `<small>${elite.replace('The ', '')}</small>`}</button>`
-    );
+    const key = marked.includes(i);
+    const note = [elite.replace('The ', ''), key ? 'key' : ''].filter(Boolean).join(' · ');
+    return [
+      `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}${key ? ' marked' : ''}" data-node="${i}" data-node-kind="${n.kind}" style="left:${x}%;top:${y}%" ` +
+        `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}${key ? ', marked: its key' : ''}"${open.includes(i) ? '' : ' disabled'}>${lineGlyph(NODE_LOOKS[n.kind].icon)}${kind}${note && `<small>${note}</small>`}</button>`,
+    ];
   });
   const heads = Array.from({ length: acts }, (_, act) => {
     const biome = run.exits && act <= run.biomes.length ? ` · ${BIOMES[biomeOf(run, act)]!.name}` : ''; // the biome of an act not yet picked is not named
@@ -1258,7 +1358,7 @@ export function mapHtml(map: MapNode[], run: Run, book = ''): string {
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
-  return `${head}${told}${run.path.length ? '' : startHtml(run) + book}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
+  return `${head}${told}${keysHtml(run)}${run.path.length ? '' : startHtml(run) + book}${legendHtml()}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */
@@ -1281,10 +1381,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '' } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [] } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1333,9 +1433,11 @@ function decodeRun(raw: unknown): Run | null {
     biomes.every((b, i) => isInt(b, BIOMES.length - 1) && b > 0 && biomes.indexOf(b) === i) &&
     isInt(flawless, MAX_FLAWLESS) &&
     typeof daily === 'string' &&
-    (daily === '' || DAY.test(daily));
+    (daily === '' || DAY.test(daily)) &&
+    Array.isArray(keys) &&
+    keys.every((k, i) => isInt(k, KEYS.length - 1) && keys.indexOf(k) === i);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys }
     : null;
 }
 
@@ -1371,7 +1473,7 @@ export async function loadRun<E extends ReplayEngine>(
     if (raw === undefined) return null;
     const state = decodeRun(raw);
     const map = state ? mapOf(state.seed) : [];
-    const walked = state !== null && state.path.every((n, i) => next(map, state.path.slice(0, i)).includes(n));
+    const walked = state !== null && state.path.every((n, i) => next(map, state.path.slice(0, i), lastAct(map, state)).includes(n));
     const fight = walked && state.fighting && state.path.length ? replay(state.moves, () => make(state, map)) : null;
     // A boss node's fight saved when it was an army fight (before #800) does not replay on the boss's board: it starts over.
     if (!fight && walked && state.fighting && lastNode(map, state)?.kind === 'boss') {

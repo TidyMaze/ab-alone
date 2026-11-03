@@ -40,6 +40,7 @@ import {
   EVENTS,
   fightBudget,
   FIGHT_FOES,
+  Key,
   foesOf,
   foePlan,
   FORMATIONS,
@@ -146,7 +147,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '' });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [] });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -295,7 +296,7 @@ describe('roguelite', () => {
     ['a bad best', { ...newRun(1, 3, LEGACY_UNLOCKED), best: 4 }],
     ['an unknown commander', { ...newRun(1, 3, LEGACY_UNLOCKED), commander: 4 }],
     ['a commander below none', { ...newRun(1, 3, LEGACY_UNLOCKED), commander: -2 }],
-    ['an unknown relic', { ...newRun(1, 3, LEGACY_UNLOCKED), relics: [12] }],
+    ['an unknown relic', { ...newRun(1, 3, LEGACY_UNLOCKED), relics: [16] }],
     ['a relic twice', { ...newRun(1, 3, LEGACY_UNLOCKED), relics: [3, 3] }],
     ['relics that are no list', { ...newRun(1, 3, LEGACY_UNLOCKED), relics: 3 }],
     ['a bad relic flag', { ...newRun(1, 3, LEGACY_UNLOCKED), relic: 'yes' }],
@@ -555,7 +556,7 @@ describe('roguelite', () => {
   });
 
   it('an elite: a stronger bot, and a won one gives up to 2 marbles back before its reward', () => {
-    const elite = pick({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] }, 1);
+    const elite = pick({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [0], keys: [Key.Emerald] }, 1); // not the marked one (#1467)
     expect(fightBudget(ACT, elite, 1000)).toBe(1000 * ELITE_BUDGET);
     expect(ELITE_BUDGET).toBe(2);
     expect(fightBudget(ACT, pick(newRun(1, 3, LEGACY_UNLOCKED), 0), 1000)).toBe(1000);
@@ -782,8 +783,8 @@ describe('roguelite', () => {
   it('draws elites, rests and events on the map', () => {
     const doc = parse(mapHtml(ACT, newRun(1, 3, LEGACY_UNLOCKED)));
     const nodes = [...doc.querySelectorAll<HTMLButtonElement>('button[data-node]')];
-    expect(nodes.map((b) => b.textContent)).toEqual(['Fight', 'Elite', 'Rest', 'Event', 'Boss']);
-    expect(nodes.map((b) => b.className)).toEqual(['node', 'node elite', 'node rest', 'node event', 'node boss']);
+    expect(nodes.map((b) => b.textContent)).toEqual(['Fight', 'Elitekey', 'Rest', 'Event', 'Boss']);
+    expect(nodes.map((b) => b.className)).toEqual(['node', 'node elite marked', 'node rest', 'node event', 'node boss']);
     expect(nodes[2]!.getAttribute('aria-label')).toBe('Act 1, rest');
   });
 
@@ -792,7 +793,7 @@ describe('roguelite', () => {
     const boss = actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ids)!;
     expect(ids).toContain(boss.id);
     expect(boss.percent).toBe(ACT_PERCENT[0]);
-    expect(ACT_PERCENT).toEqual([50, 100, 200]);
+    expect(ACT_PERCENT).toEqual([50, 100, 200, 300]);
     expect(actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ids)).toEqual(boss); // the same run: the same boss and seed
     const second = actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0, 2, 3), 5), ids)!;
     expect(second.percent).toBe(ACT_PERCENT[1]);
@@ -946,10 +947,10 @@ describe('roguelite relics', () => {
   const ALL = RELICS.map((_, code) => code);
 
   it('twelve relics, by their code on the bridge, each a name, a one-line rule and its own glyph', () => {
-    expect(RELICS).toHaveLength(12);
+    expect(RELICS).toHaveLength(16);
     expect(Object.keys(Relic)).toEqual(RELICS.map((r) => r.name.replace(/ (\w)/g, (_, c: string) => c.toUpperCase())));
     expect(Object.values(Relic)).toEqual(ALL);
-    expect(new Set(RELICS.map((r) => r.icon)).size).toBe(12);
+    expect(new Set(RELICS.map((r) => r.icon)).size).toBe(16);
     for (const r of RELICS) expect(r.help).toMatch(/^[^.]+$/); // one line, no full stop
     expect(relicMask(run({ relics: [Relic.Gyroscope, Relic.Detonator] }))).toBe(0b10001);
     expect(relicMask(run())).toBe(0);
@@ -1037,7 +1038,7 @@ describe('roguelite relics', () => {
   it('Jammer: the bot searches a quarter fewer positions in fights and elites, not against a boss', () => {
     const jammed = { relics: [Relic.Jammer] };
     expect(fightBudget(ACT, { ...pick(newRun(1, 3, LEGACY_UNLOCKED), 0), ...jammed }, 1000)).toBe(750);
-    expect(fightBudget(ACT, pick(run(jammed), 1), 1000)).toBe(1500);
+    expect(fightBudget(ACT, pick(run({ ...jammed, keys: [Key.Emerald] }), 1), 1000)).toBe(1500);
     expect(fightBudget(ACT, pick(run(jammed), 5), 1000)).toBe(1000);
   });
 
@@ -1568,8 +1569,8 @@ describe('varied enemy armies (#1462)', () => {
     const labels = (run: Run): string[] =>
       [...new DOMParser().parseFromString(mapHtml(FOES, run), 'text/html').querySelectorAll<HTMLButtonElement>('button[data-node]')].map((b) => `${b.textContent}|${b.getAttribute('aria-label')}`);
     const after = { ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] };
-    expect(labels(after)).toEqual(['Fight|Act 1, fight', 'EliteArtificer|Act 1, elite, The Artificer', 'Boss|Act 1, boss']);
-    expect(labels({ ...after, enemies: false })).toEqual(['Fight|Act 1, fight', 'Elite|Act 1, elite', 'Boss|Act 1, boss']);
+    expect(labels(after)).toEqual(['Fight|Act 1, fight', 'EliteArtificer · key|Act 1, elite, The Artificer, marked: its key', 'Boss|Act 1, boss']);
+    expect(labels({ ...after, enemies: false })).toEqual(['Fight|Act 1, fight', 'Elitekey|Act 1, elite, marked: its key', 'Boss|Act 1, boss']);
   });
 
   it('the bot\'s army of the fight is the bridge\'s plan for the node, a marble short with the Saboteur', () => {
@@ -1730,7 +1731,7 @@ describe('roguelite Collector (#1470)', () => {
 
   it('the reward and relic screens of an elite or a boss say which blueprint it dropped', () => {
     const rest = BLUEPRINTS.map((_, id) => id).filter((id) => id !== 0);
-    const elite = won([0, 1], { unlocked: rest }); // only Lucky coin is left to drop
+    const elite = won([0, 1], { unlocked: rest, keys: [Key.Emerald] }); // only Lucky coin is left to drop
     const line = 'Blueprint found · Relic blueprint · Lucky coin: rewards offer 4 choices · kept for the Collector, lost if the run ends first';
     expect(parse(rewardHtml(TWO, elite)).querySelector('.run-help')!.textContent).toBe(line);
     expect(parse(relicHtml(TWO, { ...elite, relic: true })).querySelector('.run-help')!.textContent).toBe(line);
@@ -1989,8 +1990,8 @@ describe('roguelite ascension', () => {
   });
 
   it('level 1: an elite searches 3 times a fight, not 2', () => {
-    expect(fightBudget(ACT, pick({ ...level(0), path: [0] }, 1), 1000)).toBe(2000);
-    expect(fightBudget(ACT, pick({ ...level(1), path: [0] }, 1), 1000)).toBe(3000);
+    expect(fightBudget(ACT, pick({ ...level(0), path: [0], keys: [Key.Emerald] }, 1), 1000)).toBe(2000); // not the marked elite (#1467)
+    expect(fightBudget(ACT, pick({ ...level(1), path: [0], keys: [Key.Emerald] }, 1), 1000)).toBe(3000);
     expect(fightBudget(ACT, pick(level(1), 0), 1000)).toBe(1000); // a fight
   });
 
@@ -2044,8 +2045,8 @@ describe('roguelite ascension', () => {
   it('level 10: the bot searches a quarter more in fights and elites, not against a boss', () => {
     expect(fightBudget(ACT, pick(level(9), 0), 1000)).toBe(1000);
     expect(fightBudget(ACT, pick(level(10), 0), 1000)).toBe(1250);
-    expect(fightBudget(ACT, pick(level(10, { path: [0] }), 1), 1000)).toBe(3750);
-    expect(fightBudget(ACT, pick(level(10, { path: [0], relics: [Relic.Jammer] }), 1), 1000)).toBe(2813);
+    expect(fightBudget(ACT, pick(level(10, { path: [0], keys: [Key.Emerald] }), 1), 1000)).toBe(3750);
+    expect(fightBudget(ACT, pick(level(10, { path: [0], relics: [Relic.Jammer], keys: [Key.Emerald] }), 1), 1000)).toBe(2813);
     expect(fightBudget(ACT, pick(level(10, { path: [0] }), 4), 1000)).toBe(1000);
   });
 

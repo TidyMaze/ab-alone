@@ -14,7 +14,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 
 ## 1. The mode
 
-- **Run**: 3 acts, each a branching map of nodes the player walks through, top to bottom. An act
+- **Run**: 3 acts (a fourth with the three keys of section 22), each a branching map of nodes the player walks through, top to bottom. An act
   has 3 rows of nodes then its boss: 12 nodes on a path through a run, the bosses included.
 - **Nodes** (section 7): fight (the bot), elite (a stronger bot, a better reward), rest (marbles
   back up to 14, or a special marble upgraded, section 10), event (a short text with 2 or 3 choices, a gain and a cost, some of them a gamble, section 16),
@@ -61,7 +61,7 @@ button keeps its `aria-label` (`Act 1, elite, The Wall`) and `data-node`, and ho
 
 The run (seed, army, its special marbles, its relics, its tactics, its scrap, the nodes picked, the special marbles placed on
 the fight on and its moves, a reward waiting to be picked, an event, a rest site or a shop waiting for its
-choice (with what the shop sold), a relic offer waiting to be taken, the commander picked (section 17), the ascension level (section 20), the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
+choice (with what the shop sold), a relic offer waiting to be taken, the keys taken (section 22), the commander picked (section 17), the ascension level (section 20), the line of what the last event told, and its cells, blueprints and Collector, section 15) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -738,3 +738,55 @@ changes what a run holds.
 - **MCP**: the server's run is the client's `Run`, its `fightOver` counts the flawless fights, and a save carries both
   fields. The score and the book are the page's, not the server's (section 19).
 - **Turn it against the boss**: not a boss mechanic; no boss has a score.
+
+## 22. Boss relics, keys and a fourth act (#1467)
+
+Slay the Spire's boss relics and its three keys: the end of a won run holds one more secret. Only variety carries between runs
+(Decision #934): nothing here is kept after the run, and a run without a key plays the three acts of section 1.
+
+- **Boss relics**: four more relics, codes 12 to 15 (the bridge's `Relic` codes stop at 11: the page plays these, the engine is
+  unchanged), each a strong effect with a cost. One of the 3 relics an act boss offers (section 9) is a boss relic, the last of the
+  three, dealt from those the run does not hold by the run seed and the node; the other two are ordinary. Treasures, elites,
+  events and shops never deal one. The relic screen marks it "Boss relic".
+
+  | Code | Relic | Effect | Cost |
+  |---|---|---|---|
+  | 12 | War banner | the bot has 2 marbles fewer in fights and elites (3 with the Saboteur) | act bosses play at 150 % of their strength |
+  | 13 | Mending core | a marble comes back after every won fight, elite and boss (up to 14) | a rest brings back only 3 marbles |
+  | 14 | Static shroud | the bot searches half the positions in fights and elites | rewards offer one choice fewer |
+  | 15 | Boss breaker | act bosses play at half their strength | the bot searches 25 % more positions in fights and elites |
+
+  The knobs are the ones of the ordinary relics (the bot's marbles and budget, a boss's strength, the marbles back, the rest, the
+  number of offers) and stack with them, multiplying: the Jammer and the Static shroud leave 0.375 of the budget. The Mending core's
+  marble adds to the Salvage magnet's and the War chest's.
+- **Keys**: three, each taken by a costly choice, once each. A key is saved with the run (`keys`, the codes in the order taken).
+  - **Ruby**: at a rest site, Give up the rest (no marble back, no upgrade) takes the Ruby key.
+  - **Sapphire**: at a treasure, Give up the relic takes the Sapphire key.
+  - **Emerald**: the first elite of each of the first three acts is **marked** on the map (a double border and "key"). It is a
+    stronger bot: it searches one more time a fight's positions than an elite does (3, not 2; 4 from ascension level 1, section 20). Beating it takes the Emerald key, on top of its
+    marbles, reward and relic; once the run holds the Emerald the other marked elites are ordinary elites.
+  A key is not guaranteed on a path: an act can have no elite, rest or treasure on the way, as in Slay the Spire. The map shows how
+  many keys the run holds and what the others ask once it has the first one.
+- **Act 4**: with the three keys the third act's boss no longer wins the run. It still offers its relic (a boss relic among them),
+  reward and Collector, but no exit, and the map grows by two rows: one **elite** (an archetype of section 14 with 5 special
+  marbles, as any elite of an act past the third, searching an elite's positions) then a **final boss**. Without the three keys
+  those two nodes are not on the map and not reachable. Act 4 is played in the Meadow (no hole, no signature marble); beating its
+  boss wins the run, and a loss ends it as anywhere.
+- **The final boss** is The Ballast Mind (`FINAL_BOSS`, "ballast"), at 300 % of its search budget (acts 1 to 3 play at 50, 100 and 200 %;
+  the War banner, the Boss breaker and the Dampener scale it as any act boss), with its seed from the run seed and the node. Why
+  it: it borrows an effect of five other bosses (the Hull's crack, the Pulsar's pulse, the Magnetizer's polarity, the Chaplain's
+  conversion, the Swarm's wave), so it is the one boss that "holds all the others", and its fight is a fair race to 12 ejections
+  between equal armies, which a run of 14 marbles can win at 300 %. It is also the Archipelago's boss: a run that took that exit
+  meets it twice, in act 2 or 3 and again at the end, with another fight seed.
+- **Acts won** count the fourth boss too (0 to 4, the score's and the MCP `acts_won`), but only the first three unlock anything: `ab-alone.roguelite` holds 0 to 3.
+- **In the engine and the bridge**: `run_map(seed)` ends with the two nodes of the fourth act (act index 3, `FINAL_ACT`; an elite
+  with its archetype and formation, then the boss), after the nodes of the other acts, so every node of a run saved before keeps its
+  index. `run_foes` of the elite gives its plan (14 marbles, 5 special marbles). `engine_version` is unchanged.
+- **Saving**: `keys` is saved with the run. A run saved before it has none and plays three acts as before; a save whose path walks
+  into act 4 without the three keys does not load.
+- **The MCP server** (section 19): `keys` in the run state once the run holds one, the Ruby and Sapphire as the last option of the
+  rest and relic screens (`Give up the rest: take the Ruby key`), the boss relic among a boss's relic options, and the fourth act's
+  nodes in `map` only once the three keys are held.
+- **Turn it against the bot**: the marked elite and the final boss are fought like any other; the War banner, the Static shroud and
+  the Mending core are the player's edge for the fights, paid for later, and the Boss breaker is the player's edge against the
+  bosses, paid for in every fight.

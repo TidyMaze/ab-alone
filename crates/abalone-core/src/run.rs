@@ -10,6 +10,9 @@ use crate::world::Biome;
 
 /// Acts of a run, each ending on its boss node.
 pub const ACTS: usize = 3;
+/// The index of the fourth act (docs/specs/roguelite.md section 22): an elite then a final boss, walked only with the three
+/// keys. Its two nodes come last in the map, so the nodes of the other acts keep their indices.
+pub const FINAL_ACT: usize = ACTS;
 /// Rows of fight nodes in an act, before its boss row.
 pub const FIGHT_ROWS: usize = 3;
 /// Marbles of the army at the start of a run: the standard layout.
@@ -389,7 +392,7 @@ fn foes_of(seed: u64, index: usize, kind: NodeKind) -> (Formation, Option<Elite>
 }
 
 /// The map of the run `seed`: act by act, row by row, column ascending. A fight row has 2 to 4
-/// nodes, the boss row one.
+/// nodes, the boss row one; the fourth act (`FINAL_ACT`) has an elite and its boss.
 pub fn run_map(seed: u64) -> Vec<Node> {
     let mut state = seed;
     let mut map = Vec::new();
@@ -418,6 +421,18 @@ pub fn run_map(seed: u64) -> Vec<Node> {
                 }
             }));
         }
+    }
+    for (row, kind) in [NodeKind::Elite, NodeKind::Boss].into_iter().enumerate() {
+        let (formation, elite) = foes_of(seed, map.len(), kind);
+        map.push(Node {
+            act: FINAL_ACT,
+            row,
+            col: 0,
+            kind,
+            links: if row == 0 { vec![0] } else { Vec::new() },
+            formation,
+            elite,
+        });
     }
     map
 }
@@ -793,7 +808,7 @@ mod tests {
             assert_eq!(boss[0].kind, NodeKind::Boss);
             assert!(boss[0].links.is_empty());
         }
-        assert_eq!(map.len(), map.iter().filter(|n| n.act < ACTS).count());
+        assert_eq!(map.iter().filter(|n| n.act >= ACTS).count(), 2);
         assert!(map
             .windows(2)
             .all(|w| (w[0].act, w[0].row, w[0].col) < (w[1].act, w[1].row, w[1].col)));
@@ -837,7 +852,10 @@ mod tests {
             for act in 0..ACTS {
                 assert!(row(&map, act, 0).iter().all(|n| n.kind == NodeKind::Fight));
             }
-            for node in map.iter().filter(|n| n.row > 0 && n.row < FIGHT_ROWS) {
+            for node in map
+                .iter()
+                .filter(|n| n.act < ACTS && n.row > 0 && n.row < FIGHT_ROWS)
+            {
                 if !seen.contains(&node.kind) {
                     seen.push(node.kind);
                 }
@@ -854,7 +872,7 @@ mod tests {
         // saved before the elites, rests and events still walks its map.
         let mut digest = 0u64;
         for seed in 0..50 {
-            for n in run_map(seed) {
+            for n in run_map(seed).into_iter().filter(|n| n.act < ACTS) {
                 digest = mix(digest ^ (n.act * 1000 + n.row * 100 + n.col) as u64);
                 for l in n.links {
                     digest = mix(digest ^ l as u64);
