@@ -32,7 +32,7 @@ async function startCore(page: Page, reducedMotion = true): Promise<void> {
     crypto.getRandomValues = ((a: Uint32Array) => a.fill(2)) as typeof crypto.getRandomValues; // the fight seed
   });
   await page.emulateMedia({ reducedMotion: reducedMotion ? 'reduce' : 'no-preference' });
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&quality=low');
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
