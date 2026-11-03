@@ -967,7 +967,7 @@ runs (Decision #934): a branch is one more way across an act, never a stronger a
 - **Turn it against the bot**: nothing here changes a fight; the hidden branches are the player's routes (a treasure sooner, a row
   less of fights, one more biome to choose), the bot stays the bot of its node.
 
-## 28. The build in an act boss fight (#1494)
+## 28. The build in an act boss fight (#1494, #1495)
 
 The special marbles, relics, affinities and tactics a run built over its act count in its hardest fight too. An act boss fight
 (`Encounter`) carries them as an army fight does, inside the boss's own rules.
@@ -978,15 +978,25 @@ The special marbles, relics, affinities and tactics a run built over its act cou
   and play on the army's marbles as in a fight. The boss's search plays the same moves and rules (it searches the game the
   `Encounter` holds, as the bot does in a fight), so it pushes, avoids and answers the Heavies, Anchors, Sparks and the rest. Boss-only
   relic effects (section 22: the Dampener, the War banner, the Boss breaker) are the page's and unchanged.
-- **Which bosses take it**: those that play standard Abalone on their board with hooks that only remove marbles, because a special
-  mark moves with its marble and a hook that moves marbles would leave it behind: **The Hull, The Chaplain, The Alien, The Rail
-  Yard, The Overseer and The Stalker** (`takes_build` on the bridge, one flag per boss in the roster). A hook that removes a marble
-  (a crack that vanishes a cell, a train, an incinerator, the Chaplain's martyr) takes its mark with it (`Board::set` to Empty and
-  `Board::void` drop the mark of the cell). The Chaplain's conversion keeps the mark on the marble, so a converted Heavy is the
-  boss's. **The others fight as before** (no placement, no special marble, no tactic bar), each for its own reason: The Echo (its
-  free moves and memory of moves), The Choir and The Swarm (their own fights, not a plain `Encounter`), The Magnetizer, The
-  Pulsar, The Assembly Line, The Unstable Core, The Dual Room and The Ballast Mind (their pulses, belts, repulsions, shockwaves,
-  rooms and borrowed effects move or replace marbles, and The Unstable Core's weighted push already is a rule of its own).
+- **Which bosses take it**: twelve of the fifteen, those that play Abalone on a board of their own with hooks that either remove marbles
+  or move them with their special mark (#1495, below): **The Hull, The Chaplain, The Alien, The Rail Yard, The Overseer, The
+  Stalker** (#1494), and **The Magnetizer, The Pulsar, The Assembly Line, The Unstable Core, The Dual Room and The Ballast Mind**
+  (`takes_build` and `boss_takes_build(id)` on the bridge, one flag per boss in the roster). **The others fight as before** (no
+  placement, no special marble, no tactic bar), each for its own reason: The Echo (its free moves and memory of moves), The Choir
+  and The Swarm (their own fights, not a plain `Encounter`).
+- **Marks and hooks** (#1494, #1495): a special mark is the marble's, so a hook that touches a marble takes its mark along. A hook that
+  empties or voids a cell (a crack, a train, an incinerator, the martyr, an overload, a press, a belt's end) drops the mark of the cell
+  (`Board::set` to Empty and `Board::void`), and a hook that moves marbles moves their marks to where they went and drops those of the
+  marbles it threw off the board (`Board::follow_specials`, the same code in the game and in the boss's search tree): The Magnetizer's
+  repulsion (the pair and every marble it pushes), The Pulsar's pulse (and the pulse The Ballast Mind borrows), The Assembly Line's belts
+  (a marble carried off an end or struck by a press loses its mark), The Unstable Core's shockwave. The Dual Room's return keeps the mark
+  with the marble: the special marble pushed into the void or over the rim comes back special in the other room (`Dual::marks`). The
+  Chaplain's conversion keeps the mark on the marble, so a converted Heavy is the boss's. A hook is not a push: it ejects a marble
+  whatever its mark, an Anchor stays on the board against the push of a move only, and a Spark does not burst nor a Medic come back from
+  a hook (as in #1494). The weighted push of The Unstable Core adds up with the Heavies' weight as any push does.
+- **Seen before the fight**: a boss node of the map says in its tip, once the biome of its act is known, which boss ends the act and
+  whether it "takes your build" or "fights without your build" (`mapHtml`'s roster, `boss_takes_build` of the bridge); the placement
+  screen is the sign of a boss that takes it, and one that does not starts its fight at once.
 - **Placement**: a run with special marbles shows the placement of section 6 on the boss's board before the first move, on the
   army's marbles of that board (the Black ones: the layout is the boss's own, so a placement made for an army fight does not
   carry). A boss that takes no build starts its fight at once. The `placed` of the run are saved with it.
@@ -1002,7 +1012,7 @@ The special marbles, relics, affinities and tactics a run built over its act cou
   change loads as it was: its moves replay on the boss with the relics of the run (the Gyroscope only adds legal pushes), no special
   marble was placed and the tactics held can be played from the next turn. Deterministic: the same seed, placement and moves give
   the same fight. `engine_version` is unchanged: no game of another mode changes.
-- **The bridge**: `Encounter.takes_build()`, `set_relics(mask)` (the mask of `Engine::set_relics`; it turns the flag on), then
+- **The bridge**: `boss_takes_build(id)` (the roster's flag, before any fight), `Encounter.takes_build()`, `set_relics(mask)` (the mask of `Engine::set_relics`; it turns the flag on), then
   `place_special(q, r, kind)`, `specials()`, `fuses()` and `tactics()` (the mask of `Engine::tactics`, only Reinforce and Fall back),
   and `play` takes a tactic record. An `Err` for a boss that takes no build. The client builds the fight with `encounterFor`
   (`client/src/bot.ts`, shared by the page and the bot's worker).
