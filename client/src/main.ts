@@ -228,6 +228,7 @@ import {
   ratioFloor,
   ratioFrames,
   drawWanted,
+  roomVeiled,
   timeDraw,
   type LastDraw,
   fogSettings,
@@ -6892,6 +6893,7 @@ renderer.setAnimationLoop((now) => {
   if (!navigator.webdriver) adaptResolution(now);
   offerLowTier(!sliding() && !lastMovePlaying); // at a quiet moment: no move animation (the ambient dust and heat pulse always move)
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
+  if (roomVeiled(document.body.dataset.veil === 'on', sceneRenderer.terraceOn)) return; // the room under the veil is never seen: its programs are not compiled (#1481)
   for (const sync of syncMarbles) sync();
   for (const sync of syncPedestals) sync();
   renderer.info.reset();

@@ -10,6 +10,7 @@ import {
   ratioFloor,
   ratioFrames,
   drawWanted,
+  roomVeiled,
   timeDraw,
   fogSettings,
   readClearBoard,
@@ -647,6 +648,17 @@ describe('drawWanted (#848)', () => {
   });
   it('leaves automation to its throttle alone, so the browser checks still see draws on a still board', () => {
     expect(drawWanted(false, false, false, true)).toBe(true);
+  });
+});
+
+describe('roomVeiled (#1481)', () => {
+  it('skips the frame the veil hides: the room, drawn before the terrace, is never seen', () => {
+    expect(roomVeiled(true, false)).toBe(true);
+  });
+  it('draws once the terrace is on, or when no veil was put up (?scene=room, the Open world)', () => {
+    expect(roomVeiled(true, true)).toBe(false);
+    expect(roomVeiled(false, false)).toBe(false);
+    expect(roomVeiled(false, true)).toBe(false);
   });
 });
 
