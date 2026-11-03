@@ -90,13 +90,20 @@ impl Engine {
     }
 
     /// Gives the army of a rogue-lite fight its run's relics, before its first move: `mask` holds
-    /// the bit of each relic's code (see the module docs); a bit no relic has is ignored.
+    /// the bit of each relic's code and, from bit 16, the level of each affinity on 2 bits (see the
+    /// module docs); a bit no relic has is ignored.
     pub fn set_relics(&mut self, mask: u32) -> Result<(), String> {
         let relics: Vec<Relic> = Relic::ALL
             .into_iter()
             .filter(|r| mask & r.bit() != 0)
             .collect();
-        self.game.set_relics(&relics).map_err(|e| format!("{e:?}"))
+        self.game
+            .set_relics(&relics)
+            .map_err(|e| format!("{e:?}"))?;
+        let level = |a: u32| ((mask >> (16 + 2 * a)) & 3) as u8;
+        self.game
+            .set_affinities([level(0), level(1), level(2)])
+            .map_err(|e| format!("{e:?}"))
     }
 
     /// The special marbles, records of 3 integers `[q, r, kind]`, see the module docs.
@@ -377,10 +384,23 @@ mod tests {
     }
 
     #[test]
+    fn set_relics_also_takes_the_affinity_levels_from_bit_16_on_two_bits_each() {
+        let mut engine = Engine::with_army(14, 14);
+        // Force 1, Tactics 2, Chaos 3 (capped at the top level 2).
+        assert_eq!(engine.set_relics(1 << 16 | 2 << 18 | 3 << 20), Ok(()));
+        assert_eq!(engine.game.board().affinities(), [1, 2, 2]);
+        assert_eq!(engine.game.board().relics(), 0);
+        assert_eq!(
+            Engine::new().set_relics(1 << 16),
+            Err("NotRogueLite".to_string())
+        );
+    }
+
+    #[test]
     fn set_relics_takes_the_relics_of_a_run_by_their_bit_before_the_first_move() {
         let mut engine = Engine::with_army(14, 14);
         // Gyroscope (0) and Detonator (4), and a bit no relic has.
-        assert_eq!(engine.set_relics(0b1_0001 | 1 << 20), Ok(()));
+        assert_eq!(engine.set_relics(0b1_0001 | 1 << 14), Ok(()));
         let board = engine.game.board();
         assert!(board.has_relic(Relic::Gyroscope) && board.has_relic(Relic::Detonator));
         assert!(!board.has_relic(Relic::Jammer));

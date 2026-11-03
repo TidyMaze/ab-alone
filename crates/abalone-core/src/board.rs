@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::moves::{Move, Player};
-use crate::run::Relic;
+use crate::run::{Affinity, Relic, MAX_AFFINITY};
 
 /// Radius of the standard board: 61 cells. A cell `(q, r)` is on a board of radius `n` when
 /// `|q|`, `|r|` and `|q + r|` are all `<= n`.
@@ -117,6 +117,9 @@ pub struct Board {
     /// The army's relics in a rogue-lite fight, by their bit (`Relic::bit`); the Gyroscope's is
     /// spent by the push it lets through.
     relics: u32,
+    /// The army's levels of the three affinities in a rogue-lite fight, by `Affinity` code
+    /// (docs/specs/roguelite.md section 23).
+    affinities: [u8; 3],
     /// The Choir's armies and turn order, only inside its search tree (#825).
     choir: Option<ChoirMarks>,
     /// The plies played, only inside The Magnetizer's search tree: its assignment clock (#916).
@@ -308,6 +311,7 @@ impl Board {
             echoes: Vec::new(),
             specials: None,
             relics: 0,
+            affinities: [0; 3],
             choir: None,
             magnetizer_ply: None,
         }
@@ -537,6 +541,26 @@ impl Board {
             return Err(PlaceError::NotRogueLite);
         }
         self.relics = relics.iter().fold(0, |set, r| set | r.bit());
+        Ok(())
+    }
+
+    /// The army's level of `affinity` in this fight, `0` without the rogue-lite flag.
+    pub fn affinity(&self, affinity: Affinity) -> u8 {
+        self.affinities[affinity as usize]
+    }
+
+    /// The army's three levels, by `Affinity` code.
+    pub fn affinities(&self) -> [u8; 3] {
+        self.affinities
+    }
+
+    /// Gives the army its affinity `levels` (Force, Tactics, Chaos) for this fight, each capped at
+    /// `MAX_AFFINITY`. Only on a rogue-lite board.
+    pub fn set_affinities(&mut self, levels: [u8; 3]) -> Result<(), PlaceError> {
+        if !self.rogue_lite() {
+            return Err(PlaceError::NotRogueLite);
+        }
+        self.affinities = levels.map(|l| l.min(MAX_AFFINITY));
         Ok(())
     }
 

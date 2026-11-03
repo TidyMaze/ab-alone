@@ -81,6 +81,21 @@ impl Relic {
     }
 }
 
+/// An affinity of a rogue-lite run (docs/specs/roguelite.md section 23): a family of special marbles a scroll grows
+/// by a level, its value its code on the bridge. The engine plays the bonuses on the army's marbles (Black).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Affinity {
+    /// The Heavy and the Heavy+: they weigh more in a push.
+    Force = 0,
+    /// The Anchor, the Anchor+ and the Shield.
+    Tactics = 1,
+    /// The Spark, the Spark+ and the Bomb.
+    Chaos = 2,
+}
+
+/// The highest level of an affinity.
+pub const MAX_AFFINITY: u8 = 2;
+
 /// How the bot's marbles stand at the start of a fight or an elite (docs/specs/roguelite.md section
 /// 14), its value its code on the bridge. The army always stands on the standard layout, so the
 /// daisies are the flowers of the Belgian daisy (`Board::belgian_daisy`) set on the bot's half.
@@ -2839,5 +2854,371 @@ mod final_act {
             // The act boss that follows has the plain army.
             assert_eq!(foe_plan(seed, i + 1, 0, Biome::Meadow).specials, []);
         }
+    }
+}
+
+#[cfg(test)]
+mod affinities {
+    use super::*;
+    use crate::board::Special::{
+        self, Anchor, AnchorPlus, Bomb, Heavy, HeavyPlus, Shield, Spark, SparkPlus,
+    };
+    use crate::moves::Direction::{self, E, NW, SW};
+    use crate::moves::{apply, legal_moves, Move, MoveError};
+    use crate::search::best_move;
+
+    type P = (i32, i32);
+
+    /// A rogue-lite board where the army (Black) has the affinity `levels` (Force, Tactics, Chaos).
+    fn board(black: &[P], white: &[P], specials: &[(P, Special)], levels: [u8; 3]) -> Board {
+        let mut b = Board::empty();
+        b.set_rogue_lite();
+        for &(q, r) in black {
+            b.set(q, r, Cell::Black);
+        }
+        for &(q, r) in white {
+            b.set(q, r, Cell::White);
+        }
+        for &(cell, kind) in specials {
+            b.place_special(cell, kind).unwrap();
+        }
+        b.set_affinities(levels).unwrap();
+        b
+    }
+
+    fn mv(cells: &[P], dir: Direction) -> Move {
+        Move {
+            cells: cells.to_vec(),
+            dir,
+        }
+    }
+
+    fn cells(b: &Board, cell: Cell) -> Vec<P> {
+        let mut v: Vec<P> = (-4..=4)
+            .flat_map(|q| (-4..=4).map(move |r| (q, r)))
+            .filter(|&(q, r)| b.get(q, r) == Some(cell))
+            .collect();
+        v.sort();
+        v
+    }
+
+    const NONE: [u8; 3] = [0, 0, 0];
+    const FORCE: [[u8; 3]; 3] = [[0; 3], [1, 0, 0], [2, 0, 0]];
+    const TACTICS: [[u8; 3]; 3] = [[0; 3], [0, 1, 0], [0, 2, 0]];
+    const CHAOS: [[u8; 3]; 3] = [[0; 3], [0, 0, 1], [0, 0, 2]];
+
+    #[test]
+    fn the_affinities_are_listed_in_the_order_of_their_bridge_code() {
+        assert_eq!(Affinity::Force as usize, 0);
+        assert_eq!(Affinity::Tactics as usize, 1);
+        assert_eq!(Affinity::Chaos as usize, 2);
+        assert_eq!(MAX_AFFINITY, 2);
+    }
+
+    #[test]
+    fn affinities_are_set_on_a_rogue_lite_fight_before_its_first_move_capped_at_the_top_level() {
+        let mut plain = Board::standard();
+        assert_eq!(
+            plain.set_affinities([1, 0, 0]),
+            Err(PlaceError::NotRogueLite)
+        );
+        assert_eq!(plain.affinities(), [0, 0, 0]);
+        assert_eq!(
+            Game::new().set_affinities([1, 0, 0]),
+            Err(PlaceError::NotRogueLite)
+        );
+        let mut game = army_game(FULL_ARMY);
+        assert_eq!(game.set_affinities([1, 2, 9]), Ok(()));
+        assert_eq!(game.board().affinities(), [1, 2, MAX_AFFINITY]);
+        assert_eq!(game.board().affinity(Affinity::Force), 1);
+        assert_eq!(game.board().affinity(Affinity::Tactics), 2);
+        assert_eq!(game.board().affinity(Affinity::Chaos), MAX_AFFINITY);
+        let first = legal_moves(game.board(), Player::Black)[0].clone();
+        game.play(&first).unwrap();
+        assert_eq!(game.set_affinities([0, 0, 0]), Err(PlaceError::Started));
+    }
+
+    #[test]
+    fn the_affinities_are_part_of_the_position() {
+        let first = mv(&[(0, 2)], crate::moves::Direction::NE);
+        let mut plain = army_game(FULL_ARMY);
+        let mut forced = army_game(FULL_ARMY);
+        forced.set_affinities([1, 0, 0]).unwrap();
+        plain.play(&first).unwrap();
+        forced.play(&first).unwrap();
+        assert_ne!(plain.history()[0].hash, forced.history()[0].hash);
+    }
+
+    #[test]
+    fn force_adds_its_level_to_the_weight_of_the_armys_heavy_and_heavy_plus() {
+        // A lone Heavy (2) cannot push a pair (2); with Force 1 (3) it can, and a trio (3) needs Force 2 (4).
+        let lone = mv(&[(0, 0)], E);
+        let pair = [(1, 0), (2, 0)];
+        let trio = [(1, 0), (2, 0), (3, 0)];
+        let push = |white: &[P], levels: [u8; 3]| {
+            apply(
+                &board(&[(0, 0)], white, &[((0, 0), Heavy)], levels),
+                Player::Black,
+                &lone,
+            )
+            .map(|r| r.1)
+        };
+        assert_eq!(push(&pair, FORCE[0]), Err(MoveError::NotStrongEnough));
+        assert_eq!(push(&pair, FORCE[1]), Ok(false));
+        assert_eq!(push(&pair, FORCE[2]), Ok(false));
+        assert_eq!(push(&trio, FORCE[1]), Err(MoveError::NotStrongEnough));
+        assert_eq!(push(&trio, FORCE[2]), Ok(false));
+        // A Heavy+ (3) pushes a trio with Force 1 (4), not without.
+        let plus = |levels: [u8; 3]| {
+            apply(
+                &board(&[(0, 0)], &trio, &[((0, 0), HeavyPlus)], levels),
+                Player::Black,
+                &lone,
+            )
+        };
+        assert_eq!(plus(FORCE[0]), Err(MoveError::NotStrongEnough));
+        assert!(plus(FORCE[1]).is_ok());
+        // A plain marble gains nothing.
+        let plain = apply(
+            &board(&[(0, 0)], &pair, &[], FORCE[2]),
+            Player::Black,
+            &lone,
+        );
+        assert_eq!(plain, Err(MoveError::NotStrongEnough));
+    }
+
+    #[test]
+    fn force_also_makes_the_armys_heavy_harder_to_push() {
+        // White's trio (3) pushes a lone Heavy (2), but not one with Force 1 (3).
+        let trio = mv(&[(-3, 0), (-2, 0), (-1, 0)], E);
+        let against = |levels: [u8; 3]| {
+            apply(
+                &board(
+                    &[(0, 0)],
+                    &[(-3, 0), (-2, 0), (-1, 0)],
+                    &[((0, 0), Heavy)],
+                    levels,
+                ),
+                Player::White,
+                &trio,
+            )
+        };
+        assert!(against(FORCE[0]).is_ok());
+        assert_eq!(against(FORCE[1]), Err(MoveError::NotStrongEnough));
+    }
+
+    #[test]
+    fn the_enemys_heavy_gains_nothing_from_the_armys_force() {
+        // White's lone Heavy (2) cannot push the army's pair (2) whatever the army's Force.
+        let lone = mv(&[(0, 0)], E);
+        let b = board(&[(1, 0), (2, 0)], &[(0, 0)], &[((0, 0), Heavy)], FORCE[2]);
+        assert_eq!(
+            apply(&b, Player::White, &lone),
+            Err(MoveError::NotStrongEnough)
+        );
+        // And the army's pair (2) still holds against a Heavy White... one weighing 2, a tie.
+        let b = board(&[(0, 0), (1, 0)], &[(2, 0)], &[((2, 0), Heavy)], FORCE[2]);
+        assert!(apply(&b, Player::Black, &mv(&[(0, 0), (1, 0)], Direction::W)).is_ok());
+    }
+
+    #[test]
+    fn tactics_1_makes_the_armys_anchor_keep_the_marble_in_front_of_it_on_the_board() {
+        // White's trio pushes the army's (3,0) Anchor and (4,0): the marble on the rim goes off, unless Tactics 1.
+        let trio = [(0, 0), (1, 0), (2, 0)];
+        let push = mv(&trio, E);
+        let run = |levels: [u8; 3], kind: Special| {
+            apply(
+                &board(&[(3, 0), (4, 0)], &trio, &[((3, 0), kind)], levels),
+                Player::White,
+                &push,
+            )
+        };
+        assert!(legal_moves(
+            &board(&[(3, 0), (4, 0)], &trio, &[((3, 0), Anchor)], TACTICS[0]),
+            Player::White
+        )
+        .contains(&push));
+        assert_eq!(run(TACTICS[0], Anchor).map(|r| r.1), Ok(true));
+        assert_eq!(run(TACTICS[1], Anchor), Err(MoveError::PushBlocked));
+        assert_eq!(run(TACTICS[2], Anchor), Err(MoveError::PushBlocked));
+        assert!(!legal_moves(
+            &board(&[(3, 0), (4, 0)], &trio, &[((3, 0), Anchor)], TACTICS[1]),
+            Player::White
+        )
+        .contains(&push));
+        // A Shield is no Anchor: it keeps the rule it has.
+        assert_eq!(run(TACTICS[1], Shield).map(|r| r.1), Ok(false));
+    }
+
+    #[test]
+    fn the_enemys_anchor_keeps_nothing_from_the_armys_tactics() {
+        // The army's trio pushes White's (3,0) Anchor and (4,0) off.
+        let trio = [(0, 0), (1, 0), (2, 0)];
+        let b = board(&trio, &[(3, 0), (4, 0)], &[((3, 0), Anchor)], TACTICS[2]);
+        assert_eq!(
+            apply(&b, Player::Black, &mv(&trio, E)).map(|r| r.1),
+            Ok(true)
+        );
+        // The army's pushing group is not shielded either.
+        let b = board(
+            &[(1, 0), (2, 0), (3, 0)],
+            &[(4, 0)],
+            &[((3, 0), Anchor)],
+            TACTICS[2],
+        );
+        assert_eq!(
+            apply(&b, Player::Black, &mv(&[(1, 0), (2, 0), (3, 0)], E)).map(|r| r.1),
+            Ok(true)
+        );
+    }
+
+    #[test]
+    fn tactics_2_adds_one_to_the_weight_of_the_armys_anchors_and_shields() {
+        // A lone marble pushes a lone plain marble only when it weighs 2.
+        let lone = mv(&[(0, 0)], E);
+        for kind in [Anchor, AnchorPlus, Shield] {
+            let run = |levels: [u8; 3]| {
+                apply(
+                    &board(&[(0, 0)], &[(1, 0)], &[((0, 0), kind)], levels),
+                    Player::Black,
+                    &lone,
+                )
+            };
+            assert_eq!(run(TACTICS[0]), Err(MoveError::NotStrongEnough), "{kind:?}");
+            assert_eq!(run(TACTICS[1]), Err(MoveError::NotStrongEnough), "{kind:?}");
+            assert!(run(TACTICS[2]).is_ok(), "{kind:?}");
+        }
+        // A plain marble gains nothing, nor do the enemy's.
+        assert!(apply(
+            &board(&[(0, 0)], &[(1, 0)], &[], TACTICS[2]),
+            Player::Black,
+            &lone
+        )
+        .is_err());
+        assert!(apply(
+            &board(&[(1, 0)], &[(0, 0)], &[((0, 0), Anchor)], TACTICS[2]),
+            Player::White,
+            &lone
+        )
+        .is_err());
+    }
+
+    /// White pushes the army's Spark off from (4,-2); its neighbours (3,-2), White, (4,-3) and (3,-1), Black, move away.
+    fn burst_of(levels: [u8; 3], black: &[P], specials: &[(P, Special)]) -> Board {
+        let b = board(black, &[(2, -2), (3, -2)], specials, levels);
+        let (after, ejected) = apply(&b, Player::White, &mv(&[(2, -2), (3, -2)], E)).unwrap();
+        assert!(ejected);
+        after
+    }
+
+    #[test]
+    fn chaos_1_bursts_the_armys_sparks_one_cell_further() {
+        let black = [(4, -2), (4, -3), (3, -1)];
+        let spark = [((4, -2), Spark)];
+        let plain = burst_of(CHAOS[0], &black, &spark);
+        assert_eq!(cells(&plain, Cell::White), vec![(2, -2), (4, -2)]);
+        assert_eq!(cells(&plain, Cell::Black), vec![(2, 0), (4, -4)]);
+        // (4,-3) slides past (4,-4) off the board, the others 2 cells.
+        for levels in [CHAOS[1], CHAOS[2]] {
+            let more = burst_of(levels, &black, &spark);
+            assert_eq!(cells(&more, Cell::White), vec![(1, -2), (4, -2)]);
+            assert_eq!(cells(&more, Cell::Black), vec![(1, 1)]);
+        }
+        // A Spark+ bursts 3 cells.
+        let plus = [((4, -2), SparkPlus)];
+        let three = burst_of(CHAOS[1], &black, &plus);
+        assert_eq!(cells(&three, Cell::White), vec![(0, -2), (4, -2)]);
+        assert_eq!(cells(&three, Cell::Black), vec![(0, 2)]);
+        // It adds to the Detonator's cell: a Spark with both bursts 3 cells.
+        let mut both = board(&black, &[(2, -2), (3, -2)], &spark, CHAOS[1]);
+        both.set_relics(&[Relic::Detonator]).unwrap();
+        let (both, _) = apply(&both, Player::White, &mv(&[(2, -2), (3, -2)], E)).unwrap();
+        assert_eq!(cells(&both, Cell::White), vec![(0, -2), (4, -2)]);
+        assert_eq!(cells(&both, Cell::Black), vec![(0, 2)]);
+    }
+
+    #[test]
+    fn the_enemys_spark_bursts_as_far_as_before_whatever_the_armys_chaos() {
+        let b = board(
+            &[(2, -2), (3, -2)],
+            &[(4, -2), (4, -3), (3, -1)],
+            &[((4, -2), Spark)],
+            CHAOS[2],
+        );
+        let (after, _) = apply(&b, Player::Black, &mv(&[(2, -2), (3, -2)], E)).unwrap();
+        assert_eq!(cells(&after, Cell::White), vec![(2, 0), (4, -4)]);
+    }
+
+    /// Black burns its Bomb on (3,0) in `turns` moves of the marble on (-4,4)..., White's marbles on (4,0), (4,-1) and (2,1)
+    /// are in reach of the burst; `levels` are the army's.
+    fn bombed(levels: [u8; 3], turns: usize) -> Board {
+        let mut b = board(
+            &[(3, 0), (-4, 4)],
+            &[(4, 0), (4, -1), (2, 1), (4, -4)],
+            &[((3, 0), Bomb(3))],
+            levels,
+        );
+        let walk = [mv(&[(-4, 4)], NW), mv(&[(-4, 3)], NW), mv(&[(-4, 2)], NW)];
+        let reply = [mv(&[(4, -4)], SW), mv(&[(3, -3)], SW)];
+        for i in 0..turns {
+            b = apply(&b, Player::Black, &walk[i]).unwrap().0;
+            if b.special((3, 0)).is_none() {
+                return b;
+            }
+            if i < reply.len() {
+                b = apply(&b, Player::White, &reply[i]).unwrap().0;
+            }
+        }
+        b
+    }
+
+    #[test]
+    fn chaos_1_bursts_the_armys_bomb_one_cell_further() {
+        // Without it the Bomb pushes (2,1) to (1,2); with it to (0,3).
+        let plain = bombed(CHAOS[0], 3);
+        assert_eq!(cells(&plain, Cell::White), vec![(1, 2), (2, -2)]);
+        let more = bombed(CHAOS[1], 3);
+        assert_eq!(cells(&more, Cell::White), vec![(0, 3), (2, -2)]);
+        assert!(more.specials().is_empty());
+    }
+
+    #[test]
+    fn chaos_2_burns_two_turns_of_the_armys_bomb_fuse_per_turn() {
+        // The fuse is 3: after one turn it is 1 with Chaos 2, 2 without, and it bursts on the second turn.
+        assert_eq!(bombed(CHAOS[1], 1).special((3, 0)), Some(Bomb(2)));
+        assert_eq!(bombed(CHAOS[2], 1).special((3, 0)), Some(Bomb(1)));
+        assert_eq!(bombed(CHAOS[1], 2).special((3, 0)), Some(Bomb(1)));
+        let burst = bombed(CHAOS[2], 2);
+        assert!(burst.specials().is_empty());
+        assert_eq!(cells(&burst, Cell::White), vec![(0, 3), (3, -3)]);
+    }
+
+    #[test]
+    fn the_enemys_bomb_burns_and_bursts_as_before_whatever_the_armys_chaos() {
+        let b = board(
+            &[(-4, 4)],
+            &[(4, -4), (4, 0)],
+            &[((4, 0), Bomb(3))],
+            CHAOS[2],
+        );
+        let after = apply(&b, Player::Black, &mv(&[(-4, 4)], NW)).unwrap().0;
+        let after = apply(&after, Player::White, &mv(&[(4, -4)], SW)).unwrap().0;
+        assert_eq!(after.special((4, 0)), Some(Bomb(2)));
+    }
+
+    #[test]
+    fn the_bot_plays_the_bonuses_it_has() {
+        // The lone Heavy (2) pushes the pair (2) off the rim only with Force 1 (3).
+        let b = board(
+            &[(2, 0), (-4, 4)],
+            &[(3, 0), (4, 0), (-4, 0)],
+            &[((2, 0), Heavy)],
+            FORCE[1],
+        );
+        let mut game = Game::from_position(b, Player::Black, [0, 0]);
+        let found = best_move(&game, 3000).unwrap();
+        assert_eq!(found, mv(&[(2, 0)], E));
+        game.play(&found).unwrap();
+        assert_eq!(game.ejected(Player::Black), 1);
     }
 }

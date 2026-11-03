@@ -91,7 +91,8 @@
 //! - Relics of a rogue-lite fight (`Engine::set_relics`): a bit mask, bit `code` set for each relic
 //!   the army holds. `code` `0` Gyroscope, `1` Hull plating, `2` Salvage magnet, `3` Jammer, `4`
 //!   Detonator, `5` Bunks, `6` Lucky coin, `7` Bargain, `8` Saboteur, `9` Dampener, `10` War chest,
-//!   `11` Quartermaster (docs/specs/roguelite.md section 9).
+//!   `11` Quartermaster (docs/specs/roguelite.md section 9). The same mask carries the army's affinities from bit 16:
+//!   the level, 0 to 2, of Force, Tactics and Chaos on 2 bits each, in that order (section 23).
 //! - Rogue-lite map (`run_map`): records of 7 integers `[act, row, col, kind, links, formation, elite]` per node,
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
 //!   an act), `2` elite, `3` rest, `4` event (no longer drawn), `5` treasure, `6` shop, `7` unknown (a "?" the page turns

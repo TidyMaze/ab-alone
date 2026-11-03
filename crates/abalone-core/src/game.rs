@@ -183,6 +183,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if board.relics() != 0 {
         board.relics().hash(&mut hasher);
     }
+    if board.affinities() != [0; 3] {
+        board.affinities().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -395,6 +398,17 @@ impl Game {
             return Err(PlaceError::Started);
         }
         self.board.set_relics(relics)?;
+        self.start_hash = position_hash(&self.board, self.to_move);
+        Ok(())
+    }
+
+    /// Gives the army its run's affinity `levels`, before the first move of a rogue-lite fight
+    /// (docs/specs/roguelite.md section 23).
+    pub fn set_affinities(&mut self, levels: [u8; 3]) -> Result<(), PlaceError> {
+        if !self.history.is_empty() {
+            return Err(PlaceError::Started);
+        }
+        self.board.set_affinities(levels)?;
         self.start_hash = position_hash(&self.board, self.to_move);
         Ok(())
     }
