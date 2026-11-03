@@ -5,6 +5,7 @@
     "": {
       "name": "abalone-client",
       "dependencies": {
+        "@noble/secp256k1": "3.2.0",
         "trystero": "0.26.0",
       },
       "devDependencies": {

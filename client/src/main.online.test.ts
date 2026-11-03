@@ -267,6 +267,24 @@ describe('Play online', () => {
 
   /** A ranked draw with a White opponent that listens for seals (#1287). `whiteJoins`: the opponent plays under a board key too. */
   async function sealedDraw(joined: boolean, whiteJoins: boolean) {
+    const relays: { url: string; sent: string[] }[] = [];
+    // The relays are stubs, whatever the page opens: a test never reaches a real one.
+    vi.stubGlobal('WebSocket', class { // eslint-disable-line @typescript-eslint/no-extraneous-class
+      private fns: ((e: { data?: string }) => void)[] = [];
+      private rec = { url: '', sent: [] as string[] };
+      constructor(url: string) {
+        this.rec.url = url;
+        relays.push(this.rec);
+        queueMicrotask(() => this.fns.forEach((f) => f({})));
+      }
+      addEventListener(type: string, fn: (e: { data?: string }) => void): void {
+        if (type === 'open') this.fns.push(fn);
+      }
+      send(data: string): void {
+        this.rec.sent.push(data);
+      }
+      close(): void {}
+    });
     const game = await boot('?bot=off&board');
     localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 3, choice: joined ? 'joined' : 'declined' }));
     game.openModes();
@@ -291,12 +309,15 @@ describe('Play online', () => {
     }
     await white.report(1200);
     await until(game, () => byId('hud').querySelector('.rank-delta') !== null);
-    return { game, heard, out };
+    return { game, heard, out, relays };
   }
 
   it('with ?board and both seats joined, the seats sign the ranked result together (#1287)', async () => {
-    const { game, heard, out } = await sealedDraw(true, true);
+    const { game, heard, out, relays } = await sealedDraw(true, true);
     await until(game, () => game.hook('__sealed') !== null);
+    await until(game, () => relays.length === 3 && relays.every((r) => r.sent.length === 1));
+    expect(relays.map((r) => r.url)).toEqual(['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
+    expect(JSON.parse(relays[0]!.sent[0]!)[0]).toBe('EVENT');
     const mine = game.hook('__sealed') as SharedResult;
     expect(await bothSigned(mine)).toBe(true);
     expect(out.result).toEqual(mine);
@@ -307,8 +328,9 @@ describe('Play online', () => {
 
   it('a seat that did not join sends no seal and takes none: nothing is signed (#1287)', async () => {
     for (const [joined, whiteJoins] of [[true, false], [false, true]] as const) {
-      const { game, heard } = await sealedDraw(joined, whiteJoins);
+      const { game, heard, relays } = await sealedDraw(joined, whiteJoins);
       await game.settle();
+      expect(relays).toEqual([]); // nothing is published unless both seats joined
       expect(game.hook('__sealed')).toBeNull();
       expect(heard.map((s) => s.step)).toEqual(joined ? ['intro'] : []); // joined alone: its intro is all there is, no result
     }

@@ -26,6 +26,7 @@ import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
 import { readBoard, sharedHtml, type SharedResult } from './boardfeed';
+import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
@@ -5412,7 +5413,7 @@ let rankedMine: Report | null = null;
 let rankedTheirs: Report | null = null;
 let rankedResult: 'refused' | undefined;
 // The seats seal a ranked result (#1287, rankedseal.ts): behind ?board, only when this seat joined the board; the other seat's intro is
-// what proves it joined too. Nothing is sent to a relay: the result both seats signed waits in `sealedResult` for the publishing slice.
+// what proves it joined too. The result both seats signed goes to the three relays (publish.ts) and is kept in `sealedResult`.
 let roomKeys: Keys | null = null;
 let sealing: { game: string; seal: Promise<RankedSeal> } | null = null;
 let sealedResult: SharedResult | null = null;
@@ -5427,7 +5428,10 @@ function sealOf(): Promise<RankedSeal> | null {
 }
 function sealed(step: Step): void {
   if (step.send) link?.send(step.send);
-  if (step.result) sealedResult = step.result;
+  if (step.result) {
+    sealedResult = step.result; // both seats signed it: it goes to the relays, a relay that refuses only means it is not on the board
+    void publishResult((url) => new WebSocket(url), step.result, Math.floor(Date.now() / 1000));
+  }
 }
 /** The pair of reports agreed: our intro goes out, and the final is offered to the seal. */
 async function sealFinal(): Promise<void> {
