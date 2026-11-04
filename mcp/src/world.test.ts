@@ -48,7 +48,7 @@ function clientRun(seed: number, dirs: string[]): { hero: string; troop: string[
   for (const d of dirs) {
     const [dq, dr] = STEPS[d]!;
     if (!hero.step([hero.at[0] + dq!, hero.at[1] + dr!])) throw new Error(`the client refuses ${d}`);
-    const played = fight.troopPush(w, seed, [hero.at, ...hero.troop], w.broken);
+    const played = fight.troopPush(w, seed, [hero.at, ...hero.troop], w.broken, hero.tick);
     if (played) {
       const [at, ...troop] = played.push.troop;
       hero.at = at!;

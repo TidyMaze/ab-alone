@@ -111,8 +111,8 @@ describe('the enemies of the fight', () => {
   it('plays the troop push on the overlay: no push, a slide, an ejection off the world', () => {
     const w = new World(grass, (cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(1, 0) : new Int32Array()));
     const fight = new FightState();
-    expect(fight.troopPush(w, 9, [[0, 0]], [])).toBeNull();
-    const slid = fight.troopPush(w, 9, [[0, 0], [-1, 0], [-2, 0]], []);
+    expect(fight.troopPush(w, 9, [[0, 0]], [], 1)).toBeNull();
+    const slid = fight.troopPush(w, 9, [[0, 0], [-1, 0], [-2, 0]], [], 1);
     expect(slid).toEqual({
       from: [[0, 0], [-1, 0], [-2, 0]],
       foes: [[1, 0]],
@@ -122,8 +122,11 @@ describe('the enemies of the fight', () => {
     expect(fight.nearHero(w, [0, 0])).toEqual([[2, 0]]);
     // The world ends at q = 511: the enemy on (511,0) is pushed off it.
     const edge = new World(grass, (cx, cy) => (cx === 31 && cy === 0 ? Int32Array.of(511, 0) : new Int32Array()));
-    const out = new FightState().troopPush(edge, 9, [[510, 0], [509, 0]], []);
+    const out = new FightState().troopPush(edge, 9, [[510, 0], [509, 0]], [], 1);
     expect(out!.push.ejected).toEqual([[511, 0]]);
+    // A single marble shoves a foe off the world too (#1504): it takes the foe's cell.
+    const shove = new FightState().troopPush(edge, 9, [[510, 0]], [], 1);
+    expect(shove!.push).toEqual({ troop: [[511, 0]], enemies: [], ejected: [[511, 0]], dir: [1, 0] });
   });
 
   it('an enemy on a cell no generated enemy starts on is added to the overlay', () => {
