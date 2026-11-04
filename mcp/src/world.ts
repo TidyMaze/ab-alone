@@ -1,7 +1,7 @@
 // The Open world tools of docs/specs/mcp.md section 5: start a world from a seed, read a short window of it, walk a step or to a
 // cell, teleport. Every rule is the Rust core's, called in the client's order (`OpenWorldMode.roll` of client/src/openworldmode.ts):
 // the map, the enemies, the lairs, the teleporters and the path (`world_chunk`, `world_enemies`, `world_lairs`, `world_teleporters`,
-// `world_path`), the step (`world_enter`, `world_trail`) and the troop's push after it (`WorldFight`); the teleport is the client's
+// `world_path`), the step (`world_enter`, `world_flock`) and the troop's push after it (`WorldFight`); the teleport is the client's
 // own code (client/src/openworldteleport.ts). This holds the hero, the troop, the broken cells, the fight and the lairs
 // beaten and the cells discovered, saves them in the client's format (client/src/openworldsave.ts), and turns the engine's codes into words.
 import { decodeDiscovered, Discovered, type DiscoveredSave } from '../../client/src/openworlddiscovered';
@@ -24,8 +24,8 @@ export interface WorldRules {
   world_path(seed: number, fromQ: number, fromR: number, toQ: number, toR: number, blocked: Int32Array, broken: Int32Array): Int32Array;
   /** What the step from `(q, r)` to `(tq, tr)` does: 0 refused, 1 rolls, 2 breaks. `terrain` is the code of the cell, -1 off the world. */
   world_enter(q: number, r: number, tq: number, tr: number, terrain: number, occupied: boolean, treesNear: boolean): number;
-  /** The troop after the hero steps from `(q, r)` to `(tq, tr)`: `q, r` pairs. */
-  world_trail(troop: Int32Array, q: number, r: number, tq: number, tr: number): Int32Array;
+  /** The troop after the hero steps from `(q, r)` to `(tq, tr)`, flocking over `ground`: `q, r` pairs. */
+  world_flock(seed: number, tick: number, troop: Int32Array, q: number, r: number, tq: number, tr: number, ground: Int32Array): Int32Array;
   /** The version of the world generator: a save of another version does not hold this world. */
   world_version(): number;
   /** The enemies of a fight as the pushes left them: a new one has no push, `restore` gives the fight of a save. */
@@ -157,6 +157,7 @@ const NAMES = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wal
  * client/src/trainer.ts). */
 const RECORD = 5;
 const CREW = 6;
+const WATER = 0;
 const BOULDER = 5;
 const TREE = 6;
 const ROCK = 3;
@@ -190,6 +191,8 @@ interface Play {
   yaw: number;
   discovered: Discovered;
   time: number;
+  /** The hero's steps so far: with the seed it fixes the flock's ties. */
+  tick: number;
 }
 
 /** The one Open world of the server. */
@@ -221,9 +224,9 @@ export class OpenWorld {
     if (save) {
       const { removed, added, beaten } = save.fight;
       const fight = this.rules.WorldFight.restore(Int32Array.from(removed.flatMap((key) => key.split(',').map(Number))), flat(added), beaten);
-      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered), time: save.time ?? 0 };
+      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered), time: save.time ?? 0, tick: 0 };
     } else {
-      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered(), time: 0 };
+      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered(), time: 0, tick: 0 };
     }
     this.play.discovered.reveal(this.play.hero); // a save from before the discovery: the cells round the hero, as the client
     this.lairCells = pairs(this.rules.world_lairs(this.play.seed));
@@ -328,7 +331,7 @@ export class OpenWorld {
   }
 
   /** The client's step (`Hero.step` of client/src/openworld.ts, then `OpenWorldMode.troopPush`): the engine says whether the hero enters
-   * `to` (`world_enter`); then an obstacle there is broken, the troop trails the hero (`world_trail`) and plays its push when one is
+   * `to` (`world_enter`); then an obstacle there is broken, the troop flocks (`world_flock`) and plays its push when one is
    * legal (`WorldFight.troop_push`), the hero and the troop taking the cells it gives. `null` when the step is refused: nothing changes. */
   private roll(to: Cell): { smashed: 'boulder' | 'tree' | null; push: Push | null } | null {
     const play = this.play!;
@@ -339,7 +342,9 @@ export class OpenWorld {
     if (entry === REFUSED) return null;
     const smashed = entry === BREAKS ? (NAMES[code!] as 'boulder' | 'tree') : null;
     if (smashed) play.broken.push(to);
-    play.troop = pairs(this.rules.world_trail(flat(play.troop), hero[0], hero[1], to[0], to[1]));
+    const sailing = code === WATER;
+    const ground = [hero, ...play.troop].flatMap((cell) => [cell, ...DELTAS.map((d): Cell => [cell[0] + d[0], cell[1] + d[1]])]).filter((cell) => this.standable(cell, sailing));
+    play.troop = pairs(this.rules.world_flock(seed, play.tick++, flat(play.troop), hero[0], hero[1], to[0], to[1], flat(ground)));
     play.hero = to;
     play.discovered.reveal(to); // the cells within 10 of the hero, as the client's `mark` (#1411)
     const out = fight.troop_push(seed, flat([to, ...play.troop]), this.chunksAround(to, this.rules.WorldFight.push_reach()), flat(play.broken));
@@ -350,6 +355,12 @@ export class OpenWorld {
     play.discovered.reveal(play.hero);
     const direction = DIRECTIONS[DELTAS.findIndex((d) => same(d, [out.dir[0]!, out.dir[1]!]))]!;
     return { smashed, push: { direction, ejected: pairs(out.ejected).map(text) } };
+  }
+
+  /** Whether a follower may stand on a cell: the open ground, no enemy on it; water only while the hero sails (the client's `Hero.standable`). */
+  private standable(cell: Cell, sailing: boolean): boolean {
+    const code = this.terrain(cell[0], cell[1]);
+    return code !== undefined && (OPEN.includes(code) || (sailing && code === WATER)) && !this.occupied(cell);
   }
 
   /** Why the hero cannot enter `to`, in words. */

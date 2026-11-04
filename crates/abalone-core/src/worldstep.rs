@@ -114,6 +114,8 @@ pub fn hero_dir(at_r: i32, keys: u8, yaw: f64, steering: bool, free: u8) -> Opti
 pub const TROOP: usize = 15;
 /// How far from the hero a follower may drift before the leash pulls it back (cells).
 const LEASH: i32 = 3;
+/// How far a follower with no valid cell beside it looks for one.
+const REACH: i32 = 6;
 
 /// What the hero's step onto a cell does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -173,7 +175,12 @@ fn best_cell(
         .enumerate()
         .map(|(k, m)| (k, m, (c.0 + m.0, c.1 + m.1)))
         .filter(|&(_, m, cand)| {
-            cand != to && (m == (0, 0) || ((free(cand) || cand == at) && !cells.contains(&cand)))
+            cand != to
+                && if m == (0, 0) {
+                    free(cand)
+                } else {
+                    (free(cand) || cand == at) && !cells.contains(&cand)
+                }
         })
         .min_by_key(|&(k, m, cand)| {
             let beside = cells
@@ -191,7 +198,30 @@ fn best_cell(
                 + n * hex_distance(m, heading)
                 + jitter as i32
         });
-    best.map_or(c, |(_, _, cand)| cand)
+    best.map_or_else(
+        || nearest_valid(cells, c, at, to, free),
+        |(_, _, cand)| cand,
+    )
+}
+
+/// The nearest cell within `REACH` of `c` a marble may stand on, for a follower whose own cell and neighbours are all invalid (on the hero's
+/// target, under an enemy, in water the hero left, on an obstacle); `c` itself when there is none.
+fn nearest_valid(
+    cells: &[(i32, i32)],
+    c: (i32, i32),
+    at: (i32, i32),
+    to: (i32, i32),
+    free: &dyn Fn((i32, i32)) -> bool,
+) -> (i32, i32) {
+    let mut around: Vec<(i32, i32)> = (-REACH..=REACH)
+        .flat_map(|dq| (-REACH..=REACH).map(move |dr| (c.0 + dq, c.1 + dr)))
+        .filter(|&cand| hex_distance(c, cand) <= REACH)
+        .collect();
+    around.sort_by_key(|&cand| (hex_distance(c, cand), cand));
+    around
+        .into_iter()
+        .find(|&cand| cand != to && (free(cand) || cand == at) && !cells.contains(&cand))
+        .unwrap_or(c)
 }
 
 /// The troop after the hero steps from `at` to `to` (#1504, docs/specs/openworld.md section 4b): the followers flock. Each one, the one
@@ -494,6 +524,31 @@ mod tests {
     fn the_follower_on_the_hero_target_moves_away_to_the_cell_the_hero_left() {
         let after = flock(&[(1, 0)], (0, 0), (1, 0), SEED, 0, &|_| false);
         assert_eq!(after, [(0, 0)]);
+    }
+
+    #[test]
+    fn a_follower_on_the_hero_target_with_no_free_neighbour_takes_the_nearest_free_cell() {
+        let free = |c: (i32, i32)| c == (3, 0);
+        assert_eq!(flock(&[(1, 0)], (9, 9), (1, 0), SEED, 0, &free), [(3, 0)]);
+    }
+
+    #[test]
+    fn a_follower_on_an_enemy_water_or_obstacle_cell_takes_the_nearest_valid_cell() {
+        // its own cell (0, 0) is no longer free, nor are its neighbours; (0, 2) is the nearest free one, (3, 3) is farther
+        let free = |c: (i32, i32)| c == (0, 2) || c == (3, 3);
+        assert_eq!(flock(&[(0, 0)], (9, 9), (9, 8), SEED, 0, &free), [(0, 2)]);
+        // the cell the hero left counts
+        assert_eq!(
+            flock(&[(0, 0)], (0, 2), (0, 3), SEED, 0, &|_| false),
+            [(0, 2)]
+        );
+    }
+
+    #[test]
+    fn a_follower_with_no_valid_cell_skips_the_cells_of_other_marbles() {
+        // (0, 1) is the only free cell near (0, 0); another marble holds it and (0, 1) is not a neighbour move for the other
+        let out = flock(&[(0, 0), (0, 1)], (9, 9), (9, 8), SEED, 0, &|c| c == (0, 1));
+        assert_ne!(out[0], (0, 1));
     }
 
     #[test]

@@ -34,7 +34,7 @@ const SAVE = z.object({
   version: z.int(),
   seed: z.int().min(0).max(4294967295),
   hero: CELL,
-  troop: z.array(CELL).max(6),
+  troop: z.array(CELL).max(15),
   fight: z.object({ removed: z.array(z.string().regex(/^-?\d+,-?\d+$/)), added: z.array(CELL), beaten: z.int().min(0) }),
   yaw: z.number(),
   broken: z.array(CELL),

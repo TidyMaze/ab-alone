@@ -86,6 +86,17 @@ describe('the Open world tools', () => {
     expect(JSON.parse(stale.text).code).toBe('bad_save');
   });
 
+  test('a save of 7 to 15 followers loads through new_world, 16 is refused', async () => {
+    await connect();
+    const save = JSON.parse((await call('new_world', { seed: 3 }), await call('save_world')).text);
+    const troop = (n: number) => Array.from({ length: n }, (_, i) => [(i % 5) + 1, Math.floor(i / 5)]);
+    for (const n of [7, 15]) {
+      const loaded = await call('new_world', { save: { ...save, troop: troop(n) } });
+      expect(JSON.parse(loaded.text).troop).toHaveLength(n);
+    }
+    expect((await call('new_world', { save: { ...save, troop: troop(16) } })).isError).toBe(true);
+  });
+
   test("the fight of a lair is the session's game: won after the step onto the lair, it beats the lair", async () => {
     // Every fight of this server is won as it starts: the boss encounter says Black won.
     const won = (boss: string, seed: number) => {

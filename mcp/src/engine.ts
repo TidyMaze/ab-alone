@@ -40,7 +40,7 @@ export function worldRules(): WorldRules {
     world_teleporters: wasm.world_teleporters,
     world_path: wasm.world_path,
     world_enter: wasm.world_enter,
-    world_trail: wasm.world_trail,
+    world_flock: wasm.world_flock,
     world_version: wasm.world_version,
     WorldFight: wasm.WorldFight,
   };

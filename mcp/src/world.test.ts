@@ -146,7 +146,7 @@ describe('a new world', () => {
 });
 
 describe('a step', () => {
-  test('rolls the hero onto the open cell, the troop trails it', () => {
+  test('rolls the hero onto the open cell, the troop flocks round it', () => {
     const open = world();
     value(open.newWorld({ seed: 0 }));
     const moved = value(open.step({ direction: 'E' }));
@@ -154,7 +154,7 @@ describe('a step', () => {
     expect(moved.push).toBeNull();
     expect(moved.state.hero).toBe('(1,0)');
     expect(moved.state.beaten).toBe(0);
-    expect(moved.state.troop).toEqual(['(0,0)', '(-1,0)', '(1,-1)', '(-1,1)', '(0,-1)', '(0,1)']);
+    expect(moved.state.troop).toEqual(['(2,0)', '(0,0)', '(1,-1)', '(-1,2)', '(1,-2)', '(0,1)']);
     expect(value(open.state({})).hero).toBe('(1,0)');
   });
 
@@ -167,14 +167,15 @@ describe('a step', () => {
     expect(value(open.state({}))).toEqual(before);
   });
 
-  test('the hero sails onto water like onto open ground, the troop trails it (#1441)', () => {
+  test('the hero sails onto water like onto open ground, the troop flocks round it (#1441)', () => {
     const { open, spot } = standBeside([0]);
     const [q, r] = spot.at;
     const [dq, dr] = STEPS[spot.dir]!;
     const moved = value(open.step({ direction: spot.dir as 'E' }));
     expect(moved.moved).toBe(true);
+    expect(moved.push).toBeNull();
     expect(moved.state.hero).toBe(`(${q + dq},${r + dr})`);
-    expect(moved.state.troop[0]).toBe(`(${q},${r})`);
+    expect(moved.state.troop).not.toContain(moved.state.hero);
   });
 
   test('a boulder is broken by rolling into it and the cell is rock after', () => {
@@ -243,13 +244,13 @@ describe('a step', () => {
 });
 
 describe('a walk', () => {
-  test('goes to a far cell by the engine path, the troop is the last cells of it', () => {
+  test('goes to a far cell by the engine path, the troop flocks along it', () => {
     const open = world();
     value(open.newWorld({ seed: 0 }));
     const walked = value(open.walk({ q: 4, r: 0 }));
     expect(walked.steps).toBe(4);
     expect(walked.state.hero).toBe('(4,0)');
-    expect(walked.state.troop).toEqual(['(3,0)', '(2,0)', '(1,0)', '(0,0)', '(-1,0)', '(1,-1)']);
+    expect(walked.state.troop).toEqual(['(5,0)', '(3,0)', '(4,-1)', '(2,2)', '(4,-2)', '(3,1)']);
   });
 
   test('walks over a boulder it breaks on the way', () => {
@@ -295,7 +296,7 @@ describe('a walk', () => {
 // Seed 1 has an enemy group at (6,6), (7,5), (8,4). The values below are what the client gives for the same seed and moves:
 // `Hero.step` (client/src/openworld.ts) then `FightState.troopPush` (client/src/openworldfight.ts), as `OpenWorldMode.roll` calls them.
 describe('the same seed and moves as the client', () => {
-  const PUSHED = { hero: '(6,6)', troop: ['(5,6)', '(4,6)', '(2,6)', '(1,6)', '(0,6)', '(0,5)'] };
+  const PUSHED = { hero: '(6,6)', troop: ['(6,5)', '(4,6)', '(4,5)', '(5,6)', '(3,5)', '(4,7)'] };
 
   test('six steps SE then five E: the fifth E brings the troop beside the group and it pushes it east', () => {
     const open = world();
@@ -304,7 +305,7 @@ describe('the same seed and moves as the client', () => {
     for (let i = 0; i < 3; i++) expect(value(open.step({ direction: 'E' })).push).toBeNull();
     const near = value(open.step({ direction: 'E' }));
     expect(near.state.hero).toBe('(4,6)');
-    expect(near.state.troop).toEqual(['(3,6)', '(2,6)', '(1,6)', '(0,6)', '(0,5)', '(0,4)']);
+    expect(near.state.troop).toEqual(['(5,5)', '(2,6)', '(4,5)', '(3,6)', '(3,4)', '(3,7)']);
     expect(near.state.enemies).toEqual(['(6,6)', '(7,5)']);
     const pushed = value(open.step({ direction: 'E' }));
     expect(pushed.moved).toBe(true);
@@ -349,7 +350,7 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
       version: VERSION,
       seed: 1,
       hero: [6, 6],
-      troop: [[5, 6], [4, 6], [2, 6], [1, 6], [0, 6], [0, 5]],
+      troop: [[6, 5], [4, 6], [4, 5], [5, 6], [3, 5], [4, 7]],
       fight: save.fight,
       yaw: 0,
       broken: [],
@@ -367,10 +368,13 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
 
   test('new_world with a save resumes the world: the same state, and the same moves give the same results after', () => {
     const open = pushed();
-    const resumed = world();
-    expect(value(resumed.newWorld({ save: value(open.save()) }))).toEqual(value(open.state({})));
-    for (const direction of ['NE', 'NE', 'W', 'SE', 'E'] as const) expect(resumed.step({ direction })).toEqual(open.step({ direction }));
-    expect(resumed.walk({ q: 0, r: 0 })).toEqual(open.walk({ q: 0, r: 0 }));
+    const [resumed, again] = [world(), world()];
+    const save = value(open.save());
+    expect(value(resumed.newWorld({ save }))).toEqual(value(open.state({})));
+    value(again.newWorld({ save }));
+    // the flock's step count starts again at 0 on a resume (as the client's), so two resumes of one save agree
+    for (const direction of ['NE', 'NE', 'W', 'SE', 'E'] as const) expect(resumed.step({ direction })).toEqual(again.step({ direction }));
+    expect(resumed.walk({ q: 0, r: 0 })).toEqual(again.walk({ q: 0, r: 0 }));
   });
 
   test('a save the client wrote resumes as it was, and saves back to the same record', async () => {

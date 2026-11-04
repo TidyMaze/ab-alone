@@ -212,7 +212,7 @@ cell with n the marbles plus the hero, the lowest winning:
 - **jitter**: a SplitMix64 hash of the world seed, the tick (the hero's step count) and the marble's index, under one cell.
 
 Integers only, so a replay, and the peers that receive the cells, agree. A follower on `to` moves first and is never dropped, so the hero is
-never blocked by its troop. `ground` is the open ground (sand, grass, rock, no enemy on it), plus water only while the hero sails (#1441): a
+never blocked by its troop. A follower never stays on `to`, an enemy's cell, water the hero does not sail or an obstacle: when its own cell is invalid and no neighbour is valid it takes the nearest valid cell within 6 (or stays when there is none). `ground` is the open ground (sand, grass, rock, no enemy on it), plus water only while the hero sails (#1441): a
 follower never stands on an obstacle, and in water only on a boat's course. The troop keeps its 15 marbles and its order; the wire carries up
 to 15 offsets (33 bytes).
 

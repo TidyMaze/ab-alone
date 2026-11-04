@@ -125,8 +125,11 @@ describe('the troop on the wire', () => {
     expect(decode(Uint8Array.of(2, 4))).toBeNull();
     expect(decode(Uint8Array.of(2, 4, 2, 1, 0))).toBeNull(); // says 2 marbles, holds 1
     expect(decode(Uint8Array.of(2, 4, 1, 1, 0, 9))).toBeNull(); // a byte too many
-    expect(decode(new Uint8Array([2, 4, 7, ...new Array(14).fill(1)]))).toBeNull(); // 7 marbles with the same offset
-    expect(decode(new Uint8Array([2, 4, 16, ...new Array(32).fill(1)]))).toBeNull(); // 16 marbles
+    for (const n of [7, 15]) {
+      const distinct = Array.from({ length: n }, (_, i): [number, number] => [i % 5 + 1, Math.floor(i / 5)]);
+      expect(decode(encodeTroop(distinct))).toEqual({ t: 'troop', offsets: distinct }); // 7 to 15 distinct marbles load
+    }
+    expect(decode(new Uint8Array([2, 4, 16, ...Array.from({ length: 16 }, (_, i) => [i % 5 + 1, Math.floor(i / 5)]).flat()]))).toBeNull(); // 16 marbles
     expect(decode(Uint8Array.of(2, 4, 1, 0, 0))).toBeNull(); // on the hero
     expect(decode(Uint8Array.of(2, 4, 1, 9, 0))).toBeNull(); // 9 cells off
     expect(decode(Uint8Array.of(2, 4, 1, 5, 5))).toBeNull(); // 10 cells off on the diagonal
