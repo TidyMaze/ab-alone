@@ -2,7 +2,7 @@
 // can enter go to the bridge's `world_step` (abalone-core `worldstep`), which holds the rule; this module only packs them.
 import { world_enter, world_step, world_flock } from 'abalone-wasm';
 import { DIRECTIONS, type Axial } from './board';
-import type { FightState } from './openworldfight';
+import type { FightState, Goal } from './openworldfight';
 import { TERRAINS, type World } from './openworld';
 
 /** The bit of each arrow key in the bridge's `keys` argument. */
@@ -34,8 +34,9 @@ export function enter(world: World, fight: FightState, at: Axial, to: Axial): En
 }
 
 /** The troop after the hero steps from `at` to `to` (`world_flock`, the flock of abalone-core `worldstep`): the same marbles in the same order,
- * each on one of `ground` (or the cell the hero left), none on `to`. `seed` and `tick` fix every tie, so peers agree. */
-export function flock(seed: number, tick: number, troop: readonly Axial[], at: Axial, to: Axial, ground: readonly Axial[]): Axial[] {
-  const flat = world_flock(seed >>> 0, tick >>> 0, Int32Array.from(troop.flat()), Int32Array.of(at[0], at[1], to[0], to[1]), Int32Array.from(ground.flat()));
+ * each on one of `ground` (or the cell the hero left), none on `to`. `seed` and `tick` fix every tie, so peers agree. `goals` are the cells
+ * the herd sends followers to (#1506, `FightState.herdGoals`). */
+export function flock(seed: number, tick: number, troop: readonly Axial[], at: Axial, to: Axial, ground: readonly Axial[], goals: readonly Goal[] = []): Axial[] {
+  const flat = world_flock(seed >>> 0, tick >>> 0, Int32Array.from(troop.flat()), Int32Array.of(at[0], at[1], to[0], to[1]), Int32Array.from(ground.flat()), Int32Array.from(goals.flatMap(([i, [q, r]]) => [i, q, r])));
   return Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
 }

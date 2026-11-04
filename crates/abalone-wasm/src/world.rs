@@ -196,7 +196,8 @@ pub fn world_enter(
 
 /// The troop after the hero steps from `(step[0], step[1])` to `(step[2], step[3])` (#1504, the flock of docs/specs/openworld.md section 4b): `q, r` pairs, in
 /// the order they came. `ground` holds the cells the followers may stand on (the client checks the cells beside the troop), `tick` counts
-/// the hero's steps: with the world `seed` it fixes every tie, so peers agree.
+/// the hero's steps: with the world `seed` it fixes every tie, so peers agree. `goals` are `index, q, r` triples (`WorldFight.herd_goals`, #1506):
+/// the followers the herd sends to a cell; empty without a hunt.
 #[wasm_bindgen]
 pub fn world_flock(
     seed: u32,
@@ -204,8 +205,15 @@ pub fn world_flock(
     troop: Vec<i32>,
     step: Vec<i32>,
     ground: Vec<i32>,
+    goals: Vec<i32>,
 ) -> Vec<i32> {
     let ground = pairs(&ground);
+    let goals: Vec<(usize, (i32, i32))> = goals
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|g| (g[0] as usize, (g[1], g[2])))
+        .collect();
     worldstep::flock(
         &pairs(&troop),
         (step[0], step[1]),
@@ -213,6 +221,7 @@ pub fn world_flock(
         u64::from(seed),
         tick,
         &|cell| ground.contains(&cell),
+        &goals,
     )
     .into_iter()
     .flat_map(|(q, r)| [q, r])
@@ -339,6 +348,27 @@ impl WorldFight {
             ejected: flat_of(&played.ejected),
             dir: vec![played.dir.0, played.dir.1],
         })
+    }
+
+    /// The cells the herd sends the followers to before they flock (#1506): `index, q, r` triples for the troop (the hero first) in the world
+    /// `seed`, `chunks` and `broken` as for `troop_push`; empty without a hunt. Pass them to `world_flock`.
+    pub fn herd_goals(
+        &self,
+        seed: u32,
+        troop: Vec<i32>,
+        chunks: Vec<i32>,
+        broken: Vec<i32>,
+    ) -> Vec<i32> {
+        self.overlay
+            .herd_goals(
+                &blocks_of(&chunks),
+                &pairs(&troop),
+                broken_terrain(seed, &broken),
+                u64::from(seed),
+            )
+            .into_iter()
+            .flat_map(|(i, (q, r))| [i as i32, q, r])
+            .collect()
     }
 
     /// How far from the hero the enemies are that a push can reach.
@@ -560,9 +590,34 @@ mod tests {
             vec![1, 0, -1, 0],
             vec![0, 0, 1, 0],
             vec![0, 0, -1, 0, -2, 0],
+            vec![],
         );
         assert_eq!(out[0..2], [0, 0]);
         assert_eq!(out.len(), 4);
+    }
+
+    #[test]
+    fn the_herd_sends_a_follower_behind_the_foe_and_the_flock_takes_the_goal() {
+        // The world of seed 9 has water near the spawn column; a hunt needs a foe within 6 and water within 10: none here, so no goals.
+        let fight = WorldFight::new();
+        assert!(fight
+            .herd_goals(9, vec![0, 0, 1, 0], vec![], vec![])
+            .is_empty());
+        // Seed 1: a foe on (9,-30) with the water three cells away, the hero behind it: the one follower flanks.
+        let goals = fight.herd_goals(1, vec![8, -30, 7, -30], vec![0, -2, 1, 9, -30], vec![]);
+        assert_eq!(goals, vec![0, 9, -31]);
+        let out = world_flock(
+            7,
+            0,
+            vec![-4, 0],
+            vec![1, 0, 0, 0],
+            (-6..6)
+                .flat_map(|q| (-6..6).flat_map(move |r| [q, r]))
+                .collect(),
+            vec![0, -4, 4],
+        );
+        assert_eq!(out.len(), 2);
+        assert!((out[0] + 4).abs() + (out[1] - 4).abs() < 8);
     }
 
     #[test]

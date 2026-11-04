@@ -271,6 +271,16 @@ describe('the troop', () => {
     expect(run(5)).not.toEqual(run(6));
   });
 
+  it('sends a follower to the flank cell the herd asks for (#1506)', () => {
+    // Seed 1: a foe on (9,-30), the water three cells away; the hero rolls to (8,-30) behind it and the follower takes the cell beside it.
+    const flat = (cx: number, cy: number) => (Math.abs(cx) > 1 || Math.abs(cy) > 3 ? new Uint8Array() : Uint8Array.from({ length: CHUNK * CHUNK * 3 }, (_, i) => grass[i % 3]!));
+    const hero = new Hero(new World(flat, (cx, cy) => (cx === 0 && cy === -2 ? Int32Array.of(9, -30) : new Int32Array())), new FightState(), 1);
+    hero.at = [7, -30];
+    hero.troop = [[8, -32]];
+    expect(hero.step([8, -30])).toBe(true);
+    expect(hero.troop).toEqual([[9, -31]]);
+  });
+
   it('keeps fifteen marbles when the hero rolls onto one of them', () => {
     const hero = heroOn(new World(bytes));
     const onto = hero.troop[0]!;

@@ -5,6 +5,7 @@
 
 use crate::world::{Terrain, CHUNK};
 use crate::worldfight;
+use crate::worldherd;
 
 /// A cell, `q, r`.
 pub type Cell = (i32, i32);
@@ -129,7 +130,9 @@ impl Overlay {
         // A line that ejects wins; else a single marble shoving a foe out (#1504); else the line's push.
         let push = match line {
             Some(line) if line.ejections > 0 => line,
-            line => worldfight::best_shove(troop, &foes, &terrain, seed, tick).or(line)?,
+            line => worldfight::best_shove(troop, &foes, &terrain, seed, tick)
+                .or_else(|| worldherd::herd_push(troop, &foes, &terrain, seed))
+                .or(line)?,
         };
         let (mut after, mut enemies) = (troop.to_vec(), foes.clone());
         let ejected = worldfight::apply_push(&mut after, &mut enemies, &push);
@@ -141,6 +144,19 @@ impl Overlay {
             ejected,
             dir: push.dir.vector(),
         })
+    }
+
+    /// The cells the herd sends the followers to before they flock (#1506, `worldherd::goals`): `troop` is the hero first, `chunks` the chunks
+    /// that reach the enemies near it; (follower index, cell) pairs, empty without a hunt.
+    pub fn herd_goals(
+        &self,
+        chunks: &[(Cell, Vec<Cell>)],
+        troop: &[Cell],
+        terrain: impl Fn(i32, i32) -> Option<Terrain>,
+        seed: u64,
+    ) -> Vec<(usize, Cell)> {
+        let foes = self.around(chunks, troop[0], PUSH_REACH);
+        worldherd::goals(troop, &foes, terrain, seed)
     }
 
     /// Plays a push: the enemies `old` leave their cells, the enemies `new` stand on theirs, and the `ejected` ones count as beaten.
@@ -378,5 +394,37 @@ mod tests {
             .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], water, (3, 5))
             .unwrap();
         assert_eq!(played.troop, [(1, 0), (0, 0), (-1, 0)]);
+    }
+
+    #[test]
+    fn a_marble_behind_a_far_foe_herds_it_one_cell_toward_the_water_and_the_goals_send_the_pusher()
+    {
+        let sea = |q: i32, _r: i32| {
+            Some(if q >= 5 {
+                Terrain::Water
+            } else {
+                Terrain::Grass
+            })
+        };
+        let mut overlay = Overlay::new();
+        let chunks = [((0, 0), vec![(2, 0)])];
+        let troop = [(0, 0), (0, 1), (-1, 0)];
+        assert_eq!(overlay.herd_goals(&chunks, &troop, sea, 1)[0], (0, (1, 0)));
+        let played = overlay
+            .troop_push(&chunks, &[(0, 0), (1, 0)], sea, (1, 1))
+            .unwrap();
+        assert_eq!(
+            (played.enemies.clone(), played.ejected.clone(), played.dir),
+            (vec![(3, 0)], vec![], (1, 0))
+        );
+        assert_eq!(played.troop, [(0, 0), (2, 0)]);
+        assert_eq!(overlay.beaten(), 0);
+        assert_eq!(overlay.added(), [(3, 0)]);
+        // Nothing near: no goals; a marble elsewhere: no push.
+        assert!(overlay.herd_goals(&[], &troop, sea, 1).is_empty());
+        let mut overlay = Overlay::new();
+        assert!(overlay
+            .troop_push(&chunks, &[(0, 0), (0, 1)], sea, (1, 1))
+            .is_none());
     }
 }

@@ -218,8 +218,11 @@ export class Hero {
       this.world.smash(to[0], to[1]);
     }
     const sailing = this.world.tile(to[0], to[1])?.terrain === 'water';
-    const ground = [this.at, ...this.troop].flatMap((cell) => [cell, ...neighbours(cell)]).filter((cell) => this.standable(cell, sailing));
-    this.troop = flock(this.seed, this.tick++, this.troop, this.at, to, ground);
+    const goals = this.fight.herdGoals(this.world, this.seed, [to, ...this.troop], this.world.broken);
+    // The followers the herd sends hop twice, so the ground reaches two cells round them.
+    const sent = goals.flatMap(([i]) => neighbours(this.troop[i]!).flatMap((cell) => neighbours(cell)));
+    const ground = [this.at, ...this.troop].flatMap((cell) => [cell, ...neighbours(cell)]).concat(sent).filter((cell) => this.standable(cell, sailing));
+    this.troop = flock(this.seed, this.tick++, this.troop, this.at, to, ground, goals);
     this.at = to;
     return true;
   }

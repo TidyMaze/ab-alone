@@ -129,6 +129,13 @@ describe('the enemies of the fight', () => {
     expect(shove!.push).toEqual({ troop: [[511, 0]], enemies: [], ejected: [[511, 0]], dir: [1, 0] });
   });
 
+  it('gives the cells the herd sends the followers to, none without a hunt (#1506)', () => {
+    // Seed 1: a foe on (9,-30) with the water three cells away; the hero stands behind it, the follower flanks.
+    const foe = new World(grass, (cx, cy) => (cx === 0 && cy === -2 ? Int32Array.of(9, -30) : new Int32Array()));
+    expect(new FightState().herdGoals(foe, 1, [[8, -30], [7, -30]], [])).toEqual([[0, [9, -31]]]);
+    expect(new FightState().herdGoals(world(), 9, [[0, 0], [1, 0]], [])).toEqual([]);
+  });
+
   it('an enemy on a cell no generated enemy starts on is added to the overlay', () => {
     const cell: Axial = [-3, 7];
     const fight = new FightState();

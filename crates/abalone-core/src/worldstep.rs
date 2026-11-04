@@ -116,6 +116,8 @@ pub const TROOP: usize = 15;
 const LEASH: i32 = 3;
 /// How far a follower with no valid cell beside it looks for one.
 const REACH: i32 = 6;
+/// The pull of the cell a follower is sent to by the herd (#1506), in 1/n cell per cell: above the leash, so it wins over the flock.
+const HERD_PULL: i32 = 64;
 
 /// What the hero's step onto a cell does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,6 +167,7 @@ fn best_cell(
     to: (i32, i32),
     (seed, tick): (u64, u32),
     free: &dyn Fn((i32, i32)) -> bool,
+    goal: Option<(i32, i32)>,
 ) -> (i32, i32) {
     let n = cells.len() as i32 + 1;
     let heading = (to.0 - at.0, to.1 - at.1);
@@ -196,6 +199,7 @@ fn best_cell(
                 + n * 32 * (hex_distance(cand, to) - LEASH).max(0)
                 + n * beside
                 + n * hex_distance(m, heading)
+                + goal.map_or(0, |g| n * HERD_PULL * hex_distance(cand, g))
                 + jitter as i32
         });
     best.map_or_else(
@@ -229,6 +233,8 @@ fn nearest_valid(
 /// left), never `to` nor a cell of another marble, by integer boids costs: cohesion (distance to the centre of the group, in 1/n cell),
 /// separation (one cell per marble beside the cell), alignment (one cell per step off the hero's heading), a leash beyond `LEASH`
 /// cells of the hero, and a sub-cell jitter hashed from `seed`, `tick` and the index. Integers only: every peer gets the same cells.
+/// `goals` (follower index, cell) are the cells the herd sends followers to (#1506, `worldherd::goals`): such a follower hops twice and
+/// adds a pull of 64 per cell to its goal to the cost, so it wins over the flock; the others flock as before.
 pub fn flock(
     troop: &[(i32, i32)],
     at: (i32, i32),
@@ -236,19 +242,21 @@ pub fn flock(
     seed: u64,
     tick: u32,
     free: &dyn Fn((i32, i32)) -> bool,
+    goals: &[(usize, (i32, i32))],
 ) -> Vec<(i32, i32)> {
     let mut cells = troop.to_vec();
     let mut order: Vec<usize> = (0..cells.len()).collect();
     order.sort_by_key(|&i| hex_distance(cells[i], to));
     for i in order {
-        // A follower beyond the leash hops twice: it flies faster than the hero, so the strays catch up.
-        let hops = if hex_distance(cells[i], to) > LEASH {
+        let goal = goals.iter().find(|g| g.0 == i).map(|g| g.1);
+        // A follower beyond the leash, or sent by the herd, hops twice: it flies faster than the hero, so the strays catch up.
+        let hops = if goal.is_some() || hex_distance(cells[i], to) > LEASH {
             2
         } else {
             1
         };
         for _ in 0..hops {
-            cells[i] = best_cell(&cells, i, at, to, (seed, tick), free);
+            cells[i] = best_cell(&cells, i, at, to, (seed, tick), free, goal);
         }
     }
     cells
@@ -467,7 +475,7 @@ mod tests {
                 at.0 + [1, 1, 0][(t % 3) as usize],
                 at.1 + [0, -1, -1][(t % 3) as usize],
             );
-            troop = flock(&troop, at, to, seed, t, free);
+            troop = flock(&troop, at, to, seed, t, free, &[]);
             at = to;
             assert_eq!(troop.len(), TROOP);
             assert!(!troop.contains(&at), "a follower stands on the hero");
@@ -515,31 +523,37 @@ mod tests {
             } else {
                 ((1, 0), (0, 0))
             };
-            troop = flock(&troop, from, dest, SEED, t, &free);
+            troop = flock(&troop, from, dest, SEED, t, &free, &[]);
             assert!(troop.iter().all(|&c| free(c)), "{troop:?}");
         }
     }
 
     #[test]
     fn the_follower_on_the_hero_target_moves_away_to_the_cell_the_hero_left() {
-        let after = flock(&[(1, 0)], (0, 0), (1, 0), SEED, 0, &|_| false);
+        let after = flock(&[(1, 0)], (0, 0), (1, 0), SEED, 0, &|_| false, &[]);
         assert_eq!(after, [(0, 0)]);
     }
 
     #[test]
     fn a_follower_on_the_hero_target_with_no_free_neighbour_takes_the_nearest_free_cell() {
         let free = |c: (i32, i32)| c == (3, 0);
-        assert_eq!(flock(&[(1, 0)], (9, 9), (1, 0), SEED, 0, &free), [(3, 0)]);
+        assert_eq!(
+            flock(&[(1, 0)], (9, 9), (1, 0), SEED, 0, &free, &[]),
+            [(3, 0)]
+        );
     }
 
     #[test]
     fn a_follower_on_an_enemy_water_or_obstacle_cell_takes_the_nearest_valid_cell() {
         // its own cell (0, 0) is no longer free, nor are its neighbours; (0, 2) is the nearest free one, (3, 3) is farther
         let free = |c: (i32, i32)| c == (0, 2) || c == (3, 3);
-        assert_eq!(flock(&[(0, 0)], (9, 9), (9, 8), SEED, 0, &free), [(0, 2)]);
+        assert_eq!(
+            flock(&[(0, 0)], (9, 9), (9, 8), SEED, 0, &free, &[]),
+            [(0, 2)]
+        );
         // the cell the hero left counts
         assert_eq!(
-            flock(&[(0, 0)], (0, 2), (0, 3), SEED, 0, &|_| false),
+            flock(&[(0, 0)], (0, 2), (0, 3), SEED, 0, &|_| false, &[]),
             [(0, 2)]
         );
     }
@@ -547,26 +561,53 @@ mod tests {
     #[test]
     fn a_follower_with_no_valid_cell_skips_the_cells_of_other_marbles() {
         // (0, 1) is the only free cell near (0, 0); another marble holds it and (0, 1) is not a neighbour move for the other
-        let out = flock(&[(0, 0), (0, 1)], (9, 9), (9, 8), SEED, 0, &|c| c == (0, 1));
+        let out = flock(
+            &[(0, 0), (0, 1)],
+            (9, 9),
+            (9, 8),
+            SEED,
+            0,
+            &|c| c == (0, 1),
+            &[],
+        );
         assert_ne!(out[0], (0, 1));
     }
 
     #[test]
     fn a_walled_in_follower_stays() {
         assert_eq!(
-            flock(&[(0, 0)], (5, 5), (5, 6), SEED, 0, &|_| false),
+            flock(&[(0, 0)], (5, 5), (5, 6), SEED, 0, &|_| false, &[]),
             [(0, 0)]
         );
     }
 
     #[test]
     fn a_follower_far_behind_closes_up() {
-        let after = flock(&[(-3, 0)], (4, 0), (5, 0), SEED, 0, &|_| true);
+        let after = flock(&[(-3, 0)], (4, 0), (5, 0), SEED, 0, &|_| true, &[]);
         assert!(dist(after[0], (5, 0)) < dist((-3, 0), (5, 0)));
     }
 
     #[test]
+    fn a_follower_sent_by_the_herd_hops_twice_toward_its_goal_whatever_the_leash() {
+        let goal = (-4, 4);
+        let out = flock(&[(-4, 0)], (1, 0), (0, 0), SEED, 0, &|_| true, &[(0, goal)]);
+        assert_eq!(hex_distance(out[0], goal), 2);
+        // The others do not feel it.
+        let out = flock(
+            &[(-4, 0), (0, 2)],
+            (1, 0),
+            (0, 0),
+            SEED,
+            0,
+            &|_| true,
+            &[(0, goal)],
+        );
+        assert_eq!(out.len(), 2);
+        assert_ne!(out[1], goal);
+    }
+
+    #[test]
     fn an_empty_troop_stays_empty() {
-        assert!(flock(&[], (0, 0), (1, 0), SEED, 0, &|_| true).is_empty());
+        assert!(flock(&[], (0, 0), (1, 0), SEED, 0, &|_| true, &[]).is_empty());
     }
 }

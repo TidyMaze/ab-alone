@@ -360,6 +360,48 @@ describe('the same seed and moves as the client', () => {
   });
 });
 
+type Way = Parameters<OpenWorld['step']>[0]['direction'];
+
+describe('the troop herds a foe to the water, as the client does (#1506)', () => {
+  // Seed 1: a foe on (9,-30), sand with the water three cells away (12,-33). The hero walks there by the engine's path then steps W and E.
+  const rules = { ...worldRules(), world_enemies: (_seed: number, cx: number, cy: number) => (cx === 0 && cy === -2 ? Int32Array.of(9, -30) : new Int32Array()) };
+  const path = Array.from(rules.world_path(1, 0, 0, 8, -30, new Int32Array(), new Int32Array()));
+  const walk = Array.from({ length: path.length / 2 }, (_, i) => {
+    const [dq, dr] = [path[2 * i]! - (i === 0 ? 0 : path[2 * i - 2]!), path[2 * i + 1]! - (i === 0 ? 0 : path[2 * i - 1]!)];
+    return Object.entries(STEPS).find(([, d]) => d[0] === dq && d[1] === dr)![0] as Way;
+  });
+  const dirs: Way[] = [...walk, ...Array.from({ length: 20 }, (_, i): Way => (i % 2 === 0 ? 'W' : 'E'))];
+  const text = (cells: readonly (readonly number[])[]) => cells.map(([q, r]) => `(${q},${r})`);
+
+  test('the real client Hero and the MCP give the same hero, troop and foe after every step, and the foe ends in the water', () => {
+    const w = new World((cx, cy) => rules.world_chunk(1, cx, cy), (cx, cy) => rules.world_enemies(1, cx, cy));
+    const fight = new FightState();
+    const hero = new Hero(w, fight, 1);
+    const open = new OpenWorld(rules, bossIds);
+    value(open.newWorld({ seed: 1 }));
+    let herded = 0;
+    for (const d of dirs) {
+      const [dq, dr] = STEPS[d]!;
+      expect(hero.step([hero.at[0] + dq!, hero.at[1] + dr!])).toBe(true);
+      const played = fight.troopPush(w, 1, [hero.at, ...hero.troop], w.broken, hero.tick);
+      if (played) {
+        const [at, ...troop] = played.push.troop;
+        hero.at = at!;
+        hero.troop = troop;
+        if (played.push.enemies.length > 0) herded++;
+      }
+      const mcp = value(open.step({ direction: d })).state;
+      expect(mcp.hero).toBe(`(${hero.at[0]},${hero.at[1]})`);
+      expect(mcp.troop).toEqual(text(hero.troop));
+      expect(value(open.state({ radius: 8 })).enemies).toEqual(text(fight.enemiesAround(w, hero.at, 8)));
+      expect(mcp.beaten).toBe(fight.beaten);
+    }
+    expect(herded).toBeGreaterThanOrEqual(2); // the foe was pushed along the sand before it fell
+    expect(fight.beaten).toBe(1);
+    expect(value(open.state({ radius: 8 })).enemies).toEqual([]);
+  });
+});
+
 const VERSION = worldRules().world_version();
 
 /** Seed 1 walked to (5,6): the troop pushed the enemy group on the way, so the fight has enemies removed and added (see above). */

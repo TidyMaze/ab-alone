@@ -5,7 +5,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, World } from './openworld';
 import { DEFAULT_YAW, restYaw, TURN_STEP } from './openworldmode';
-import { heroStep } from './openworldstep';
+import { flock, heroStep } from './openworldstep';
 import { OpenWorldView } from './openworldview';
 
 // The rules of the step are tested in Rust (abalone-core worldstep); this file tests what the client adds: the packing of the keys,
@@ -14,6 +14,16 @@ const open = () => true;
 // Grass at height 1 in the chunks round the origin.
 const grass = () => Uint8Array.from({ length: CHUNK * CHUNK * 3 }, (_, i) => [1, 2, 0][i % 3]!);
 const DEG = Math.PI / 180;
+
+describe('flock', () => {
+  it('sends a follower to the cell the herd gives it (#1506), two hops a step', () => {
+    const ground: Axial[] = Array.from({ length: 13 * 13 }, (_, i): Axial => [(i % 13) - 6, Math.floor(i / 13) - 6]);
+    const goal: Axial = [-4, 4];
+    const [at] = flock(7, 0, [[-4, 0]], [1, 0], [0, 0], ground, [[0, [goal[0], goal[1]]]]);
+    expect(Math.abs(at![0] - goal[0]) + Math.abs(at![1] - goal[1])).toBeLessThan(4); // from 4 cells away to 2
+    expect(flock(7, 0, [[-4, 0]], [1, 0], [0, 0], ground)).toHaveLength(1);
+  });
+});
 
 describe('heroStep', () => {
   it('gives the cell of the held arrows: a single arrow, a diagonal, with the row zigzag of up and down', () => {

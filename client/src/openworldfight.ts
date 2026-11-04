@@ -41,6 +41,9 @@ export interface Pushed {
   dir: Axial;
 }
 
+/** A follower the herd sends to a cell (#1506): its index among the followers, and the cell. */
+export type Goal = readonly [number, Axial];
+
 /** The flat `q, r` list of cells, for the bridge. */
 const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());
 /** The cells of a flat `q, r` list. */
@@ -105,6 +108,12 @@ export class FightState {
     if (!out) return null;
     const push: Pushed = { troop: cellsOf(out.troop), enemies: cellsOf(out.enemies), ejected: cellsOf(out.ejected), dir: [out.dir[0]!, out.dir[1]!] };
     return { from: [...troop], foes: cellsOf(out.foes), push };
+  }
+
+  /** The cells the herd sends followers to before they flock (`WorldFight.herd_goals`, #1506): `troop` has the hero first. None without a hunt. */
+  herdGoals(world: World, seed: number, troop: readonly Axial[], broken: readonly Axial[]): Goal[] {
+    const out = this.fight.herd_goals(seed, flat(troop), this.chunksAround(world, troop[0]!, WorldFight.push_reach()), flat(broken));
+    return Array.from({ length: out.length / 3 }, (_, i): Goal => [out[3 * i]!, [out[3 * i + 1]!, out[3 * i + 2]!]]);
   }
 
   /** Whether an enemy marble stands on the cell `(q, r)` now. */
