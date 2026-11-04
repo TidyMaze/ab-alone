@@ -260,7 +260,7 @@ describe('worldSaves', () => {
       { ...record(7), hero: [1] },
       { ...record(7), hero: [1.5, 0] },
       { ...record(7), troop: [[0, 0], ['a', 0]] },
-      { ...record(7), troop: Array.from({ length: 7 }, () => [0, 0]) }, // more than the troop
+      { ...record(7), troop: Array.from({ length: 16 }, () => [0, 0]) }, // more than the troop
       { ...record(7), troop: 'x' },
       { ...record(7), fight: null },
       { ...record(7), fight: { removed: ['2,0'], added: [], beaten: -1 } },

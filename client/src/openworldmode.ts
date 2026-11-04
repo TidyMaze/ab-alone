@@ -183,7 +183,7 @@ export class OpenWorldMode {
     view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
     view.cullGround(document.body.dataset.software === 'on'); // a software renderer lays the ground in view only (#1483)
     view.setShadows(!this.lowTier()); // the sun's soft shadow round the hero, on the high tier only (#1364)
-    this.hero = new Hero(world, this.fight);
+    this.hero = new Hero(world, this.fight, this.seed);
     if (saved) {
       this.hero.at = saved.hero;
       this.hero.troop = saved.troop;

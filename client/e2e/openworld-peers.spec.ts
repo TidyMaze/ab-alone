@@ -343,7 +343,7 @@ test('the army of another hero is drawn round it, and ours goes out as 15 bytes,
   await page.screenshot({ path: 'test-results/peers-army.png' });
   const troops = () => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m[1] === 4));
   await expect.poll(async () => (await troops()).length).toBeGreaterThanOrEqual(1);
-  expect((await troops())[0]).toHaveLength(15);
+  expect((await troops())[0]).toHaveLength(33); // 3 bytes and 15 offsets (#1504)
 });
 
 // #1447: the hero of another player on water rides a boat, as ours does. Seed 1305 has water on (25,0) and (25,1), sand on (24,0).

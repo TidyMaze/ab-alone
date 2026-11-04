@@ -70,7 +70,7 @@ describe('the Open world mode', () => {
     expect(body().openworld).toBe('42');
     expect(body().openworldAt).toBe('0,0');
     expect(body().openworldEnemies).toBe('3');
-    expect(body().openworldTroop!.split(' ')).toHaveLength(6);
+    expect(body().openworldTroop!.split(' ')).toHaveLength(15);
     const render = vi.fn();
     m.frame(render);
     m.frame(render);
@@ -265,7 +265,7 @@ describe('the Open world mode', () => {
     const drawn = JSON.parse(body().openworldDrawn!) as Record<string, number>;
     expect(drawn['terrain-grass']).toBeGreaterThan(0);
     expect(drawn['prop-boulder']).toBeGreaterThan(0);
-    expect(drawn.troop).toBe(6);
+    expect(drawn.troop).toBe(15);
     expect(drawn.enemies).toBe(3);
   });
 
@@ -389,7 +389,10 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     expect(tap(m, 'ArrowRight')).toBe(true);
     expect(m.hero!.at).toEqual([2, 0]); // the line (1,0) (0,0) (-1,0) pushed the enemy east, the hero with it
     expect(body().openworldAt).toBe('2,0');
-    expect(body().openworldTroop).toBe('1,0 0,0 1,-1 -1,1 0,-1 0,1');
+    const troop = body().openworldTroop!.split(' ');
+    expect(troop).toHaveLength(15); // the flock after the step, then the push
+    expect(new Set(troop).size).toBe(15);
+    expect(troop).not.toContain('2,0'); // none on the hero
     expect(body().openworldEnemies).toBe('1');
     expect(m.enemies()).toEqual([[3, 0]]);
     expect(body().openworldPush).toBe('1');
@@ -578,7 +581,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
   const pushing = (reduced = false): OpenWorldMode => {
     const m = mode(undefined, undefined, () => reduced);
     m.enter(1, 800, 600);
-    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0], [-3, 0]], enemies: [[2, 0]] });
     return m;
   };
   afterEach(() => {
@@ -658,6 +661,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     tap(m, 'ArrowRight');
     m.frame(vi.fn(), 100);
     m.release('ArrowRight');
+    m.hero!.troop = [[3, -1], [3, -2], [2, -2], [4, -2], [2, -3], [3, -3], [4, -3]]; // the flock after the first push is the engine's: a troop round (3,-1) lets the bridge push again
     tap(m, 'ArrowLeft'); // the hero rolls back (the enemy on (3,0) blocks the way on): the bridge pushes again
     expect(snap).toHaveBeenCalledTimes(2);
     expect(play).toHaveBeenCalledTimes(2);
@@ -763,7 +767,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     const store = memoryStore();
     const m = mode(undefined, undefined, undefined, undefined, worldSaves(store, 1));
     m.enter(7, 800, 600);
-    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0], [-3, 0]], enemies: [[2, 0]] });
     tap(m, 'ArrowRight');
     frameOf(m);
     await settle();

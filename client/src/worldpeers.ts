@@ -19,7 +19,7 @@ const TROOP = 4;
 const BEATEN = 5;
 const LAIR = 6;
 /** The most marbles of a troop on the wire, and how far from its hero one may stand (cells). */
-export const TROOP_MAX = 6;
+export const TROOP_MAX = 15;
 export const TROOP_REACH = 8;
 
 /** A signed world event (#1305): `break` (a hero broke the obstacle on the cell), `beaten` (the enemy marble that starts on the cell was

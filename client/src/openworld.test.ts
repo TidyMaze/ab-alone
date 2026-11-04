@@ -113,7 +113,7 @@ describe('the hero', () => {
     const water = heroOn(new World(bytes));
     expect(water.step([0, 1])).toBe(true);
     expect(water.at).toEqual([0, 1]);
-    expect(water.troop[0]).toEqual(SPAWN);
+    expect(water.troop).toHaveLength(TROOP);
     expect(water.smashed).toBeNull();
   });
 
@@ -234,28 +234,65 @@ describe('the enemies', () => {
 });
 
 describe('the troop', () => {
-  it('starts as six marbles around the spawn', () => {
+  const key = (c: Axial) => c.join(',');
+  const far = (a: Axial, b: Axial) => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[0] - b[0] + a[1] - b[1]));
+  /** The hero walks east then back, `steps` times; each troop is checked. */
+  function walk(hero: Hero, steps: number, standable: (c: Axial) => boolean): Axial[][] {
+    const seen: Axial[][] = [];
+    for (let i = 0; i < steps; i++) {
+      expect(hero.step([hero.at[0] + (i % 2 ? -1 : 1) * (i % 12 < 6 ? 1 : -1), hero.at[1]])).toBe(true);
+      expect(hero.troop).toHaveLength(TROOP);
+      expect(new Set(hero.troop.map(key)).size).toBe(TROOP);
+      expect(hero.troop.some((c) => same(c, hero.at))).toBe(false);
+      expect(hero.troop.every((c) => far(c, hero.at) <= 5 && standable(c))).toBe(true);
+      seen.push(hero.troop.map((c): Axial => [...c]));
+    }
+    return seen;
+  }
+  const dry = (c: Axial) => !(c[0] === 0 && c[1] === 1) && !(c[0] === 2 && c[1] === 0);
+
+  it('is fifteen marbles round the spawn, on the open ground and not on the water cell (#1504)', () => {
     const hero = heroOn(new World(bytes));
-    expect(TROOP).toBe(6);
-    expect(hero.troop).toEqual(neighbours(SPAWN));
+    expect(TROOP).toBe(15);
+    expect(hero.troop).toHaveLength(15);
+    expect(new Set(hero.troop.map(key)).size).toBe(15);
+    expect(hero.troop.every((c) => far(c, SPAWN) <= 3 && dry(c) && !same(c, SPAWN))).toBe(true);
+    expect(hero.troop.slice(0, 5).map(key).sort()).toEqual(neighbours(SPAWN).filter((c) => dry(c)).map(key).sort());
   });
 
-  it('trails the hero: the cell it left first, then the cells it left before', () => {
+  it('flocks round the hero without crowding, standing or blocking it (#1504)', () => {
     const hero = heroOn(new World(bytes));
-    for (const to of [[1, 0], [1, -1], [1, -2], [1, -3]] as const) expect(hero.step([...to])).toBe(true);
-    expect(hero.troop).toHaveLength(TROOP);
-    expect(hero.troop.slice(0, 4)).toEqual([[1, -2], [1, -1], [1, 0], SPAWN]);
-    expect(new Set(hero.troop.map((c) => c.join(','))).size).toBe(TROOP);
-    expect(hero.troop.some((c) => same(c, hero.at))).toBe(false);
+    walk(hero, 60, dry);
   });
 
-  it('keeps six marbles when the hero rolls onto one of them', () => {
+  it('flocks the same from the same seed and differently from another', () => {
+    const run = (seed: number) => walk(new Hero(new World(bytes), new FightState(), seed), 40, dry);
+    expect(run(5)).toEqual(run(5));
+    expect(run(5)).not.toEqual(run(6));
+  });
+
+  it('keeps fifteen marbles when the hero rolls onto one of them', () => {
     const hero = heroOn(new World(bytes));
     const onto = hero.troop[0]!;
     expect(hero.step(onto)).toBe(true);
     expect(hero.troop).toHaveLength(TROOP);
     expect(hero.troop.some((c) => same(c, onto))).toBe(false);
-    expect(hero.troop[0]).toEqual(SPAWN);
+  });
+
+  it('never stands on an enemy', () => {
+    const hero = new Hero(new World(bytes, () => Int32Array.of(1, 1)), new FightState());
+    expect(hero.troop.some((c) => same(c, [1, 1]))).toBe(false);
+    walk(hero, 30, (c) => dry(c) && !same(c, [1, 1]));
+  });
+
+  it('follows onto the water only while the hero sails (#1441)', () => {
+    const sea = new World(() => new Uint8Array(CHUNK * CHUNK * 3));
+    const hero = heroOn(sea);
+    expect(hero.troop).toEqual([]); // the spawn is dry in the game; here every cell is water
+    hero.troop = neighbours(SPAWN);
+    expect(hero.step([1, 0])).toBe(true);
+    expect(hero.troop).toHaveLength(6);
+    expect(hero.troop.some((c) => same(c, [1, 0]))).toBe(false);
   });
 });
 

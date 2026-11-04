@@ -102,19 +102,22 @@ describe('the broken-cell event on the wire', () => {
 });
 
 describe('the troop on the wire', () => {
-  it('is 3 bytes and 2 per marble, as offsets from the hero: 15 bytes for a full troop of 6', () => {
-    expect(TROOP_MAX).toBe(6);
+  it('is 3 bytes and 2 per marble, as offsets from the hero: 33 bytes for a full troop of 15 (#1504)', () => {
+    expect(TROOP_MAX).toBe(15);
     expect(encodeTroop([])).toEqual(Uint8Array.of(2, 4, 0));
     expect(encodeTroop([[1, 0], [-2, 3]])).toEqual(Uint8Array.of(2, 4, 2, 1, 0, 254, 3));
     const six = encodeTroop([[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]]);
     expect(six).toHaveLength(15);
     expect(decode(six)).toEqual({ t: 'troop', offsets: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]] });
+    const ring = Array.from({ length: 15 }, (_, i): [number, number] => [i % 5 + 1, Math.floor(i / 5)]);
+    expect(encodeTroop(ring)).toHaveLength(33);
+    expect(decode(encodeTroop(ring))).toEqual({ t: 'troop', offsets: ring });
     expect(decode(encodeTroop([[-2, 3]]))).toEqual({ t: 'troop', offsets: [[-2, 3]] });
   });
 
-  it('keeps only the first 6 marbles when sent more', () => {
-    const many = Array.from({ length: 9 }, (_, i): [number, number] => [i + 1, 0]);
-    expect(decode(encodeTroop(many))).toEqual({ t: 'troop', offsets: [[1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0]] });
+  it('keeps only the first 15 marbles when sent more', () => {
+    const many = Array.from({ length: 18 }, (_, i): [number, number] => [(i % 8) + 1, Math.floor(i / 8)]);
+    expect(decode(encodeTroop(many))).toEqual({ t: 'troop', offsets: many.slice(0, 15) });
   });
 
   it('refuses what a troop cannot be: a wrong length, too many, a marble on the hero, far off, or twice', () => {
@@ -122,7 +125,8 @@ describe('the troop on the wire', () => {
     expect(decode(Uint8Array.of(2, 4))).toBeNull();
     expect(decode(Uint8Array.of(2, 4, 2, 1, 0))).toBeNull(); // says 2 marbles, holds 1
     expect(decode(Uint8Array.of(2, 4, 1, 1, 0, 9))).toBeNull(); // a byte too many
-    expect(decode(new Uint8Array([2, 4, 7, ...new Array(14).fill(1)]))).toBeNull(); // 7 marbles
+    expect(decode(new Uint8Array([2, 4, 7, ...new Array(14).fill(1)]))).toBeNull(); // 7 marbles with the same offset
+    expect(decode(new Uint8Array([2, 4, 16, ...new Array(32).fill(1)]))).toBeNull(); // 16 marbles
     expect(decode(Uint8Array.of(2, 4, 1, 0, 0))).toBeNull(); // on the hero
     expect(decode(Uint8Array.of(2, 4, 1, 9, 0))).toBeNull(); // 9 cells off
     expect(decode(Uint8Array.of(2, 4, 1, 5, 5))).toBeNull(); // 10 cells off on the diagonal

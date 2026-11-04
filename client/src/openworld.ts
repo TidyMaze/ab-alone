@@ -2,7 +2,7 @@
 // at a time, and the hero that walks them one cell at a time. Pure data and rules: no DOM, no three.js.
 import { DIRECTIONS, type Axial } from './board';
 import type { FightState } from './openworldfight';
-import { enter, trail } from './openworldstep';
+import { enter, flock } from './openworldstep';
 
 /** A chunk is CHUNK x CHUNK cells; the world is a hexagon of cells round the spawn (`WORLD_RADIUS` of the engine, #1440). */
 export const CHUNK = 16;
@@ -168,21 +168,42 @@ export function cellAtPoint(x: number, z: number): Axial {
   return [rq + 0, rr + 0]; // + 0: no -0
 }
 
-/** The troop follows the hero: this many marbles. */
-export const TROOP = 6;
+/** The troop follows the hero: this many marbles (#1504). */
+export const TROOP = 15;
 
-/** The hero: one marble that rolls one cell at a time over the open cells of the world, and the troop that trails it. */
+/** The cells within `radius` of a cell, nearest ring first (ring 0 left out), each ring by `q` then `r`. */
+const rings = ([q, r]: Axial, radius: number): Axial[] => {
+  const out: Axial[] = [];
+  for (let dq = -radius; dq <= radius; dq++) {
+    for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr++) if (dq || dr) out.push([q + dq, r + dr]);
+  }
+  return out.sort((a, b) => Math.max(Math.abs(a[0] - q), Math.abs(a[1] - r), Math.abs(a[0] - q + a[1] - r)) - Math.max(Math.abs(b[0] - q), Math.abs(b[1] - r), Math.abs(b[0] - q + b[1] - r)) || a[0] - b[0] || a[1] - b[1]);
+};
+
+/** The hero: one marble that rolls one cell at a time over the open cells of the world, and the troop that flocks round it. */
 export class Hero {
   at: Axial = SPAWN;
-  /** The troop starts around the spawn; after a step each marble takes the place of the one before it, the first the hero's. */
-  troop: Axial[] = neighbours(SPAWN);
+  /** The troop starts round the spawn, on the open ground, nearest first; after a step it flocks (`flock`, abalone-core `worldstep`). */
+  troop: Axial[];
   /** The obstacle the last step broke (#1147), `null` when it broke none. */
   smashed: Terrain | null = null;
   /** `fight` holds the enemies as they are now, the pushed ones included (openworldfight.ts). */
+  private tick = 0;
   constructor(
     private readonly world: World,
     private readonly fight: FightState,
-  ) {}
+    private readonly seed = 0,
+  ) {
+    this.troop = rings(SPAWN, 3)
+      .filter((cell) => this.standable(cell, false))
+      .slice(0, TROOP);
+  }
+
+  /** Whether a follower may stand on a cell: the open ground, no enemy on it; water only while the hero sails (#1441). */
+  private standable(cell: Axial, sailing: boolean): boolean {
+    const terrain = this.world.tile(cell[0], cell[1])?.terrain;
+    return terrain !== undefined && (WALKABLE.has(terrain) || (sailing && terrain === 'water')) && !this.fight.occupied(this.world, cell[0], cell[1]);
+  }
 
   /** Rolls to `to` when the engine allows the step (`enter`, abalone-core `worldstep`: a neighbour that is on the world, free of enemies and
    * either open or an obstacle it breaks, #1147); reports whether it moved. */
@@ -194,7 +215,9 @@ export class Hero {
       this.smashed = this.world.tile(to[0], to[1])!.terrain;
       this.world.smash(to[0], to[1]);
     }
-    this.troop = trail(this.troop, this.at, to);
+    const sailing = this.world.tile(to[0], to[1])?.terrain === 'water';
+    const ground = [this.at, ...this.troop].flatMap((cell) => [cell, ...neighbours(cell)]).filter((cell) => this.standable(cell, sailing));
+    this.troop = flock(this.seed, this.tick++, this.troop, this.at, to, ground);
     this.at = to;
     return true;
   }

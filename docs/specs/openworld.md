@@ -151,8 +151,8 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 - **Steering setting** (#1137): the Settings item *Steering*, on by default (team decision), stored under `ab-alone.steering`.
   Off, a held direction takes only the straight step and leans when it is blocked (#1040), and a far tap does nothing; a tap next
   to the hero rolls it either way. The Open world HUD line `#openworld-mode` names the mode: "Steering on" or "Steering off".
-- **Troop**: 6 marbles at the start. After each hero step each troop marble takes the place of the
-  one before it in the trail, and the first takes the cell the hero left. No decision of the player.
+- **Troop** (#1504): 15 marbles per player, local and remote, at the start on the open ground round the spawn (nearest first). After each
+  hero step the troop flocks (section 4b). No decision of the player.
 - **Automatic attack**: after its step, the troop attacks when a line of 2 or 3 of its marbles,
   hero included, is next to a smaller line of enemy marbles along that line's axis and the push is
   legal under `rules.md`. It then plays that push. The enemy line is the run of enemies right in
@@ -196,6 +196,25 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 - **Loss** (deferred, not built): the hero ejected ends the walk (the world is kept, the hero
   starts again at the spawn, the troop at 6). It cannot happen yet, because enemies never push;
   it is specified here for when they do. A troop marble ejected is lost, with the same deferral.
+
+## 4b. The flock (#1504)
+
+The troop moves like a flock of birds. The rule is `worldstep::flock` (abalone-core), exported as `world_flock(seed, tick, troop, from, to, ground)`;
+the client only passes the cells and draws. After the hero steps from `at` to `to`, every follower moves once (a follower more than 3 cells
+from the hero, the leash, moves twice, so strays catch up), the nearest to the hero first. It takes the best of its own cell and its six
+neighbours that is in `ground`, is not `to` and holds no other marble (the cell `at` the hero left is always allowed), by this cost, in 1/n
+cell with n the marbles plus the hero, the lowest winning:
+
+- **cohesion**: the distance to the centre of the group and to the hero;
+- **separation**: one cell per marble beside the candidate cell;
+- **alignment**: one cell per hex step between the move and the hero's heading;
+- **leash**: 32 cells per cell beyond 3 from the hero;
+- **jitter**: a SplitMix64 hash of the world seed, the tick (the hero's step count) and the marble's index, under one cell.
+
+Integers only, so a replay, and the peers that receive the cells, agree. A follower on `to` moves first and is never dropped, so the hero is
+never blocked by its troop. `ground` is the open ground (sand, grass, rock, no enemy on it), plus water only while the hero sails (#1441): a
+follower never stands on an obstacle, and in water only on a boat's course. The troop keeps its 15 marbles and its order; the wire carries up
+to 15 offsets (33 bytes).
 
 ## 5. Saving
 

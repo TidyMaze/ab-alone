@@ -194,13 +194,32 @@ pub fn world_enter(
     }
 }
 
-/// The troop after the hero steps from `(q, r)` to `(tq, tr)`: `q, r` pairs, the cell the hero left first.
+/// The troop after the hero steps from `(q, r)` to `(tq, tr)` (#1504, the flock of docs/specs/openworld.md section 4b): `q, r` pairs, in
+/// the order they came. `ground` holds the cells the followers may stand on (the client checks the cells beside the troop), `tick` counts
+/// the hero's steps: with the world `seed` it fixes every tie, so peers agree.
 #[wasm_bindgen]
-pub fn world_trail(troop: Vec<i32>, q: i32, r: i32, tq: i32, tr: i32) -> Vec<i32> {
-    worldstep::trail(&pairs(&troop), (q, r), (tq, tr))
-        .into_iter()
-        .flat_map(|(q, r)| [q, r])
-        .collect()
+pub fn world_flock(
+    seed: u32,
+    tick: u32,
+    troop: Vec<i32>,
+    q: i32,
+    r: i32,
+    tq: i32,
+    tr: i32,
+    ground: Vec<i32>,
+) -> Vec<i32> {
+    let ground = pairs(&ground);
+    worldstep::flock(
+        &pairs(&troop),
+        (q, r),
+        (tq, tr),
+        u64::from(seed),
+        tick,
+        &|cell| ground.contains(&cell),
+    )
+    .into_iter()
+    .flat_map(|(q, r)| [q, r])
+    .collect()
 }
 
 /// The cells of a flat `q, r` list.
@@ -533,9 +552,19 @@ mod tests {
     }
 
     #[test]
-    fn a_trail_is_the_old_cell_then_the_troop_without_the_new_one() {
-        let out = world_trail(vec![1, 0, -1, 0], 0, 0, 1, 0);
-        assert_eq!(out, vec![0, 0, -1, 0]);
+    fn a_flock_moves_the_marble_off_the_hero_target_onto_the_ground_given() {
+        let out = world_flock(
+            7,
+            0,
+            vec![1, 0, -1, 0],
+            0,
+            0,
+            1,
+            0,
+            vec![0, 0, -1, 0, -2, 0],
+        );
+        assert_eq!(out[0..2], [0, 0]);
+        assert_eq!(out.len(), 4);
     }
 
     #[test]
