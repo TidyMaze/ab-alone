@@ -199,7 +199,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 
 ## 4b. The flock (#1504)
 
-The troop moves like a flock of birds. The rule is `worldstep::flock` (abalone-core), exported as `world_flock(seed, tick, troop, from, to, ground)`;
+The troop moves like a flock of birds. The rule is `worldstep::flock` (abalone-core), exported as `world_flock(seed, tick, troop, step, ground)` with `step` = `[from q, from r, to q, to r]`;
 the client only passes the cells and draws. After the hero steps from `at` to `to`, every follower moves once (a follower more than 3 cells
 from the hero, the leash, moves twice, so strays catch up), the nearest to the hero first. It takes the best of its own cell and its six
 neighbours that is in `ground`, is not `to` and holds no other marble (the cell `at` the hero left is always allowed), by this cost, in 1/n

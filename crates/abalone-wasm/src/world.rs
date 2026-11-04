@@ -194,7 +194,7 @@ pub fn world_enter(
     }
 }
 
-/// The troop after the hero steps from `(q, r)` to `(tq, tr)` (#1504, the flock of docs/specs/openworld.md section 4b): `q, r` pairs, in
+/// The troop after the hero steps from `(step[0], step[1])` to `(step[2], step[3])` (#1504, the flock of docs/specs/openworld.md section 4b): `q, r` pairs, in
 /// the order they came. `ground` holds the cells the followers may stand on (the client checks the cells beside the troop), `tick` counts
 /// the hero's steps: with the world `seed` it fixes every tie, so peers agree.
 #[wasm_bindgen]
@@ -202,17 +202,14 @@ pub fn world_flock(
     seed: u32,
     tick: u32,
     troop: Vec<i32>,
-    q: i32,
-    r: i32,
-    tq: i32,
-    tr: i32,
+    step: Vec<i32>,
     ground: Vec<i32>,
 ) -> Vec<i32> {
     let ground = pairs(&ground);
     worldstep::flock(
         &pairs(&troop),
-        (q, r),
-        (tq, tr),
+        (step[0], step[1]),
+        (step[2], step[3]),
         u64::from(seed),
         tick,
         &|cell| ground.contains(&cell),
@@ -557,10 +554,7 @@ mod tests {
             7,
             0,
             vec![1, 0, -1, 0],
-            0,
-            0,
-            1,
-            0,
+            vec![0, 0, 1, 0],
             vec![0, 0, -1, 0, -2, 0],
         );
         assert_eq!(out[0..2], [0, 0]);

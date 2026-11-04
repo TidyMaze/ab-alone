@@ -26,7 +26,7 @@ export interface WorldRules {
   /** What the step from `(q, r)` to `(tq, tr)` does: 0 refused, 1 rolls, 2 breaks. `terrain` is the code of the cell, -1 off the world. */
   world_enter(q: number, r: number, tq: number, tr: number, terrain: number, occupied: boolean, treesNear: boolean): number;
   /** The troop after the hero steps from `(q, r)` to `(tq, tr)`, flocking over `ground`: `q, r` pairs. */
-  world_flock(seed: number, tick: number, troop: Int32Array, q: number, r: number, tq: number, tr: number, ground: Int32Array): Int32Array;
+  world_flock(seed: number, tick: number, troop: Int32Array, step: Int32Array, ground: Int32Array): Int32Array;
   /** The version of the world generator: a save of another version does not hold this world. */
   world_version(): number;
   /** The enemies of a fight as the pushes left them: a new one has no push, `restore` gives the fight of a save. */
@@ -346,7 +346,7 @@ export class OpenWorld {
     if (smashed) play.broken.push(to);
     const sailing = code === WATER;
     const ground = [hero, ...play.troop].flatMap((cell) => [cell, ...DELTAS.map((d): Cell => [cell[0] + d[0], cell[1] + d[1]])]).filter((cell) => this.standable(cell, sailing));
-    play.troop = pairs(this.rules.world_flock(seed, play.tick++, flat(play.troop), hero[0], hero[1], to[0], to[1], flat(ground)));
+    play.troop = pairs(this.rules.world_flock(seed, play.tick++, flat(play.troop), Int32Array.of(hero[0], hero[1], to[0], to[1]), flat(ground)));
     play.hero = to;
     play.discovered.reveal(to); // the cells within 10 of the hero, as the client's `mark` (#1411)
     const out = fight.troop_push(seed, flat([to, ...play.troop]), this.chunksAround(to, this.rules.WorldFight.push_reach()), flat(play.broken));
