@@ -2404,7 +2404,7 @@ drawProps = (): void => {
   for (const [name, light] of Object.entries(lights)) light.name = name; // the ?lights sliders' names
   propsGroup.add(...Object.values(lights));
   roomAccents = neonLook ? accentLights('room') : [];
-  propsGroup.add(...roomAccents);
+  if (roomAccents.length) propsGroup.add(...roomAccents); // add() with no object logs a Three error (#1505)
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
