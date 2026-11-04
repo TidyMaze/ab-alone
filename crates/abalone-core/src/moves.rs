@@ -132,14 +132,17 @@ fn every_move(board: &Board, own: Cell) -> Vec<Move> {
                     if size == 1 && axis != Direction::E {
                         continue;
                     }
-                    let cells: Vec<_> = (0..size).map(|i| step((q, r), v, i)).collect();
+                    let mut cells = [(q, r); 3];
+                    for (i, c) in cells.iter_mut().enumerate() {
+                        *c = step((q, r), v, i as i32);
+                    }
+                    let group = &cells[..size as usize];
                     for dir in Direction::ALL {
-                        let m = Move {
-                            cells: cells.clone(),
-                            dir,
-                        };
-                        if apply_for(board, own, &m).is_ok() {
-                            moves.push(m);
+                        if check(board, own, group, dir).is_ok() {
+                            moves.push(Move {
+                                cells: group.to_vec(),
+                                dir,
+                            });
                         }
                     }
                 }
@@ -160,8 +163,77 @@ pub fn apply(board: &Board, player: Player, mv: &Move) -> Result<(Board, bool), 
 /// blocks it (rules.md section 10.4). Returns the new board and whether a marble was ejected (or, in
 /// a rogue-lite fight, a Bomb burst).
 pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), MoveError> {
+    let played = play_checked(board, own, mv);
+    // In tests every move played is also played by the former implementation: same result.
+    #[cfg(test)]
+    assert_eq!(played, tests::apply_for_oracle(board, own, mv));
+    played
+}
+
+fn play_checked(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), MoveError> {
     let mut group = mv.cells.clone();
     group.sort();
+    let plan = check(board, own, &group, mv.dir)?;
+    let d = mv.dir.vector();
+    let (lead, run, mut off, mut gyroscope) = (plan.lead, plan.run, plan.off, plan.gyroscope);
+    let mut next = board.clone();
+    let mut moved: Vec<((i32, i32), Cell)> = group.iter().map(|&c| (c, own)).collect();
+    // The cells of the Shields a failed push spent.
+    let mut spent = Vec::new();
+    if run > 0 {
+        // A Shield in the pushed line stops the push (a rogue-lite fight): nothing moves and the
+        // Shield is spent.
+        spent = (0..run)
+            .map(|i| step(lead, d, i))
+            .filter(|&c| board.special(c) == Some(Special::Shield))
+            .collect();
+        if spent.is_empty() {
+            moved.extend((0..run).map(|i| {
+                let c = step(lead, d, i);
+                (c, at(board, c).expect("run cell"))
+            }));
+        } else {
+            moved.clear();
+            off = None;
+            gyroscope = false;
+        }
+    }
+    for &(c, _) in &moved {
+        next.set(c.0, c.1, Cell::Empty);
+    }
+    for &(c, cell) in &moved {
+        let t = step(c, d, 1);
+        next.set(t.0, t.1, cell);
+    }
+    let mut bombed = false;
+    if board.rogue_lite() {
+        let moved: Vec<_> = moved.iter().map(|&(c, _)| c).collect();
+        bombed = crate::run::carry_specials(board, &mut next, &moved, d, off, own, &spent);
+    }
+    if gyroscope {
+        next.spend_relic(crate::run::Relic::Gyroscope);
+    }
+    Ok((next, off.is_some() || bombed))
+}
+
+/// What a legal move pushes: no board is built, nothing is allocated.
+struct Plan {
+    /// The first cell in front of the group.
+    lead: (i32, i32),
+    /// How many opponent marbles the move pushes.
+    run: i32,
+    /// The cell of the marble the push throws off the board.
+    off: Option<(i32, i32)>,
+    gyroscope: bool,
+}
+
+/// Checks the move of the sorted `group` of `own` marbles in direction `dir`, in place.
+fn check(
+    board: &Board,
+    own: Cell,
+    group: &[(i32, i32)],
+    dir: Direction,
+) -> Result<Plan, MoveError> {
     let n = group.len();
     if n == 0 {
         return Err(MoveError::EmptySelection);
@@ -183,24 +255,25 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
     if (0..n).any(|i| group[i] != step(group[0], v, i as i32)) {
         return Err(MoveError::NotALine);
     }
-    let d = mv.dir.vector();
+    let d = dir.vector();
     let inline = n == 1 || d == v || d == step((0, 0), v, -1);
-    let mut next = board.clone();
-    // The cell of the marble the push throws off the board.
-    let mut off = None;
-    let mut gyroscope = false;
-    // The cells of the Shields a failed push spent.
-    let mut spent = Vec::new();
-    let mut moved: Vec<((i32, i32), Cell)> = group.iter().map(|&c| (c, own)).collect();
+    let mut plan = Plan {
+        lead: group[0],
+        run: 0,
+        off: None,
+        gyroscope: false,
+    };
     if inline {
         let front = if d == v { group[n - 1] } else { group[0] };
         let lead = step(front, d, 1);
+        plan.lead = lead;
         let mut run = 0;
         while at(board, step(lead, d, run))
             .is_some_and(|c| c != own && c != Cell::Empty && c != Cell::Overseer)
         {
             run += 1;
         }
+        plan.run = run;
         let behind = at(board, step(lead, d, run));
         if run == 0 {
             match behind {
@@ -212,10 +285,10 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
             let short = weight(board, (0..run).map(|i| step(lead, d, i)))
                 .checked_sub(weight(board, group.iter().copied()));
             // The army's Gyroscope (a rogue-lite relic) lets one push of a tie through, once.
-            gyroscope = short == Some(0)
+            plan.gyroscope = short == Some(0)
                 && own == Cell::Black
                 && board.has_relic(crate::run::Relic::Gyroscope);
-            if short.is_some() && !gyroscope {
+            if short.is_some() && !plan.gyroscope {
                 return Err(MoveError::NotStrongEnough);
             }
             match behind {
@@ -232,27 +305,11 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
                 {
                     return Err(MoveError::PushBlocked)
                 }
-                None => off = Some(step(lead, d, run - 1)),
-            }
-            // A Shield in the pushed line stops the push (a rogue-lite fight): nothing moves and the
-            // Shield is spent.
-            spent = (0..run)
-                .map(|i| step(lead, d, i))
-                .filter(|&c| board.special(c) == Some(Special::Shield))
-                .collect();
-            if spent.is_empty() {
-                moved.extend((0..run).map(|i| {
-                    let c = step(lead, d, i);
-                    (c, at(board, c).expect("run cell"))
-                }));
-            } else {
-                moved.clear();
-                off = None;
-                gyroscope = false;
+                None => plan.off = Some(step(lead, d, run - 1)),
             }
         }
     } else {
-        for &c in &group {
+        for &c in group {
             match at(board, step(c, d, 1)) {
                 Some(Cell::Empty) => {}
                 Some(_) => return Err(MoveError::Blocked),
@@ -260,26 +317,167 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
             }
         }
     }
-    for &(c, _) in &moved {
-        next.set(c.0, c.1, Cell::Empty);
-    }
-    for &(c, cell) in &moved {
-        let t = step(c, d, 1);
-        next.set(t.0, t.1, cell);
-    }
-    let mut bombed = false;
-    if board.rogue_lite() {
-        let moved: Vec<_> = moved.iter().map(|&(c, _)| c).collect();
-        bombed = crate::run::carry_specials(board, &mut next, &moved, d, off, own, &spent);
-    }
-    if gyroscope {
-        next.spend_relic(crate::run::Relic::Gyroscope);
-    }
-    Ok((next, off.is_some() || bombed))
+    Ok(plan)
 }
 
 #[cfg(test)]
 mod tests {
+    pub(super) fn apply_for_oracle(
+        board: &Board,
+        own: Cell,
+        mv: &Move,
+    ) -> Result<(Board, bool), MoveError> {
+        let mut group = mv.cells.clone();
+        group.sort();
+        let n = group.len();
+        if n == 0 {
+            return Err(MoveError::EmptySelection);
+        }
+        if n > 3 {
+            return Err(MoveError::TooManyMarbles);
+        }
+        if group.iter().any(|&c| at(board, c) != Some(own)) {
+            return Err(MoveError::NotOwnMarble);
+        }
+        // Sorted ascending, the gap between neighbours is E, NE or SE when the group is a line.
+        let axis = Direction::ALL
+            .into_iter()
+            .find(|d| n == 1 || step(group[0], d.vector(), 1) == group[1]);
+        let Some(axis) = axis else {
+            return Err(MoveError::NotALine);
+        };
+        let v = axis.vector();
+        if (0..n).any(|i| group[i] != step(group[0], v, i as i32)) {
+            return Err(MoveError::NotALine);
+        }
+        let d = mv.dir.vector();
+        let inline = n == 1 || d == v || d == step((0, 0), v, -1);
+        let mut next = board.clone();
+        // The cell of the marble the push throws off the board.
+        let mut off = None;
+        let mut gyroscope = false;
+        // The cells of the Shields a failed push spent.
+        let mut spent = Vec::new();
+        let mut moved: Vec<((i32, i32), Cell)> = group.iter().map(|&c| (c, own)).collect();
+        if inline {
+            let front = if d == v { group[n - 1] } else { group[0] };
+            let lead = step(front, d, 1);
+            let mut run = 0;
+            while at(board, step(lead, d, run))
+                .is_some_and(|c| c != own && c != Cell::Empty && c != Cell::Overseer)
+            {
+                run += 1;
+            }
+            let behind = at(board, step(lead, d, run));
+            if run == 0 {
+                match behind {
+                    Some(Cell::Empty) => {}
+                    Some(_) => return Err(MoveError::Blocked),
+                    None => return Err(MoveError::OffBoard),
+                }
+            } else {
+                let short = weight(board, (0..run).map(|i| step(lead, d, i)))
+                    .checked_sub(weight(board, group.iter().copied()));
+                // The army's Gyroscope (a rogue-lite relic) lets one push of a tie through, once.
+                gyroscope = short == Some(0)
+                    && own == Cell::Black
+                    && board.has_relic(crate::run::Relic::Gyroscope);
+                if short.is_some() && !gyroscope {
+                    return Err(MoveError::NotStrongEnough);
+                }
+                match behind {
+                    Some(Cell::Empty) => {}
+                    Some(_) => return Err(MoveError::PushBlocked),
+                    // A core never leaves the board over the rim (The Overseer): only an incinerator
+                    // takes it. Nor does an Anchor (a rogue-lite fight), nor the marble in front of an
+                    // Anchor+ (or an army's Anchor with Tactics 1) in the pushed line.
+                    None if at(board, step(lead, d, run - 1)) == Some(Cell::Core)
+                        || board
+                            .special(step(lead, d, run - 1))
+                            .is_some_and(Special::anchor)
+                        || (run > 1
+                            && crate::run::keeps_in_front(board, step(lead, d, run - 2))) =>
+                    {
+                        return Err(MoveError::PushBlocked)
+                    }
+                    None => off = Some(step(lead, d, run - 1)),
+                }
+                // A Shield in the pushed line stops the push (a rogue-lite fight): nothing moves and the
+                // Shield is spent.
+                spent = (0..run)
+                    .map(|i| step(lead, d, i))
+                    .filter(|&c| board.special(c) == Some(Special::Shield))
+                    .collect();
+                if spent.is_empty() {
+                    moved.extend((0..run).map(|i| {
+                        let c = step(lead, d, i);
+                        (c, at(board, c).expect("run cell"))
+                    }));
+                } else {
+                    moved.clear();
+                    off = None;
+                    gyroscope = false;
+                }
+            }
+        } else {
+            for &c in &group {
+                match at(board, step(c, d, 1)) {
+                    Some(Cell::Empty) => {}
+                    Some(_) => return Err(MoveError::Blocked),
+                    None => return Err(MoveError::OffBoard),
+                }
+            }
+        }
+        for &(c, _) in &moved {
+            next.set(c.0, c.1, Cell::Empty);
+        }
+        for &(c, cell) in &moved {
+            let t = step(c, d, 1);
+            next.set(t.0, t.1, cell);
+        }
+        let mut bombed = false;
+        if board.rogue_lite() {
+            let moved: Vec<_> = moved.iter().map(|&(c, _)| c).collect();
+            bombed = crate::run::carry_specials(board, &mut next, &moved, d, off, own, &spent);
+        }
+        if gyroscope {
+            next.spend_relic(crate::run::Relic::Gyroscope);
+        }
+        Ok((next, off.is_some() || bombed))
+    }
+
+    /// The move generator before the in-place check: the oracle of the differential tests.
+    fn every_move_oracle(board: &Board, own: Cell) -> Vec<Move> {
+        let mut moves = Vec::new();
+        let radius = board.radius();
+        for q in -radius..=radius {
+            for r in -radius..=radius {
+                if board.get(q, r) != Some(own) {
+                    continue;
+                }
+                for axis in [E, NE, SE] {
+                    let v = axis.vector();
+                    for size in 1..=3 {
+                        if size == 1 && axis != E {
+                            continue;
+                        }
+                        let cells: Vec<_> = (0..size).map(|i| step((q, r), v, i)).collect();
+                        for dir in Direction::ALL {
+                            let m = Move {
+                                cells: cells.clone(),
+                                dir,
+                            };
+                            if apply_for_oracle(board, own, &m).is_ok() {
+                                moves.push(m);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        moves
+    }
+
     use super::Direction::*;
     use super::*;
     use crate::board::{Cell, MAX_RADIUS};
@@ -329,6 +527,53 @@ mod tests {
 
     fn refused(black: &[P], white: &[P], m: Move) -> MoveError {
         apply(&board(black, white), Player::Black, &m).unwrap_err()
+    }
+
+    struct Lcg(u64);
+    impl Lcg {
+        fn next(&mut self, n: usize) -> usize {
+            self.0 = self
+                .0
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((self.0 >> 33) as usize) % n
+        }
+    }
+
+    fn same_as_oracle(b: &Board) {
+        for own in [Cell::Black, Cell::White] {
+            assert_eq!(every_move(b, own), every_move_oracle(b, own));
+        }
+    }
+
+    #[test]
+    fn every_move_matches_the_oracle_on_seeded_games() {
+        for seed in 0..6 {
+            let mut rng = Lcg(seed + 1);
+            let mut g = crate::game::Game::new();
+            for _ in 0..120 {
+                same_as_oracle(g.board());
+                let moves = legal_moves(g.board(), g.to_move());
+                if moves.is_empty() || g.outcome().is_some() {
+                    break;
+                }
+                g.play(&moves[rng.next(moves.len())]).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn every_move_matches_the_oracle_on_random_edge_boards() {
+        let mut rng = Lcg(99);
+        for _ in 0..400 {
+            let mut b = Board::empty();
+            for _ in 0..rng.next(30) + 2 {
+                let (q, r) = (rng.next(9) as i32 - 4, rng.next(9) as i32 - 4);
+                let cell = [Cell::Black, Cell::White][rng.next(2)];
+                b.set(q, r, cell);
+            }
+            same_as_oracle(&b);
+        }
     }
 
     // Example 1
