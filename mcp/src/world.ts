@@ -5,6 +5,7 @@
 // own code (client/src/openworldteleport.ts). This holds the hero, the troop, the broken cells, the fight and the lairs
 // beaten and the cells discovered, saves them in the client's format (client/src/openworldsave.ts), and turns the engine's codes into words.
 import { decodeDiscovered, Discovered, type DiscoveredSave } from '../../client/src/openworlddiscovered';
+import { startTroop } from '../../client/src/openworld';
 import { teleport } from '../../client/src/openworldteleport';
 import { endingLine } from '../../client/src/tally';
 import { DIRECTIONS } from './notation';
@@ -226,7 +227,8 @@ export class OpenWorld {
       const fight = this.rules.WorldFight.restore(Int32Array.from(removed.flatMap((key) => key.split(',').map(Number))), flat(added), beaten);
       this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered), time: save.time ?? 0, tick: 0 };
     } else {
-      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered(), time: 0, tick: 0 };
+      this.play = { seed, hero: [0, 0], troop: [], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered(), time: 0, tick: 0 };
+      this.play.troop = startTroop((cell) => this.standable([cell[0], cell[1]], false)).map(([q, r]): Cell => [q, r]); // the client's own start (`Hero`): same cells, same order
     }
     this.play.discovered.reveal(this.play.hero); // a save from before the discovery: the cells round the hero, as the client
     this.lairCells = pairs(this.rules.world_lairs(this.play.seed));

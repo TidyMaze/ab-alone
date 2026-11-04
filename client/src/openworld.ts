@@ -180,6 +180,9 @@ const rings = ([q, r]: Axial, radius: number): Axial[] => {
   return out.sort((a, b) => Math.max(Math.abs(a[0] - q), Math.abs(a[1] - r), Math.abs(a[0] - q + a[1] - r)) - Math.max(Math.abs(b[0] - q), Math.abs(b[1] - r), Math.abs(b[0] - q + b[1] - r)) || a[0] - b[0] || a[1] - b[1]);
 };
 
+/** The troop's start round the spawn: the TROOP nearest cells of the three rings that `standable` takes, nearest first (the MCP starts it the same way). */
+export const startTroop = (standable: (cell: Axial) => boolean): Axial[] => rings(SPAWN, 3).filter(standable).slice(0, TROOP);
+
 /** The hero: one marble that rolls one cell at a time over the open cells of the world, and the troop that flocks round it. */
 export class Hero {
   at: Axial = SPAWN;
@@ -194,9 +197,7 @@ export class Hero {
     private readonly fight: FightState,
     private readonly seed = 0,
   ) {
-    this.troop = rings(SPAWN, 3)
-      .filter((cell) => this.standable(cell, false))
-      .slice(0, TROOP);
+    this.troop = startTroop((cell) => this.standable(cell, false));
   }
 
   /** Whether a follower may stand on a cell: the open ground, no enemy on it; water only while the hero sails (#1441). */

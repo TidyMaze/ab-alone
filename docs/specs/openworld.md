@@ -214,7 +214,7 @@ cell with n the marbles plus the hero, the lowest winning:
 Integers only, so a replay, and the peers that receive the cells, agree. A follower on `to` moves first and is never dropped, so the hero is
 never blocked by its troop. A follower never stays on `to`, an enemy's cell, water the hero does not sail or an obstacle: when its own cell is invalid and no neighbour is valid it takes the nearest valid cell within 6 (or stays when there is none). `ground` is the open ground (sand, grass, rock, no enemy on it), plus water only while the hero sails (#1441): a
 follower never stands on an obstacle, and in water only on a boat's course. The troop keeps its 15 marbles and its order; the wire carries up
-to 15 offsets (33 bytes).
+to 15 offsets (33 bytes). A new world starts the troop the same way in the client and the MCP (`startTroop`: the 15 nearest standable cells of the three rings round the spawn). The tick is not saved, so a resumed world restarts it at 0 and flocks differently from the same session played straight through, in the client and the MCP alike (accepted).
 
 ## 5. Saving
 

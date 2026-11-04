@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { Discovered, SIGHT } from '../../client/src/openworlddiscovered';
+import { Hero, World } from '../../client/src/openworld';
 import { FightState } from '../../client/src/openworldfight';
 import { decodeWorld, RECORD, worldSaves } from '../../client/src/openworldsave';
 import { memoryStore } from '../../client/src/savegame';
@@ -35,6 +36,26 @@ function code(seed: number, q: number, r: number): number {
   if (!chunks.has(key)) chunks.set(key, worldRules().world_chunk(seed, cx, cy));
   const cells = chunks.get(key)!;
   return cells.length === 0 ? -1 : cells[((r - cy * 16) * 16 + (q - cx * 16)) * 3 + 1]!;
+}
+
+/** The client's own run of a seed (no save): `Hero.step` then `FightState.troopPush`, as `OpenWorldMode.roll` calls them, for the moves `dirs`.
+ * Cells as the MCP writes them. The fixtures of the tests below come from here, not from the MCP. */
+function clientRun(seed: number, dirs: string[]): { hero: string; troop: string[] } {
+  const rules = worldRules();
+  const w = new World((cx, cy) => rules.world_chunk(seed, cx, cy), (cx, cy) => rules.world_enemies(seed, cx, cy));
+  const fight = new FightState();
+  const hero = new Hero(w, fight, seed);
+  for (const d of dirs) {
+    const [dq, dr] = STEPS[d]!;
+    if (!hero.step([hero.at[0] + dq!, hero.at[1] + dr!])) throw new Error(`the client refuses ${d}`);
+    const played = fight.troopPush(w, seed, [hero.at, ...hero.troop], w.broken);
+    if (played) {
+      const [at, ...troop] = played.push.troop;
+      hero.at = at!;
+      hero.troop = troop;
+    }
+  }
+  return { hero: `(${hero.at[0]},${hero.at[1]})`, troop: hero.troop.map(([q, r]) => `(${q},${r})`) };
 }
 
 const SEEDS = Array.from({ length: 12 }, (_, seed) => seed);
@@ -88,11 +109,20 @@ describe('a new world', () => {
     const state = value(open.newWorld({ seed: 0 }));
     expect(state.seed).toBe(0);
     expect(state.hero).toBe('(0,0)');
-    expect(state.troop).toEqual(['(1,0)', '(-1,0)', '(1,-1)', '(-1,1)', '(0,-1)', '(0,1)']);
+    expect(state.troop).toHaveLength(15);
     expect(state.broken).toBe(0);
     expect(state.lairs).toHaveLength(15);
     expect(state.lairs[0]).toEqual({ boss: bossIds()[0], cell: '(206,132)', distance: 338, beaten: false });
     expect(state.ending).toBeUndefined();
+  });
+
+  test('starts the troop as the client does: the same cells in the same order, for several seeds (#1504)', () => {
+    const rules = worldRules();
+    for (const seed of SEEDS) {
+      const client = new Hero(new World((cx, cy) => rules.world_chunk(seed, cx, cy), (cx, cy) => rules.world_enemies(seed, cx, cy)), new FightState(), seed);
+      const state = value(world().newWorld({ seed }));
+      expect(state.troop).toEqual(client.troop.map(([q, r]) => `(${q},${r})`));
+    }
   });
 
   test('the seed defaults to 0 and the same seed gives the same world', () => {
@@ -130,7 +160,7 @@ describe('a new world', () => {
     const rules: WorldRules = { ...worldRules(), world_chunk: (seed, cx, cy) => (cx < 0 ? new Uint8Array() : worldRules().world_chunk(seed, cx, cy)) };
     const open = new OpenWorld(rules, bossIds);
     const rows = value(open.newWorld({ seed: 0 })).window.rows;
-    expect(rows[3]!.cells).toBe('??TH' + 'Tgg');
+    expect(rows[3]!.cells).toBe('???HTTg');
   });
 
   test('a cell past the edge, in a chunk the edge crosses, is a question mark (#1440)', () => {
@@ -139,7 +169,7 @@ describe('a new world', () => {
     const rules: WorldRules = { ...worldRules(), world_chunk: (seed, cx, cy) => (cx < 0 ? edge : worldRules().world_chunk(seed, cx, cy)) };
     const open = new OpenWorld(rules, bossIds);
     const rows = value(open.newWorld({ seed: 0 })).window.rows;
-    expect(rows[3]!.cells).toBe('??TH' + 'Tgg');
+    expect(rows[3]!.cells).toBe('???HTTg');
     const error = failure(open.step({ direction: 'W' }));
     expect(error.message).toContain('off the world');
   });
@@ -154,7 +184,7 @@ describe('a step', () => {
     expect(moved.push).toBeNull();
     expect(moved.state.hero).toBe('(1,0)');
     expect(moved.state.beaten).toBe(0);
-    expect(moved.state.troop).toEqual(['(2,0)', '(0,0)', '(1,-1)', '(-1,2)', '(1,-2)', '(0,1)']);
+    expect(moved.state.troop).toEqual(clientRun(0, ['E']).troop);
     expect(value(open.state({})).hero).toBe('(1,0)');
   });
 
@@ -250,7 +280,7 @@ describe('a walk', () => {
     const walked = value(open.walk({ q: 4, r: 0 }));
     expect(walked.steps).toBe(4);
     expect(walked.state.hero).toBe('(4,0)');
-    expect(walked.state.troop).toEqual(['(5,0)', '(3,0)', '(4,-1)', '(2,2)', '(4,-2)', '(3,1)']);
+    expect(walked.state.troop).toEqual(clientRun(0, ['E', 'E', 'E', 'E']).troop);
   });
 
   test('walks over a boulder it breaks on the way', () => {
@@ -296,33 +326,35 @@ describe('a walk', () => {
 // Seed 1 has an enemy group at (6,6), (7,5), (8,4). The values below are what the client gives for the same seed and moves:
 // `Hero.step` (client/src/openworld.ts) then `FightState.troopPush` (client/src/openworldfight.ts), as `OpenWorldMode.roll` calls them.
 describe('the same seed and moves as the client', () => {
-  const PUSHED = { hero: '(6,6)', troop: ['(6,5)', '(4,6)', '(4,5)', '(5,6)', '(3,5)', '(4,7)'] };
+  const PUSHED = clientRun(1, [...Array<string>(6).fill('SE'), ...Array<string>(4).fill('E')]);
 
-  test('six steps SE then five E: the fifth E brings the troop beside the group and it pushes it east', () => {
+  test('six steps SE then four E: the fourth E brings the troop beside the group and it pushes it east', () => {
     const open = world();
     value(open.newWorld({ seed: 1 }));
     for (let i = 0; i < 6; i++) value(open.step({ direction: 'SE' }));
-    for (let i = 0; i < 3; i++) expect(value(open.step({ direction: 'E' })).push).toBeNull();
+    for (let i = 0; i < 2; i++) expect(value(open.step({ direction: 'E' })).push).toBeNull();
     const near = value(open.step({ direction: 'E' }));
-    expect(near.state.hero).toBe('(4,6)');
-    expect(near.state.troop).toEqual(['(5,5)', '(2,6)', '(4,5)', '(3,6)', '(3,4)', '(3,7)']);
-    expect(near.state.enemies).toEqual(['(6,6)', '(7,5)']);
+    expect(near.state.hero).toBe('(3,6)');
+    expect(near.state.troop).toEqual(clientRun(1, [...Array<string>(6).fill('SE'), ...Array<string>(3).fill('E')]).troop);
+    expect(near.state.enemies).toEqual(['(6,6)']);
     const pushed = value(open.step({ direction: 'E' }));
     expect(pushed.moved).toBe(true);
     expect(pushed.push).toEqual({ direction: 'E', ejected: [] });
     expect(pushed.state).toMatchObject({ ...PUSHED, beaten: 0, enemies: ['(7,5)', '(8,4)', '(7,6)'] });
-    const row = value(open.state({ radius: 1 })).window.rows.find((r) => r.r === 6)!;
+    const row = value(open.state({ radius: 2 })).window.rows.find((r) => r.r === 6)!;
     expect(row.cells[7 - row.q0]).toBe('E');
-    const refused = failure(open.step({ direction: 'E' }));
+    const again = value(open.step({ direction: 'E' })); // the troop's next push takes the hero on, as the client's run does
+    expect(again.state.hero).toBe(clientRun(1, [...Array<string>(6).fill('SE'), ...Array<string>(5).fill('E')]).hero);
+    const refused = failure(open.step({ direction: 'NW' }));
     expect(refused.code).toBe('blocked');
     expect(refused.message).toContain('an enemy stands there');
   });
 
-  test('a walk to (5,6) takes the same path and ends on the push, the hero on (6,6)', () => {
+  test('a walk to (5,6) takes the same path and ends on the push, the hero on (5,6)', () => {
     const open = world();
     value(open.newWorld({ seed: 1 }));
     const walked = value(open.walk({ q: 5, r: 6 }));
-    expect(walked.steps).toBe(11);
+    expect(walked.steps).toBe(10);
     expect(walked.pushes).toEqual([{ direction: 'E', ejected: [] }]);
     expect(walked.state).toMatchObject(PUSHED);
   });
@@ -349,8 +381,8 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
     expect(decodeWorld(save, 1, VERSION)).toEqual({
       version: VERSION,
       seed: 1,
-      hero: [6, 6],
-      troop: [[6, 5], [4, 6], [4, 5], [5, 6], [3, 5], [4, 7]],
+      hero: [5, 6],
+      troop: clientRun(1, [...Array<string>(6).fill('SE'), ...Array<string>(4).fill('E')]).troop.map((t) => t.slice(1, -1).split(',').map(Number)),
       fight: save.fight,
       yaw: 0,
       broken: [],
@@ -360,9 +392,9 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
       savedAt: save.savedAt,
     });
     const seen = Discovered.from(save.discovered!);
-    expect(seen.has(6 + SIGHT, 6)).toBe(true); // round the hero, as the client discovers it (#1411)
+    expect(seen.has(5 + SIGHT, 6)).toBe(true); // round the hero, as the client discovers it (#1411)
     expect(seen.has(0 - SIGHT, 0)).toBe(true); // and round the spawn it walked from
-    expect(seen.has(6 + SIGHT + 1, 6)).toBe(false);
+    expect(seen.has(5 + SIGHT + 1, 6)).toBe(false);
     expect(FightState.fromJSON(save.fight).toJSON()).toEqual(save.fight);
   });
 
@@ -404,7 +436,7 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
     const open = pushed();
     const error = failure(open.newWorld({ save: { ...value(open.save()), discovered: [[0, 0, '!!']] } }));
     expect(error.code).toBe('bad_save');
-    expect(value(open.state({})).hero).toBe('(6,6)');
+    expect(value(open.state({})).hero).toBe('(5,6)');
   });
 
   test('a save of another world version is refused and the world in progress is kept', () => {
@@ -515,7 +547,7 @@ describe('the teleporters (#1412)', () => {
     expect(value(open.state({})).teleporters).toEqual([{ cell: '(2,-1)', distance: hex([q, r], [2, -1]) }, { cell: far, distance: 0 }]);
     const moved = value(open.teleport({ q: 2, r: -1 }));
     expect(moved.hero).toBe('(2,-1)');
-    expect(moved.troop).toHaveLength(6);
+    expect(moved.troop).toHaveLength(15);
     expect(moved.troop.slice(0, 2)).toEqual(['(1,-1)', '(1,0)']); // the free cells round it, the nearest first
     expect(value(open.teleport({ q, r })).hero).toBe(far);
   });
