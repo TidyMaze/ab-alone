@@ -37,7 +37,7 @@ export interface WorldRules {
 export interface Fight {
   occupied(generated: Int32Array, q: number, r: number): boolean;
   around(chunks: Int32Array, q: number, r: number, radius: number): Int32Array;
-  troop_push(seed: number, troop: Int32Array, chunks: Int32Array, broken: Int32Array): { troop: Int32Array; ejected: Int32Array; dir: Int32Array } | undefined;
+  troop_push(seed: number, troop: Int32Array, chunks: Int32Array, broken: Int32Array, tick: number): { troop: Int32Array; ejected: Int32Array; dir: Int32Array } | undefined;
   removed(): Int32Array;
   added(): Int32Array;
   beaten(): number;
@@ -349,7 +349,7 @@ export class OpenWorld {
     play.troop = pairs(this.rules.world_flock(seed, play.tick++, flat(play.troop), Int32Array.of(hero[0], hero[1], to[0], to[1]), flat(ground)));
     play.hero = to;
     play.discovered.reveal(to); // the cells within 10 of the hero, as the client's `mark` (#1411)
-    const out = fight.troop_push(seed, flat([to, ...play.troop]), this.chunksAround(to, this.rules.WorldFight.push_reach()), flat(play.broken));
+    const out = fight.troop_push(seed, flat([to, ...play.troop]), this.chunksAround(to, this.rules.WorldFight.push_reach()), flat(play.broken), play.tick);
     if (!out) return { smashed, push: null };
     const [pushedHero, ...pushedTroop] = pairs(out.troop);
     play.hero = pushedHero!;

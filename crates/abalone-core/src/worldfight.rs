@@ -5,6 +5,7 @@
 
 use crate::moves::Direction;
 use crate::world::Terrain;
+use crate::worldstep::mix;
 use std::cmp::Reverse;
 
 /// Where an ejected marble falls: into water, or off the edge of the world.
@@ -64,6 +65,49 @@ pub fn best_push(
         .into_iter()
         .min_by_key(|(key, _)| *key)
         .map(|(_, push)| push)
+}
+
+/// The troop's shove (#1504): a marble beside a foe pushes it when the cell behind the foe, along the same direction, is water or off
+/// the world: the foe is ejected and the marble takes its cell, as the front of a push does. One shove at most, chosen among all of them
+/// by the lowest SplitMix64 hash of the world `seed`, the `tick`, the marble's index and the direction, so peers agree. `None` when no
+/// foe can be shoved out.
+pub fn best_shove(
+    troop: &[(i32, i32)],
+    enemies: &[(i32, i32)],
+    terrain: impl Fn(i32, i32) -> Option<Terrain>,
+    seed: u64,
+    tick: u32,
+) -> Option<Push> {
+    let mut found = Vec::new();
+    for (i, &marble) in troop.iter().enumerate() {
+        for (index, dir) in Direction::ALL.into_iter().enumerate() {
+            let d = dir.vector();
+            let foe = shift(marble, d, 1);
+            let beyond = shift(marble, d, 2);
+            let fall = match terrain(beyond.0, beyond.1) {
+                None => Fall::Edge,
+                Some(Terrain::Water) => Fall::Water,
+                Some(_) => continue,
+            };
+            if !enemies.contains(&foe) {
+                continue;
+            }
+            let slot = (i * 6 + index) as u64;
+            let key = mix(seed.wrapping_add(mix(u64::from(tick) << 32 | slot)));
+            let push = Push {
+                dir,
+                troop: vec![marble],
+                enemies: vec![foe],
+                last: Outcome::Ejected(fall),
+                ejections: 1,
+            };
+            found.push((key, slot, push));
+        }
+    }
+    found
+        .into_iter()
+        .min_by_key(|(key, slot, _)| (*key, *slot))
+        .map(|(_, _, push)| push)
 }
 
 /// `c` moved `n` cells along `d`.
@@ -515,5 +559,52 @@ mod tests {
     fn abalone_replays_an_ejection_off_the_edge() {
         // (4,0) is on the rim of the radius 4 board; the push takes it off the board.
         replay(&[(2, 0), (3, 0)], &[(4, 0)]);
+    }
+
+    #[test]
+    fn a_marble_next_to_a_foe_with_water_behind_shoves_it_in() {
+        let sea = [((2, 0), Terrain::Water)];
+        let shove = best_shove(&[(0, 0), (1, 0)], &[(1, 1)], world(&sea, WIDE), 1, 0);
+        assert_eq!(shove, None); // (1,0)->(1,1) is SE, behind it (1,2) is grass
+        let sea = [((1, 2), Terrain::Water)];
+        let shove = best_shove(&[(0, 0), (1, 0)], &[(1, 1)], world(&sea, WIDE), 1, 0).unwrap();
+        assert_eq!(shove.dir, SE);
+        assert_eq!(shove.troop, [(1, 0)]);
+        assert_eq!(shove.enemies, [(1, 1)]);
+        assert_eq!(
+            (shove.last, shove.ejections),
+            (Outcome::Ejected(Fall::Water), 1)
+        );
+        let (mut troop, mut foes) = (vec![(0, 0), (1, 0)], vec![(1, 1), (5, 5)]);
+        assert_eq!(apply_push(&mut troop, &mut foes, &shove), [(1, 1)]);
+        assert_eq!((troop, foes), (vec![(0, 0), (1, 1)], vec![(5, 5)]));
+    }
+
+    #[test]
+    fn a_shove_over_the_edge_ejects_and_dry_ground_or_far_foes_do_not() {
+        let edge = world(&[], 1);
+        let shove = best_shove(&[(0, 0)], &[(1, 0)], edge, 1, 0).unwrap();
+        assert_eq!((shove.dir, shove.last), (E, Outcome::Ejected(Fall::Edge)));
+        assert_eq!(best_shove(&[(0, 0)], &[(1, 0)], plain(), 1, 0), None);
+        assert_eq!(best_shove(&[(0, 0)], &[(2, 0)], world(&[], 2), 1, 0), None);
+        let rock = [((2, 0), Terrain::Rock)];
+        assert_eq!(
+            best_shove(&[(0, 0)], &[(1, 0)], world(&rock, WIDE), 1, 0),
+            None
+        );
+    }
+
+    #[test]
+    fn the_shove_among_several_is_chosen_by_the_hash_of_seed_tick_and_marble() {
+        // Two foes beside the hero, water behind both: E and W.
+        let sea = [((2, 0), Terrain::Water), ((-2, 0), Terrain::Water)];
+        let mut seen = std::collections::HashSet::new();
+        for tick in 0..32 {
+            let a = best_shove(&[(0, 0)], &[(1, 0), (-1, 0)], world(&sea, WIDE), 7, tick).unwrap();
+            let b = best_shove(&[(0, 0)], &[(-1, 0), (1, 0)], world(&sea, WIDE), 7, tick).unwrap();
+            assert_eq!(a.dir, b.dir); // same on every peer, whatever the order of the foes
+            seen.insert(a.dir);
+        }
+        assert_eq!(seen.len(), 2);
     }
 }
