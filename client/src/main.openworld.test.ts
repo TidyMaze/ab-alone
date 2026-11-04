@@ -50,7 +50,7 @@ describe('the Open world mode', () => {
     press('ArrowRight'); // the hero rolls onto (1,0): the line (1,0), (0,0), (-1,0) pushes the enemy (2,0) on to (3,0)
     expect(data().openworldAt).toBe('2,0');
     expect(data().openworldPush).toBe('1');
-    expect(data().openworldTroop).toBe('1,0 0,0 -2,0');
+    expect(data().openworldTroop).toBe('1,0 0,0');
     expect(hooks().__openworldEnemies!()).toEqual([[3, 0]]);
   });
 
@@ -518,8 +518,8 @@ describe('the public Open world online', () => {
     const sent = room.sent.map(([d, to]) => [decode(d), to] as const);
     expect(sent.map(([m, to]) => [m!.t, to])).toEqual([['pos', undefined], ['troop', undefined], ['hello', 'p'], ['pos', 'p'], ['troop', 'p']]);
     expect(sent[0]![0]).toEqual({ t: 'pos', q: 0, r: 0, seq: 0 });
-    expect((sent[1]![0] as { offsets: unknown[] }).offsets).toHaveLength(6); // the six marbles round the spawn, 15 bytes
-    expect(room.sent[1]![0]).toHaveLength(15);
+    expect((sent[1]![0] as { offsets: unknown[] }).offsets).toHaveLength(15); // the troop starts at 15 marbles
+    expect(room.sent[1]![0]).toHaveLength(33); // 3 + 2 * 15 bytes
     room.data(encodeHello(), 'p');
     room.data(encodeHello(), 'p');
     room.data(encodePos(200, 0, 0), 'p');
