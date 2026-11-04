@@ -316,22 +316,18 @@ impl WorldFight {
 
     /// The troop's attack after a step: the best legal push of `troop` (the hero's cell first) in the world `seed` against the enemies
     /// within `world_push_reach` of the hero, `chunks` being the chunks that reach them (`around`), `broken` the broken cells. The push is
-    /// played on the fight (a line push, or a single marble shoving a foe into the water, #1504, `tick` being the hero's step count of the flock); `undefined` when none is legal.
+    /// played on the fight; `undefined` when none is legal.
     pub fn troop_push(
         &mut self,
         seed: u32,
         troop: Vec<i32>,
         chunks: Vec<i32>,
         broken: Vec<i32>,
-        tick: u32,
     ) -> Option<PushResult> {
         let terrain = broken_terrain(seed, &broken);
-        let played = self.overlay.troop_push(
-            &blocks_of(&chunks),
-            &pairs(&troop),
-            terrain,
-            (u64::from(seed), tick),
-        )?;
+        let played = self
+            .overlay
+            .troop_push(&blocks_of(&chunks), &pairs(&troop), terrain)?;
         Some(PushResult {
             troop: flat_of(&played.troop),
             foes: flat_of(&played.foes),
@@ -614,7 +610,7 @@ mod tests {
         let mut fight = WorldFight::new();
         let chunks = vec![0, 0, 1, 1, 0];
         let out = fight
-            .troop_push(9, vec![0, 0, -1, 0], chunks, vec![], 1)
+            .troop_push(9, vec![0, 0, -1, 0], chunks, vec![])
             .unwrap();
         assert_eq!(out.troop, vec![1, 0, 0, 0]);
         assert_eq!(out.foes, vec![1, 0]);
@@ -631,7 +627,7 @@ mod tests {
         let mut fight = WorldFight::new();
         fight.apply(vec![], vec![511, 0], 0);
         let out = fight
-            .troop_push(9, vec![509, 0, 510, 0], chunk_of_row(31), vec![], 1)
+            .troop_push(9, vec![509, 0, 510, 0], chunk_of_row(31), vec![])
             .unwrap();
         assert_eq!(out.ejected, vec![511, 0]);
         assert!(out.enemies.is_empty());
@@ -642,10 +638,10 @@ mod tests {
     fn no_legal_push_is_undefined_and_leaves_the_fight() {
         let mut fight = WorldFight::new();
         assert!(fight
-            .troop_push(9, vec![0, 0, -1, 0], vec![0, 0, 0], vec![], 1)
+            .troop_push(9, vec![0, 0, -1, 0], vec![0, 0, 0], vec![])
             .is_none());
         assert!(fight
-            .troop_push(9, vec![0, 0], vec![0, 0, 1, 1, 0], vec![], 1)
+            .troop_push(9, vec![0, 0], vec![0, 0, 1, 1, 0], vec![])
             .is_none());
         assert_eq!(fight.added(), Vec::<i32>::new());
     }
@@ -667,7 +663,7 @@ mod tests {
             let (cx, cy) = ((q - 1).div_euclid(16), r.div_euclid(16));
             let chunks = vec![cx, cy, 1, q - 1, r];
             let push = |broken: Vec<i32>| {
-                WorldFight::new().troop_push(9, troop.clone(), chunks.clone(), broken, 1)
+                WorldFight::new().troop_push(9, troop.clone(), chunks.clone(), broken)
             };
             assert!(push(vec![]).is_none(), "{kind:?} blocks");
             assert!(

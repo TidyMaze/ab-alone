@@ -791,7 +791,7 @@ export class OpenWorldMode {
    * the hero (`FightState.troopPush`). The hero and the troop take the cells it gives (the hero's first). Returns the push as it was
    * played, from the cells before it, for its animation; `null` when no push was legal. */
   private troopPush(): Played | null {
-    const played = this.fight.troopPush(this.world!, this.seed, [this.hero!.at, ...this.hero!.troop], this.world!.broken, this.hero!.tick);
+    const played = this.fight.troopPush(this.world!, this.seed, [this.hero!.at, ...this.hero!.troop], this.world!.broken);
     if (!played) return null;
     const [hero, ...troop] = played.push.troop;
     this.hero!.at = hero!;

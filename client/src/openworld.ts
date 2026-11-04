@@ -191,8 +191,7 @@ export class Hero {
   /** The obstacle the last step broke (#1147), `null` when it broke none. */
   smashed: Terrain | null = null;
   /** `fight` holds the enemies as they are now, the pushed ones included (openworldfight.ts). */
-  /** The hero's step count: with the seed it fixes the flock's ties and the troop's shove (#1504). */
-  tick = 0;
+  private tick = 0;
   constructor(
     private readonly world: World,
     private readonly fight: FightState,

@@ -116,21 +116,15 @@ impl Overlay {
 
     /// The troop's attack: the best legal push of `troop` (the hero first) against the enemies within `PUSH_REACH` of the hero, on the
     /// `terrain` given. `chunks` are the chunks that reach them with their generated enemies (`around`). The push is played on the
-    /// overlay, the shove of a single marble included (`best_shove`, from the `seed` and the `tick`); `None`, and the overlay as it was, when no push is legal.
+    /// overlay; `None`, and the overlay as it was, when no push is legal.
     pub fn troop_push(
         &mut self,
         chunks: &[(Cell, Vec<Cell>)],
         troop: &[Cell],
         terrain: impl Fn(i32, i32) -> Option<Terrain>,
-        (seed, tick): (u64, u32),
     ) -> Option<Played> {
         let foes = self.around(chunks, troop[0], PUSH_REACH);
-        let line = worldfight::best_push(troop, &foes, &terrain);
-        // A line that ejects wins; else a single marble shoving a foe out (#1504); else the line's push.
-        let push = match line {
-            Some(line) if line.ejections > 0 => line,
-            line => worldfight::best_shove(troop, &foes, &terrain, seed, tick).or(line)?,
-        };
+        let push = worldfight::best_push(troop, &foes, terrain)?;
         let (mut after, mut enemies) = (troop.to_vec(), foes.clone());
         let ejected = worldfight::apply_push(&mut after, &mut enemies, &push);
         self.apply(&foes, &enemies, ejected.len());
@@ -264,7 +258,7 @@ mod tests {
         let mut overlay = Overlay::new();
         let chunks = [((0, 0), vec![(1, 0), (3, 3)])];
         let played = overlay
-            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], grass, (1, 0))
+            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], grass)
             .unwrap();
         assert_eq!(played.troop, [(1, 0), (0, 0), (-1, 0)]);
         assert_eq!(played.foes, [(1, 0), (3, 3)]);
@@ -282,7 +276,7 @@ mod tests {
         let chunks = [((0, 0), vec![(1, 0)])];
         let water = |_q: i32, _r: i32| Some(Terrain::Water); // only the cell beyond the enemy is asked for
         let played = overlay
-            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], water, (1, 0))
+            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], water)
             .unwrap();
         assert_eq!(played.ejected, [(1, 0)]);
         assert!(played.enemies.is_empty());
@@ -294,13 +288,10 @@ mod tests {
     fn no_legal_push_changes_nothing() {
         let mut overlay = Overlay::new();
         let chunks = [((0, 0), vec![(5, 5)])];
-        assert_eq!(
-            overlay.troop_push(&chunks, &[(0, 0), (-1, 0)], grass, (1, 0)),
-            None
-        );
+        assert_eq!(overlay.troop_push(&chunks, &[(0, 0), (-1, 0)], grass), None);
         assert_eq!(overlay, Overlay::new());
         assert_eq!(
-            overlay.troop_push(&[], &[(0, 0), (-1, 0), (-2, 0)], grass, (1, 0)),
+            overlay.troop_push(&[], &[(0, 0), (-1, 0), (-2, 0)], grass),
             None
         );
     }
@@ -310,7 +301,7 @@ mod tests {
         let mut overlay = Overlay::new();
         let chunks = [((0, 0), vec![(1, 0)]), ((1, 0), vec![(16, 0)])];
         let played = overlay
-            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], grass, (1, 0))
+            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], grass)
             .unwrap();
         assert_eq!(played.foes, [(1, 0)]);
         assert_eq!(PUSH_REACH, 10);
@@ -340,43 +331,5 @@ mod tests {
         assert_eq!(overlay.removed(), [(4, 4), (1, 1)]);
         assert_eq!(overlay.added(), [(2, 2)]);
         assert_eq!(overlay.beaten(), 7);
-    }
-
-    #[test]
-    fn a_single_marble_shoves_a_foe_into_the_water_and_a_line_that_ejects_wins() {
-        let mut overlay = Overlay::new();
-        let chunks = [((0, 0), vec![(1, 0), (7, 7)])];
-        let sea = |q: i32, r: i32| {
-            Some(if (q, r) == (2, 0) {
-                Terrain::Water
-            } else {
-                Terrain::Grass
-            })
-        };
-        let played = overlay.troop_push(&chunks, &[(0, 0)], sea, (3, 5)).unwrap();
-        assert_eq!((played.ejected.clone(), played.dir), (vec![(1, 0)], (1, 0)));
-        assert_eq!(played.troop, [(1, 0)]);
-        assert_eq!(overlay.beaten(), 1);
-        // A line that pushes without ejecting loses to a shove that ejects; a line that ejects wins.
-        let mut overlay = Overlay::new();
-        let chunks = [((0, 0), vec![(1, 0), (0, -1)])];
-        let sea = |q: i32, r: i32| {
-            Some(if (q, r) == (0, -2) {
-                Terrain::Water
-            } else {
-                Terrain::Grass
-            })
-        };
-        let played = overlay
-            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], sea, (3, 5))
-            .unwrap();
-        assert_eq!(played.ejected, [(0, -1)]);
-        let mut overlay = Overlay::new();
-        let water = |_q: i32, _r: i32| Some(Terrain::Water);
-        let chunks = [((0, 0), vec![(1, 0)])];
-        let played = overlay
-            .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], water, (3, 5))
-            .unwrap();
-        assert_eq!(played.troop, [(1, 0), (0, 0), (-1, 0)]);
     }
 }

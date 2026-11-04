@@ -98,10 +98,10 @@ export class FightState {
   }
 
   /** The troop's attack (`WorldFight.troop_push`, abalone-core `worldoverlay`): the best legal push of `troop` (the hero's cell first) in
-   * the world `seed`, with the `broken` cells and the hero's step `tick` (a single marble also shoves a foe into the water, #1504), played on the fight. The push as it was played, from the cells before it; `null` when none
+   * the world `seed`, with the `broken` cells, played on the fight. The push as it was played, from the cells before it; `null` when none
    * is legal. */
-  troopPush(world: World, seed: number, troop: readonly Axial[], broken: readonly Axial[], tick: number): Played | null {
-    const out = this.fight.troop_push(seed, flat(troop), this.chunksAround(world, troop[0]!, WorldFight.push_reach()), flat(broken), tick >>> 0);
+  troopPush(world: World, seed: number, troop: readonly Axial[], broken: readonly Axial[]): Played | null {
+    const out = this.fight.troop_push(seed, flat(troop), this.chunksAround(world, troop[0]!, WorldFight.push_reach()), flat(broken));
     if (!out) return null;
     const push: Pushed = { troop: cellsOf(out.troop), enemies: cellsOf(out.enemies), ejected: cellsOf(out.ejected), dir: [out.dir[0]!, out.dir[1]!] };
     return { from: [...troop], foes: cellsOf(out.foes), push };
