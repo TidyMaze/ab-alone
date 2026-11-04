@@ -789,7 +789,7 @@ describe('roguelite', () => {
   });
 
   it('a fight an Unknown node turned into is a plain fight: 10 foes, scrap, the Jammer, and the run line says fight', () => {
-    const UNKNOWN = parseMap([0, 0, 0, 7, 0, 0, 0]);
+    const UNKNOWN = parseMap([0, 1, 0, 7, 0, 0, 0]);
     const fight = Array.from({ length: 60 }, (_, seed) => visit(UNKNOWN, newRun(seed, 3, LEGACY_UNLOCKED), 0)).find((r) => r.fighting)!;
     expect(foesOf(UNKNOWN, fight)).toBe(FIGHT_FOES);
     expect(foesOf(UNKNOWN, { ...fight, relics: [Relic.Saboteur] })).toBe(FIGHT_FOES - 1);
@@ -1117,7 +1117,7 @@ describe('roguelite relics', () => {
   });
 
   it('Saboteur: the bot has a marble fewer in fights and elites', () => {
-    expect(foesOf(ACT, { ...pick(newRun(1, 3, LEGACY_UNLOCKED), 0), relics: [Relic.Saboteur] })).toBe(FIGHT_FOES - 1);
+    expect(foesOf(ACT, { ...pick(newRun(1, 3, LEGACY_UNLOCKED), 0), relics: [Relic.Saboteur] })).toBe(FIRST_FOES - 1);
     expect(foesOf(ACT, pick(run({ relics: [Relic.Saboteur] }), 1))).toBe(START_ARMY - 1);
   });
 
@@ -1629,7 +1629,7 @@ describe('varied enemy armies (#1462)', () => {
     expect(foePlan(FOES, pick({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [0], relics: [Relic.Saboteur] }, 1), planOf)).toEqual([9, 3, 0, -4, 2]);
     expect(seen).toEqual([[0, 0], [1, 1]]);
     // A run saved before them: the count alone, as before.
-    expect(foePlan(FOES, pick({ ...newRun(1, 3, LEGACY_UNLOCKED), enemies: false }, 0), planOf)).toBe(FIGHT_FOES);
+    expect(foePlan(FOES, pick({ ...newRun(1, 3, LEGACY_UNLOCKED), enemies: false }, 0), planOf)).toBe(FIRST_FOES);
     expect(seen).toHaveLength(2);
   });
 

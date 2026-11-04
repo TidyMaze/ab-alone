@@ -303,7 +303,7 @@ describe('a fight played to its end on the real engine', () => {
     value(run.pick({ node: 0 }));
     let plies = 0;
     while (value(run.state({})).screen === 'fight' && plies++ < 200) {
-      value(session.playMove({ move: formatMove(fromRecord(calls.engines[0]!.best_move(400))) })); // the engine plays the agent's side too
+      value(session.playMove({ move: formatMove(fromRecord((calls.engines[0] as RunEngine & { auto_move(nodes: number): Int32Array }).auto_move(400))) })); // Auto-play's search plays the agent's side, so it does not repeat itself into a draw
     }
     const state = value(run.state({}));
     expect(value(session.getState()).status).toBe('black_won');
@@ -332,7 +332,7 @@ describe('pick', () => {
     expect(failure(run.pick({ node: 999 })).code).toBe('bad_choice');
   });
 
-  test('a fight starts as the session game: the agent is Black against the bot, 10 marbles for a fight node', async () => {
+  test('a fight starts as the session game: the agent is Black against the bot, 8 marbles for the first fight', async () => {
     const { run, session } = setup();
     value(await run.newRun({ seed: 0 }));
     const state = value(run.pick({ node: 0 }));
@@ -342,7 +342,7 @@ describe('pick', () => {
     const game = value(session.getState());
     expect(game.mode).toBe('bot');
     expect(game.game_id).toBe(state.fight!.game);
-    expect(game.board.split('W')).toHaveLength(11);
+    expect(game.board.split('W')).toHaveLength(9);
     expect(state.line).toContain('act 1 fight');
     expect(failure(run.pick({ node: 1 })).code).toBe('not_now');
   });

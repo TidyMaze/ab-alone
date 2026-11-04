@@ -244,8 +244,8 @@ describe('the boss relics', () => {
   });
   it('War banner: the bot has 2 marbles fewer, and act bosses play at 150 % of their strength', () => {
     const run = { ...fighting(base(), 0), relics: [Relic.WarBanner] };
-    expect(foesOf(MAP, run)).toBe(8);
-    expect(foesOf(MAP, { ...run, relics: [Relic.WarBanner, Relic.Saboteur] })).toBe(7);
+    expect(foesOf(MAP, run)).toBe(6); // the first fight's 8 (#1502)
+    expect(foesOf(MAP, { ...run, relics: [Relic.WarBanner, Relic.Saboteur] })).toBe(5);
     const asked: number[] = [];
     foePlan(MAP, { ...run, relics: [Relic.WarBanner, Relic.Saboteur] }, (_n, less) => (asked.push(less), [10, 0, 0]));
     expect(asked).toEqual([3]);

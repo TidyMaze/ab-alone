@@ -606,11 +606,14 @@ export function chooseExit(map: MapNode[], run: Run, biome: number, exitsOf: (ac
 /** The marbles of a fight node's bot (#1145): its standard layout less the 4 of its front row. */
 export const FIGHT_FOES = 10;
 /** The marbles of the bot in the first fight of a run (#1502): act 1, row 1. */
-export const FIRST_FOES = FIGHT_FOES;
+export const FIRST_FOES = 8;
 
-/** The marbles of the bot in the run's fight: FIGHT_FOES against a fight node, the full START_ARMY against an elite, one
- * fewer with the Saboteur. */
-export const foesOf = (map: MapNode[], run: Run): number => (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY) - fewer(run);
+/** The marbles of a node's bot before the relics: FIRST_FOES in the first fight of the run, FIGHT_FOES in any other fight, the
+ * full START_ARMY against an elite. */
+const baseFoes = (node: MapNode | undefined): number => (node?.kind !== 'fight' ? START_ARMY : node.act === 0 && node.row === 0 ? FIRST_FOES : FIGHT_FOES);
+
+/** The marbles of the bot in the run's fight: `baseFoes`, one fewer with the Saboteur. */
+export const foesOf = (map: MapNode[], run: Run): number => baseFoes(lastNode(map, run)) - fewer(run);
 /** The marbles the bot lacks in fights and elites: 1 with the Saboteur, 2 with the War banner (#1467). */
 const fewer = (run: Run): number => Number(has(run, Relic.Saboteur)) + 2 * Number(has(run, Relic.WarBanner));
 

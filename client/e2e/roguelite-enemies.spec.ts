@@ -22,7 +22,7 @@ test('the rogue-lite foes: a formation and special marbles in a fight, a named e
 
   await hook({ ...run, path: [0], fighting: true });
   await expect(page.locator('#hud small')).toContainText('Rogue-lite run · act 1 fight · Belgian daisy · army 14 marbles');
-  expect(await marks()).toBe('3,-4,3'); // a Spark
+  expect(await marks()).toBe('4,-3,3'); // a Spark
   await freshDraw(page);
   await shot(page, { path: 'test-results/1462-fight-after.png' });
 

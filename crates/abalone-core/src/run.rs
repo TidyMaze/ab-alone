@@ -22,7 +22,7 @@ pub const MIN_ARMY: u8 = 4;
 /// Marbles of the bot against a fight node (#1145): its standard layout without the 4 of its front row.
 pub const FIGHT_FOES: u8 = 10;
 /// Marbles of the bot in the first fight of a run (#1502): act 1, row 1.
-pub const FIRST_FOES: u8 = FIGHT_FOES;
+pub const FIRST_FOES: u8 = 8;
 
 /// What a node of the map holds (docs/specs/roguelite.md section 2). Its value is its code on
 /// the bridge.
@@ -787,7 +787,7 @@ pub struct FoePlan {
 
 /// The bot's army at node `index` of the map of `seed`, `less` marbles short (the Saboteur): a
 /// pure function of the seed and the node. A fight, or an Unknown node the page turned into
-/// one (#1463), has `FIGHT_FOES` marbles and an elite `FULL_ARMY`, in the node's formation. A fight holds `act + 1` special marbles of different
+/// one (#1463), has `FIGHT_FOES` marbles, the first fight of the run `FIRST_FOES` (#1502), and an elite `FULL_ARMY`, in the node's formation. A fight holds `act + 1` special marbles of different
 /// kinds, from the Heavy, Anchor and Spark in act 1, with the Magnet and Shield in act 2 and the
 /// Bomb and Medic in act 3; an elite holds its archetype's. In a `biome` (section 18) a fight also always holds the
 /// biome's signature special marble, in place of its first kind when it was not dealt. Any other node, or an index off
@@ -816,6 +816,8 @@ pub fn foe_plan_with(seed: u64, index: usize, less: u8, biome: Biome, more: u8) 
     };
     let base = if node.kind == NodeKind::Elite {
         FULL_ARMY
+    } else if node.act == 0 && node.row == 0 {
+        FIRST_FOES
     } else {
         FIGHT_FOES
     };

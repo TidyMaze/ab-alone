@@ -316,7 +316,8 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   // comes back, the flash of a Shield. They only show what the engine did.
   const counts = (kind: number): number[] => Array.from({ length: 10 }, (_, k) => Number(k === kind - 1));
   /** The fight of node 0 with `placed` marbles of `kind` and `moves` already played (records of the bridge). */
-  const staged = (kind: number, placed: number[][], moves: number[][] = []): Run => ({ ...pick({ ...plainRun(3, 3), specials: counts(kind) }, 0), placed, moves });
+  // Seed 3: fight 7, in row 3, has the plain 10 marbles of a fight.
+  const staged = (kind: number, placed: number[][], moves: number[][] = []): Run => ({ ...pick({ ...plainRun(3, 3), specials: counts(kind), path: [1, 4] }, 7), placed, moves });
   /** The record of a move of one marble on `(q, r)` in direction `dir`. */
   const ONE = (q: number, r: number, dir: number): number[] => [1, dir, q, r, 0, 0, 0, 0];
 
@@ -506,7 +507,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(line()).toBe('Rogue-lite run · army 14 marbles · pick a fight');
   });
 
-  it('a fight starts with 10 enemy marbles, its front row gone, and an elite with all 14, #1145', async () => {
+  it('a fight starts with 10 enemy marbles, its front row gone, the first fight with 8, and an elite with all 14, #1145, #1502', async () => {
     const whites = async (node: number, path: number[]): Promise<string[]> => {
       const game = await boot('?bot=off');
       await game.hook('__run', pick({ ...plainRun(3, 3), path }, node));
@@ -514,9 +515,12 @@ describe('main.ts, the rogue-lite run (#798)', () => {
       const cells = game.hook<Move[]>('__legal').flatMap((m) => m.cells.map((c) => c.join(',')));
       return [...new Set(cells)];
     };
-    const fight = await whites(0, []);
+    const fight = await whites(7, [1, 4]);
     expect(fight).toContain('0,-3');
     expect(fight.some((c) => ['0,-2', '1,-2', '2,-2', '-1,-3'].includes(c))).toBe(false);
+    const first = await whites(0, []);
+    expect(first.length).toBeLessThanOrEqual(8);
+    expect(first.some((c) => ['0,-2', '1,-2', '2,-2', '-1,-3'].includes(c))).toBe(false);
     expect(await whites(2, [0])).toContain('0,-2'); // an elite: the standard 14
   });
 
@@ -943,7 +947,7 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
     let pickable: { index: number; path: number[] } | undefined;
     for (; !pickable; seed++) {
       const { nodes, found } = await nodesOf(seed, 'fight');
-      pickable = found.find((f) => nodes[f.index]!.formation > 0);
+      pickable = found.find((f) => nodes[f.index]!.row > 0 && nodes[f.index]!.formation > 0); // the first fight has 8 marbles (#1502)
     }
     seed--;
     const { nodes } = await nodesOf(seed, 'fight');

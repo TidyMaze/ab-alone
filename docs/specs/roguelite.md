@@ -24,12 +24,12 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
   back row first; the bot has its 14 against an elite, 10 against a fight node (#1145): its
-  standard layout without the 4 marbles of its front row (`FIGHT_FOES`), or the formation and special marbles of section 14. Marbles ejected in a fight are lost for the run. A won fight
+  standard layout without the 4 marbles of its front row (`FIGHT_FOES`), and 8 in the first fight of the run (act 1, row 1, `FIRST_FOES`, #1502), or the formation and special marbles of section 14. Marbles ejected in a fight are lost for the run. A won fight
   that does not end the run offers a reward (section 6): a marble or a special marble (Heavy,
   Anchor, Spark, and section 13's Magnet, Shield, Bomb, Medic), placed before the next fights.
 - **End**: the run is lost when a fight is lost (a draw is a loss) or the army is below 4 marbles,
   and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
-  fight never goes on after the run is lost; the army wins at the usual 6 ejections, also against the 10 marbles of a fight node (4 are left).
+  fight never goes on after the run is lost; the army wins at the usual 6 ejections, also against the 10 marbles of a fight node (4 are left) and the 8 of the first fight (2 are left).
 - **Meta**: unlocks only, between runs (section 8, #801, and the Collector's blueprints of section 15): other special
   marble types, relics, tactics and commanders (section 17), and the runes of section 27 that open hidden branches on the map, never power. Every run starts from zero.
 - **Determinism**: the map comes from a run seed (engine splitmix64), so a run can be replayed and
@@ -438,7 +438,7 @@ the special marbles is the engine's, played by the bot's search like the army's.
 
 - **Formations**: `Formation` in `abalone-core::run`, its code on the bridge. Drawn for each fight and elite, equally
   likely, from its own draw apart from the map's shape and kinds (`run::foes_of`). A bot with fewer marbles than the
-  formation holds (10 against a fight, one fewer with the Saboteur) loses the marbles nearest the centre first (the
+  formation holds (10 against a fight, 8 in the first one, one fewer with the Saboteur) loses the marbles nearest the centre first (the
   standard layout, its front row first as before).
 
   | Code | Formation | Cells (White's half) |

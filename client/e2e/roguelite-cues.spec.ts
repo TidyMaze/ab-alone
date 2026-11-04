@@ -6,7 +6,7 @@ import { shot } from './shot';
 const load = async (page: Page, specials: number[], placed: number[][], moves: number[][]) => {
   await page.goto('./?bot=off');
   await page.waitForFunction(() => (window as any).__run);
-  await page.evaluate((state) => (window as any).__run(state), { seed: 3, army: 14, path: [0], fighting: true, moves, end: '', specials, placed, reward: false });
+  await page.evaluate((state) => (window as any).__run(state), { seed: 3, army: 14, path: [1, 4, 7], fighting: true, moves, end: '', specials, placed, reward: false });
 };
 const freshDraw = async (page: Page) => {
   const asked = await page.evaluate(() => (window as any).__drawNext() as number);
