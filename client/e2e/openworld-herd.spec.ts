@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import { lowTierOnCi } from './modes';
-import { shot } from './shot';
 
 lowTierOnCi();
 
@@ -14,15 +13,11 @@ test('a foe three cells from the water is herded in within a few hero steps, #15
   await expect.poll(() => data('openworldAt')).toBe('0,0');
   await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [7, -29], troop: [[6, -29], [6, -30], [7, -30], [8, -29]], enemies: [[9, -30]] }));
   await expect.poll(() => data('openworldAt')).toBe('7,-29');
-  await shot(page, { path: 'test-results/openworld-herd-before.png' });
   const keys = ['ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'];
-  for (const [i, key] of keys.entries()) {
+  for (const key of keys) {
     if ((await enemies()).length === 0) break;
     await page.keyboard.press(key);
-    await page.waitForTimeout(100);
-    if (i === 1) await shot(page, { path: 'test-results/openworld-herd-during.png' });
   }
   await expect.poll(enemies).toEqual([]);
   expect(await data('openworldBeaten')).toBe('1');
-  await shot(page, { path: 'test-results/openworld-herd-after.png' });
 });

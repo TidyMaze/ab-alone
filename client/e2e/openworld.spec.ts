@@ -74,12 +74,12 @@ shared('the hero steps up onto a higher cell of the Open world and the page keep
   expect(errors).toEqual([]);
 });
 
-// #966: enemy marbles stand on the map and the troop of 6 trails the hero, the first marble on the cell it just left.
+// #966: enemy marbles stand on the map and the troop of 15 trails the hero, the first marble on the cell it just left.
 shared('enemy marbles are on the map and the troop follows the hero, #966', async ({ world: page }) => {
   const data = (key: 'openworldAt' | 'openworldTroop' | 'openworldEnemies') => page.evaluate((k) => document.body.dataset[k], key);
   await expect.poll(() => data('openworldAt')).toBe('0,0');
   expect(Number(await data('openworldEnemies'))).toBeGreaterThan(0);
-  expect((await data('openworldTroop'))!.split(' ')).toHaveLength(6);
+  expect((await data('openworldTroop'))!.split(' ')).toHaveLength(15); // the troop starts at 15 marbles (flock)
   await page.keyboard.press('ArrowUp');
   await expect.poll(() => data('openworldAt')).not.toBe('0,0');
   const before = await data('openworldAt');
@@ -149,7 +149,7 @@ shared('the wheel zooms the Open world out far and back, and the hero still roll
   const drawn = await page.evaluate(() => JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>);
   expect(drawn['terrain-grass']).toBeGreaterThan(0);
   expect(drawn['prop-tree']).toBeGreaterThan(0);
-  expect(drawn.troop).toBe(6);
+  expect(drawn.troop).toBe(15); // the troop starts at 15 marbles (flock)
   expect(drawn.enemies).toBeGreaterThan(0);
   await page.mouse.wheel(0, -2000);
   await expect.poll(zoom).toBe(1);
@@ -246,7 +246,7 @@ shared('the troop pushes the enemy in front of it after a step, and the enemy mo
   expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBe('1');
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldPush)).toBe('1');
   expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('2,0');
-  expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0 -2,0');
+  expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0'); // the two troop marbles trail the hero on (2,0): the line of three pushed forward one cell each, no third marble
   expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
   expect(await page.evaluate(() => document.body.dataset.openworldBeaten)).toBe('0');
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined(); // within the expect timeout: a loaded page draws the end of the animation late
