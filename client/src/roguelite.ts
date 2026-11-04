@@ -605,6 +605,8 @@ export function chooseExit(map: MapNode[], run: Run, biome: number, exitsOf: (ac
 
 /** The marbles of a fight node's bot (#1145): its standard layout less the 4 of its front row. */
 export const FIGHT_FOES = 10;
+/** The marbles of the bot in the first fight of a run (#1502): act 1, row 1. */
+export const FIRST_FOES = FIGHT_FOES;
 
 /** The marbles of the bot in the run's fight: FIGHT_FOES against a fight node, the full START_ARMY against an elite, one
  * fewer with the Saboteur. */

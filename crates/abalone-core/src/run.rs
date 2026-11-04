@@ -21,6 +21,8 @@ pub const FULL_ARMY: u8 = 14;
 pub const MIN_ARMY: u8 = 4;
 /// Marbles of the bot against a fight node (#1145): its standard layout without the 4 of its front row.
 pub const FIGHT_FOES: u8 = 10;
+/// Marbles of the bot in the first fight of a run (#1502): act 1, row 1.
+pub const FIRST_FOES: u8 = FIGHT_FOES;
 
 /// What a node of the map holds (docs/specs/roguelite.md section 2). Its value is its code on
 /// the bridge.
@@ -2426,7 +2428,7 @@ mod foes {
     #[test]
     fn a_fight_node_has_10_foes_an_elite_14_and_the_saboteur_takes_one() {
         for seed in 0..30 {
-            let (fight, _) = node_of(seed, NodeKind::Fight, 0).unwrap();
+            let (fight, _) = node_of(seed, NodeKind::Fight, 1).unwrap();
             assert_eq!(foe_plan(seed, fight, 0, Biome::Meadow).count, FIGHT_FOES);
             assert_eq!(
                 foe_plan(seed, fight, 1, Biome::Meadow).count,
@@ -2438,6 +2440,28 @@ mod foes {
                 assert_eq!(foe_plan(seed, elite, 0, Biome::Meadow).count, FULL_ARMY);
                 assert_eq!(foe_plan(seed, elite, 1, Biome::Meadow).count, FULL_ARMY - 1);
             }
+        }
+    }
+
+    #[test]
+    fn the_first_fight_of_a_run_has_8_foes_and_the_saboteur_takes_one() {
+        assert_eq!(FIRST_FOES, 8);
+        for seed in 0..30 {
+            let map = run_map(seed);
+            for (index, node) in map.iter().enumerate() {
+                if node.kind == NodeKind::Fight {
+                    let first = node.act == 0 && node.row == 0;
+                    let count = if first { FIRST_FOES } else { FIGHT_FOES };
+                    assert_eq!(foe_plan(seed, index, 0, Biome::Meadow).count, count);
+                    assert_eq!(foe_plan(seed, index, 1, Biome::Meadow).count, count - 1);
+                }
+            }
+            let plan = foe_plan(seed, 0, 0, Biome::Meadow);
+            assert_eq!(
+                usize::from(plan.count),
+                map[0].formation.cells(FIRST_FOES).len()
+            );
+            assert_eq!(plan.specials.len(), 1);
         }
     }
 

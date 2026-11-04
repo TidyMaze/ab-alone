@@ -48,6 +48,7 @@ import {
   EVENTS,
   fightBudget,
   FIGHT_FOES,
+  FIRST_FOES,
   Key,
   foesOf,
   foePlan,
@@ -592,7 +593,10 @@ describe('roguelite', () => {
   it('a fight puts 10 enemy marbles on the board, an elite or a boss the full 14, #1145', () => {
     const elite = pick({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] }, 1);
     expect(FIGHT_FOES).toBe(10);
-    expect(foesOf(ACT, pick(newRun(1, 3, LEGACY_UNLOCKED), 0))).toBe(10);
+    expect(FIRST_FOES).toBe(8);
+    expect(foesOf(ACT, pick(newRun(1, 3, LEGACY_UNLOCKED), 0))).toBe(FIRST_FOES); // act 1, row 1 (#1502)
+    expect(foesOf([{ ...ACT[0]!, row: 1 }], pick(newRun(1, 3, LEGACY_UNLOCKED), 0))).toBe(10);
+    expect(foesOf([{ ...ACT[0]!, act: 1 }], pick(newRun(1, 3, LEGACY_UNLOCKED), 0))).toBe(10);
     expect(foesOf(ACT, elite)).toBe(START_ARMY);
   });
 
