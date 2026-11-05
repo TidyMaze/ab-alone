@@ -315,7 +315,7 @@ describe('reading the relays (#1287, read only)', () => {
   });
 
   it('reads the three chosen relays, keeps what replays, and sends no event', async () => {
-    expect(RELAYS).toEqual(['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
+    expect(RELAYS).toEqual(['wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']); // nos.lol dropped: its terms page holds none (#1287)
     const socks: Fake[] = [];
     const good = JSON.stringify(await signed());
     const open = (url: string): Socket => {

@@ -21,7 +21,7 @@ describe('shared board opt-in', () => {
     await game.settle();
     expect(shown()).toBe(true);
     expect(byId('optin-text').textContent).toContain('public and permanent');
-    expect(byId('optin-text').textContent).not.toContain('16 or older');
+    expect(byId('optin-text').textContent).toContain('You must be 16 or older.');
     expect(byId<HTMLInputElement>('optin-box').checked).toBe(false);
     expect(byId<HTMLButtonElement>('optin-yes').disabled).toBe(true);
     expect(byId<HTMLAnchorElement>('optin-notice').href).toContain('docs/privacy.md');
@@ -32,7 +32,7 @@ describe('shared board opt-in', () => {
     byId('optin-yes').click();
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
     expect(shown()).toBe(false);
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 3, choice: 'joined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 4, choice: 'joined' });
     expect(localStorage.getItem('ab-alone.board-name')).toHaveLength(16);
   });
 
@@ -53,7 +53,7 @@ describe('shared board opt-in', () => {
     await game.settle();
     byId('optin-no').click();
     await game.settle();
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 3, choice: 'declined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 4, choice: 'declined' });
   });
 
   it('Keep ranked local stores a decline, and it is not asked again', async () => {
@@ -73,7 +73,7 @@ describe('shared board opt-in', () => {
       leave();
       await game.settle();
       expect(shown()).toBe(false);
-      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 3, choice: 'declined' });
+      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 4, choice: 'declined' });
       expect(localStorage.getItem('ab-alone.board-key')).toBeNull();
     }
     game.openModes();
@@ -101,22 +101,24 @@ describe('shared board opt-in', () => {
     byId('optin-no').click();
   });
 
-  it('is off without ?board, for a real player as for an automated page: no dialog, no buttons, no key, nothing stored', async () => {
-    for (const webdriver of [false, true]) {
-      const game = await boot('?bot=off&net=hook', { webdriver });
-      game.openModes();
-      byId('ranked').click();
-      await game.settle();
-      expect(shown()).toBe(false);
-      game.openModes();
-      byId('leaderboard').click();
-      expect(byId('board-share').hidden).toBe(true);
-      expect(byId('board').hidden).toBe(false);
-      expect(Object.keys(localStorage).filter((k) => k.startsWith('ab-alone.board-'))).toEqual([]);
-    }
+  it('is on by default, no flag needed: the leaderboard shows the join placeholder and no key is made before the join', async () => {
+    FakeSocket.all = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const game = await boot('?bot=off&net=hook');
+    game.openModes();
+    byId('leaderboard').click();
+    await game.settle();
+    expect(byId('board-share').hidden).toBe(false);
+    expect(byId('board-shared').textContent).toContain('Join the board');
+    expect(byId('board').hidden).toBe(false);
+    expect(FakeSocket.all).toHaveLength(0);
+    expect(Object.keys(localStorage).filter((k) => k.startsWith('ab-alone.board-'))).toEqual([]);
+    vi.unstubAllGlobals();
   });
 
   it('the board dialog joins, then New key changes the key and Leave the board stores a signed retire and clears the consent', async () => {
+    FakeSocket.all = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
     const game = await boot('?bot=off&board');
     game.openModes();
     byId('leaderboard').click();
@@ -138,6 +140,8 @@ describe('shared board opt-in', () => {
     expect(retires.events).toHaveLength(2); // New key retired the first key, Leave the second
     expect(retires.events.map((e) => e.kind)).toEqual(["retire", "retire"]);
     expect((JSON.parse(localStorage.getItem('ab-alone.board-consent')!) as { choice: string }).choice).toBe('declined');
+    expect(localStorage.getItem('ab-alone.board-key')).toBe(''); // Leave erases the key here
+    vi.unstubAllGlobals();
   });
 
   it('joining, New key and Leave the board open no socket', async () => {
@@ -155,7 +159,7 @@ describe('shared board opt-in', () => {
     expect(sockets).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
-  it('with ?board=publish, Leave the board and New key each send their retire to the three relays; plain ?board sent none above', async () => {
+  it('with ?board=publish, Leave the board and New key each send their retire to the two relays; plain ?board sent none above', async () => {
     const sent: string[] = [];
     class Sock {
       constructor(readonly url: string) { queueMicrotask(() => this.on.get('open')?.({})); }
@@ -173,12 +177,12 @@ describe('shared board opt-in', () => {
     byId('optin-yes').click();
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
     byId('board-newkey').click();
-    await vi.waitFor(() => expect(sent).toHaveLength(3));
+    await vi.waitFor(() => expect(sent).toHaveLength(2)); // two relays now
     byId('board-leave').click();
-    await vi.waitFor(() => expect(sent).toHaveLength(6));
+    await vi.waitFor(() => expect(sent).toHaveLength(4));
     const events = sent.map((m) => (JSON.parse(m) as [string, { content: string }])[1].content);
     expect(sent.every((m) => m.startsWith('["EVENT"'))).toBe(true);
-    expect(events.map((c) => (JSON.parse(c) as { kind: string }).kind)).toEqual(Array(6).fill('retire'));
+    expect(events.map((c) => (JSON.parse(c) as { kind: string }).kind)).toEqual(Array(4).fill('retire'));
     vi.unstubAllGlobals();
   });
   // The read side (#1287): behind ?board and after the opt-in, the board reads the three relays and shows the results the rules replay.
@@ -237,7 +241,7 @@ describe('shared board opt-in', () => {
     game.openModes();
     byId('leaderboard').click();
     expect(FakeSocket.all).toHaveLength(0); // not joined: nothing is read
-    expect(byId('board-shared').hidden).toBe(true);
+    expect(byId('board-shared').textContent).toContain('Join the board');
     byId('board-close').click();
     game.openModes();
     byId('ranked').click();
@@ -248,7 +252,7 @@ describe('shared board opt-in', () => {
     game.openModes();
     byId('leaderboard').click();
     await vi.waitFor(() => expect(byId('board-shared').textContent).toContain('Ann'));
-    expect(FakeSocket.all.map((s) => s.url)).toEqual(['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
+    expect(FakeSocket.all.map((s) => s.url)).toEqual(['wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
     expect(byId('board-shared').textContent).toContain('<i>Ann</i>'); // as text
     expect(byId('board-shared').innerHTML).toContain('&lt;i&gt;');
     expect(byId('board-shared').textContent).not.toContain('Liar');
@@ -264,7 +268,7 @@ describe('shared board opt-in', () => {
     vi.unstubAllGlobals();
   });
 
-  it('without ?board nothing is read, even from a player who joined before', async () => {
+  it('an answer of the version before is asked again: nothing is read from it', async () => {
     FakeSocket.all = [];
     vi.stubGlobal('WebSocket', FakeSocket);
     localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 3, choice: 'joined' }));
@@ -276,8 +280,8 @@ describe('shared board opt-in', () => {
     vi.unstubAllGlobals();
   });
 
-  it('with ?board, no relay is contacted before a current opt-in: not asked, declined, an older answer, or garbage', async () => {
-    for (const saved of [null, { v: 3, choice: 'declined' }, { v: 1, choice: 'joined' }, { v: 2, choice: 'joined' }, 'garbage']) {
+  it('no relay is contacted before a current opt-in: not asked, declined, an older answer, or garbage', async () => {
+    for (const saved of [null, { v: 4, choice: 'declined' }, { v: 1, choice: 'joined' }, { v: 2, choice: 'joined' }, { v: 3, choice: 'joined' }, 'garbage']) {
       FakeSocket.all = [];
       vi.stubGlobal('WebSocket', FakeSocket);
       localStorage.clear();
@@ -287,7 +291,7 @@ describe('shared board opt-in', () => {
       byId('leaderboard').click();
       await game.settle();
       expect(FakeSocket.all).toHaveLength(0);
-      expect(byId('board-shared').hidden).toBe(true);
+      expect(byId('board-shared').textContent).toContain('Join the board');
       vi.unstubAllGlobals();
     }
   });

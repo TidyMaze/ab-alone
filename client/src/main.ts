@@ -28,7 +28,7 @@ import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consen
 import { readBoard, sharedHtml, type SharedResult } from './boardfeed';
 import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
-import { BOARD_TEXT, publishFlag, boardAskNeeded, boardKeys, boardFlag, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
+import { BOARD_TEXT, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, encounterFor, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -1323,7 +1323,6 @@ function askBoard(): Promise<void> {
 }
 const shareJoined = (): boolean => readChoice(store) === 'joined';
 function showShare(): void {
-  document.getElementById('board-share')!.hidden = !boardFlag(location.search);
   const joined = shareJoined();
   document.getElementById('board-share-state')!.textContent = joined
     ? `You are on the shared board as "${readBoardName(store)}". Nothing is published yet.`
@@ -1332,21 +1331,24 @@ function showShare(): void {
   document.getElementById('board-leave')!.hidden = !joined;
   document.getElementById('board-newkey')!.hidden = !joined;
 }
-document.getElementById('board-join')!.addEventListener('click', () => void askBoard().then(showShare));
+document.getElementById('board-join')!.addEventListener('click', () => void askBoard().then(() => (showShare(), showShared())));
 // Behind ?board=publish the retire that Leave or New key just stored goes to the three relays (publish.ts); plain ?board sends nothing.
 const publishRetire = (): void => {
   if (publishFlag(location.search)) void publishResult((url) => new WebSocket(url), readRetires(store).at(-1)!, Math.floor(Date.now() / 1000));
 };
-document.getElementById('board-leave')!.addEventListener('click', () => void leaveBoard(store, Date.now()).then(() => (publishRetire(), showShare())));
+document.getElementById('board-leave')!.addEventListener('click', () => void leaveBoard(store, Date.now()).then(() => (publishRetire(), showShare(), showShared())));
 document.getElementById('board-newkey')!.addEventListener('click', () => void newKey(store, Date.now()).then(publishRetire));
-// The shared board, read side (#1287): behind ?board and after the opt-in, the three relays are read and the results the Rust rules replay
-// are shown. Nothing is published. A reopened board drops an older read that comes back late.
+// The shared board, read side (#1287): once joined, the relays are read and the results the Rust rules replay are shown. Before the
+// join no socket is opened: the placeholder says so. Nothing is published here. A reopened board drops an older read that comes back late.
 let sharedRead = 0;
 function showShared(): void {
   const box = document.getElementById('board-shared')!;
-  box.hidden = !(boardFlag(location.search) && shareJoined());
-  if (box.hidden) return;
+  box.hidden = false;
   const read = ++sharedRead;
+  if (!shareJoined()) {
+    box.textContent = 'Join the board to see the shared results. Until you join, your browser connects to no relay.';
+    return;
+  }
   box.textContent = 'Reading the relays...';
   void Promise.all([readBoard((url) => new WebSocket(url), Math.floor(Date.now() / 1000), replay_score), boardKeys(store)]).then(([rows, keys]) => {
     if (read === sharedRead) box.innerHTML = sharedHtml(rows, keys.pub);
@@ -5529,7 +5531,7 @@ let sealing: { game: string; seal: Promise<RankedSeal> } | null = null;
 let sealedResult: SharedResult | null = null;
 function sealOf(): Promise<RankedSeal> | null {
   const session = online;
-  if (!session || !roomKeys || !link || rankedMode !== '1v1' || !boardFlag(location.search) || readChoice(store) !== 'joined') return null;
+  if (!session || !roomKeys || !link || rankedMode !== '1v1' || readChoice(store) !== 'joined') return null;
   if (sealing?.game !== session.game) {
     const keys = roomKeys;
     sealing = { game: session.game, seal: boardKeys(store).then((board) => new RankedSeal({ game: session.game, side: session.side as 1 | 2, keys, board, name: readBoardName(store), opponent: session.opponent, nowS: () => Math.floor(Date.now() / 1000) })) };
@@ -5748,7 +5750,7 @@ function playOnline(coop?: CoopFight, asDuel = false): void {
 document.getElementById('play-online')!.addEventListener('click', () => playOnline());
 const rankedButton = document.getElementById('ranked') as HTMLButtonElement;
 rankedButton.addEventListener('click', () => {
-  if (boardAskNeeded(store, location.search)) void askBoard().then(startRanked);
+  if (boardAskNeeded(store)) void askBoard().then(startRanked);
   else startRanked();
 });
 function startRanked(): void {

@@ -10,17 +10,17 @@ const BOARD_KEY = 'ab-alone.board-key';
 const NAME_KEY = 'ab-alone.board-name';
 const RETIRE_KEY = 'ab-alone.board-retire';
 /** Raise it when the text below changes: an older answer then counts for nothing and the box is asked again. */
-export const BOARD_VERSION = 3;
+export const BOARD_VERSION = 4;
 /** The retire record has its own version: a text change must never hide a retire already signed. */
 const RETIRE_VERSION = 1;
 export const NAME_MAX = 16;
 
-/** The text decided by the legal role on #1287: public, permanent, third party relays, no erasure, a name that is not you, 16+. */
+/** The text decided by the legal role on #1287: public, permanent, third party relays, no erasure, a name that is not you, 16+, what Leave erases. */
 export const BOARD_TEXT =
-  'The shared ranked board publishes your ranked results (with the moves of each game and your opponent\'s key and name), a random key and the name you pick on public Nostr relays run by third parties (nos.lol, relay.piazza.today, relay.bitmacro.cloud). ' +
+  'The shared ranked board publishes your ranked results (with the moves of each game and your opponent\'s key and name), a random key and the name you pick on public Nostr relays run by third parties (relay.piazza.today, relay.bitmacro.cloud). ' +
   'Opening the board connects your browser to these relays, which see your IP address. ' +
-  'It is public and permanent: we cannot delete it, and the relays keep what they keep. Leaving the board stops new results, it does not erase old ones. ' +
-  'Pick a name that does not identify you.';
+  'It is public and permanent: we cannot delete it, and the relays keep what they keep. Leaving the board deletes your board key in this browser and stops new results; it does not erase the results already on the relays. ' +
+  'Pick a name that does not identify you. You must be 16 or older.';
 
 export type BoardChoice = 'joined' | 'declined';
 
@@ -46,14 +46,11 @@ export function readChoice(store: Store): BoardChoice | null {
 export const writeChoice = (store: Store, choice: BoardChoice): void =>
   write(store, CHOICE_KEY, JSON.stringify({ v: BOARD_VERSION, choice }));
 
-/** The whole feature is behind `?board`, off for everyone else (unfinished work, nothing is published yet). */
-export const boardFlag = (search: string): boolean => new URLSearchParams(search).has('board');
-
 /** The write side has its own switch, `?board=publish`: plain `?board` only reads, so testing the board never writes to a public relay. */
 export const publishFlag = (search: string): boolean => new URLSearchParams(search).get('board') === 'publish';
 
-/** Whether ranked entry must ask first: the flag is on and there is no answer yet. */
-export const boardAskNeeded = (store: Store, search: string): boolean => boardFlag(search) && readChoice(store) === null;
+/** Whether ranked entry must ask first: there is no answer yet. */
+export const boardAskNeeded = (store: Store): boolean => readChoice(store) === null;
 
 /** A pseudonym: no control characters, spaces collapsed, 16 characters at most (by code point). */
 export const cleanName = (raw: string): string =>
@@ -96,10 +93,11 @@ export async function joinBoard(store: Store, name: string): Promise<string> {
   return pub;
 }
 
-/** Leaves: builds and stores the signed `retire` for the current key (nothing is sent), then clears the consent. */
+/** Leaves: builds and stores the signed `retire` for the current key (nothing is sent), erases the key, then clears the consent. */
 async function retireCurrent(store: Store, nowMs: number): Promise<RetireEvent> {
   const event = await signRetire(await boardKeys(store), Math.floor(nowMs / 1000));
   write(store, RETIRE_KEY, JSON.stringify({ v: RETIRE_VERSION, events: [...readRetires(store), event] }));
+  write(store, BOARD_KEY, ''); // the key is erased here once retired: Leave and New key both erase it
   return event;
 }
 

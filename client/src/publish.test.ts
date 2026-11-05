@@ -57,9 +57,9 @@ describe('publishing a ranked result (#1287)', () => {
 
   it('sends one EVENT per relay and counts those that say OK; a refusal, a notice, an error, a close or count for none', async () => {
     const done = publishResult(open, result, 7);
-    await vi.waitFor(() => expect(Fake.all).toHaveLength(3));
+    await vi.waitFor(() => expect(Fake.all).toHaveLength(2));
     expect(Fake.all.map((s) => s.url)).toEqual([...RELAYS]);
-    const [a, b, c] = Fake.all as [Fake, Fake, Fake];
+    const [a, b] = Fake.all as [Fake, Fake];
     for (const s of Fake.all) s.emit('open');
     const sent = JSON.parse(a.sent[0]!) as [string, { id: string; content: string }];
     expect(sent[0]).toBe('EVENT');
@@ -71,10 +71,8 @@ describe('publishing a ranked result (#1287)', () => {
     b.emit('message', JSON.stringify(['OK', 'other', true]));
     b.emit('message', JSON.stringify(['OK', sent[1].id, false, 'blocked']));
     b.emit('message', JSON.stringify(['OK', sent[1].id, true])); // after the end: ignored
-    c.emit('message', JSON.stringify(['EVENT']));
-    c.emit('close');
     expect(await done).toBe(1);
-    expect([a.closed, b.closed, c.closed]).toEqual([1, 1, 1]);
+    expect([a.closed, b.closed]).toEqual([1, 1]);
   });
 
   it('publishes nothing when the event cannot be made', async () => {

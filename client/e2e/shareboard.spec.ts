@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Issue #1287: the shared ranked board opt-in, asked at the first ranked entry, unticked; and its read side: once joined, opening the
-// board reads the three relays and only reads (REQ and CLOSE, never an EVENT).
-// `?board` asks for the dialog under Playwright (navigator.webdriver skips it), `?net=hook` keeps the online transport off the network.
+// board reads the two relays and only reads (REQ and CLOSE, never an EVENT). No flag: the board is on by default.
+// `?net=hook` keeps the online transport off the network.
 const SHOTS = process.env.SHOTS;
 
 async function watch(page: Page): Promise<{ sockets: string[]; sent: string[] }> {
@@ -18,7 +18,7 @@ async function watch(page: Page): Promise<{ sockets: string[]; sent: string[] }>
 
 test('the ranked entry asks first, joining and leaving the board are as easy, and nothing is sent', async ({ page }) => {
   const { sockets, sent } = await watch(page);
-  await page.goto('./?bot=off&board&net=hook');
+  await page.goto('./?bot=off&net=hook');
   await page.getByRole('button', { name: 'Game modes' }).click();
   await page.getByRole('button', { name: 'Ranked' }).click();
   const dialog = page.getByRole('dialog', { name: 'Shared ranked board' });
@@ -53,9 +53,9 @@ test('the ranked entry asks first, joining and leaving the board are as easy, an
     consent: localStorage.getItem('ab-alone.board-consent'),
     retire: localStorage.getItem('ab-alone.board-retire'),
   }));
-  expect(JSON.parse(kept.consent!)).toEqual({ v: 3, choice: 'declined' });
+  expect(JSON.parse(kept.consent!)).toEqual({ v: 4, choice: 'declined' });
   expect(JSON.parse(kept.retire!).events[0].kind).toBe('retire');
-  await expect.poll(() => new Set(sockets).size).toBe(3);
-  expect([...new Set(sockets)].sort()).toEqual(['wss://nos.lol/', 'wss://relay.bitmacro.cloud/', 'wss://relay.piazza.today/']);
+  await expect.poll(() => new Set(sockets).size).toBe(2);
+  expect([...new Set(sockets)].sort()).toEqual(['wss://relay.bitmacro.cloud/', 'wss://relay.piazza.today/']);
   expect(sent.every((m) => m.startsWith('["REQ"') || m.startsWith('["CLOSE"'))).toBe(true);
 });

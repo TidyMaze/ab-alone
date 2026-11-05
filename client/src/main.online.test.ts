@@ -77,9 +77,13 @@ async function hosted(url = '?bot=off') {
   return { game, white };
 }
 
+// The shared board asks at the first ranked entry (#1287). These tests answer it once, as declined, after boot (boot clears storage), so the queue starts.
+const declineBoard = (): void => localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 4, choice: 'declined' }));
+
 /** Presses Ranked and seats a White opponent (#1317). */
 async function rankedHosted() {
   const game = await boot('?bot=off');
+  declineBoard();
   game.openModes();
   byId('ranked').click();
   await until(game, () => data().seat === 'player');
@@ -239,6 +243,7 @@ describe('Play online', () => {
 
   it('Ranked queues 1v1 with rank badge and tolerance window, and updates Elo rating on game end (#711)', async () => {
     const game = await boot('?bot=off');
+    declineBoard();
     game.openModes();
     const rankedBtn = byId<HTMLButtonElement>('ranked');
     expect(rankedBtn.disabled).toBe(false);
@@ -286,7 +291,7 @@ describe('Play online', () => {
       close(): void {}
     });
     const game = await boot(search);
-    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 3, choice: joined ? 'joined' : 'declined' }));
+    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 4, choice: joined ? 'joined' : 'declined' }));
     game.openModes();
     byId('ranked').click();
     await until(game, () => data().seat === 'player');
@@ -315,8 +320,8 @@ describe('Play online', () => {
   it('with ?board and both seats joined, the seats sign the ranked result together (#1287)', async () => {
     const { game, heard, out, relays } = await sealedDraw(true, true);
     await until(game, () => game.hook('__sealed') !== null);
-    await until(game, () => relays.length === 3 && relays.every((r) => r.sent.length === 1));
-    expect(relays.map((r) => r.url)).toEqual(['wss://nos.lol', 'wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
+    await until(game, () => relays.length === 2 && relays.every((r) => r.sent.length === 1));
+    expect(relays.map((r) => r.url)).toEqual(['wss://relay.piazza.today', 'wss://relay.bitmacro.cloud']);
     expect(JSON.parse(relays[0]!.sent[0]!)[0]).toBe('EVENT');
     const mine = game.hook('__sealed') as SharedResult;
     expect(await bothSigned(mine)).toBe(true);
@@ -365,6 +370,7 @@ describe('Play online', () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     game.openModes();
     byId('battle-royale').click();
+    declineBoard();
     game.openModes();
     byId('ranked').click();
     expect(byId('hud').querySelector('.rank-badge')?.textContent).toContain('Silver');
@@ -385,6 +391,7 @@ describe('Play online', () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     game.openModes();
     byId('battle-royale').click();
+    declineBoard();
     game.openModes();
     byId('ranked').click();
     const { Royale } = await import('abalone-wasm');

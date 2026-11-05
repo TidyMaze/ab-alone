@@ -44,8 +44,8 @@ describe('ranked leaderboard dialog', () => {
     game.openModes();
     byId('leaderboard').click();
     expect(byId('board-body').textContent).toContain('Play a ranked match');
-    key('Tab');
-    expect(document.activeElement).toBe(byId('board-close'));
+    key('Tab'); // the shared board's join button comes first (#1287)
+    expect(document.activeElement).toBe(byId('board-join'));
     key('Tab', true);
     expect(document.activeElement).toBe(byId('board-close'));
     key('a');

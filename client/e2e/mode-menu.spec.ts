@@ -62,6 +62,10 @@ test('picking a boss closes the mode menu and keeps Retry and Goal in the column
 });
 
 test('picking Ranked starts a ranked queue with rank badge and updates Elo in Battle royale (#711)', async ({ page }) => {
+  // The shared board asks at the first ranked entry (#1287): this spec answers it once, as declined, so the queue starts.
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('ab-alone.board-consent')) localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 4, choice: 'declined' }));
+  });
   await page.goto('./?bot=off&net=hook');
   const modes = page.getByRole('button', { name: 'Game modes' });
   await modes.click();

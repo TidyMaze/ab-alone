@@ -19,10 +19,10 @@ describe('the board opt-in (#1287)', () => {
   });
 
   it('says what the law asks: public, permanent, third party relays, no deletion, a name that is not you, 16+', () => {
-    expect(BOARD_VERSION).toBe(3); // the answers given before the moves-and-opponent-key words are asked again
+    expect(BOARD_VERSION).toBe(4); // the answers given before the age and the withdrawal words are asked again
     expect(BOARD_TEXT).toContain('your ranked results (with the moves of each game and your opponent\'s key and name), a random key');
     expect(BOARD_TEXT).toContain('Opening the board connects your browser to these relays, which see your IP address. It is public');
-    for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'nos.lol']) {
+    for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'relay.piazza.today', 'You must be 16 or older.', 'deletes your board key']) {
       expect(BOARD_TEXT).toContain(word);
     }
   });
@@ -30,10 +30,10 @@ describe('the board opt-in (#1287)', () => {
   it('is asked until answered, and an answer of another version counts for nothing', () => {
     const store = memory();
     expect(readChoice(store)).toBeNull();
-    expect(boardAskNeeded(store, '?board')).toBe(true);
+    expect(boardAskNeeded(store)).toBe(true);
     writeChoice(store, 'declined');
     expect(readChoice(store)).toBe('declined');
-    expect(boardAskNeeded(store, '?board')).toBe(false);
+    expect(boardAskNeeded(store)).toBe(false);
     store.setItem('ab-alone.board-consent', JSON.stringify({ v: BOARD_VERSION + 1, choice: 'joined' }));
     expect(readChoice(store)).toBeNull();
     store.setItem('ab-alone.board-consent', JSON.stringify({ v: BOARD_VERSION, choice: 'maybe' }));
@@ -42,9 +42,8 @@ describe('the board opt-in (#1287)', () => {
     expect(readChoice(store)).toBeNull();
   });
 
-  it('is off without ?board, for everyone', () => {
-    expect(boardAskNeeded(memory(), '?bot=off')).toBe(false);
-    expect(boardAskNeeded(memory(), '?board')).toBe(true);
+  it('is asked by default, for everyone: no flag is needed', () => {
+    expect(boardAskNeeded(memory())).toBe(true);
   });
 
   it('cuts a pseudonym to 16 characters, without control characters or runs of spaces', () => {
@@ -84,6 +83,7 @@ describe('the board opt-in (#1287)', () => {
     expect(await verifyRetire(retire)).toBe(true);
     expect(readRetires(store)).toEqual([retire]);
     expect(readChoice(store)).toBe('declined');
+    expect(store.getItem('ab-alone.board-key')).toBe(''); // erased by Leave
   });
 
   it('a retire record kept under the first board version still counts: its key is never reused and Leave keeps it', async () => {
