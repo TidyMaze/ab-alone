@@ -8,21 +8,20 @@ const memory = (): Store => {
 };
 
 describe('the first-launch guide (#1293)', () => {
-  it('opens on a first launch, never once seen, and not in an automated browser unless ?guide asks for it', () => {
+  it('opens only when ?guide asks for it, and never once seen: a first launch plays the first run instead (#1521)', () => {
     const store = memory();
-    expect(guideDue(store, '', false)).toBe(true);
-    expect(guideDue(store, '?bot=off', true)).toBe(false); // the e2e specs boot on a fresh profile: no guide over them
-    expect(guideDue(store, '?bot=off&guide', true)).toBe(true);
+    expect(guideDue(store, '')).toBe(false); // no longer automatic: the first run (firstrun.ts) replaces it
+    expect(guideDue(store, '?bot=off')).toBe(false);
+    expect(guideDue(store, '?bot=off&guide')).toBe(true);
     writeGuideSeen(store);
     expect(guideSeen(store)).toBe(true);
     expect(store!.getItem('ab-alone.guide')).toBe('seen');
-    expect(guideDue(store, '', false)).toBe(false);
-    expect(guideDue(store, '?guide', true)).toBe(false);
+    expect(guideDue(store, '?guide')).toBe(false);
   });
 
-  it('opens at every launch when storage is blocked, where no setting lasts', () => {
+  it('asks again at every ?guide when storage is blocked, where no setting lasts', () => {
     expect(guideSeen(null)).toBe(false);
-    expect(guideDue(null, '', false)).toBe(true);
+    expect(guideDue(null, '?guide')).toBe(true);
   });
 
   it('steps forward to the end, back to the first page, and closes on a skip or past the last page', () => {
@@ -37,6 +36,8 @@ describe('the first-launch guide (#1293)', () => {
   it('shows the goal, a move, a push, the 3:2 rule, then the controls', () => {
     expect(GUIDE.map((page) => page.title)).toEqual(['Push them into the void', 'Move', 'Push', 'Out-number them', 'Controls']);
     expect(GUIDE[0]!.text).toContain('six');
+    for (const page of GUIDE) expect(page.text).not.toMatch(/pale|shell|glass/i); // one vocabulary, as the HUD's: White and Black (#1523)
+    expect(GUIDE[0]!.text).toMatch(/You are White.*Black marbles/);
     expect(GUIDE[3]!.text).toMatch(/3.*2/);
   });
 

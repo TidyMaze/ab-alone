@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CELLS, VANISHED, type Axial } from './board';
 import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, type Spot } from './hub';
-import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
+import { arrowCell, bossTitle, bumpLine, goalDeck, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -305,5 +305,30 @@ describe('the boss pips (#1249)', () => {
         '<span class="pip" data-state="locked" title="The Ballast Mind: locked"></span>',
     );
     expect(pipsHtml([])).toContain('Bosses 0/5');
+  });
+});
+
+describe('the next goal of a new player (#1521)', () => {
+  it('is the first deck while no boss is beaten, none once one is', () => {
+    expect(goalDeck([])).toBe('mess');
+    expect(goalDeck(['echo'])).toBeNull();
+  });
+
+  it('marks the rail row of the goal deck, and says so in words under The Echo', () => {
+    const html = railHtml('mess', [], 'mess');
+    expect(html).toContain(
+      '<li data-deck="mess" data-state="open" data-goal aria-current="location"><span class="n">01</span><b>Mess</b><small>The Echo waits · next goal · you are here</small></li>',
+    );
+    expect(railHtml('cargo', [], 'mess')).toContain('<small>The Echo waits · next goal</small></li>'); // the marble is on another deck
+    expect(railHtml('mess', [])).not.toContain('data-goal'); // no goal asked: the rail as before
+    expect(railHtml('mess', ['echo'], null)).not.toContain('next goal');
+  });
+
+  it('marks the boss door plate of the goal deck alone, and no plate of another deck', () => {
+    const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, 'mess');
+    expect(html.match(/data-goal/g)).toHaveLength(1);
+    expect(html).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-goal>');
+    expect(labelsHtml({ deck: 'cargo', cell: [0, 0] }, [], {}, 'mess')).not.toContain('data-goal');
+    expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, [])).not.toContain('data-goal');
   });
 });

@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { boot, type Game } from './test/harness';
 
-// The first-launch guide on main.ts (#1293): a dialog of five pages over the game, closed for good by Skip or the end,
-// opened again from the settings menu.
+// The guide on main.ts (#1293): a dialog of five pages over the game, closed for good by Skip or the end, opened by ?guide
+// or again from the settings menu. A first launch plays the first run instead (#1521, main.firstrun.test.ts).
 
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const guide = (): HTMLElement => byId('guide');
@@ -28,8 +28,8 @@ function plugPad(game: Game): (button: number) => void {
 }
 
 describe('the first-launch guide', () => {
-  it('opens on a first launch on its first page, Next walks it to the last, whose Play closes it for good', async () => {
-    await boot('?bot=off', { webdriver: false });
+  it('opens with ?guide on its first page, Next walks it to the last, whose Play closes it for good', async () => {
+    await boot('?bot=off&guide');
     expect(guide().hidden).toBe(false);
     expect(guide().getAttribute('role')).toBe('dialog');
     expect(title()).toBe('Push them into the void');
@@ -50,7 +50,7 @@ describe('the first-launch guide', () => {
   });
 
   it('Back steps back and Skip closes it at any page for good', async () => {
-    await boot('?bot=off', { webdriver: false });
+    await boot('?bot=off&guide');
     next().click();
     next().click();
     expect(back().disabled).toBe(false);
@@ -67,7 +67,7 @@ describe('the first-launch guide', () => {
   });
 
   it('Escape skips it; the keys pressed in it never reach the game, and Tab keeps the focus in it', async () => {
-    await boot('?bot=off', { webdriver: false });
+    await boot('?bot=off&guide');
     const skip = byId('guide-skip');
     skip.focus();
     expect(key(skip, 'Tab', true)).toBe(false); // the first stop wraps to the last
@@ -83,9 +83,11 @@ describe('the first-launch guide', () => {
     expect(reached).toBe(true);
   });
 
-  it('does not open in an automated browser, unless ?guide asks for it', async () => {
+  it('never opens by itself, a first launch included (#1521): ?guide asks for it, the settings menu opens it again', async () => {
     await boot('?bot=off');
     expect(guide().hidden).toBe(true);
+    await boot('/', { webdriver: false });
+    expect(guide().hidden).toBe(true); // the first run plays instead
     await boot('?bot=off&guide');
     expect(guide().hidden).toBe(false);
   });

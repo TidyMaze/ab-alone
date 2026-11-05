@@ -148,4 +148,16 @@ describe('Hint', () => {
     hint.press(other, moves(1)); // another game at the same ply asks too
     expect(calls).toHaveLength(3);
   });
+
+  it('shows a move given by the game itself, on its position alone, with no engine asked (#1521)', () => {
+    const { calls, hint, changes } = setup();
+    hint.show(game, moves(2), BEST);
+    expect(calls).toHaveLength(0);
+    expect(hint.state(at(game, 2))).toBe('shown');
+    expect(hint.shown(at(game, 2))).toEqual(BEST);
+    expect(changes()).toBe(1);
+    expect(hint.shown(at(game, 3))).toBeNull();
+    hint.press(game, moves(2)); // a second press clears it, as for an asked hint
+    expect(hint.state(at(game, 2))).toBe('off');
+  });
 });
