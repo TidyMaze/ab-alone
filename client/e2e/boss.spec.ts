@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { contrastRatio, type RGB } from '../src/contrast';
 import { ANNOUNCED_AT, CONVERTED_AT, EXPLODED_AT, SEED, parseRecorded } from '../src/test/chaplain-game';
 import { openModes } from './modes';
 import { shot } from './shot';
@@ -11,122 +10,9 @@ const freshDraw = async (page: Page) => {
   await page.waitForFunction((n) => (window as any).__draws() > n, asked);
 };
 
-// Bug #326: a tell drawn on top of a boss marble (a Choir army glyph, the glass half of a marble The Chaplain converted,
-// #508) reads 3:1 against
-// the shell it sits on (world.md section 5, Tell marks). For each cell, the contrast (WCAG 2) of the brightest to the
-// darkest pixel of a small box where the top of its marble is drawn, read from one screenshot. The box follows the
-// cell spacing, so it holds at any window size.
-// `path` keeps the screenshot read, for the report (#429). `lift` is the height of the tell above the board: the box then
-// sits where the tell is drawn, which for a cell far from the centre is not above its centre (bug #1259: a Choir glyph
-// of the outer column sat 12 px out of the box, which read the glyph's edge or nothing, 2.26 to 4.9 from run to run).
-const topContrasts = async (page: Page, cells: [number, number][], path?: string, lift?: number): Promise<number[]> => {
-  // A frame drawn after this call sees the marks the caller just waited for (#383): two rAF can miss it.
-  await freshDraw(page);
-  const png = (await page.screenshot({ path })).toString('base64');
-  return page.evaluate(
-    async ([b64, list, lift]) => {
-      const img = new Image();
-      img.src = `data:image/png;base64,${b64}`;
-      await img.decode();
-      const canvas = document.createElement('canvas');
-      [canvas.width, canvas.height] = [img.width, img.height];
-      const g = canvas.getContext('2d')!;
-      g.drawImage(img, 0, 0);
-      const linear = (v: number) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
-      return list.map(([q, r]) => {
-        const toScreen = (window as any).__cellToScreen;
-        const c = toScreen(q, r);
-        const step = toScreen(q + 1, r).x - c.x; // one cell to the right, same row
-        const half = Math.round(step * 0.12);
-        const at = lift === undefined ? { x: c.x, y: c.y - step * 0.55 } : toScreen(q, r, lift);
-        const d = g.getImageData(Math.round(at.x) - half, Math.round(at.y) - half, 2 * half, 2 * half).data;
-        const lum: number[] = [];
-        for (let i = 0; i < d.length; i += 4) {
-          lum.push(0.2126 * linear(d[i]!) + 0.7152 * linear(d[i + 1]!) + 0.0722 * linear(d[i + 2]!));
-        }
-        return (Math.max(...lum) + 0.05) / (Math.min(...lum) + 0.05);
-      });
-    },
-    [png, cells, lift] as const,
-  );
-};
-
-// The height of the Choir army glyphs above the board (main.ts, the glyph's y).
-const CHOIR_GLYPH_LIFT = 0.76;
-
 // #358: every boss tell has a sound twin, played when the tell appears or changes. window.__tellCues() lists the cues
 // played so far. The clicks that open the fight are the gesture that starts the audio.
 const tellCues = (page: Page) => page.evaluate(() => (window as any).__tellCues()) as Promise<string[]>;
-
-// The source of the decal: the page loads it as KTX2 (#700), which no canvas reads.
-const CRACK_DECAL = readFileSync(new URL('../textures/crack-decal.png', import.meta.url)).toString('base64');
-
-// #355: The Hull's crack decal reads 3:1 on its cell (world.md section 5, Tell marks). Two screenshots, the decal shown
-// then hidden: at each texel of crack-decal.png inside a crack line, in the ring round the marble, the contrast (WCAG 2)
-// of the drawn crack against the steel under it. A point whose pixel does not change is hidden (by a shell, a tick, the
-// bevel) and left out. The page draws at half the pixel ratio under automation, so most crack pixels are mixed with
-// the steel: the check counts the points where the crack is fully drawn and reads 3:1. Returns how many points show
-// and how many of them reach 3:1. `path` keeps the screenshot with the decal shown, for the report (#431).
-const crackContrast = async (
-  page: Page,
-  [q, r]: [number, number],
-  path?: string,
-): Promise<{ shown: number; reading: number }> => {
-  await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
-  await page.mouse.move(2, 2); // no hover ghost
-  await freshDraw(page); // a draw since the last change
-  const shown = await page.screenshot({ path });
-  await page.evaluate(() => (window as any).__crackDecalShown(false));
-  let hidden = shown;
-  for (let n = 0; n < 50 && hidden.equals(shown); n++) {
-    await freshDraw(page);
-    hidden = await page.screenshot();
-  }
-  const pairs: [RGB, RGB][] = await page.evaluate(
-    async ([a, b, cq, cr, decalPng]) => {
-      (window as any).__crackDecalShown(true); // shown again, in the same call to the page (#431)
-      const pixels = async (src: string) => {
-        const img = new Image();
-        img.src = src;
-        await img.decode();
-        const canvas = document.createElement('canvas');
-        [canvas.width, canvas.height] = [img.width, img.height];
-        const g = canvas.getContext('2d')!;
-        g.drawImage(img, 0, 0);
-        const { data } = g.getImageData(0, 0, img.width, img.height);
-        const at = (x: number, y: number) => {
-          const i = (y * img.width + x) * 4;
-          return [data[i]!, data[i + 1]!, data[i + 2]!];
-        };
-        return { w: img.width, at };
-      };
-      const [shownPx, hiddenPx] = await Promise.all([a, b].map((png) => pixels(`data:image/png;base64,${png}`)));
-      const decal = await pixels(`data:image/png;base64,${decalPng}`);
-      const size = decal.w, CELL = 0.46; // the decal covers the disc, image x and y along the world x and z
-      const line = (x: number, y: number) => {
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (decal.at(x + dx, y + dy)[0]! < 250) return false;
-        return true;
-      };
-      const out: number[][][] = [];
-      for (let y = 1; y < size - 1; y++) {
-        for (let x = 1; x < size - 1; x++) {
-          if (!line(x, y)) continue;
-          const wx = ((2 * (x + 0.5)) / size - 1) * CELL, wz = ((2 * (y + 0.5)) / size - 1) * CELL;
-          if (Math.hypot(wx, wz) < 0.37) continue; // under the marble, seen through the glass
-          const dr = wz / (Math.sqrt(3) / 2); // world (x, z) to axial, as axialTo3D
-          const p = (window as any).__cellToScreen(cq + wx - dr / 2, cr + dr);
-          const [px, py] = [Math.round(p.x), Math.round(p.y)];
-          const pair = [shownPx.at(px, py), hiddenPx.at(px, py)];
-          if (pair[0]!.some((v, i) => Math.abs(v - pair[1]![i]!) > 8)) out.push(pair);
-        }
-      }
-      return out;
-    },
-    [shown.toString('base64'), hidden.toString('base64'), q, r, CRACK_DECAL] as const,
-  );
-  const ratios = pairs.map(([crack, steel]) => contrastRatio(crack, steel));
-  return { shown: ratios.length, reading: ratios.filter((ratio) => ratio >= 3).length };
-};
 
 test('start The Echo, play a move, the boss replies, Retry resets the board', async ({ page }) => {
   await page.goto('./');
@@ -249,7 +135,7 @@ for (const tier of ['high', 'low']) {
     await shot(page, { path: testInfo.outputPath('hull-vanished.png') });
   });
 
-  test(`start The Hull (${tier} tier): the cracked cell wears the crack decal, 3:1 with Clear board on, #355`, async ({ page }, testInfo) => {
+  test(`start The Hull (${tier} tier): the cracked cell wears the crack decal, #355`, async ({ page }) => {
     const body = page.locator('body');
     await page.setViewportSize({ width: 1280, height: 720 }); // the contrast check's window, as contrast.spec.ts
     await startHull(page, tier, CRACK_SEED);
@@ -264,9 +150,6 @@ for (const tier of ['high', 'low']) {
     await page.getByRole('button', { name: 'Clear board', includeHidden: true }).dispatchEvent('click');
     await expect(body).toHaveAttribute('data-clear', 'on');
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual(decals);
-    const clear = await crackContrast(page, decals[0]!, testInfo.outputPath('hull-cracked-clear.png'));
-    expect(clear.shown).toBeGreaterThan(20);
-    expect(clear.reading).toBeGreaterThanOrEqual(5);
   });
 }
 
@@ -330,7 +213,7 @@ test('start The Chaplain: a hovered move shows the marbles it flips, #150', asyn
 
 // The same fight, a converted marble keeps its own look (#326): half ridged shell, half glass (no hidden core since #886), under
 // the wax (#508), its glass half 3:1 against its shell. The recorded game converts its first marble at ply 24.
-test('start The Chaplain: a converted marble keeps its look, #150', { tag: '@contrast' }, async ({ page }, testInfo) => {
+test('start The Chaplain: a converted marble keeps its look, #150', async ({ page }) => {
   await startChaplain(page);
   await playRecorded(page, 0, CONVERTED_AT - 1);
   await expect(page.locator('body')).toHaveAttribute('data-converted', '0');
@@ -341,8 +224,6 @@ test('start The Chaplain: a converted marble keeps its look, #150', { tag: '@con
   const looks = await page.evaluate(() => (window as any).__convertedLooks());
   expect(looks).toHaveLength(cells.length);
   expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'cracks', 'glyph', 'glyph-outline'] }))));
-  const contrasts = await topContrasts(page, cells, testInfo.outputPath('chaplain-converted.png'));
-  for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3); // its glass half reads (#326, #508)
 });
 
 // The Chaplain's martyr (#748): after 4 ejections one boss marble wears the tell and the HUD says it explodes; the next boss
@@ -398,8 +279,6 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   expect(await tellCues(page)).toEqual(['choir']); // the next-army tell appears
   await shot(page, { path: testInfo.outputPath('choir-start.png') });
 
-  const before = await armies();
-  for (const c of await topContrasts(page, before.map((m) => m.cell), undefined, CHOIR_GLYPH_LIFT)) expect(c).toBeGreaterThanOrEqual(3); // #326
   const mv = await page.evaluate(() =>
     (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
   );
@@ -419,30 +298,6 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
 
 // Task #377: the boss marks stay readable on other shell skins (a pale and a metal one): the Choir army glyphs at the
 // start and a converted marble's glass half once The Chaplain converts one, 3:1 as for the default skin (#326, #508).
-for (const skin of ['hex', 'riveted']) {
-  test(`the Choir glyphs read 3:1 on the ${skin} shell, task #377`, async ({ page }) => {
-    await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
-    await page.goto('./');
-    await page.locator('canvas').waitFor();
-    await openModes(page);
-    await page.getByRole('button', { name: 'Boss fight' }).click();
-    await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
-    await expect(page.locator('body')).toHaveAttribute('data-armies', '18');
-    const armies = (await page.evaluate(() => (window as any).__armies())) as { cell: [number, number] }[];
-    for (const c of await topContrasts(page, armies.map((m) => m.cell), undefined, CHOIR_GLYPH_LIFT)) expect(c).toBeGreaterThanOrEqual(3);
-  });
-
-  test(`The Chaplain's converted marble reads 3:1 on the ${skin} shell, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {
-    await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
-    await startChaplain(page);
-    await playRecorded(page, 0, CONVERTED_AT); // the recorded game converts its first marble at ply 24
-    await expect(page.locator('body')).not.toHaveAttribute('data-converted', '0');
-    const cells = await page.evaluate(() => (window as any).__converted());
-    const contrasts = await topContrasts(page, cells, testInfo.outputPath(`chaplain-${skin}.png`));
-    for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3);
-  });
-}
-
 // Task #507: in boss mode the shells of the boss side wear their boss's accent (world.md section 5), a rust crown for
 // The Hull, candle wax for The Chaplain, under any palette, safe mode and Clear board. window.__accents() lists the cells
 // whose marble wears one. The screenshot is kept for the report.

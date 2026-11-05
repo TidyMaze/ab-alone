@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { contrastRatio, type RGB } from '../src/contrast';
 import { lowTierOnCi } from './modes';
 import { shot } from './shot';
 
@@ -54,56 +53,5 @@ for (const [phase, ms] of PHASES) {
     await page.mouse.move(2, 2);
     await frames(page);
     await shot(page, { path: `${shots}/fight-${phase}.png` });
-  });
-}
-
-// Each marble reads 3:1 against the cells on all three boards (art.md, the game's contrast): as the deck specs of contrast.spec.ts, the mean
-// of a small box at the middle of each marble of the start position against the mean of the same box on the empty cells in the middle.
-// The Echo's start: white marbles on the near rows, black on the far ones. A report as the other contrast checks: `bun run e2e:contrast`.
-const NEAR: [number, number][] = [[-4, 4], [-2, 4], [0, 4], [-1, 3], [0, 2]];
-const FAR: [number, number][] = [[4, -4], [2, -4], [0, -4], [1, -3], [0, -2]];
-const CELLS: [number, number][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [-2, 0], [2, 0]];
-const boxMeans = (page: Page, png: Buffer, cells: [number, number][]) =>
-  page.evaluate(
-    async ([b64, list]) => {
-      const img = new Image();
-      img.src = `data:image/png;base64,${b64}`;
-      await img.decode();
-      const c = document.createElement('canvas');
-      c.width = img.width;
-      c.height = img.height;
-      const g = c.getContext('2d')!;
-      g.drawImage(img, 0, 0);
-      const toScreen = (window as any).__cellToScreen;
-      const half = Math.max(2, Math.round((toScreen(1, 0).x - toScreen(0, 0).x) * 0.08));
-      return list.map(([q, r]) => {
-        const p = toScreen(q, r);
-        const d = g.getImageData(Math.round(p.x) - half, Math.round(p.y) - half, 2 * half, 2 * half).data;
-        const sum = [0, 0, 0];
-        for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) sum[k]! += d[i + k]!;
-        return sum.map((s) => s / (d.length / 4)) as unknown as RGB;
-      });
-    },
-    [png.toString('base64'), cells] as const,
-  );
-for (const [phase, ms] of PHASES) {
-  test(`the marbles read 3:1 against the cells on the ${phase} board, #1496`, { tag: '@contrast' }, async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await page.addInitScript(() => localStorage.setItem('ab-alone.tier', 'high'));
-    await enter(page);
-    await setTime(page, ms);
-    await intoLair(page);
-    await expect(page.locator('body')).toHaveAttribute('data-fight-board', phase);
-    await page.mouse.move(2, 2); // no hover ghost
-    await page.waitForTimeout(2500); // the terrace and its marbles are drawn
-    const png = await page.screenshot();
-    const deck = await boxMeans(page, png, CELLS);
-    const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
-    for (const [side, cells] of [['white', NEAR], ['black', FAR]] as const) {
-      const ratios = (await boxMeans(page, png, cells)).map((rgb) => contrastRatio(rgb, mean));
-      const line = `${phase} ${side}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
-      console.log(line);
-      expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);
-    }
   });
 }

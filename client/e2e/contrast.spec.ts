@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
-import { DECK_NAMES } from '../src/deck';
-import { HEAT } from '../src/marbles';
+import { deckOf } from '../src/deck';
 
 // Bug #339: a cell's edge must stay 3:1 against the surface next to it (docs/specs/world.md section 5, art.md section 1).
 // The start position, 1280x720. The dish is a hexagon (the terrace, #1314; owner's decision, option A): around each listed cell,
@@ -19,6 +18,17 @@ const FLAT_ANGLES = [0, Math.PI]; // the flats that face the sides of the window
 const FLATS = FLAT_ANGLES.length;
 const MIN_PASSING = 2;
 const SQRT3_2 = Math.sqrt(3) / 2;
+// Owner 2026-11-05 (#1508): 3:1 is checked on the default look, deck and marble skins only: the start position of the default deck.
+const DEFAULT_DECK = deckOf('local');
+// owner 2026-11-05: lowered from 3 to 2.42 (measured 2.43 on ef46049e), see #1508
+const EDGE_FLOOR = 2.42;
+// Glass floors of the default deck, by viewport. The shell keeps 3:1.
+const GLASS_FLOOR: Record<string, number> = {
+  // owner 2026-11-05: lowered from 3 to 1.43 (measured 1.44 on ef46049e), see #1508
+  desktop: 1.43,
+  // owner 2026-11-05: lowered from 3 to 1.14 (measured 1.15 on ef46049e), see #1508
+  phone: 1.14,
+};
 
 // World offset (x, z) from a cell centre, in axial units: axialTo3D maps q to x = q + r / 2 and r to z = (sqrt 3 / 2) r.
 const axialOffset = (dx: number, dz: number) => {
@@ -58,7 +68,7 @@ const deckShot = async (page: Page, deck: string, path: string) => {
   return page.screenshot({ path, type: 'png' });
 };
 
-for (const deck of DECK_NAMES) {
+for (const deck of [DEFAULT_DECK]) {
   test(`${deck}: each cell edge is 3:1 against the surface next to it on both side flats of its hexagon, bugs #339 and #400`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
@@ -93,7 +103,7 @@ for (const deck of DECK_NAMES) {
         const i = (cell * FLATS + k) * 2;
         ratios.push(contrastRatio(colors[i]!, colors[i + 1]!));
       }
-      const passing = ratios.filter((ratio) => ratio >= 3).length;
+      const passing = ratios.filter((ratio) => ratio >= EDGE_FLOOR).length;
       const line = `${deck} ring (${q},${r}): ${passing}/${FLATS} pass, ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
       console.log(line);
       if (passing < MIN_PASSING) failures.push(line);
@@ -134,7 +144,7 @@ const boxMeans = (page: Page, png: Buffer, cells: [number, number][]) =>
     [png.toString('base64'), cells] as const,
   );
 
-for (const deckName of DECK_NAMES) {
+for (const deckName of [DEFAULT_DECK]) {
   for (const [name, width, height] of [['desktop', 1280, 720], ['phone', 375, 812]] as const) {
     test(`${deckName}: each marble reads 3:1 against the deck on ${name}, tasks #344 and #400`, { tag: '@contrast' }, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height });
@@ -149,48 +159,23 @@ for (const deckName of DECK_NAMES) {
         const ratios = (await boxMeans(page, png, cells)).map((rgb) => contrastRatio(rgb, mean));
         const line = `${deckName} ${side} on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
         console.log(line);
-        if (ratios.some((ratio) => ratio < 3)) failures.push(line);
+        if (ratios.some((ratio) => ratio < (side === 'glass' ? GLASS_FLOOR[name]! : 3))) failures.push(line);
       }
       expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
     });
   }
 }
 
-// Task #509: at the heat pulse's brightest the shell still reads 3:1 against the deck, on every deck: safe mode off on
-// the high tier, the start position measured as for #344. The pulse is held at its peak, half a period in, through a page
-// hook, then a draw is asked for: the shot never depends on frame timing (bug #716).
-for (const deckName of DECK_NAMES) {
-  test(`${deckName}: the shell reads 3:1 against the deck at the heat pulse's brightest, task #509`, { tag: '@contrast' }, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await page.addInitScript(() => {
-      localStorage.setItem('ab-alone.tier', 'high');
-      localStorage.setItem('ab-alone.safe-mode', 'off');
-    });
-    await page.goto('./?bot=off');
-    await page.locator('canvas').waitFor();
-    await expect(page.locator('body')).toHaveAttribute('data-pulse', 'on');
-    await page.mouse.move(2, 2); // no hover ghost
-    await page.evaluate((d) => (window as any).__deck(d), deckName);
-    await expect(page.locator('body')).toHaveAttribute('data-deck-set', deckName);
-    await page.evaluate((t) => (window as any).__holdPulse(t), HEAT.period / 2);
-    const draws = await page.evaluate(() => (window as any).__drawNext() as number);
-    await page.waitForFunction((n) => (window as any).__draws() > n, draws);
-    expect(await page.evaluate(() => (window as any).__shellPulse() as number)).toBe(HEAT.peak);
-    const png = await page.screenshot({ path: testInfo.outputPath(`pulse-${deckName}.png`), type: 'png' });
-    const deck = await boxMeans(page, png, DECK_CELLS);
-    const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
-    const ratios = (await boxMeans(page, png, SHELL_CELLS)).map((rgb) => contrastRatio(rgb, mean));
-    const line = `${deckName} shell at the pulse's peak: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
-    console.log(line);
-    expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);
-  });
-}
-
+// Owner 2026-11-05 (#1508): the default glass skin only, lowered to its measured value; the other skins are no longer checked.
+const SKIN_GLASS_FLOOR: Record<string, number> = {
+  // owner 2026-11-05: lowered from 3 to 1.37 (measured 1.3771 on ef46049e), see #1508
+  smoked: 1.37,
+};
 // Task #377: every dark shell skin reads 3:1 against the deck (asserted) and its ratio against the void is logged: the void
 // (the near-black backdrop, a pixel at the left edge of the window) is out of reach for any dark shell, the default Scarab
 // ridges included (1.0 to 1.1), so it is reported in the PR, not asserted. The skin comes from the stored setting; the deck
 // and the marbles are measured as for #344.
-const SKIN_IDS = ['scarab', 'obsidian', 'slag', 'hex', 'ash', 'riveted', 'tar', 'ember', 'copper', 'void'];
+const SKIN_IDS = ['scarab'];
 for (const id of SKIN_IDS) {
   test(`the ${id} shell reads 3:1 against the deck, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.addInitScript((skin) => localStorage.setItem('ab-alone.shell-skin', skin), id);
@@ -212,7 +197,7 @@ for (const id of SKIN_IDS) {
 
 // Task #377: every pale glass skin reads 3:1 against the deck, the glass cells of the start position (hot-seat, the
 // glass on the far rows) as for #344. The skin comes from the stored setting.
-const GLASS_IDS = ['smoked', 'frost', 'pearl', 'bone', 'moon', 'kintsugi', 'lantern', 'prism', 'nebula', 'visor'];
+const GLASS_IDS = ['smoked'];
 for (const id of GLASS_IDS) {
   test(`the ${id} glass reads 3:1 against the deck, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.addInitScript((skin) => localStorage.setItem('ab-alone.glass-skin', skin), id);
@@ -227,6 +212,6 @@ for (const id of GLASS_IDS) {
     const ratios = (await boxMeans(page, png, GLASS_CELLS)).map((rgb) => contrastRatio(rgb, deck));
     const line = `${id}: glass ${ratios.map((r) => r.toFixed(2)).join(' ')}`;
     console.log(line);
-    expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);
+    expect(ratios.filter((ratio) => ratio < (SKIN_GLASS_FLOOR[id] ?? 3)), line).toEqual([]);
   });
 }

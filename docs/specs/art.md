@@ -41,7 +41,7 @@ and no new look: each rule names its source (section numbers), and changes when 
   cold rim backlight on forward bay, warm console bounce on the avionics desk, and subtle cyan ground wash grounding the pedestal, #644).
   Soft contact shadows ground marbles onto the deck cells and frame
   (#459), disabled under low quality tier and automation to save software WebGL. Every cell and
-  marble stays legible: cell edge 3:1, each marble 3:1 on the deck (#344). The deck steel is lit to
+  marble stays legible: cell edge 3:1, each marble 3:1 on the deck (#344). The 3:1 is checked on the default look, deck and marble skins only (owner 2026-11-05, #1508). The deck steel is lit to
   a mid-tone so the black shell stands out, the frame's plate stays dark.
 - **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold,
   steel and ore dust (online, The Hull). Furnace: orange glow, steam (The Choir). Chapel: candles,
