@@ -1913,17 +1913,16 @@ mod tests {
     }
 
     #[test]
-    fn a_boulder_is_a_cell_to_walk_to_and_a_lone_tree_too_but_not_a_crowded_one() {
+    fn a_boulder_is_a_cell_to_walk_to_and_any_tree_too() {
         let boulder = find(Terrain::Boulder, false);
         let lone = find(Terrain::Tree, false);
         let crowded = find(Terrain::Tree, true);
-        for target in [boulder, lone] {
+        for target in [boulder, lone, crowded] {
             let start = (target.0 - 1, target.1);
             let path = walk_path(9, start, target, &[], &[]);
             assert_eq!(path.last(), Some(&target), "{target:?}");
         }
         let start = (crowded.0 - 1, crowded.1);
-        assert!(walk_path(9, start, crowded, &[], &[]).is_empty());
         let path = walk_path(9, start, crowded, &[crowded], &[]);
         assert_eq!(path.last(), Some(&crowded), "a broken tree is grass");
         let boulder_broken = walk_path(9, (boulder.0 - 1, boulder.1), boulder, &[boulder], &[]);

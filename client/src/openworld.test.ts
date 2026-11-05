@@ -153,27 +153,29 @@ describe('what the hero can break (#1147)', () => {
   };
   const world = new World(cells);
 
-  it('is an isolated boulder or an isolated tree, nothing else', () => {
+  it('is any boulder or any tree, nothing else (#1510)', () => {
     const fight = new FightState();
     const from = (q: number, r: number): Entry => enter(world, fight, [q - 1, r], [q, r]);
     expect(from(3, 3)).toBe('breaks'); // a boulder
     expect(from(5, 5)).toBe('breaks'); // a tree with no tree beside it
-    expect(from(8, 5)).toBe('refused'); // a forest: a tree beside a tree
-    expect(from(9, 5)).toBe('refused');
+    expect(from(8, 5)).toBe('breaks'); // a forest: a tree beside a tree
+    expect(from(9, 5)).toBe('breaks');
     expect(from(5, 8)).toBe('refused'); // a wall
     expect(from(8, 8)).toBe('refused'); // a peak
     expect(from(1, 1)).toBe('rolls'); // open grass
     expect(enter(new World(() => new Uint8Array()), fight, [0, 0], [1, 0])).toBe('refused'); // off the world
   });
 
-  it('turns an isolated tree to grass when broken, and keeps a forest standing', () => {
+  it('turns a tree to grass when broken, alone or in a forest (#1510)', () => {
     const hero = heroOn(world);
     hero.at = [4, 5];
     expect(hero.step([5, 5])).toBe(true);
     expect(hero.smashed).toBe('tree');
     expect(world.tile(5, 5)!.terrain).toBe('grass');
     hero.at = [7, 5];
-    expect(hero.step([8, 5])).toBe(false);
+    expect(hero.step([8, 5])).toBe(true);
+    expect(hero.smashed).toBe('tree');
+    expect(world.tile(8, 5)!.terrain).toBe('grass');
   });
 
   it('keeps a broken cell broken when its chunk is evicted and loaded again, and when restored on a new world', () => {

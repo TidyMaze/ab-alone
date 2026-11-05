@@ -426,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn a_boulder_and_a_lone_tree_are_broken_and_nothing_else_blocked() {
+    fn a_boulder_and_any_tree_are_broken_and_nothing_else_blocked() {
         assert_eq!(
             entry((0, 0), (1, 0), Some(Terrain::Boulder), false, true),
             Entry::Breaks
@@ -437,7 +437,7 @@ mod tests {
         );
         assert_eq!(
             entry((0, 0), (1, 0), Some(Terrain::Tree), false, true),
-            Entry::Refused
+            Entry::Breaks // a tree in a forest too (#1510)
         );
         for terrain in [Terrain::Peak, Terrain::Wall] {
             assert_eq!(
