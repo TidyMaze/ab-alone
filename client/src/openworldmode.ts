@@ -34,6 +34,10 @@ const PATH_REACH = 40;
 const KEEPALIVE_TICK_MS = 1000;
 
 
+/** How long, in ms, no wild fight starts after a world opens (#1511): the marble just fled from, a reload, a loss, and the marble next to the
+ * hero when the world is entered. */
+export const FLEE_GRACE_MS = 5000;
+
 /** The most time of day one frame counts, in ms: a tab that was stalled does not skip the day (#1496). */
 const MAX_DAY_STEP_MS = 250;
 
@@ -75,6 +79,13 @@ export class OpenWorldMode {
   wander: () => number = () => 0;
   /** The tick the marbles stand at now. */
   private ticked = 0;
+  /** What starts a wild fight with the marble that touches the hero (#1511): the seed and the cell the marble starts on. The page plays the
+   * transition and the fight, and brings the hero back to this world when it ends. */
+  onWild: (seed: number, home: Axial) => void = () => {};
+  /** The page clock (ms) before which no wild fight starts: a world that just opened gives 5 s to walk away. 0 when none is due. */
+  private calmUntil = 0;
+  /** Whether a wild fight has started: the hero takes no more steps while the page plays the transition. */
+  private fighting = false;
   /** The timer that keeps the hero alive for the room while the tab is hidden (#1371). */
   private keepalive: ReturnType<typeof setInterval> | null = null;
   private view: OpenWorldView | null = null;
@@ -173,6 +184,8 @@ export class OpenWorldMode {
     this.world = world;
     if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
     this.fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
+    this.fighting = false;
+    this.calmUntil = performance.now() + FLEE_GRACE_MS; // the marble next to the hero when the world opens does not fight for 5 s (#1511)
     this.ticked = this.wander();
     this.fight.setClock(seed, this.ticked); // the marbles stand where the clock has them from the first draw (#1511)
     this.pushes = 0;
@@ -344,8 +357,10 @@ export class OpenWorldMode {
   }
 
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
-   * enemies of the loaded square replaced by `enemies`, none pushed; `beaten` (#1175) sets the lairs beaten. */
-  fixture({ hero, troop, enemies, beaten }: { hero: Axial; troop: Axial[]; enemies: Axial[]; beaten?: number[] }): void {
+   * enemies of the loaded square replaced by `enemies`, none pushed (without `enemies`, the generated ones stay, wandering, and a marble that
+   * touches the hero starts a wild fight); `beaten` (#1175) sets the lairs beaten. A fixture ends the calm of a world just opened (#1511). */
+  fixture({ hero, troop, enemies, beaten }: { hero: Axial; troop: Axial[]; enemies?: Axial[]; beaten?: number[] }): void {
+    this.calmUntil = 0;
     this.view!.snap();
     if (beaten) {
       this.beaten = [...beaten];
@@ -356,13 +371,16 @@ export class OpenWorldMode {
     this.hero!.at = hero;
     this.hero!.troop = troop;
     this.view!.show(hero, troop); // first: the loaded square may keep its centre, which the enemies are hidden around (#1046)
-    const [cx, cy] = this.view!.centreChunk;
-    this.fight.reset();
-    this.fight.hide(this.world!, cx, cy, MAX_REACH);
-    this.fight.apply([], enemies, []);
+    if (enemies) {
+      const [cx, cy] = this.view!.centreChunk;
+      this.fight.reset();
+      this.fight.hide(this.world!, cx, cy, MAX_REACH);
+      this.fight.apply([], enemies, []);
+    }
     this.view!.updateEnemies();
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
+    this.wild(); // a marble the hero was put next to fights at once
   }
 
   /** Shows the steering mode in the HUD (#1137), and drops a walk when steering is off: called when a world opens and when the
@@ -430,6 +448,7 @@ export class OpenWorldMode {
    * teleporter (#1412): while the map is open, M, T and Escape close it, Enter picks the ringed teleporter in the choice, and the other
    * keys are not the mode's. Reports whether the key was the mode's. */
   key(key: string, repeat = false): boolean {
+    if (this.fighting) return false; // the transition into a wild fight takes the keys (#1511)
     if (this.mapShown && key === 'Enter' && this.worldMap!.choosing) return this.choose(this.worldMap!.chosen), true; // the ringed teleporter (#1412)
     if (this.mapShown) return (key === 'Escape' || MAP_KEYS.has(key) || TELEPORT_KEYS.has(key)) && (this.toggleMap(), true);
     if (MAP_KEYS.has(key)) return this.toggleMap(), true;
@@ -659,6 +678,10 @@ export class OpenWorldMode {
     if (this.view.setTime(this.tod, !reduced)) this.dirty = true; // the sky and the sun, drawn again as they change
     this.markPhase();
     this.stepWander(now);
+    if (this.calmUntil > 0 && now >= this.calmUntil) {
+      this.calmUntil = 0;
+      this.wild(); // the calm is over: a marble that has stayed next to the hero fights
+    }
     if (this.view!.follow(seconds, reduced)) this.dirty = true; // the camera follows the hero, its turn and its zoom (#988, #1026, #1333)
     if (this.view!.drawnYaw !== this.mapYaw) this.drawMap(); // the minimap and the map turn with the camera, only while it turns (#1448)
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
@@ -749,6 +772,7 @@ export class OpenWorldMode {
   /** The hero steps to `to`, at `at` (ms); `pace` is the pace of its glide: a `tap` (a press on the screen) eases out, the steps of
    * the held arrows keep one speed (#1065). */
   private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): boolean {
+    if (this.fighting) return false;
     const lair = this.lairs.findIndex((cell) => same(cell, to));
     if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair), false;
     const from = this.hero!.at;
@@ -765,7 +789,7 @@ export class OpenWorldMode {
     if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)
     if (now !== null) this.view!.ripple(from, this.hero!.at, now, this.lowTier()); // a ring on the water next to it (#1101)
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: span * slowBy(), pace }); // the step glides (#1040)
-    const played = this.troopPush();
+    const played = this.wild() ? null : this.troopPush(); // a marble that touches the hero fights: the troop does not push it (#1511)
     this.view!.updateEnemies();
     if (played && now !== null) {
       this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
@@ -836,6 +860,23 @@ export class OpenWorldMode {
     this.view.wander(now, this.reduced(), slowBy());
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
+    this.wild(); // a marble that walked up to the hero fights
+  }
+
+  /** Starts the wild fight (#1511) when a generated marble no push has moved touches the hero (within one cell) and no calm is due: the
+   * walk ends, the world is saved with the hero where it stands, and the page takes over (`onWild`). Reports whether one started. */
+  private wild(): boolean {
+    if (this.fighting || this.calmUntil > 0 || !this.view) return false;
+    const touching = this.fight.wildContact(this.world!, this.hero!.at);
+    if (!touching) return false;
+    this.fighting = true;
+    this.held.clear();
+    this.pad = [];
+    this.route = [];
+    this.nextStep = Infinity;
+    this.persist();
+    this.onWild(this.seed, touching.home);
+    return true;
   }
 
   /** The mark of a push being drawn (`openworldAnim`, for the browser checks): set while the view draws it, removed otherwise. */

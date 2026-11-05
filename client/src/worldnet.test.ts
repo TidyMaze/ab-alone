@@ -421,6 +421,20 @@ describe('WorldPeersHost', () => {
       expect(beaten).toEqual([[3, 5]]);
     });
 
+    it('tells a wild fight won as a beaten enemy, named by the cell it started on, now or when the room opens, and only for the public world (#1511)', async () => {
+      const { nets, host, enter, keysOnce } = setup();
+      host.wildWon(PUBLIC_SEED, [4, -2]); // the room is closed: owed
+      host.wildWon(PUBLIC_SEED, [-1, 0]); // canBeaten says no
+      host.wildWon(7, [4, -2]); // another seed
+      await flush();
+      expect(nets).toHaveLength(0);
+      enter();
+      await until(() => sentBeaten(nets[0]!).length === 1);
+      expect(decode(sentBeaten(nets[0]!)[0]![0]!)).toMatchObject({ t: 'break', event: { kind: 'beaten', seed: PUBLIC_SEED, q: 4, r: -2, pub: (await keysOnce).pub } });
+      host.wildWon(PUBLIC_SEED, [4, -2]); // the room is open: sent at once
+      await until(() => sentBeaten(nets[0]!).length === 2);
+    });
+
     it('sends a lair taken signed as type 6 to every peer, only for the public world', async () => {
       const { nets, host, enter, keysOnce } = setup();
       enter();

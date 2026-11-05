@@ -127,6 +127,50 @@ Rust (`crates/abalone-core/src/worldwander.rs`, `offset`), integers only, so eve
   the tick. `Played.homes` gives the start cell of the ejected marble when it is a generated one, and `FightState.alive(world, home)` is the
   peer's check that it is still there. The wire does not change.
 
+## 3c. The wild fight (#1511)
+
+A wandering marble that touches the hero starts a fight the player can run from. It is the game's own Abalone against the bot, on the arena of
+the hour, reached and left the way a boss lair is (section 7). No new rule.
+
+- **Contact.** A generated marble no push has moved, within **1 cell** of the hero (`WorldFight.wild_contact`, `Overlay::wild_contact`), starts
+  the fight. It is looked for after each step of the hero (so rolling into a marble, or up to one, is a contact: the step lands within one cell
+  first), on each tick of the clock (a marble that walks up to the hero), when the calm ends, and when a test fixture puts the hero beside one.
+  Of several, the one that started on the lowest `(r, q)` fights. A marble the troop shoved stands in `added` and fights nobody. The step that
+  makes the contact **skips the troop's automatic push** (section 4): the marble has started a fight, the troop does not push it, nor any other
+  that step. The walk ends and the hero takes no more steps; the world is saved with the hero where it stands (the cell it landed on).
+- **Calm.** A world that has just opened starts no wild fight for `FLEE_GRACE_MS` = **5 s**: that is how a marble that was fled from cannot fight
+  for 5 s (Flee, a loss and a reload all open the world again), and a marble next to the hero on a reload or a Back does not catch it at once.
+  After the calm, a marble still within one cell fights. A test fixture ends the calm.
+- **Transition** (`client/src/wildwipe.ts`, `#wild-wipe`, ui.css): a white flash over the first 0.2 s and a dark hexagon with an accent rim that
+  grows from the middle of the screen over the world in 0.5 s; the world is left and the arena is set up under it; then the hexagon shrinks back to the
+  middle over 0.5 s: **1 s in all**, the game's own (the hexagon of its cells, its accent), no art of another game. Under reduced motion (the
+  page's `reducedMotion()`) it is a plain fade: 0.25 s to black, the swap, 0.25 s back. The cover ignores the pointer and the keys, and the arena is
+  there from the middle of the transition, so nothing waits for it once the arena appears. While it closes the hero takes no step and no key is the
+  world's.
+- **The arena.** `startWild` in `main.ts`: the world is left (saved), a new local game against the bot starts on the **standard board, 14 marbles a
+  side**: no constant of a short army fits better (the Trainer starts a wave on one marble, `FULL_ARMY` and `START_ARMY` are the full 14). The board
+  is the hexagon of the phase the marble was met at, the same three looks as a lair (section 11, `data-fight-board`). The player's own local game is
+  not touched: the wild fight is never saved (`saves.save` is skipped, New and Retry are hidden), and Flee, Back or a reload give the saved local game
+  back under the world. The game rules, the HUD and the end banner are the ordinary ones.
+- **The bot.** `WILD_NODES` = **2000** positions (`bot.ts`), a tenth of the bot's 20 000 and below the rogue-lite's fight (20 000 at normal, scaled
+  by the difficulty, doubled against an elite): fixed, not scaled by the difficulty setting, and never above the test budget `?nodes`.
+- **Flee.** A button labelled `Flee` in the dock (`#wild-flee`, ui.css, the accent ring of Retry), on screen for the whole fight and hidden once it is over,
+  and the **F** key (not in a text field, not with Ctrl, Alt or Meta). It ends the fight at once: the world opens again with the hero where it stood, no
+  reward and no penalty, the marble where the clock puts it, calm for 5 s. A **loss** ends the game and offers "Back to the Open world", the same
+  return, with no penalty. A **reload** during the fight (`localStorage` `ab-alone.wild` holds the world's seed while one is on) opens the world at the
+  load, the hero on its cell; nothing was lost, the marble is still there.
+- **Win.** The end banner adds "The marble is gone from the world.", and the marble is removed as a marble the troop ejected is today:
+  `WorldSaves.beatMarble` writes its start cell into the saved `fight.removed` and adds one to `fight.beaten` (once, even if the banner is drawn
+  again). "Back to the Open world" resumes the world without it. It is told to the other heroes as a beaten enemy (`PeerHost.wildWon`, the lair's
+  owed queue: sent now or when the room opens).
+- **Online (the smallest correct rule).** A wild win is the signed `beaten` event of #1305, unchanged: it names the cell the marble was **generated**
+  on, never where it wandered, and the peers check it with `world_is_enemy` against that cell as they do for an enemy the troop ejects
+  (`PeerHost.beaten` uses `Played.homes` now). A peer applies it to the marble that starts there if it is still alive (`FightState.alive`), wherever its
+  clock puts it. The fight itself is the player's alone: other heroes see the hero leave the world, as for a lair, and come back.
+- **MCP.** The server stays in step by standing still: its `WorldFight` sets no clock (tick 0, every marble where it starts, as before), and it has
+  no board fight to start, so `world_step` and `world_walk` never meet a wild fight and the marbles never move there. No change to its tools or
+  its saves.
+
 ## 4. The hero and the troop
 
 - **Hero**: one glass marble (#1176: in the skin the player wears on the ship, as the troop; the enemies wear the worn shell skin, and the stripe ring is the only team cue), moved one cell at a time (click a neighbour, or the arrow keys, as
@@ -300,7 +344,8 @@ watches the troop push, reloads and is still there (under 15 s). Every slice is 
 with the Playwright MCP before its PR, with a screenshot.
 
 Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, enemies })` puts the
-hero, the troop and the enemies of the loaded square (the generated ones are hidden), and
+hero, the troop and the enemies of the loaded square (the generated ones are hidden; without `enemies` they stay, wandering, and a marble the hero is put
+beside fights, section 3c), `window.__openworldWander(tick | null)` sets the tick of the marbles' clock (section 3b), and
 `window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them. `window.__openworldTime(ms)` sets the time of
 day in ms of the 12 minute cycle (section 11); `body[data-openworld-phase]` reads `day`, `dusk` or `night`, and `body[data-fight-board]`
 the same on a lair fight.

@@ -26,6 +26,9 @@ export interface PeerHost {
   beaten(cell: Axial): void;
   /** The hero took the boss lair on `cell` of the world `seed` (#1305): told to the others once the room is open, signed. */
   lairWon(seed: number, cell: Axial): void;
+  /** The hero won a wild fight against the generated marble that starts on `cell` of the world `seed` (#1511): told as a beaten enemy, once
+   * the room is open, signed, when the rule allows it. */
+  wildWon(seed: number, cell: Axial): void;
 }
 
 /** What the signed events need of the page: the player's key, the rules of the world (`world_can_break`, `world_is_enemy`, the lairs of
@@ -82,7 +85,7 @@ export class WorldPeersHost implements PeerHost {
   /** How many events far from their sender each peer reported: no more than a sync (SYNC_MAX), since nothing proves its key was there. */
   private readonly far = new Map<string, number>();
   /** The lairs taken while the room was closed (the fight leaves the world): told when it opens. Kept across a leave. */
-  private owed: Axial[] = [];
+  private owed: [BreakEvent['kind'], Axial][] = [];
 
   /**
    * `open` joins a room, `allowed` says whether online play was accepted (read when a world is entered), `root` holds the edge
@@ -182,13 +185,20 @@ export class WorldPeersHost implements PeerHost {
    * public world's lairs are shared. */
   lairWon(seed: number, cell: Axial): void {
     if (seed !== PUBLIC_SEED) return;
-    this.owed.push(cell);
+    this.owed.push(['lair', cell]);
+    this.sendOwed();
+  }
+
+  /** A wild fight was won (#1511): the marble is a beaten enemy to the others, named by the cell it started on, told now or when the room opens. */
+  wildWon(seed: number, cell: Axial): void {
+    if (seed !== PUBLIC_SEED || !this.hooks.canBeaten(seed, cell[0], cell[1])) return;
+    this.owed.push(['beaten', cell]);
     this.sendOwed();
   }
 
   private sendOwed(): void {
     if (!this.running) return;
-    for (const cell of this.owed.splice(0)) void this.announce('lair', cell);
+    for (const [kind, cell] of this.owed.splice(0)) void this.announce(kind, cell);
   }
 
   /** The hero broke the obstacle on `cell`: signs it, holds it and tells every peer. */

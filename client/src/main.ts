@@ -30,7 +30,7 @@ import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
-import { askBot, askEval, botBudget, encounterFor, engineFor } from './bot';
+import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
@@ -208,6 +208,7 @@ import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { FightState } from './openworldfight';
+import { wipe } from './wildwipe';
 import { OpenWorldMode, twistOf } from './openworldmode';
 import { BOARD_LOOKS } from './boardlook';
 import type { Phase } from './daynight';
@@ -2554,14 +2555,16 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPale
 let hover: Axial | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the hub (#522)
 let lairFrom: { seed: number; lair: number; phase: Phase } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170), and the phase of the world it was entered in (#1496)
-/** Dresses the board for the phase the lair was entered in (#1496): day, dusk or night, `body[data-fight-board]` reading the same. A fight that is no lair's has the ordinary board. */
+let wildFrom: { seed: number; home: Axial; phase: Phase } | null = null; // the Open world marble that started the wild fight (#1511): the world, the cell it starts on, and the phase it was met in
+/** Dresses the board for the phase the lair or the wild marble was met in (#1496, #1511): day, dusk or night, `body[data-fight-board]` reading the same. A fight that is neither has the ordinary board. */
 function syncBoardLook(): void {
-  const phase = lairFrom?.phase;
+  const phase = lairFrom?.phase ?? wildFrom?.phase;
   sceneRenderer.setBoardLook(phase ? BOARD_LOOKS[phase] : null);
   if (phase) document.body.dataset.fightBoard = phase;
   else delete document.body.dataset.fightBoard;
 }
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
+const wildFlee = document.getElementById('wild-flee') as HTMLButtonElement; // Flee, for the whole wild fight (#1511)
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
 // (the rules e2e tests drive both sides by hand).
@@ -2579,7 +2582,8 @@ const gameStore = indexedDbStore();
 const saves = new LocalSaves(gameStore, navigator.storage);
 // Without ?bot=off the page resumes the game of either mode: a hot-seat game from the hub's table goes on with
 // no bot (#565).
-const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? new Encounter(boss.id, boss.seed) : new Engine()));
+const loadLocal = () => saves.load(botWorker ? undefined : false, (boss) => (boss ? new Encounter(boss.id, boss.seed) : new Engine())); // the saved local game, with the bot or at the table it was played at
+const resumed = await loadLocal();
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 // The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
@@ -2777,7 +2781,7 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = liveGame();
   const started = performance.now();
-  const normal = run ? fightBudget(run.map, run.state, scaleBudget(budget, difficulty)) : scaleBudget(budget, difficulty); // an elite searches more (#800)
+  const normal = wildFrom ? Math.min(WILD_NODES, budget) : run ? fightBudget(run.map, run.state, scaleBudget(budget, difficulty)) : scaleBudget(budget, difficulty); // an elite searches more (#800); a wild marble a modest fixed search (#1511)
   const searchBudget = trainer ? trainerBudget(trainer.wave, normal) : normal; // past a full army, the bot searches more (#1159)
   const diffPercent = (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]; // an act boss at its act's strength
   let move: number[];
@@ -2872,7 +2876,7 @@ function playMove(record: number[]): void {
     drop = { cell: back, start: performance.now(), reduced, y: dropAt(0, reduced).y };
     document.body.dataset.medics = String(Number(document.body.dataset.medics ?? 0) + 1); // read by the e2e tests
   }
-  if (!online && (!fight || stalkerSaved()) && !run && !trainer) void saves.save(savedGame(), engine.status() !== 0);
+  if (!online && (!fight || stalkerSaved()) && !run && !trainer && !wildFrom) void saves.save(savedGame(), engine.status() !== 0); // a wild fight is not the local game (#1511)
   if (run?.state.fighting) runMoved();
   analyse();
 }
@@ -3510,8 +3514,9 @@ function hud(extra = ''): void {
 }
 function drawHud(extra = ''): void {
   syncReplay();
-  backButton.hidden = !(roomOf || lairFrom) || engine.status() === 0; // once the game a hub room or a lair started is over (#522, #1170)
-  backButton.textContent = lairFrom ? 'Back to the Open world' : 'Back to the hub';
+  backButton.hidden = !(roomOf || lairFrom || wildFrom) || engine.status() === 0; // once the game a hub room, a lair or a wild marble started is over (#522, #1170, #1511)
+  backButton.textContent = lairFrom || wildFrom ? 'Back to the Open world' : 'Back to the hub';
+  wildFlee.hidden = !wildFrom || engine.status() !== 0; // Flee for the whole fight, not once it is over (#1511)
   if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
   if (hub) {
     delete document.body.dataset.over; // no end light over the hub
@@ -3532,6 +3537,7 @@ function drawHud(extra = ''): void {
     glass: glassOf(),
   });
   if (end?.anim === 'win' && fight) end.line = `${end.line} ${medalNote(fight)}`; // a won fight: Black is the player's side
+  if (end?.anim === 'win' && wildFrom) end.line = `${end.line} ${wildWon(wildFrom)}`;
   if (end && trainer && status === 1 && engine.draw_reason() !== 0) Object.assign(end, { title: 'Stalled', line: 'A draw costs a marble.' }); // not "You win" (#1159)
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
@@ -5296,6 +5302,74 @@ addEventListener('keydown', (e) => {
 addEventListener('pointerdown', (e) => {
   if (goalOpen && !within(goalSheet, e.target) && !within(goalButton, e.target)) closeGoal();
 });
+// The wild fight (#1511, docs/specs/openworld.md section 3c): a wandering marble of the Open world that touches the hero starts the normal
+// Abalone fight against a modest bot (WILD_NODES), on the arena board of the hour it was met at. After the wipe the world is left, saved with the
+// hero where it stands. Flee, a loss and a reload put the hero back there; a win takes the marble out of the world, saved as a marble the troop ejected.
+const WILD_KEY = 'ab-alone.wild'; // the world of a wild fight under way, so a reload puts the player back in it
+/** Marks, or unmarks, that a wild fight is under way. */
+function wildMarked(on: boolean, seed = 0): void {
+  write(store, WILD_KEY, on ? String(seed) : '');
+}
+/** The wild fight of `from` begins: the world is left, and the arena opens against the bot. The local game the player had stays in its store. */
+function startWild(from: NonNullable<typeof wildFrom>): void {
+  leaveMode();
+  wildFrom = from;
+  wildMarked(true, from.seed);
+  syncBoardLook();
+  worker = botWorker;
+  stopAnalysis();
+  applyDeck(deckOf('local'));
+  engine = new Engine();
+  history.length = 0;
+  replaying = null;
+  selected = [];
+  thinking = false;
+  moveModes('pick');
+  retryButton.hidden = true;
+  newGameButton.hidden = true;
+  view = resetView(4);
+  applyView();
+  refresh();
+  analyse();
+}
+/** The player's own local game comes back under the world once a wild fight ends (a game started before is read from its store). */
+async function restoreLocal(): Promise<void> {
+  const back = await loadLocal();
+  worker = back && !back.bot ? null : botWorker;
+  engine = back?.engine ?? new Engine();
+  history.length = 0;
+  history.push(...(back?.moves ?? []));
+  replaying = null;
+  selected = [];
+  thinking = false;
+  view = resetView(4);
+  applyView();
+  refresh();
+}
+/** The hero goes back to its world where it stood: Flee, Back after a fight, a loss. */
+function returnFromWild(): void {
+  const { seed } = wildFrom!;
+  wildFrom = null;
+  wildMarked(false);
+  wildFlee.hidden = true;
+  syncBoardLook();
+  newGameButton.hidden = false;
+  void openWorld.open(seed, innerWidth, innerHeight).then(restoreLocal);
+}
+/** A won wild fight: the marble that started on `wild.home` is gone from the saved world and told to the other heroes, once per fight. */
+let wildSeen: unknown = null;
+function wildWon(wild: NonNullable<typeof wildFrom>): string {
+  if (wildSeen !== engine) {
+    wildSeen = engine;
+    void openWorldSaves.beatMarble(wild.seed, wild.home);
+    peersHost.wildWon(wild.seed, wild.home);
+  }
+  return 'The marble is gone from the world.';
+}
+wildFlee.addEventListener('click', () => wildFrom && returnFromWild());
+addEventListener('keydown', (e) => {
+  if ((e.key === 'f' || e.key === 'F') && wildFrom && engine.status() === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement)) wildFlee.click(); // Flee by the keyboard
+});
 retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom))); // a lair's retry stays the lair's (#1170)
 
 // The hub (#521, game-design.md section 3.5): Hub draws the map of the saved deck, in that deck's look, with the
@@ -5368,6 +5442,7 @@ function startLocal(bot: boolean): void {
   newGame();
 }
 backButton.addEventListener('click', () => {
+  if (wildFrom) return returnFromWild();
   if (lairFrom) {
     const { seed } = lairFrom;
     lairFrom = null;
@@ -5389,6 +5464,9 @@ function leaveMode(): void {
   leaveHub();
   fight = null;
   lairFrom = null;
+  wildFrom = null;
+  wildMarked(false);
+  wildFlee.hidden = true;
   syncBoardLook();
   goalOpen = false;
   speech = null;
@@ -6255,6 +6333,11 @@ function lairCells(seed: number): Axial[] {
   return Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
 }
 openWorld.peers = peersHost;
+const wildWipe = document.getElementById('wild-wipe')!;
+openWorld.onWild = (seed, home) => {
+  const phase = openWorld.phase; // the hour the marble was met at dresses the arena
+  wipe(wildWipe, reducedMotion(), () => startWild({ seed, home, phase }));
+};
 // The clock the enemy marbles wander by (#1511): the wall clock in ticks, so every peer sees them in the same places. Under automation it stands
 // at tick 0, where the marbles start, until a spec sets it (`__openworldWander`).
 let wanderTick: number | null = navigator.webdriver ? 0 : null;
@@ -6949,4 +7032,5 @@ renderer.setAnimationLoop((now) => {
 });
 // A link with any ?openworld=<value> opens the public world at the load (#1361), the online notice first. The saved fight stays
 // in its store: the click does the same, and a world only replaces the board on screen.
-if (openWorldParam !== '') openWorldButton.click(); // last: the whole page is ready
+if (openWorldParam !== '' || read(store, WILD_KEY)) openWorldButton.click(); // last: the whole page is ready; a reload during a wild fight comes back to the world (#1511)
+wildMarked(false); // the mark is only for the reload

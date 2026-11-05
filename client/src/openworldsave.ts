@@ -42,6 +42,9 @@ export interface WorldSaves {
   put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number, broken?: readonly Axial[], lairs?: readonly number[], discovered?: DiscoveredSave, time?: number): Promise<boolean>;
   /** Marks lair `lair` of the saved world of `seed` as beaten (#1170); nothing when there is no save or the store fails. */
   beat(seed: number, lair: number): Promise<void>;
+  /** Marks the generated marble that starts on `home` as beaten in the saved world of `seed` (#1511): gone, and counted, as one the troop ejected;
+   * nothing when there is no save, the marble is gone already, or the store fails. */
+  beatMarble(seed: number, home: Axial): Promise<void>;
   /** Deletes the save of `seed`: the New world control discards the world it leaves (#1021). A refusing store keeps it. */
   discard(seed: number): Promise<void>;
   /** Remembers `seed` as the last world played. */
@@ -125,6 +128,19 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
         if (save && !save.lairs.includes(lair)) await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: [...save.lairs, lair], discovered: save.discovered, time: save.time });
       } catch {
         // Storage blocked: the lair is beaten in the medals only.
+      }
+    },
+    async beatMarble(seed, home) {
+      try {
+        const raw = await store.get(keyOf(seed));
+        const save = raw === undefined ? null : decodeWorld(raw, seed, version);
+        const key = home.join(',');
+        if (save && !save.fight.removed.includes(key)) {
+          const fight = { ...save.fight, removed: [...save.fight.removed, key], beaten: save.fight.beaten + 1 };
+          await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: save.lairs, discovered: save.discovered, time: save.time, fight });
+        }
+      } catch {
+        // Storage blocked: the marble comes back with the world.
       }
     },
     async discard(seed) {

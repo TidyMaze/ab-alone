@@ -79,6 +79,10 @@ export interface WorkerLike {
 /** Search budget in positions: fixed, so the bot plays the same on every machine. */
 export const BOT_NODES = 20000;
 
+/** The search budget of a wild fight in the Open world (#1511): a tenth of the bot's, so a wandering marble is weaker than the rogue-lite's
+ * fight bot (BOT_NODES scaled by the difficulty, more against an elite). Fixed, and capped by the test budget of `?nodes`. */
+export const WILD_NODES = 2000;
+
 /** Evaluation bar budget in positions: a quarter of the bot's, never a clock (#191). */
 export const EVAL_NODES = 5000;
 

@@ -137,6 +137,31 @@ describe('the save of the beaten lairs (#1170)', () => {
   });
 });
 
+describe('a marble beaten in a wild fight is saved gone (#1511)', () => {
+  it('beatMarble removes the generated marble from the saved fight and counts it, once, and does nothing without a save', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.beatMarble(7, [5, 5]);
+    expect(await saves.load(7)).toBeNull();
+    await saves.put(7, hero, troop, new FightState(), 0, [], [0]);
+    await saves.beatMarble(7, [5, 5]);
+    await saves.beatMarble(7, [5, 5]);
+    await saves.beatMarble(7, [6, -2]);
+    const back = (await saves.load(7))!;
+    expect(back.fight).toEqual({ removed: ['5,5', '6,-2'], added: [], beaten: 2 });
+    expect(back.lairs).toEqual([0]);
+    expect(back.hero).toEqual(hero);
+  });
+
+  it('beatMarble leaves a store that fails alone', async () => {
+    const store = memoryStore();
+    await worldSaves(store, 1).put(7, hero, troop, new FightState(), 0);
+    store.put = async () => {
+      throw new Error('full');
+    };
+    await expect(worldSaves(store, 1).beatMarble(7, [5, 5])).resolves.toBeUndefined();
+  });
+});
+
 describe('the save of the discovered cells (#1411)', () => {
   const discovered = (): DiscoveredSave => {
     const seen = new Discovered();

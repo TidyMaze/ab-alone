@@ -1434,7 +1434,7 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
 
   it('tells the peers host which enemy the hero ejected (#1305), and none when nothing was ejected', () => {
     const [wq, wr] = shore(1);
-    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn() };
+    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn(), wildWon: vi.fn() };
     const m = mode(undefined, real, () => true, () => new Int32Array());
     m.peers = peers;
     m.enter(1, 800, 600);
@@ -1448,7 +1448,7 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
   });
 
   it('tells the peers host which cell the hero broke, and none when it broke nothing', () => {
-    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn() };
+    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn(), wildWon: vi.fn() };
     const quiet = beside();
     quiet.peers = peers;
     tap(quiet, 'ArrowRight');
@@ -1743,7 +1743,7 @@ describe('the Dungeon button walks to the nearest tower (#1291)', () => {
 });
 
 describe('the Open world mode and the online peers (#1305)', () => {
-  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn() });
+  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn(), beaten: vi.fn(), lairWon: vi.fn(), wildWon: vi.fn() });
 
   it('hands the world entered to the peers host, and tells it when the world is left, by Escape or by another world', () => {
     const m = mode();

@@ -65,7 +65,8 @@ First to eject 6 wins. On top of it, the ship:
   badlands and an archipelago), a hero marble you walk and a troop that fights on its own, both sailing
   across the water on small boats, with a minimap in the top right corner, a map of the world discovered round the hero (M, or the Map button) and
   teleporters to travel between the ones discovered (T, or the Teleport button, on a teleporter), a sky that goes through day, dusk and night
-  in 12 minutes, and a lair fight on a board dressed for the hour you entered it at ([spec](docs/specs/openworld.md)).
+  in 12 minutes, a lair fight on a board dressed for the hour you entered it at, and wandering marbles that walk up to your hero and start a wild
+  fight against the bot you can flee with the Flee button or F ([spec](docs/specs/openworld.md)).
 - **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)).
 
 Rusted deck plates, cold light, fog at the rim. The camera orbits and zooms; a **Clear board**
