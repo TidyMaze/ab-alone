@@ -7,7 +7,7 @@ import { CHAR_MS, FAREWELL, angryLine } from './speech';
 import { boot, type Game } from './test/harness';
 
 // The Overseer on the harness (#635, game-design.md section 7.11): the Overseer, its 6 cores and 6 vents drawn, the
-// neurotoxin line, a core pushed next to a vent that slides there then rolls into it and sinks (#1241), and the win.
+// slag fill line, a core pushed next to a vent that slides there then rolls into it and sinks (#1241), and the win.
 // ?bot=off plays both sides from the fixture of the core tests (crates/abalone-core/src/encounter/overseer.rs): the
 // player pushes the core (1, 1) next to (3, 1) at ply 5, which pulls it in, then (-2, 1) next to (-4, 1); the boss walks
 // 3 marbles onto (4, -1), where they burn, then pushes the core (2, -1) next to it itself at ply 22: the player's 6th
@@ -80,7 +80,7 @@ describe('main.ts The Overseer speaks (#741)', () => {
     expect(bubble().hidden).toBe(true);
   });
 
-  it('says the next taunt at each 20 % of the neurotoxin, and a new fight starts its bubble again', async () => {
+  it('says the next taunt at each 20 % of the slag fill, and a new fight starts its bubble again', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightOverseer(game);
     expect(bubbleText()).toBe('');
@@ -117,7 +117,7 @@ describe('main.ts The Overseer speaks (#741)', () => {
     game.frame(1000);
     expect(bubble().hidden).toBe(true);
     expect(tell()).toContain(VENT_NOTE); // P2: the vents burn yours too
-    expect(tell()).toContain('Neurotoxin');
+    expect(tell()).toContain('Slag fill');
     expect(body().haze).toBe('18'); // 3 puffs over each of the 6 vents
     game.frame(0);
     const before = body().hazeY;
@@ -143,7 +143,7 @@ describe('main.ts The Overseer speaks (#741)', () => {
 });
 
 describe('main.ts The Overseer (#635)', () => {
-  it('plays in the Chapel with its Tally line, draws the Overseer, its cores and vents, and the neurotoxin', async () => {
+  it('plays in the Chapel with its Tally line, draws the Overseer, its cores and vents, and the slag fill', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightOverseer(game);
     expect(body().boss).toBe('overseer');
@@ -229,7 +229,7 @@ describe('main.ts The Overseer (#635)', () => {
     expect(bubble().classList.contains('still')).toBe(true);
   });
 
-  it('a fight with no clock draws no Overseer and no neurotoxin', async () => {
+  it('a fight with no clock draws no Overseer and no slag fill', async () => {
     const game = await boot('?bot=off');
     expect(drawn(game)).toEqual({ overseer: null, cores: [], vents: [] });
     expect(tell()).toBeUndefined();

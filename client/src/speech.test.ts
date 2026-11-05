@@ -43,14 +43,14 @@ describe('speechAt, the typing timer of a bubble', () => {
 });
 
 describe('angryLine, the line of a core burnt on a vent', () => {
-  it('are the 6 lines of the owner, verbatim', () => {
+  it('are the 6 lines of the watch, verbatim (#1545)', () => {
     expect(ANGRY_LINES).toEqual([
-      'That core was load-bearing. Like your hopes.',
-      "Do you know what that cost? No. You can't count.",
-      'Stop touching my things.',
-      'I will remember that. I remember everything.',
-      'Congratulations. You broke something. Again.',
-      'That was mine. Everything here is mine.',
+      'Core burnt. The record is one short.',
+      'Core lost to the vent. Cause noted.',
+      'A core is struck from the watch. Logged.',
+      'The vent took it. The count stays open.',
+      'Core gone. No other copy is kept.',
+      'Burn logged. Cores on watch: fewer.',
     ]);
   });
 
@@ -71,6 +71,6 @@ describe('angryLine, the line of a core burnt on a vent', () => {
 
 describe('the farewell of the defeated Overseer (#789)', () => {
   it('is the one line of the issue', () => {
-    expect(FAREWELL).toBe('Well done. You broke the last thing that cared about you.');
+    expect(FAREWELL).toBe('Watch ended. No one remains to log it.');
   });
 });

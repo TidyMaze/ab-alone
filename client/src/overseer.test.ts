@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { axialTo3D } from './board';
 import { EJECT_MS, FADE_MS, trackAt } from './eject';
+import { BOSS_LORE } from './lorelogs';
+import { ANGRY_LINES, FAREWELL } from './speech';
+import { SECRETS } from './story';
 import { HAZE_PER_VENT, TAUNTS, TOXIN_TURNS, VENT_NOTE, burnTrack, burnsPlayer, hazeAt, parseBurns, startsBurningPlayer, tauntIndex, toxinText, ventNote, ventOf } from './overseer';
 
 describe('The Overseer helpers (#635, game-design.md section 7.11)', () => {
@@ -13,14 +16,14 @@ describe('The Overseer helpers (#635, game-design.md section 7.11)', () => {
     expect(() => parseBurns([1, 2])).toThrow('multiple of 3');
   });
 
-  it('reads the neurotoxin level and a sarcastic line every 20 %', () => {
+  it('reads the slag fill level and a line of the watch every 20 %', () => {
     expect(TOXIN_TURNS).toBe(40);
-    expect(toxinText(40)).toBe(`Neurotoxin 0 % · 40 turns left · ${TAUNTS[0]}`);
-    expect(toxinText(30)).toBe(`Neurotoxin 25 % · 30 turns left · ${TAUNTS[1]}`);
-    expect(toxinText(20)).toBe(`Neurotoxin 50 % · 20 turns left · ${TAUNTS[2]}`);
-    expect(toxinText(15)).toBe(`Neurotoxin 63 % · 15 turns left · ${TAUNTS[3]}`);
-    expect(toxinText(1)).toBe(`Neurotoxin 98 % · 1 turn left · ${TAUNTS[4]}`);
-    expect(toxinText(0)).toBe(`Neurotoxin 100 % · 0 turns left · ${TAUNTS[4]}`);
+    expect(toxinText(40)).toBe(`Slag fill 0 % · 40 turns left · ${TAUNTS[0]}`);
+    expect(toxinText(30)).toBe(`Slag fill 25 % · 30 turns left · ${TAUNTS[1]}`);
+    expect(toxinText(20)).toBe(`Slag fill 50 % · 20 turns left · ${TAUNTS[2]}`);
+    expect(toxinText(15)).toBe(`Slag fill 63 % · 15 turns left · ${TAUNTS[3]}`);
+    expect(toxinText(1)).toBe(`Slag fill 98 % · 1 turn left · ${TAUNTS[4]}`);
+    expect(toxinText(0)).toBe(`Slag fill 100 % · 0 turns left · ${TAUNTS[4]}`);
     expect(toxinText(-1)).toBe(''); // a fight with no clock
     expect(new Set(TAUNTS).size).toBe(5);
   });
@@ -50,6 +53,29 @@ describe('The Overseer helpers (#635, game-design.md section 7.11)', () => {
     expect([rolled.x, rolled.z]).toEqual([to.x, to.z]);
     const faded = trackAt(burnTrack([2, 1], true, [3, 1]), 0);
     expect([faded.x, faded.z]).toEqual([to.x, to.z]);
+  });
+});
+
+// #1545: the Overseer is an original ship system in Tally's register (world.md section 12.7): terse, procedural, unsettling.
+describe('The Overseer voice (#1545, world.md section 12.7)', () => {
+  const LINES = [...TAUNTS, ...ANGRY_LINES, FAREWELL, VENT_NOTE, toxinText(40), toxinText(0), BOSS_LORE.find((e) => e.id.includes('overseer'))!.body];
+  const BANNED =
+    /neurotoxin|test subject|testing|facility|cake|festive|corpse|goodbye|hopes|load-bearing|congratulations|well done|stop touching|my things|remember everything|mean it|can't count|\bmine\b|toxic|sarcas/i;
+
+  it('holds none of the framing of the old voice: neurotoxin, test subjects, a testing facility, cake, a joke on the failure', () => {
+    for (const line of LINES) expect(line).not.toMatch(BANNED);
+  });
+
+  it('speaks like a system: statements only, no first person, no exclamation or question, short', () => {
+    for (const line of [...TAUNTS, ...ANGRY_LINES, FAREWELL]) {
+      expect(line).not.toMatch(/[!?]|\b(I|me|my|mine|we|you|your)\b/);
+      expect(line.length).toBeLessThanOrEqual(50);
+    }
+  });
+
+  it('names its hazard from the Ballast: the slag fill, and holds no secret word of the story, whatever the stage the fight is met at', () => {
+    expect(toxinText(30)).toMatch(/^Slag fill 25 %/);
+    for (const line of LINES) for (const { word } of SECRETS) expect(line).not.toMatch(word);
   });
 });
 

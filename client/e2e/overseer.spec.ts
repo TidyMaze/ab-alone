@@ -64,7 +64,7 @@ async function plies(page: Page, from: number, to: number): Promise<void> {
 
 test('The Overseer: a core pushed next to a vent is pulled in and sinks, an ejection for the player, #635 #1241', async ({ page }, testInfo) => {
   await startOverseer(page);
-  await expect(page.locator('#hud .boss .tell')).toContainText('Neurotoxin 0 % · 40 turns left');
+  await expect(page.locator('#hud .boss .tell')).toContainText('Slag fill 0 % · 40 turns left');
   expect(await cores(page)).toBe(6);
   await plies(page, 0, 4);
   await expect(page.locator('#hud')).toContainText('1/6'); // a boss marble walked onto a vent and burnt
@@ -110,14 +110,14 @@ test('The Overseer: on victory its marble explodes, with no angry line, #789', a
   // 1.5 s more of stepped clock here would cost 5 draws on a CI runner (#1481).
 });
 
-// The Overseer speaks and its vents turn toxic (#741, docs/specs/ui.md).
+// The Overseer speaks and its vents turn to fume (#741, docs/specs/ui.md).
 const LINES = [
-  'That core was load-bearing. Like your hopes.',
-  "Do you know what that cost? No. You can't count.",
-  'Stop touching my things.',
-  'I will remember that. I remember everything.',
-  'Congratulations. You broke something. Again.',
-  'That was mine. Everything here is mine.',
+  'Core burnt. The record is one short.',
+  'Core lost to the vent. Cause noted.',
+  'A core is struck from the watch. Logged.',
+  'The vent took it. The count stays open.',
+  'Core gone. No other copy is kept.',
+  'Burn logged. Cores on watch: fewer.',
 ];
 const bubbleText = (page: Page) => page.locator('#bubble-text').textContent() as Promise<string>;
 
@@ -139,7 +139,7 @@ test('The Overseer: its taunt is typed in a bubble over its marble, on screen, #
   await stepClock(page, 300);
   const second = (await bubbleText(page)).length;
   expect(first).toBeLessThan(second);
-  expect(second).toBeLessThan('Take your time. The neurotoxin will wait.'.length);
+  expect(second).toBeLessThan('Watch begun. The chamber is sealed.'.length);
   const box = (await bubble.boundingBox())!;
   const view = page.viewportSize()!;
   expect(box.x).toBeGreaterThan(0);
@@ -148,7 +148,7 @@ test('The Overseer: its taunt is typed in a bubble over its marble, on screen, #
   await shot(page, { path: testInfo.outputPath('overseer-typing.png') });
 });
 
-test('The Overseer: a burnt core makes the bubble angry and shaking, and the vents turn toxic in P2, #741', async ({ page }, testInfo) => {
+test('The Overseer: a burnt core makes the bubble angry and shaking, and the vents turn to fume in P2, #741', async ({ page }, testInfo) => {
   await page.clock.install();
   await startOverseer(page);
   await plies(page, 0, 4);

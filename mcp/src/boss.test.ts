@@ -162,12 +162,12 @@ const CASES: Record<string, () => void> = {
 
   overseer() {
     const overseer = newEncounter('overseer', 0);
-    // The vents are marks; the neurotoxin clock is the tell, before the bare special id of every ply.
+    // The vents are marks; the slag clock is the tell, before the bare special id of every ply.
     const vents = ['(-3,-1)', '(4,-1)', '(-4,0)', '(4,0)', '(-4,1)', '(3,1)'];
     expect(bossState('overseer', overseer)).toMatchObject({
       name: 'The Overseer',
       tell: {
-        kind: 'neurotoxin',
+        kind: 'slag',
         cells: [],
         text: 'the boss wins at the end of your turn in 40 turns unless you win first; an empty vent pulls in a core next to it at the end of every ply',
       },
