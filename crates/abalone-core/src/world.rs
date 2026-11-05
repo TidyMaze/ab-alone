@@ -800,17 +800,26 @@ pub const TOWNS: usize = 5;
 pub const DUNGEONS: usize = 5;
 /// The salt of the town and dungeon gate draws (as `LOG_SALT`, two salts each).
 const PLACE_SALT: u64 = 60;
-/// Town `k` is drawn in the sextant `k`, 40 to 120 ground units out (a hex distance of 139 at most, inside the lairs' `LAIR_MIN`); the gate `k` in the sextant `k + 1`,
-/// as far out as the lairs.
+/// Town `k` is drawn in the sextant `k`, 40 to 120 ground units out at first (a hex distance of 139 at most, inside the lairs' `LAIR_MIN`);
+/// the gate `k` in the sextant `k + 1`, as far out as the lairs.
 const TOWN_RING: (f64, f64) = (40.0, 120.0);
 const DUNGEON_RING: (f64, f64) = (160.0, 420.0);
+
+/// The most tries a place has, so the search always ends: the most any seed of 1 to 2000 needed is 239 (`PLACE_TRIES` is four times that).
+pub const PLACE_TRIES: i32 = 1000;
 
 /// The towns then the dungeon gates of the world `seed` (docs/specs/openworld.md section 13), each with its kind and its cell. The first
 /// town is the spawn clearing, `(0, 0)`. Town `k` (1 to 4) is drawn in the sextant `k` (forest, tundra, desert, badlands) and the dungeon
 /// gate `k` in the sextant `k + 1` (forest to archipelago): the first draw that `spot` keeps and that is more than 3 cells from every cell
-/// of `avoid` (the lairs, the teleporters and the logs) and from the places placed before it. From the seed alone, it reads the terrain
-/// and the enemies, never changes them, so `WORLD_VERSION` does not move.
+/// of `avoid` (the lairs, the teleporters and the logs) and from the places placed before it. The far edge of the ring of the place
+/// grows by 1 ground unit every 2 tries, up to the lairs' `LAIR_FAR`, so a sextant with no open ground near the spawn still gets its
+/// town further out. From the seed alone, it reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
 pub fn places(seed: u64, avoid: &[(i32, i32)]) -> Vec<(PlaceKind, (i32, i32))> {
+    places_within(seed, avoid, PLACE_TRIES)
+}
+
+/// `places` with at most `tries` draws a place: a place with no fit in them is left out, so the search always ends.
+fn places_within(seed: u64, avoid: &[(i32, i32)], tries: i32) -> Vec<(PlaceKind, (i32, i32))> {
     let mut taken = avoid.to_vec();
     taken.push((0, 0));
     let mut found = vec![(PlaceKind::Town, (0, 0))];
@@ -820,12 +829,13 @@ pub fn places(seed: u64, avoid: &[(i32, i32)]) -> Vec<(PlaceKind, (i32, i32))> {
             (0..DUNGEONS as i32)
                 .map(|k| (PlaceKind::Dungeon, 10 + k, k as usize + 1, DUNGEON_RING)),
         );
-    for (kind, k, wedge, ring) in wanted {
-        let cell = (0..)
-            .find_map(|n| spot(seed, PLACE_SALT, k, n, wedge, ring, &taken))
-            .expect("an endless search");
-        taken.push(cell);
-        found.push((kind, cell));
+    for (kind, k, wedge, (near, far)) in wanted {
+        let ring = |n: i32| (near, (far + f64::from(n) / 2.0).min(LAIR_FAR));
+        let fit = (0..tries).find_map(|n| spot(seed, PLACE_SALT, k, n, wedge, ring(n), &taken));
+        if let Some(cell) = fit {
+            taken.push(cell);
+            found.push((kind, cell));
+        }
     }
     found
 }
@@ -2094,13 +2104,13 @@ mod tests {
     }
 
     #[test]
-    fn the_other_towns_stand_near_the_spawn_in_their_biome_and_every_wild_biome_holds_a_gate() {
+    fn the_other_towns_stand_in_their_biome_and_every_wild_biome_holds_a_gate() {
         for seed in 1..=24 {
             let found = places(seed, &place_avoid(seed));
             let towns = kind_cells(&found, PlaceKind::Town);
             for (k, &(q, r)) in towns.iter().enumerate().skip(1) {
                 assert_eq!(cell(seed, q, r).unwrap().biome, SEXTANTS[k], "seed {seed}");
-                assert!(distance(q, r) < LAIR_MIN, "seed {seed}: town {k}");
+                assert!(distance(q, r) < WORLD_RADIUS, "seed {seed}: town {k}");
             }
             let gates = kind_cells(&found, PlaceKind::Dungeon);
             for (k, &(q, r)) in gates.iter().enumerate() {
@@ -2132,10 +2142,10 @@ mod tests {
             found,
             vec![
                 town(0, 0),
-                town(59, -44),
+                town(50, -44),
                 town(22, -88),
                 town(-101, 20),
-                town(-78, 66),
+                town(-92, 72),
                 gate(392, -366),
                 gate(44, -217),
                 gate(-312, -21),
@@ -2186,6 +2196,42 @@ mod tests {
                 }
             },
         );
+    }
+
+    #[test]
+    fn every_seed_from_1_to_2000_finds_its_places_in_a_quarter_of_the_tries_a_place_has() {
+        // A quarter of the tries is enough for every seed (the most any needs is 239), so `PLACE_TRIES` has four times the room.
+        sweep(
+            "places in a quarter of the tries",
+            |seed| places_within(seed, &[], PLACE_TRIES / 4),
+            |seed, found| assert_eq!(found.len(), TOWNS + DUNGEONS, "seed {seed}"),
+        );
+    }
+
+    #[test]
+    fn the_seeds_whose_towns_found_no_fit_near_the_spawn_get_all_their_places_with_the_lairs_the_teleporters_and_the_logs_avoided(
+    ) {
+        for seed in [862, 1178, 1279, 1339, 1413, 1540, 1616] {
+            let avoid = place_avoid(seed);
+            let found = places(seed, &avoid);
+            assert_eq!(found.len(), TOWNS + DUNGEONS, "seed {seed}");
+            for (i, a) in found.iter().enumerate().skip(1) {
+                assert!(
+                    avoid.iter().all(|&c| hex_distance(c, a.1) > 3),
+                    "seed {seed}: {a:?}"
+                );
+                assert!(distance(a.1 .0, a.1 .1) > SAFE, "seed {seed}: {a:?}");
+                for b in &found[..i] {
+                    assert!(hex_distance(a.1, b.1) > 3, "seed {seed}: {a:?} and {b:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_place_with_no_fit_in_its_tries_is_left_out_and_the_spawn_town_stays() {
+        assert_eq!(places_within(7, &[], 0), vec![(PlaceKind::Town, (0, 0))]);
+        assert_eq!(places_within(7, &[], PLACE_TRIES), places(7, &[]));
     }
 
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.

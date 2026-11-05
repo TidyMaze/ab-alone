@@ -549,12 +549,15 @@ plan as the game.
   lair does (section 7). No place moves the hero anywhere else.
 - **Placement is seeded world generation in Rust** (`world::places(seed, avoid)`, bridge `world_places(seed)`, `kind, q, r` triples,
   `kind` 0 a town and 1 a dungeon gate). The towns come first and the spawn clearing, `(0, 0)`, is the first town. The other four towns
-  are drawn in the sextants 1 to 4 (the biomes of section 2, from the forest), 40 to 120 ground units out, which keeps them inside the
-  nearest tower's 150 cells. The five dungeon gates are drawn in the sextants 1 to 5, 160 to 420 ground units out, as the towers.
+  are drawn in the sextants 1 to 4 (the biomes of section 2, from the forest), 40 to 120 ground units out, inside the nearest tower's 150
+  cells. The far edge of that ring grows by 1 ground unit every 2 tries, up to 420 (the towers' `LAIR_FAR`): on seeds 862, 1178, 1279, 1339,
+  1413, 1540 and 1616 a sextant holds too little open ground of its biome within 120 units (a pad of 7 cells with no tree, boulder or peak), and the town stands further out. The five dungeon gates are drawn in the sextants 1 to 5, 160 to 420 ground units out, as the towers.
   A draw is kept when its cell and its six neighbours are open ground of the sextant's biome, it is more than `SAFE` (8) cells from the
   spawn, 2 cells or more inside its chunk with no generated enemy within 2 cells, and it is more than 3 cells from every lair,
   teleporter, log and place placed before it, so no two places overlap and none sits on blocked ground (a tower is a lair: they do not
-  move). The bridge passes the lairs, the teleporters and the logs, in that order, so none of them moves. It reads the terrain and the
+  move). The search ends: a place has `PLACE_TRIES` (1000) tries, four times what the most demanding of the seeds 1 to 2000 needs (239),
+  and a place with no fit in them is left out, so the world holds fewer than ten (the spawn town always stays). The biome of the sextant
+  stays required: every sextant of the seeds 1 to 2000 holds open ground of its biome. The bridge passes the lairs, the teleporters and the logs, in that order, so none of them moves. It reads the terrain and the
   enemies, never changes them, and needs no record in the save: the places are a function of the seed, so `WORLD_VERSION` does not move
   and the saves keep loading.
 - **Map.** A town is a green house on a hexagonal plate, a dungeon gate an orange arch on a triangular plate, a tower the crenellated
@@ -563,7 +566,8 @@ plan as the game.
   its window, 20 px, no arrow. The violet, amber, green and orange of the icons read 3:1 over the plate (unit test).
 - **Browser checks.** `body[data-openworld-places]` lists the places (`town:q,r` or `dungeon:q,r`, separated by spaces);
   `window.__openworldPlaces(seed)` gives the bridge's triples.
-- **Tests.** Rust: the places of 24 seeds hold the 5 towns and the 5 gates, the spawn town first, no two places within 3 cells, none on a
+- **Tests.** Rust: the places of the seeds 1 to 2000 all hold the 5 towns and the 5 gates (a bounded sweep: it fails rather than hangs, and
+  holds in a quarter of the tries), the places of 24 seeds hold them, the spawn town first, no two places within 3 cells, none on a
   lair, teleporter or log, each with open ground and no enemy round it, each in its biome; seed 7 is pinned. Client: the icons' shapes
   and contrast, the minimap and the map drawing them, the mode reading and publishing them.
 - **Not now**: walking into a town or a gate (no station and no run starts from the world yet), moving the Hub's stations, 3D models of
