@@ -142,6 +142,39 @@ describe('the Open world mode', () => {
     expect(game.hud()).toContain('to move'); // the board's plate is back
   });
 
+  it('Escape closes the terminal reader opened from the log archive in the world, then the sheets of the page, and only then leaves it, #1591', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    localStorage.setItem('ab-alone.lore-read', 'cargo-assay');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    await game.settle();
+    game.frame();
+    press('ArrowRight');
+    expect(data().openworldAt).toBe('1,0');
+    game.openSettings();
+    byId('setting-log-archive').click();
+    document.querySelector<HTMLButtonElement>('.setting-archive button')!.click();
+    expect(data().reading).toBe('cargo-assay');
+    press('Escape'); // the reader closes, the world stays where it was
+    expect(data().reading).toBeUndefined();
+    expect(byId('reader').hidden).toBe(true);
+    expect(data().openworld).toBe('7');
+    expect(data().openworldAt).toBe('1,0');
+    game.openSettings(); // the settings menu too: its Escape closes it only
+    expect(byId('settings').getAttribute('aria-expanded')).toBe('true');
+    press('Escape');
+    expect(byId('settings').getAttribute('aria-expanded')).toBe('false');
+    expect(data().openworld).toBe('7');
+    game.openModes(); // and the Game modes menu
+    expect(byId('modes').getAttribute('aria-expanded')).toBe('true');
+    press('Escape');
+    expect(byId('modes').getAttribute('aria-expanded')).toBe('false');
+    expect(data().openworld).toBe('7');
+    press('Escape'); // no sheet open: the world is left
+    expect(data().openworld).toBeUndefined();
+  });
+
   it('rolls the hero by a press on the screen, and keeps the board out of it', async () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();

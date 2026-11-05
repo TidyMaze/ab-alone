@@ -77,3 +77,23 @@ for (const { name, viewport, touch } of sizes) {
     });
   });
 }
+
+test('Escape closes the terminal reader opened from the log archive in the world, the hero stays, a second Escape leaves, #1591', async ({ page }) => {
+  await open(page);
+  await stand(page, [3, 1]);
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-at', '3,1');
+  await page.evaluate(() => localStorage.setItem('ab-alone.lore-read', 'cargo-assay')); // one entry read: the archive lists it
+  await page.locator('#settings').click();
+  await page.locator('#setting-log-archive').click();
+  await page.locator('.setting-archive button').first().click();
+  await expect(page.locator('body')).toHaveAttribute('data-reading', 'cargo-assay');
+  await expect(page.locator('#reader')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('body')).not.toHaveAttribute('data-reading', /.+/);
+  await expect(page.locator('#reader')).toBeHidden();
+  await expect(page.locator('body')).toHaveAttribute('data-openworld', '7'); // still in the world, the hero where it stood
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-at', '3,1');
+  await shot(page, { path: 'test-results/reader-escape-stays-in-world.png' });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('body')).not.toHaveAttribute('data-openworld', /.+/);
+});
