@@ -109,6 +109,11 @@ No cutscenes, no forced dialogue, no quest log.
   locally. Collectable (#517): a recorder prop lies on the cargo crate of the room (`client/src/room.ts`); a click on it
   plays the deck's log too. Any log heard, from the recorder or Play log, is saved collected (`client/src/lorestore.ts`):
   the log archive lists the logs collected after the entries read, and a press on one replays it.
+- **Lore of the story** (`client/src/lorelogs.ts`, #1589, section 12): 15 boss entries, one per boss of the roster, of 200 characters at most, and 12 logs of the
+  Open world, of 320 at most (openworld.md section 12). A boss win shows that boss's entry in a sheet over the dock (`#lore`, the audio log transcript's family: it lets every
+  press through, and Retry and leaving stay in the dock), a win again shows the same entry. Every entry is filed in the log archive when it is shown or read, after the
+  terminals and in the order of the roster then of the logs, and the archive reopens it in the terminal reader (a log of the world and the Medal room have no audio log, so
+  no Play log). Each entry has a stage, and none holds a secret word of a later one.
 - **Tally.** One-line announcements at match start and end. Never explains itself.
 - **Boss arenas.** Each boss board carries one lore object the player can inspect before the
   fight.

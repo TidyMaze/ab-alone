@@ -309,7 +309,7 @@ The world (seed), the hero and troop cells, and the enemy groups beaten are save
 `ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
 
 **What is saved.** One record per seed, under the key `openworld:<seed>`:
-`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], time, yaw, savedAt }`, where `fight` is the
+`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], time, logs: [n, ...], yaw, savedAt }`, where `fight` is the
 `FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
 The last world played is kept apart under `openworld:last` (`{ seed }`).
 
@@ -333,7 +333,7 @@ either (a bad `fight` makes a bad record). Both are deleted, and the world start
 field) or 2 loads with no lair beaten, so an old save is kept; an unknown later version, or a `lairs` that is not a list of
 whole numbers, is deleted like any garbage. `record` 4 adds `discovered`, the cells discovered (section 9): a record before it loads
 with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is garbage. `record` 5 adds `time`,
-the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage.
+the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage. `record` 6 adds `logs`, the numbers of the lore logs found (section 12): a record before it loads with none found; a `logs` that is not a list of whole numbers is garbage.
 
 ## 6. Tests
 
@@ -347,7 +347,7 @@ Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, 
 hero, the troop and the enemies of the loaded square (the generated ones are hidden; without `enemies` they stay, wandering, and a marble the hero is put
 beside fights, section 3c), `window.__openworldWander(tick | null)` sets the tick of the marbles' clock (section 3b), and
 `window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them. `window.__openworldTime(ms)` sets the time of
-day in ms of the 12 minute cycle (section 11); `body[data-openworld-phase]` reads `day`, `dusk` or `night`, and `body[data-fight-board]`
+day in ms of the 12 minute cycle (section 11), `window.__openworldLogs(seed)` gives the lore logs of a world as `q, r` pairs (section 12); `body[data-openworld-phase]` reads `day`, `dusk` or `night`, and `body[data-fight-board]`
 the same on a lair fight.
 
 ## 7. Boss lairs (#1170, #1171, epic #1177)
@@ -496,3 +496,30 @@ The Open world goes through day, dusk and night, and a lair is fought on a hexag
 - **Tests.** Unit: the phase from the time, the blend and its steps, the save, the sky of the view, the board looks, the terrace's look
   and the mark of the fight. E2E (`openworld-daynight.spec.ts`): a world at each phase set with the hook, a lair entered at each phase on
   its board, and the contrast at each.
+
+## 12. Lore logs (#1589)
+
+The Open world holds twelve logs of the story (`docs/specs/world.md` section 12), optional, never on the way to the ending.
+
+- **Placement** is seeded world generation in Rust (`world::logs(seed, avoid)`, bridge `world_logs(seed)`, `q, r` pairs, log 0 first, 12 in all,
+  `LOGS`). Log `k` is drawn in the sextant `k % 6` (the biome of section 2: meadow, forest, tundra, desert, badlands, archipelago), in ring `k / 6`:
+  the near ring 30 to 140 ground units from the spawn, the far ring 160 to 420 (the lairs' 160 to 420). So each biome holds two, one near the spawn and one
+  far, and the same seed gives the same cells on every peer. A draw is kept when its cell and its six neighbours are open ground of the sextant's biome
+  (never water, a peak, a tree, a boulder or a wall), it is more than `SAFE` (8) cells from the spawn, it lies 2 cells or more inside its chunk with no
+  generated enemy within 2 cells, and no lair or teleporter is within 3 cells (the bridge passes both as `avoid`). It reads the terrain and the enemies,
+  never changes them, so `WORLD_VERSION` does not move and the saves keep loading.
+- **Text.** `client/src/lorelogs.ts` holds the twelve entries by log number (`WORLD_LOGS`): a title, a body of 320 characters at most, a `stage` of the reveal
+  ladder (1 to 3) and a `reread` flag (three of them carry the hint of a reread). Tally's register, short, original. No log holds a secret word of a later
+  stage (`lorelogs.test.ts`).
+- **Look.** A log is a stake on its cell: tall and amber, glowing at night, while unread; short and grey, with no glow, once found (the shape changes, not
+  only the colour). A diamond icon on the minimap and the map for the logs on discovered cells, a filled amber slab unread and an outline of it in the grey of a
+  beaten tower once found (`logIcon`, never a tower or a portal). The amber and the grey read 3:1 over the icon's plate (unit test).
+- **Read.** Rolling onto a log (a step of the hero, never a teleport) opens a short panel (`#openworld-log`: the title and the text) in the top left, under the cog
+  and beside the minimap, over the world and nothing else: it ignores the pointer. It never blocks a move: the next move closes it. The log is marked found in the
+  world's save (`logs`, section 5), and filed in the log archive (`ab-alone.lore-read`, world.md section 4), whose Logs page reopens it in the terminal reader at any
+  time, in or out of the world. Rolling onto a log found reads it again. `body[data-openworld-logs]` lists the logs on discovered cells (`q,r` separated by
+  spaces), `data-openworld-logs-found` the numbers found and `data-openworld-log` the id of the log the panel shows.
+- **MCP.** The server does not expose the logs: its `save_world` carries the numbers found as the client wrote them (`mcp.md`).
+- **Tests.** Rust: 12 cells per seed from the seed alone, each on open ground of its biome with its neighbours, off the spawn, the lairs, the teleporters and the
+  enemies, two per sextant. Client: the save of `logs` and its migration, the stakes and their glow, the icon, the panel, the archive. E2E
+  (`openworld-lore.spec.ts`): a log read by a roll, closed by the next move, found after a reload and in the archive.

@@ -59,14 +59,14 @@ First to eject 6 wins. On top of it, the ship:
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.
 - **Battle royale** on the Furnace deck: up to 6 seats, hidden orders, bots fill empty seats.
-- **Hub**: walk five decks, a door per boss, a room per mode, lore terminals. New players land there,
+- **Hub**: walk five decks, a door per boss, a room per mode, lore terminals. Every boss you beat shows its own short lore entry under the victory banner, and the log archive (Logs in the cog menu) keeps the entries and the logs of the Open world you read. New players land there,
   after a short illustrated guide to the rules and the controls of their device (Guide in the cog menu opens it again).
 - **Open world**: a generated hex map of six biomes, one per sixth of the hexagon (meadow, forest, tundra, desert,
   badlands and an archipelago), a hero marble you walk and a troop that fights on its own, both sailing
   across the water on small boats, with a minimap in the top right corner, a map of the world discovered round the hero (M, or the Map button) and
   teleporters to travel between the ones discovered (T, or the Teleport button, on a teleporter), a sky that goes through day, dusk and night
   in 12 minutes, a lair fight on a board dressed for the hour you entered it at, and wandering marbles that walk up to your hero and start a wild
-  fight against the bot you can flee with the Flee button or F ([spec](docs/specs/openworld.md)).
+  fight against the bot you can flee with the Flee button or F, and twelve lore logs on stakes, each read by rolling onto it and kept in the world's save ([spec](docs/specs/openworld.md)).
 - **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)).
 
 Rusted deck plates, cold light, fog at the rim. The camera orbits and zooms; a **Clear board**
