@@ -33,6 +33,8 @@ export interface BootOptions {
   fonts?: (font: string) => Promise<unknown>;
   /** What fails: `worker` answers every bot request with an error, `wasm` and `renderer` reject their init (#736, #737). */
   fails?: 'worker' | 'wasm' | 'renderer';
+  /** What the page finds in localStorage when it loads, a player who played before (#1584); empty by default. */
+  storage?: Record<string, string>;
   /** The renderer runs on WebGPU, not its WebGL fallback: compute shaders, so clustered lighting (#neon tubes). */
   webgpu?: boolean;
 }
@@ -127,6 +129,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   for (const { name } of [...root.attributes]) if (name !== 'lang') root.removeAttribute(name);
   document.body.replaceWith(Object.assign(document.createElement('body'), { innerHTML: body }));
   localStorage.clear();
+  for (const [key, value] of Object.entries(options.storage ?? {})) localStorage.setItem(key, value);
   history.replaceState(null, '', new URL(url, location.origin).href);
   Object.defineProperty(navigator, 'webdriver', { value: webdriver, configurable: true });
   undo.push(() => Reflect.deleteProperty(navigator, 'webdriver'));

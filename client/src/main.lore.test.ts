@@ -43,7 +43,7 @@ describe('the lore after a boss win (#1589)', () => {
   });
 
   it('shows the entry of the boss that was beaten, whichever it is, and the same one again on a repeat win', async () => {
-    const game = await boot('?bot=off', { reducedMotion: true });
+    const game = await boot('?bot=off', { reducedMotion: true, storage: { 'ab-alone.story': JSON.stringify({ moments: [2, 3], wins: 0 }) } }); // stage 3: The Swarm's entry is reached (#1584)
     await fight(game, 'The Swarm', 1);
     expect(byId('lore-title').textContent).toBe('Cargo: the Swarm');
     expect(byId('lore-body').textContent).toBe(BOSS_LORE.at(-1)!.body);

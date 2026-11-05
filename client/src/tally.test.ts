@@ -38,6 +38,22 @@ describe('tallyLine', () => {
   });
 });
 
+describe("the first boss win changes the next Tally line of the bot table (#1584)", () => {
+  it('says the stage 2 line from the stage 2 on, and the first one before', () => {
+    expect(tallyLine({ mode: 'bot' })).toBe('Mess: one seat filled. The other is counted.');
+    expect(tallyLine({ mode: 'bot', stage: 1 })).toBe('Mess: one seat filled. The other is counted.');
+    for (const stage of [2, 3, 7]) expect(tallyLine({ mode: 'bot', stage })).toBe('Mess: one seat filled. The other is counted. It was never an enemy.');
+  });
+
+  it('changes that one line only: the other modes and the bosses say the same at every stage', () => {
+    for (const stage of [1, 2, 7]) {
+      expect(tallyLine({ mode: 'local', stage })).toBe('Mess: two crews, one table. Ledger open.');
+      expect(tallyLine({ mode: 'online', stage })).toBe('Link: two crews, one ledger. Both counted.');
+      expect(tallyLine({ mode: 'boss', boss: 'echo', stage })).toBe('Mirror logged. Six out to balance the books.');
+    }
+  });
+});
+
 describe('endingLine (#1175)', () => {
   it('names the open clamp and the crew attached, in one line', () => {
     expect(endingLine(6)).toBe('Variance noted. Clamp: open. Crew attached: 6.');

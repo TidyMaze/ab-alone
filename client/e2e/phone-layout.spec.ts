@@ -377,6 +377,7 @@ for (const { name, viewport, mobile } of sizes) {
       const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
       await page.addInitScript(() => {
         crypto.getRandomValues = ((a: Uint32Array) => a.fill(0)) as typeof crypto.getRandomValues; // the fight seed
+        localStorage.setItem('ab-alone.story', JSON.stringify({ moments: [2, 3], wins: 0 })); // stage 3 reaches The Swarm's entry (#1584)
       });
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();

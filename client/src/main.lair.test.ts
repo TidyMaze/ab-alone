@@ -166,10 +166,10 @@ describe('the day and the night of the Open world (#1496)', () => {
 });
 
 describe("Tally's line in the Open world (#1171)", () => {
-  it('shows "Claim 0412: unworked." the first time the player opens an Open world, and never again', async () => {
+  it('shows "Claim: unworked." the first time the player opens an Open world, and never again (the line number comes with stage 5, #1584)', async () => {
     const game = await boot('?bot=off&openworld=7'); // the link opens the world at the load (#1361)
     await settle();
-    expect(byId('openworld-tally').textContent).toBe('Claim 0412: unworked.');
+    expect(byId('openworld-tally').textContent).toBe('Claim: unworked.');
     expect(localStorage.getItem('ab-alone.tally0412')).toBe('seen');
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
@@ -178,6 +178,20 @@ describe("Tally's line in the Open world (#1171)", () => {
     byId('openworld').click();
     await settle();
     expect(byId('openworld-tally').textContent).toBe('');
+  });
+});
+
+describe("Tally's first-visit line from stage 5 (#1584)", () => {
+  it('names the claim, 0412, once the player is delivered, at stage 5', async () => {
+    await boot('?bot=off&openworld=7', { storage: { 'ab-alone.story': JSON.stringify({ moments: [2, 3, 4, 5], wins: 0 }) } });
+    await settle();
+    expect(byId('openworld-tally').textContent).toBe('Claim 0412: unworked.');
+  });
+
+  it('keeps the number back at stage 4', async () => {
+    await boot('?bot=off&openworld=7', { storage: { 'ab-alone.story': JSON.stringify({ moments: [2, 3, 4], wins: 0 }) } });
+    await settle();
+    expect(byId('openworld-tally').textContent).toBe('Claim: unworked.');
   });
 });
 

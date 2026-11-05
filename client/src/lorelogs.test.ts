@@ -2,18 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { AUDIO_LOGS } from './audiologs';
 import { LORE } from './lore';
 import { audioDeckOf, BOSS_LORE, bossLore, entryOf, STORY, WORLD_LOGS, type StoryEntry } from './lorelogs';
+import { SECRETS } from './story';
 import { BOSS_IDS } from './tally';
 
 // The lore of the story (docs/specs/world.md section 12): 15 boss entries and 12 world logs, each with its stage of the reveal ladder.
 const ENTRIES: readonly StoryEntry[] = [...BOSS_LORE, ...WORLD_LOGS];
 
-/** The secret words of the ladder and the stage that may first hold each (world.md section 12.2): none appears in an entry of an earlier stage. */
-const SECRETS: readonly { word: RegExp; from: number }[] = [
-  { word: /deliver/i, from: 4 },
-  { word: /\bcold/i, from: 4 },
-  { word: /0412/, from: 5 },
-  { word: /cannot push/i, from: 6 },
-];
 /** The stages of the five bosses the ladder binds (world.md section 12.3); the other ten stay at 3 or below. */
 const LADDER: Record<string, number> = { echo: 2, hull: 4, choir: 3, chaplain: 5, ballast: 7 };
 /** The sentences of a text, lowercase, the device "Appended by TALLY" (the note under a terminal, world.md section 4) left out. */
