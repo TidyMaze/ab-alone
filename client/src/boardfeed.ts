@@ -7,7 +7,7 @@ import { DEFAULT_RATING, MIN_RATING, update1v1Elo } from './elo';
 import { b64, signedBy, type Keys } from './moverecord';
 import { cleanName, verifyRetire, type RetireEvent } from './shareboard';
 
-// nos.lol is out (#1287, legal 2026-11-05): its NIP-11 names a terms page that holds no terms. See docs/specs/multiplayer.md 7.
+// The two relays the board reads (#1287, docs/specs/multiplayer.md 7).
 export const RELAYS = ['wss://relay.piazza.today', 'wss://relay.bitmacro.cloud'] as const;
 export const WINDOW_S = 7 * 24 * 3600;
 const CLOCK_SLACK_S = 600;

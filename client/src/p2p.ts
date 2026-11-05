@@ -7,7 +7,7 @@ import type { ConnectionState, Transport } from './transport';
 const APP_ID = 'ab-alone';
 
 /** The relay shortlist (docs/specs/multiplayer.md section 7, #1338), instead of Trystero's defaults (`relayConfig.urls` in trystero 0.26, the issue says `relayUrls`). */
-export const RELAY_URLS = ['wss://relay.piazza.today', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud']; // nos.lol dropped (#1287, multiplayer.md 7)
+export const RELAY_URLS = ['wss://relay.piazza.today', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud']; // multiplayer.md 7 (#1287)
 
 /**
  * Serverless P2P: Trystero finds the peer through public Nostr relays, moves go over WebRTC.
