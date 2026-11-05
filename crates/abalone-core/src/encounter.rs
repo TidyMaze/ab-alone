@@ -84,7 +84,7 @@ pub struct Encounter {
     hook_seed: u64,
     /// The marbles the last ply's hook removed, with what they were (The Overseer's burns).
     removed: Vec<((i32, i32), Cell)>,
-    /// Player turns before the boss wins, for a fight on a clock (The Overseer's neurotoxin).
+    /// Player turns before the boss wins, for a fight on a clock (The Overseer's slag fill).
     turn_limit: Option<u32>,
     /// Count the marbles a hook removes by colour, when it flips none (The Ballast Mind borrows
     /// the Pulsar's pulse, which moves marbles).

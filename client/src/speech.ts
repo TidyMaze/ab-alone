@@ -14,16 +14,16 @@ export const GLITCH_MS = 25;
 
 /** What the Overseer says when a core burns on a vent (#741): one is picked per burn. */
 export const ANGRY_LINES: readonly string[] = [
-  'That core was load-bearing. Like your hopes.',
-  "Do you know what that cost? No. You can't count.",
-  'Stop touching my things.',
-  'I will remember that. I remember everything.',
-  'Congratulations. You broke something. Again.',
-  'That was mine. Everything here is mine.',
+  'Core burnt. The record is one short.',
+  'Core lost to the vent. Cause noted.',
+  'A core is struck from the watch. Logged.',
+  'The vent took it. The count stays open.',
+  'Core gone. No other copy is kept.',
+  'Burn logged. Cores on watch: fewer.',
 ];
 
 /** What the Overseer says once the player has beaten it (#789), after its marble explodes. */
-export const FAREWELL = 'Well done. You broke the last thing that cared about you.';
+export const FAREWELL = 'Watch ended. No one remains to log it.';
 
 const ANGRY_SEED = 741;
 

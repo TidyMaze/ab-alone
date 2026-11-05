@@ -36,7 +36,7 @@
 //! - Cell list (The Chaplain, the cells The Magnetizer just polarized): pairs `[q, r]`, back to back.
 //! - Incinerators (The Overseer): a cell list. Removed (its burns): records of 3 integers
 //!   `[q, r, code]`, the board code of each marble the last ply's hook removed, back to back.
-//!   Turns left (its neurotoxin): the player turns before the boss wins, `-1` with no clock.
+//!   Turns left (its slag fill): the player turns before the boss wins, `-1` with no clock.
 //! - Polarities (The Magnetizer): one integer per cell, in the board order: `0` none, `1` +, `-1` −.
 //! - Announce (The Magnetizer): `[q, r, sign]` of the marble that takes `sign` at the start of the
 //!   next assignment turn, empty when none.

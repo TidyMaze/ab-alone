@@ -788,11 +788,12 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
 
-### 7.11 The Overseer: burn its cores before the neurotoxin
+### 7.11 The Overseer: burn its cores before the slag fill
 
-- **Concept**: the Chapel's old test supervisor woke up. It sits bolted to the middle of the
-  chamber, guards its personality cores, comments on your every move and floods the room with
-  neurotoxin while you think.
+- **Concept**: the Chapel's watch system, a ship system that kept the count of the shrine and never
+  stopped. It sits bolted to the middle of the chamber, guards its cores, logs your every move in
+  Tally's register (terse, procedural, never a joke, world.md section 12.7) and lets the **slag
+  fill** rise in the room while you think.
 - **Board and sides**: standard radius 4 board, Chapel deck look. 14 marbles each on the standard
   layout: the boss has its army (14) and plays it with standard Abalone. On top of it:
   - **The Overseer** on the centre cell `(0, 0)`. Nothing moves it: a move onto it is refused and
@@ -813,7 +814,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   phase, yours in P2; a burnt marble counts for the other side, as the Hull's voids. The phase of
   a ply is the one before it.
 - **Win and lose**: win at **6** ejections as usual (`rules.md` §10.3): the 6 cores burnt win, and a
-  boss marble ejected or burnt counts too. Lose at 6 of yours, a draw, or the **neurotoxin**: at
+  boss marble ejected or burnt counts too. Lose at 6 of yours, a draw, or the **slag fill**: at
   the end of your turn **40**, if you have not won, the boss wins. Your 40th move still wins if it
   brings your 6th ejection.
 - **Phases**: P1 at the start, **P2 after 2 ejections** credited to you: P2 burns your marbles too.
@@ -830,30 +831,30 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   warm disc crossed by 3 dark slots on its cell. A burning marble sinks into its vent and fades (reduced motion: a fade);
   a core a vent pulls in rolls one cell onto it first (reduced motion: it fades on the vent). The goal line reads
   "Push its cores onto or next to the vents."
-  **Vents by phase** (#741): from P2, when the vents start burning your marbles too, a toxic green
-  haze rises from them (reduced motion: a faint still haze) and the HUD adds "The vents now burn
+  **Vents by phase** (#741): from P2, when the vents start burning your marbles too, a green
+  fume of slag rises from them (reduced motion: a faint still haze) and the HUD adds "The vents now burn
   your marbles too." for 2 plies.
-  **It talks** (#741): the sarcastic line of each 20 % is typed (17 characters a second, monospace,
+  **It talks** (#741): the watch line of each 20 % is typed (17 characters a second, monospace,
   a short flicker and a soft blip per character; reduced motion: all at once) in a bubble over its
   pedestal, held 3 s after the last character, then faded. A core burnt on a vent angers it: a
   red bubble that shakes (reduced motion: still), typed the same way, held 1 s, with one of 6
-  lines picked from the fight seed and the ply (the same on every peer): "That core was
-  load-bearing. Like your hopes.", "Do you know what that cost? No. You can't count.", "Stop
-  touching my things.", "I will remember that. I remember everything.", "Congratulations. You
-  broke something. Again.", "That was mine. Everything here is mine."
+  lines picked from the fight seed and the ply (the same on every peer): "Core burnt. The record
+  is one short.", "Core lost to the vent. Cause noted.", "A core is struck from the watch.
+  Logged.", "The vent took it. The count stays open.", "Core gone. No other copy is kept.", "Burn
+  logged. Cores on watch: fewer."
   **It goes** (#789): when the player wins, its pedestal explodes like the Chaplain's martyr (a flash and
-  a ring of shards, reduced motion: a static flash), then its bubble types "Well done. You broke the
-  last thing that cared about you." (held 3 s). The farewell has priority: the angry line due on the
+  a ring of shards, reduced motion: a static flash), then its bubble types "Watch ended. No one
+  remains to log it." (held 3 s). The farewell has priority: the angry line due on the
   winning ply is dropped.
-  The HUD line reads "Neurotoxin 25 % · 30 turns left", then one sarcastic line of the Overseer
-  that changes with the level, every 20 %: "Take your time. The neurotoxin will wait.", "The
-  neurotoxin is now at a level we call festive.", "You are doing very well. For a corpse.", "Most
-  test subjects stop moving around now.", "Goodbye. I mean it this time."
+  The HUD line reads "Slag fill 25 % · 30 turns left", then one line of the watch that changes
+  with the level, every 20 %: "Watch begun. The chamber is sealed.", "The fill is rising. The
+  watch continues.", "The fill is at the sills. All moves are logged.", "The fill is over the
+  grates. Turns are counted.", "The fill is at the rim. This watch is closing."
 - **Counter, turn it against the boss**: the boss's own push burns a core when it puts one on or
   next to an empty incinerator, which pulls it in, and the vents burn its marbles in every phase:
   push a boss marble one cell onto an incinerator instead of two cells off the board, and it
   cannot plug a vent in front of a core. The boss search sees the burns (every ply of its
-  tree burns, in the phase the credits so far give), plays the neurotoxin clock (the player's last
+  tree burns, in the phase the credits so far give), plays the slag fill clock (the player's last
   turn is a boss win in the tree) and keeps cores and its marbles off the vents; it never
   pushes a core in unless every other move costs it more.
 - **Winnable** (`cargo run --release --example overseer_sim`): the bot ladder's player (4x the boss

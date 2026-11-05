@@ -403,3 +403,14 @@ so it can be re-pointed at towers later; `main.ts` fires the events through one 
 - **Old text.** `lore.ts` and `audiologs.ts` entries carry a `stage` (all 1). Four lines broke the rule of 12.4 and were reworded, with the
   same meaning: the chapel sermon ("a coat against the night"), the night loader's log ("A wide, dim bay.", "That is the night air."), the
   bridge log ("A clean, steady hum.") and the first-visit line of the Open world ("Claim: unworked." before stage 5, openworld.md section 7).
+
+### 12.7 The Overseer's voice (#1545)
+
+The Overseer is the Chapel's **watch system**: a ship system that kept the shrine's count and never stopped. It is not a person, a
+joker or a host. It speaks in Tally's register, terse, procedural and unsettling: short statements of what it logs ("Core burnt. The
+record is one short."), never a question, a boast, a pun or a remark on the player's failure, and never "I" or "you". It keeps a watch,
+so what it says is the watch: begun, continuing, closing, ended ("Watch ended. No one remains to log it."). Its hazard is the **slag
+fill**, the slag of the vein rising in the sealed chamber turn by turn: the vents burn, the fill ends the fight at turn 40. The player
+sees "Slag fill 25 %" on the HUD. Nothing here is taken from any existing game, and the old framing of a lab, a test, a subject and a
+prize is gone from the fight, its specs and its lore entry. Its lines hold no secret word of section 12.2, so they may be met at any
+stage; `overseer.test.ts` guards the banned framing and the secret words. Its mechanic and balance are unchanged.

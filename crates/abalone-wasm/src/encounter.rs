@@ -1079,7 +1079,7 @@ impl Encounter {
             .collect()
     }
 
-    /// Player turns left before the boss wins on the clock (The Overseer's neurotoxin), `-1` for
+    /// Player turns left before the boss wins on the clock (The Overseer's slag fill), `-1` for
     /// a fight with no clock.
     pub fn turns_left(&self) -> i32 {
         match &self.fight {

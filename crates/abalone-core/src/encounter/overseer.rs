@@ -1,5 +1,5 @@
 //! The Overseer (#635, docs/specs/game-design.md section 7.11): burn its cores before the
-//! neurotoxin floods the chamber. The Overseer sits at the centre and nothing moves it; 6 passive
+//! slag fill floods the chamber. The Overseer sits at the centre and nothing moves it; 6 passive
 //! cores sit around it and both sides push them like opponent marbles; a core on one of the 6
 //! incinerator cells of the rim burns at the end of the ply and counts for the player, whoever
 //! pushed it; an empty incinerator pulls in a core next to it first (#1241). The incinerators burn
@@ -18,7 +18,7 @@ type P = (i32, i32);
 pub const OVERSEER_CORES: [P; 6] = [(-1, -1), (2, -1), (-2, 0), (2, 0), (-2, 1), (1, 1)];
 /// The 6 incinerator cells: the rim cells of the 3 middle rows, 2 steps beyond a core each. TUNE.
 pub const OVERSEER_INCINERATORS: [P; 6] = [(-3, -1), (4, -1), (-4, 0), (4, 0), (-4, 1), (3, 1)];
-/// Player turns before the neurotoxin wins the fight for the boss. TUNE.
+/// Player turns before the slag fill wins the fight for the boss. TUNE.
 pub const OVERSEER_TURNS: u32 = 40;
 /// P2 starts after this many ejections credited to the player (cores burnt count). TUNE.
 pub const OVERSEER_PHASE_EJECTIONS: [u8; 1] = [2];
@@ -133,7 +133,7 @@ pub fn overseer_start(seed: u64) -> Encounter {
 }
 
 /// The boss reply: its node-limited search, where every ply of the tree burns in the phase the
-/// credits so far give, so it sees what the incinerators take, and the neurotoxin clock wins the
+/// credits so far give, so it sees what the incinerators take, and the slag fill clock wins the
 /// fight for it when the player's last turn comes. `None` on the player's turn or when the game
 /// is over.
 pub fn overseer_move(enc: &Encounter) -> Option<Move> {
@@ -144,7 +144,7 @@ pub fn overseer_move(enc: &Encounter) -> Option<Move> {
 }
 
 /// The node-limited search of `enc` for the side to move, every ply of its tree burning in the
-/// phase its credits give: the boss reply of [`overseer_move`], with the neurotoxin `clock`, or
+/// phase its credits give: the boss reply of [`overseer_move`], with the slag fill `clock`, or
 /// the ladder player, who reads the incinerators with no clock.
 pub(crate) fn overseer_search(
     enc: &Encounter,
@@ -316,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn the_boss_stalls_when_the_neurotoxin_wins_before_the_player_can_burn_the_6th_core() {
+    fn the_boss_stalls_when_the_slag_fill_wins_before_the_player_can_burn_the_6th_core() {
         // 5 ejections, one turn left: the player needs 2 plies to push the core next to (3, 1),
         // and has 1. Whatever the boss plays, the clock wins; it plays its best-looking move
         // instead of the defence the old search needed.
@@ -553,7 +553,7 @@ mod tests {
     }
 
     #[test]
-    fn the_neurotoxin_wins_at_the_end_of_the_players_last_turn() {
+    fn the_slag_fill_wins_at_the_end_of_the_players_last_turn() {
         let enc = fight(&[(-4, 4)], &[(4, -4)], &[], Player::Black, [0, 0]);
         let mut enc = Encounter::new(enc.game().clone(), overseer_boss(), 0).with_turn_limit(2);
         assert_eq!(enc.turns_left(), Some(2));

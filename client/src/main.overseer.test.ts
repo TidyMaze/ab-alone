@@ -61,18 +61,18 @@ describe('main.ts The Overseer speaks (#741)', () => {
     game.frame(0);
     expect(bubble().hidden).toBe(false);
     expect(bubble().classList.contains('angry')).toBe(false);
-    expect(bubbleText()).toBe('T');
+    expect(bubbleText()).toBe(TAUNTS[0]![0]);
     expect(bubble().classList.contains('glitch')).toBe(true); // the flicker of a new character
     expect(parseFloat(bubble().style.left)).toBeGreaterThan(0); // over the Overseer's marble, on the window
     expect(parseFloat(bubble().style.top)).toBeGreaterThan(0);
     game.frame(500);
     expect(bubbleText()).toBe(TAUNTS[0]!.slice(0, 9));
     expect(cues(game).filter((c) => c === 'blip')).toHaveLength(2); // one per frame that typed
-    game.frame(2000); // 40 characters take 2.4 s
+    game.frame(2000); // 35 characters take 2.1 s
     expect(bubbleText()).toBe(TAUNTS[0]);
     expect(bubble().style.opacity).toBe('1');
     expect(TAUNTS[0]!.length * CHAR_MS).toBeLessThan(2500);
-    game.frame(3000); // the 3 s hold is over, the fade runs
+    game.frame(2700); // the 3 s hold is over, the fade runs
     expect(Number(bubble().style.opacity)).toBeLessThan(1);
     game.frame(1000);
     expect(bubble().hidden).toBe(true);

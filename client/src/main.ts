@@ -1858,7 +1858,7 @@ const pupilMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base });
 const ventGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const ventMaterial = new THREE.MeshBasicMaterial({ color: 0xc8501e });
 const slotGeometry = new THREE.PlaneGeometry(0.56, 0.07).rotateX(-Math.PI / 2);
-// A toxic green haze rises from the vents once they burn the player's marbles too (P2, #741): 3 soft puffs a vent,
+// A green fume of slag rises from the vents once they burn the player's marbles too (P2, #741): 3 soft puffs a vent,
 // looping, one faint puff held still under reduced motion (overseer.ts hazeAt).
 const hazeMap = (() => {
   const canvas = Object.assign(document.createElement('canvas'), { width: 64, height: 64 });
@@ -1874,7 +1874,7 @@ const hazeMap = (() => {
 })();
 let hazes: { sprite: THREE.Sprite; k: number }[] = []; // moved by the animation loop
 // The Overseer's speech bubble (#741): a DOM element over its marble, typed at reading speed (speech.ts). The taunt of
-// each 20 % of the neurotoxin, and an angry shaking red line when a core burns on a vent.
+// each 20 % of the slag fill, and an angry shaking red line when a core burns on a vent.
 const bubbleBox = document.getElementById('bubble')!;
 const bubbleText = document.getElementById('bubble-text')!;
 const bubbleLine = document.getElementById('bubble-line')!; // the whole line for screen readers

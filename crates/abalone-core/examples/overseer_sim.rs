@@ -2,7 +2,7 @@
 //! `cargo run --release --example overseer_sim`. The bot ladder's player (`ladder.rs`: 2 seeded
 //! random opening moves, then the node-limited search that avoids a position already seen) plays
 //! The Overseer over many seeds; its search sees the incinerators, as the boss's does. It prints
-//! each fight and fails (exit 1) when the player wins none inside the neurotoxin limit.
+//! each fight and fails (exit 1) when the player wins none inside the slag fill limit.
 //! Set `OVERSEER_SEEDS=<n>` to play n seeds (default 20) and `OVERSEER_X=<x>` for another player
 //! budget, x times the boss budget (default 4, the ladder's strongest player). The seeds run on
 //! all cores.

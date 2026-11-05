@@ -666,7 +666,7 @@ Remainder of #826 (reply time, 10x cell, `spares_eggs`), nothing tuned, no code 
   No measurable slowdown at the 3000 node budget, in line with the other bosses (the Unstable Core
   198 to 203 average after #915).
 
-### The Overseer: its AI plays the neurotoxin clock and its phases (#828), not tuned
+### The Overseer: its AI plays the slag fill clock and its phases (#828), not tuned
 
 Before (the ladder row only, 402b79f): the boss search burned on every ply but kept the phase of
 the root and ignored the 40-turn clock. After: the phase is recomputed in the tree from the
@@ -681,7 +681,7 @@ incinerators or the clock, so the ladder cannot calibrate this boss, as for the 
 | 3000 (1x) | 0 | 0 | 79 | push 7, rim ejection 3 |
 | 30000 (10x) | 1 | 1 | 79 | push 6, rim ejection 2, draw 1 |
 
-79 plies is the 40th player turn: the neurotoxin ends nearly every fight, before and after. The
+79 plies is the 40th player turn: the slag fill ends nearly every fight, before and after. The
 clock only changes a reply in the last turns, and the fight is lost to it anyway for this player.
 Nothing was tuned. `cargo run --release --example overseer_sim` plays the player that sees the
 incinerators.
@@ -1147,7 +1147,7 @@ Command: `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -
 Reading: against the owner target of 14 to 18 of 20 at 10x only the Magnetizer is inside (16). The Pulsar
 is far below (4), the Assembly Line and the Unstable Core win nothing (the Unstable Core ends in 27 plies by
 rim ejection). The Overseer is the plain-search player's row: it does not see the incinerators or the clock,
-so the neurotoxin ends the fight at ply 79 (the 40th turn) as in the 10 seed row of #828; 20 seeds give 0 and
+so the slag fill ends the fight at ply 79 (the 40th turn) as in the 10 seed row of #828; 20 seeds give 0 and
 2 wins. The Rail Yard rows are in its own section above. Nothing was tuned, the knobs are the owner's.
 Run times, one machine: 25 s to 66 s at 1x, 104 s to 578 s at 10x.
 
@@ -1350,7 +1350,7 @@ most, one ladder run at a time, main after #1228.
 **The fix, for all three.** As #1228 found for the Assembly Line, `player_move` ran the plain search against these
 three bosses: it never saw a core burn, a train pass or a repulsion. It now plays the boss's own hooked search, as
 it does for the Ballast Mind: `overseer_search` (every ply of the tree burns in the phase its credits give; no clock
-for the player, the boss keeps its neurotoxin clock), `railyard_search` (every player ply counts the trains down, a
+for the player, the boss keeps its slag fill clock), `railyard_search` (every player ply counts the trains down, a
 pass ejects its line) and `magnetizer_search` (every ply settles, the assignments run after the boss plies). The
 player in the game sees the same: the vents, the train ghosts and countdowns, the glyphs and the announce diamond.
 Unit tests, each a position where the plain search loses or misses what the hook does:
@@ -1373,7 +1373,7 @@ whose repulsion throws the marble behind it off the rim).
 20). No knob was tried; if the owner wants the 10x row nearer the middle, the train lead (5) is the next step.
 
 **The Overseer: 9 of 20 at 10x, no knob reaches the target, not tuned.** A local probe replayed the 20 ladder games
-at 10x and split the credits by cause. After the fix, 10 of the 11 losses end at ply 79, the neurotoxin, with 4 or 5
+at 10x and split the credits by cause. After the fix, 10 of the 11 losses end at ply 79, the slag fill, with 4 or 5
 of the 6 ejections made (seed 7 is a draw at ply 38). Over the 20 games the player burnt 67 cores, the boss 2; boss
 marbles burnt 9, pushed off 18; player marbles burnt 6, pushed off 11. So the player now learns the counter (the spec
 gate "fewer than 2 cores burnt" is far away), but the last one or two cores end jammed: two cores side by side on
@@ -1446,7 +1446,7 @@ the same burns on every ply, so the same games as try 4, the max phase column re
 
 **The client and the MCP.** A core a vent pulls in rolls one cell onto that vent, then sinks (`ventOf` and
 `burnTrack` in `client/src/overseer.ts`; reduced motion: it fades on the vent). The goal line reads "Push its cores
-onto or next to the vents."; the MCP `neurotoxin` tell adds "an empty vent pulls in a core next to it at the end of
+onto or next to the vents."; the MCP `slag` tell adds "an empty vent pulls in a core next to it at the end of
 every ply". The e2e fixture wins at ply 22 instead of 24: the cores the player and the boss push next to a vent are
 pulled in one push earlier.
 
@@ -1571,7 +1571,7 @@ test (done in each task's PR), and the ladder rows (taken from the sections belo
 | Rail Yard | `railyard.rs:601` `a_train_five_turns_out_does_not_stop_the_boss_from_winning_but_one_about_to_pass_does` | 2 / 4 at 1x, 1 / 4 at 10x (#827) | 3000 | wasm 111 / 142 / 253 (#827) |
 | Magnetizer | `magnetizer.rs:965` `the_tree_sees_the_assignment_at_the_start_of_turn_3_and_avoids_its_repulsion` | 7 / 2 at 1x, 16 / 7 at 10x (#916); later rows in #1237 | 3000 | wasm 187 / 485 / 652 (#916) |
 | Pulsar | `pulsar.rs:667` `the_phase_reached_in_the_tree_changes_the_best_move` | 2 / 2 at 1x, 4 / 4 at 10x (#913); 18 of 20 at 10x after #1231 | 3000 | wasm 143 / 191 / 423 (#913) |
-| Overseer | `overseer.rs:319` `the_boss_stalls_when_the_neurotoxin_wins_before_the_player_can_burn_the_6th_core` (asserts the move differs from the pre-#828 search) | 0 / 0 at 1x, 1 / 1 at 10x of 10 seeds (#828); 2 of 20 at 10x (#1117), 17 of 20 after #1241 | 3000 | wasm 315 / 679 / 7382 loaded machine (#828) |
+| Overseer | `overseer.rs:319` `the_boss_stalls_when_the_slag_fill_wins_before_the_player_can_burn_the_6th_core` (asserts the move differs from the pre-#828 search) | 0 / 0 at 1x, 1 / 1 at 10x of 10 seeds (#828); 2 of 20 at 10x (#1117), 17 of 20 after #1241 | 3000 | wasm 315 / 679 / 7382 loaded machine (#828) |
 | Assembly Line | `assembly.rs:759` `the_phase_reached_in_the_tree_changes_the_best_move` | 0 / 0 at 1x and 10x (#914); 18 of 20 at 10x after #1228 | 3000 | wasm 143 / 245 / 375 (#914) |
 | Unstable Core | `unstable.rs:846`, `unstable.rs:887` | 8 / 8 at 1x, 18 / 17 at 10x (#915) | 3000 | wasm 198 to 203 / 386 to 400 (#915) |
 
