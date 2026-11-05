@@ -52,6 +52,7 @@ const data = (over: Partial<MinimapData> = {}): MinimapData => ({
   enemies: [],
   lairs: [],
   teleporters: [],
+  logs: [],
   yaw: 0,
   ...over,
 });
@@ -265,6 +266,14 @@ describe('drawMinimap', () => {
     expect(log).toContain('stroke chosen');
   });
 
+  it('draws the logs in the window as amber slabs, a log found as a grey outline, and none out of the window (#1589)', () => {
+    const { ctx, fills } = fakeContext();
+    drawMinimap(ctx, SIZE, data({ logs: [{ cell: [3, 0], found: false }, { cell: [-3, 1], found: true }, { cell: [200, 0], found: false }] }));
+    const open = at(fills, ICON.log);
+    expect(open).toHaveLength(1); // the one in the window not found; the outline of the found one is stroked
+    expect(open[0]!.at[0]).toBeGreaterThan(MIDDLE); // 3 cells right of the hero
+  });
+
   it('draws a lair out of the window as an arrow on the edge pointing to it', () => {
     const { ctx, fills } = fakeContext();
     drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [100, -200], beaten: false }] }));
@@ -293,6 +302,12 @@ describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, c
     expect(far!.at[0]).toBeGreaterThan(200 + 200 * 10 - 14);
     expect(far!.at[0]).toBeLessThan(200 + 200 * 10 + 14);
     expect(at(fills, ICON.done)).toHaveLength(1);
+  });
+
+  it('draws every log given where it is, however far (#1589)', () => {
+    const { ctx, fills } = fakeContext();
+    drawMap(ctx, frame, data({ logs: [{ cell: [200, 0], found: false }] }));
+    expect(at(fills, ICON.log)).toHaveLength(1);
   });
 
   it('draws every teleporter given where it is, however far', () => {

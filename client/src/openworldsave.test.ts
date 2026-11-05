@@ -47,7 +47,7 @@ describe('the save of the camera yaw (#1026)', () => {
 
   it('discards a record of a record version this build does not know, a later one', async () => {
     const store = memoryStore();
-    store.data.set('openworld:7', { ...record(7), record: 6, yaw: 0 });
+    store.data.set('openworld:7', { ...record(7), record: 7, yaw: 0 });
     expect(await worldSaves(store, 1).load(7)).toBeNull();
     expect(store.data.has('openworld:7')).toBe(false);
   });
@@ -235,12 +235,47 @@ describe('the save of the time of day (#1496)', () => {
   });
 });
 
+describe('the save of the lore logs found (#1589)', () => {
+  it('saves the logs found with the world and loads them back', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], [], 0, [4, 11]);
+    expect((await saves.load(7))!.logs).toEqual([4, 11]);
+  });
+
+  it('loads a record of the record version 5 or before, saved before the logs, as none found: old saves still load', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', { ...record(7), record: 5, yaw: 0, lairs: [], discovered: [], time: 3 });
+    expect((await worldSaves(store, 1).load(7))!.logs).toEqual([]);
+    store.data.set('openworld:7', record(7));
+    expect((await worldSaves(store, 1).load(7))!.logs).toEqual([]);
+  });
+
+  it('discards a record of this record version whose logs are not a list of log numbers', async () => {
+    for (const bad of ['x', undefined, [-1], [1.5], ['a'], [[1]], Array.from({ length: 100_001 }, () => 1)]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...record(7), record: 6, yaw: 0, lairs: [], discovered: [], time: 0, logs: bad });
+      expect(await worldSaves(store, 1).load(7), String(bad).slice(0, 20)).toBeNull();
+      expect(store.data.has('openworld:7')).toBe(false);
+    }
+  });
+
+  it('beat and beatMarble keep the logs found', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], [], 0, [2, 9]);
+    await saves.beat(7, 2);
+    await saves.beatMarble(7, [5, 5]);
+    const back = (await saves.load(7))!;
+    expect(back.logs).toEqual([2, 9]);
+    expect(back.lairs).toEqual([2]);
+  });
+});
+
 describe('worldSaves', () => {
   it('saves a world under its seed and loads it back with its hero, troop and fight', async () => {
     const saves = worldSaves(memoryStore(), 1);
     expect(await saves.put(7, hero, troop, fightWithPush(), 0)).toBe(true);
     const back = await saves.load(7);
-    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], time: 0, savedAt: expect.any(Number) });
+    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], time: 0, logs: [], savedAt: expect.any(Number) });
     expect(back!.fight.beaten).toBe(1);
   });
 

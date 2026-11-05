@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contrastRatio, type RGB } from './contrast';
 import { setNeonWorldOn } from './neonlook';
 import { TERRAINS } from './openworld';
-import { BOSS_COLOURS, ICON, iconSize, lairIcon, portalIcon } from './openworldlairicon';
+import { BOSS_COLOURS, ICON, iconSize, lairIcon, logIcon, portalIcon } from './openworldlairicon';
 import { terrainColour } from './openworldminimap';
 
 // The icon of a boss tower on the Open world map and minimap (#1438): a tower on a dark plate, in the boss's colour.
@@ -55,6 +55,7 @@ describe('the boss colours', () => {
     }
     for (const colour of [ICON.portal, ICON.here]) expect(contrastRatio(rgb(colour), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(ICON.done), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(rgb(ICON.log), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(ICON.check), rgb(ICON.done))).toBeGreaterThanOrEqual(3);
   });
 
@@ -146,5 +147,27 @@ describe('portalIcon (#1443)', () => {
     portalIcon(on.ctx, 0, 0, 30, true);
     expect(off.fills.some((f) => f.colour === ICON.here)).toBe(false);
     expect(on.fills.some((f) => f.colour === ICON.here)).toBe(true);
+  });
+});
+
+describe('logIcon (#1589)', () => {
+  it('draws a diamond plate with a halo and a rim and a filled amber slab: neither a tower nor a portal', () => {
+    const { ctx, fills, strokes } = fakeContext();
+    logIcon(ctx, 100, 50, 30, false);
+    expect(fills[0]!.colour).toBe(ICON.plate);
+    expect(fills[0]!.points).toHaveLength(8); // four points: a diamond, the tower's plate is a square of other points
+    expect(fills[0]!.points.slice(0, 2)).toEqual([100, 35]); // pointing up
+    expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
+    expect(fills.some((f) => f.colour === ICON.log)).toBe(true);
+    for (const f of fills) expect(f.points.length).toBeLessThanOrEqual(8); // no crenellated tower
+  });
+
+  it('draws a log found as an outline of the slab in the grey of a beaten tower, never in amber', () => {
+    const [open, found] = [fakeContext(), fakeContext()];
+    logIcon(open.ctx, 0, 0, 30, false);
+    logIcon(found.ctx, 0, 0, 30, true);
+    expect(found.fills.some((f) => f.colour === ICON.log)).toBe(false);
+    expect(found.strokes.some((s) => s.colour === ICON.done)).toBe(true);
+    expect(open.strokes.some((s) => s.colour === ICON.done)).toBe(false);
   });
 });

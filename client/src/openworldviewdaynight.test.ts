@@ -83,14 +83,18 @@ describe('the sky of the Open world view', () => {
   it('keeps the hero, the troop, the teleporters and the lairs lit at night: the glow follows the look', () => {
     const view = made();
     view.setTeleporters([[1, 1]]);
+    view.setLogs([[2, 1]], []);
     const glow = (name: string): number => ((view.scene.getObjectByName(name) as THREE.InstancedMesh).material as THREE.MeshStandardMaterial).emissiveIntensity;
     const day = glow('teleporter-pad');
+    const dayLog = glow('log-stake');
     view.setTime(9 * MIN, true);
     expect(glow('teleporter-pad')).toBeGreaterThan(day);
     expect(glow('teleporter-ring')).toBeGreaterThan(day);
+    expect(glow('log-stake')).toBeGreaterThan(dayLog);
     expect(view.shine.value).toBe(1);
     view.setTime(MIN, true);
     expect(glow('teleporter-pad')).toBe(day);
+    expect(glow('log-stake')).toBe(dayLog);
     expect(view.shine.value).toBe(0);
   });
 
