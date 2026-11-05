@@ -25,12 +25,11 @@ export type Entry = 'refused' | 'rolls' | 'breaks';
 const ENTRIES: readonly Entry[] = ['refused', 'rolls', 'breaks'];
 
 /** What the step of the hero from `at` to `to` does (`world_enter`, abalone-core `worldstep`): the rule is in the engine; this reads the
- * terrain of the cell, whether an enemy stands on it and, for a tree, whether another tree stands beside it. */
+ * terrain of the cell and whether an enemy stands on it. */
 export function enter(world: World, fight: FightState, at: Axial, to: Axial): Entry {
   const terrain = world.tile(to[0], to[1])?.terrain;
-  const trees = terrain === 'tree' && DIRECTIONS.some(([dq, dr]) => world.tile(to[0] + dq, to[1] + dr)?.terrain === 'tree');
   const occupied = fight.occupied(world, to[0], to[1]);
-  return ENTRIES[world_enter(at[0], at[1], to[0], to[1], terrain === undefined ? -1 : TERRAINS.indexOf(terrain), occupied, trees)]!;
+  return ENTRIES[world_enter(at[0], at[1], to[0], to[1], terrain === undefined ? -1 : TERRAINS.indexOf(terrain), occupied)]!;
 }
 
 /** The troop after the hero steps from `at` to `to` (`world_flock`, the flock of abalone-core `worldstep`): the same marbles in the same order,

@@ -130,22 +130,15 @@ pub enum Entry {
     Breaks,
 }
 
-/// What the hero's step from `at` to `to` does, `terrain` being that of `to` (`None` off the world), `occupied` whether an enemy
-/// stands on it and `trees_near` whether a tree stands on one of its six neighbours.
-pub fn entry(
-    at: (i32, i32),
-    to: (i32, i32),
-    terrain: Option<Terrain>,
-    occupied: bool,
-    trees_near: bool,
-) -> Entry {
+/// What the hero's step from `at` to `to` does, `terrain` being that of `to` (`None` off the world) and `occupied` whether an enemy
+/// stands on it.
+pub fn entry(at: (i32, i32), to: (i32, i32), terrain: Option<Terrain>, occupied: bool) -> Entry {
     let delta = (to.0 - at.0, to.1 - at.1);
     let Some(terrain) = terrain.filter(|_| DIRECTIONS.contains(&delta) && !occupied) else {
         return Entry::Refused;
     };
     match terrain {
-        Terrain::Boulder => Entry::Breaks,
-        Terrain::Tree if !trees_near => Entry::Breaks,
+        Terrain::Boulder | Terrain::Tree => Entry::Breaks,
         _ if !terrain.open_to_hero() => Entry::Refused,
         _ => Entry::Rolls,
     }
@@ -379,20 +372,11 @@ mod tests {
     #[test]
     fn a_neighbour_of_open_ground_free_of_enemies_is_rolled_onto() {
         for terrain in [Terrain::Sand, Terrain::Grass, Terrain::Rock, Terrain::Water] {
-            assert_eq!(
-                entry((0, 0), (1, 0), Some(terrain), false, false),
-                Entry::Rolls
-            );
+            assert_eq!(entry((0, 0), (1, 0), Some(terrain), false), Entry::Rolls);
         }
         for to in DIRECTIONS {
             assert_eq!(
-                entry(
-                    (2, 3),
-                    (2 + to.0, 3 + to.1),
-                    Some(Terrain::Grass),
-                    false,
-                    true
-                ),
+                entry((2, 3), (2 + to.0, 3 + to.1), Some(Terrain::Grass), false),
                 Entry::Rolls
             );
         }
@@ -402,7 +386,7 @@ mod tests {
     fn a_cell_that_is_not_a_neighbour_is_refused() {
         for to in [(0, 0), (2, 0), (1, 1), (-1, -1), (5, 5)] {
             assert_eq!(
-                entry((0, 0), to, Some(Terrain::Grass), false, false),
+                entry((0, 0), to, Some(Terrain::Grass), false),
                 Entry::Refused
             );
         }
@@ -410,17 +394,17 @@ mod tests {
 
     #[test]
     fn off_the_world_or_under_an_enemy_is_refused_even_for_a_boulder() {
-        assert_eq!(entry((0, 0), (1, 0), None, false, false), Entry::Refused);
+        assert_eq!(entry((0, 0), (1, 0), None, false), Entry::Refused);
         assert_eq!(
-            entry((0, 0), (1, 0), Some(Terrain::Grass), true, false),
+            entry((0, 0), (1, 0), Some(Terrain::Grass), true),
             Entry::Refused
         );
         assert_eq!(
-            entry((0, 0), (1, 0), Some(Terrain::Boulder), true, false),
+            entry((0, 0), (1, 0), Some(Terrain::Boulder), true),
             Entry::Refused
         );
         assert_eq!(
-            entry((0, 0), (1, 0), Some(Terrain::Water), true, false),
+            entry((0, 0), (1, 0), Some(Terrain::Water), true),
             Entry::Refused
         );
     }
@@ -428,22 +412,15 @@ mod tests {
     #[test]
     fn a_boulder_and_any_tree_are_broken_and_nothing_else_blocked() {
         assert_eq!(
-            entry((0, 0), (1, 0), Some(Terrain::Boulder), false, true),
+            entry((0, 0), (1, 0), Some(Terrain::Boulder), false),
             Entry::Breaks
         );
         assert_eq!(
-            entry((0, 0), (1, 0), Some(Terrain::Tree), false, false),
+            entry((0, 0), (1, 0), Some(Terrain::Tree), false),
             Entry::Breaks
-        );
-        assert_eq!(
-            entry((0, 0), (1, 0), Some(Terrain::Tree), false, true),
-            Entry::Breaks // a tree in a forest too (#1510)
         );
         for terrain in [Terrain::Peak, Terrain::Wall] {
-            assert_eq!(
-                entry((0, 0), (1, 0), Some(terrain), false, false),
-                Entry::Refused
-            );
+            assert_eq!(entry((0, 0), (1, 0), Some(terrain), false), Entry::Refused);
         }
     }
 

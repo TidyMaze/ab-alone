@@ -23,7 +23,7 @@ export function toolResult(result: Result<unknown>): CallToolResult {
 const WINDOW =
   'The window is a hex of cells round the hero, one row per r, each row from the cell q0 along q. H hero, T troop, E enemy, L lair, ' +
   '? off the world, else the terrain: ~ water, s sand, g grass, r rock, P peak, o boulder, t tree, W wall. Peaks, walls, enemies ' +
-  'and lairs cannot be entered; the hero and the troop sail on water like on land; a boulder, or a tree with no tree beside it, is broken by rolling into it. After each step ' +
+  'and lairs cannot be entered; the hero and the troop sail on water like on land; a boulder or a tree is broken by rolling into it. After each step ' +
   'the troop attacks on its own, as in the client: it plays the best legal push against the enemies near the hero, and an enemy ' +
   'pushed into water or off the world is ejected (beaten).';
 
@@ -200,7 +200,7 @@ export function createServer(
     {
       description:
         'Roll the hero one cell, then the troop pushes on its own: push is its direction and the enemy ejected, null when no push ' +
-        'was legal (the push can move the hero). Water is sailed like land. Refused (blocked) by a peak, a wall, an enemy or an unbreakable tree, and ' +
+        'was legal (the push can move the hero). Water is sailed like land. Refused (blocked) by a peak, a wall or an enemy, and ' +
         'nothing changes. Onto a lair the hero stays, moved is false and lair names the boss and the call that starts its fight ' +
         '(new_game with that boss).',
       inputSchema: z.strictObject({ direction: z.enum(['E', 'W', 'NE', 'SW', 'NW', 'SE']).describe('Direction of the step.') }),

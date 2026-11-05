@@ -728,8 +728,7 @@ pub const PATH_EXPANSIONS: usize = 6000;
 const STEPS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
 
 /// Whether a peer's claim that the hero broke the cell `(q, r)` of the world `seed` can be true (#1305): the generated cell is a
-/// boulder or a tree. The rule that a tree with a tree beside it holds (`entry`) is not checked: it depends on which neighbours were
-/// already broken, so on the order the events arrive in, and a refused event is never asked for again.
+/// boulder or a tree.
 pub fn can_break(seed: u64, q: i32, r: i32) -> bool {
     cell(seed, q, r).is_some_and(|c| matches!(c.terrain, Terrain::Boulder | Terrain::Tree))
 }
@@ -815,8 +814,8 @@ pub fn find_path_within(
 }
 
 /// The walk of the hero from `from` to `to` over the world `seed` (`find_path`): a cell is entered when it is on the world, not in
-/// `blocked` (the enemies), and open to the hero (water too, #1441) or an obstacle the hero breaks by rolling into it (a boulder, or a tree with no tree on its six
-/// neighbours, #1147). The cells of `broken` are plain ground.
+/// `blocked` (the enemies), and open to the hero (water too, #1441) or an obstacle the hero breaks by rolling into it (a boulder or a tree, #1147,
+/// #1510). The cells of `broken` are plain ground.
 pub fn walk_path(
     seed: u64,
     from: (i32, i32),
@@ -894,10 +893,7 @@ fn path_over(
             return false;
         }
         match terrain(q, r) {
-            Some(Terrain::Boulder) => true,
-            Some(Terrain::Tree) => STEPS
-                .iter()
-                .all(|&(dq, dr)| terrain(q + dq, r + dr) != Some(Terrain::Tree)),
+            Some(Terrain::Boulder | Terrain::Tree) => true,
             Some(other) => other.open_to_hero(),
             None => false,
         }

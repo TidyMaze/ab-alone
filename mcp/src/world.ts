@@ -24,7 +24,7 @@ export interface WorldRules {
   /** The walk from a cell to a cell: `q, r` pairs, the start left out, empty when there is none. */
   world_path(seed: number, fromQ: number, fromR: number, toQ: number, toR: number, blocked: Int32Array, broken: Int32Array): Int32Array;
   /** What the step from `(q, r)` to `(tq, tr)` does: 0 refused, 1 rolls, 2 breaks. `terrain` is the code of the cell, -1 off the world. */
-  world_enter(q: number, r: number, tq: number, tr: number, terrain: number, occupied: boolean, treesNear: boolean): number;
+  world_enter(q: number, r: number, tq: number, tr: number, terrain: number, occupied: boolean): number;
   /** The troop after the hero steps from `(q, r)` to `(tq, tr)`, flocking over `ground`: `q, r` pairs. */
   world_flock(seed: number, tick: number, troop: Int32Array, step: Int32Array, ground: Int32Array, goals: Int32Array): Int32Array;
   /** The version of the world generator: a save of another version does not hold this world. */
@@ -161,7 +161,6 @@ const RECORD = 5;
 const CREW = 6;
 const WATER = 0;
 const BOULDER = 5;
-const TREE = 6;
 const ROCK = 3;
 const GRASS = 2;
 /** The ground a marble stands on: sand, grass and rock. */
@@ -255,7 +254,7 @@ export class OpenWorld {
   }
 
   /** Rolls the hero one cell, then the troop pushes. Water is sailed (#1441); an enemy, a wall, a peak or a tree beside a tree
-   * refuses it; a boulder, or a tree with no tree beside it, is broken. Onto a lair the hero stays and the lair's boss is named, where the client starts its fight. */
+   * refuses it; a boulder or a tree is broken. Onto a lair the hero stays and the lair's boss is named, where the client starts its fight. */
   step({ direction }: StepInput): Result<Stepped> {
     const play = this.play;
     if (!play) return this.none();
@@ -340,8 +339,7 @@ export class OpenWorld {
     const play = this.play!;
     const { hero, fight, seed } = play;
     const code = this.terrain(to[0], to[1]);
-    const trees = code === TREE && DELTAS.some(([dq, dr]) => this.terrain(to[0] + dq, to[1] + dr) === TREE);
-    const entry = this.rules.world_enter(hero[0], hero[1], to[0], to[1], code ?? -1, this.occupied(to), trees);
+    const entry = this.rules.world_enter(hero[0], hero[1], to[0], to[1], code ?? -1, this.occupied(to));
     if (entry === REFUSED) return null;
     const smashed = entry === BREAKS ? (NAMES[code!] as 'boulder' | 'tree') : null;
     if (smashed) play.broken.push(to);

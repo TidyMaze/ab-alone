@@ -238,11 +238,10 @@ describe('a step', () => {
     expect(left.cells[q + dq - left.q0]).toBe('g');
   });
 
-  test('a tree next to another tree stays in the way', () => {
+  test('a tree next to another tree is broken too (#1510)', () => {
     const crowded = (seed: number) => (q: number, r: number) => Object.values(STEPS).some(([dq, dr]) => code(seed, q + dq, r + dr) === 6);
     const { open, spot } = standBeside([6], crowded);
-    const [q, r] = spot.at;
-    expect(failure(open.step({ direction: spot.dir as 'E' })).code).toBe('blocked');
+    expect(value(open.step({ direction: spot.dir as 'E' })).smashed).toBe('tree');
   });
 
   test('a cell off the world refuses the step', () => {

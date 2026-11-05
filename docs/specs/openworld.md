@@ -63,9 +63,9 @@ A-light Explore (#720 to #725), which it does not touch.
   trees, walls, and scattered boulders (about 2 % of the open cells). Water blocks the enemies only: the hero and the troop
   sail on it (section 4, #1441), and lairs, teleporters and the spawn stay on land. A push into an obstacle is
   refused, as a push into a friendly marble is in `rules.md`.
-- **Breakable obstacles** (#1147): the hero breaks a small isolated obstacle by rolling into it. Only a **boulder**, or a
-  **tree with no tree on its six neighbours**, is breakable (`breakable` in `openworld.ts`). Buildings (walls), mountains
-  and forests (a tree beside a tree) stay in the way, and so does any cell an enemy stands on. The move that would have
+- **Breakable obstacles** (#1147, #1510): the hero breaks a small obstacle by rolling into it. Every **boulder** and every
+  **tree** is breakable, alone or in a forest (`entry` in `worldstep.rs`). Buildings (walls) and mountains
+  stay in the way, and so does any cell an enemy stands on. The move that would have
   been refused goes through and the cell becomes plain ground of its terrain (a boulder leaves rock, a tree grass); only the
   hero breaks, the troop and the enemies treat an obstacle as blocked until it is broken, and a push into one is refused
   by the engine until then (the bridge gets the broken cells, which are plain ground for it: #1154). The break plays shards of the prop's colour, thrown outward and falling, gone within 0.7 s, drawn by the
@@ -119,7 +119,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   on the screen; the tie goes to the one that leans forward (up on the screen), so at every resting angle Left steps up-left and
   Right up-right (#1273). Up, Down and the diagonals keep their steps; Down with Left or Right still steps back.
 - **Steering** (#1137): a held direction (arrow, stick) is an *intent*, an angle on the ground. Each step takes the cell of
-  that direction when the hero can enter it. When it cannot (a rock, a tree, a wall, a cliff, an enemy), the hero takes
+  that direction when the hero can enter it. When it cannot (a wall, a peak, an enemy), the hero takes
   the free one of the two neighbours 60 degrees to the side that the intent follows best; if both follow it equally, the lower
   direction index (E, W, NE, SW, NW, SE). It never steps back or to a cell 120 degrees off. When no side is free, it leans and
   stops as before (#1040). Only legal steps: the same `Hero.step` rules.
@@ -128,7 +128,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   three times over). The path is a game rule, so it lives in Rust (#1164): `world::find_path`, a bounded A* on the hex grid,
   exported as `world_path(seed, from, to, blocked, broken)` (`q, r` pairs, the start left out, empty when there is no way).
   A cell is entered when it is on the world, not an enemy or a lair (`blocked`) and open (water too, it is sailed) or an obstacle the hero breaks
-  (a boulder, a tree with no tree beside it, #1147), the same rule as `Hero.step`; the cells of `broken` are plain ground. Every
+  (a boulder or a tree, #1147, #1510), the same rule as `Hero.step`; the cells of `broken` are plain ground. Every
   step costs 1, the estimate is the hex distance. Bounds: the destination is within 40 cells of the hero, and the search stops after
   6000 expanded cells, so a walled-in destination costs a bounded time; both give no path and the tap does nothing. Determinism: the
   open cell with the lowest estimate goes first, then the nearest the destination, then the lowest `(q, r)`, and the steps are tried
