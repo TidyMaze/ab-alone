@@ -87,6 +87,9 @@ describe('the Open world tools', () => {
     await call('new_world', { save: { ...save, time: 450000 } }); // the time of day of a save of the client comes back, not the start of day (#1592)
     expect(JSON.parse((await call('save_world')).text).time).toBe(450000);
     expect((await call('new_world', { save: { ...save, time: -1 } })).isError).toBe(true);
+    const { time: _time, ...before } = save; // a save from before the cycle (record 4): the start of day
+    await call('new_world', { save: before });
+    expect(JSON.parse((await call('save_world')).text).time).toBe(0);
     expect((await call('new_world', { save: { ...save, hero: [1] } })).isError).toBe(true);
     const stale = await call('new_world', { save: { ...save, version: save.version + 1 } });
     expect(JSON.parse(stale.text).code).toBe('bad_save');

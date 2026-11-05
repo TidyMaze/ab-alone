@@ -40,6 +40,7 @@ const SAVE = z.object({
   broken: z.array(CELL),
   lairs: z.array(z.int().min(0)),
   discovered: z.array(z.tuple([z.int(), z.int(), z.string()])).optional(),
+  time: z.number().min(0).optional(),
   logs: z.array(z.int().min(0)).optional(),
 });
 
