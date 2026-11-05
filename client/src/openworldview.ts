@@ -324,6 +324,10 @@ export const MARBLE = 0.3;
 export const LAIR_LOOK = { open: 0xffb020, beaten: 0x4caf6a, height: 5 };
 /** A teleporter (#1412): a flat glowing hex pad on its cell and a ring floating `ring` over it, in a violet none of the terrain nor the marbles has. */
 export const TELEPORTER_LOOK = { colour: 0xb36bff, ring: 1.1, emissive: 0.5, nightGlow: 0.9 };
+/** A lore log (#1589): a tall amber stake that glows while unread, a short dull grey one once found (the shape changes, not only the colour). */
+export const LOG_LOOK = { open: 0xffd166, found: 0x8d9792, height: { open: 1, found: 0.45 }, emissive: 0.45, nightGlow: 0.8 };
+/** The most logs a world holds, abalone-core `LOGS`. */
+const LOG_CAPACITY = 12;
 /** How much of its painted colour a lair's landmark emits at full glow (#1496). */
 const LAIR_GLOW = 0.5;
 /** The most teleporters the widest loaded square holds: one a square of 4 x 4 chunks (abalone-core `TELEPORT_BLOCK`), 21 chunks across. */
@@ -534,6 +538,11 @@ export class OpenWorldView {
   private teleporterCells: readonly Axial[] = [];
   private readonly pads: THREE.InstancedMesh;
   private readonly rings: THREE.InstancedMesh;
+  /** The lore logs of the world (#1589), the numbers of the ones found, and their stakes, laid for the ones in the loaded chunks. */
+  private logCells: readonly Axial[] = [];
+  private logsFound: readonly number[] = [];
+  private readonly stakes: THREE.InstancedMesh;
+  private readonly stakesFound: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
   private readonly dummy = new THREE.Object3D();
   /** Reused by every instance colour written, so a build allocates none. */
@@ -652,6 +661,12 @@ export class OpenWorldView {
     const glow = (): THREE.Material => new THREE.MeshStandardMaterial({ color: TELEPORTER_LOOK.colour, emissive: TELEPORTER_LOOK.colour, emissiveIntensity: TELEPORTER_LOOK.emissive, roughness: 0.4, flatShading: true });
     this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, new THREE.CylinderGeometry(0.5, 0.56, 0.08, 6).translate(0, 0.04, 0), glow());
     this.rings = this.instances('teleporter-ring', TELEPORTER_CAPACITY, new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0), glow());
+    const stake = (found: boolean): THREE.BufferGeometry => {
+      const height = found ? LOG_LOOK.height.found : LOG_LOOK.height.open;
+      return new THREE.CylinderGeometry(0.07, 0.1, height, 5).translate(0, height / 2, 0);
+    };
+    this.stakes = this.instances('log-stake', LOG_CAPACITY, stake(false), new THREE.MeshStandardMaterial({ color: LOG_LOOK.open, emissive: LOG_LOOK.open, emissiveIntensity: LOG_LOOK.emissive, roughness: 0.5, flatShading: true }));
+    this.stakesFound = this.instances('log-stake-found', LOG_CAPACITY, stake(true), new THREE.MeshStandardMaterial({ color: LOG_LOOK.found, roughness: 0.9, flatShading: true }));
     this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
     if (!this.neon) this.applyLook(); // the sky of the time of day, the day's at the start (#1496)
   }
@@ -1285,6 +1300,7 @@ export class OpenWorldView {
     for (const material of this.waterTint) (material as THREE.MeshStandardMaterial).color.setHex(look.water);
     this.shine.value = look.glow;
     for (const mesh of [this.pads, this.rings]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
+    (this.stakes.material as THREE.MeshStandardMaterial).emissiveIntensity = LOG_LOOK.emissive + LOG_LOOK.nightGlow * look.glow;
   }
 
   /** The sun's soft shadow round the hero, on the high tier (#1364). */
@@ -1572,6 +1588,36 @@ export class OpenWorldView {
     this.pads.instanceMatrix.needsUpdate = this.rings.instanceMatrix.needsUpdate = true;
   }
 
+  /** The lore logs of the world (#1589) and the numbers (places in `cells`) of the ones found: the ones in the loaded chunks are drawn, and
+   * the others when the chunks get to them. */
+  setLogs(cells: readonly Axial[], found: readonly number[]): void {
+    this.logCells = cells;
+    this.logsFound = found;
+    this.placeLogs();
+  }
+
+  /** Lays a stake on the top of each log of the loaded chunks: the tall amber one while unread, the short grey one once found. */
+  private placeLogs(): void {
+    const [cx, cy] = this.centre;
+    const reach = this.loadedReach;
+    const { dummy } = this;
+    dummy.scale.set(1, 1, 1);
+    let [open, found] = [0, 0];
+    this.logCells.forEach(([q, r], i) => {
+      const [kx, ky] = chunkOf([q, r]);
+      if (Math.abs(kx - cx) > reach || Math.abs(ky - cy) > reach) return;
+      const tile = this.world.tile(q, r)!;
+      const p = axialTo3D(q, r);
+      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
+      dummy.updateMatrix();
+      if (this.logsFound.includes(i)) this.stakesFound.setMatrixAt(found++, dummy.matrix);
+      else this.stakes.setMatrixAt(open++, dummy.matrix);
+    });
+    this.stakes.count = open;
+    this.stakesFound.count = found;
+    this.stakes.instanceMatrix.needsUpdate = this.stakesFound.instanceMatrix.needsUpdate = true;
+  }
+
   /** Lays the enemy marbles of the loaded chunks as the fight has them now: the generated ones not moved, and the pushed ones.
    * A push calls it again, the chunks stay as they are. */
   updateEnemies(): void {
@@ -1660,6 +1706,7 @@ export class OpenWorldView {
     }
     if (terrain) this.updateEnemies();
     if (terrain) this.placeTeleporters();
+    if (terrain) this.placeLogs();
     for (const mesh of this.laid(terrain)) {
       if (grounds.includes(mesh) && !counts.has(mesh)) put(mesh, 0, -100, 0, 1e-4, 0); // a ground out of view keeps one speck: a mesh drawn the first time is a shader to compile
       mesh.count = counts.get(mesh) ?? 0;

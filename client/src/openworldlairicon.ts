@@ -32,6 +32,7 @@ export const ICON = {
   check: '#ffffff',
   portal: '#c58cff',
   here: '#f0e4ff',
+  log: '#ffd166',
 } as const;
 
 /** The icon's side in px: on the map it keeps a minimum when zoomed out and grows with the zoom, on the minimap it is smaller and fixed. */
@@ -106,4 +107,31 @@ export function portalIcon(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.arc(x, y, h * 0.25, 0, 2 * Math.PI);
   ctx.fillStyle = here ? ICON.here : ICON.portal;
   ctx.fill();
+}
+
+/** The slab of a lore log (#1589), in half-sides from the middle of the icon: a tall narrow stake with a pointed foot, on a diamond plate. */
+const SLAB = [[0, -0.55], [0.3, -0.25], [0.3, 0.3], [0, 0.6], [-0.3, 0.3], [-0.3, -0.25]] as const;
+
+/** Draws the icon of a lore log centred on `x, y`, `size` px across: a diamond plate (the towers' is square, the portals' round) with a
+ * slab on it, filled amber while the log is unread and only outlined in the grey of a beaten tower once found. */
+export function logIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, found: boolean): void {
+  const h = size / 2;
+  const at = (points: readonly (readonly [number, number])[]): void => {
+    ctx.beginPath();
+    points.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(x + px * h, y + py * h) : ctx.lineTo(x + px * h, y + py * h)));
+    ctx.closePath();
+  };
+  at([[0, -1], [1, 0], [0, 1], [-1, 0]]);
+  ctx.fillStyle = ICON.plate;
+  ctx.fill();
+  outline(ctx);
+  at(SLAB);
+  if (found) {
+    ctx.strokeStyle = ICON.done;
+    ctx.lineWidth = Math.max(2, size / 10);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = ICON.log;
+    ctx.fill();
+  }
 }

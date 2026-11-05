@@ -14,6 +14,7 @@ import { MARBLES } from './trainer';
 import { Discovered } from './openworlddiscovered';
 import { WorldMap } from './openworldmap';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
+import { WORLD_LOGS } from './lorelogs';
 import { enter, heroStep } from './openworldstep';
 import { pairs, teleport, teleporterNear } from './openworldteleport';
 import type { PeerHost } from './worldnet';
@@ -101,6 +102,9 @@ export class OpenWorldMode {
   private heard: number[] = [];
   /** The teleporters of the world entered (#1412), the spawn's first. */
   private teleporters: Axial[] = [];
+  /** The lore logs of the world entered (#1589), by number, and the numbers of the ones found. */
+  private logs: Axial[] = [];
+  private found: number[] = [];
   private dirty = false;
   /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
   private unsaved = false;
@@ -161,6 +165,9 @@ export class OpenWorldMode {
     private readonly teleportersOf: (seed: number) => Int32Array = () => new Int32Array(),
     /** The ids of the bosses round the roster: lair k is boss k, counted round (#1438). */
     private readonly bossIds: () => readonly string[] = () => [],
+    /** The lore logs of a seed's world: `q, r` pairs (the bridge's `world_logs`, #1589), and what files the id of a log read in the archive. */
+    private readonly logsOf: (seed: number) => Int32Array = () => new Int32Array(),
+    private readonly read: (id: string) => void = () => {},
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -194,6 +201,8 @@ export class OpenWorldMode {
     this.beaten = saved ? [...saved.lairs] : [];
     this.heard = [];
     this.teleporters = pairs(this.teleportersOf(seed));
+    this.logs = pairs(this.logsOf(seed));
+    this.found = saved ? [...saved.logs] : [];
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     this.counted = 0;
     this.tod = saved?.time ?? 0; // an older save, or a new world, starts at the start of day (#1496)
@@ -214,6 +223,7 @@ export class OpenWorldMode {
     view.show(this.hero.at, this.hero.troop);
     this.drawLairs();
     view.setTeleporters(this.teleporters);
+    view.setLogs(this.logs, this.found);
     this.peers?.enter(seed, view.scene, view.camera, world);
     this.keepAlive();
     const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
@@ -320,8 +330,11 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldMotion;
     delete document.body.dataset.openworldDiscovered;
     delete document.body.dataset.openworldTeleporters;
+    delete document.body.dataset.openworldLogs;
+    delete document.body.dataset.openworldLogsFound;
     delete document.body.dataset.openworldPhase;
     this.showTeleport(false);
+    this.closeLog();
   }
 
   /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
@@ -650,6 +663,7 @@ export class OpenWorldMode {
       enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
       lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), boss: bosses[i % bosses.length] })),
       teleporters: this.discoveredTeleporters(),
+      logs: this.logs.flatMap((cell, i) => (this.discovered.has(cell[0], cell[1]) ? [{ cell, found: this.found.includes(i) }] : [])),
       yaw: (this.mapYaw = this.view!.drawnYaw), // the camera's drawn yaw: the map turns with it (#1448)
     };
   }
@@ -773,6 +787,7 @@ export class OpenWorldMode {
    * the held arrows keep one speed (#1065). */
   private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): boolean {
     if (this.fighting) return false;
+    this.closeLog(); // the next move closes the panel of a log (#1589)
     const lair = this.lairs.findIndex((cell) => same(cell, to));
     if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair), false;
     const from = this.hero!.at;
@@ -791,6 +806,8 @@ export class OpenWorldMode {
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: span * slowBy(), pace }); // the step glides (#1040)
     const played = this.wild() ? null : this.troopPush(); // a marble that touches the hero fights: the troop does not push it (#1511)
     this.view!.updateEnemies();
+    const log = this.logs.findIndex((cell) => same(cell, this.hero!.at));
+    if (log >= 0) this.readLog(log); // rolled onto a lore log (#1589)
     if (played && now !== null) {
       this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
       const landed = now + span * slowBy();
@@ -801,6 +818,31 @@ export class OpenWorldMode {
     this.persist();
     this.mark(document.body.dataset.openworld!);
     return true;
+  }
+
+  /** The hero rolled onto the lore log `log` (#1589): its panel opens, it is marked found in the world and read in the archive. It never holds a move. */
+  private readLog(log: number): void {
+    const { id, title, body } = WORLD_LOGS[log]!;
+    if (!this.found.includes(log)) {
+      this.found.push(log);
+      this.view!.setLogs(this.logs, this.found);
+      this.persist();
+    }
+    this.read(id);
+    const panel = document.getElementById('openworld-log');
+    if (panel) {
+      document.getElementById('openworld-log-title')!.textContent = title;
+      document.getElementById('openworld-log-body')!.textContent = body;
+      panel.hidden = false;
+    }
+    document.body.dataset.openworldLog = id; // read by the browser checks
+  }
+
+  /** Closes the panel of a lore log. */
+  private closeLog(): void {
+    const panel = document.getElementById('openworld-log');
+    if (panel) panel.hidden = true;
+    delete document.body.dataset.openworldLog;
   }
 
   /** The hero walks onto the lair `lair` (#1170): the world is saved with the hero on the lair's entrance, the cell it came from, and
@@ -843,7 +885,7 @@ export class OpenWorldMode {
     if (!this.unsaved) return;
     this.unsaved = false;
     const { at, troop } = this.hero!;
-    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod).then((stored) => {
+    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod, this.found).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
   }
@@ -950,6 +992,8 @@ export class OpenWorldMode {
     document.body.dataset.openworldLairsHeard = this.heard.join(' '); // reported by others, not counted
     document.body.dataset.openworldTeleporters = this.discoveredTeleporters().map((c) => c.join(',')).join(' '); // #1412
     this.showTeleport(this.onTeleporter());
+    document.body.dataset.openworldLogs = this.logs.filter(([q, r]) => this.discovered.has(q, r)).map((c) => c.join(',')).join(' '); // #1589
+    document.body.dataset.openworldLogsFound = this.found.join(' ');
     document.body.dataset.openworldYaw = String(Math.round((this.view!.yaw * 180) / Math.PI)); // the turn, in degrees (#1026)
     document.body.dataset.openworldDrawn = JSON.stringify(this.view!.drawn);
     this.markPhase();

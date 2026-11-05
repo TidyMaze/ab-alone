@@ -4,7 +4,7 @@
 // same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
 import { type Biome, neighbours, same, type Terrain, type Tile } from './openworld';
-import { iconSize, lairIcon, portalIcon } from './openworldlairicon';
+import { iconSize, lairIcon, logIcon, portalIcon } from './openworldlairicon';
 import { BIOME_LOOK, LOOK, lowGround, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
 import { mapColour } from './neonworld';
@@ -31,6 +31,8 @@ export interface MinimapData {
   lairs: readonly { cell: Axial; beaten: boolean; boss?: string }[];
   /** The teleporters to draw (#1412): the discovered ones. */
   teleporters: readonly Axial[];
+  /** The lore logs to draw (#1589): the discovered ones, and whether each is found. */
+  logs: readonly { cell: Axial; found: boolean }[];
   /** The teleporter the map's choice would pick (#1412), ringed; none outside the choice. */
   chosen?: Axial | null;
   /** The camera's yaw, in radians (`OpenWorldView.yaw`). */
@@ -172,7 +174,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
   drawMap(ctx, { width: size, height: size, centre: data.hero, unit: size / 2 / (RADIUS + 1), round: true }, data);
 }
 
-/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs (the tower icon of each boss), the teleporters, the enemies, the troop and the hero. */
+/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs (the tower icon of each boss), the teleporters, the lore logs, the enemies, the troop and the hero. */
 export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, unit, round }: MapFrame, data: MinimapData): void {
   const [midX, midY] = [width / 2, height / 2];
   const put = (cell: Axial): { x: number; y: number } => {
@@ -218,6 +220,11 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
     if (away(cell) > edge) continue; // the minimap draws the ones in its window only
     const { x, y } = put(cell);
     portalIcon(ctx, x, y, iconSize(unit, round), same(cell, data.hero)); // a portal, the core lit under the hero (#1443)
+  }
+  for (const { cell, found } of data.logs) {
+    if (away(cell) > edge) continue; // the minimap draws the ones in its window only
+    const { x, y } = put(cell);
+    logIcon(ctx, x, y, iconSize(unit, round), found); // a slab, outlined once found (#1589)
   }
   if (data.chosen) {
     const { x, y } = put(data.chosen);

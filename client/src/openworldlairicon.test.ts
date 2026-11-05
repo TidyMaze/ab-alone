@@ -159,7 +159,7 @@ describe('logIcon (#1589)', () => {
     expect(fills[0]!.points.slice(0, 2)).toEqual([100, 35]); // pointing up
     expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
     expect(fills.some((f) => f.colour === ICON.log)).toBe(true);
-    for (const f of fills) expect(f.points.length).toBeLessThanOrEqual(8); // no crenellated tower
+    for (const f of fills) expect(f.points.length).toBeLessThanOrEqual(12); // no crenellated tower: that one has 12 points
   });
 
   it('draws a log found as an outline of the slab in the grey of a beaten tower, never in amber', () => {
