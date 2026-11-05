@@ -15,6 +15,7 @@ export interface LogLine {
 export interface AudioLog {
   id: string;
   deck: Deck;
+  stage: number;
   title: string;
   seconds: number;
   voices: readonly Voice[];
@@ -88,6 +89,7 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
   {
     id: 'mess-first-game',
     deck: 'mess',
+    stage: 1,
     title: 'Mess recorder, the first game after the order',
     seconds: 50,
     voices: [
@@ -115,6 +117,7 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
   {
     id: 'cargo-night-shift',
     deck: 'cargo',
+    stage: 1,
     title: "Night loader's suit recorder",
     seconds: 52,
     voices: [
@@ -126,14 +129,14 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
       ...later(46, tellVoices('crack')),
     ],
     lines: [
-      { at: 1, text: '[A wide, cold bay. A crane runs somewhere above.]' },
+      { at: 1, text: '[A wide, dim bay. A crane runs somewhere above.]' },
       { at: 5, text: 'Night shift, bay two. The suit says core temperature fine. I say fine.' },
       { at: 11, text: '[Boots on the grating.]' },
       {
         at: 14,
         text: 'Glove change at the hour, like the sheet says. My left hand did not want to come out of the glove.',
       },
-      { at: 21, text: 'It came out. It is only stiff. The skin is a little dull. That is the cold.' },
+      { at: 21, text: 'It came out. It is only stiff. The skin is a little dull. That is the night air.' },
       { at: 28, text: '[The frame creaks.]' },
       {
         at: 30,
@@ -147,6 +150,7 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
   {
     id: 'furnace-end-of-watch',
     deck: 'furnace',
+    stage: 1,
     title: 'Smelter deck, end of watch',
     seconds: 55,
     voices: [
@@ -174,6 +178,7 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
   {
     id: 'chapel-names',
     deck: 'chapel',
+    stage: 1,
     title: 'Chapel recorder, left on the rail',
     seconds: 56,
     voices: [
@@ -207,6 +212,7 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
   {
     id: 'bridge-crew-count',
     deck: 'bridge',
+    stage: 1,
     title: 'Bridge, console recorder',
     seconds: 53,
     voices: [
@@ -216,7 +222,7 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
       ...creak(43, 140),
     ],
     lines: [
-      { at: 1, text: '[A clean, cold hum. The console chimes.]' },
+      { at: 1, text: '[A clean, steady hum. The console chimes.]' },
       { at: 4, text: 'TALLY: Crew count.' },
       { at: 7, text: 'Not now, Tally. Bridge, recording for the log. The docking clamp will not let go.' },
       { at: 13, text: 'TALLY: Release condition: the books balanced.' },

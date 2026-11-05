@@ -374,8 +374,9 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   the numbers beaten; `__openworldFixture` stands the hero next to a lair.
 - **Medal count.** The HUD shows `Medals N / total` (`#openworld-medals`): N the bosses with a medal in the shared `ab-alone.medals`
   store, total the roster size. Read when a world opens, so it is right after "Back to the Open world".
-- **Tally's line.** The first time a player opens an Open world the HUD shows "Claim 0412: unworked." (`#openworld-tally`), once: the
-  flag `ab-alone.tally0412` is kept next to the medals. Reduced motion changes nothing.
+- **Tally's line.** The first time a player opens an Open world the HUD shows "Claim: unworked." (`#openworld-tally`), once: the
+  flag `ab-alone.tally0412` is kept next to the medals. From stage 5 of the story (world.md section 12) it reads "Claim 0412: unworked.",
+  the line number being a secret until then (#1584). Reduced motion changes nothing.
 - **Seats on file (#1315).** While some lairs are beaten and not all, a world that opens shows "Seats on file: N of total. Slag-glass remembers heat."
   (`ledgerLine` of `client/src/tally.ts`, the lore line of world.md section 2) in `#openworld-tally`, in place of the claim line, which is not asked for.
 - **Ending (#1175).** When every lair of the world is in `lairs` (beaten), the world counts as beaten: whenever it opens, `#openworld-tally`

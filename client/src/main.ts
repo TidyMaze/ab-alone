@@ -224,6 +224,7 @@ import { LORE } from './lore';
 import { audioDeckOf, bossLore, entryOf, STORY } from './lorelogs';
 import { atStake, claimReload } from './autoreload';
 import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
+import { catchUp, fire, gated, SEALED, storyStage, type StoryEvent } from './story';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import {
@@ -500,6 +501,9 @@ const store = (() => {
     return null;
   }
 })();
+catchUp(store, loadMedals(store)); // the medals of a player who played before the story fire their boss moments (#1584)
+/** Records what happened in the game for the story (story.ts, #1584): the stage may rise, and the lore held back opens. */
+const storyEvent = (event: StoryEvent): number => fire(store, event);
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
@@ -1142,7 +1146,7 @@ function openArchive(): void {
     return button;
   };
   const rows = [
-    ...archiveList(readLore(store), [...LORE, ...STORY]).map((entry) => row(entry.title, () => openReader(entry.id))),
+    ...gated(archiveList(readLore(store), [...LORE, ...STORY]), storyStage(store)).map((entry) => row(entry.title, () => openReader(entry.id))),
     ...archiveList(collectedLogs(store), AUDIO_LOGS).map((log) => row(log.title, () => playLog(log))),
   ];
   archive.replaceChildren(...(rows.length ? rows : ['Nothing read yet.']));
@@ -1481,6 +1485,7 @@ function openReader(id?: string): void {
   reader.classList.toggle('flat', flatHud || sceneRenderer.terraceOn);
   document.body.dataset.reading = consoleEntry; // read by the e2e tests
   if (consoleEntry !== MEDAL_ROOM) markRead(store, consoleEntry);
+  else storyEvent({ on: 'room', id: MEDAL_ROOM }); // the Medal room first visited is stage 3 (#1584)
   showConsole(0);
   applyView();
   paintLog();
@@ -3495,10 +3500,17 @@ let freeTargets: ReturnType<typeof groupTargets> = []; // the targets of the Ech
 // The medal of a won boss fight (#791), earned once per fight: hud() runs again on every refresh. Solo, daily and co-op
 // fights all come here, so every peer of a co-op win gets the medal.
 let medalSeen: { game: unknown; note: string } = { game: null, note: '' };
+let winSeen: unknown = null; // the game whose win the story counted, once per game: hud() runs again on every refresh (#1584)
+function winOnce(): void {
+  if (winSeen === engine) return;
+  winSeen = engine;
+  storyEvent({ on: 'win' });
+}
 function medalNote(boss: { id: string }): string {
   if (medalSeen.game !== engine) {
     const turns = playerTurns(history.length);
     const result: MedalResult = recordMedal(store, boss.id, turns);
+    storyEvent({ on: 'won', id: boss.id }); // before the lore of the win is chosen: the stage counts this win (#1584)
     medalSeen = { game: engine, note: medalLine(result, result === 'kept' ? bestTurns(store, boss.id)! : turns) };
     if (lairFrom) void openWorldSaves.beat(lairFrom.seed, lairFrom.lair); // the lair is beaten in the Open world too (#1170)
     if (lairFrom) peersHost.lairWon(lairFrom.seed, lairCells(lairFrom.seed)[lairFrom.lair]!); // and seen beaten by the other heroes (#1305)
@@ -3513,13 +3525,15 @@ function hud(extra = ''): void {
   drawHud(extra);
   syncLobby();
 }
-/** The lore of a boss win (#1589): its entry in the box of the audio log's place, filed in the log archive, none once the fight is over or left. */
-function showLore(lore: { id: string; title: string; body: string } | undefined): void {
+/** The lore of a boss win (#1589): its entry in the box of the audio log's place, filed in the log archive, none once the fight is over or left.
+ * An entry above the stage of the story is held back (#1584): the sealed line shows in its place, and the archive lists the entry once its stage is reached. */
+function showLore(lore: { id: string; title: string; body: string; stage: number } | undefined): void {
   document.getElementById('lore')!.hidden = !lore;
   if (!lore) return void delete document.body.dataset.lore;
-  document.getElementById('lore-title')!.textContent = lore.title;
-  document.getElementById('lore-body')!.textContent = lore.body;
-  document.body.dataset.lore = lore.id; // read by the e2e tests
+  const shown = lore.stage > storyStage(store) ? SEALED : lore;
+  document.getElementById('lore-title')!.textContent = shown.title;
+  document.getElementById('lore-body')!.textContent = shown.body;
+  document.body.dataset.lore = shown === SEALED ? 'sealed' : lore.id; // read by the e2e tests
   markRead(store, lore.id);
 }
 function drawHud(extra = ''): void {
@@ -3547,6 +3561,7 @@ function drawHud(extra = ''): void {
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
     glass: glassOf(),
   });
+  if (end?.anim === 'win' && (fight || worker || online?.role === 'player') && !replaying) winOnce(); // the wins of any mode, a hot seat and a spectator apart (#1584)
   if (end?.anim === 'win' && fight) end.line = `${end.line} ${medalNote(fight)}`; // a won fight: Black is the player's side
   showLore(end?.anim === 'win' && fight ? bossLore(fight.id) : undefined); // the entry of the boss beaten, in the archive too (#1589)
   if (end?.anim === 'win' && wildFrom) end.line = `${end.line} ${wildWon(wildFrom)}`;
@@ -3567,7 +3582,7 @@ function drawHud(extra = ''): void {
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
-    tally: shownPly() === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
+    tally: shownPly() === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '',
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
     rematch:
       online?.role !== 'player' || status === 0
@@ -5229,6 +5244,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
   fight = { id, seed, daily };
+  storyEvent({ on: 'start', id }); // The Ballast Mind's fight starts is stage 6 (#1584)
   goalOpen = false;
   engine = resumeFrom?.engine ?? new Encounter(id, seed);
   history.length = 0;
@@ -6281,10 +6297,10 @@ const openWorld = new OpenWorldMode(
   },
   () => ({ have: boss_ids().filter((id) => hasMedal(store, id)).length, total: boss_ids().length }), // one medal per boss, from the shared store (#1171)
   () => {
-    // Tally's claim line, once per player (#1171): the flag sits in the same store as the medals.
+    // Tally's claim line, once per player (#1171): the flag sits in the same store as the medals. The line number is the stage 5 secret (#1584).
     if (read(store, 'ab-alone.tally0412') === 'seen') return '';
     write(store, 'ab-alone.tally0412', 'seen');
-    return 'Claim 0412: unworked.';
+    return storyStage(store) >= 5 ? 'Claim 0412: unworked.' : 'Claim: unworked.';
   },
   (seed, from, to, blocked, broken) => Int32Array.from(world_path(seed, from[0], from[1], to[0], to[1], blocked, broken)), // the walk to a far cell (#1137)
   () => steering,

@@ -31,10 +31,13 @@ const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
   swarm: 'Waves on file. Forty turns to the evac.',
 };
 
-/** The line Tally says at the start of a match: a boss fight takes its boss, other modes their mode. */
-export function tallyLine({ mode, boss = '' }: { mode: TallyMode; boss?: string }): string {
+/** The line of the bot table once the story reached its stage 2, the first boss beaten (#1584): the one line the story changes in a match. */
+const BOT_LINE_2 = `${MODE_LINES.bot} It was never an enemy.`;
+
+/** The line Tally says at the start of a match: a boss fight takes its boss, other modes their mode. `stage` is the stage of the story (story.ts). */
+export function tallyLine({ mode, boss = '', stage = 1 }: { mode: TallyMode; boss?: string; stage?: number }): string {
   if (mode === 'boss') return BOSS_LINES[boss as (typeof BOSS_IDS)[number]] ?? '';
-  return MODE_LINES[mode];
+  return mode === 'bot' && stage >= 2 ? BOT_LINE_2 : MODE_LINES[mode];
 }
 
 /** Tally's line once the hero has entered every lair of the Open world (#1175): one line, no speech. `crew` is the crew attached. */

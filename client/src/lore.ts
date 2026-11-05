@@ -1,10 +1,12 @@
 // The lore terminal entries (docs/specs/world.md section 4): short logs on in-world screens, two per deck, 120 words
-// at most each, written from the facts of sections 2 and 3. Data only, never required to progress.
+// at most each, written from the facts of sections 2 and 3. Data only, never required to progress. Every entry carries the
+// stage of the reveal ladder it may speak of (section 12, story.ts) and holds no secret word of a later one.
 import type { Deck } from './deck';
 
 export interface LoreEntry {
   id: string;
   deck: Deck;
+  stage: number;
   title: string;
   body: string;
 }
@@ -13,6 +15,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'mess-house-rule',
     deck: 'mess',
+    stage: 1,
     title: "Captain's order, pinned above table four",
     body:
       'From today every dispute aboard is settled on a board. Not with fists, not with tools, not in the corridors. ' +
@@ -24,6 +27,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'mess-corner-table',
     deck: 'mess',
+    stage: 1,
     title: 'Galley log, unsigned',
     body:
       'There is still one of us at the corner table. It used to deal the cards there every night. It does not eat ' +
@@ -35,6 +39,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'cargo-assay',
     deck: 'cargo',
+    stage: 1,
     title: 'Assay note, ore bay two',
     body:
       'The new vein on Hollow is not slag. It is glass, and it holds heat like nothing on the sheet. Rest a warm ' +
@@ -45,6 +50,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'cargo-loadmaster',
     deck: 'cargo',
+    stage: 1,
     title: "Loadmaster's frame log",
     body:
       'The frame is cracking again. I hear it through my back now, since I cannot step away from it. The glass ' +
@@ -56,6 +62,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'furnace-power',
     deck: 'furnace',
+    stage: 1,
     title: 'Smelter deck, maintenance tag',
     body:
       'Power is at eleven percent. Gravity holds only where someone still lives. Tally keeps the ship running for ' +
@@ -66,6 +73,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'furnace-watch-song',
     deck: 'furnace',
+    stage: 1,
     title: 'Written inside a locker door',
     body:
       'The furnace crew sang at the end of every watch. Three groups, low, middle and high, one after the other, ' +
@@ -77,6 +85,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'chapel-door',
     deck: 'chapel',
+    stage: 1,
     title: 'Notice wired to the chapel door',
     body:
       'We built this room from what was left: cable for the rail, cargo cloth for the hangings, candles from the ' +
@@ -88,9 +97,10 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'chapel-sermon',
     deck: 'chapel',
+    stage: 1,
     title: "Sermon notes, in the chaplain's hand",
     body:
-      'Do not be afraid of the shell. It is not an ending. It is a coat against the cold, given freely. Our crew ' +
+      'Do not be afraid of the shell. It is not an ending. It is a coat against the night, given freely. Our crew ' +
       'are not lost. They are made smooth and whole and quiet. I have felt it start in my own fingers and I am ' +
       'grateful. To those of you still clear: I will not force you. I will only stand beside you, with two ' +
       'others, until you understand. Three of us around you, and you will see it too. You will be warm again.',
@@ -98,6 +108,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'bridge-clamp',
     deck: 'bridge',
+    stage: 1,
     title: 'TALLY: docking clamp',
     body:
       'Docking clamp: locked. Release condition: one winner, five seats beaten. Seats: mess, cargo, furnace, ' +
@@ -107,6 +118,7 @@ export const LORE: readonly LoreEntry[] = [
   {
     id: 'bridge-last-orders',
     deck: 'bridge',
+    stage: 1,
     title: "Captain's console, last entry",
     body:
       'Tally, my hands are going and I will stop answering soon. Keep the rule after I go. Every dispute on a ' +

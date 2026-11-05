@@ -339,7 +339,7 @@ The main line uses only the main-column triggers, so skipping optional content n
 
 - Short lines only: a Tally HUD line at match start, a boss victory or defeat line, a note under a terminal (the existing "Appended by
   TALLY" device), a lost-run summary line. Nothing blocks a move.
-- Saved in one local key, `ab-alone.story` (highest stage and ids seen), no server (#1584).
+- Saved in one local key, `ab-alone.story`, no server (#1584, section 12.6).
 - A player who only plays the bot table gets stages 2 to 4 from wins there, then one hint pointing at the world. Online games count wins
   too, and lines stay local, never sent to the opponent. After stage 7, old lines gain a reread twist, and Reset story is in the
   settings menu.
@@ -350,7 +350,7 @@ The main line uses only the main-column triggers, so skipping optional content n
 
 ### 12.4 The tested rule
 
-`story.ts` holds data only. Unit tests check that stages are strictly ordered; every stage has a trigger emitted by a real call site; a
+`story.ts` holds the data and pure functions (section 12.6). The unit tests (`story.test.ts`, `main.story.test.ts`) check that stages are strictly ordered; every stage has a trigger emitted by a real call site; a
 main-line-only run reaches stage 7; no line of stage *n* holds a secret word of a later stage; a corrupt save falls back to stage 1; every
 line fits the HUD; every `lore.ts` and `audiologs.ts` entry carries a stage tag. The entries of `lorelogs.ts` are already under the
 secret-word rule (`lorelogs.test.ts`).
@@ -358,3 +358,38 @@ secret-word rule (`lorelogs.test.ts`).
 ### 12.5 Towns and towers
 
 This amends #1516: **towns hold the delivered** (dazed, quiet, clear of the shell), and **the shelled stay in towers and dungeons**.
+
+### 12.6 The stage store (#1584)
+
+`client/src/story.ts` holds the data and the pure functions. The `TRIGGERS` table binds each moment of the ladder to the events of today,
+so it can be re-pointed at towers later; `main.ts` fires the events through one `storyEvent` helper.
+
+| Stage | Main trigger (the event) | Fired from |
+|---|---|---|
+| 2 | the first boss beaten (`won`, any boss) | the win of a boss fight, once per game |
+| 3 | the Medal room first visited (`room`, `medal-room`) | the reader opening the Medal room |
+| 4 | The Hull beaten (`won`, `hull`) | the win of a boss fight |
+| 5 | The Chaplain beaten (`won`, `chaplain`) | the win of a boss fight |
+| 6 | The Ballast Mind's fight starts (`start`, `ballast`) | the start of a boss fight |
+| 7 | The Ballast Mind beaten (`won`, `ballast`) | the win of a boss fight |
+
+- **Optional trigger.** Stage 2 also comes from 3 wins in any mode (`win`, counted once per finished game against a boss, a bot or an online
+  opponent; a hot-seat game and a spectator count none; a replay counts none). An optional trigger counts for its own stage only. The
+  other optional triggers of the ladder (an ejected crewmate of the rogue-lite, a night survived, a dungeon act 3, a lost run, five towers) are
+  not bound: the game has no event for them yet.
+- **The stage** is the longest unbroken run of fired moments from stage 2 up. Every moment is recorded when it happens, even out of order:
+  a Chaplain win before The Hull counts as soon as stages 2 to 4 are reached. The main line alone reaches stage 7.
+- **The save** is the JSON `{"moments": [...], "wins": n}` in `ab-alone.story`, through the same store as the log archive. A corrupt save is a
+  new player's, stage 1. A player who played before the story keeps what he earned: at load the medals fire the matching boss moments (a boss
+  with a medal was started and won). The Medal room (stage 3) is not recorded by a medal, so such a player visits it once.
+- **The gate.** A boss is never locked here (#1527 decides locking). Its lore entry above the current stage is held back: the win screen shows
+  the sealed line in place of the entry, the same for every such boss, in Tally's register and with no secret word ("Ledger: sealed",
+  "Seat: empty. The entry is held. Tally enters it when the count allows."); `body[data-lore]` reads `sealed`. The stage is computed after
+  the win is recorded, so beating The Hull at stage 3 shows its entry. The entry is filed as read either way. The log archive lists only the
+  entries whose stage is reached, terminals and logs of the world too (a log is gated when read from the archive, never when found), so a held
+  entry appears when its stage is reached.
+- **Tally's line.** After the first boss win, stage 2, the bot table's line at the start of a match reads "Mess: one seat filled. The other is
+  counted. It was never an enemy." No other line changes.
+- **Old text.** `lore.ts` and `audiologs.ts` entries carry a `stage` (all 1). Four lines broke the rule of 12.4 and were reworded, with the
+  same meaning: the chapel sermon ("a coat against the night"), the night loader's log ("A wide, dim bay.", "That is the night air."), the
+  bridge log ("A clean, steady hum.") and the first-visit line of the Open world ("Claim: unworked." before stage 5, openworld.md section 7).
