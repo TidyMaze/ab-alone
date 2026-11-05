@@ -591,6 +591,28 @@ mod tests {
     }
 
     #[test]
+    fn the_places_are_kind_q_r_triples_that_match_the_core_and_keep_off_the_lairs_teleporters_and_logs(
+    ) {
+        let flat = world_places(7);
+        let lairs = world::lairs(7, crate::encounter::boss_ids().len());
+        let mut taken = world::teleporters(7, &lairs);
+        taken.extend(lairs);
+        let logs = world::logs(7, &taken);
+        taken.extend(logs);
+        let cells = world::places(7, &taken);
+        assert_eq!(cells.len(), world::TOWNS + world::DUNGEONS);
+        assert_eq!(
+            flat,
+            cells
+                .iter()
+                .flat_map(|&(kind, (q, r))| [kind as i32, q, r])
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(flat[..3], [0, 0, 0], "the spawn town first");
+        assert_eq!(flat[3 * world::TOWNS], 1, "then the dungeon gates");
+    }
+
+    #[test]
     fn the_dungeon_walk_is_a_lair_number_then_q_r_pairs_that_match_the_core() {
         let lairs = world_lairs(3);
         let blocked = lairs.clone();

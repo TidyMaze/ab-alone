@@ -1962,6 +1962,112 @@ mod tests {
         assert_eq!(logs(7, &log_avoid(7))[..3], [(29, 5), (60, -36), (24, -67)]);
     }
 
+    /// The cells the towns and dungeon gates of a seed keep off: the lairs, the teleporters and the logs, as the bridge passes them.
+    fn place_avoid(seed: u64) -> Vec<(i32, i32)> {
+        let mut avoid = log_avoid(seed);
+        avoid.extend(logs(seed, &avoid));
+        avoid
+    }
+
+    fn kind_cells(found: &[(PlaceKind, (i32, i32))], kind: PlaceKind) -> Vec<(i32, i32)> {
+        found
+            .iter()
+            .filter(|place| place.0 == kind)
+            .map(|place| place.1)
+            .collect()
+    }
+
+    #[test]
+    fn every_seed_places_the_spawn_town_first_then_the_other_towns_and_the_dungeon_gates() {
+        for seed in 1..=24 {
+            let avoid = place_avoid(seed);
+            let found = places(seed, &avoid);
+            assert_eq!(found, places(seed, &avoid), "seed {seed}");
+            let towns = kind_cells(&found, PlaceKind::Town);
+            let gates = kind_cells(&found, PlaceKind::Dungeon);
+            assert_eq!(towns.len(), TOWNS, "seed {seed}");
+            assert_eq!(gates.len(), DUNGEONS, "seed {seed}");
+            assert_eq!(towns[0], (0, 0), "the spawn clearing is the first town");
+            assert!(found[..TOWNS].iter().all(|p| p.0 == PlaceKind::Town));
+        }
+        assert_ne!(places(1, &place_avoid(1)), places(2, &place_avoid(2)));
+    }
+
+    #[test]
+    fn no_two_places_overlap_and_none_sits_on_a_lair_a_teleporter_or_a_log() {
+        for seed in 1..=24 {
+            let avoid = place_avoid(seed);
+            let found = places(seed, &avoid);
+            for (i, a) in found.iter().enumerate() {
+                for b in &found[i + 1..] {
+                    assert!(hex_distance(a.1, b.1) > 3, "seed {seed}: {a:?} and {b:?}");
+                }
+                if a.1 != (0, 0) {
+                    assert!(
+                        avoid.iter().all(|&c| hex_distance(c, a.1) > 3),
+                        "seed {seed}: {a:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_place_and_its_six_neighbours_are_open_ground_with_no_enemy_near() {
+        for seed in 1..=24 {
+            for &(kind, (q, r)) in &places(seed, &place_avoid(seed)) {
+                for (dq, dr) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
+                    let c = cell(seed, q + dq, r + dr).expect("on the world");
+                    assert!(
+                        !c.terrain.blocked(),
+                        "seed {seed}: {kind:?} at ({q}, {r}) + ({dq}, {dr})"
+                    );
+                }
+                let (cx, cy) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
+                for kx in cx - 1..=cx + 1 {
+                    for ky in cy - 1..=cy + 1 {
+                        for enemy in enemy_groups(seed, kx, ky).concat() {
+                            assert!(
+                                hex_distance(enemy, (q, r)) > 2,
+                                "seed {seed}: {kind:?} at ({q}, {r})"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_other_towns_stand_near_the_spawn_in_their_biome_and_every_wild_biome_holds_a_gate() {
+        for seed in 1..=24 {
+            let found = places(seed, &place_avoid(seed));
+            let towns = kind_cells(&found, PlaceKind::Town);
+            for (k, &(q, r)) in towns.iter().enumerate().skip(1) {
+                assert_eq!(cell(seed, q, r).unwrap().biome, SEXTANTS[k], "seed {seed}");
+                assert!(distance(q, r) < LAIR_MIN, "seed {seed}: town {k}");
+            }
+            let gates = kind_cells(&found, PlaceKind::Dungeon);
+            for (k, &(q, r)) in gates.iter().enumerate() {
+                assert_eq!(
+                    cell(seed, q, r).unwrap().biome,
+                    SEXTANTS[k + 1],
+                    "seed {seed}: gate {k}"
+                );
+                assert!(distance(q, r) >= LAIR_MIN, "seed {seed}: gate {k}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_place_moves_off_a_cell_it_is_told_to_avoid() {
+        let free = places(7, &[]);
+        let moved = places(7, &[free[2].1]);
+        assert_eq!(moved.len(), free.len());
+        assert!(hex_distance(moved[2].1, free[2].1) > 3);
+        assert_eq!(moved[..2], free[..2]);
+    }
+
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
     fn walks(from: (i32, i32), path: &[(i32, i32)], avoid: &[(i32, i32)]) -> bool {
         let mut at = from;

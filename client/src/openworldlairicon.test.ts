@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contrastRatio, type RGB } from './contrast';
 import { setNeonWorldOn } from './neonlook';
 import { TERRAINS } from './openworld';
-import { BOSS_COLOURS, ICON, iconSize, lairIcon, logIcon, portalIcon } from './openworldlairicon';
+import { BOSS_COLOURS, dungeonIcon, ICON, iconSize, lairIcon, logIcon, portalIcon, townIcon } from './openworldlairicon';
 import { terrainColour } from './openworldminimap';
 
 // The icon of a boss tower on the Open world map and minimap (#1438): a tower on a dark plate, in the boss's colour.
@@ -56,6 +56,8 @@ describe('the boss colours', () => {
     for (const colour of [ICON.portal, ICON.here]) expect(contrastRatio(rgb(colour), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(ICON.done), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(ICON.log), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(rgb(ICON.town), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(rgb(ICON.dungeon), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(ICON.check), rgb(ICON.done))).toBeGreaterThanOrEqual(3);
   });
 
@@ -169,5 +171,45 @@ describe('logIcon (#1589)', () => {
     expect(found.fills.some((f) => f.colour === ICON.log)).toBe(false);
     expect(found.strokes.some((s) => s.colour === ICON.done)).toBe(true);
     expect(open.strokes.some((s) => s.colour === ICON.done)).toBe(false);
+  });
+});
+
+describe('townIcon and dungeonIcon (#1514)', () => {
+  it('draw a town as a house on a hexagonal plate with a halo and a rim', () => {
+    const { ctx, fills, strokes } = fakeContext();
+    townIcon(ctx, 100, 50, 30);
+    expect(fills[0]!.colour).toBe(ICON.plate);
+    expect(fills[0]!.points).toHaveLength(12); // six points: the tower's plate has four
+    expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
+    const house = fills.find((f) => f.colour === ICON.town)!;
+    expect(house.points).toHaveLength(10); // a roof and four walls
+    const xs = house.points.filter((_, i) => i % 2 === 0);
+    expect(Math.min(...xs)).toBeGreaterThan(85);
+    expect(Math.max(...xs)).toBeLessThan(115);
+  });
+
+  it('draw a dungeon gate as an arch on a triangular plate, with the same halo and rim', () => {
+    const { ctx, fills, strokes } = fakeContext();
+    dungeonIcon(ctx, 100, 50, 30);
+    expect(fills[0]!.colour).toBe(ICON.plate);
+    expect(fills[0]!.points).toHaveLength(6); // three points
+    expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
+    expect(fills.some((f) => f.colour === ICON.dungeon)).toBe(true);
+  });
+
+  it('give a town, a dungeon, a tower, a portal and a log five different plates', () => {
+    const plates = [townIcon, dungeonIcon].map((draw) => {
+      const { ctx, fills } = fakeContext();
+      draw(ctx, 0, 0, 30);
+      return JSON.stringify(fills[0]!.points);
+    });
+    const tower = fakeContext();
+    lairIcon(tower.ctx, 0, 0, 30, 'hull', false);
+    const portal = fakeContext();
+    portalIcon(portal.ctx, 0, 0, 30, false);
+    const log = fakeContext();
+    logIcon(log.ctx, 0, 0, 30, false);
+    plates.push(...[tower, portal, log].map((c) => JSON.stringify(c.fills[0]!.points)));
+    expect(new Set(plates).size).toBe(5);
   });
 });

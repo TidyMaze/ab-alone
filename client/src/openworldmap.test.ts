@@ -24,7 +24,7 @@ function source(over: Partial<MinimapData> = {}) {
   const asked: { centre: Axial; radius: number }[] = [];
   const read = (centre: Axial, radius: number): MinimapData => {
     asked.push({ centre, radius });
-    return { cells: [[0, 0, 'sand']], hero: [0, 0], troop: [], enemies: [], lairs: [], teleporters: [], logs: [], yaw: 0, ...over };
+    return { cells: [[0, 0, 'sand']], hero: [0, 0], troop: [], enemies: [], lairs: [], teleporters: [], logs: [], places: [], yaw: 0, ...over };
   };
   return { asked, read, last: () => asked[asked.length - 1]! };
 }

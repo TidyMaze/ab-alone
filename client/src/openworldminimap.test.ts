@@ -53,6 +53,7 @@ const data = (over: Partial<MinimapData> = {}): MinimapData => ({
   lairs: [],
   teleporters: [],
   logs: [],
+  places: [],
   yaw: 0,
   ...over,
 });
@@ -274,6 +275,17 @@ describe('drawMinimap', () => {
     expect(open[0]!.at[0]).toBeGreaterThan(MIDDLE); // 3 cells right of the hero
   });
 
+  it('draws the towns and the dungeon gates in the window as their own icons, and none out of the window (#1514)', () => {
+    const { ctx, fills } = fakeContext();
+    drawMinimap(ctx, SIZE, data({ places: [{ cell: [3, 0], kind: 'town' }, { cell: [-3, 1], kind: 'dungeon' }, { cell: [200, 0], kind: 'town' }] }));
+    const [town] = at(fills, ICON.town);
+    expect(at(fills, ICON.town)).toHaveLength(1);
+    expect(town!.at[0]).toBeGreaterThan(MIDDLE); // 3 cells right of the hero
+    const [gate] = at(fills, ICON.dungeon);
+    expect(at(fills, ICON.dungeon)).toHaveLength(1);
+    expect(gate!.at[0]).toBeLessThan(MIDDLE);
+  });
+
   it('draws a lair out of the window as an arrow on the edge pointing to it', () => {
     const { ctx, fills } = fakeContext();
     drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [100, -200], beaten: false }] }));
@@ -308,6 +320,13 @@ describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, c
     const { ctx, fills } = fakeContext();
     drawMap(ctx, frame, data({ logs: [{ cell: [200, 0], found: false }] }));
     expect(at(fills, ICON.log)).toHaveLength(1);
+  });
+
+  it('draws every town and dungeon gate given where it is, however far (#1514)', () => {
+    const { ctx, fills } = fakeContext();
+    drawMap(ctx, frame, data({ places: [{ cell: [200, 0], kind: 'town' }, { cell: [-200, 0], kind: 'dungeon' }] }));
+    expect(at(fills, ICON.town)[0]!.at[0]).toBeCloseTo(200 + 200 * 10, -2);
+    expect(at(fills, ICON.dungeon)[0]!.at[0]).toBeCloseTo(200 - 200 * 10, -2);
   });
 
   it('draws every teleporter given where it is, however far', () => {
