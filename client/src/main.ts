@@ -1506,6 +1506,7 @@ function turnReader(step: number): void {
   else showConsole(page);
 }
 addEventListener('keydown', (e) => {
+  if (openWorld.active && reading && e.key === 'Escape') return leaveReader(); // a log reread from the archive in the world (#1591)
   if (openWorld.active || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return; // the Open world's keys (#1063)
 
   if (e.key.toLowerCase() === 'c' && !reading) {
@@ -6420,8 +6421,13 @@ openWorldButton.addEventListener('click', () => {
 openWorldButton.disabled = false; // listener ready (#146)
 bindHudFold(document); // the HUD plate folds to its chip after a few steps (#1138)
 bindJoystick(document, openWorld); // the touch stick of the Open world, on the left half of the canvas (#1025)
+// Escape closes the sheet that is open over the world (the terminal reader, the settings, the Game modes, Goal, Lobby) and goes no
+// further: the world is left by the next one (#1591). The sheets close on their own keydown, before this one, so the state is read
+// as the key goes down, in the capture phase.
+let sheetOpen = false;
+addEventListener('keydown', () => (sheetOpen = reading !== null || menuIsOpen || modesOpen || goalOpen || lobbyOpen), { capture: true });
 addEventListener('keydown', (e) => {
-  if (!openWorld.active || e.target instanceof HTMLInputElement || !openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
+  if (!openWorld.active || e.target instanceof HTMLInputElement || (e.key === 'Escape' && sheetOpen) || !openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
   if (openWorld.active) return;
   dirty = CHANGE_DRAWS; // left: the board draws again
