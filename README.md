@@ -59,8 +59,7 @@ First to eject 6 wins. On top of it, the ship:
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.
 - **Battle royale** on the Furnace deck: up to 6 seats, hidden orders, bots fill empty seats.
-- **Hub**: walk five decks, a door per boss, a room per mode, lore terminals. Every boss you beat shows its own short lore entry under the victory banner once the story has reached it (the story opens in order, and a sealed line holds a later entry back), and the log archive (Logs in the cog menu) keeps the entries and the logs of the Open world you read. New players land there,
-  after a short illustrated guide to the rules and the controls of their device (Guide in the cog menu opens it again).
+- **Hub**: walk five decks, a door per boss, a room per mode, lore terminals. Every boss you beat shows its own short lore entry under the victory banner once the story has reached it (the story opens in order, and a sealed line holds a later entry back), and the log archive (Logs in the cog menu) keeps the entries and the logs of the Open world you read. A new player first gets a three-line cold open and a short scripted fight that ends on the first ejection, then lands there with The Echo marked as the next goal (the first run plays once, and can be skipped). The illustrated guide to the rules and the controls of their device no longer opens by itself: Guide in the cog menu opens it.
 - **Open world**: a generated hex map of six biomes, one per sixth of the hexagon (meadow, forest, tundra, desert,
   badlands and an archipelago), a hero marble you walk and a troop that fights on its own, both sailing
   across the water on small boats, with a minimap in the top right corner, a map of the world discovered round the hero (M, or the Map button) and

@@ -19,6 +19,20 @@ function push(game: Game): void {
   game.click(-2, -2);
 }
 
+function plugPad(game: Game): (button: number) => void {
+  let pads: unknown[] = [];
+  Object.defineProperty(navigator, 'getGamepads', { value: () => pads, configurable: true });
+  const hold = (buttons: number[]): void => {
+    const pressed = Array.from({ length: 17 }, (_, i) => ({ pressed: buttons.includes(i), value: buttons.includes(i) ? 1 : 0 }));
+    pads = [{ connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: pressed }];
+    game.frame();
+  };
+  return (button) => {
+    hold([button]);
+    hold([]);
+  };
+}
+
 describe('the cold open', () => {
   it('opens first on a fresh profile with no query, three lines of story, no guide, and is marked done at once', async () => {
     await boot('/', { webdriver: false });
@@ -60,6 +74,10 @@ describe('the cold open', () => {
     await boot('?firstrun');
     const skip = byId('coldopen-skip');
     skip.focus();
+    let reachedByLetter = false;
+    addEventListener('keydown', () => (reachedByLetter = true), { once: true });
+    key(skip, 'q'); // any other key stays in it too
+    expect(reachedByLetter).toBe(false);
     expect(key(skip, 'Tab', true)).toBe(false); // the first stop wraps to the last
     expect(document.activeElement).toBe(byId('coldopen-begin'));
     expect(key(byId('coldopen-begin'), 'Tab')).toBe(false);
@@ -77,6 +95,22 @@ describe('the cold open', () => {
   });
 });
 
+describe('the cold open on a pad', () => {
+  it('is walked by the D-pad and LB RB inside it, A presses, Start leaves the settings shut, B skips to the Hub', async () => {
+    const game = await boot('?firstrun');
+    const tap = plugPad(game);
+    tap(15); // D-pad right: the next stop after Begin wraps to Skip
+    expect(document.activeElement).toBe(byId('coldopen-skip'));
+    tap(4); // LB: Shift+Tab, back to Begin
+    expect(document.activeElement).toBe(byId('coldopen-begin'));
+    tap(9); // Start: the settings stay shut under the cold open
+    expect(byId('settings-menu').hidden).toBe(true);
+    tap(1); // B
+    expect(document.body.dataset.hub).toBe('mess 0,0');
+    Reflect.deleteProperty(navigator, 'getGamepads');
+  });
+});
+
 describe('the scripted fight', () => {
   it('begins on the fixed board with the push shown as the hint, and the first Tally line explained once', async () => {
     const game = await boot('?firstrun');
@@ -87,9 +121,9 @@ describe('the scripted fight', () => {
     expect(game.hook<number[]>('__hint')).toEqual(encodeMove(FIRST_PUSH));
     expect(byId('coach').hidden).toBe(false);
     expect(byId('coach-step').textContent).toBe(COACH.push);
-    expect(byId('coach-tally').textContent).toBe(COACH.tally);
     expect(byId('coach-hub').hidden).toBe(true);
     expect(game.hud()).toContain('Mess: one seat filled. The other is counted.'); // the HUD line, as at the start of a match
+    expect(byId('hud').querySelector('.tally-note')!.textContent).toBe(COACH.tally); // explained once, under it
     expect(byId('hud').textContent).toContain('White to move');
   });
 
@@ -102,7 +136,7 @@ describe('the scripted fight', () => {
     expect(game.hook('__plies')).toBe(FIRST_FIGHT.length + 1); // the bot never answered
     expect(run()).toBe('done');
     expect(byId('coach-step').textContent).toBe(COACH.done);
-    expect(byId('coach-tally').hidden).toBe(true);
+    expect(byId('hud').querySelector('.tally-note')).toBeNull();
     expect(byId('coach-hub').hidden).toBe(false);
     expect(byId('coach-skip').hidden).toBe(true);
     expect(game.hud()).toContain('White ejected 1/6');

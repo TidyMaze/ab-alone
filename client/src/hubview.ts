@@ -173,11 +173,11 @@ export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], med
   return { name, state, short, mark: '' };
 }
 
-/** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked. */
-export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}): string {
+/** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked, and the deck's own boss door (not the Dual Room's) is marked as the next goal when the deck is the `goal`. */
+export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}, goal: Deck | null = null): string {
   const plates = roomsOf(deck).map(({ cell: [q, r], door }) => {
     const { name, state, short, mark } = roomLabel(deck, door, beaten, medals);
-    const attrs = `${mark ? ` data-mark="${mark}"` : ''}${q === mq && r === mr ? ' data-here' : ''}`;
+    const attrs = `${mark ? ` data-mark="${mark}"` : ''}${door.kind === 'boss' && deck === goal && door.boss === bossOf(deck) ? ' data-goal' : ''}${q === mq && r === mr ? ' data-here' : ''}`;
     return `<div class="hub-label" data-cell="${q},${r}" data-kind="${door.kind}"${attrs}><b>${name}</b><small>${state}</small><span class="short">${short}</span></div>`;
   });
   if (!roomAt(deck, [mq, mr])) plates.push(`<div class="hub-label you" data-cell="${mq},${mr}">You</div>`);
@@ -189,14 +189,18 @@ const bossOf = (deck: Deck): string => roomsOf(deck).flatMap(({ door }) => (door
 const deckState = (deck: Deck, beaten: readonly string[]): 'beaten' | 'open' | 'locked' =>
   beaten.includes(bossOf(deck)) ? 'beaten' : canEnter({ kind: 'lift', to: deck }, beaten) ? 'open' : 'locked';
 
-/** The lift-shaft rail: the five decks from the Bridge down, each with its state, and where the marble is. */
-export function railHtml(at: Deck, beaten: readonly string[]): string {
+/** The deck of a new player's next goal (#1521): the first, whose boss is The Echo, until a boss is beaten; none after. */
+export const goalDeck = (beaten: readonly string[]): Deck | null => (beaten.length === 0 ? DECK_NAMES[0]! : null);
+
+/** The lift-shaft rail: the five decks from the Bridge down, each with its state, and where the marble is. The `goal` deck is marked as the next goal. */
+export function railHtml(at: Deck, beaten: readonly string[], goal: Deck | null = null): string {
   const rows = DECK_NAMES.map((deck, i) => {
     const state = deckState(deck, beaten);
     const boss = bossTitle(bossOf(deck));
     const line = state === 'locked' ? 'Lift locked' : `${boss} ${state === 'beaten' ? 'beaten' : 'waits'}`;
     const here = deck === at;
-    return `<li data-deck="${deck}" data-state="${state}"${here ? ' aria-current="location"' : ''}><span class="n">0${i + 1}</span><b>${title(deck)}</b><small>${line}${here ? ' · you are here' : ''}</small></li>`;
+    const next = deck === goal;
+    return `<li data-deck="${deck}" data-state="${state}"${next ? ' data-goal' : ''}${here ? ' aria-current="location"' : ''}><span class="n">0${i + 1}</span><b>${title(deck)}</b><small>${line}${next ? ' · next goal' : ''}${here ? ' · you are here' : ''}</small></li>`;
   });
   return `<h2>Lift shaft</h2><ul>${rows.reverse().join('')}</ul>`;
 }

@@ -1,6 +1,7 @@
-// The first-launch guide (#1293, docs/specs/ui.md section 4.7): five pages over the game, the goal, a move, a push, the
-// 3:2 rule and the controls, each with an inline SVG of the game's marbles on deck cells. Shown once: a skip or the end
-// stores it as seen; the settings menu opens it again. Pure functions and data only: main.ts builds the dialog.
+// The guide (#1293, docs/specs/ui.md section 4.7): five pages over the game, the goal, a move, a push, the 3:2 rule and the
+// controls, each with an inline SVG of the game's marbles on deck cells. It no longer opens by itself (#1521: a first launch plays
+// the first run, firstrun.ts): `?guide` or the settings menu opens it, and a skip or the end stores it as seen. Pure functions and
+// data only: main.ts builds the dialog.
 import { read, write, type Store } from './quality';
 
 const GUIDE_KEY = 'ab-alone.guide';
@@ -8,10 +9,8 @@ const GUIDE_KEY = 'ab-alone.guide';
 export const guideSeen = (store: Store): boolean => read(store, GUIDE_KEY) === 'seen';
 export const writeGuideSeen = (store: Store): void => write(store, GUIDE_KEY, 'seen');
 
-/** Whether the guide opens at start: not seen yet, and not in an automated browser (navigator.webdriver), where every
- * e2e spec boots on a fresh profile, unless `?guide` asks for it as a player's first launch. */
-export const guideDue = (store: Store, search: string, automated: boolean): boolean =>
-  !guideSeen(store) && (!automated || new URLSearchParams(search).has('guide'));
+/** Whether the guide opens at start: only when `?guide` asks for it, and not once seen. */
+export const guideDue = (store: Store, search: string): boolean => !guideSeen(store) && new URLSearchParams(search).has('guide');
 
 export type GuideEvent = 'next' | 'back' | 'skip';
 
@@ -32,7 +31,7 @@ const MARBLE = 13;
 const cell = (x: number, y: number): string => `<circle cx="${x}" cy="${y}" r="${CELL}" fill="#0f1214" stroke="#3a4248"/>`;
 const marble = (x: number, y: number, side: 'glass' | 'shell', ghost = false): string =>
   `<circle cx="${x}" cy="${y}" r="${MARBLE}" fill="url(#guide-${side})"${ghost ? ' opacity="0.6" stroke="#d8d4c8" stroke-width="1.5" stroke-dasharray="4 3"' : ''}/>`;
-/** A row of cells from `x0`, `step` apart: G a glass marble, S a shell, g and s their ghosts (dashed) where they go, . empty. */
+/** A row of cells from `x0`, `step` apart: G a White marble, S a Black one, g and s their ghosts (dashed) where they go, . empty. */
 const row = (y: number, marks: string, x0: number, step = 40): string =>
   [...marks]
     .map((mark, i) => {
@@ -55,7 +54,7 @@ const svg = (body: string): string =>
   body +
   '</svg>';
 
-// The goal: three glass push the last shell over the rim, the first of the six to win.
+// The goal: three White marbles push the last Black marble over the rim, the first of the six to win.
 const goalArt = svg(
   `<path d="M192 16V104" stroke="${SODIUM}" stroke-width="3" stroke-dasharray="6 4"/>` +
     row(60, 'GGGS', 50) +
@@ -63,9 +62,9 @@ const goalArt = svg(
     arrow(50, 26, 222) +
     [0, 1, 2, 3, 4, 5].map((i) => `<circle cx="${20 + i * 14}" cy="104" r="5" ${i ? 'fill="none" stroke="#9aa3a8"' : 'fill="url(#guide-shell)"'}/>`).join(''),
 );
-// A move: a line of three glass rolls one cell along its line, to an empty cell.
+// A move: a line of three White marbles rolls one cell along its line, to an empty cell.
 const moveArt = svg(row(64, 'GGGg.S', 30) + arrow(30, 26, 150));
-// A push: two glass push one shell back a cell.
+// A push: two White marbles push one Black marble back a cell.
 const pushArt = svg(row(64, 'GGSs', 70) + arrow(70, 26, 190));
 // The 3:2 rule: three push two; two against two do not move.
 const ruleArt = svg(
@@ -87,7 +86,7 @@ const controlsArt = svg(
 export const GUIDE: readonly GuidePage[] = [
   {
     title: 'Push them into the void',
-    text: '<p>You are the pale glass. Push six of their black shells off the edge of the board to win. Lose six of yours and you lose.</p>',
+    text: '<p>You are White. Push six of the Black marbles off the edge of the board to win. Lose six of yours and you lose.</p>',
     art: goalArt,
   },
   {

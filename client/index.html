@@ -190,6 +190,24 @@
         </div>
       </div>
     </div>
+    <!-- The first run (#1521): the cold open of a fresh profile, then the coach plate over the scripted fight (firstrun.ts). -->
+    <div id="coldopen" role="dialog" aria-modal="true" aria-labelledby="coldopen-title" aria-describedby="coldopen-text" tabindex="-1" hidden>
+      <div class="card">
+        <h2 id="coldopen-title"></h2>
+        <div id="coldopen-text"></div>
+        <div class="actions">
+          <button id="coldopen-skip" type="button">Skip</button>
+          <button id="coldopen-begin" type="button">Begin</button>
+        </div>
+      </div>
+    </div>
+    <div id="coach" role="region" aria-label="First fight" hidden>
+      <p id="coach-step"></p>
+      <div class="actions">
+        <button id="coach-skip" type="button">Skip</button>
+        <button id="coach-hub" type="button" hidden>To the Hub</button>
+      </div>
+    </div>
     <!-- The online opt-in (#1338): asked once before any relay or peer is contacted. Accept stores it, Stay solo goes back to solo play. -->
     <div id="consent" role="dialog" aria-modal="true" aria-labelledby="consent-title" aria-describedby="consent-text" tabindex="-1" hidden>
       <div class="card">

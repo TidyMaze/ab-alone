@@ -47,6 +47,14 @@ export class Hint {
     this.changed();
   }
 
+  /** Shows `move`, one the game gives itself (the scripted fight of the first run, #1521), on the position of `history` played in `game`:
+   * no engine is asked, and a second press clears it as for any hint. */
+  show(game: object, history: readonly number[][], move: number[]): void {
+    this.on = { game, ply: history.length };
+    this.move = move;
+    this.changed();
+  }
+
   /** Turns the hint off, as a new selection does. */
   clear(): void {
     if (!this.on) return;

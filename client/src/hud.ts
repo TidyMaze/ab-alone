@@ -17,6 +17,7 @@ export interface HudState {
   end?: EndBanner; // once over: the end banner (#282), replaces the turn line text
   rematch?: string; // online games only, once over: who asked for a rematch (rematchText)
   tally?: string; // Tally's line at the start of a match, '' or absent once the first move is made (#294)
+  tallyNote?: string; // what that first line means, under it, in the first run's fight only (#1521)
   was?: readonly [number, number]; // the ejected counts of the last render: a pip newly out moves once (#1095)
   turn?: string; // co-op, a human ply: Your turn or Partner's turn (coopTurn) in place of "Black to move" (#530)
 }
@@ -30,13 +31,14 @@ const marble = (side: number, glass: number): string => (side === glass ? 'pale'
 const pips = (out: number, slots: number, was = out): string =>
   Array.from({ length: Math.max(slots, out) }, (_, i) => `<span class="pip${i < out ? ' out' : ''}${i >= was && i < out ? ' fresh' : ''}"></span>`).join('');
 
-export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end, tally = '', turn: ply, was }: HudState): string {
+export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end, tally = '', tallyNote = '', turn: ply, was }: HudState): string {
   const over = status !== 0;
   const turn = end ? end.title : over ? (status === 3 ? 'Draw' : `${sideName(status, glass)} wins`) : (ply ?? `${sideName(side, glass)} to move`);
   const marker = `<span class="marker ${over ? 'over' : side === 1 ? 'black' : 'white'}" aria-hidden="true"></span>`;
   return (
     `<div class="turn">${marker}<span>${turn}</span></div>` +
     (tally ? `<div class="tally">${tally}</div>` : '') +
+    (tally && tallyNote ? `<div class="tally-note">${tallyNote}</div>` : '') +
     (end
       ? `<div class="end" data-anim="${end.anim}">${end.line}</div>`
       : '') +

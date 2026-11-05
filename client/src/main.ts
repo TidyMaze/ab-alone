@@ -30,6 +30,7 @@ import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
+import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFirstRunDone } from './firstrun';
 import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
@@ -304,7 +305,7 @@ import { loadProgress, recordWin, saveProgress } from './progress';
 import { HUB_CELLS, roomAt, type Door, type Spot as HubSpot } from './hub';
 import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
-import { labelsHtml, pipsHtml, railHtml } from './hubview';
+import { goalDeck, labelsHtml, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
@@ -1237,6 +1238,75 @@ guideBox.addEventListener('keydown', (e) => {
     nextFocus(document.activeElement, e.shiftKey ? -1 : 1, guideBox).focus();
   }
 });
+// The first run (#1521, #1523, firstrun.ts, ui.md 4.7): a fresh profile gets the cold open, then a scripted fight (the standard
+// board played six plies, no click), the push shown as the hint and the coach plate, until the player's first ejection, then the Hub
+// with The Echo as the goal. Skip, at the cold open or in the fight, goes to the Hub. It is marked done when it starts: it plays
+// once. The scripted game is never saved as the player's. body[data-firstrun] reads open, fight or done, for the e2e tests.
+const coldBox = document.getElementById('coldopen')!;
+const coldBegin = document.getElementById('coldopen-begin') as HTMLButtonElement;
+const coach = document.getElementById('coach')!;
+const coachStep = document.getElementById('coach-step')!;
+const coachSkip = document.getElementById('coach-skip') as HTMLButtonElement;
+const coachHub = document.getElementById('coach-hub') as HTMLButtonElement;
+let firstRun: 'open' | 'fight' | 'done' | null = null;
+function setFirstRun(phase: typeof firstRun): void {
+  firstRun = phase;
+  if (phase) document.body.dataset.firstrun = phase;
+  else delete document.body.dataset.firstrun;
+}
+/** Closes the first run's plates, wherever it was: another mode, a new game or its own end. */
+function dropFirstRun(): void {
+  coldBox.hidden = coach.hidden = true;
+  setFirstRun(null);
+}
+function startFirstRun(): void {
+  markFirstRunDone(store);
+  setFirstRun('open');
+  document.getElementById('coldopen-title')!.textContent = COLD_OPEN.title;
+  document.getElementById('coldopen-text')!.replaceChildren(...COLD_OPEN.lines.map((line) => Object.assign(document.createElement('p'), { textContent: line })));
+  coldBox.hidden = false;
+  coldBegin.focus();
+  analyse(); // the board behind it is the start position
+}
+function beginFirstFight(): void {
+  coldBox.hidden = true;
+  setFirstRun('fight');
+  for (const record of FIRST_FIGHT_RECORDS) {
+    engine.play(Int32Array.from(record));
+    history.push(record);
+  }
+  coachStep.textContent = COACH.push;
+  coach.hidden = false;
+  hint.show(engine, history, encodeMove(FIRST_PUSH));
+  refresh();
+  analyse();
+}
+/** The player's first ejection: Tally enters it, the bot does not answer, and the way to the Hub opens. */
+function finishFirstFight(): void {
+  setFirstRun('done');
+  coachStep.textContent = COACH.done;
+  coachSkip.hidden = true;
+  coachHub.hidden = false;
+  coachHub.focus();
+}
+function endFirstRun(): void {
+  dropFirstRun();
+  enterHub(loadProgress(store).at);
+}
+coldBegin.addEventListener('click', beginFirstFight);
+document.getElementById('coldopen-skip')!.addEventListener('click', endFirstRun);
+coachSkip.addEventListener('click', endFirstRun);
+coachHub.addEventListener('click', endFirstRun);
+coldBox.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // the board and the menus never see it
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    endFirstRun();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    nextFocus(document.activeElement, e.shiftKey ? -1 : 1, coldBox).focus();
+  }
+});
 // The online opt-in (#1338, consent.ts): every way online asks here first, before any relay or peer is contacted. Accept stores
 // it; Stay solo, Escape or the pad's B keep solo play. One question at a time: a second entry waits on the same answer.
 const consentBox = document.getElementById('consent')!;
@@ -1385,8 +1455,8 @@ boardBox.addEventListener('keydown', (e) => {
   }
 });
 // Where the pad walks the focus: in the guide or the opt-in while one is open.
-const padScope = (): ParentNode => (!optinBox.hidden ? optinBox : !consentBox.hidden ? consentBox : guideBox.hidden ? document : guideBox);
-if (guideDue(store, location.search, navigator.webdriver)) openGuide(null);
+const padScope = (): ParentNode => (!optinBox.hidden ? optinBox : !consentBox.hidden ? consentBox : !coldBox.hidden ? coldBox : guideBox.hidden ? document : guideBox);
+if (guideDue(store, location.search)) openGuide(null);
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
 // closed like the settings menu. Starting a mode closes it (startBoss, Play online).
 const modeButton = document.getElementById('modes') as HTMLButtonElement;
@@ -2778,7 +2848,7 @@ function botFailed(): void {
 }
 
 async function botTurn(): Promise<void> {
-  if (online || replaying || thinking || engine.status() !== 0) return;
+  if (online || replaying || thinking || engine.status() !== 0 || firstRun === 'done') return;
   const bots = worker !== null && engine.to_move() === BOT_SIDE;
   const auto = autoPlay && !bots; // the player's side, played by the bot (#792)
   const mover = worker ?? botWorker;
@@ -2883,7 +2953,7 @@ function playMove(record: number[]): void {
     drop = { cell: back, start: performance.now(), reduced, y: dropAt(0, reduced).y };
     document.body.dataset.medics = String(Number(document.body.dataset.medics ?? 0) + 1); // read by the e2e tests
   }
-  if (!online && (!fight || stalkerSaved()) && !run && !trainer && !wildFrom) void saves.save(savedGame(), engine.status() !== 0); // a wild fight is not the local game (#1511)
+  if (!online && (!fight || stalkerSaved()) && !run && !trainer && !wildFrom && !firstRun) void saves.save(savedGame(), engine.status() !== 0); // a wild fight is not the local game (#1511)
   if (run?.state.fighting) runMoved();
   analyse();
 }
@@ -3583,7 +3653,8 @@ function drawHud(extra = ''): void {
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
-    tally: shownPly() === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '',
+    tallyNote: firstRun === 'fight' ? COACH.tally : '', // the first Tally line explained once, under it (#1521)
+    tally: (shownPly() === 0 || firstRun === 'fight') && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '',
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
     rematch:
       online?.role !== 'player' || status === 0
@@ -3901,8 +3972,8 @@ function refresh(): void {
     const glyphOf = props && ((door: Door, options: GlyphOptions) => { const room = createKitGlyph(props, door, options); room.position.y = -TERRACE_LIFT - 0.02; return room; });
     hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim, glyphOf ?? undefined);
     syncDishes();
-    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store)); // a beaten boss's door shows its medal (#1249)
-    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
+    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store), goalDeck(beaten)); // a beaten boss's door shows its medal (#1249)
+    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten, goalDeck(beaten));
     document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
     placeHubLabels();
     hud();
@@ -4535,6 +4606,7 @@ function play(seenMove: Move): void {
   }
   selected = [];
   keyDir = -1;
+  if (firstRun === 'fight' && engine.ejected(1) > 0) finishFirstFight(); // before the bot's turn: it never answers (botTurn)
   void online?.send(record);
   if (online && fight && !duel) void answerBoss(true); // co-op: our move's boss reply; in a duel the boss seat answers (#1485)
 }
@@ -4793,7 +4865,7 @@ const pollPad = gamepad((action: PadAction) => {
     case 'back':
       return void padKey('Escape');
     case 'menu':
-      if (!guideBox.hidden || !consentBox.hidden || !optinBox.hidden) return; // the settings stay shut under the guide
+      if (!guideBox.hidden || !coldBox.hidden || !consentBox.hidden || !optinBox.hidden) return; // the settings stay shut under the guide
       cog.click();
       return cog.focus();
     case 'prev':
@@ -5216,6 +5288,7 @@ newGameButton.addEventListener('click', () => {
   if (press.start) newGame();
 });
 function newGame(): void {
+  dropFirstRun();
   if (hub) {
     leaveHub();
     applyDeck(deckOf('local'));
@@ -5485,6 +5558,7 @@ backButton.addEventListener('click', () => {
 // exit(), each other mode by its leave, then clears what no mode owns (modeswitch.ts). Nothing of a mode stays in the next.
 // The Open world opens over the page instead (#1063): Esc gives the game beneath back as it was, and the next mode leaves it.
 function leaveMode(): void {
+  dropFirstRun();
   if (openWorld.active) openWorld.leave();
   leaveRun();
   leaveTrainer();
@@ -6863,6 +6937,7 @@ else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
 else if (duelInvite && boss_ids().includes(duelInvite.boss)) void goOnline(duelInvite.room, 2, duelInvite, creator, true); // the joiner plays the boss (#1316)
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite, creator); // an unknown boss starts nothing
 else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
+else if (!resumed && firstRunDue(store, location.search, navigator.webdriver, location.hash, loadProgress(store).beaten.length > 0)) startFirstRun(); // a fresh profile plays the first run (#1521)
 else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Hub (#602)
 else analyse(); // the start position
 

@@ -136,7 +136,7 @@ See section 6.
 
 | Item | Rule |
 |---|---|
-| Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Hub (Mess deck, #602). A "Hub" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
+| Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Hub (Mess deck, #602), after the first run of a fresh profile (ui.md section 4.7, #1521). A "Hub" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
 | Space | One small hex map per deck (`client/src/hub.ts`): 37 cells (radius 3), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
 | Rooms | Cells with a prop and a label plate, at least 6 per deck. Rolling onto a room enters it; standing on it again (Hub, Back to the hub) does not |

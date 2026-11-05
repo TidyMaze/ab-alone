@@ -620,7 +620,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 
 /* The plates are bolted on the frame (ui.md 1): a rivet in each corner, 4 px inside the border, drawn over the
    plate's own colour, so it takes no room and changes no size. */
-#hud, #eval, #guide .card {
+#hud, #eval, #guide .card, #coldopen .card, #coach {
   --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px);
   background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet);
   background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px;
@@ -1212,6 +1212,10 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 .hub-label[data-mark='locked'] small { color: #ff8787; }
 .hub-label[data-mark='beaten'] small { color: #ffd43b; }
 .hub-label[data-here] { box-shadow: 0 0 0 2px #ffb000; }
+/* The next goal of a new player (#1521): The Echo's door is the one solid amber plate, and the rail row of its deck is ringed in amber, the glow breathing (reduced
+   motion zeroes the animation: the ring stays), and the row says "next goal" in words under the boss. Shown until a boss is beaten. */
+.hub-label[data-goal] { --k: #1a1300; color: #1a1300; background: #ffb000; box-shadow: 0 0 0 3px #ffb000, 0 0 14px 5px rgba(255, 176, 0, 0.65); animation: goal-glow 1.2s ease-in-out infinite alternate; }
+@keyframes goal-glow { to { box-shadow: 0 0 0 3px #ffb000, 0 0 5px 1px rgba(255, 176, 0, 0.3); } }
 .hub-label.you { --k: #ffb000; color: var(--k); border-color: transparent; font: 600 0.625rem/1.2 var(--display); letter-spacing: 0.12em; text-transform: uppercase; }
 #hub-rail, #hub-pips {
   position: fixed; z-index: 1; box-sizing: border-box; color: var(--text); background: var(--panel); border: 1px solid var(--edge);
@@ -1231,6 +1235,8 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 #hub-rail li[data-state='beaten']::after { content: '\2713'; color: var(--hazard); }
 #hub-rail li[data-state='locked'] { color: var(--muted); border-style: dashed; }
 #hub-rail li[aria-current] { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+#hub-rail li[data-goal] { border-color: #ffb000; background-color: rgba(255, 176, 0, 0.16); box-shadow: inset 3px 0 #ffb000; }
+#hub-rail li[data-goal] small { color: #ffb000; font-weight: 600; }
 #hub-rail li[aria-current]::after { content: '\25CF'; color: var(--accent); }
 #hub-pips { top: 16px; right: 72px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
 #hub-pips .pip { width: 16px; height: 16px; box-sizing: border-box; border: 2px solid var(--edge); border-radius: 50%; }
@@ -1263,12 +1269,12 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 /* The first-launch guide (#1293, ui.md 4.7): a plate bolted over the dimmed game, one page at a time, its art on the dark
    deck in both themes. The controls page shows the paragraph of the input in use: the mouse and keys, touch on a coarse
    pointer, the pad's buttons once the pad is in use (body[data-pad]). Above every layer: it opens once the page is up. */
-#guide {
+#guide, #coldopen {
   position: fixed; inset: 0; z-index: 11; display: flex; align-items: center; justify-content: center; padding: 16px;
   box-sizing: border-box; background: rgba(11, 13, 15, 0.72); outline: none;
 }
-#guide[hidden] { display: none; }
-#guide .card {
+#guide[hidden], #coldopen[hidden] { display: none; }
+#guide .card, #coldopen .card {
   box-sizing: border-box; width: min(calc(26rem * var(--ui-scale)), 100%); max-height: 100%; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--space); padding: 1rem 1.25rem;
   color: var(--text); background-color: var(--panel); border: 1px solid var(--edge); border-left: 3px solid var(--plate-accent);
@@ -1287,15 +1293,36 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 }
 body[data-pad] #guide [data-controls] { display: none; }
 body[data-pad] #guide [data-controls='pad'] { display: block; }
-#guide .actions { display: flex; gap: var(--space); margin-top: var(--space); }
-#guide .actions button {
+#guide .actions, #coldopen .actions, #coach .actions { display: flex; gap: var(--space); margin-top: var(--space); }
+#guide .actions button, #coldopen .actions button, #coach .actions button {
   min-height: var(--target); padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: var(--r-button); font: 500 0.9375rem/1.2 var(--ui);
 }
-#guide-skip { margin-right: auto; }
-#guide #guide-next { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
+#guide-skip, #coldopen-skip, #coach-skip { margin-right: auto; }
+#guide #guide-next, #coldopen-begin, #coach-hub { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
 #guide .actions button:disabled { opacity: 0.4; cursor: default; }
-#guide .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#guide .actions button:focus-visible, #coldopen .actions button:focus-visible, #coach .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The first run (#1521, ui.md 4.7): the cold open is the guide's plate with three lines of Tally's voice; the coach plate sits over the
+   scripted fight, at the top between the HUD and the cog, or above the eval bar and the dock on a phone held upright. The line of the
+   story is read, never animated: nothing here moves. */
+#coldopen-title { margin: 0; font: 600 1.375rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+#coldopen-text { display: flex; flex-direction: column; gap: var(--space); }
+#coldopen-text p, #coach p { margin: 0; }
+#coach {
+  position: fixed; z-index: 3; top: 16px; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(calc(26rem * var(--ui-scale)), calc(100vw - 32px));
+  display: flex; align-items: center; gap: var(--space); padding: 0.5rem 0.75rem 0.5rem 1rem; color: var(--text); background-color: var(--panel);
+  border: 1px solid var(--edge); border-left: 3px solid var(--plate-accent); border-radius: var(--r-card); font: 0.9375rem/1.35 var(--ui);
+}
+#coach[hidden] { display: none; }
+#coach-step { flex: 1; font-weight: 600; }
+#coach .actions { margin-top: 0; }
+#coach .actions button { min-height: var(--target); }
+#hud .tally-note { margin-top: 0.25rem; font-size: 0.8125rem; color: var(--text); }
+body[data-firstrun] #hud .tally { animation: none; } /* the line stays while the note explains it */
+@media (orientation: portrait) {
+  #coach { top: auto; bottom: calc(9.5rem + env(safe-area-inset-bottom)); }
+}
 
 /* The online opt-in (#1338): the guide's card, two buttons and a link, all 44 px targets. */
 #consent {

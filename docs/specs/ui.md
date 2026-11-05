@@ -141,7 +141,7 @@ of its own under Boss fight or Fight together that scrolls sideways, so a new bo
 12 bosses and more on a phone 360 px wide, #666). In a desktop window (wider than tall, over 1100 px wide, a mouse) the items of the mode menu sit side by side when they fit, and an open boss list takes a row of its own as wide as the column with two bosses a row, each row compact, so 12 bosses and more with Daily challenge fit a 1280x720 or 1280x800 window without a scroll (#653, #699). One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
 and once a mode starts (a boss picked, Daily challenge, Play online, Hub, Battle royale). On a phone each item is at
 least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the hub, Hold, the invite link)
-stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Hub (Mess deck, #602). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
+stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Hub (Mess deck, #602), after the first run of a fresh profile (section 4.7). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
 
 ```
 +---------------------------------+
@@ -500,14 +500,50 @@ timer.
   Hub, which must show what it showed after the boot. A new mode, a HUD element or a `body` data key that stays
   fails it: remove it in the mode's leave, or add it to the lists of `modeswitch.ts`.
 
-### 4.7 First-launch guide (#1293)
+### 4.7 First run and guide (#1293, #1521, #1523)
 
-A new player meets a short guide before anything else: five pages over the dimmed game, one at a time
-(`client/src/guide.ts`).
+#### First run
 
-- **Pages.** The goal (push six of their black shells off, lose six of yours and you lose), a move (one to three
+A new player does not get five pages of rules first (#1521). A fresh profile on the plain root URL plays the **first run**
+(`client/src/firstrun.ts`), then the Hub; it plays once and can be skipped.
+
+1. **Cold open (#1523).** A plate over the board, the guide's own: a title (`Mess, deck 1`) and three lines in Tally's flat
+   register, the place, the last clear visor and Tally's rule ("CSV Ballast, drifting over Hollow. Power: 11%." / "The crew
+   has gone Black. Yours is the last clear visor." / "Tally keeps the count: six out, one winner."). It is stage 1 of the
+   story (world.md section 12.2): no line holds a secret word of a later stage, and `firstrun.test.ts` checks it against
+   `SECRETS`. Buttons: Skip (left) and Begin. Skip and Escape (B on the pad) go to the Hub.
+2. **Scripted fight.** Begin plays six plies on the standard board without a click (`FIRST_FIGHT`: White rolls a line of
+   three up the left edge while Black walks one marble to the rim), so the player, White, is to move with nothing out yet.
+   The obvious push (`FIRST_PUSH`, the line of three against the lone Black marble on the rim) is shown as the Hint ghost
+   (`Hint.show`, no engine asked). A coach plate at the top (above the dock on a phone held upright) says in one sentence
+   what to do, with Skip; the HUD keeps Tally's first line, which stays instead of fading, and explains it once under it
+   ("Tally is the ship's ledger. It counts every match: one seat is yours, the other is the bot's."). Any move can be played:
+   the bot answers as in any game, and the first ejection of the player ends the fight.
+3. **First ejection.** The bot does not answer. The coach plate reads "White ejected 1/6: Tally enters it. Six win a match.
+   The Echo, the first boss, waits in the Hub." with To the Hub, which opens the Hub.
+4. **Hub with a goal.** While no boss is beaten the Hub marks the next goal (`goalDeck` in `hubview.ts`): The Echo's door is
+   the one solid amber plate, and the Mess row of the lift-shaft rail is ringed in amber and reads "The Echo waits · next
+   goal". The door's glow breathes; Reduced motion zeroes the animation and keeps the ring. This marks every Hub visit
+   until a boss falls, a returning player who beat none included.
+
+- **Who sees it.** `firstRunDue`: the plain root URL (no query, no hash), not played, no guide seen, no game saved and no
+  boss beaten. A returning player, or one who saw the guide, gets the Hub as before (#602). The first run is marked done
+  (`ab-alone.firstrun = done`, localStorage) as soon as it starts, so it plays once even when the tab closes. The scripted
+  game is never saved as the player's local game.
+- **Tests.** An automated browser does not play it, so the e2e specs boot on a fresh profile as before; `?firstrun` makes
+  it a first launch (`client/e2e/first-run.spec.ts`: a fresh profile reaches its first ejection with no menu opened, then the
+  Hub shows The Echo as the goal, well inside the 60 s of #1521). `body[data-firstrun]` reads `open`, `fight` or `done`.
+- **Vocabulary.** White and Black everywhere in rules text, as the HUD says (#1523): the guide no longer says pale glass and
+  black shells.
+
+#### Guide
+
+The five-page guide (`client/src/guide.ts`) no longer opens by itself (#1521). The settings menu's Guide and `?guide` open
+it. It keeps its pages over the dimmed game, one at a time.
+
+- **Pages.** The goal (you are White: push six of the Black marbles off, lose six of yours and you lose), a move (one to three
   marbles in a line, one cell, six directions), a push, the 3:2 rule (a line pushes only a shorter line, equal lines never
-  push) and the controls. Each page has an inline SVG of the game's marbles, pale glass and black shell, on deck cells,
+  push) and the controls. Each page has an inline SVG of the game's marbles, White and Black, on deck cells,
   with amber arrows and dashed ghosts where the marbles go; it sits on the dark deck colour in both themes, as the 3D deck
   does. No external asset.
 - **Controls of the input in use.** The controls page holds one paragraph per input and `ui.css` shows one: the mouse and
@@ -515,14 +551,13 @@ A new player meets a short guide before anything else: five pages over the dimme
 - **Plate.** The card is a plate of the ship chrome (panel, edge, rivets, the amber accent stripe), at most 26 rem wide
   and 16 px from the window's edges, its buttons 48 px high: Skip at the left, Back and Next at the right; Next reads Play
   on the last page. Each page's art fades in on `--motion-base`, a hard cut under Reduced motion.
-- **Shown once.** It opens at the first launch. Skip, Escape (B on the pad) or Play close it and store
-  `ab-alone.guide = seen` (localStorage, as the other settings), so it never opens by itself again. The settings menu's
-  Guide, the second button of the Steering item, opens it again on its first page.
+- **Opened on demand.** Skip, Escape (B on the pad) or Play close it and store `ab-alone.guide = seen` (localStorage, as the
+  other settings). The settings menu's Guide, the second button of the Steering item, and `?guide` (while not seen) open it on
+  its first page. A player who saw it gets no first run.
 - **A modal.** A dialog (`role="dialog"`, `aria-modal`): its Next button takes the focus, Tab and the pad's focus walk
   keep to its buttons, a key pressed in it never reaches the board or the menus, and Start leaves the settings shut. The
   focus goes back where it was (the cog when the menu opened it).
-- **Tests.** An automated browser (`navigator.webdriver`) does not open it, so the e2e specs boot on a fresh profile as
-  before; `?guide` makes it a first launch (`client/e2e/guide.spec.ts`).
+- **Tests.** `?guide` opens it, also in an automated browser (`client/e2e/guide.spec.ts`).
 - **Language.** English, as the rest of the UI, which has no translations.
 
 ## 5. Board framing

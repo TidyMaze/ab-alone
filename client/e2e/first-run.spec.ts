@@ -21,14 +21,14 @@ const fits = async (page: Page, selector: string): Promise<void> => {
 async function firstRun(page: Page): Promise<void> {
   const started = Date.now();
   await page.goto('./?firstrun');
-  await expect(page.getByRole('dialog', { name: 'CSV Ballast' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Mess, deck 1' })).toBeVisible();
   await expect(page.locator('#coldopen-text p')).toHaveCount(3);
   await expect(page.locator('#guide')).toBeHidden();
   await fits(page, '#coldopen .card');
   await page.getByRole('button', { name: 'Begin', exact: true }).click();
   await expect(page.locator('body')).toHaveAttribute('data-firstrun', 'fight');
   await expect(page.locator('#coach-step')).toBeVisible();
-  await expect(page.locator('#coach-tally')).toBeVisible();
+  await expect(page.locator('#hud .tally-note')).toBeVisible();
   await fits(page, '#coach');
   expect(await page.evaluate(() => (window as any).__hint())).not.toBeNull(); // the push is shown
   await expect(page.locator('#hud')).toContainText('Mess: one seat filled. The other is counted.');
@@ -49,9 +49,11 @@ test('a fresh profile reaches its first ejection with no menu opened, then the H
   await firstRun(page);
   await expect(page.locator('#hub-rail li[data-goal]')).toContainText('The Echo waits');
   await expect(page.locator('#guide')).toBeHidden();
-  await page.reload(); // it plays once: the next launch lands on the Hub, no cold open
+  await page.reload(); // it plays once: the next launch has no cold open, and no scripted game saved
+  await expect(page.locator('#settings')).toBeEnabled();
   await expect(page.locator('#coldopen')).toBeHidden();
-  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
+  await expect(page.locator('body')).not.toHaveAttribute('data-firstrun', /.+/);
+  expect(await page.evaluate(() => (window as any).__plies())).toBe(0);
 });
 
 test('the first run can be skipped from the cold open, to the Hub, and plays once', async ({ page }) => {

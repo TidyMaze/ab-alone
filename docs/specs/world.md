@@ -333,7 +333,7 @@ can be re-pointed at towers and dungeons if Decision #1513 passes.
 
 | # | Player believes | Learns | Trigger (main / optional) | Delivered |
 |---|---|---|---|---|
-| 1 | The shelled are infected, Tally is a warden, ejected means dead | The premise | First launch | Cold open (#1523) |
+| 1 | The shelled are infected, Tally is a warden, ejected means dead | The premise | First launch | Cold open (#1523, `firstrun.ts`: three lines, ui.md section 4.7) |
 | 2 | Tally is cruel | The rule was protective | First boss beaten / 3 wins in any mode | Boss victory line, Mess terminals |
 | 3 | Ejected means dead | The ejected breathe | First town or Medal room visited / one ejected crewmate met in a rogue-lite event | Tally HUD line |
 | 4 | The shell is a disease | Cold lets go | The Hull beaten / night survived in the Open world, dungeon act 3 | Cargo audio log, Tally line |

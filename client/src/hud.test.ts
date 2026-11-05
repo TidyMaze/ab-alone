@@ -196,6 +196,15 @@ describe('the Tally line, #294', () => {
     expect(html.indexOf('class="tally"')).toBeGreaterThan(html.indexOf('class="turn"'));
   });
 
+  it('explains the tally line once, under it, in the first run (#1521): a note with no line shows nothing', () => {
+    const html = hudHtml({ ...base, tally: 'Mess: one seat filled. The other is counted.', tallyNote: 'One seat is yours.' });
+    expect(html).toContain('<div class="tally-note">One seat is yours.</div>');
+    expect(html.indexOf('class="tally-note"')).toBeGreaterThan(html.indexOf('class="tally"'));
+    expect(hudHtml({ ...base, tally: 'Mess: one seat filled.' })).not.toContain('tally-note');
+    expect(hudHtml({ ...base, tallyNote: 'One seat is yours.' })).not.toContain('tally-note');
+    expect(css).toMatch(/body\[data-firstrun\] #hud \.tally \{[^}]*animation:\s*none/); // the line stays while the note explains it
+  });
+
   it('shows no tally element when there is no line', () => {
     expect(hudHtml(base)).not.toContain('class="tally"');
   });

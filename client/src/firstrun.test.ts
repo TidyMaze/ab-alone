@@ -7,7 +7,7 @@ import type { Store } from './quality';
 import { SECRETS } from './story';
 import { tallyLine } from './tally';
 
-const memory = (): Store => {
+const memory = (): NonNullable<Store> => {
   const data = new Map<string, string>();
   return { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => void data.set(key, value) };
 };
@@ -70,9 +70,9 @@ describe('the cold open (#1523)', () => {
     expect(COACH.push).toMatch(/White.*Black/);
   });
 
-  it('explains the first Tally line of the HUD, quoted as the HUD shows it', () => {
-    expect(COACH.tally).toContain(tallyLine({ mode: 'bot' }));
-    expect(COACH.tally).toMatch(/seat/);
+  it('explains the first Tally line of the HUD, the line of the bot table: whose seats they are', () => {
+    expect(tallyLine({ mode: 'bot' })).toMatch(/seat/);
+    expect(COACH.tally).toMatch(/ledger.*seat is yours.*bot/);
   });
 });
 
