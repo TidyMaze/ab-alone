@@ -111,7 +111,8 @@ describe('the shared board read side (#1287)', () => {
     expect(await verifiedResults(raw, score, NOW, new Set())).toHaveLength(2);
     expect(banned.v).toBe(1);
     for (const b of banned.banned as { pub: string; reason: string; date: string }[]) expect([typeof b.pub, b.reason.length > 0, /^\d{4}-\d\d-\d\d$/.test(b.date)]).toEqual(['string', true, true]);
-    expect(BANNED.size).toBe(banned.banned.length);
+    expect((await BANNED).size).toBe(banned.banned.length);
+    expect(await verifiedResults(raw, score, NOW)).toHaveLength(2); // no list given: the shipped one, signed and verified
     expect([...banSet([{ pub: 'P', reason: 'r', date: '2026-11-03' }])]).toEqual(['P']);
   });
 

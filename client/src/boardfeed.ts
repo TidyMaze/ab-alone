@@ -3,6 +3,8 @@
 // ratings are derived from the valid results, never read. A result also needs the signature of BOTH seats over the game (#1317),
 // proved with the seats' keys: the Nostr signature of the event proves nothing about who played, so it is not checked.
 import banned from './bannedkeys.json';
+import banSig from './bannedkeys.sig.json';
+import { verifyBanList } from './banverify';
 import { DEFAULT_RATING, MIN_RATING, update1v1Elo } from './elo';
 import { b64, signedBy, type Keys } from './moverecord';
 import { cleanName, verifyRetire, type RetireEvent } from './shareboard';
@@ -25,7 +27,8 @@ export interface BanEntry {
   readonly date: string;
 }
 export const banSet = (list: readonly BanEntry[]): ReadonlySet<string> => new Set(list.map((b) => b.pub));
-export const BANNED = banSet((banned as { banned: readonly BanEntry[] }).banned);
+/** The banned keys of the shipped list, once its owner signature is checked (`banverify.ts`): none when it does not verify. */
+export const BANNED: Promise<ReadonlySet<string>> = verifyBanList(banned, banSig);
 /** The plies replayed for results that do NOT replay to their claim, kept apart so junk cannot use up the honest budget; and how many such
  * results one key may have before its events are no longer replayed. */
 export const JUNK_BUDGET = 20_000;
@@ -144,7 +147,8 @@ const inWindow = (ts: number, nowS: number): boolean => ts >= nowS - WINDOW_S &&
 
 /** The results both seats signed whose log the rules replay to the claimed score, one per game and pair of seats (the first seen). The rest is not shown.
  * A result with a bad signature is dropped before the replay and does not use up its game id, so nobody can squat a game. */
-export async function verifiedResults(contents: readonly string[], score: Score, nowS: number, ban: ReadonlySet<string> = BANNED): Promise<SharedResult[]> {
+export async function verifiedResults(contents: readonly string[], score: Score, nowS: number, ban?: ReadonlySet<string>): Promise<SharedResult[]> {
+  const bans = ban ?? (await BANNED);
   const seen = new Set<string>(); // every (game, black, white) met, a refused one too: a game is replayed once. The seats are in the key so that
   // another pair of keys reusing a public game id cannot spend it.
   const kept: SharedResult[] = [];
@@ -155,7 +159,7 @@ export async function verifiedResults(contents: readonly string[], score: Score,
   // The shortest logs first (stable, so the first seen still wins a tie): a flood of long junk cannot come before the games people play.
   const parsed = contents.flatMap((c) => parseResult(c) ?? []).filter((r) => inWindow(r.ts, nowS)).sort((a, b) => a.moves.length - b.moves.length);
   for (const r of parsed) {
-    if (ban.has(r.black.pub) || ban.has(r.white.pub)) continue; // a banned key's results are ignored
+    if (bans.has(r.black.pub) || bans.has(r.white.pub)) continue; // a banned key's results are ignored
     if (r.ts > (retired.get(r.black.pub) ?? Infinity) || r.ts > (retired.get(r.white.pub) ?? Infinity)) continue; // a key stopped before this game
     const id = JSON.stringify([r.game, r.black.pub, r.white.pub]);
     if (seen.has(id) || r.moves.length > budget || r.moves.length > junk || !(await bothSigned(r))) continue;
@@ -285,7 +289,7 @@ export function readRelay(open: (url: string) => Socket, nowS: number, url = '')
 }
 
 /** The board: the three relays read, the results that replay kept, the ratings derived. Reads only. */
-export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS, ban: ReadonlySet<string> = BANNED, minOpponents = MIN_OPPONENTS, minGames = MIN_GAMES, ramp = RAMP_GAMES): Promise<SharedRow[]> {
+export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS, ban?: ReadonlySet<string>, minOpponents = MIN_OPPONENTS, minGames = MIN_GAMES, ramp = RAMP_GAMES): Promise<SharedRow[]> {
   // one relay down (a rejected read) does not stop the others: allSettled, the rejected ones give nothing
   const all = await Promise.allSettled(relays.map((url) => readRelay(open, nowS, url)));
   const got = all.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
