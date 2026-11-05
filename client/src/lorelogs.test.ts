@@ -16,11 +16,46 @@ const SECRETS: readonly { word: RegExp; from: number }[] = [
 ];
 /** The stages of the five bosses the ladder binds (world.md section 12.3); the other ten stay at 3 or below. */
 const LADDER: Record<string, number> = { echo: 2, hull: 4, choir: 3, chaplain: 5, ballast: 7 };
+/** The sentences of a text, lowercase, the device "Appended by TALLY" (the note under a terminal, world.md section 4) left out. */
 const sentences = (text: string): string[] =>
   text
+    .replace(/appended by tally/gi, '')
     .split(/[.!?:]+/)
     .map((s) => s.trim().toLowerCase())
     .filter((s) => s.split(/\s+/).length >= 3);
+
+/** The secret words `entry` holds that its stage may not speak of yet. */
+const leaks = (entry: StoryEntry): string[] => SECRETS.filter(({ word, from }) => entry.stage < from && word.test(`${entry.title} ${entry.body}`)).map(({ word }) => word.source);
+/** The sentences of `entries` that appear twice among them or in `old`. */
+const repeats = (entries: readonly StoryEntry[], old: ReadonlySet<string>): string[] => {
+  const seen = new Set<string>();
+  const again: string[] = [];
+  for (const e of entries) {
+    for (const sentence of new Set(sentences(e.body))) {
+      if (old.has(sentence) || seen.has(sentence)) again.push(sentence);
+      seen.add(sentence);
+    }
+  }
+  return again;
+};
+const entry = (stage: number, body: string): StoryEntry => ({ id: 'a-b', title: 'T', body, stage });
+
+describe('the rules of the story tests', () => {
+  it('flag a secret word before its stage and let it through from its stage on', () => {
+    expect(leaks(entry(3, 'The cold and the word delivered.'))).toEqual(['deliver', '\\bcold']);
+    expect(leaks(entry(4, 'The cold and the word delivered.'))).toEqual([]);
+    expect(leaks(entry(4, 'Line 0412 cannot push.'))).toEqual(['0412', 'cannot push']);
+    expect(leaks(entry(5, 'Line 0412 cannot push.'))).toEqual(['cannot push']);
+    expect(leaks(entry(6, 'Line 0412 cannot push.'))).toEqual([]);
+  });
+
+  it('flag a sentence of three words that appears twice, and ignore the short ones and the Appended by TALLY device', () => {
+    const two = [entry(1, 'Nobody is hurt here. Entered: ok.'), entry(1, 'Appended by TALLY: Care. Nobody is hurt here!')];
+    expect(repeats(two, new Set())).toEqual(['nobody is hurt here']);
+    expect(repeats([entry(1, 'Entered. Entered.'), entry(1, 'Entered.')], new Set())).toEqual([]);
+    expect(repeats([entry(1, 'The count is kept.')], new Set(['the count is kept']))).toEqual(['the count is kept']);
+  });
+});
 
 describe('BOSS_LORE', () => {
   it('holds one entry per boss, in the order of the roster', () => {
@@ -74,23 +109,13 @@ describe('every entry of the story (world.md section 12)', () => {
   });
 
   it('holds no secret word of a later stage than its own', () => {
-    for (const e of ENTRIES) {
-      for (const { word, from } of SECRETS) {
-        if (e.stage < from) expect(`${e.title} ${e.body}`, `${e.id} (stage ${e.stage})`).not.toMatch(word);
-      }
-    }
+    for (const e of ENTRIES) expect(leaks(e), `${e.id} (stage ${e.stage})`).toEqual([]);
   });
 
   it('repeats no text: no title, no body and no sentence of three words or more appears twice, nor in a terminal or an audio log', () => {
     expect(new Set(ENTRIES.map((e) => e.title)).size).toBe(ENTRIES.length);
     expect(new Set(ENTRIES.map((e) => e.body)).size).toBe(ENTRIES.length);
     const old = new Set([...LORE.map((e) => e.body), ...AUDIO_LOGS.flatMap((l) => l.lines.map((line) => line.text))].flatMap(sentences));
-    const seen = new Set<string>();
-    for (const e of ENTRIES) {
-      for (const sentence of new Set(sentences(e.body))) {
-        expect(old.has(sentence) || seen.has(sentence), `${e.id}: ${sentence}`).toBe(false);
-        seen.add(sentence);
-      }
-    }
+    expect(repeats(ENTRIES, old)).toEqual([]);
   });
 });
