@@ -2145,6 +2145,49 @@ mod tests {
         );
     }
 
+    /// Runs `search` for the seeds 1 to 2000 on 8 threads and hands each result to `check`, failing instead of hanging when a seed never
+    /// returns (a search with no end): the threads left behind end with the test binary.
+    fn sweep<T: Send + 'static>(what: &str, search: fn(u64) -> T, mut check: impl FnMut(u64, T)) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        for part in 0..8u64 {
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                for seed in (1 + part..=2000).step_by(8) {
+                    let _ = tx.send((seed, search(seed)));
+                }
+            });
+        }
+        drop(tx);
+        for done in 0..2000 {
+            match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+                Ok((seed, found)) => check(seed, found),
+                Err(_) => {
+                    panic!("{what}: no answer after {done} of 2000 seeds, a search never ends")
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_seed_from_1_to_2000_places_its_five_towns_and_five_gates_and_the_search_ends() {
+        sweep(
+            "places",
+            |seed| places(seed, &[]),
+            |seed, found| {
+                assert_eq!(found.len(), TOWNS + DUNGEONS, "seed {seed}");
+                for (i, a) in found.iter().enumerate() {
+                    for b in &found[i + 1..] {
+                        assert!(hex_distance(a.1, b.1) > 3, "seed {seed}: {a:?} and {b:?}");
+                    }
+                    for (dq, dr) in TELEPORT_PAD {
+                        let c = cell(seed, a.1 .0 + dq, a.1 .1 + dr).expect("on the world");
+                        assert!(!c.terrain.blocked(), "seed {seed}: {a:?}");
+                    }
+                }
+            },
+        );
+    }
+
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
     fn walks(from: (i32, i32), path: &[(i32, i32)], avoid: &[(i32, i32)]) -> bool {
         let mut at = from;
