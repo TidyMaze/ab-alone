@@ -164,6 +164,15 @@ impl Arena {
         }
     }
 
+    /// The boss searches `percent` of its budget (the act's strength of a run, docs/specs/roguelite.md section 7).
+    fn scale_node_budget(&mut self, percent: u32) {
+        match self {
+            Arena::Plain(enc, _) => enc.scale_node_budget(percent),
+            Arena::Choir(choir) => choir.scale_node_budget(percent),
+            Arena::Swarm(swarm) => swarm.scale_node_budget(percent),
+        }
+    }
+
     fn kind(&self) -> LadderBoss {
         match self {
             Arena::Plain(_, kind) => *kind,
@@ -330,17 +339,30 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
     }
 }
 
-/// Plays `arena` to its end or to `ply_cap` plies and records it. A player with no move left lost
-/// every marble to conversion, the only way to lose them all. `opening` is the number of
-/// random first player moves.
+/// [`play_full`] without the marbles the boss ejected.
 fn play_out(
-    mut arena: Arena,
+    arena: Arena,
     seed: u64,
     attempt: u32,
     player_budget: u32,
     opening: u32,
     ply_cap: u32,
 ) -> (AttemptRecord, Vec<Move>) {
+    let (record, moves, _) = play_full(arena, seed, attempt, player_budget, opening, ply_cap);
+    (record, moves)
+}
+
+/// Plays `arena` to its end or to `ply_cap` plies and records it, with the marbles the boss ejected.
+/// A player with no move left lost every marble to conversion, the only way to lose them all.
+/// `opening` is the number of random first player moves.
+fn play_full(
+    mut arena: Arena,
+    seed: u64,
+    attempt: u32,
+    player_budget: u32,
+    opening: u32,
+    ply_cap: u32,
+) -> (AttemptRecord, Vec<Move>, u8) {
     let echo = arena.kind() == LadderBoss::Echo;
     let mut losses = Losses::default();
     let mut max_phase = arena.phase();
@@ -408,7 +430,7 @@ fn play_out(
         boss_marbles: marbles(game.board(), Cell::White),
         conversions: losses.converted,
     };
-    (record, moves)
+    (record, moves, game.ejected(Player::White))
 }
 
 /// One seeded encounter of `boss` against the alpha-beta bot with `player_budget` nodes.
@@ -438,6 +460,22 @@ pub fn play_attempt_moves(
         OPENING_RANDOM_MOVES,
         ply_cap,
     )
+}
+
+/// One act boss fight of a run (docs/specs/roguelite.md section 7): `boss` searching `percent` of its budget,
+/// against the alpha-beta bot with `player_budget` nodes. The record, and the marbles the boss ejected, which
+/// the army loses.
+pub fn play_act_boss(
+    boss: LadderBoss,
+    seed: u64,
+    player_budget: u32,
+    percent: u32,
+    ply_cap: u32,
+) -> (AttemptRecord, u8) {
+    let mut arena = Arena::new(boss, seed);
+    arena.scale_node_budget(percent);
+    let (record, _, lost) = play_full(arena, seed, 1, player_budget, OPENING_RANDOM_MOVES, ply_cap);
+    (record, lost)
 }
 
 /// Plays `moves` (both sides, in order) through the encounter API of `boss` from its start with
@@ -1216,15 +1254,28 @@ mod tests {
         assert_eq!(budget(LadderBoss::Hull, 50), 1500);
         assert_eq!(budget(LadderBoss::Hull, 300), 9000);
         assert_eq!(budget(LadderBoss::Swarm, 200), SWARM_NODE_BUDGET * 2);
-        assert_eq!(budget(LadderBoss::Choir, 50), 0, "the Choir scales its own encounter");
+        assert_eq!(
+            budget(LadderBoss::Choir, 50),
+            0,
+            "the Choir scales its own encounter"
+        );
     }
 
     #[test]
     fn an_act_boss_fight_reports_the_marbles_the_boss_ejected() {
         let a = arena(&[(2, 0), (3, 0)], &[(4, 0), (-4, 4)], Player::Black, [5, 0]);
         assert_eq!(play_full(a, 7, 2, 50, 0, 300).2, 0, "the player won it");
-        let a = arena(&[(-4, 0), (3, 3)], &[(-2, 0), (-3, 0)], Player::White, [0, 5]);
-        assert_eq!(play_full(a, 0, 1, 50, 0, 300).2, 6, "the boss ejected its sixth");
+        let a = arena(
+            &[(-4, 0), (3, 3)],
+            &[(-2, 0), (-3, 0)],
+            Player::White,
+            [0, 5],
+        );
+        assert_eq!(
+            play_full(a, 0, 1, 50, 0, 300).2,
+            6,
+            "the boss ejected its sixth"
+        );
         let (record, lost) = play_act_boss(LadderBoss::Echo, 3, 40, 100, 6);
         let plain = play_attempt(LadderBoss::Echo, 3, 1, 40, 6);
         assert_eq!((record.plies, record.result), (plain.plies, plain.result));
