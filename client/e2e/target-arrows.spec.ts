@@ -80,13 +80,26 @@ test('the targets of a selected group carry the direction of the move a click pl
   ]);
 });
 
+// An empty cell (no arrow, no marble, not a target of the selection above), measured with the same disc in the same shot.
+// Its outline must stay under 3:1, or the disc reads the deck itself and the arrow check proves nothing (#1508).
+const EMPTY: [number, number] = [1, 0];
+
+// Wait for the draw that shows the selection (its arrows are built in that draw), not a fixed sleep: draws are throttled
+// under automation, so ask for one and read the counter until it moves past the call.
+const waitDraw = async (page: Page) => {
+  const before = await page.evaluate(() => (window as any).__draws() as number);
+  await expect
+    .poll(() => page.evaluate(() => { (window as any).__drawNext(); return (window as any).__draws() as number; }), { timeout: 10_000 })
+    .toBeGreaterThan(before);
+};
+
 const VIEWS = [
   ['desktop', 1280, 720, false],
   ['phone', 375, 812, false],
   ['desktop with Clear board', 1280, 720, true],
 ] as const;
 for (const [name, width, height, clear] of VIEWS) {
-  test(`each target arrow reads 3:1 against the deck on ${name}, task #390`, { tag: '@contrast' }, async ({ page }, testInfo) => {
+  test(`each target arrow reads 3:1 against the deck on ${name}, and the empty cell in the same shot stays under it, tasks #390 and #1508`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     if (clear) await page.addInitScript(() => localStorage.setItem('ab-alone.clear-board', 'on'));
     await page.goto('./?bot=off');
@@ -95,26 +108,49 @@ for (const [name, width, height, clear] of VIEWS) {
     await page.mouse.move(2, 2); // no hover ghost
     await select(page, [[0, 2]]);
     const cells = (await targets(page)).map((t: { cell: [number, number] }) => t.cell);
-    // Wait for the draw that shows the selection (its arrows are built in that draw), not a fixed sleep: draws are
-    // throttled under automation, so ask for one and read the counter until it moves past the click.
-    const before = await page.evaluate(() => (window as any).__draws() as number);
-    await expect
-      .poll(() => page.evaluate(() => { (window as any).__drawNext(); return (window as any).__draws() as number; }), { timeout: 10_000 })
-      .toBeGreaterThan(before);
+    expect(cells, 'the empty cell is not a target').not.toContainEqual(EMPTY);
+    await waitDraw(page);
     // Then shoot until a screenshot shows the arrows on the terrace (the kit loads async): the outline of each arrow, read
-    // against the deck, must reach 3:1. The last reading's ratios go in the failure message.
+    // against the deck, must reach 3:1. The empty cell's outline is read in the same shot and must stay under 3:1.
+    // The last reading's ratios go in the failure message.
     let ratios: number[] = [];
+    let empty = NaN;
     await expect
       .poll(
         async () => {
           const png = await page.screenshot({ path: testInfo.outputPath(`targets-${width}.png`), type: 'png' });
-          ratios = (await outlines(page, png, cells as [number, number][])).map(({ outline, deck }) => contrastRatio(outline, deck));
+          const all = (await outlines(page, png, [...cells, EMPTY] as [number, number][])).map(({ outline, deck }) => contrastRatio(outline, deck));
+          ratios = all.slice(0, -1);
+          empty = all[all.length - 1]!;
           return Math.min(...ratios);
         },
         { timeout: 10_000 },
       )
       .toBeGreaterThanOrEqual(3);
     expect(ratios.length, 'targets on the board').toBeGreaterThan(0);
+    expect(empty, 'the empty cell, no arrow and no marble, in the same shot').toBeLessThan(3);
     testInfo.annotations.push({ type: 'outline:deck', description: ratios.map((r) => r.toFixed(2)).join(', ') });
+    testInfo.annotations.push({ type: 'empty:deck', description: empty.toFixed(2) });
   });
 }
+
+// The negative control (#1508): with the arrows hidden, the same check must fail. The selection is cancelled by a second
+// click on the marble, and the test first checks that no target is left, so the arrows are not on the board.
+test('with the arrows hidden, the arrow check fails: no outline reaches 3:1 on the cells that carried an arrow, task #1508', { tag: '@contrast' }, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await page.mouse.move(2, 2); // no hover ghost
+  await select(page, [[0, 2]]);
+  const cells = (await targets(page)).map((t: { cell: [number, number] }) => t.cell);
+  expect(cells.length, 'targets on the board before the cancel').toBeGreaterThan(0);
+  await waitDraw(page);
+  await select(page, [[0, 2]]); // the second click cancels the selection
+  expect(await targets(page), 'no target left after the cancel').toEqual([]);
+  await waitDraw(page);
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  const png = await page.screenshot({ path: testInfo.outputPath('targets-hidden.png'), type: 'png' });
+  const ratios = (await outlines(page, png, cells as [number, number][])).map(({ outline, deck }) => contrastRatio(outline, deck));
+  testInfo.annotations.push({ type: 'hidden outline:deck', description: ratios.map((r) => r.toFixed(2)).join(', ') });
+  expect(Math.min(...ratios), 'the arrow check must fail with the arrows hidden').toBeLessThan(3);
+});

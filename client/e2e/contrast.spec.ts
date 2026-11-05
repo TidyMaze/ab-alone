@@ -20,14 +20,14 @@ const MIN_PASSING = 2;
 const SQRT3_2 = Math.sqrt(3) / 2;
 // Owner 2026-11-05 (#1508): 3:1 is checked on the default look, deck and marble skins only: the start position of the default deck.
 const DEFAULT_DECK = deckOf('local');
-// owner 2026-11-05: lowered from 3 to 2.42 (measured 2.43 on ef46049e), see #1508
-const EDGE_FLOOR = 2.42;
+// owner 2026-11-05: lowered from 3 to 2.43, min of 3 runs on 0df19363, see #1508
+const EDGE_FLOOR = 2.43;
 // Glass floors of the default deck, by viewport. The shell keeps 3:1.
 const GLASS_FLOOR: Record<string, number> = {
-  // owner 2026-11-05: lowered from 3 to 1.43 (measured 1.44 on ef46049e), see #1508
-  desktop: 1.43,
-  // owner 2026-11-05: lowered from 3 to 1.14 (measured 1.15 on ef46049e), see #1508
-  phone: 1.14,
+  // owner 2026-11-05: lowered from 3 to 1.44, min of 3 runs on 0df19363, see #1508
+  desktop: 1.44,
+  // owner 2026-11-05: lowered from 3 to 1.15, min of 3 runs on 0df19363, see #1508
+  phone: 1.15,
 };
 
 // World offset (x, z) from a cell centre, in axial units: axialTo3D maps q to x = q + r / 2 and r to z = (sqrt 3 / 2) r.
@@ -168,13 +168,13 @@ for (const deckName of [DEFAULT_DECK]) {
 
 // Owner 2026-11-05 (#1508): the default glass skin only, lowered to its measured value; the other skins are no longer checked.
 const SKIN_GLASS_FLOOR: Record<string, number> = {
-  // owner 2026-11-05: lowered from 3 to 1.37 (measured 1.3771 on ef46049e), see #1508
+  // owner 2026-11-05: lowered from 3 to 1.37, min of 3 runs on 0df19363 (raw 1.3771, rounded down), see #1508
   smoked: 1.37,
 };
-// Task #377: every dark shell skin reads 3:1 against the deck (asserted) and its ratio against the void is logged: the void
-// (the near-black backdrop, a pixel at the left edge of the window) is out of reach for any dark shell, the default Scarab
-// ridges included (1.0 to 1.1), so it is reported in the PR, not asserted. The skin comes from the stored setting; the deck
-// and the marbles are measured as for #344.
+// Task #377, owner 2026-11-05 (#1508): the default shell skin (scarab) only reads 3:1 against the deck (asserted). Its ratio
+// against the void is logged: the void (the near-black backdrop, a pixel at the left edge of the window) is out of reach for
+// any dark shell, the default Scarab ridges included (1.0 to 1.1), so it is reported in the PR, not asserted. The skin comes
+// from the stored setting; the deck and the marbles are measured as for #344.
 const SKIN_IDS = ['scarab'];
 for (const id of SKIN_IDS) {
   test(`the ${id} shell reads 3:1 against the deck, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {
@@ -195,8 +195,8 @@ for (const id of SKIN_IDS) {
   });
 }
 
-// Task #377: every pale glass skin reads 3:1 against the deck, the glass cells of the start position (hot-seat, the
-// glass on the far rows) as for #344. The skin comes from the stored setting.
+// Task #377, owner 2026-11-05 (#1508): the default glass skin (smoked) only reads its lowered floor against the deck, on the
+// glass cells of the start position (hot-seat, the glass on the far rows) as for #344. The skin comes from the stored setting.
 const GLASS_IDS = ['smoked'];
 for (const id of GLASS_IDS) {
   test(`the ${id} glass reads 3:1 against the deck, task #377`, { tag: '@contrast' }, async ({ page }, testInfo) => {

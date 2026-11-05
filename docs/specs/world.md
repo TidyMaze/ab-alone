@@ -176,7 +176,7 @@ or a key ends it at once, and it never holds the next move. Reduced motion: a pl
 cell out, where the push left it.
 
 Rules never change with the look: cell size, contrast and edge clarity stay constant
-(contrast 3:1 minimum between cell edge and surface). The 3:1 is checked on the default look, deck and marble skins only (owner 2026-11-05, #1508).
+(contrast 3:1 minimum between cell edge and surface). The checks (owner 2026-11-05, #1508) are on the default look, default deck and default skins only: cell edge at 2.43, default shell 3:1 on the deck, default glass at 1.44 (desktop), 1.15 (phone) and smoked 1.37 (each the min of 3 runs on 0df19363, the rest of the 3:1 kept); target arrows 3:1 on their outline, with an empty cell in the same shot under 3:1.
 
 ## 6. Diegetic HUD rules
 
