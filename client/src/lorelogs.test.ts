@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AUDIO_LOGS } from './audiologs';
 import { LORE } from './lore';
-import { BOSS_LORE, WORLD_LOGS, type StoryEntry } from './lorelogs';
+import { audioDeckOf, BOSS_LORE, bossLore, entryOf, STORY, WORLD_LOGS, type StoryEntry } from './lorelogs';
 import { BOSS_IDS } from './tally';
 
 // The lore of the story (docs/specs/world.md section 12): 15 boss entries and 12 world logs, each with its stage of the reveal ladder.
@@ -117,5 +117,32 @@ describe('every entry of the story (world.md section 12)', () => {
     expect(new Set(ENTRIES.map((e) => e.body)).size).toBe(ENTRIES.length);
     const old = new Set([...LORE.map((e) => e.body), ...AUDIO_LOGS.flatMap((l) => l.lines.map((line) => line.text))].flatMap(sentences));
     expect(repeats(ENTRIES, old)).toEqual([]);
+  });
+});
+
+describe('the lookups of the reader and the win screen', () => {
+  it('give the entry of a boss, none for a boss the roster does not know', () => {
+    for (const id of BOSS_IDS) expect(bossLore(id)!.boss).toBe(id);
+    expect(bossLore('nobody')).toBeUndefined();
+  });
+
+  it('list the 27 entries of the story, the bosses then the logs, and find any entry of the reader by its id', () => {
+    expect(STORY).toEqual([...BOSS_LORE, ...WORLD_LOGS]);
+    expect(entryOf('mess-house-rule')!.title).toBe("Captain's order, pinned above table four");
+    expect(entryOf('boss-hull')).toBe(BOSS_LORE[1]);
+    expect(entryOf('log-meadow-near')).toBe(WORLD_LOGS[0]);
+    expect(entryOf('nobody-here')).toBeUndefined();
+  });
+
+  it('give the audio log of an entry: the deck of a terminal or of a boss, none for a log of the world', () => {
+    expect(audioDeckOf('cargo-assay')).toBe('cargo');
+    expect(audioDeckOf('boss-echo')).toBe('mess');
+    expect(audioDeckOf('boss-ballast')).toBe('bridge');
+    expect(audioDeckOf('log-meadow-near')).toBeNull();
+    expect(audioDeckOf('nobody-here')).toBeNull();
+  });
+
+  it('hold no markup character: the win screen writes them as text of the plate', () => {
+    for (const e of STORY) expect(`${e.title}${e.body}`, e.id).not.toMatch(/[<>&]/);
   });
 });
