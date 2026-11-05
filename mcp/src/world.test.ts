@@ -430,6 +430,7 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
       lairs: [],
       discovered: save.discovered,
       time: 0,
+      logs: [],
       savedAt: save.savedAt,
     });
     const seen = Discovered.from(save.discovered!);
@@ -456,7 +457,7 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
     const seen = new Discovered();
     seen.reveal([30, 30]);
     seen.reveal([6, 6]);
-    await worldSaves(store, VERSION).put(1, [6, 6], [[5, 6], [4, 6]], fight, 0.75, [[2, 3]], [0, 2], seen.toJSON());
+    await worldSaves(store, VERSION).put(1, [6, 6], [[5, 6], [4, 6]], fight, 0.75, [[2, 3]], [0, 2], seen.toJSON(), 0, [3, 7]); // two lore logs found (#1589)
     const record = store.data.get('openworld:1') as WorldSave;
     const open = world();
     const state = value(open.newWorld({ save: record }));
@@ -464,7 +465,15 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
     expect(state.enemies).toContain('(7,6)');
     expect(state.enemies).not.toContain('(6,6)');
     expect(state.lairs.map((lair) => lair.beaten)).toEqual(state.lairs.map((_, k) => k === 0 || k === 2));
-    expect({ ...value(open.save()), savedAt: 0 }).toEqual({ ...record, savedAt: 0 });
+    expect({ ...value(open.save()), savedAt: 0 }).toEqual({ ...record, savedAt: 0 }); // the logs found come back as the client wrote them
+    expect(value(open.save()).logs).toEqual([3, 7]);
+  });
+
+  test('a save from before the lore logs (record 5) resumes with none found (#1589)', () => {
+    const { logs: _logs, ...old } = value(pushed().save());
+    const open = world();
+    value(open.newWorld({ save: { ...old, record: 5 } }));
+    expect(value(open.save()).logs).toEqual([]);
   });
 
   test('a save from before the discovered cells (record 3) resumes with the cells round the hero discovered (#1411)', () => {
