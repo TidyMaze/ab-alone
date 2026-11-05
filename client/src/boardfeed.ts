@@ -286,6 +286,8 @@ export function readRelay(open: (url: string) => Socket, nowS: number, url = '')
 
 /** The board: the three relays read, the results that replay kept, the ratings derived. Reads only. */
 export async function readBoard(open: (url: string) => Socket, nowS: number, score: Score, relays: readonly string[] = RELAYS, ban: ReadonlySet<string> = BANNED, minOpponents = MIN_OPPONENTS, minGames = MIN_GAMES, ramp = RAMP_GAMES): Promise<SharedRow[]> {
-  const all = await Promise.all(relays.map((url) => readRelay(open, nowS, url)));
-  return deriveBoard(await verifiedResults(all.flat(), score, nowS, ban), minOpponents, minGames, ramp);
+  // one relay down (a rejected read) does not stop the others: allSettled, the rejected ones give nothing
+  const all = await Promise.allSettled(relays.map((url) => readRelay(open, nowS, url)));
+  const got = all.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  return deriveBoard(await verifiedResults(got, score, nowS, ban), minOpponents, minGames, ramp);
 }

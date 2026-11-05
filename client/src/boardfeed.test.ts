@@ -336,6 +336,23 @@ describe('reading the relays (#1287, read only)', () => {
     for (const s of socks) expect(s.sent.every((m) => ['REQ', 'CLOSE'].includes((JSON.parse(m) as string[])[0]!))).toBe(true);
   });
 
+  it('one relay that cannot be read (its socket throws) still reads the other (#1287)', async () => {
+    const good = JSON.stringify(await signed());
+    const broken = { addEventListener: () => { throw new Error('down'); }, close: () => {}, send: () => {} } as unknown as Socket;
+    const open = (url: string): Socket => {
+      if (url === 'down') return broken;
+      const s = new Fake(url);
+      queueMicrotask(() => {
+        s.emit('open');
+        s.emit('message', event(good));
+        s.emit('message', JSON.stringify(['EOSE', 'ab-board']));
+      });
+      return s;
+    };
+    const rows = await readBoard(open, 1000, score, ['down', 'wss://relay.piazza.today'], new Set(), 0, 0, 0);
+    expect(rows).toHaveLength(2);
+  });
+
   it('ignores a result dated outside the window: far in the future, or older than 7 days', async () => {
     const mk = async (game: string, ts: number) => JSON.stringify(await signed({ game, ts }));
     const contents = [await mk('ok', 1000), await mk('future', 9e15), await mk('old', 1000 - WINDOW_S - 1), await mk('edge', 1000 + 600)];

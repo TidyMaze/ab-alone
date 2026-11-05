@@ -28,7 +28,7 @@ import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consen
 import { readBoard, sharedHtml, type SharedResult } from './boardfeed';
 import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
-import { BOARD_TEXT, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
+import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, encounterFor, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -5542,7 +5542,7 @@ function sealed(step: Step): void {
   if (step.send) link?.send(step.send);
   if (step.result) {
     sealedResult = step.result; // both seats signed it: it goes to the relays, a relay that refuses only means it is not on the board
-    if (publishFlag(location.search)) void publishResult((url) => new WebSocket(url), step.result, Math.floor(Date.now() / 1000));
+    if (publishAllowed(store, location.search)) void publishResult((url) => new WebSocket(url), step.result, Math.floor(Date.now() / 1000)); // the consent is checked again: a Leave during the wait sends nothing
   }
 }
 /** The pair of reports agreed: our intro goes out, and the final is offered to the seal. */

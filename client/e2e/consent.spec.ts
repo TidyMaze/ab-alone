@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Issue #1338: nothing reaches a relay or a peer before the player accepts the online notice. `?consent` asks for the
 // dialog under Playwright (navigator.webdriver skips it, as the guide), and routeWebSocket keeps every relay unreached.
-const SHORTLIST = ['wss://relay.piazza.today/', 'wss://nos.lol/', 'wss://nostr.red5d.dev/', 'wss://relay.bitmacro.cloud/'];
+const SHORTLIST = ['wss://relay.piazza.today/', 'wss://nostr.red5d.dev/', 'wss://relay.bitmacro.cloud/'];
 
 async function watch(page: Page): Promise<string[]> {
   const sockets: string[] = [];

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generateKeys } from './moverecord';
 import {
-  BOARD_TEXT, BOARD_VERSION, publishFlag, boardAskNeeded, boardKeys, cleanName, joinBoard, leaveBoard, newKey, readChoice, readBoardName, readRetires,
+  BOARD_TEXT, BOARD_VERSION, publishAllowed, publishFlag, boardAskNeeded, boardKeys, cleanName, joinBoard, leaveBoard, newKey, readChoice, readBoardName, readRetires,
   signRetire, verifyRetire, writeChoice,
 } from './shareboard';
 import { worldKeys } from './worldevents';
@@ -19,14 +19,14 @@ describe('the board opt-in (#1287)', () => {
   });
 
   it('says what the law asks: public, permanent, third party relays, no deletion, a name that is not you, 16+', () => {
-    expect(BOARD_VERSION).toBe(4); // the answers given before the age and the withdrawal words are asked again
+    expect(BOARD_VERSION).toBe(5); // the answers given before the transfer sentence are asked again
     expect(BOARD_TEXT).toContain('your ranked results (with the moves of each game and your opponent\'s key and name), a random key');
     expect(BOARD_TEXT).toContain('Opening the board connects your browser to these relays, which see your IP address. It is public');
-    for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'relay.piazza.today', 'You must be 16 or older.', 'deletes your board key']) {
+    for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'relay.piazza.today', 'You must be 16 or older.', 'deletes your board key and your name', 'the copies already on the relays stay']) {
       expect(BOARD_TEXT).toContain(word);
     }
     // #1287, GDPR art. 49(1)(a): the transfer outside the EEA rests on this consent, so the player is told of it here.
-    expect(BOARD_TEXT).toContain('The relays that keep your results may be outside the EU and their operators are not checked by us.');
+    expect(BOARD_TEXT).toContain('The relays may be outside the European Economic Area, in a country without an EU adequacy decision, where your data may have less legal protection; we do not check their operators. You consent to this transfer.');
   });
 
   it('is asked until answered, and an answer of another version counts for nothing', () => {
@@ -86,6 +86,16 @@ describe('the board opt-in (#1287)', () => {
     expect(readRetires(store)).toEqual([retire]);
     expect(readChoice(store)).toBe('declined');
     expect(store.getItem('ab-alone.board-key')).toBe(''); // erased by Leave
+    expect(store.getItem('ab-alone.board-name')).toBe(''); // the name too (#1287)
+  });
+
+  it('publishes a result only with ?board=publish and while the consent is still joined: a Leave during the wait publishes nothing', async () => {
+    const store = memory();
+    await joinBoard(store, 'a');
+    expect(publishAllowed(store, '?board=publish')).toBe(true);
+    expect(publishAllowed(store, '?board')).toBe(false);
+    await leaveBoard(store, 1000);
+    expect(publishAllowed(store, '?board=publish')).toBe(false);
   });
 
   it('a retire record kept under the first board version still counts: its key is never reused and Leave keeps it', async () => {

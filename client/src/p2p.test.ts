@@ -35,7 +35,7 @@ describe('p2pTransport', () => {
   it('joins on the relay shortlist, never the 29 defaults (#1338)', () => {
     p2pTransport('r');
     expect(joined.config?.relayConfig?.urls).toEqual(RELAY_URLS);
-    expect(RELAY_URLS).toEqual(['wss://relay.piazza.today', 'wss://nos.lol', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud']);
+    expect(RELAY_URLS).toEqual(['wss://relay.piazza.today', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud']); // nos.lol dropped (#1287)
   });
 
 

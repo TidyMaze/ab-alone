@@ -630,7 +630,7 @@ const END_ROYALE = {
 
   it('the Ranked room opens a ranked room as its menu entry does; offline it opens nothing', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
-    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 4, choice: 'declined' })); // the board asks at the first ranked entry (#1287)
+    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 5, choice: 'declined' })); // the board asks at the first ranked entry (#1287)
     const beaten = ['echo', 'hull', 'choir', 'chaplain'];
     localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'bridge', cell: [2, -3], beaten }));
     ship(game);

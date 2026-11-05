@@ -10,7 +10,7 @@ const BOARD_KEY = 'ab-alone.board-key';
 const NAME_KEY = 'ab-alone.board-name';
 const RETIRE_KEY = 'ab-alone.board-retire';
 /** Raise it when the text below changes: an older answer then counts for nothing and the box is asked again. */
-export const BOARD_VERSION = 4;
+export const BOARD_VERSION = 5;
 /** The retire record has its own version: a text change must never hide a retire already signed. */
 const RETIRE_VERSION = 1;
 export const NAME_MAX = 16;
@@ -19,9 +19,9 @@ export const NAME_MAX = 16;
 export const BOARD_TEXT =
   'The shared ranked board publishes your ranked results (with the moves of each game and your opponent\'s key and name), a random key and the name you pick on public Nostr relays run by third parties (relay.piazza.today, relay.bitmacro.cloud). ' +
   'Opening the board connects your browser to these relays, which see your IP address. ' +
-  'It is public and permanent: we cannot delete it, and the relays keep what they keep. Leaving the board deletes your board key in this browser and stops new results; it does not erase the results already on the relays. ' +
+  'It is public and permanent: we cannot delete it, and the relays keep what they keep. Leaving the board deletes your board key and your name in this browser and stops new results; the copies already on the relays stay. ' +
   'Pick a name that does not identify you. You must be 16 or older. ' +
-  'The relays that keep your results may be outside the EU and their operators are not checked by us.';
+  'The relays may be outside the European Economic Area, in a country without an EU adequacy decision, where your data may have less legal protection; we do not check their operators. You consent to this transfer.';
 
 export type BoardChoice = 'joined' | 'declined';
 
@@ -49,6 +49,9 @@ export const writeChoice = (store: Store, choice: BoardChoice): void =>
 
 /** The write side has its own switch, `?board=publish`: plain `?board` only reads, so testing the board never writes to a public relay. */
 export const publishFlag = (search: string): boolean => new URLSearchParams(search).get('board') === 'publish';
+
+/** A result goes to the relays only behind `?board=publish` and while the consent is still joined: checked again just before sending (a Leave during the seal's wait sends nothing). */
+export const publishAllowed = (store: Store, search: string): boolean => publishFlag(search) && readChoice(store) === 'joined';
 
 /** Whether ranked entry must ask first: there is no answer yet. */
 export const boardAskNeeded = (store: Store): boolean => readChoice(store) === null;
@@ -109,6 +112,7 @@ async function freshKey(store: Store): Promise<Keys> {
 
 export async function leaveBoard(store: Store, nowMs: number): Promise<RetireEvent> {
   const event = await retireCurrent(store, nowMs);
+  write(store, NAME_KEY, ''); // Leave erases the name here too; New key keeps it
   writeChoice(store, 'declined');
   return event;
 }

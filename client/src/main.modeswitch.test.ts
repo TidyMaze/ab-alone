@@ -112,7 +112,7 @@ async function bootHub(url = '/'): Promise<{ game: Game; probe: Probe }> {
   });
   const scene = catchScene();
   const game = await boot(url);
-  localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 4, choice: 'declined' })); // the board asks at the first ranked entry (#1287)
+  localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 5, choice: 'declined' })); // the board asks at the first ranked entry (#1287)
   const probe = { scene, intervals: countIntervals() };
   await game.settle();
   game.hook('__drawNext');

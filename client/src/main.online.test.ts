@@ -78,7 +78,7 @@ async function hosted(url = '?bot=off') {
 }
 
 // The shared board asks at the first ranked entry (#1287). These tests answer it once, as declined, after boot (boot clears storage), so the queue starts.
-const declineBoard = (): void => localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 4, choice: 'declined' }));
+const declineBoard = (): void => localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 5, choice: 'declined' }));
 
 /** Presses Ranked and seats a White opponent (#1317). */
 async function rankedHosted() {
@@ -291,7 +291,7 @@ describe('Play online', () => {
       close(): void {}
     });
     const game = await boot(search);
-    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 4, choice: joined ? 'joined' : 'declined' }));
+    localStorage.setItem('ab-alone.board-consent', JSON.stringify({ v: 5, choice: joined ? 'joined' : 'declined' }));
     game.openModes();
     byId('ranked').click();
     await until(game, () => data().seat === 'player');

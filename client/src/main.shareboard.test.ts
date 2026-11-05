@@ -32,7 +32,7 @@ describe('shared board opt-in', () => {
     byId('optin-yes').click();
     await vi.waitFor(() => expect(localStorage.getItem('ab-alone.board-key')).not.toBeNull());
     expect(shown()).toBe(false);
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 4, choice: 'joined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 5, choice: 'joined' });
     expect(localStorage.getItem('ab-alone.board-name')).toHaveLength(16);
   });
 
@@ -53,7 +53,7 @@ describe('shared board opt-in', () => {
     await game.settle();
     byId('optin-no').click();
     await game.settle();
-    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 4, choice: 'declined' });
+    expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 5, choice: 'declined' });
   });
 
   it('Keep ranked local stores a decline, and it is not asked again', async () => {
@@ -73,7 +73,7 @@ describe('shared board opt-in', () => {
       leave();
       await game.settle();
       expect(shown()).toBe(false);
-      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 4, choice: 'declined' });
+      expect(JSON.parse(localStorage.getItem('ab-alone.board-consent')!)).toEqual({ v: 5, choice: 'declined' });
       expect(localStorage.getItem('ab-alone.board-key')).toBeNull();
     }
     game.openModes();
