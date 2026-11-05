@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { parseRecorded } from '../src/test/chaplain-game';
 import { BLACK_WINS } from './end-games';
 import { loseByRepetition, startDaily } from './fight-end';
 import { maxUiScale } from '../src/uiscale';
@@ -35,15 +37,15 @@ const problems = (page: Page) =>
     const hud = document.getElementById('hud')!.getBoundingClientRect();
     const found: string[] = [];
     for (const c of cells) if (meets(hud, c.disc)) found.push(`the HUD covers ${c.name}`);
-    const plates: Record<string, string> = { eval: 'the evaluation plate', transcript: 'the transcript' };
-    for (const el of document.querySelectorAll('button, input, label, textarea, select, #eval, #transcript')) {
+    const plates: Record<string, string> = { eval: 'the evaluation plate', transcript: 'the transcript', lore: 'the lore of a win' };
+    for (const el of document.querySelectorAll('button, input, label, textarea, select, #eval, #transcript, #lore')) {
       if (el.getClientRects().length === 0) continue; // hidden
       const name = plates[el.id] ?? (el.textContent || el.getAttribute('aria-label')!);
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // a scrolling column brings it into view
       const box = el.getBoundingClientRect();
       if (el.id !== 'hud-fold' && meets(box, hud)) found.push(`${name} covers the HUD`); // its own fold button (#957)
       if (!onScreen(box)) found.push(`${name} is off screen`);
-      const sheeted = el.closest('#mode-menu, #daily-card, #lobby-sheet') != null; // #1032 #1488: a sheet above the dock (the open Lobby too) may lie over the board's lower cells
+      const sheeted = el.closest('#mode-menu, #daily-card, #lobby-sheet, #lore') != null; // #1032 #1488 #1589: a sheet above the dock (the open Lobby too) may lie over the board's lower cells
       if (!sheeted) for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
     }
     // The plates let taps through, so they must not lie over a control either, or they hide it.
@@ -367,6 +369,24 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'with the end banner');
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'with the end banner turned around');
+    });
+
+    // The lore of a boss win (#1589) sits in the plate under the banner: the plate still covers no cell and no button. The recorded win of The
+    // Swarm (fight seed 0) is played by the __playMoves hook.
+    test('the lore of a boss win covers neither a cell nor a button, #1589', async ({ page }, testInfo) => {
+      const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
+      await page.addInitScript(() => {
+        crypto.getRandomValues = ((a: Uint32Array) => a.fill(0)) as typeof crypto.getRandomValues; // the fight seed
+      });
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await openModes(page);
+      await page.getByRole('button', { name: 'Boss fight' }).click();
+      await page.locator('#boss-list').getByRole('button', { name: 'The Swarm' }).click();
+      await page.evaluate((records) => (window as any).__playMoves(records), plies);
+      await expect(page.locator('#lore')).toBeVisible();
+      await expect(page.locator('body')).toHaveAttribute('data-lore', 'boss-swarm');
+      await check(page, testInfo, 'with the lore of a boss win');
     });
 
     // The same defeat as the plate check of bug #271 (the plate and the buttons cover no cell after a daily defeat): one

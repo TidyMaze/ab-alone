@@ -221,6 +221,7 @@ import { AMBIENT } from './openworldparticles';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
+import { audioDeckOf, bossLore, entryOf, STORY } from './lorelogs';
 import { atStake, claimReload } from './autoreload';
 import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
@@ -1141,7 +1142,7 @@ function openArchive(): void {
     return button;
   };
   const rows = [
-    ...archiveList(readLore(store), LORE).map((entry) => row(entry.title, () => openReader(entry.id))),
+    ...archiveList(readLore(store), [...LORE, ...STORY]).map((entry) => row(entry.title, () => openReader(entry.id))),
     ...archiveList(collectedLogs(store), AUDIO_LOGS).map((log) => row(log.title, () => playLog(log))),
   ];
   archive.replaceChildren(...(rows.length ? rows : ['Nothing read yet.']));
@@ -1433,7 +1434,7 @@ let consoleSince = 0;
 const deckEntry = (): string => LORE.find((e) => e.deck === deck)!.id;
 function layoutConsole(id = deckEntry()): void {
   if (!consoleFonts) return;
-  const entry = id === MEDAL_ROOM ? { ...medalRoom(store, bossRoster()), id } : LORE.find((e) => e.id === id)!;
+  const entry = id === MEDAL_ROOM ? { ...medalRoom(store, bossRoster()), id } : entryOf(id)!;
   consolePages = terminalPages(entry, uiScale, (text, font) => {
     consoleG.font = font;
     return consoleG.measureText(text).width;
@@ -1541,7 +1542,7 @@ const logButton = document.getElementById('log-button') as HTMLButtonElement;
 const transcript = document.getElementById('transcript')!;
 let playing: { log: AudioLog; since: number } | null = null;
 function paintLog(): void {
-  logButton.hidden = !reading && !playing;
+  logButton.hidden = !playing && !(reading && audioDeckOf(consoleEntry)); // a log of the world and the Medal room have no recording (#1589)
   logButton.textContent = playing ? 'Skip log' : 'Play log';
   const line = (playing && transcriptOn && lineAt(playing.log, (performance.now() - playing.since) / 1000)) || '';
   if (transcript.textContent !== line) transcript.textContent = line; // aria-live: a line is read once
@@ -1563,7 +1564,7 @@ function playLog(log: AudioLog): void {
 }
 logButton.addEventListener('click', () => {
   if (playing) stopLog();
-  else playLog(logOf(LORE.find((e) => e.id === consoleEntry)!.deck));
+  else playLog(logOf(audioDeckOf(consoleEntry)!));
 });
 // Called every frame: the next transcript line, and the end of the log.
 function tickLog(now: number): void {
@@ -3512,12 +3513,22 @@ function hud(extra = ''): void {
   drawHud(extra);
   syncLobby();
 }
+/** The lore of a boss win (#1589): its entry in the box of the audio log's place, filed in the log archive, none once the fight is over or left. */
+function showLore(lore: { id: string; title: string; body: string } | undefined): void {
+  document.getElementById('lore')!.hidden = !lore;
+  if (!lore) return void delete document.body.dataset.lore;
+  document.getElementById('lore-title')!.textContent = lore.title;
+  document.getElementById('lore-body')!.textContent = lore.body;
+  document.body.dataset.lore = lore.id; // read by the e2e tests
+  markRead(store, lore.id);
+}
 function drawHud(extra = ''): void {
   syncReplay();
   backButton.hidden = !(roomOf || lairFrom || wildFrom) || engine.status() === 0; // once the game a hub room, a lair or a wild marble started is over (#522, #1170, #1511)
   backButton.textContent = lairFrom || wildFrom ? 'Back to the Open world' : 'Back to the hub';
   wildFlee.hidden = !wildFrom || engine.status() !== 0; // Flee for the whole fight, not once it is over (#1511)
   if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
+  if (hub || royale) showLore(undefined);
   if (hub) {
     delete document.body.dataset.over; // no end light over the hub
     document.getElementById('hud')!.innerHTML = hub.hud();
@@ -3537,6 +3548,7 @@ function drawHud(extra = ''): void {
     glass: glassOf(),
   });
   if (end?.anim === 'win' && fight) end.line = `${end.line} ${medalNote(fight)}`; // a won fight: Black is the player's side
+  showLore(end?.anim === 'win' && fight ? bossLore(fight.id) : undefined); // the entry of the boss beaten, in the archive too (#1589)
   if (end?.anim === 'win' && wildFrom) end.line = `${end.line} ${wildWon(wildFrom)}`;
   if (end && trainer && status === 1 && engine.draw_reason() !== 0) Object.assign(end, { title: 'Stalled', line: 'A draw costs a marble.' }); // not "You win" (#1159)
   if (end) document.body.dataset.over = end.anim;

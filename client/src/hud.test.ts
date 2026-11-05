@@ -138,15 +138,6 @@ describe('hudHtml', () => {
     expect(hudHtml({ ...base, status: 3, online })).not.toContain('rematch');
   });
 
-  it('shows the lore of a boss win under the end banner, and no lore block without one, #1589', () => {
-    const end = { title: 'Victory', line: 'The seat is empty.', anim: 'win' as const, lore: { title: 'Mess: the Echo', body: 'Seat: empty.' } };
-    const html = hudHtml({ ...base, status: 1, end });
-    expect(html).toContain('<div class="lore"><div class="lore-title">Mess: the Echo</div>Seat: empty.</div>');
-    expect(html.indexOf('class="lore"')).toBeGreaterThan(html.indexOf('class="end"'));
-    expect(hudHtml({ ...base, status: 1, end: { ...end, lore: undefined } })).not.toContain('class="lore"');
-    expect(hudHtml(base)).not.toContain('class="lore"');
-  });
-
   it('shows the end banner in place of the turn line: title, reason, animation id, #282', () => {
     const end = { title: 'You win', line: '6 out. The books balance.', anim: 'win' as const };
     const html = hudHtml({ ...base, status: 1, end });

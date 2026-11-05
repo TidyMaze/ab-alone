@@ -3,6 +3,8 @@
 // procedural, unsettling. Every entry carries its `stage` of the reveal ladder and holds no secret word of a later one (lorelogs.test.ts);
 // a player beats the bosses in any order, so a boss entry stands alone and never reads as if an earlier reveal had happened. None of it is
 // required to progress.
+import { deckOf, type Deck } from './deck';
+import { LORE } from './lore';
 
 /** An entry of the story: a title and a body, shown in the terminal reader, and the stage of the reveal ladder it may speak of. */
 export interface StoryEntry {
@@ -63,3 +65,18 @@ export const WORLD_LOGS: readonly WorldLog[] = [
   log('badlands-far', 3, 'Stake: the cracked plate', 'Survey stake, cracked. Scratched under the plate: the ones thrown out can talk. I heard Imre this morning. He said the sky is very large. He said he is fine. The crew wrote it down as a rumour. Tally wrote it down as fact.'),
   log('archipelago-far', 3, 'Stake: the last island', 'Survey stake on the last island of the chain. A boat lies beached, empty. Nobody drowned. Everyone walked inland in a line, and the line is still moving. Appended by TALLY: Crew, eleven. In good order.'),
 ];
+
+/** The entries of the story, the bosses then the logs of the world: the log archive lists the ones read after the terminals. */
+export const STORY: readonly StoryEntry[] = [...BOSS_LORE, ...WORLD_LOGS];
+
+/** The entry a win over `boss` shows, none for a boss the roster does not hold. */
+export const bossLore = (boss: string): BossLore | undefined => BOSS_LORE.find((e) => e.boss === boss);
+
+/** The entry of the terminal reader with this id, a terminal of a deck or an entry of the story. */
+export const entryOf = (id: string): Pick<StoryEntry, 'id' | 'title' | 'body'> | undefined => LORE.find((e) => e.id === id) ?? STORY.find((e) => e.id === id);
+
+/** The deck whose audio log goes with an entry: a terminal's own, the deck a boss sat on; none for a log of the world. */
+export function audioDeckOf(id: string): Deck | null {
+  const boss = BOSS_LORE.find((e) => e.id === id);
+  return LORE.find((e) => e.id === id)?.deck ?? (boss ? deckOf('boss', boss.boss) : null);
+}

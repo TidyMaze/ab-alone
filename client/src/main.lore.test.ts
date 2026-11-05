@@ -34,10 +34,10 @@ describe('the lore after a boss win (#1589)', () => {
   it('shows the entry of the boss beaten under the banner, with its title, and files it in the archive', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     await fight(game, 'The Echo', 1);
-    const lore = document.querySelector('#hud .lore')!;
-    expect(lore.querySelector('.lore-title')!.textContent).toBe(BOSS_LORE[0]!.title);
-    expect(lore.textContent).toContain(BOSS_LORE[0]!.body);
-    expect(document.querySelector('#hud .end')!.nextElementSibling).toBe(lore); // under the banner
+    expect(byId('lore').hidden).toBe(false);
+    expect(byId('lore-title').textContent).toBe(BOSS_LORE[0]!.title);
+    expect(byId('lore-body').textContent).toBe(BOSS_LORE[0]!.body);
+    expect(game.hud()).toContain('Victory');
     expect(data().lore).toBe('boss-echo');
     expect(localStorage.getItem('ab-alone.lore-read')).toBe('boss-echo');
   });
@@ -45,26 +45,41 @@ describe('the lore after a boss win (#1589)', () => {
   it('shows the entry of the boss that was beaten, whichever it is, and the same one again on a repeat win', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     await fight(game, 'The Swarm', 1);
-    expect(document.querySelector('#hud .lore .lore-title')!.textContent).toBe('Cargo: the Swarm');
-    expect(document.querySelector('#hud .lore')!.textContent).toContain(BOSS_LORE.at(-1)!.body);
+    expect(byId('lore-title').textContent).toBe('Cargo: the Swarm');
+    expect(byId('lore-body').textContent).toBe(BOSS_LORE.at(-1)!.body);
     vi.restoreAllMocks();
     await fight(game, 'The Swarm', 1);
-    expect(document.querySelector('#hud .lore .lore-title')!.textContent).toBe('Cargo: the Swarm');
+    expect(byId('lore-title').textContent).toBe('Cargo: the Swarm');
     expect(localStorage.getItem('ab-alone.lore-read')).toBe('boss-swarm'); // one entry in the archive
   });
 
   it('never blocks Retry or leaving: the buttons of the win stay', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     await fight(game, 'The Echo', 1);
+    expect(byId('lore').hidden).toBe(false);
     expect(byId('boss-retry').hidden).toBe(false);
-    expect(document.querySelector('#hud .lore')!.closest('#hud')!.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('goes with the fight: the Hub and the Battle royale take it away', async () => {
+    for (const leave of ['ship', 'battle-royale']) {
+      const game = await boot('?bot=off', { reducedMotion: true });
+      await fight(game, 'The Echo', 1);
+      expect(byId('lore').hidden).toBe(false);
+      vi.restoreAllMocks();
+      await game.settle();
+      game.openModes();
+      byId(leave).click();
+      await game.settle();
+      expect(byId('lore').hidden, leave).toBe(true);
+      expect(data().lore, leave).toBeUndefined();
+    }
   });
 
   it('shows no lore after a defeat, and none in a game against the bot', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     await fight(game, 'The Echo', 2);
     expect(game.hud()).toContain('Defeat');
-    expect(document.querySelector('#hud .lore')).toBeNull();
+    expect(byId('lore').hidden).toBe(true);
     expect(data().lore).toBeUndefined();
     expect(localStorage.getItem('ab-alone.lore-read')).toBeNull();
   });
