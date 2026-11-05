@@ -726,6 +726,14 @@ fn teleporter_in(seed: u64, cx: i32, cy: i32, avoid: &[(i32, i32)]) -> Option<(i
     })
 }
 
+/// The lore logs placed in a world (#1589, docs/specs/openworld.md section 12): two in each sextant, one near the spawn and one far.
+pub const LOGS: usize = 12;
+
+/// The cells of the `LOGS` lore logs of the world `seed`. Stub of the red test.
+pub fn logs(_seed: u64, _avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    vec![]
+}
+
 /// The farthest a hero path reaches from its start, in cells (docs/specs/openworld.md section 4).
 pub const PATH_RADIUS: i32 = 40;
 /// The most cells one path search expands before it gives up.
@@ -1822,6 +1830,94 @@ mod tests {
         // A quarter as many as one a square of 4 x 4 chunks, which gave 137 (#1444); 36 before the archipelago's sea (#1442).
         assert_eq!(found.len(), 34);
         assert_eq!(found[..3], [(2, -1), (29, -382), (130, -355)]);
+    }
+
+    /// The cells the lore logs of a seed keep off: the lairs and the teleporters, as the bridge passes them.
+    fn log_avoid(seed: u64) -> Vec<(i32, i32)> {
+        let lairs = lairs(seed, ROSTER);
+        let mut avoid = teleporters(seed, &lairs);
+        avoid.extend(lairs);
+        avoid
+    }
+
+    #[test]
+    fn twelve_log_cells_come_from_the_seed_alone_and_are_all_different() {
+        for seed in [1, 7, 1305] {
+            let avoid = log_avoid(seed);
+            let found = logs(seed, &avoid);
+            assert_eq!(found.len(), LOGS, "seed {seed}");
+            assert_eq!(logs(seed, &avoid), found);
+            for (i, a) in found.iter().enumerate() {
+                assert!(!found[i + 1..].contains(a), "seed {seed}: {a:?}");
+            }
+        }
+        assert_ne!(logs(1, &log_avoid(1)), logs(2, &log_avoid(2)));
+    }
+
+    #[test]
+    fn a_log_and_its_six_neighbours_are_open_ground_in_its_own_biome_off_the_spawn() {
+        for seed in [1, 7, 1305, 2, 3, 4, 5, 6] {
+            for (k, &(q, r)) in logs(seed, &log_avoid(seed)).iter().enumerate() {
+                assert!(distance(q, r) > SAFE, "seed {seed}: log {k} at ({q}, {r})");
+                for (dq, dr) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
+                    let c = cell(seed, q + dq, r + dr).expect("on the world");
+                    assert!(!c.terrain.blocked(), "seed {seed}: log {k} at ({q}, {r})");
+                    assert_eq!(
+                        c.biome,
+                        SEXTANTS[k % 6],
+                        "seed {seed}: log {k} at ({q}, {r})"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_log_keeps_off_the_lairs_the_teleporters_and_the_enemies() {
+        for seed in [1, 7, 1305, 2, 3] {
+            let avoid = log_avoid(seed);
+            for &(q, r) in &logs(seed, &avoid) {
+                assert!(
+                    avoid.iter().all(|&c| hex_distance(c, (q, r)) > 3),
+                    "seed {seed}: ({q}, {r})"
+                );
+                let (cx, cy) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
+                for kx in cx - 1..=cx + 1 {
+                    for ky in cy - 1..=cy + 1 {
+                        for enemy in enemy_groups(seed, kx, ky).concat() {
+                            assert!(hex_distance(enemy, (q, r)) > 2, "seed {seed}: ({q}, {r})");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_sextant_holds_two_logs_one_near_the_spawn_and_one_far() {
+        for seed in [1, 7, 1305, 2, 3, 4] {
+            let found = logs(seed, &log_avoid(seed));
+            for wedge in 0..6 {
+                let (near, far) = (found[wedge], found[wedge + 6]);
+                assert_eq!(cell(seed, near.0, near.1).unwrap().biome, SEXTANTS[wedge]);
+                assert_eq!(cell(seed, far.0, far.1).unwrap().biome, SEXTANTS[wedge]);
+                assert!(distance(near.0, near.1) < 150, "seed {seed}: log {wedge}");
+                assert!(
+                    distance(far.0, far.1) > 150,
+                    "seed {seed}: log {}",
+                    wedge + 6
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_log_moves_off_a_cell_it_is_told_to_avoid() {
+        let free = logs(7, &[]);
+        let moved = logs(7, &[free[3]]);
+        assert_eq!(moved.len(), free.len());
+        assert!(hex_distance(moved[3], free[3]) > 3);
+        assert_eq!(moved[..3], free[..3]);
     }
 
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.

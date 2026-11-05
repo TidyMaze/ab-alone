@@ -108,6 +108,12 @@ pub fn world_teleporters(seed: u32) -> Vec<i32> {
         .collect()
 }
 
+/// The lore logs of the world `seed` (#1589, docs/specs/openworld.md section 12): `q, r` pairs, log 0 first. Stub of the red test.
+#[wasm_bindgen]
+pub fn world_logs(_seed: u32) -> Vec<i32> {
+    vec![]
+}
+
 /// The walk of the hero from `(from_q, from_r)` to `(to_q, to_r)` in the world `seed` (docs/specs/openworld.md section 4): `q, r`
 /// pairs, the start left out, empty when there is none. `blocked` holds the enemy cells and the lairs, `broken` the obstacles the
 /// hero has broken (#1154), both `q, r` pairs.
@@ -562,6 +568,20 @@ mod tests {
         assert!(cells
             .iter()
             .all(|&t| lairs.iter().all(|&l| world::hex_distance(t, l) > 3)));
+    }
+
+    #[test]
+    fn the_logs_are_q_r_pairs_that_match_the_core_and_keep_off_the_lairs_and_the_teleporters() {
+        let flat = world_logs(7);
+        let lairs = world::lairs(7, crate::encounter::boss_ids().len());
+        let mut taken = world::teleporters(7, &lairs);
+        taken.extend(lairs);
+        let cells = world::logs(7, &taken);
+        assert_eq!(cells.len(), world::LOGS);
+        assert_eq!(
+            flat,
+            cells.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
+        );
     }
 
     #[test]

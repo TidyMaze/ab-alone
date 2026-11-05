@@ -136,7 +136,7 @@ pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::{replay_score, Engine};
 pub use royale::Royale;
 pub use run::{run_exits, run_foes, run_map};
-pub use world::{world_chunk, world_lairs, world_teleporters, world_version};
+pub use world::{world_chunk, world_lairs, world_logs, world_teleporters, world_version};
 
 #[cfg(test)]
 mod tests {
