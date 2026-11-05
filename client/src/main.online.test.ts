@@ -166,7 +166,8 @@ describe('Play online', () => {
   });
 
   it('puts the fingerprint of the key that holds Black in the invite link (#1323)', async () => {
-    const { white } = await hosted();
+    const { game, white } = await hosted();
+    await until(game, () => white.session.seats.keyOf(1) !== ''); // the page saw White's Hello, White may not have seen the page's yet (#1509)
     expect(location.hash).toBe(`#room=${white.session.game}&key=${await fingerprint(white.session.seats.keyOf(1))}`);
   });
 
