@@ -728,10 +728,51 @@ fn teleporter_in(seed: u64, cx: i32, cy: i32, avoid: &[(i32, i32)]) -> Option<(i
 
 /// The lore logs placed in a world (#1589, docs/specs/openworld.md section 12): two in each sextant, one near the spawn and one far.
 pub const LOGS: usize = 12;
+/// The salt of the log draws: the angle in the sextant, then the distance from the spawn.
+const LOG_SALT: u64 = 50;
+/// The distance of a log from the spawn in ground units, drawn between these two, by ring: the near ring stays inside the lairs' (`LAIR_NEAR`).
+const LOG_RINGS: [(f64, f64); 2] = [(30.0, 140.0), (160.0, 420.0)];
 
-/// The cells of the `LOGS` lore logs of the world `seed`. Stub of the red test.
-pub fn logs(_seed: u64, _avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
-    vec![]
+/// The cells of the `LOGS` lore logs of the world `seed`: log `k` is drawn in the sextant `k % 6` (ring `k / 6`, near then far), the first
+/// draw whose cell and six neighbours are open ground of that sextant's biome, off the spawn's `SAFE` radius, 2 cells or more inside its
+/// chunk with no generated enemy within 2 cells, and no cell of `avoid` (the lairs and the teleporters) within 3. From the seed alone: it
+/// reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
+pub fn logs(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    (0..LOGS as i32)
+        .map(|k| {
+            (0..)
+                .find_map(|n| log_try(seed, k, n, avoid))
+                .expect("an endless search")
+        })
+        .collect()
+}
+
+/// The `n`-th try of log `k`: its cell when it is a fit one.
+fn log_try(seed: u64, k: i32, n: i32, avoid: &[(i32, i32)]) -> Option<(i32, i32)> {
+    let wedge = k as usize % 6;
+    let (near, far) = LOG_RINGS[k as usize / 6];
+    let angle =
+        (wedge as f64 - 0.4 + 0.8 * unit(seed, LOG_SALT, k, n)) * std::f64::consts::FRAC_PI_3;
+    let reach = near + (far - near) * unit(seed, LOG_SALT + 1, k, n);
+    // The pointy-top layout of the client's `cellAtPoint`, as the lairs.
+    let r = (-reach * angle.sin() / (3f64.sqrt() / 2.0)).round() as i32;
+    let q = (reach * angle.cos() - f64::from(r) / 2.0).round() as i32;
+    let (cx, cy) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
+    let inside = |v: i32| (2..CHUNK - 2).contains(&v.rem_euclid(CHUNK));
+    let open = |&(dq, dr): &(i32, i32)| {
+        cell(seed, q + dq, r + dr)
+            .is_some_and(|c| !c.terrain.blocked() && c.biome == SEXTANTS[wedge])
+    };
+    let fit = distance(q, r) > SAFE
+        && inside(q)
+        && inside(r)
+        && TELEPORT_PAD.iter().all(open)
+        && avoid.iter().all(|&cell| hex_distance(cell, (q, r)) > 3)
+        && enemy_groups(seed, cx, cy)
+            .concat()
+            .iter()
+            .all(|&enemy| hex_distance(enemy, (q, r)) > 2);
+    fit.then_some((q, r))
 }
 
 /// The farthest a hero path reaches from its start, in cells (docs/specs/openworld.md section 4).
@@ -1902,11 +1943,7 @@ mod tests {
                 assert_eq!(cell(seed, near.0, near.1).unwrap().biome, SEXTANTS[wedge]);
                 assert_eq!(cell(seed, far.0, far.1).unwrap().biome, SEXTANTS[wedge]);
                 assert!(distance(near.0, near.1) < 150, "seed {seed}: log {wedge}");
-                assert!(
-                    distance(far.0, far.1) > 150,
-                    "seed {seed}: log {}",
-                    wedge + 6
-                );
+                assert!(distance(far.0, far.1) > 150, "seed {seed}: far log {wedge}");
             }
         }
     }
@@ -1918,6 +1955,11 @@ mod tests {
         assert_eq!(moved.len(), free.len());
         assert!(hex_distance(moved[3], free[3]) > 3);
         assert_eq!(moved[..3], free[..3]);
+    }
+
+    #[test]
+    fn the_logs_of_seed_7_are_pinned() {
+        assert_eq!(logs(7, &log_avoid(7))[..3], [(29, 5), (60, -36), (24, -67)]);
     }
 
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.

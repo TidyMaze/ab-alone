@@ -108,10 +108,16 @@ pub fn world_teleporters(seed: u32) -> Vec<i32> {
         .collect()
 }
 
-/// The lore logs of the world `seed` (#1589, docs/specs/openworld.md section 12): `q, r` pairs, log 0 first. Stub of the red test.
+/// The lore logs of the world `seed` (#1589, docs/specs/openworld.md section 12): `q, r` pairs, log 0 first, kept off the lairs and the teleporters.
 #[wasm_bindgen]
-pub fn world_logs(_seed: u32) -> Vec<i32> {
-    vec![]
+pub fn world_logs(seed: u32) -> Vec<i32> {
+    let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
+    let mut taken = world::teleporters(u64::from(seed), &lairs);
+    taken.extend(lairs);
+    world::logs(u64::from(seed), &taken)
+        .into_iter()
+        .flat_map(|(q, r)| [q, r])
+        .collect()
 }
 
 /// The walk of the hero from `(from_q, from_r)` to `(to_q, to_r)` in the world `seed` (docs/specs/openworld.md section 4): `q, r`
