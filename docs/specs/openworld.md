@@ -360,7 +360,9 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   ground of that sextant's biome on the world and it is at least 150 cells from the spawn (`LAIR_MIN`): so every biome holds two
   lairs or more (three in the meadow, the forest and the tundra for the 15 bosses), on land, an island in the archipelago. Before
   #1442 lair `k` was drawn in the `k`-th `count`-th of the circle. The hexagon's corners are 448 ground units out and the middles
-  of its sides about 388, so a draw past the edge is drawn again. It reads the terrain, never changes it.
+  of its sides about 388, so a draw past the edge is drawn again. After 8000 tries in its share of the sextant a lair is drawn in the whole sextant, and the search
+  ends after 40 000 (#1594: seed 711's third lair of the tundra had no open ground in its share and the world never opened); a lair found in its share
+  does not move. It reads the terrain, never changes it.
 - **Look.** A low-poly landmark made in Blender (`client/models/openworld-lair.glb`, vertex colours, under 72 triangles each) on
   the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
   while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).

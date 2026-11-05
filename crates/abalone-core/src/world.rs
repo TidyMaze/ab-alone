@@ -633,18 +633,28 @@ const LAIR_FAR: f64 = 420.0;
 pub fn lairs(seed: u64, count: usize) -> Vec<(i32, i32)> {
     (0..count as i32)
         .map(|k| {
-            (0..)
+            (0..LAIR_TRIES)
                 .find_map(|n| lair_try(seed, count, k, n))
-                .expect("an endless search")
+                .expect("a fit lair in the sextant")
         })
         .collect()
 }
+
+/// A lair is drawn in its share of the sextant for its first `LAIR_SLOT_TRIES` tries (the most any seed of 1 to 2000 but 711 needs is
+/// 5 666), then in the whole sextant (#1594: the third of seed 711's tundra that lair 14 is drawn in holds no open ground). So the
+/// lairs of a seed that found them in the share do not move. The search ends after `LAIR_TRIES` tries.
+const LAIR_SLOT_TRIES: i32 = 8000;
+const LAIR_TRIES: i32 = 40_000;
 
 /// The `n`-th try of lair `k`: its cell when it is a fit one.
 fn lair_try(seed: u64, count: usize, k: i32, n: i32) -> Option<(i32, i32)> {
     let (wedge, nth) = (k as usize % 6, f64::from(k / 6));
     let shares = (count / 6 + usize::from(wedge < count % 6)) as f64;
-    let slot = nth + 0.2 + 0.6 * unit(seed, LAIR_SALT, k, n);
+    let slot = if n < LAIR_SLOT_TRIES {
+        nth + 0.2 + 0.6 * unit(seed, LAIR_SALT, k, n)
+    } else {
+        shares * unit(seed, LAIR_SALT, k, n) // the whole sextant
+    };
     let angle = (wedge as f64 - 0.5 + slot / shares) * std::f64::consts::FRAC_PI_3;
     let reach = LAIR_NEAR + (LAIR_FAR - LAIR_NEAR) * unit(seed, LAIR_SALT + 1, k, n);
     // The pointy-top layout of the client's `cellAtPoint`: x runs along q, z along the rows, the north up.
@@ -2156,7 +2166,7 @@ mod tests {
     }
 
     /// Runs `search` for the seeds 1 to 2000 on 8 threads and hands each result to `check`, failing instead of hanging when a seed never
-    /// returns (a search with no end): the threads left behind end with the test binary.
+    /// returns (a search with no end, `what` is the message): the threads left behind end with the test binary.
     fn sweep<T: Send + 'static>(what: &str, search: fn(u64) -> T, mut check: impl FnMut(u64, T)) {
         let (tx, rx) = std::sync::mpsc::channel();
         for part in 0..8u64 {
@@ -2168,20 +2178,18 @@ mod tests {
             });
         }
         drop(tx);
-        for done in 0..2000 {
-            match rx.recv_timeout(std::time::Duration::from_secs(30)) {
-                Ok((seed, found)) => check(seed, found),
-                Err(_) => {
-                    panic!("{what}: no answer after {done} of 2000 seeds, a search never ends")
-                }
-            }
+        for _ in 0..2000 {
+            let (seed, found) = rx
+                .recv_timeout(std::time::Duration::from_secs(30))
+                .expect(what);
+            check(seed, found);
         }
     }
 
     #[test]
     fn every_seed_from_1_to_2000_places_its_five_towns_and_five_gates_and_the_search_ends() {
         sweep(
-            "places",
+            "places never end",
             |seed| places(seed, &[]),
             |seed, found| {
                 assert_eq!(found.len(), TOWNS + DUNGEONS, "seed {seed}");
@@ -2202,7 +2210,7 @@ mod tests {
     fn every_seed_from_1_to_2000_finds_its_places_in_a_quarter_of_the_tries_a_place_has() {
         // A quarter of the tries is enough for every seed (the most any needs is 239), so `PLACE_TRIES` has four times the room.
         sweep(
-            "places in a quarter of the tries",
+            "places never end",
             |seed| places_within(seed, &[], PLACE_TRIES / 4),
             |seed, found| assert_eq!(found.len(), TOWNS + DUNGEONS, "seed {seed}"),
         );
@@ -2237,7 +2245,7 @@ mod tests {
     #[test]
     fn every_seed_from_1_to_2000_places_its_fifteen_lairs_and_the_search_ends() {
         sweep(
-            "lairs",
+            "lairs never end",
             |seed| lairs(seed, 15),
             |seed, found| {
                 assert_eq!(found.len(), 15, "seed {seed}");
