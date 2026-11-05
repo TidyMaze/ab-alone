@@ -287,3 +287,69 @@ Still open:
 1. Audio assets: original recordings, licensed, or procedurally generated (budget)?
 2. Photosensitivity safe mode on by default: confirm.
 3. Tech review (#54) asks for an audio and asset pipeline section: who owns it?
+
+## 12. The story (#1583)
+
+The answer to the game, written once. Every writer reads this section before writing a line of lore, and **no line, spec or
+screenshot may state a fact of a stage before the player can reach it** (the ladder below). This repository is public: a player
+who reads this section spoils the game, and the text is here on purpose, because the secret words are checked against it.
+
+### 12.1 The story in ten lines
+
+1. Slag-glass remembers heat. It holds a warm person, shell outside and person inside, awake and slowing. It is a hold, not a death.
+2. Cold lets go. The only cold the crew could reach was the airlock and Hollow's night.
+3. The captain learned this first. A shell will not walk to an airlock. It obeys one thing, the board's count.
+4. So the last order was the game: "so nobody else gets hurt". An ejected marble leaves the glass and wakes on the moon.
+5. Tally was ordered to run the game and cannot push a crewmate. It needs a clear hand.
+6. The ledger's old words change meaning. "Cargo" means to be delivered. "Gone for good" means gone from the glass. Draws are
+   booked as losses because a draw delivers nobody. "Crew clear: one" means one hand free to push.
+7. The player is ledger line 0412 ("Claim 0412" already exists), the first one delivered. They woke clear in the dust, and the cold
+   took their memory. The visor is a cooled shard of the vein.
+8. Towns are the delivered, dazed and quiet. The shelled play hard because the glass fears the cold. The Chaplain preaches against delivery.
+9. The turn: pushing them into the void was always a rescue.
+10. The last seat on the bridge is Tally itself. It lists itself as cargo and cannot deliver itself.
+
+Sections 1 to 3 stay true at every stage: they are what the player believes until the ladder changes it.
+
+### 12.2 The reveal ladder
+
+Triggers are named by story moment, not by place: one `TRIGGERS` table binds each moment to today's events (a boss id, a Hub room) and
+can be re-pointed at towers and dungeons if Decision #1513 passes.
+
+| # | Player believes | Learns | Trigger (main / optional) | Delivered |
+|---|---|---|---|---|
+| 1 | The shelled are infected, Tally is a warden, ejected means dead | The premise | First launch | Cold open (#1523) |
+| 2 | Tally is cruel | The rule was protective | First boss beaten / 3 wins in any mode | Boss victory line, Mess terminals |
+| 3 | Ejected means dead | The ejected breathe | First town or Medal room visited / one ejected crewmate met in a rogue-lite event | Tally HUD line |
+| 4 | The shell is a disease | Cold lets go | The Hull beaten / night survived in the Open world, dungeon act 3 | Cargo audio log, Tally line |
+| 5 | I am the last clear survivor | I was delivered first, line 0412 | The Chaplain beaten / a lost run (optional extra line) | Lost-run summary, Chaplain line |
+| 6 | Tally wants me beaten | Tally cannot push, it needs me | The Ballast Mind fight starts | Boss line |
+| 7 | Winning opens the clamp | The last seat is Tally | Ballast Mind beaten / five towers (#1546) | Ending line |
+
+**Secret words.** Withheld until stage 4: the cold and the word "delivered" (`deliver`, `cold`). Until stage 5: line 0412 (`0412`). Until
+stage 6: Tally's limit (`cannot push`). Until stage 7: Tally as cargo. A line of stage *n* holds no secret word of a stage after *n*.
+The main line uses only the main-column triggers, so skipping optional content never blocks the ending.
+
+### 12.3 Delivery
+
+- Short lines only: a Tally HUD line at match start, a boss victory or defeat line, a note under a terminal (the existing "Appended by
+  TALLY" device), a lost-run summary line. Nothing blocks a move.
+- Saved in one local key, `ab-alone.story` (highest stage and ids seen), no server (#1584).
+- A player who only plays the bot table gets stages 2 to 4 from wins there, then one hint pointing at the world. Online games count wins
+  too, and lines stay local, never sent to the opponent. After stage 7, old lines gain a reread twist, and Reset story is in the
+  settings menu.
+- **Lore entries** (`client/src/lorelogs.ts`, #1589): every entry carries its `stage` as data, a boss entry holds only what its stage
+  reveals and stands alone (a player beats the bosses in any order, so it never reads as if an earlier stage had happened), and a world
+  log of stage 1 to 3 may carry the hint of a reread: it holds no secret word of a later stage and reads differently once the player knows.
+  The first five bosses follow the ladder (The Echo 2, The Hull 4, The Chaplain 5, The Ballast Mind 7, The Choir 3); the other ten stay at stage 3 or below.
+
+### 12.4 The tested rule
+
+`story.ts` holds data only. Unit tests check that stages are strictly ordered; every stage has a trigger emitted by a real call site; a
+main-line-only run reaches stage 7; no line of stage *n* holds a secret word of a later stage; a corrupt save falls back to stage 1; every
+line fits the HUD; every `lore.ts` and `audiologs.ts` entry carries a stage tag. The entries of `lorelogs.ts` are already under the
+secret-word rule (`lorelogs.test.ts`).
+
+### 12.5 Towns and towers
+
+This amends #1516: **towns hold the delivered** (dazed, quiet, clear of the shell), and **the shelled stay in towers and dungeons**.
