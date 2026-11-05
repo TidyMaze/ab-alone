@@ -11,7 +11,7 @@ export interface StoryEvent {
   id?: string;
 }
 
-/** What a moment waits for: an event of this kind, of this id when it has one, and for a `win` the count of wins it needs. */
+/** What a moment waits for: an event of this kind, of this id when it has one, and the count it needs: wins for a `win`, different bosses for a `won`. */
 export interface Trigger extends StoryEvent {
   times?: number;
 }
@@ -27,7 +27,7 @@ export interface StageTrigger {
 
 export const TRIGGERS: readonly StageTrigger[] = [
   { stage: 2, main: { on: 'won' }, optional: { on: 'win', times: 3 } }, // the first boss beaten, or 3 wins in any mode
-  { stage: 3, main: { on: 'room', id: 'medal-room' } }, // the Medal room first visited
+  { stage: 3, main: { on: 'room', id: 'medal-room' }, optional: { on: 'won', times: 2 } }, // the Medal room first visited, or a second boss beaten: nobody is stuck for not opening a room
   { stage: 4, main: { on: 'won', id: 'hull' } }, // The Hull beaten
   { stage: 5, main: { on: 'won', id: 'chaplain' } }, // The Chaplain beaten
   { stage: 6, main: { on: 'start', id: 'ballast' } }, // The Ballast Mind's fight starts
@@ -47,10 +47,11 @@ export const SEALED = { title: 'Ledger: sealed', body: 'Seat: empty. The entry i
 
 export const STORY_KEY = 'ab-alone.story';
 
-/** What is saved: the stages whose moment came, in the order they came, and the wins counted in any mode. */
+/** What is saved: the stages whose moment came, in the order they came, the wins counted in any mode and the bosses beaten. */
 export interface Story {
   moments: number[];
   wins: number;
+  bosses: string[];
 }
 
 const whole = (n: unknown, least: number): n is number => Number.isInteger(n) && (n as number) >= least;
@@ -59,12 +60,12 @@ const whole = (n: unknown, least: number): n is number => Number.isInteger(n) &&
 export function loadStory(store: Store): Story {
   try {
     const saved = JSON.parse(read(store, STORY_KEY) ?? 'null') as Partial<Story> | null;
-    const { moments, wins } = saved ?? {};
-    if (Array.isArray(moments) && moments.every((m) => whole(m, 2) && m <= 7) && whole(wins, 0)) return { moments, wins };
+    const { moments, wins, bosses = [] } = saved ?? {};
+    if (Array.isArray(moments) && moments.every((m) => whole(m, 2) && m <= 7) && whole(wins, 0) && Array.isArray(bosses)) return { moments, wins, bosses };
   } catch {
     // Not JSON: a new player.
   }
-  return { moments: [], wins: 0 };
+  return { moments: [], wins: 0, bosses: [] };
 }
 
 /** The stage of a story: the longest unbroken run of moments from stage 2 up, 1 with none. */
@@ -77,15 +78,18 @@ export function stageOf({ moments }: Story): number {
 /** The stage the player has reached. */
 export const storyStage = (store: Store): number => stageOf(loadStory(store));
 
-const matches = (t: Trigger, e: StoryEvent, wins: number): boolean => t.on === e.on && (t.id === undefined || t.id === e.id) && wins >= (t.times ?? 0);
+const matches = (t: Trigger, e: StoryEvent, count: number): boolean => t.on === e.on && (t.id === undefined || t.id === e.id) && count >= (t.times ?? 0);
 
 /** Records what happened, saves it when it changed anything, and returns the stage reached. */
 export function fire(store: Store, event: StoryEvent): number {
   const story = loadStory(store);
   const wins = story.wins + (event.on === 'win' ? 1 : 0);
-  const hit = TRIGGERS.filter(({ stage, main, optional }) => !story.moments.includes(stage) && [main, optional].some((t) => t && matches(t, event, wins))).map((t) => t.stage);
-  const next = { moments: [...story.moments, ...hit], wins };
-  if (hit.length > 0 || wins !== story.wins) write(store, STORY_KEY, JSON.stringify(next));
+  const newBoss = event.on === 'won' && !story.bosses.includes(event.id!);
+  const bosses = newBoss ? [...story.bosses, event.id!] : story.bosses;
+  const count = event.on === 'win' ? wins : bosses.length;
+  const hit = TRIGGERS.filter(({ stage, main, optional }) => !story.moments.includes(stage) && [main, optional].some((t) => t && matches(t, event, count))).map((t) => t.stage);
+  const next = { moments: [...story.moments, ...hit], wins, bosses };
+  if (hit.length > 0 || wins !== story.wins || newBoss) write(store, STORY_KEY, JSON.stringify(next));
   return stageOf(next);
 }
 

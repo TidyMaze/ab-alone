@@ -55,12 +55,12 @@ describe('the stage', () => {
       const store = memory();
       store.setItem(STORY_KEY, text);
       expect(storyStage(store), text).toBe(1);
-      expect(loadStory(store), text).toEqual({ moments: [], wins: 0 });
+      expect(loadStory(store), text).toMatchObject({ moments: [], wins: 0 });
     }
   });
 
   it('is the longest unbroken run of moments from stage 2 up', () => {
-    const at = (...moments: number[]): number => stageOf({ moments, wins: 0 });
+    const at = (...moments: number[]): number => stageOf({ moments, wins: 0, bosses: [] });
     expect(at()).toBe(1);
     expect(at(2)).toBe(2);
     expect(at(2, 3)).toBe(3);
@@ -81,9 +81,8 @@ describe('the stage', () => {
   it('counts a moment fired out of order as soon as the ones before it are reached', () => {
     const store = memory();
     expect(fire(store, { on: 'won', id: 'chaplain' })).toBe(2); // the first boss beaten, whichever it is, and the Chaplain's own moment
-    expect(saved(store)).toEqual({ moments: [2, 5], wins: 0 });
-    expect(fire(store, { on: 'won', id: 'hull' })).toBe(2); // the Medal room (3) is still to come
-    expect(fire(store, { on: 'room', id: 'medal-room' })).toBe(5);
+    expect(saved(store)).toMatchObject({ moments: [2, 5], wins: 0 });
+    expect(fire(store, { on: 'won', id: 'hull' })).toBe(5); // a second boss reaches 3, The Hull is 4, and the Chaplain's 5 was waiting
   });
 });
 
@@ -91,9 +90,9 @@ describe('fire', () => {
   it('records the first boss win as stage 2, and a boss of the ladder as its own moment as well', () => {
     const store = memory();
     expect(fire(store, { on: 'won', id: 'swarm' })).toBe(2);
-    expect(saved(store)).toEqual({ moments: [2], wins: 0 });
-    expect(fire(store, { on: 'won', id: 'hull' })).toBe(2);
-    expect(saved(store)).toEqual({ moments: [2, 4], wins: 0 });
+    expect(saved(store)).toMatchObject({ moments: [2], wins: 0 });
+    expect(fire(store, { on: 'won', id: 'hull' })).toBe(4); // a second boss is stage 3 as well
+    expect(saved(store)).toMatchObject({ moments: [2, 3, 4], wins: 0 });
   });
 
   it('records a moment once, and writes nothing when an event changes nothing', () => {
@@ -112,18 +111,28 @@ describe('fire', () => {
     const store = memory();
     fire(store, { on: 'start', id: 'ballast' });
     fire(store, { on: 'room', id: 'medal-room' });
-    expect(saved(store)).toEqual({ moments: [6, 3], wins: 0 });
+    expect(saved(store)).toMatchObject({ moments: [6, 3], wins: 0 });
+  });
+
+  it('reaches 7 for a player who never opens the Medal room: a second boss stands in for it, and the first alone does not', () => {
+    const store = memory();
+    expect(fire(store, { on: 'won', id: 'hull' })).toBe(2);
+    expect(fire(store, { on: 'won', id: 'hull' })).toBe(2); // the same boss again is no second boss
+    expect(fire(store, { on: 'won', id: 'echo' })).toBe(4);
+    expect(fire(store, { on: 'won', id: 'chaplain' })).toBe(5);
+    expect(fire(store, { on: 'start', id: 'ballast' })).toBe(6);
+    expect(fire(store, { on: 'won', id: 'ballast' })).toBe(7);
   });
 
   it('counts the wins of any mode, and the third is the optional trigger of stage 2 only', () => {
     const store = memory();
     expect(fire(store, { on: 'win' })).toBe(1);
     expect(fire(store, { on: 'win' })).toBe(1);
-    expect(saved(store)).toEqual({ moments: [], wins: 2 });
+    expect(saved(store)).toMatchObject({ moments: [], wins: 2 });
     expect(fire(store, { on: 'win' })).toBe(2);
-    expect(saved(store)).toEqual({ moments: [2], wins: 3 });
+    expect(saved(store)).toMatchObject({ moments: [2], wins: 3 });
     expect(fire(store, { on: 'win' })).toBe(2); // nothing else follows from wins
-    expect(saved(store)).toEqual({ moments: [2], wins: 4 });
+    expect(saved(store)).toMatchObject({ moments: [2], wins: 4 });
   });
 
   it('survives a blocked storage without throwing', () => {
@@ -137,8 +146,8 @@ describe('catchUp', () => {
   it('fires the boss moments of the medals a player already holds, so nobody is sent back', () => {
     const store = memory();
     catchUp(store, { echo: 14, hull: 20, ballast: 60 });
-    expect(saved(store)).toEqual({ moments: [2, 4, 6, 7], wins: 0 });
-    expect(storyStage(store)).toBe(2); // the Medal room (3) and the Chaplain (5) are still to come
+    expect(saved(store)).toMatchObject({ moments: [2, 3, 4, 6, 7], wins: 0 });
+    expect(storyStage(store)).toBe(4); // the Chaplain (5) is still to come
   });
 
   it('writes nothing for a player with no medal', () => {

@@ -367,7 +367,7 @@ so it can be re-pointed at towers later; `main.ts` fires the events through one 
 | Stage | Main trigger (the event) | Fired from |
 |---|---|---|
 | 2 | the first boss beaten (`won`, any boss) | the win of a boss fight, once per game |
-| 3 | the Medal room first visited (`room`, `medal-room`) | the reader opening the Medal room |
+| 3 | the Medal room first visited (`room`, `medal-room`), or a second boss beaten (`won`, 2 different bosses) | the reader opening the Medal room, a boss win |
 | 4 | The Hull beaten (`won`, `hull`) | the win of a boss fight |
 | 5 | The Chaplain beaten (`won`, `chaplain`) | the win of a boss fight |
 | 6 | The Ballast Mind's fight starts (`start`, `ballast`) | the start of a boss fight |
@@ -381,7 +381,7 @@ so it can be re-pointed at towers later; `main.ts` fires the events through one 
   a Chaplain win before The Hull counts as soon as stages 2 to 4 are reached. The main line alone reaches stage 7.
 - **The save** is the JSON `{"moments": [...], "wins": n}` in `ab-alone.story`, through the same store as the log archive. A corrupt save is a
   new player's, stage 1. A player who played before the story keeps what he earned: at load the medals fire the matching boss moments (a boss
-  with a medal was started and won). The Medal room (stage 3) is not recorded by a medal, so such a player visits it once.
+  with a medal was started and won). Two medals reach stage 3 the same way, so nobody is stuck for not opening the Medal room.
 - **The gate.** A boss is never locked here (#1527 decides locking). Its lore entry above the current stage is held back: the win screen shows
   the sealed line in place of the entry, the same for every such boss, in Tally's register and with no secret word ("Ledger: sealed",
   "Seat: empty. The entry is held. Tally enters it when the count allows."); `body[data-lore]` reads `sealed`. The stage is computed after
