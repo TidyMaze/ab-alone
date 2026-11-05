@@ -1201,4 +1201,35 @@ mod tests {
         assert_eq!((s.boss, s.player_budget, s.attempts), ("echo", 40, 2));
         assert!(s.median_plies > 0.0 && s.median_plies <= 8.0);
     }
+
+    #[test]
+    fn an_act_boss_searches_its_budget_scaled_by_the_act_percent() {
+        let budget = |boss, percent| {
+            let mut a = Arena::new(boss, 0);
+            a.scale_node_budget(percent);
+            match a {
+                Arena::Plain(enc, _) => enc.boss.node_budget,
+                Arena::Swarm(swarm) => swarm.budget(),
+                Arena::Choir(_) => 0,
+            }
+        };
+        assert_eq!(budget(LadderBoss::Hull, 50), 1500);
+        assert_eq!(budget(LadderBoss::Hull, 300), 9000);
+        assert_eq!(budget(LadderBoss::Swarm, 200), SWARM_NODE_BUDGET * 2);
+        assert_eq!(budget(LadderBoss::Choir, 50), 0, "the Choir scales its own encounter");
+    }
+
+    #[test]
+    fn an_act_boss_fight_reports_the_marbles_the_boss_ejected() {
+        let a = arena(&[(2, 0), (3, 0)], &[(4, 0), (-4, 4)], Player::Black, [5, 0]);
+        assert_eq!(play_full(a, 7, 2, 50, 0, 300).2, 0, "the player won it");
+        let a = arena(&[(-4, 0), (3, 3)], &[(-2, 0), (-3, 0)], Player::White, [0, 5]);
+        assert_eq!(play_full(a, 0, 1, 50, 0, 300).2, 6, "the boss ejected its sixth");
+        let (record, lost) = play_act_boss(LadderBoss::Echo, 3, 40, 100, 6);
+        let plain = play_attempt(LadderBoss::Echo, 3, 1, 40, 6);
+        assert_eq!((record.plies, record.result), (plain.plies, plain.result));
+        assert!(lost <= 6);
+        let (record, _) = play_act_boss(LadderBoss::Choir, 3, 40, 50, 4);
+        assert_eq!(record.boss, "choir");
+    }
 }
