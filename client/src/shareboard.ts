@@ -20,7 +20,8 @@ export const BOARD_TEXT =
   'The shared ranked board publishes your ranked results (with the moves of each game and your opponent\'s key and name), a random key and the name you pick on public Nostr relays run by third parties (relay.piazza.today, relay.bitmacro.cloud). ' +
   'Opening the board connects your browser to these relays, which see your IP address. ' +
   'It is public and permanent: we cannot delete it, and the relays keep what they keep. Leaving the board deletes your board key in this browser and stops new results; it does not erase the results already on the relays. ' +
-  'Pick a name that does not identify you. You must be 16 or older.';
+  'Pick a name that does not identify you. You must be 16 or older. ' +
+  'The relays that keep your results may be outside the EU and their operators are not checked by us.';
 
 export type BoardChoice = 'joined' | 'declined';
 

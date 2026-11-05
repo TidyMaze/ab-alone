@@ -25,6 +25,8 @@ describe('the board opt-in (#1287)', () => {
     for (const word of ['public and permanent', 'third parties', 'cannot delete', 'does not identify you', 'relay.piazza.today', 'You must be 16 or older.', 'deletes your board key']) {
       expect(BOARD_TEXT).toContain(word);
     }
+    // #1287, GDPR art. 49(1)(a): the transfer outside the EEA rests on this consent, so the player is told of it here.
+    expect(BOARD_TEXT).toContain('The relays that keep your results may be outside the EU and their operators are not checked by us.');
   });
 
   it('is asked until answered, and an answer of another version counts for nothing', () => {
