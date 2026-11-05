@@ -10,6 +10,7 @@ pub mod worldfight;
 pub mod worldherd;
 pub mod worldoverlay;
 pub mod worldstep;
+pub mod worldwander;
 
 pub fn version() -> &'static str {
     "0.1.0"
