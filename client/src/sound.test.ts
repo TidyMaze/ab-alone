@@ -15,6 +15,7 @@ import {
   ROUTE,
   SILENT,
   Sfx,
+  SMALL_SPEAKER_HZ,
   TENSION,
   TellWatch,
   busGain,
@@ -25,6 +26,7 @@ import {
   knockVoices,
   PICK,
   layerGains,
+  smallSpeakerDb,
   tellVoices,
   type Bus,
   type Cue,
@@ -54,12 +56,17 @@ describe('cueFor, world.md section 7', () => {
 });
 
 describe('HUM, world.md section 7 ambience', () => {
-  it('low steady sines, no melody: every tone one pitch under 90 Hz', () => {
-    expect(HUM.length).toBeGreaterThanOrEqual(2);
+  it('low steady sines, no melody: two fundamentals under 90 Hz, any other tone a harmonic above 150 Hz', () => {
+    expect(HUM.filter((tone) => tone.freq < 90).length).toBeGreaterThanOrEqual(2);
     for (const tone of HUM) {
       expect(tone.freq).toBeGreaterThanOrEqual(30);
-      expect(tone.freq).toBeLessThan(90);
+      expect(tone.freq < 90 || tone.freq > SMALL_SPEAKER_HZ).toBe(true);
     }
+  });
+
+  it('is heard on a small speaker (#1572): at least -47 dBFS and at most -30 dBFS after the 150 Hz high-pass', () => {
+    expect(smallSpeakerDb(HUM)).toBeGreaterThanOrEqual(-47);
+    expect(smallSpeakerDb(HUM)).toBeLessThanOrEqual(-30);
   });
 
   it('quiet under the effects: the tones together stay at a tenth of the full level or less', () => {
@@ -75,10 +82,23 @@ describe('TENSION, the drone tension layers (world.md section 7, Music; #439)', 
       expect(layer.length).toBeGreaterThan(0);
       for (const tone of layer) {
         expect(tone.freq).toBeGreaterThanOrEqual(30);
-        expect(tone.freq).toBeLessThan(200);
+        expect(tone.freq).toBeLessThan(400);
         expect(tone.gain).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('every layer carries content above 150 Hz for laptop and phone speakers (#1572)', () => {
+    for (const layer of TENSION) expect(layer.some((tone) => tone.freq > SMALL_SPEAKER_HZ)).toBe(true);
+  });
+
+  it('stays audible on a small speaker and still rises with the level (#1572, world.md section 7, Mix levels)', () => {
+    const level = (n: number) => smallSpeakerDb(TENSION.slice(0, n).flat());
+    expect(level(0)).toBe(-Infinity);
+    expect(level(1)).toBeGreaterThanOrEqual(-44);
+    expect(level(2)).toBeGreaterThanOrEqual(-40);
+    expect(level(2) - level(1)).toBeGreaterThanOrEqual(3);
+    expect(level(2)).toBeLessThanOrEqual(-30); // an undertone, not a new feature
   });
 
   it('as quiet as the hum: each layer at a tenth of the full level or less', () => {
@@ -89,6 +109,27 @@ describe('TENSION, the drone tension layers (world.md section 7, Music; #439)', 
     expect(layerGains(0)).toEqual([0, 0]);
     expect(layerGains(1)).toEqual([1, 0]);
     expect(layerGains(2)).toEqual([1, 1]);
+  });
+});
+
+describe('smallSpeakerDb, the level left on a laptop or phone speaker (#1572)', () => {
+  it('is silent for no tone', () => {
+    expect(smallSpeakerDb([])).toBe(-Infinity);
+  });
+
+  it('passes a tone far above the cutoff: a 1 kHz sine at gain 0.1 is the RMS of 0.1 times the master', () => {
+    expect(smallSpeakerDb([{ freq: 1000, gain: 0.1 }])).toBeCloseTo(20 * Math.log10((0.1 * MASTER_LEVEL) / Math.SQRT2), 1);
+  });
+
+  it('is 3 dB down at the cutoff and about 40 dB down two decades below it (second-order high-pass)', () => {
+    const at = (freq: number) => smallSpeakerDb([{ freq, gain: 0.1 }]);
+    expect(at(1000) - at(SMALL_SPEAKER_HZ)).toBeCloseTo(3, 0);
+    expect(at(1000) - at(SMALL_SPEAKER_HZ / 10)).toBeCloseTo(40, 0);
+  });
+
+  it('adds the power of the tones: two equal tones are 3 dB above one', () => {
+    const one = smallSpeakerDb([{ freq: 400, gain: 0.05 }]);
+    expect(smallSpeakerDb([{ freq: 400, gain: 0.05 }, { freq: 500, gain: 0.05 }]) - one).toBeCloseTo(3, 0);
   });
 });
 
