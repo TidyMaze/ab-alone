@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_logs, world_path, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_logs, world_path, world_places, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -6455,6 +6455,7 @@ const openWorld = new OpenWorldMode(
   () => boss_ids(), // lair k is boss k round the roster: the tower icons of the map (#1438)
   (seed) => Int32Array.from(world_logs(seed)), // the lore logs (#1589)
   (id) => markRead(store, id), // a log read joins the log archive (#1589)
+  (seed) => Int32Array.from(world_places(seed)), // the towns and dungeon gates (#1514)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;
@@ -6549,6 +6550,7 @@ if (navigator.webdriver) {
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldTeleporters = (seed: number) => Array.from(world_teleporters(seed)); // every teleporter of a world, `q, r` pairs (#1412)
+  hooks.__openworldPlaces = (seed: number) => Array.from(world_places(seed)); // every town and dungeon gate of a world, `kind, q, r` triples (#1514)
   hooks.__openworldLogs = (seed: number) => Array.from(world_logs(seed)); // every lore log of a world, `q, r` pairs (#1589)
   hooks.__openworldLairs = (seed: number) => lairCells(seed); // the boss lairs of a world as cells, for the peer tests (#1305)
   hooks.__openworldCamera = (at?: number) => openWorld.camera(at); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)

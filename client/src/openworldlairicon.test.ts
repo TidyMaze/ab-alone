@@ -182,7 +182,7 @@ describe('townIcon and dungeonIcon (#1514)', () => {
     expect(fills[0]!.points).toHaveLength(12); // six points: the tower's plate has four
     expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
     const house = fills.find((f) => f.colour === ICON.town)!;
-    expect(house.points).toHaveLength(10); // a roof and four walls
+    expect(house.points).toHaveLength(14); // seven points: a roof over four walls
     const xs = house.points.filter((_, i) => i % 2 === 0);
     expect(Math.min(...xs)).toBeGreaterThan(85);
     expect(Math.max(...xs)).toBeLessThan(115);

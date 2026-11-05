@@ -120,6 +120,21 @@ pub fn world_logs(seed: u32) -> Vec<i32> {
         .collect()
 }
 
+/// The towns then the dungeon gates of the world `seed` (#1514, docs/specs/openworld.md section 13): `kind, q, r` triples, `kind` `0` for a
+/// town and `1` for a dungeon gate, the spawn town first, kept off the lairs, the teleporters and the logs.
+#[wasm_bindgen]
+pub fn world_places(seed: u32) -> Vec<i32> {
+    let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
+    let mut taken = world::teleporters(u64::from(seed), &lairs);
+    taken.extend(lairs);
+    let logs = world::logs(u64::from(seed), &taken);
+    taken.extend(logs);
+    world::places(u64::from(seed), &taken)
+        .into_iter()
+        .flat_map(|(kind, (q, r))| [kind as i32, q, r])
+        .collect()
+}
+
 /// The walk of the hero from `(from_q, from_r)` to `(to_q, to_r)` in the world `seed` (docs/specs/openworld.md section 4): `q, r`
 /// pairs, the start left out, empty when there is none. `blocked` holds the enemy cells and the lairs, `broken` the obstacles the
 /// hero has broken (#1154), both `q, r` pairs.

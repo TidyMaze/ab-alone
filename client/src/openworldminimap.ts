@@ -4,7 +4,7 @@
 // same drawing on another frame (`drawMap`).
 import type { Axial } from './board';
 import { type Biome, neighbours, same, type Terrain, type Tile } from './openworld';
-import { iconSize, lairIcon, logIcon, portalIcon } from './openworldlairicon';
+import { dungeonIcon, iconSize, lairIcon, logIcon, portalIcon, townIcon } from './openworldlairicon';
 import { BIOME_LOOK, LOOK, lowGround, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
 import { mapColour } from './neonworld';
@@ -33,6 +33,8 @@ export interface MinimapData {
   teleporters: readonly Axial[];
   /** The lore logs to draw (#1589): the discovered ones, and whether each is found. */
   logs: readonly { cell: Axial; found: boolean }[];
+  /** The towns and the dungeon gates (#1514), in or out of the window: landmarks seen from afar, as the lairs. */
+  places: readonly { cell: Axial; kind: 'town' | 'dungeon' }[];
   /** The teleporter the map's choice would pick (#1412), ringed; none outside the choice. */
   chosen?: Axial | null;
   /** The camera's yaw, in radians (`OpenWorldView.yaw`). */
@@ -174,7 +176,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, size: number, data: M
   drawMap(ctx, { width: size, height: size, centre: data.hero, unit: size / 2 / (RADIUS + 1), round: true }, data);
 }
 
-/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the lairs (the tower icon of each boss), the teleporters, the lore logs, the enemies, the troop and the hero. */
+/** Draws `data` on `frame`, `data.yaw` up: the cells given, then the towns and the dungeon gates, the lairs (the tower icon of each boss), the teleporters, the lore logs, the enemies, the troop and the hero. */
 export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, unit, round }: MapFrame, data: MinimapData): void {
   const [midX, midY] = [width / 2, height / 2];
   const put = (cell: Axial): { x: number; y: number } => {
@@ -200,6 +202,11 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   }
   const edge = round ? midX - 8 : Infinity; // the full map has no edge: every lair is drawn where it is
   const away = (cell: Axial): number => Math.hypot(put(cell).x - midX, put(cell).y - midY);
+  for (const { cell, kind } of data.places) {
+    if (away(cell) > edge) continue; // the minimap draws the ones in its window only
+    const { x, y } = put(cell);
+    (kind === 'town' ? townIcon : dungeonIcon)(ctx, x, y, iconSize(unit, round)); // a house, a gate (#1514)
+  }
   const out = data.lairs.filter(({ cell, beaten }) => !beaten && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
   const arrows = new Set(out.slice(0, ARROWS).map((lair) => lair.cell));
   for (const { cell, beaten, boss } of data.lairs) {

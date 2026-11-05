@@ -524,3 +524,47 @@ The Open world holds twelve logs of the story (`docs/specs/world.md` section 12)
 - **Tests.** Rust: 12 cells per seed from the seed alone, each on open ground of its biome with its neighbours, off the spawn, the lairs, the teleporters and the
   enemies, two per sextant. Client: the save of `logs` and its migration, the stakes and their glow, the icon, the panel, the archive. E2E
   (`openworld-lore.spec.ts`): a log read by a roll, closed by the next move, found after a reload and in the archive.
+
+## 13. The world as the map of the whole game (#1514, Decision #1513)
+
+Decision #1513 (both owners agreed, 2026-11-05): the Open world is the map of the whole game, and every mode is a place in it or a
+gate to it. This supersedes the "secondary mode" of section 1. Same rules in every place (Abalone first, no HP, no levels, no stats,
+#313); only the place changes. This section is the one-page plan; the rows say what is built and what is planned, so nobody reads a
+plan as the game.
+
+| Mode today | Place in the world | Enter | Leave | State |
+|---|---|---|---|---|
+| Open world (walk, troop, fights) | The whole hexagon, spawn `(0, 0)` | "Open world" in the mode menu; `#openworld` link | Leave button, back to where the player came from | Built |
+| Hub, bot, hot-seat, Medal room, terminals, Daily | **Spawn town**: the clearing of radius 3 round `(0, 0)`, the crash site | Walk into the clearing (the hero starts in it) | Walk out of it | Place and map icon built (this section). The Hub scene stays the front door; moving its stations into the town is planned |
+| Training yard (Trainer, Stalker), a bot table, a hot-seat table, a notice board | **The four other towns**, one per biome but the meadow and the archipelago (forest, tundra, desert, badlands), 40 to 120 ground units out | Walk in | Walk out | Place and map icon built. Their stations are planned, five towns sharing out the Hub's stations, one per deck |
+| Online, Ranked, Leaderboard, Royale, co-op, boss duel | **Arena town**: one of the four other towns, chosen when it is built. An invite link `#room=` still opens the table at once | Walk in | Walk out | Planned (the town exists on the map, the table does not) |
+| The 15 bosses | **Towers**: the boss lairs of section 7, lair `k` in the sextant `k % 6`, 160 to 420 ground units out | Roll onto the lair from a neighbour | Win or lose, "Back to the Open world": the hero returns to the entrance cell | Built (section 7). The five story bosses as the gates of the five decks is planned |
+| Rogue-lite run | **Dungeon gates**: one in each biome but the meadow (forest, tundra, desert, badlands, archipelago), 160 to 420 ground units out. An act is one dungeon, in matching terrain | Roll onto the gate from a neighbour | Leave the run: the hero returns to the entrance cell | Gate and map icon built. Entering one is planned; the run is still started from the Hub |
+| Teleporters | Pads in the clearing and in the open ground, one a square of 8 x 8 chunks (section 10) | Roll onto a pad, Teleport button | Pick another pad | Built. Pads inside towns and gate clearings are planned |
+| Console | Leaves the player's UI | n/a | n/a | Planned |
+| Boss fight menu | Fast travel to the towers already found | Menu entry | n/a | Planned |
+| Quick game (bot, hot-seat, online) | Outside the world: a permanent button that skips it | The button | Back to the menu | Planned |
+
+- **Rule for every place**: it is entered by walking or rolling onto it, and every exit returns the hero to the entrance cell, as a
+  lair does (section 7). No place moves the hero anywhere else.
+- **Placement is seeded world generation in Rust** (`world::places(seed, avoid)`, bridge `world_places(seed)`, `kind, q, r` triples,
+  `kind` 0 a town and 1 a dungeon gate). The towns come first and the spawn clearing, `(0, 0)`, is the first town. The other four towns
+  are drawn in the sextants 1 to 4 (the biomes of section 2, from the forest), 40 to 120 ground units out, which keeps them inside the
+  nearest tower's 150 cells. The five dungeon gates are drawn in the sextants 1 to 5, 160 to 420 ground units out, as the towers.
+  A draw is kept when its cell and its six neighbours are open ground of the sextant's biome, it is more than `SAFE` (8) cells from the
+  spawn, 2 cells or more inside its chunk with no generated enemy within 2 cells, and it is more than 3 cells from every lair,
+  teleporter, log and place placed before it, so no two places overlap and none sits on blocked ground (a tower is a lair: they do not
+  move). The bridge passes the lairs, the teleporters and the logs, in that order, so none of them moves. It reads the terrain and the
+  enemies, never changes them, and needs no record in the save: the places are a function of the seed, so `WORLD_VERSION` does not move
+  and the saves keep loading.
+- **Map.** A town is a green house on a hexagonal plate, a dungeon gate an orange arch on a triangular plate, a tower the crenellated
+  tower of section 8 on a square plate, a teleporter a round plate and a log a diamond: five shapes (`townIcon`, `dungeonIcon` of
+  `openworldlairicon.ts`). Like the towers they are landmarks seen from afar: the map draws every one where it is, the minimap the ones in
+  its window, 20 px, no arrow. The violet, amber, green and orange of the icons read 3:1 over the plate (unit test).
+- **Browser checks.** `body[data-openworld-places]` lists the places (`town:q,r` or `dungeon:q,r`, separated by spaces);
+  `window.__openworldPlaces(seed)` gives the bridge's triples.
+- **Tests.** Rust: the places of 24 seeds hold the 5 towns and the 5 gates, the spawn town first, no two places within 3 cells, none on a
+  lair, teleporter or log, each with open ground and no enemy round it, each in its biome; seed 7 is pinned. Client: the icons' shapes
+  and contrast, the minimap and the map drawing them, the mode reading and publishing them.
+- **Not now**: walking into a town or a gate (no station and no run starts from the world yet), moving the Hub's stations, 3D models of
+  the places (#1518), the transitions (#1519), the door grammar (#1517).

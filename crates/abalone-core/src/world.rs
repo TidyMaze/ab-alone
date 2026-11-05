@@ -749,11 +749,24 @@ pub fn logs(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
 
 /// The `n`-th try of log `k`: its cell when it is a fit one.
 fn log_try(seed: u64, k: i32, n: i32, avoid: &[(i32, i32)]) -> Option<(i32, i32)> {
-    let wedge = k as usize % 6;
-    let (near, far) = LOG_RINGS[k as usize / 6];
-    let angle =
-        (wedge as f64 - 0.4 + 0.8 * unit(seed, LOG_SALT, k, n)) * std::f64::consts::FRAC_PI_3;
-    let reach = near + (far - near) * unit(seed, LOG_SALT + 1, k, n);
+    let ring = LOG_RINGS[k as usize / 6];
+    spot(seed, LOG_SALT, k, n, k as usize % 6, ring, avoid)
+}
+
+/// The `n`-th try of the spot `k` drawn from `salt` in the sextant `wedge`, 30 to 140 or 160 to 420 ground units out (`reach`): its cell
+/// when it is a fit one. The cell and its six neighbours are open ground of the sextant's biome, off the spawn's `SAFE` radius, 2 cells
+/// or more inside its chunk with no generated enemy within 2 cells, and no cell of `avoid` within 3. Logs, towns and dungeon gates use it.
+fn spot(
+    seed: u64,
+    salt: u64,
+    k: i32,
+    n: i32,
+    wedge: usize,
+    (near, far): (f64, f64),
+    avoid: &[(i32, i32)],
+) -> Option<(i32, i32)> {
+    let angle = (wedge as f64 - 0.4 + 0.8 * unit(seed, salt, k, n)) * std::f64::consts::FRAC_PI_3;
+    let reach = near + (far - near) * unit(seed, salt + 1, k, n);
     // The pointy-top layout of the client's `cellAtPoint`, as the lairs.
     let r = (-reach * angle.sin() / (3f64.sqrt() / 2.0)).round() as i32;
     let q = (reach * angle.cos() - f64::from(r) / 2.0).round() as i32;
@@ -773,6 +786,48 @@ fn log_try(seed: u64, k: i32, n: i32, avoid: &[(i32, i32)]) -> Option<(i32, i32)
             .iter()
             .all(|&enemy| hex_distance(enemy, (q, r)) > 2);
     fit.then_some((q, r))
+}
+
+/// What a place of the world is (#1514, docs/specs/openworld.md section 13). The bridge passes it as its number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaceKind {
+    Town = 0,
+    Dungeon = 1,
+}
+
+/// The towns of a world, the spawn clearing first, and the dungeon gates, one in each biome but the meadow.
+pub const TOWNS: usize = 5;
+pub const DUNGEONS: usize = 5;
+/// The salt of the town and dungeon gate draws (as `LOG_SALT`, two salts each).
+const PLACE_SALT: u64 = 60;
+/// Town `k` is drawn in the sextant `k`, 40 to 120 ground units out (a hex distance of 139 at most, inside the lairs' `LAIR_MIN`); the gate `k` in the sextant `k + 1`,
+/// as far out as the lairs.
+const TOWN_RING: (f64, f64) = (40.0, 120.0);
+const DUNGEON_RING: (f64, f64) = (160.0, 420.0);
+
+/// The towns then the dungeon gates of the world `seed` (docs/specs/openworld.md section 13), each with its kind and its cell. The first
+/// town is the spawn clearing, `(0, 0)`. Town `k` (1 to 4) is drawn in the sextant `k` (forest, tundra, desert, badlands) and the dungeon
+/// gate `k` in the sextant `k + 1` (forest to archipelago): the first draw that `spot` keeps and that is more than 3 cells from every cell
+/// of `avoid` (the lairs, the teleporters and the logs) and from the places placed before it. From the seed alone, it reads the terrain
+/// and the enemies, never changes them, so `WORLD_VERSION` does not move.
+pub fn places(seed: u64, avoid: &[(i32, i32)]) -> Vec<(PlaceKind, (i32, i32))> {
+    let mut taken = avoid.to_vec();
+    taken.push((0, 0));
+    let mut found = vec![(PlaceKind::Town, (0, 0))];
+    let wanted = (1..TOWNS as i32)
+        .map(|k| (PlaceKind::Town, k, k as usize, TOWN_RING))
+        .chain(
+            (0..DUNGEONS as i32)
+                .map(|k| (PlaceKind::Dungeon, 10 + k, k as usize + 1, DUNGEON_RING)),
+        );
+    for (kind, k, wedge, ring) in wanted {
+        let cell = (0..)
+            .find_map(|n| spot(seed, PLACE_SALT, k, n, wedge, ring, &taken))
+            .expect("an endless search");
+        taken.push(cell);
+        found.push((kind, cell));
+    }
+    found
 }
 
 /// The farthest a hero path reaches from its start, in cells (docs/specs/openworld.md section 4).
@@ -2066,6 +2121,28 @@ mod tests {
         assert_eq!(moved.len(), free.len());
         assert!(hex_distance(moved[2].1, free[2].1) > 3);
         assert_eq!(moved[..2], free[..2]);
+    }
+
+    #[test]
+    fn the_places_of_seed_7_are_pinned() {
+        let found = places(7, &place_avoid(7));
+        let town = |q, r| (PlaceKind::Town, (q, r));
+        let gate = |q, r| (PlaceKind::Dungeon, (q, r));
+        assert_eq!(
+            found,
+            vec![
+                town(0, 0),
+                town(59, -44),
+                town(22, -88),
+                town(-101, 20),
+                town(-78, 66),
+                gate(392, -366),
+                gate(44, -217),
+                gate(-312, -21),
+                gate(-292, 331),
+                gate(-151, 434),
+            ]
+        );
     }
 
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.

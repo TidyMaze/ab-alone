@@ -45,6 +45,10 @@ const MAX_DAY_STEP_MS = 250;
 /** The cells as the bridge takes them: `q, r` pairs. */
 const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());
 
+/** The places as the bridge gives them (#1514): `kind, q, r` triples, kind 0 a town and 1 a dungeon gate. */
+const placesIn = (flatPlaces: Int32Array): { cell: Axial; kind: 'town' | 'dungeon' }[] =>
+  Array.from({ length: flatPlaces.length / 3 }, (_, i) => ({ kind: flatPlaces[3 * i] === 0 ? 'town' : 'dungeon', cell: [flatPlaces[3 * i + 1]!, flatPlaces[3 * i + 2]!] as Axial }));
+
 /** The camera turns by a step of Q or E, and by a px of a right-button drag, in radians (#1026). */
 export const TURN_STEP = Math.PI / 3;
 /** The camera rests at this angle plus a multiple of TURN_STEP, so screen up runs along a straight line of hexes, not the zigzag between
@@ -104,6 +108,8 @@ export class OpenWorldMode {
   private teleporters: Axial[] = [];
   /** The lore logs of the world entered (#1589), by number, and the numbers of the ones found. */
   private logs: Axial[] = [];
+  /** The towns and dungeon gates of the world entered (#1514). */
+  private places: { cell: Axial; kind: 'town' | 'dungeon' }[] = [];
   private found: number[] = [];
   private dirty = false;
   /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
@@ -168,6 +174,8 @@ export class OpenWorldMode {
     /** The lore logs of a seed's world: `q, r` pairs (the bridge's `world_logs`, #1589), and what files the id of a log read in the archive. */
     private readonly logsOf: (seed: number) => Int32Array = () => new Int32Array(),
     private readonly read: (id: string) => void = () => {},
+    /** The towns and dungeon gates of a seed's world: `kind, q, r` triples (the bridge's `world_places`, #1514). */
+    private readonly placesOf: (seed: number) => Int32Array = () => new Int32Array(),
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -202,6 +210,7 @@ export class OpenWorldMode {
     this.heard = [];
     this.teleporters = pairs(this.teleportersOf(seed));
     this.logs = pairs(this.logsOf(seed));
+    this.places = placesIn(this.placesOf(seed));
     this.found = saved ? [...saved.logs] : [];
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     this.counted = 0;
@@ -321,6 +330,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldYaw;
     delete document.body.dataset.openworldBroken;
     delete document.body.dataset.openworldLairs;
+    delete document.body.dataset.openworldPlaces;
     delete document.body.dataset.openworldLairsBeaten;
     delete document.body.dataset.openworldLairsHeard;
     delete document.body.dataset.openworldDrawn;
@@ -663,6 +673,7 @@ export class OpenWorldMode {
       enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
       lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), boss: bosses[i % bosses.length] })),
       teleporters: this.discoveredTeleporters(),
+      places: this.places,
       logs: this.logs.flatMap((cell, i) => (this.discovered.has(cell[0], cell[1]) ? [{ cell, found: this.found.includes(i) }] : [])),
       yaw: (this.mapYaw = this.view!.drawnYaw), // the camera's drawn yaw: the map turns with it (#1448)
     };
@@ -988,6 +999,7 @@ export class OpenWorldMode {
     document.body.dataset.openworldRoute = String(this.route.length); // the cells of a walk to a far cell still to take (#1137)
     document.body.dataset.openworldBroken = String(this.world!.broken.length); // the obstacles broken (#1147)
     document.body.dataset.openworldLairs = this.lairs.map((c) => c.join(',')).join(' ');
+    document.body.dataset.openworldPlaces = this.places.map(({ kind, cell }) => `${kind}:${cell.join(',')}`).join(' '); // #1514
     document.body.dataset.openworldLairsBeaten = this.beaten.join(' ');
     document.body.dataset.openworldLairsHeard = this.heard.join(' '); // reported by others, not counted
     document.body.dataset.openworldTeleporters = this.discoveredTeleporters().map((c) => c.join(',')).join(' '); // #1412

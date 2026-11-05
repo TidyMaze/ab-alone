@@ -33,6 +33,8 @@ export const ICON = {
   portal: '#c58cff',
   here: '#f0e4ff',
   log: '#ffd166',
+  town: '#7be0a0',
+  dungeon: '#ff8a5c',
 } as const;
 
 /** The icon's side in px: on the map it keeps a minimum when zoomed out and grows with the zoom, on the minimap it is smaller and fixed. */
@@ -134,4 +136,44 @@ export function logIcon(ctx: CanvasRenderingContext2D, x: number, y: number, siz
     ctx.fillStyle = ICON.log;
     ctx.fill();
   }
+}
+
+/** The house of a town (#1514), in half-sides from the middle of the icon: a pitched roof over four walls. */
+const HOUSE = [[0, -0.65], [0.6, -0.1], [0.45, -0.1], [0.45, 0.55], [-0.45, 0.55], [-0.45, -0.1], [-0.6, -0.1]] as const;
+/** The gate of a dungeon: a square arch, the doorway cut out of a block. */
+const GATE = [[-0.5, 0.55], [-0.5, -0.3], [-0.25, -0.55], [0.25, -0.55], [0.5, -0.3], [0.5, 0.55], [0.22, 0.55], [0.22, -0.2], [-0.22, -0.2], [-0.22, 0.55]] as const;
+
+/** Draws the icon of a town (#1514) centred on `x, y`, `size` px across: a house on a hexagonal plate (the towers' plate is square, the
+ * portals' round, the logs' a diamond), in green. */
+export function townIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const h = size / 2;
+  const at = (points: readonly (readonly [number, number])[]): void => {
+    ctx.beginPath();
+    points.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(x + px * h, y + py * h) : ctx.lineTo(x + px * h, y + py * h)));
+    ctx.closePath();
+  };
+  at([[0, -1], [0.87, -0.5], [0.87, 0.5], [0, 1], [-0.87, 0.5], [-0.87, -0.5]]);
+  ctx.fillStyle = ICON.plate;
+  ctx.fill();
+  outline(ctx);
+  at(HOUSE);
+  ctx.fillStyle = ICON.town;
+  ctx.fill();
+}
+
+/** Draws the icon of a dungeon gate (#1514) centred on `x, y`, `size` px across: an arched doorway on a triangular plate, in orange. */
+export function dungeonIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const h = size / 2;
+  const at = (points: readonly (readonly [number, number])[]): void => {
+    ctx.beginPath();
+    points.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(x + px * h, y + py * h) : ctx.lineTo(x + px * h, y + py * h)));
+    ctx.closePath();
+  };
+  at([[0, -1.05], [1.05, 0.85], [-1.05, 0.85]]);
+  ctx.fillStyle = ICON.plate;
+  ctx.fill();
+  outline(ctx);
+  at(GATE.map(([px, py]) => [px * 0.7, py * 0.7 + 0.2] as const));
+  ctx.fillStyle = ICON.dungeon;
+  ctx.fill();
 }

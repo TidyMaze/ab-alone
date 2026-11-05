@@ -116,6 +116,8 @@
 //!   spawn on open ground, lair `k` in the sextant `k % 6` (docs/specs/openworld.md section 7).
 //! - Open world teleporters (`world_teleporters(seed)`): `q, r` pairs, the spawn's first, one a square of 8 x 8 chunks, kept off
 //!   the lairs (docs/specs/openworld.md section 10).
+//! - Open world places (`world_places(seed)`): the towns then the dungeon gates, `kind, q, r` triples (`kind` `0` a town, `1` a dungeon
+//!   gate), the spawn town first, kept off the lairs, the teleporters and the logs (docs/specs/openworld.md section 13).
 //! - Open world push (`world_push(seed, troop, enemies, broken)`): `troop` is the hero's cell then the troop's,
 //!   `enemies` the enemy marbles near the hero, `q, r` pairs. Empty when no push is legal, else
 //!   `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies, ...enemies, dir_q, dir_r]`:
@@ -136,7 +138,9 @@ pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::{replay_score, Engine};
 pub use royale::Royale;
 pub use run::{run_exits, run_foes, run_map};
-pub use world::{world_chunk, world_lairs, world_logs, world_teleporters, world_version};
+pub use world::{
+    world_chunk, world_lairs, world_logs, world_places, world_teleporters, world_version,
+};
 
 #[cfg(test)]
 mod tests {
