@@ -39,6 +39,7 @@ import {
   MARBLE,
   type Played,
   waterColor,
+  WANDER_GLIDE_MS,
 } from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
@@ -1456,7 +1457,7 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
   const pushOf = (): Played => ({
     from: [[1, 0], [0, 0], [-1, 0], [-2, 0]],
     foes: [[2, 0]],
-    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], dir: [1, 0] },
+    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], homes: [], dir: [1, 0] },
   });
   const SQUARE = (cx: number, cy: number): Uint8Array => (Math.abs(cx) > 3 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
   // The view once the push is played: the state the mode draws at once, on the final cells.
@@ -1535,7 +1536,7 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     const played: Played = {
       from: [[-5, 0], [3, 0], [2, 0]],
       foes: [[1, 0]],
-      push: { troop: [[-5, 0], [2, 0], [1, 0]], enemies: [[0, 0]], ejected: [], dir: [-1, 0] },
+      push: { troop: [[-5, 0], [2, 0], [1, 0]], enemies: [[0, 0]], ejected: [], homes: [], dir: [-1, 0] },
     };
     const view = settled(played);
     view.playPush(played, 0);
@@ -1549,7 +1550,7 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     const played: Played = {
       from: [[1, 0], [0, 0], [-1, 0]],
       foes: [[2, 0]],
-      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], dir: [1, 0] },
+      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], homes: [[2, 0]], dir: [1, 0] },
     };
     const view = settled(played);
     view.playPush(played, 0);
@@ -1575,7 +1576,7 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     const played: Played = {
       from: [[62, 0], [61, 0], [60, 0]],
       foes: [[63, 0]],
-      push: { troop: [[63, 0], [62, 0], [61, 0]], enemies: [], ejected: [[63, 0]], dir: [1, 0] },
+      push: { troop: [[63, 0], [62, 0], [61, 0]], enemies: [], ejected: [[63, 0]], homes: [[63, 0]], dir: [1, 0] },
     };
     const view = settled(played);
     view.playPush(played, 0);
@@ -1591,7 +1592,7 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     const played: Played = {
       from: [[1, 0], [0, 0], [-1, 0]],
       foes: [[2, 0]],
-      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], dir: [1, 0] },
+      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], homes: [[2, 0]], dir: [1, 0] },
     };
     const view = settled(played);
     view.playPush(played, 0);
@@ -1774,7 +1775,7 @@ describe('the step glide of the hero and the troop (docs/specs/openworld.md sect
   const pushLine = (): Played => ({
     from: [[1, 0], [0, 0], [-1, 0], [-2, 0]],
     foes: [[2, 0]],
-    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], dir: [1, 0] },
+    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], homes: [], dir: [1, 0] },
   });
   // The drawn place of a marble: the hero, or an instance of the troop.
   function placeOf(view: OpenWorldView, name: 'hero' | 'troop', index = 0): THREE.Vector3 {
@@ -1931,7 +1932,7 @@ describe('the step glide of the hero and the troop (docs/specs/openworld.md sect
     const pushed: Played = {
       from: [[a, 0], [a - 1, 0], [a - 2, 0], [a - 3, 0]],
       foes: [[a + 1, 0]],
-      push: { troop: [[a + 1, 0], [a, 0], [a - 1, 0], [a - 3, 0]], enemies: [[a + 2, 0]], ejected: [], dir: [1, 0] },
+      push: { troop: [[a + 1, 0], [a, 0], [a - 1, 0], [a - 3, 0]], enemies: [[a + 2, 0]], ejected: [], homes: [], dir: [1, 0] },
     };
     const view = new OpenWorldView(new World(edge));
     view.show([a, 0], [[a - 1, 0], [a - 2, 0], [a - 3, 0]]);
@@ -2097,7 +2098,7 @@ describe('the loaded chunks keep their centre while the hero paces along a chunk
     const played: Played = {
       from: [[edge - 1, 0], [edge - 2, 0]],
       foes: [],
-      push: { troop: [[edge, 0], [edge - 1, 0]], enemies: [], ejected: [], dir: [1, 0] },
+      push: { troop: [[edge, 0], [edge - 1, 0]], enemies: [], ejected: [], homes: [], dir: [1, 0] },
     };
     view.playPush(played, 0);
     view.tick(10_000);
@@ -2747,5 +2748,65 @@ describe('the ground in view only, on a software renderer (#1483)', () => {
     view.cullGround(false);
     view.show([0, 0]);
     expect(laid(view).size).toBe(CELLS);
+  });
+});
+
+describe('the wandering marbles are rolled to their next cell (#1511)', () => {
+  const SQUARE = (cx: number, cy: number): Uint8Array => (Math.abs(cx) > 3 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+  const group = (cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5) : new Int32Array());
+  const foe = (view: OpenWorldView, index = 0): THREE.Vector3 => {
+    const m = new THREE.Matrix4();
+    (view.scene.getObjectByName('enemies') as THREE.InstancedMesh).getMatrixAt(index, m);
+    return new THREE.Vector3().setFromMatrixPosition(m);
+  };
+  const standing = (): { view: OpenWorldView; fight: FightState } => {
+    const fight = new FightState();
+    const view = new OpenWorldView(new World(SQUARE, group), fight);
+    view.show([0, 0]);
+    view.updateEnemies();
+    return { view, fight };
+  };
+  afterEach(() => vi.restoreAllMocks());
+
+  it('lays the marbles on the cells the clock gives and rolls each from its old cell, over the glide', () => {
+    const { view, fight } = standing();
+    fight.apply([[5, 5], [6, 5]], [[5, 6], [6, 6]], []); // the group steps one cell
+    view.wander(1000, false);
+    expect(view.animating).toBe(true);
+    view.tick(1000);
+    expect(foe(view).x).toBeCloseTo(axialTo3D(5, 5).x, 5); // still on the old cell at the start
+    view.tick(1000 + WANDER_GLIDE_MS / 2);
+    expect(foe(view).z).toBeGreaterThan(axialTo3D(5, 5).z);
+    expect(foe(view).z).toBeLessThan(axialTo3D(5, 6).z);
+    view.tick(1000 + WANDER_GLIDE_MS);
+    view.tick(1000 + WANDER_GLIDE_MS + 1);
+    expect(foe(view).z).toBeCloseTo(axialTo3D(5, 6).z, 5);
+    expect(view.animating).toBe(false);
+  });
+
+  it('jumps under reduced motion, when nothing moved, and when the marbles are not the same ones', () => {
+    const { view, fight } = standing();
+    fight.apply([[5, 5], [6, 5]], [[5, 6], [6, 6]], []);
+    view.wander(1000, true);
+    expect(view.animating).toBe(false);
+    expect(foe(view).z).toBeCloseTo(axialTo3D(5, 6).z, 5);
+    view.wander(2000, false); // nothing moved since
+    expect(view.animating).toBe(false);
+    fight.apply([[5, 6]], [], [[5, 6]]); // one marble gone: the list is another one
+    view.wander(3000, false);
+    expect(view.animating).toBe(false);
+  });
+
+  it('keeps a push being drawn going, and the glide slowed by the page', () => {
+    const { view, fight } = standing();
+    const push: Played = { from: [[1, 0]], foes: [[5, 5]], push: { troop: [[2, 0]], enemies: [[5, 5]], ejected: [], homes: [], dir: [1, 0] } };
+    view.playPush(push, 0);
+    const end = view.animating;
+    fight.apply([[5, 5], [6, 5]], [[5, 6], [6, 6]], []);
+    view.wander(100, false, 2);
+    expect(end).toBe(true);
+    view.tick(100 + WANDER_GLIDE_MS); // twice the time: half way
+    expect(foe(view).z).toBeLessThan(axialTo3D(5, 6).z);
+    expect(view.animating).toBe(true);
   });
 });

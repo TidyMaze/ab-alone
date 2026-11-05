@@ -89,12 +89,43 @@ The levels of noise, the biomes, the relief and the obstacle density are specifi
 
 Basic enemies only. A group is 1 to 3 loose black marbles in a line on passable cells, placed by
 the seed (about one group per 400 cells), none within 8 cells of the spawn, and a group stays
-inside one chunk, so no two groups share a cell. They hold their
-ground and have no behaviour of their own: they react only when pushed. They never stand on water: a push that would put one
+inside one chunk, so no two groups share a cell. They wander (section 3b) but never push: they react only when pushed. They never stand on water: a push that would put one
 there ejects it. A pushed enemy is
 ejected when the cell beyond the line is water or off the world (the edge of the world): the last
 enemy of the line falls, the others shift one cell. A push into a tree, boulder, wall or peak, or
 into a marble (troop or enemy), is refused. Enemies never push, so nothing ejects the hero yet.
+
+## 3b. The wandering marbles (#1511)
+
+The generated marbles of a chunk walk a short way from where they start and back, slowly, as one group. The rule is pure and lives in
+Rust (`crates/abalone-core/src/worldwander.rs`, `offset`), integers only, so every peer sees the same marbles in the same places.
+
+- **Clock.** The world's tick: the wall clock in ticks of `TICK_MS` = 1200 ms (`FightState.tickMs`, `Math.floor(Date.now() / 1200)`), the
+  same on every peer to within their clocks. A marble steps one cell a tick, 0.83 cells a second against the hero's 7. The page hands the
+  tick to the fight (`FightState.setClock(seed, tick)`, `WorldFight.set_clock`), and every question about the enemies (where they are,
+  which cell is taken, who is near the hero, what a push meets) is asked at that tick. Tick 0 stands every marble on the cell it starts
+  on: a fight that sets no clock, the MCP server's, never sees a marble move (it has no real time, and no wild fight, section 3c).
+- **Walk.** The group of a chunk moves as one: every marble of the chunk is shifted by the same offset, so they never meet each other. The
+  tick is cut into outings of `EPOCH` = 8 ticks. Each outing draws from the seed, the chunk and the outing alone a direction (one of the
+  six) and a length of 0 to `LEASH` = 3 cells. The group goes out one cell a tick, stays, and comes back to end the outing at home, so
+  the offset after tick `t` of an outing is `min(t, length, 8 - t)` cells along the direction (the distance is 0 at the start of every
+  outing, and a tick moves the group one cell at most).
+- **Where it may go.** A marble never walks onto water, a peak, a wall, a tree or a boulder (the generated terrain, `Terrain::blocked`, the
+  same as where a group is placed), off the world, or out of its chunk. When a cell of the way is such for any marble of the chunk's
+  group, the length is cut short of it. The terrain read is the generated one, never the cells the hero broke, which peers do not share.
+  The walk reads the chunk's generated marbles, the ones a push moved away included, so it never depends on what a troop did.
+  A wanderer can pass over a marble the troop shoved or a troop marble: they overlap for a moment (accepted).
+- **A marble moved by a push stops wandering.** It stands where it was pushed to, in `added` (section 4), and keeps no start cell. The
+  overlay keeps a generated marble by the cell it starts on (`removed`), so the save format is unchanged, and a marble pushed
+  onto the start cell of another one is not that one again.
+- **Drawing.** The view lays the enemies again on a tick and rolls each marble that stepped from its old cell to the new one over
+  `WANDER_GLIDE_MS` = 900 ms (the push's own animation is waited for), at once under reduced motion. `window.__openworldWander(tick)` sets
+  the tick on a webdriver page (`null` for the real clock); automation stands at tick 0 until a spec sets it, so the specs of the world
+  keep their marbles still.
+- **Online.** A signed "beaten" event (`multiplayer.md` section 7, #1305; `world_is_enemy`) names the cell the marble was **generated** on, not
+  where it wandered to, and the peers check it against that cell as before: a marble is the same one on every peer whatever its place at
+  the tick. `Played.homes` gives the start cell of the ejected marble when it is a generated one, and `FightState.alive(world, home)` is the
+  peer's check that it is still there. The wire does not change.
 
 ## 4. The hero and the troop
 

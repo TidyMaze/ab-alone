@@ -2,8 +2,11 @@
 //! crate for its encoding.
 
 use abalone_core::world::{self, Terrain};
-use abalone_core::worldoverlay::{Overlay, PUSH_REACH};
+use abalone_core::worldoverlay::{Block, Overlay, PUSH_REACH};
 use abalone_core::worldstep::{self, Entry};
+use abalone_core::worldwander;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 /// Bytes per cell: `[height, terrain, biome]`.
@@ -224,10 +227,10 @@ fn flat_of(cells: &[(i32, i32)]) -> Vec<i32> {
 }
 
 /// A chunk and the generated enemies that start in it.
-type Block = ((i32, i32), Vec<(i32, i32)>);
+type Chunk = ((i32, i32), Vec<(i32, i32)>);
 
 /// The chunks of a flat list: `cx, cy, n` then the `n` generated enemies of that chunk as `q, r` pairs, chunk after chunk.
-fn blocks_of(chunks: &[i32]) -> Vec<Block> {
+fn blocks_of(chunks: &[i32]) -> Vec<Chunk> {
     let mut blocks = Vec::new();
     let mut rest = chunks;
     while let [cx, cy, n, tail @ ..] = rest {
@@ -249,6 +252,9 @@ pub struct PushResult {
     pub enemies: Vec<i32>,
     /// The enemy ejected, none or one.
     pub ejected: Vec<i32>,
+    /// The cell the ejected enemy started on when it was a generated one (the cell the other heroes check, #1511), else the cell it
+    /// stood on.
+    pub homes: Vec<i32>,
     /// The direction of the push, `q, r`.
     pub dir: Vec<i32>,
 }
@@ -258,6 +264,11 @@ pub struct PushResult {
 #[wasm_bindgen]
 pub struct WorldFight {
     overlay: Overlay,
+    /// The world seed and the tick of the clock the wandering marbles stand at (#1511); tick 0, the start of the clock, has them all at
+    /// the cells they start on, which is where a fight that never sets a clock (the MCP server) leaves them.
+    clock: (u64, u32),
+    /// The offset each chunk's group has at the clock, worked out once per chunk and tick.
+    offsets: RefCell<HashMap<(i32, i32), (i32, i32)>>,
 }
 
 #[wasm_bindgen]
@@ -265,16 +276,16 @@ impl WorldFight {
     /// A fight with no push.
     #[wasm_bindgen(constructor)]
     pub fn new() -> WorldFight {
-        WorldFight {
-            overlay: Overlay::new(),
-        }
+        WorldFight::with(Overlay::new())
     }
 
     /// The fight of a save: the generated enemies gone and the enemies on other cells (`q, r` pairs), the number ejected.
     pub fn restore(removed: Vec<i32>, added: Vec<i32>, beaten: u32) -> WorldFight {
-        WorldFight {
-            overlay: Overlay::from_parts(cells_of_flat(&removed), cells_of_flat(&added), beaten),
-        }
+        WorldFight::with(Overlay::from_parts(
+            cells_of_flat(&removed),
+            cells_of_flat(&added),
+            beaten,
+        ))
     }
 
     /// Forgets every push.
@@ -287,25 +298,56 @@ impl WorldFight {
         self.overlay.hide(&cells_of_flat(&cells));
     }
 
+    /// Sets the clock the wandering marbles stand at (#1511): the world `seed` and the `tick`, the same on every peer. Every query after
+    /// it places the generated enemies where they are at that tick. Tick 0 has them where they start.
+    pub fn set_clock(&mut self, seed: u32, tick: u32) {
+        if self.clock != (u64::from(seed), tick) {
+            self.clock = (u64::from(seed), tick);
+            self.offsets.borrow_mut().clear();
+        }
+    }
+
+    /// The length of a tick of the clock in ms (`worldwander::TICK_MS`): the marbles take one step per tick.
+    pub fn tick_ms() -> u32 {
+        worldwander::TICK_MS
+    }
+
     /// Whether an enemy stands on `(q, r)`, `generated` being the generated enemies of its chunk.
     pub fn occupied(&self, generated: Vec<i32>, q: i32, r: i32) -> bool {
-        self.overlay.occupied(&cells_of_flat(&generated), (q, r))
+        let generated = cells_of_flat(&generated);
+        let offset = self.offset(chunk_of((q, r)), &generated);
+        self.overlay.occupied(&generated, (q, r), offset)
+    }
+
+    /// Whether the generated enemy that starts on `(q, r)` is still in the world, `generated` being the generated enemies of its chunk
+    /// (#1511): a signed event of another hero names that cell, wherever the enemy wandered.
+    pub fn alive(&self, generated: Vec<i32>, q: i32, r: i32) -> bool {
+        self.overlay.alive(&cells_of_flat(&generated), (q, r))
     }
 
     /// The enemies on chunk `(cx, cy)` now, `generated` being its generated ones.
     pub fn chunk_enemies(&self, generated: Vec<i32>, cx: i32, cy: i32) -> Vec<i32> {
-        flat_of(
-            &self
-                .overlay
-                .chunk_enemies(&cells_of_flat(&generated), (cx, cy)),
-        )
+        let generated = cells_of_flat(&generated);
+        let offset = self.offset((cx, cy), &generated);
+        flat_of(&self.overlay.chunk_enemies(&generated, (cx, cy), offset))
+    }
+
+    /// The marble that touches the hero on `(q, r)` (#1511): a generated enemy within one cell that no push has moved. `[home q, home
+    /// r, q, r]`, the cell it starts on then the cell it stands on, or empty. `chunks` as for `around`.
+    pub fn wild_contact(&self, chunks: Vec<i32>, q: i32, r: i32) -> Vec<i32> {
+        match self.overlay.wild_contact(&self.blocks(&chunks), (q, r)) {
+            Some(marble) => {
+                let home = marble.home.expect("a wild marble is a generated one");
+                vec![home.0, home.1, marble.at.0, marble.at.1]
+            }
+            None => vec![],
+        }
     }
 
     /// The enemies within `radius` cells of `(q, r)`. `chunks` lists the chunks to look in, in order: `cx, cy, n` then the `n` generated
     /// enemies of that chunk as `q, r` pairs, chunk after chunk.
     pub fn around(&self, chunks: Vec<i32>, q: i32, r: i32, radius: i32) -> Vec<i32> {
-        let blocks = blocks_of(&chunks);
-        flat_of(&self.overlay.around(&blocks, (q, r), radius))
+        flat_of(&self.overlay.around(&self.blocks(&chunks), (q, r), radius))
     }
 
     /// The troop's attack after a step: the best legal push of `troop` (the hero's cell first) in the world `seed` against the enemies
@@ -320,17 +362,16 @@ impl WorldFight {
         tick: u32,
     ) -> Option<PushResult> {
         let terrain = broken_terrain(seed, &broken);
-        let played = self.overlay.troop_push(
-            &blocks_of(&chunks),
-            &pairs(&troop),
-            terrain,
-            (u64::from(seed), tick),
-        )?;
+        let blocks = self.blocks(&chunks);
+        let played =
+            self.overlay
+                .troop_push(&blocks, &pairs(&troop), terrain, (u64::from(seed), tick))?;
         Some(PushResult {
             troop: flat_of(&played.troop),
             foes: flat_of(&played.foes),
             enemies: flat_of(&played.enemies),
             ejected: flat_of(&played.ejected),
+            homes: flat_of(&played.homes),
             dir: vec![played.dir.0, played.dir.1],
         })
     }
@@ -346,7 +387,7 @@ impl WorldFight {
     ) -> Vec<i32> {
         self.overlay
             .herd_goals(
-                &blocks_of(&chunks),
+                &self.blocks(&chunks),
                 &pairs(&troop),
                 broken_terrain(seed, &broken),
                 u64::from(seed),
@@ -383,10 +424,49 @@ impl WorldFight {
     }
 }
 
+impl WorldFight {
+    fn with(overlay: Overlay) -> WorldFight {
+        WorldFight {
+            overlay,
+            clock: (0, 0),
+            offsets: RefCell::new(HashMap::new()),
+        }
+    }
+
+    /// The offset the group of chunk `chunk` has at the clock, `generated` being the generated enemies of the chunk.
+    fn offset(&self, chunk: (i32, i32), generated: &[(i32, i32)]) -> (i32, i32) {
+        let (seed, tick) = self.clock;
+        if tick == 0 || generated.is_empty() {
+            return (0, 0);
+        }
+        *self
+            .offsets
+            .borrow_mut()
+            .entry(chunk)
+            .or_insert_with(|| worldwander::offset(seed, chunk, generated, tick))
+    }
+
+    /// The chunks of a flat list with the offset their group has now.
+    fn blocks(&self, chunks: &[i32]) -> Vec<Block> {
+        blocks_of(chunks)
+            .into_iter()
+            .map(|(chunk, generated)| {
+                let offset = self.offset(chunk, &generated);
+                (chunk, generated, offset)
+            })
+            .collect()
+    }
+}
+
 impl Default for WorldFight {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The chunk a cell is in.
+fn chunk_of((q, r): (i32, i32)) -> (i32, i32) {
+    (q.div_euclid(world::CHUNK), r.div_euclid(world::CHUNK))
 }
 
 /// The terrain of a cell of the world `seed` as the hero left it: a broken boulder is rock, a broken tree grass (#1147).
@@ -672,6 +752,7 @@ mod tests {
             .troop_push(9, vec![509, 0, 510, 0], chunk_of_row(31), vec![], 1)
             .unwrap();
         assert_eq!(out.ejected, vec![511, 0]);
+        assert_eq!(out.homes, vec![511, 0]); // a marble pushed before has no start cell to name: its own
         assert!(out.enemies.is_empty());
         assert_eq!(fight.beaten(), 1);
     }
@@ -757,5 +838,80 @@ mod tests {
             vec![1, 0, 9, 0, 0, 3, 16, 0]
         );
         assert!(fight.around(vec![], 0, 0, 5).is_empty());
+    }
+
+    /// A chunk of the seed 3 with generated enemies, and a tick at which its group stands away from where it starts.
+    fn wandering() -> (i32, i32, Vec<i32>, u32, (i32, i32)) {
+        (-5..5)
+            .flat_map(|cx| (-5..5).map(move |cy| (cx, cy)))
+            .find_map(|(cx, cy)| {
+                let flat = world_enemies(3, cx, cy);
+                let generated = pairs(&flat);
+                (1..200).find_map(|tick| {
+                    let offset = worldwander::offset(3, (cx, cy), &generated, tick);
+                    (!generated.is_empty() && offset != (0, 0))
+                        .then(|| (cx, cy, flat.clone(), tick, offset))
+                })
+            })
+            .expect("a chunk of the seed 3 has a group that wanders")
+    }
+
+    #[test]
+    fn a_clock_moves_the_generated_enemies_and_tick_zero_puts_them_home() {
+        let (cx, cy, flat, tick, (dq, dr)) = wandering();
+        let mut fight = WorldFight::new();
+        assert_eq!(fight.chunk_enemies(flat.clone(), cx, cy), flat);
+        fight.set_clock(3, tick);
+        let moved: Vec<i32> = flat
+            .chunks(2)
+            .flat_map(|c| [c[0] + dq, c[1] + dr])
+            .collect();
+        assert_eq!(fight.chunk_enemies(flat.clone(), cx, cy), moved);
+        assert!(fight.occupied(flat.clone(), moved[0], moved[1]));
+        assert!(!fight.occupied(flat.clone(), flat[0], flat[1]));
+        fight.set_clock(3, tick); // the same clock again keeps what was worked out
+        assert_eq!(fight.chunk_enemies(flat.clone(), cx, cy), moved);
+        assert_eq!(
+            fight
+                .around(
+                    vec![cx, cy, flat.len() as i32 / 2]
+                        .into_iter()
+                        .chain(flat.clone())
+                        .collect(),
+                    flat[0],
+                    flat[1],
+                    10
+                )
+                .len(),
+            moved.len()
+        );
+        fight.set_clock(3, 0);
+        assert_eq!(fight.chunk_enemies(flat.clone(), cx, cy), flat);
+        assert_eq!(WorldFight::tick_ms(), worldwander::TICK_MS);
+        assert!(fight.alive(flat.clone(), flat[0], flat[1]));
+        assert!(!fight.alive(flat.clone(), flat[0] + 100, flat[1]));
+    }
+
+    #[test]
+    fn a_wandering_marble_next_to_the_hero_is_the_wild_contact_and_names_its_start_cell() {
+        let (cx, cy, flat, tick, (dq, dr)) = wandering();
+        let mut fight = WorldFight::new();
+        fight.set_clock(3, tick);
+        let chunks: Vec<i32> = vec![cx, cy, flat.len() as i32 / 2]
+            .into_iter()
+            .chain(flat.clone())
+            .collect();
+        let (home, at) = ((flat[0], flat[1]), (flat[0] + dq, flat[1] + dr));
+        // The hero stands on the marble's cell: that is within one cell.
+        assert_eq!(
+            fight.wild_contact(chunks.clone(), at.0, at.1)[..2],
+            [home.0, home.1]
+        );
+        assert_eq!(
+            fight.wild_contact(chunks.clone(), at.0, at.1)[2..],
+            [at.0, at.1]
+        );
+        assert!(fight.wild_contact(chunks, at.0 + 9, at.1).is_empty());
+        assert!(fight.wild_contact(vec![], 0, 0).is_empty());
     }
 }

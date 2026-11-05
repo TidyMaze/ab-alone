@@ -418,6 +418,8 @@ export const LUNGE_MS = 400;
 const CONTACT = 0.4 * LUNGE_MS;
 export const SLIDE_MS = 250;
 export const FALL_MS = 300;
+/** A wandering marble rolls to its next cell over this long, in ms: a step of the clock is 1200 ms (#1511). */
+export const WANDER_GLIDE_MS = 900;
 /** How far an ejected marble sinks below the ground, in world units. */
 const SINK = 0.6;
 
@@ -1584,6 +1586,20 @@ export class OpenWorldView {
     }
     this.place(this.foes, enemyCells);
     this.enemyCount = this.foes.count;
+  }
+
+  /** The wandering marbles took a step (#1511): lays the enemies again on the cells the clock gives and rolls each that moved one cell from
+   * its old cell to the new one, over `WANDER_GLIDE_MS`. Reduced motion jumps. `slow` multiplies the time. */
+  wander(now: number, reduced: boolean, slow = 1): void {
+    const before = [...this.enemyCells];
+    this.updateEnemies();
+    const after = this.enemyCells;
+    if (reduced || before.length !== after.length) return;
+    const glide: Timing = { start: now, span: WANDER_GLIDE_MS * slow, fall: 0, lunge: false };
+    const moves = after.flatMap((cell, i) => (same(before[i]!, cell) ? [] : [this.move('foes', i, before[i]!, cell, glide)]));
+    if (moves.length === 0) return;
+    this.moves = [...this.moves, ...moves];
+    this.end = Math.max(this.end, now + glide.span);
   }
 
   /** The meshes a build lays: every managed mesh, or with `terrain` false the props only. The ground columns do not depend on the

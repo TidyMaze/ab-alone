@@ -71,6 +71,10 @@ export class OpenWorldMode {
   hero: Hero | null = null;
   /** The online layer of the public world (#1305): told of each world entered and left, and of each frame. None draws solo. */
   peers: PeerHost | null = null;
+  /** The tick of the clock the enemy marbles wander by (#1511): the same on every peer. The default stands them where they start. */
+  wander: () => number = () => 0;
+  /** The tick the marbles stand at now. */
+  private ticked = 0;
   /** The timer that keeps the hero alive for the room while the tab is hidden (#1371). */
   private keepalive: ReturnType<typeof setInterval> | null = null;
   private view: OpenWorldView | null = null;
@@ -169,6 +173,8 @@ export class OpenWorldMode {
     this.world = world;
     if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
     this.fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
+    this.ticked = this.wander();
+    this.fight.setClock(seed, this.ticked); // the marbles stand where the clock has them from the first draw (#1511)
     this.pushes = 0;
     const flatLairs = this.lairsOf(seed);
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
@@ -370,9 +376,9 @@ export class OpenWorldMode {
   }
 
   /** Another hero ejected the enemy that starts on `cell` (#1305, a signed event checked by the peers host): it is beaten for the visit,
-   * as a push of this hero would have left it. No enemy on the cell does nothing. */
+   * as a push of this hero would have left it, wherever it wandered to (#1511). No generated enemy starting there, or one gone already, does nothing. */
   remoteBeaten(cell: Axial): void {
-    if (!this.world || !this.view || !this.fight.occupied(this.world, cell[0], cell[1])) return;
+    if (!this.world || !this.view || !this.fight.alive(this.world, cell)) return;
     this.fight.apply([cell], [], [cell]);
     this.view.updateEnemies();
     this.dirty = true;
@@ -652,6 +658,7 @@ export class OpenWorldMode {
     this.counted = now;
     if (this.view.setTime(this.tod, !reduced)) this.dirty = true; // the sky and the sun, drawn again as they change
     this.markPhase();
+    this.stepWander(now);
     if (this.view!.follow(seconds, reduced)) this.dirty = true; // the camera follows the hero, its turn and its zoom (#988, #1026, #1333)
     if (this.view!.drawnYaw !== this.mapYaw) this.drawMap(); // the minimap and the map turn with the camera, only while it turns (#1448)
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
@@ -797,7 +804,7 @@ export class OpenWorldMode {
     this.hero!.at = hero!;
     this.hero!.troop = troop;
     this.pushes++;
-    for (const cell of played.push.ejected) this.peers?.beaten(cell); // an enemy beaten is told to the other heroes (#1305)
+    for (const cell of played.push.homes) this.peers?.beaten(cell); // an enemy beaten is told to the other heroes (#1305), by the cell it started on (#1511)
     return played;
   }
 
@@ -815,6 +822,20 @@ export class OpenWorldMode {
     void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
+  }
+
+  /** The marbles take a step when the clock has ticked (#1511): the fight is told the tick, and the view lays them on their new cells and
+   * rolls the ones that stepped. It waits for a push being drawn to end, since the push holds the cells it was played on. Called by the
+   * frame, and by the test hook that sets the clock (`snap`: it ends a push or a roll being drawn first, so the cells are final). */
+  stepWander(now = performance.now(), snap = false): void {
+    const tick = this.wander();
+    if (snap) this.view?.snap();
+    if (tick === this.ticked || !this.view || this.view.animating) return;
+    this.ticked = tick;
+    this.fight.setClock(this.seed, tick);
+    this.view.wander(now, this.reduced(), slowBy());
+    this.dirty = true;
+    this.mark(document.body.dataset.openworld!);
   }
 
   /** The mark of a push being drawn (`openworldAnim`, for the browser checks): set while the view draws it, removed otherwise. */

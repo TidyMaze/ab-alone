@@ -1419,16 +1419,16 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     expect(() => mode().remoteBreak([0, 1])).not.toThrow();
   });
 
-  it('a beaten enemy of another hero (#1305) is gone and counted, and a cell with no enemy does nothing', () => {
-    const m = beside();
-    m.fixture({ hero: [0, 2], troop: [[1, 2], [2, 2]], enemies: [[1, 0]] });
-    m.remoteBeaten([5, 5]); // no enemy there
+  it('a beaten enemy of another hero (#1305) is gone and counted, named by the cell it starts on, and a cell no enemy starts on does nothing', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    const drawn = Number(body().openworldEnemies);
+    m.remoteBeaten([4, 4]); // no generated enemy starts there
     expect(body().openworldBeaten).toBe('0');
-    m.remoteBeaten([1, 0]);
+    m.remoteBeaten([5, 5]);
     expect(body().openworldBeaten).toBe('1');
-    expect(body().openworldEnemies).toBe('0');
-    expect(m.enemies()).toEqual([]);
-    m.remoteBeaten([1, 0]); // twice: it is gone now
+    expect(body().openworldEnemies).toBe(String(drawn - 1));
+    m.remoteBeaten([5, 5]); // twice: it is gone now
     expect(body().openworldBeaten).toBe('1');
   });
 

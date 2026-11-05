@@ -32,13 +32,20 @@ export function decodeFight(raw: unknown): FightSave | null {
   return { removed: save.removed as string[], added: save.added as Axial[], beaten: save.beaten as number };
 }
 
-/** What `WorldFight.troop_push` gave: the new troop cells (the hero's first), the new enemy cells, the enemy ejected (none or one) and the
- * direction of the push. */
+/** What `WorldFight.troop_push` gave: the new troop cells (the hero's first), the new enemy cells, the enemy ejected (none or one), the cell
+ * that one started on when it was a generated enemy (else its own, #1511: the cell the other heroes check) and the direction of the push. */
 export interface Pushed {
   troop: Axial[];
   enemies: Axial[];
   ejected: Axial[];
+  homes: Axial[];
   dir: Axial;
+}
+
+/** The marble that touches the hero (#1511): the cell it starts on, and the cell it stands on now. */
+export interface Contact {
+  home: Axial;
+  at: Axial;
 }
 
 /** A follower the herd sends to a cell (#1506): its index among the followers, and the cell. */
@@ -57,6 +64,17 @@ export class FightState {
   /** The enemies ejected so far. */
   get beaten(): number {
     return this.fight.beaten();
+  }
+
+  /** The length of a tick of the wandering clock in ms (abalone-core `worldwander`): the marbles take one step each (#1511). */
+  static get tickMs(): number {
+    return WorldFight.tick_ms();
+  }
+
+  /** Sets the clock the wandering marbles stand at: the world `seed` and the `tick`, the same on every peer. Tick 0 has them where they
+   * start, which is where a fight that never sets a clock leaves them. */
+  setClock(seed: number, tick: number): void {
+    this.fight.set_clock(seed, tick >>> 0);
   }
 
   /** Forgets every push: the generated enemies are all back, none beaten. */
@@ -106,7 +124,7 @@ export class FightState {
   troopPush(world: World, seed: number, troop: readonly Axial[], broken: readonly Axial[], tick: number): Played | null {
     const out = this.fight.troop_push(seed, flat(troop), this.chunksAround(world, troop[0]!, WorldFight.push_reach()), flat(broken), tick >>> 0);
     if (!out) return null;
-    const push: Pushed = { troop: cellsOf(out.troop), enemies: cellsOf(out.enemies), ejected: cellsOf(out.ejected), dir: [out.dir[0]!, out.dir[1]!] };
+    const push: Pushed = { troop: cellsOf(out.troop), enemies: cellsOf(out.enemies), ejected: cellsOf(out.ejected), homes: cellsOf(out.homes), dir: [out.dir[0]!, out.dir[1]!] };
     return { from: [...troop], foes: cellsOf(out.foes), push };
   }
 
@@ -114,6 +132,17 @@ export class FightState {
   herdGoals(world: World, seed: number, troop: readonly Axial[], broken: readonly Axial[]): Goal[] {
     const out = this.fight.herd_goals(seed, flat(troop), this.chunksAround(world, troop[0]!, WorldFight.push_reach()), flat(broken));
     return Array.from({ length: out.length / 3 }, (_, i): Goal => [out[3 * i]!, [out[3 * i + 1]!, out[3 * i + 2]!]]);
+  }
+
+  /** The generated marble within one cell of the hero's `cell` that no push has moved (#1511), `null` when there is none. */
+  wildContact(world: World, cell: Axial): Contact | null {
+    const out = this.fight.wild_contact(this.chunksAround(world, cell, 1), cell[0], cell[1]);
+    return out.length === 0 ? null : { home: [out[0]!, out[1]!], at: [out[2]!, out[3]!] };
+  }
+
+  /** Whether the generated marble that starts on `home` is still in the world, wherever it wandered to (#1511). */
+  alive(world: World, home: Axial): boolean {
+    return this.fight.alive(flat(world.enemies(...chunkOf(home))), home[0], home[1]);
   }
 
   /** Whether an enemy marble stands on the cell `(q, r)` now. */

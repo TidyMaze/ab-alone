@@ -558,6 +558,13 @@ pub fn cell(seed: u64, q: i32, r: i32) -> Option<Cell> {
     Some(Window::new(seed, q.div_euclid(CHUNK), r.div_euclid(CHUNK)).cell(q, r))
 }
 
+/// Whether a marble may not stand on a cell of chunk `(cx, cy)` of the world `seed`: it is off the world, or its terrain is blocked
+/// (`Terrain::blocked`). One window is built for the chunk, so many cells cost one generation (the wandering marbles, #1511).
+pub fn chunk_blocked(seed: u64, cx: i32, cy: i32) -> impl Fn(i32, i32) -> bool {
+    let window = Window::new(seed, cx, cy);
+    move |q, r| !in_world(q, r) || window.cell(q, r).terrain.blocked()
+}
+
 /// The `CHUNK` x `CHUNK` cells of chunk `(cx, cy)`, row by row (`r` then `q` ascending), `None`
 /// off the world. In a chunk the edge crosses, the cells past it are `None`.
 pub fn chunk(seed: u64, cx: i32, cy: i32) -> Option<Vec<Option<Cell>>> {

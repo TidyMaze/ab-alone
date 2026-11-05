@@ -207,6 +207,7 @@ import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
+import { FightState } from './openworldfight';
 import { OpenWorldMode, twistOf } from './openworldmode';
 import { BOARD_LOOKS } from './boardlook';
 import type { Phase } from './daynight';
@@ -6254,6 +6255,10 @@ function lairCells(seed: number): Axial[] {
   return Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
 }
 openWorld.peers = peersHost;
+// The clock the enemy marbles wander by (#1511): the wall clock in ticks, so every peer sees them in the same places. Under automation it stands
+// at tick 0, where the marbles start, until a spec sets it (`__openworldWander`).
+let wanderTick: number | null = navigator.webdriver ? 0 : null;
+openWorld.wander = () => wanderTick ?? Math.floor(Date.now() / FightState.tickMs);
 netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
 netName.addEventListener('input', () => {
   writeName(store, cleanName(netName.value)); // the field keeps what was typed, the store and the peers get the clean name
@@ -6283,6 +6288,7 @@ if (navigator.webdriver) {
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
   hooks.__openworldEnemies = () => openWorld.enemies();
+  hooks.__openworldWander = (tick: number | null) => ((wanderTick = tick), openWorld.stepWander(undefined, true)); // the tick of the marbles' clock, or null for the real one (#1511)
   hooks.__openworldTime = (ms: number) => openWorld.setTime(ms); // the time of day in ms of the 12 minute cycle: 0 day, 6 min dusk, 7.5 min night (#1496)
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)

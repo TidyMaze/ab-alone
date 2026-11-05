@@ -2,30 +2,71 @@
 //! from where they start and back, slowly, as one group. The rule is a pure function of the world seed, the chunk, the marbles it
 //! starts with and a tick of the clock, so every peer sees the same marbles in the same places. Integers only.
 
+use crate::world::{self, CHUNK};
+use crate::worldstep::mix;
+use std::cell::OnceCell;
+
 /// A cell, `q, r`.
 pub type Cell = (i32, i32);
 
 /// The most cells a chunk's marbles go from where they start.
 pub const LEASH: i32 = 3;
+/// The length of a tick of the clock in ms: the marbles take one step per tick, slower than the hero (140 ms a cell).
+pub const TICK_MS: u32 = 1200;
 /// Ticks of one outing: out, a pause, and back (`2 * LEASH + 2`). Every outing starts and ends with the marbles at home.
-pub const EPOCH: u32 = 8;
+pub const EPOCH: u32 = 2 * LEASH as u32 + 2;
 
-/// How far along its outing a chunk's group is at `tick`, as the offset every marble of the chunk has from its generated cell. The
-/// group goes one cell per tick along one of the six directions, for up to `LEASH` cells, stops short of any cell that is off the
-/// chunk or `blocked`, and comes back. Tick 0 is at home.
-pub fn offset_with(
-    _seed: u64,
-    _chunk: Cell,
-    _generated: &[Cell],
-    _tick: u32,
-    _blocked: &dyn Fn(i32, i32) -> bool,
-) -> Cell {
-    (0, 0)
+/// The six steps of the hex grid in the order of the client (E, W, NE, SW, NW, SE).
+const STEPS: [Cell; 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+/// Keeps the draws of the walk apart from the other users of the mix.
+const SALT: u64 = 0x1511_57A6_D0C5_93B1;
+
+/// The chunk a cell is in.
+fn chunk_of((q, r): Cell) -> Cell {
+    (q.div_euclid(CHUNK), r.div_euclid(CHUNK))
 }
 
-/// `offset_with` on the terrain of the world `seed`: a cell is blocked when it is off the world or not open ground.
-pub fn offset(_seed: u64, _chunk: Cell, _generated: &[Cell], _tick: u32) -> Cell {
-    (0, 0)
+/// How far along its outing a chunk's group is at `tick`, as the offset every marble of the chunk has from its generated cell. Each
+/// outing (`EPOCH` ticks) draws a direction and a length up to `LEASH` from the seed, the chunk and the outing alone. The group goes
+/// one cell per tick for that many cells (fewer when the way is blocked), stays, and comes back to end the outing at home, so tick 0
+/// is at home. A cell the group would take must be in the chunk and not `blocked`, for every marble of `generated` (the chunk's
+/// generated marbles, the ones a push moved away too, so the walk never depends on what the troop did).
+pub fn offset_with(
+    seed: u64,
+    chunk: Cell,
+    generated: &[Cell],
+    tick: u32,
+    blocked: &dyn Fn(i32, i32) -> bool,
+) -> Cell {
+    let (epoch, phase) = (tick / EPOCH, tick % EPOCH);
+    let point = (u64::from(chunk.0 as u32) << 32) | u64::from(chunk.1 as u32);
+    let draw = mix(seed ^ SALT ^ mix(point) ^ mix(u64::from(epoch)));
+    let (dq, dr) = STEPS[(draw % 6) as usize];
+    let want = ((draw >> 8) % (LEASH as u64 + 1)) as i32;
+    // The group is `phase` cells out on the way out, `EPOCH - phase` on the way back, and no further than it wants to go.
+    let reach = want.min(phase as i32).min((EPOCH - phase) as i32);
+    let mut steps = 0;
+    while steps < reach {
+        let k = steps + 1;
+        let free = generated.iter().all(|&(q, r)| {
+            let at = (q + k * dq, r + k * dr);
+            chunk_of(at) == chunk && !blocked(at.0, at.1)
+        });
+        if !free {
+            break;
+        }
+        steps = k;
+    }
+    (steps * dq, steps * dr)
+}
+
+/// `offset_with` on the terrain of the world `seed`: a cell is blocked when it is off the world or not open ground. The chunk's
+/// terrain is only built when the group is out on a walk.
+pub fn offset(seed: u64, chunk: Cell, generated: &[Cell], tick: u32) -> Cell {
+    let terrain: OnceCell<Box<dyn Fn(i32, i32) -> bool>> = OnceCell::new();
+    offset_with(seed, chunk, generated, tick, &|q, r| {
+        terrain.get_or_init(|| Box::new(world::chunk_blocked(seed, chunk.0, chunk.1)))(q, r)
+    })
 }
 
 #[cfg(test)]

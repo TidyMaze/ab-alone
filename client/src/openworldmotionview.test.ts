@@ -182,7 +182,7 @@ describe('the water and the trees move (#1101, #1102)', () => {
     const played: Played = {
       from: [[1, 0], [0, 0], [-1, 0]],
       foes: [[2, 0]],
-      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], dir: [1, 0] },
+      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], homes: [[2, 0]], dir: [1, 0] },
     };
     const view = lake();
     view.show([1, 0], [[0, 0], [-1, 0]]);
