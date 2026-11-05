@@ -2234,6 +2234,25 @@ mod tests {
         assert_eq!(places_within(7, &[], PLACE_TRIES), places(7, &[]));
     }
 
+    #[test]
+    fn every_seed_from_1_to_2000_places_its_fifteen_lairs_and_the_search_ends() {
+        sweep(
+            "lairs",
+            |seed| lairs(seed, 15),
+            |seed, found| {
+                assert_eq!(found.len(), 15, "seed {seed}");
+                for (k, &(q, r)) in found.iter().enumerate() {
+                    assert!(distance(q, r) >= LAIR_MIN, "seed {seed}: lair {k}");
+                    for (dq, dr) in TELEPORT_PAD {
+                        let c = cell(seed, q + dq, r + dr).expect("on the world");
+                        assert!(!c.terrain.blocked(), "seed {seed}: lair {k}");
+                        assert_eq!(c.biome, SEXTANTS[k % 6], "seed {seed}: lair {k}");
+                    }
+                }
+            },
+        );
+    }
+
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
     fn walks(from: (i32, i32), path: &[(i32, i32)], avoid: &[(i32, i32)]) -> bool {
         let mut at = from;
