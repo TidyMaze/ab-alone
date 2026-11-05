@@ -204,24 +204,42 @@ export const AMBIENCE_TRACKS: readonly Track[] = [
   { url: 'audio/reactor-room-tone-1.mp3', gain: 0.4 },
   { url: 'audio/reactor-room-tone-2.mp3', gain: 0.35 },
 ];
-/** The hum under every game (world.md section 7): two low sines a fifth apart, no melody, quiet. */
+/** The hum under every game (world.md section 7): two low sines a fifth apart, no melody, quiet, and the octave of the
+ * upper one above 150 Hz so a laptop or phone speaker plays something (#1572). */
 export const HUM: readonly HumTone[] = [
   { freq: 55, gain: 0.03 },
   { freq: 82.4, gain: 0.02 },
+  { freq: 164.8, gain: 0.008 },
 ];
-/** The two drone tension layers under the hum (world.md section 7, Music; #439): steady tones, no melody. */
+/** The two drone tension layers under the hum (world.md section 7, Music; #439): steady tones, no melody. Each keeps
+ * its low sines for good speakers and adds harmonics above 150 Hz for small ones (#1572). */
 export const TENSION: readonly (readonly HumTone[])[] = [
-  // Unease: a minor second over the hum's root, two sines a hair apart that beat slowly.
+  // Unease: a minor second over the hum's root, two sines a hair apart that beat slowly, and their 3rd harmonics.
   [
     { freq: 58.3, gain: 0.02 },
     { freq: 58.8, gain: 0.02 },
+    { freq: 174.9, gain: 0.012 },
+    { freq: 176.4, gain: 0.012 },
   ],
-  // Dread: the tritone over the root and its octave, thin and cold.
+  // Dread: the tritone over the root and its octave, thin and cold, with the 3rd and 4th harmonics.
   [
     { freq: 77.8, gain: 0.015 },
-    { freq: 155.6, gain: 0.008 },
+    { freq: 155.6, gain: 0.012 },
+    { freq: 233.4, gain: 0.012 },
+    { freq: 311.2, gain: 0.008 },
   ],
 ];
+/** The small-speaker simulation (#1572): a laptop or phone speaker reproduces almost nothing below about this. */
+export const SMALL_SPEAKER_HZ = 150;
+/** The level in dBFS (RMS, master included, buses at 100 %) left of `tones` on a small speaker: each sine goes through
+ * a second-order Butterworth high-pass at `SMALL_SPEAKER_HZ`, the tones add as power. Calculated, not rendered. */
+export const smallSpeakerDb = (tones: readonly HumTone[]): number => {
+  const power = tones.reduce((sum, { freq, gain }) => {
+    const pass = 1 / Math.sqrt(1 + (SMALL_SPEAKER_HZ / freq) ** 4);
+    return sum + (gain * pass * MASTER_LEVEL) ** 2 / 2;
+  }, 0);
+  return 10 * Math.log10(power);
+};
 /** The gain of each tension layer at `level`: level n plays the first n layers. */
 export const layerGains = (level: Tension): number[] => TENSION.map((_, i) => (i < level ? 1 : 0));
 

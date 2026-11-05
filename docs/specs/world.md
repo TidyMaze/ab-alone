@@ -224,6 +224,16 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   rule in The Unstable Core, #761) and per boss
   phase after the first, at most 2; level 1 brings in the first layer, level 2 both, each
   crossfading over about a second.
+  Small speakers (#1572): a laptop or phone speaker plays almost nothing below about 150 Hz, so the hum
+  and each tension layer keep their low sines for good speakers and add harmonics above 150 Hz
+  (the hum an octave over its upper sine, unease the 3rd harmonics of its two beating sines, dread the
+  3rd and 4th of its tritone). `smallSpeakerDb` (`sound.ts`) calculates what is left: a second-order
+  Butterworth high-pass at 150 Hz on each sine, the master gain 0.8, buses at 100 %, tones added as
+  power, in dBFS RMS. Target loudness, which `sound.test.ts` asserts: hum at least -47 and at most -30
+  dBFS (ambience bus); tension level 1 at least -44, level 2 at least -40 and at least 3 dB above
+  level 1, level 2 at most -30 (music bus, an undertone, not a feature). Today: hum -45.5, level 1
+  -41.8, level 2 -38.1 dBFS (before: -48.0, -52.4, -46.6). This is calculated, not heard: an owner
+  should listen on a laptop and a phone.
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
 - **Mix.** Four sliders: music, ambience, effects, voice (#438), each the gain of its bus into one
   master gain, 0 to 100 %, at 100 % by default and saved locally. The hum is ambience, the
