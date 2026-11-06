@@ -60,17 +60,22 @@
       </div>
       <div id="openworld-hud" role="group" aria-label="Open world">
         <p id="openworld-live" role="status" class="sr-only"></p>
-        <p>Open world: <span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, M for the map, T on a teleporter to teleport, Esc to leave.</span><span class="tap-hint">drag the stick or tap a next cell to walk, twist two fingers to turn the camera, the Map button for the map, the Teleport button on a teleporter, the Hub button to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, View for the map, Y on a teleporter to teleport, B to leave.</span></p>
-        <p id="openworld-mode"></p>
+        <p id="openworld-goal"></p>
+        <p id="openworld-bearing"></p>
         <p><output id="openworld-medals"></output></p>
         <p id="openworld-tally"></p>
+        <details id="openworld-controls">
+          <summary>Controls<span class="keys-hint"> (H)</span></summary>
+          <p><span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, M for the map, T on a teleporter to teleport, H to close this, Esc to leave.</span><span class="tap-hint">drag the stick or tap a next cell to walk, twist two fingers to turn the camera, the Map button for the map, the Teleport button on a teleporter, the Hub button to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, View for the map, Y on a teleporter to teleport, B to leave.</span></p>
+          <p id="openworld-mode"></p>
+        </details>
         <div id="openworld-online" hidden>
           <p id="openworld-net" role="status"></p>
           <label for="openworld-name" class="sr-only">Public name, seen by the players online</label>
           <input id="openworld-name" type="text" maxlength="16" autocomplete="off" spellcheck="false" placeholder="anonymous" />
           <button id="openworld-hide" type="button" aria-pressed="false">Hide</button>
         </div>
-        <button id="openworld-dungeon" type="button">Dungeon</button>
+        <button id="openworld-dungeon" type="button">Nearest tower</button>
         <p id="openworld-dungeon-note" role="status"></p>
       </div>
       <div id="openworld-peers" aria-label="Other heroes out of view" hidden></div>

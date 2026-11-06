@@ -14,7 +14,7 @@ const enter = async (page: import('@playwright/test').Page): Promise<void> => {
   await showHud(page, '#openworld-goal'); // the plate folds 8 s after the entry, before a slow runner gets here (#1436)
 };
 
-test('the world says its goal and the bearing to the nearest tower, the controls are collapsed, and H opens and closes them', async ({ page }, testInfo) => {
+test('the world says its goal and the bearing to the nearest tower, the controls are collapsed, and H and a tap open and close them', async ({ page }, testInfo) => {
   await enter(page);
   await expect(page.locator('#openworld-goal')).toHaveText(/^Goal: beat the 15 towers of Hollow\. One medal each\.$/);
   await expect(page.locator('#openworld-bearing')).toHaveText(/^Nearest tower: \d+ cells, (to the |straight )(upper |lower )?\w+\.$/);
@@ -23,16 +23,20 @@ test('the world says its goal and the bearing to the nearest tower, the controls
   const hint = page.locator('#openworld-controls .keys-hint').last();
   await expect(hint).toBeHidden(); // collapsed
   await shot(page, { path: testInfo.outputPath('1530-world-desktop.png') });
-  await page.keyboard.press('h');
+  await page.keyboard.press('h'); // shows the plate first when it has folded
   await expect(hint).toBeVisible();
   await expect(hint).toContainText('H to close this');
   await page.keyboard.press('h');
   await expect(hint).toBeHidden();
+  await showHud(page, '#openworld-controls summary');
   await page.locator('#openworld-controls summary').click(); // a tap does the same
   await expect(hint).toBeVisible();
   await page.locator('#openworld-controls summary').click();
-  await expect(hint).toBeHidden();
-  // The bearing follows the hero: next to the first tower it is one cell away.
+  await expect(hint).toBeHidden(); // opened and closed: it stays closed
+});
+
+test('the bearing follows the hero: next to the first tower it is one cell away', async ({ page }) => {
+  await enter(page);
   const [q, r] = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ')[0]!.split(',').map(Number) as [number, number];
   await page.evaluate(([q, r]) => (window as any).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] }), [q, r]);
   await expect(page.locator('#openworld-bearing')).toHaveText(/^Nearest tower: 1 cell, /);

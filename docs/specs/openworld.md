@@ -376,7 +376,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   the numbers beaten; `__openworldFixture` stands the hero next to a lair.
 - **Medal count.** The HUD shows `Medals N / total` (`#openworld-medals`): N the bosses with a medal in the shared `ab-alone.medals`
   store, total the roster size. Read when a world opens, so it is right after "Back to the Open world".
-- **Tally's line.** The first time a player opens an Open world the HUD shows "Claim: unworked." (`#openworld-tally`), once: the
+- **Tally's line.** The first time a player opens an Open world the HUD shows "Claim: unworked." and one sentence that explains it (`CLAIM_NOTE`, section 14) (`#openworld-tally`), once: the
   flag `ab-alone.tally0412` is kept next to the medals. From stage 5 of the story (world.md section 12) it reads "Claim 0412: unworked.",
   the line number being a secret until then (#1584). Reduced motion changes nothing.
 - **Seats on file (#1315).** While some lairs are beaten and not all, a world that opens shows "Seats on file: N of total. Slag-glass remembers heat."
@@ -596,3 +596,24 @@ plan as the game.
 - **Marker.** A flat pad on the cell, the teleporter's pad recoloured to the map icons' colours, green on a town and orange on a gate
   (`town-pad`, `gate-pad`, `OpenWorldView.setPlaces`), lit at night as the teleporters are. No plate label: lairs have none. Real models are #1518.
 - **Not now**: moving the Hub's stations, 3D models of the places (#1518), the transitions (#1519), the door grammar (#1517).
+
+## 14. The goal on arrival (#1530)
+
+The panel (`#openworld-hud`) opens on what to do, not on the keys.
+
+- **Goal.** `#openworld-goal`: "Goal: beat the 15 towers of Hollow. One medal each." (a tower is a lair for the player). `#openworld-bearing` under
+  it: "Nearest tower: 208 cells, to the upper left." The nearest tower not beaten, by hex distance, and the way on the screen in eight words
+  (`WAYS` of `openworldgoal.ts`), from the same turn of the ground as the minimap's arrows (`screenOffset`), so it follows the camera. Both are
+  written when the minimap is drawn (a step, a tower beaten, a camera turn) and only when they change. Once every tower is beaten the goal reads "Goal done: all 15 towers are beaten." and the
+  bearing says what is left: the lore logs not found, else "Left: the dungeon gates." A world with no tower shows neither. Tally's flat register, no
+  word of a later stage (checked against `SECRETS`).
+- **Medals.** `Medals n / 15` stays (`#openworld-medals`), the one wording of progress on every screen: the Hub's count (`#hub-pips`) says it too (#1527).
+- **Controls.** The keys, taps and pad buttons are behind `#openworld-controls`, a `<details>` closed on arrival, with the steering line
+  (`#openworld-mode`) inside. A tap on its summary (44 px) or H opens and closes it; H on a folded plate shows the plate with the controls open. Nothing else
+  opens or closes it: a player who opened it and closed it finds it closed in the next world.
+- **Nearest tower.** The button `#openworld-dungeon` (its id is kept) walks to the nearest tower not beaten (#1291). It was "Dungeon", which
+  now names the gates of section 13.
+- **Claim.** The first-visit line stays, once per player, with its stage rule (`Claim: unworked.` before stage 5, "Claim 0412: unworked." from it), and
+  is followed by "A claim is a case on Tally's ledger. Unworked means no tower is beaten."
+- **Phone.** On a window 500 px high or under the panel is a column of 17 rem at the left, so the hero in the middle is clear of it, and its own
+  height is bounded (`max-height`, it scrolls) so the open controls never leave the top of the screen.

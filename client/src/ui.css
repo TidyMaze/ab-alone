@@ -921,7 +921,7 @@ body[data-biome] #run-map { border-color: var(--biome); background: color-mix(in
 #run-map .run-ascension button { min-width: 2.25rem; padding-inline: 0.25rem; }
 
 /* The Open world mode (#962) draws its own scene: the board's HUD steps aside for its plate. */
-#openworld-hud { --accent: var(--plate-accent); --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px); display: none; position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background-color: var(--panel); background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet); background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px; background-size: 6px 6px; background-repeat: no-repeat; border: 1px solid var(--edge); border-radius: var(--r-card); font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s; }
+#openworld-hud { max-height: calc(100vh - 5.5rem); overflow-y: auto; --accent: var(--plate-accent); --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px); display: none; position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background-color: var(--panel); background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet); background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px; background-size: 6px 6px; background-repeat: no-repeat; border: 1px solid var(--edge); border-radius: var(--r-card); font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s; }
 body[data-openworld] #openworld-hud { display: block; }
 /* Folded (#1138, openworldfold.ts): the plate leaves the screen and its reach, the chip takes its corner. The delay of `visibility` lets the fade end first; it leaves on the fast token (#1105). */
 #openworld-hud[data-folded] { opacity: 0; transform: translateY(0.5rem) scale(0.96); transform-origin: bottom left; visibility: hidden; pointer-events: none; transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out), visibility 0s var(--motion-fast); }
@@ -962,6 +962,17 @@ body[data-openworld] #openworld-log:not([hidden]) { display: block; animation: s
 /* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
 #openworld-hud p { margin: 0 0 0.5rem; }
 #openworld-hud code { font-size: 0.8125rem; }
+/* The plate scrolls inside its height (#1530): the open controls never run off the top of a short window. The controls hint is closed on arrival: a summary of the shared target size opens it, with H. The goal and the bearing are plain lines. */
+#openworld-controls { margin: 0 0 0.5rem; }
+#openworld-controls summary { -webkit-tap-highlight-color: transparent; pointer-events: auto; /* the chrome lets nothing through but its buttons (#chrome :is(button...)) */ display: flex; align-items: center; gap: 0.5rem; min-height: var(--target); cursor: pointer; list-style: none; font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+#openworld-controls summary::-webkit-details-marker { display: none; }
+#openworld-controls summary::before { content: '\25B8'; color: var(--plate-accent); }
+#openworld-controls[open] summary::before { content: '\25BE'; }
+#openworld-controls summary:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
+#openworld-controls p:last-child { margin-bottom: 0; }
+#openworld-bearing { color: var(--plate-accent); font-weight: 600; }
+/* On a short window (a phone on its side) the plate is a narrow column at the left, so the hero in the middle stays clear of it (#1530). */
+@media (max-height: 500px) { #openworld-hud { max-width: 17rem; } }
 /* The Dungeon button (#1291) is a HUD button (44 px target); its note shows only when a press found no tower. */
 #openworld-dungeon-note:empty { display: none; }
 /* #1038: text for a screen reader only, such as the one live status of a sheet that is read as a group. */
@@ -1261,8 +1272,8 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 #hub-rail li[data-goal] small { color: #ffb000; font-weight: 600; }
 #hub-rail p.goal { margin: var(--space) 0 0; padding: 4px var(--space); color: #ffb000; font-weight: 600; border: 1px solid #ffb000; border-radius: 4px; background-color: rgba(255, 176, 0, 0.16); }
 #hub-rail li[aria-current]::after { content: '\25CF'; color: var(--accent); }
-#hub-pips { top: 16px; right: 72px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
-#hub-pips .pip { width: 16px; height: 16px; box-sizing: border-box; border: 2px solid var(--edge); border-radius: 50%; }
+#hub-pips { top: 16px; right: 72px; display: flex; align-items: center; gap: 4px; padding: 6px 8px; } /* "Medals 0 / 15" is longer than "Bosses 0/5": small pips keep the first-run coach plate clear of it at 960 px */
+#hub-pips .pip { width: 12px; height: 12px; box-sizing: border-box; border: 2px solid var(--edge); border-radius: 50%; }
 #hub-pips .pip[data-state='beaten'] { background: var(--hazard); border-color: var(--hazard); }
 #hub-pips .pip[data-state='open'] { border-color: var(--danger); }
 #hub-pips .pip[data-state='locked'] { border-style: dotted; }

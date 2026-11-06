@@ -8,7 +8,7 @@ import { SECRETS } from './story';
 
 describe('the bearing to a cell (#1530)', () => {
   it('reads the ground as the minimap does: the camera at yaw 0 sees decreasing r straight up, increasing r straight down', () => {
-    expect(bearingOf([0, 0], [0, -10], 0)).toEqual({ cells: 10, way: 'straight up' });
+    expect(bearingOf([0, 0], [5, -10], 0)).toEqual({ cells: 10, way: 'straight up' });
     expect(bearingOf([0, 0], [-5, 10], 0).way).toBe('straight down'); // dq + dr / 2 = 0
     expect(bearingOf([0, 0], [7, 0], 0)).toEqual({ cells: 7, way: 'to the right' });
     expect(bearingOf([0, 0], [-7, 0], 0).way).toBe('to the left');
@@ -56,7 +56,7 @@ describe('the goal lines (#1530)', () => {
   it('skips the towers beaten, and says one cell for a cell', () => {
     expect(goalLines({ ...at, lairs: lairs(true, false) }).bearing).toBe('Nearest tower: 20 cells, to the right.');
     expect(goalLines({ ...at, hero: [9, 0], lairs: lairs(false) }).bearing).toBe('Nearest tower: 1 cell, to the right.');
-    expect(goalLines({ ...at, hero: [0, 0], lairs: [{ cell: [30, 0], beaten: false }, { cell: [0, -4], beaten: false }] }).bearing).toBe('Nearest tower: 4 cells, straight up.');
+    expect(goalLines({ ...at, hero: [0, 0], lairs: [{ cell: [30, 0], beaten: false }, { cell: [2, -4], beaten: false }] }).bearing).toBe('Nearest tower: 4 cells, straight up.');
   });
 
   it('says one tower for a world of one', () => {

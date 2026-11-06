@@ -13,6 +13,7 @@ import { endingLine, ledgerLine } from './tally';
 import { MARBLES } from './trainer';
 import { Discovered } from './openworlddiscovered';
 import { WorldMap } from './openworldmap';
+import { CLAIM_NOTE, goalLines } from './openworldgoal';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
 import { WORLD_LOGS } from './lorelogs';
 import { enter, heroStep } from './openworldstep';
@@ -70,6 +71,8 @@ const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const MAP_KEYS = new Set(['m', 'M']);
 /** The keys of the Teleport action (#1412): on a teleporter they open the map in the choice of a teleporter, and close it again. */
 const TELEPORT_KEYS = new Set(['t', 'T']);
+/** The keys that open and close the controls hint of the HUD (#1530). */
+const HELP_KEYS = new Set(['h', 'H']);
 /** The ground a marble can stand on: the troop arrives on it round a teleporter (#1412). */
 
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
@@ -379,7 +382,38 @@ export class OpenWorldMode {
     const [filed, total] = [this.beaten.length, this.lairs.length];
     if (total > 0 && filed >= total) tally.textContent = endingLine(MARBLES);
     else if (!fresh) tally.textContent = '';
-    else tally.textContent = filed > 0 ? ledgerLine(filed, total) : this.tally();
+    else tally.textContent = filed > 0 ? ledgerLine(filed, total) : this.claim();
+  }
+
+  /** The page's first-visit line, with its explanation (#1530): the line names a claim, which says nothing to a player who has not met the word. */
+  private claim(): string {
+    const line = this.tally();
+    return line && `${line} ${CLAIM_NOTE}`;
+  }
+
+  /** The objective and the bearing in the HUD (#1530), written when they change: called with the minimap, so on a step, a beaten tower and a
+   * camera turn. */
+  private showGoal(): void {
+    const { goal, bearing } = goalLines({
+      hero: this.hero!.at,
+      yaw: this.view!.drawnYaw,
+      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
+      logsLeft: this.logs.length - this.found.length,
+    });
+    for (const [id, line] of [['openworld-goal', goal], ['openworld-bearing', bearing]] as const) {
+      const out = document.getElementById(id);
+      if (out && out.textContent !== line) out.textContent = line;
+    }
+  }
+
+  /** The H key (#1530): opens the controls hint of the HUD, or closes it. A folded plate is shown first, with the hint open. The player's choice stays
+   * as it was left: nothing else opens or closes it. */
+  private toggleControls(): void {
+    const controls = document.getElementById('openworld-controls') as HTMLDetailsElement | null;
+    if (!controls) return;
+    const folded = document.getElementById('openworld-hud')?.dataset.folded;
+    if (folded) document.getElementById('openworld-chip')?.click();
+    controls.open = folded ? true : !controls.open;
   }
 
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
@@ -479,6 +513,7 @@ export class OpenWorldMode {
     if (this.mapShown) return (key === 'Escape' || MAP_KEYS.has(key) || TELEPORT_KEYS.has(key)) && (this.toggleMap(), true);
     if (MAP_KEYS.has(key)) return this.toggleMap(), true;
     if (TELEPORT_KEYS.has(key)) return this.teleport(), true;
+    if (HELP_KEYS.has(key)) return this.toggleControls(), true;
     if (key === 'Escape') return this.leave(), true;
     this.cancelWalk(); // any key ends a walk to a far cell (#1137)
     if (key === 'r' || key === 'R') return this.turn(DEFAULT_YAW - this.view!.yaw), true; // back to the default angle (#1026)
@@ -995,6 +1030,7 @@ export class OpenWorldMode {
   /** Draws the minimap (#1410) from the world as it is: called by `mark`, so on a step, a push and a camera turn, never on a frame. The
    * cells not discovered stay dark (#1411). The map, when open, is drawn again too. */
   private drawMap(): void {
+    this.showGoal();
     if (this.mapShown) this.worldMap!.draw();
     const canvas = this.mapCanvas();
     const ctx = canvas.getContext('2d');

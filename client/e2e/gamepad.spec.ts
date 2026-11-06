@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openControls } from './modes';
 
 // The gamepad (#1252) on a mocked navigator.getGamepads: one pad of the standard layout, set from the test.
 const A = 0, B = 1, RB = 5, START = 9, DOWN = 13;
@@ -86,7 +85,7 @@ test('a gamepad turns the Open world camera, switches the help to its buttons an
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
-  await openControls(page); // the hints are behind the summary (#1530)
+  await page.keyboard.press('h'); // the hints are behind the summary (#1530): H opens them without a click, which would move the focus off the board and the pad's LB with it
   await expect(page.locator('#openworld-hud .keys-hint').last()).toBeVisible();
   await tap(page, 4); // LB: the first press of the pad switches the help to its buttons
   await expect.poll(yaw).toBe('30');

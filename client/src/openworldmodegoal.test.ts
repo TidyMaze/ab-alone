@@ -49,13 +49,13 @@ describe('the goal lines of the HUD (#1530)', () => {
     m.fixture({ hero: [2, 0], troop: [], enemies: [] });
     expect(text('openworld-bearing')).toBe('Nearest tower: 1 cell, to the upper right.');
     m.fixture({ hero: [2, 0], troop: [], enemies: [], beaten: [0] });
-    expect(text('openworld-bearing')).toBe('Nearest tower: 5 cells, to the lower left.'); // (-4, 2) from (2, 0): dq -6, dr 2
+    expect(text('openworld-bearing')).toBe('Nearest tower: 6 cells, to the lower left.'); // (-4, 2) from (2, 0): dq -6, dr 2
     m.fixture({ hero: [2, 0], troop: [], enemies: [], beaten: [0, 1] });
     expect(text('openworld-goal')).toBe('Goal done: all 2 towers are beaten.');
     expect(text('openworld-bearing')).toBe('Left: the dungeon gates.');
     await saves.put(8, [0, 0], [], fightOf(), 0, [], [0]);
     await m.open(8, 800, 600); // a world saved with a tower beaten
-    expect(text('openworld-bearing')).toBe('Nearest tower: 4 cells, to the lower left.');
+    expect(text('openworld-bearing')).toBe('Nearest tower: 4 cells, to the left.'); // the saved world rests the camera at a yaw of +30 degrees
   });
 
   it('turn with the camera, as the minimap does, and are written only when they change', () => {

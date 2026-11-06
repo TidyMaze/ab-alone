@@ -175,9 +175,20 @@ describe('the goal and the collapsed controls of the Open world plate (#1530)', 
     expect(html).not.toContain('Open world: <span class="keys-hint">');
   });
 
+  it('scrolls inside its own height, so the open controls never run off the top of a short window', () => {
+    const plate = rule('#openworld-hud');
+    expect(plate).toContain('max-height: calc(100vh - 5.5rem)');
+    expect(plate).toContain('overflow-y: auto');
+  });
+
+  it('is a narrow column on a short window, so the hero in the middle stays clear of it', () => {
+    expect(css).toContain('@media (max-height: 500px) { #openworld-hud { max-width: 17rem; } }');
+  });
+
   it('makes the summary a 44 px target', () => {
     const summary = rule('#openworld-controls summary');
     expect(summary).toContain('min-height: var(--target)');
     expect(summary).toContain('cursor: pointer');
+    expect(summary).toContain('pointer-events: auto'); // #chrome takes no pointer but its buttons'
   });
 });
