@@ -84,6 +84,20 @@ describe('the wandering marbles in the Open world mode', () => {
     expect(wander).not.toHaveBeenCalled();
   });
 
+  it('tells the fight the cells of the troop before the clock, so no marble walks onto one (#1590)', () => {
+    const m = made();
+    let tick = 0;
+    m.wander = () => tick;
+    m.enter(found.seed, 800, 600);
+    const held = vi.spyOn(FightState.prototype, 'setHeld');
+    const clock = vi.spyOn(FightState.prototype, 'setClock');
+    tick = away;
+    m.stepWander();
+    expect(held).toHaveBeenCalledTimes(1);
+    expect(held.mock.calls[0]![0].length).toBeGreaterThan(0);
+    expect(held.mock.invocationCallOrder[0]!).toBeLessThan(clock.mock.invocationCallOrder[0]!);
+  });
+
   it('the hook that sets the clock moves them at once, ending a roll being drawn first', () => {
     const m = made(false);
     let tick = 0;

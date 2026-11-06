@@ -1032,6 +1032,36 @@ mod tests {
     }
 
     #[test]
+    fn a_group_whose_next_cell_is_held_by_the_troop_or_a_shoved_marble_waits_a_tick() {
+        let (cx, cy, flat, tick, (dq, dr)) = wandering();
+        let stands = |fight: &WorldFight, cell: (i32, i32)| {
+            pairs(&fight.chunk_enemies(flat.clone(), cx, cy)).contains(&cell)
+        };
+        let next = (flat[0] + dq, flat[1] + dr);
+        let mut fight = WorldFight::new();
+        fight.set_held(vec![next.0, next.1]);
+        fight.set_clock(3, tick);
+        assert!(!stands(&fight, next), "a troop marble holds the cell");
+        // The group keeps the cells of the tick before, a pure function of the seed, the chunk and the clock.
+        let before = worldwander::offset(3, (cx, cy), &pairs(&flat), tick - 1);
+        assert_eq!(
+            fight.chunk_enemies(flat.clone(), cx, cy),
+            flat.chunks(2)
+                .flat_map(|c| [c[0] + before.0, c[1] + before.1])
+                .collect::<Vec<i32>>()
+        );
+        fight.set_held(vec![]);
+        assert!(stands(&fight, next), "released, the group takes the step");
+        let mut shoved = WorldFight::restore(vec![], vec![next.0, next.1], 0);
+        shoved.set_clock(3, tick);
+        assert!(!stands(&shoved, next), "a shoved marble holds the cell");
+        let mut gone = WorldFight::restore(flat.clone(), vec![], 0);
+        gone.set_held(vec![next.0, next.1]);
+        gone.set_clock(3, tick);
+        assert!(gone.chunk_enemies(flat.clone(), cx, cy).is_empty());
+    }
+
+    #[test]
     fn a_clock_moves_the_generated_enemies_and_tick_zero_puts_them_home() {
         let (cx, cy, flat, tick, (dq, dr)) = wandering();
         let mut fight = WorldFight::new();

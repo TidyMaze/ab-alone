@@ -205,6 +205,16 @@ describe('the wandering marbles (#1511)', () => {
     expect(FightState.tickMs).toBe(1200);
   });
 
+  it('holds the cells of the troop: a group whose next cell is held waits, and walks on once the cell is free (#1590)', () => {
+    const { w, fight, tick, offset } = wanderer();
+    const next: Axial = [5 + offset[0], 5 + offset[1]];
+    fight.setHeld([next]);
+    fight.setClock(3, tick);
+    expect(fight.chunkEnemies(w, 0, 0)).not.toContainEqual(next);
+    fight.setHeld([]);
+    expect(fight.chunkEnemies(w, 0, 0)).toContainEqual(next);
+  });
+
   it('places the generated marbles where the clock has them, in every question about them', () => {
     const { w, fight, offset } = wanderer();
     const [dq, dr] = offset;
