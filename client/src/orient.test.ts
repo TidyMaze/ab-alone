@@ -96,6 +96,18 @@ describe('carryTurns and rolledTurn', () => {
     expect(end).not.toEqual(marbleTurn(3, at(0, 2))); // it rolled
   });
 
+  it('a pushed marble that starts late rolls from its old turn to the same end turn, and no jump at either end', () => {
+    const before = put([[0, 1, 1], [0, 0, 1], [0, -1, 2]]);
+    const after = put([[0, 0, 1], [0, -1, 1], [0, -2, 2]]);
+    const tracks = slideTracks(before, after, move(4, [0, 0], [0, 1]), false);
+    const pushed = tracks.find((t) => t.delayMs)!;
+    const end = carryTurns(new Map(), 3, tracks, 4).get(at(0, -2))!;
+    sameRotation(rolledTurn(pushed, 0, end), marbleTurn(3, at(0, -1))); // waiting on its cell
+    sameRotation(rolledTurn(pushed, pushed.delayMs!, end), marbleTurn(3, at(0, -1)));
+    sameRotation(rolledTurn(pushed, 200, end), end); // it ends with the move
+    expect(marbleTurn(3, at(0, -1))).not.toEqual(end); // it rolled
+  });
+
   it('the roll turns about the axis square to the path, by one cell over the radius', () => {
     const before = put([[0, 0, 1]]);
     const after = put([[1, 0, 1]]);

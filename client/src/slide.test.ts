@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CORE_CODE, DIRECTIONS, VANISHED, axialTo3D, cellIndex, cellsFor, type Axial, type Move } from './board';
-import { MARBLE_RADIUS, SLIDE_MS, rollAt, slideAt, slideTracks } from './slide';
+import { MARBLE_RADIUS, SLIDE_MS, SQUASH, SQUASH_MS, STAGGER_MS, rollAt, slideAt, slideEndMs, slideTracks, squashAt } from './slide';
 
 const empty = (): number[] => new Array<number>(61).fill(0);
 const put = (cells: Array<[number, number, number]>): number[] => {
@@ -35,7 +35,7 @@ describe('slideTracks', () => {
     const before = put([[-1, 1, 1], [0, 1, 1], [1, 1, CORE_CODE]]);
     const after = put([[0, 1, 1], [1, 1, 1], [2, 1, CORE_CODE]]);
     const tracks = slideTracks(before, after, move(0, [-1, 1], [0, 1]), false);
-    expect(tracks).toContainEqual({ cell: [2, 1], from: xz(1, 1), to: xz(2, 1), durationMs: SLIDE_MS });
+    expect(tracks).toContainEqual({ cell: [2, 1], from: xz(1, 1), to: xz(2, 1), durationMs: SLIDE_MS - STAGGER_MS, delayMs: STAGGER_MS });
   });
 
   it('slides the pushed opponent marbles with the pushing line', () => {
@@ -44,7 +44,7 @@ describe('slideTracks', () => {
     const after = put([[0, 0, 1], [0, -1, 1], [0, -2, 2]]);
     const tracks = slideTracks(before, after, move(4, [0, 0], [0, 1]), false);
     expect(tracks).toHaveLength(3);
-    expect(tracks).toContainEqual({ cell: [0, -2], from: xz(0, -1), to: xz(0, -2), durationMs: SLIDE_MS });
+    expect(tracks).toContainEqual({ cell: [0, -2], from: xz(0, -1), to: xz(0, -2), durationMs: SLIDE_MS - STAGGER_MS, delayMs: STAGGER_MS });
     expect(tracks.map((t) => t.cell)).toEqual(
       expect.arrayContaining([[0, -1], [0, 0], [0, -2]]),
     );
@@ -59,7 +59,7 @@ describe('slideTracks', () => {
       expect.arrayContaining([[-2, -1], [-2, 0], [-2, 1], [-2, -2]]),
     );
     expect(tracks).toHaveLength(4);
-    expect(tracks).toContainEqual({ cell: [-2, -2], from: xz(-2, -1), to: xz(-2, -2), durationMs: SLIDE_MS });
+    expect(tracks).toContainEqual({ cell: [-2, -2], from: xz(-2, -1), to: xz(-2, -2), durationMs: SLIDE_MS - STAGGER_MS, delayMs: STAGGER_MS });
   });
 
   it('ends the push line at a vanished cell: the marbles beyond the hole stay put', () => {
@@ -100,6 +100,57 @@ describe('slideTracks', () => {
   });
 });
 
+describe('the stagger of a pushed chain', () => {
+  // Black pair pushes White marbles NW along the q = -2 column; a trio pushes two.
+  const line = (pushed: number): ReturnType<typeof slideTracks> => {
+    const cells: Array<[number, number, number]> = [[-2, 2, 1], [-2, 1, 1]];
+    for (let k = 0; k < pushed; k++) cells.push([-2, 0 - k, 2]);
+    const after = cells.map(([q, r, side]): [number, number, number] => [q, r - 1, side]);
+    return slideTracks(put(cells), put(after), move(4, [-2, 1], [-2, 2]), false);
+  };
+  const delayOf = (tracks: ReturnType<typeof line>, cell: Axial): number | undefined => tracks.find((t) => t.cell[0] === cell[0] && t.cell[1] === cell[1])!.delayMs;
+
+  it('is 20 ms a place along the line: about the time the pusher takes to close the gap to the next marble', () => {
+    expect(STAGGER_MS).toBe(20);
+    // The pusher's ease out cubic covers the 0.28 cell gap between two marbles (spacing 1, diameter 0.72) in about 21 ms.
+    expect(1 - (1 - STAGGER_MS / SLIDE_MS) ** 3).toBeCloseTo(0.27, 2);
+    expect(MARBLE_RADIUS * 2).toBeCloseTo(0.72);
+  });
+
+  it('starts the pushed marbles after the pusher, the moved group at once', () => {
+    const tracks = line(2);
+    expect(delayOf(tracks, [-2, 0])).toBeUndefined();
+    expect(delayOf(tracks, [-2, 1])).toBeUndefined();
+    expect(delayOf(tracks, [-2, -1])).toBe(STAGGER_MS); // the first marble pushed
+    expect(delayOf(tracks, [-2, -2])).toBe(2 * STAGGER_MS); // the second one
+  });
+
+  it('stops at two places, so a long line of cores and marbles never waits long', () => {
+    // Black pair, then a White marble, a core, a White marble and a core: four pushed.
+    const cells: Array<[number, number, number]> = [[-4, 0, 1], [-3, 0, 1], [-2, 0, 2], [-1, 0, CORE_CODE], [0, 0, 2], [1, 0, CORE_CODE]];
+    const after = cells.map(([q, r, side]): [number, number, number] => [q + 1, r, side]);
+    const tracks = slideTracks(put(cells), put(after), move(0, [-4, 0], [-3, 0]), false);
+    expect(tracks.map((t) => t.delayMs)).toEqual([undefined, undefined, STAGGER_MS, 2 * STAGGER_MS, 2 * STAGGER_MS, 2 * STAGGER_MS]);
+  });
+
+  it('shortens the pushed marbles slide so the whole move still ends at 200 ms', () => {
+    for (const tracks of [line(1), line(2)]) {
+      for (const t of tracks) expect(slideEndMs(t)).toBe(SLIDE_MS);
+    }
+    expect(slideEndMs({ cell: [0, 0], from: { x: 0, z: 0 }, to: { x: 1, z: 0 }, durationMs: 180, delayMs: 20 })).toBe(200);
+    expect(slideEndMs({ cell: [0, 0], from: { x: 0, z: 0 }, to: { x: 1, z: 0 }, durationMs: 200 })).toBe(200);
+  });
+
+  it('has no stagger with reduced motion', () => {
+    const cells: Array<[number, number, number]> = [[0, 1, 1], [0, 0, 1], [0, -1, 2]];
+    const after = cells.map(([q, r, side]): [number, number, number] => [q, r - 1, side]);
+    for (const t of slideTracks(put(cells), put(after), move(4, [0, 0], [0, 1]), true)) {
+      expect(t.durationMs).toBe(0);
+      expect(t.delayMs ?? 0).toBe(0);
+    }
+  });
+});
+
 describe('slideAt', () => {
   const track = { cell: [1, 0] as Axial, from: { x: 0, z: 0 }, to: { x: 1, z: 2 }, durationMs: 200 };
 
@@ -119,6 +170,54 @@ describe('slideAt', () => {
 
   it('reduced motion: at the new cell at once', () => {
     expect(slideAt({ ...track, durationMs: 0 }, 0)).toEqual({ x: 1, z: 2 });
+  });
+
+  it('waits at the old cell for its delay, then eases out over what is left', () => {
+    const late = { ...track, delayMs: 20, durationMs: 180 };
+    expect(slideAt(late, 0)).toEqual({ x: 0, z: 0 });
+    expect(slideAt(late, 20)).toEqual({ x: 0, z: 0 });
+    expect(slideAt(late, 20 + 90).x).toBeCloseTo(0.875);
+    expect(slideAt(late, 200)).toEqual({ x: 1, z: 2 });
+  });
+});
+
+describe('squashAt', () => {
+  const track = { cell: [1, 0] as Axial, from: { x: 0, z: 0 }, to: { x: 1, z: 2 }, durationMs: 200 };
+  const rest = { y: 1, xz: 1 };
+
+  it('lasts 120 ms from the arrival, and is cut short by nothing before or after', () => {
+    expect(SQUASH_MS).toBe(120);
+    expect(squashAt(track, 0)).toEqual(rest); // still sliding
+    expect(squashAt(track, 199)).toEqual(rest);
+    expect(squashAt(track, 200)).toEqual(rest); // the arrival: the squash starts from rest
+    expect(squashAt(track, 200 + SQUASH_MS)).toEqual(rest);
+    expect(squashAt(track, 5000)).toEqual(rest);
+  });
+
+  it('squashes first: flatter and wider, the volume kept', () => {
+    const s = squashAt(track, 200 + SQUASH_MS / 4);
+    expect(s.y).toBeLessThan(1 - SQUASH / 2);
+    expect(s.y).toBeGreaterThan(1 - SQUASH);
+    expect(s.xz).toBeGreaterThan(1);
+    expect(s.y * s.xz * s.xz).toBeCloseTo(1, 9);
+  });
+
+  it('then rebounds taller and thinner than at rest, and settles', () => {
+    const s = squashAt(track, 200 + (3 * SQUASH_MS) / 4);
+    expect(s.y).toBeGreaterThan(1);
+    expect(s.y).toBeLessThan(1 + SQUASH / 2);
+    expect(s.xz).toBeLessThan(1);
+    expect(s.y * s.xz * s.xz).toBeCloseTo(1, 9);
+    expect(squashAt(track, 200 + SQUASH_MS / 2).y).toBeCloseTo(1, 9); // the turn between squash and rebound
+  });
+
+  it('starts from the arrival of a delayed track, which is the same moment', () => {
+    const late = { ...track, delayMs: 20, durationMs: 180 };
+    expect(squashAt(late, 200 + SQUASH_MS / 4)).toEqual(squashAt(track, 200 + SQUASH_MS / 4));
+  });
+
+  it('is cut under reduced motion: a zero duration never squashes', () => {
+    for (const ms of [0, 10, 30, 60, 100]) expect(squashAt({ ...track, durationMs: 0 }, ms)).toEqual(rest);
   });
 });
 
