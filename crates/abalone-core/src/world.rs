@@ -2640,4 +2640,103 @@ mod tests {
         );
         assert_eq!(gate_ring(&found, at(1000)), 5);
     }
+
+    /// The pad of each tower of a seed, boss 0 first, with the tower it stands beside.
+    fn pads(seed: u64) -> Vec<((i32, i32), (i32, i32))> {
+        towers(seed)
+            .into_iter()
+            .map(|tower| (tower, tower_pad(seed, tower)))
+            .collect()
+    }
+
+    #[test]
+    fn every_seed_from_1_to_2000_gives_each_tower_a_pad_on_an_open_cell_next_to_it_and_the_search_ends(
+    ) {
+        sweep("pads never end", pads, |seed, found| {
+            assert_eq!(found.len(), 15, "seed {seed}");
+            for (i, &(tower, pad)) in found.iter().enumerate() {
+                assert_eq!(hex_distance(tower, pad), 1, "seed {seed}: pad {i}");
+                let c = cell(seed, pad.0, pad.1).expect("on the world");
+                assert!(!c.terrain.blocked(), "seed {seed}: pad {i}");
+                assert!(!is_enemy(seed, pad.0, pad.1), "seed {seed}: pad {i}");
+                assert!(
+                    found.iter().all(|&(t, _)| t != pad),
+                    "seed {seed}: pad {i} is on a tower"
+                );
+                for &(_, other) in &found[i + 1..] {
+                    assert_ne!(pad, other, "seed {seed}: two pads on {pad:?}");
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn a_pad_never_shares_a_cell_with_a_teleporter_a_log_or_a_place() {
+        for seed in [1, 7, 1305, 2, 3, 862, 1178] {
+            let mut taken = bridge_avoid(seed);
+            let found = logs(seed, &taken);
+            taken.extend(found.iter().flatten());
+            let towns = places(seed, &taken);
+            taken.extend(towns.into_iter().map(|p| p.1));
+            for (_, pad) in pads(seed) {
+                assert!(taken.iter().all(|&c| c != pad), "seed {seed}: {pad:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_pad_takes_the_first_neighbour_in_the_order_of_the_steps_that_is_open_and_free_of_enemies()
+    {
+        let tower = towers(7)[0];
+        let pad = tower_pad(7, tower);
+        let free = |(dq, dr): (i32, i32)| {
+            let (q, r) = (tower.0 + dq, tower.1 + dr);
+            cell(7, q, r).is_some_and(|c| !c.terrain.blocked()) && !is_enemy(7, q, r)
+        };
+        let first = STEPS.iter().find(|&&step| free(step)).unwrap();
+        assert_eq!(pad, (tower.0 + first.0, tower.1 + first.1));
+        assert_eq!(tower_pad(7, tower), pad, "from the seed alone");
+    }
+
+    /// The cells the logs, then the places, keep off, as the bridge passes them (the 15 towers' lairs and the teleporters, then the logs).
+    fn bridge_avoid(seed: u64) -> Vec<(i32, i32)> {
+        let lairs = lairs(seed, TOWER_ORDER.len());
+        let mut avoid = teleporters(seed, &lairs);
+        avoid.extend(lairs);
+        avoid
+    }
+
+    /// The points of interest that are no boss (docs/specs/openworld.md section 16): the lore logs and the dungeon gates.
+    fn points_of_interest(seed: u64) -> Vec<(i32, i32)> {
+        let mut avoid = bridge_avoid(seed);
+        let found = logs(seed, &avoid);
+        avoid.extend(found.iter().flatten());
+        let gates = kind_cells(&places(seed, &avoid), PlaceKind::Dungeon);
+        found.into_iter().flatten().chain(gates).collect()
+    }
+
+    /// The farthest a near log is from the spawn in cells: its ring ends 140 ground units out, and a cell is 2 / sqrt(3) of a unit across.
+    const NEAR_REACH: i32 = 165;
+
+    #[test]
+    fn a_world_holds_twelve_logs_and_five_gates_two_or_three_points_of_interest_in_every_biome_and_one_near_the_spawn_in_each(
+    ) {
+        for seed in 1..=300 {
+            let found = points_of_interest(seed);
+            assert_eq!(found.len(), LOGS + DUNGEONS, "seed {seed}");
+            for wedge in 0..6 {
+                let here: Vec<(i32, i32)> = found
+                    .iter()
+                    .copied()
+                    .filter(|&(q, r)| cell(seed, q, r).unwrap().biome == SEXTANTS[wedge])
+                    .collect();
+                let want = if wedge == 0 { 2 } else { 3 };
+                assert_eq!(here.len(), want, "seed {seed}: biome {wedge}");
+                assert!(
+                    here.iter().any(|&c| hex_distance((0, 0), c) <= NEAR_REACH),
+                    "seed {seed}: biome {wedge} has nothing within {NEAR_REACH} cells of the spawn"
+                );
+            }
+        }
+    }
 }
