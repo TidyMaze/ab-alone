@@ -6788,13 +6788,10 @@ bindJoystick(document, openWorld); // the touch stick of the Open world, on the 
 let sheetOpen = false;
 addEventListener('keydown', () => (sheetOpen = reading !== null || menuIsOpen || modesOpen || goalOpen || lobbyOpen), { capture: true });
 addEventListener('keydown', (e) => {
-  if (!openWorld.active || e.target instanceof HTMLInputElement || (e.key === 'Escape' && sheetOpen) || !openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
+  if (!openWorld.active || e.target instanceof HTMLInputElement || (e.key === 'Escape' && sheetOpen)) return;
+  if (e.key === 'Escape' && !openWorld.mapShown) return e.preventDefault(), exitButton.click(); // Escape presses the exit of the dock, as Browser Back does (#1605, ui.md 4.10); the map closes first, below
+  if (!openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
-  if (openWorld.active) return;
-  needBoard(); // Escape left the world
-  dirty = CHANGE_DRAWS; // left: the board draws again
-  drawAsked = true;
-  refresh();
 });
 addEventListener('keyup', (e) => openWorld.release(e.key)); // a diagonal needs both arrows held (#977)
 addEventListener('blur', () => openWorld.release()); // no key stays held once the window is left

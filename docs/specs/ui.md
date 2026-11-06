@@ -552,7 +552,7 @@ timer.
   lair, Back, Retry, the Trainer's Next wave and a game resumed after a reload all go through it. It leaves whatever mode
   is on, then clears the stray state no mode owns: the fight's controls and sheets and the board's `body` data, from the
   lists of `client/src/modeswitch.ts`.
-- **The Open world opens over the page** (#1063): Esc gives the game beneath back as it was, and the world hides all of it,
+- **The Open world opens over the page** (#1063): the world hides all of the game beneath it, Esc presses the exit of the dock and lands in the Hub (#1605, section 4.10), and the next mode leaves it,
   its boss bar, notes and end light included. The next mode's start leaves the world.
 - **Guard.** `client/src/main.modeswitch.test.ts` enters every mode of the README table, plays it and leaves it for the
   Hub, which must show what it showed after the boot. A new mode, a HUD element or a `body` data key that stays
@@ -735,8 +735,7 @@ A mode is entered by a door and left by one control: the exit `#exit`, the **fir
 a phone and on a desktop included (the dock shows the exit alone there, bottom right, clear of the stick, the plate and the map button; the
 separate Hub button is gone). Its label names where it leads: **World** when the player came from the world, otherwise **Hub**; it returns the
 hero to the entrance used. It replaces the Hub button of the Open world, "Back to the hub" and "Back to the Open world" (once in the Lobby
-sheet). Esc keeps its shortcut of the world (it leaves the world to the page beneath, which the exit does not change); Browser Back
-(section 4.9) presses the exit, so both land in one place. The plain table and the Hub, the home of the game, have none: their first
+sheet). Esc in the world presses the exit (#1605) and Browser Back (section 4.9) presses it too, so all three land in one place, the Hub. The map or a sheet open over the world (the terminal reader, the settings, the Game modes, Goal, Lobby) closes first on Esc, and the world stays. The plain table and the Hub, the home of the game, have none: their first
 slot stays New game. A wild fight keeps Flee (F) in the first slot until it is over, as Flee leads to the same place, then World.
 A boss or lair fight in progress with a ply played is not saved, so the exit asks for a second press, `Sure?` in the `.confirm` look, lapsing after `CONFIRM_MS` as New game does (`newgame.ts`); a fight over or with no ply, the world, the Hub, a town, a run, the Trainer and a table ask nothing, and Browser Back never asks.
 
