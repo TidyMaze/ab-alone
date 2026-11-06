@@ -67,8 +67,9 @@ function click(game: Game, from: Axial, to: Axial): void {
 }
 
 /** Boots, presses Play online in the mode menu, and seats a White opponent once the page's session exists. */
-async function hosted(url = '?bot=off') {
-  const game = await boot(url);
+async function hosted(url = '?bot=off', options: Parameters<typeof boot>[1] = {}) {
+  const game = await boot(url, options);
+  if (options.audio) dispatchEvent(new KeyboardEvent('keydown', { key: 'a' })); // the first gesture unlocks the sound (#1570)
   game.openModes();
   byId('play-online').click();
   await until(game, () => data().seat === 'player');
@@ -800,5 +801,29 @@ describe('The service worker', () => {
     await game.settle();
     expect(sw.register).toHaveBeenCalledOnce();
     expect(game.turn()).toBe('Black to move');
+  });
+});
+
+// The cues of an online game (#1570, world.md section 7): the page reports each cue it played as `__cues`.
+describe('the cues of an online game (#1570)', () => {
+  const cues = (game: Game): string[] => game.hook<string[]>('__cues');
+  const count = (game: Game, event: string): number => cues(game).filter((c) => c === event).length;
+
+  it('the opponent joining sounds once, not on each redraw of the status', async () => {
+    const { game } = await hosted('?bot=off', { audio: true });
+    expect(count(game, 'online-join')).toBe(1);
+    game.openSettings();
+    byId('setting-flat-hud').click();
+    expect(count(game, 'online-join')).toBe(1);
+  });
+
+  it('the turn coming back after the opponent moved sounds once, not for the own move', async () => {
+    const { game, white } = await hosted('?bot=off', { audio: true });
+    click(game, [0, 2], [0, 1]);
+    await until(game, () => white.session.signedLog.length === 1);
+    expect(count(game, 'turn-start')).toBe(0);
+    await white.play([0, -2], [0, -1]);
+    await until(game, () => game.hook('__plies') === 2);
+    expect(count(game, 'turn-start')).toBe(1);
   });
 });

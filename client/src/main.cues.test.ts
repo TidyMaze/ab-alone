@@ -85,11 +85,11 @@ describe('the win and the loss (#1570)', () => {
     start(game, 'The Echo');
     over.status = 1;
     move(game);
-    expect(count(game, 'win')).toBe(1);
+    expect(count(game, 'boss-death')).toBe(1);
     game.openSettings();
     byId('setting-flat-hud').click();
     expect(game.hud()).toContain('Victory');
-    expect([count(game, 'win'), count(game, 'loss')]).toEqual([1, 0]);
+    expect([count(game, 'boss-death'), count(game, 'win'), count(game, 'loss')]).toEqual([1, 0, 0]); // the boss death takes the place of the win
   });
 
   it('a boss fight lost, a draw of it too, sounds the loss', async () => {
@@ -103,14 +103,25 @@ describe('the win and the loss (#1570)', () => {
     expect([count(game, 'win'), count(game, 'loss')]).toEqual([0, 1]);
   });
 
-  it('a game against the bot won sounds, a draw does not', async () => {
-    for (const [status, expected] of [[1, 1], [3, 0]] as const) {
+  it('a game against the bot won sounds the win, a draw its own cue and never the win', async () => {
+    for (const [status, win, draw] of [[1, 1, 0], [3, 0, 1]] as const) {
       const game = await boot('?nodes=50', { audio: true });
       gesture();
       await judge(game, 'Engine', { status });
       move(game);
-      expect(count(game, 'win'), `status ${status}`).toBe(expected);
+      expect([count(game, 'win'), count(game, 'draw')], `status ${status}`).toEqual([win, draw]);
+      game.openSettings();
+      byId('setting-flat-hud').click();
+      expect([count(game, 'win'), count(game, 'draw')], `status ${status} drawn again`).toEqual([win, draw]);
     }
+  });
+
+  it('a draw in a hot seat is silent, like a win there', async () => {
+    const game = await boot('?bot=off', { audio: true });
+    gesture();
+    await judge(game, 'Engine', { status: 3 });
+    move(game);
+    expect(count(game, 'draw')).toBe(0);
   });
 
   it('a hot seat is silent: nobody there wins or loses', async () => {
@@ -129,7 +140,7 @@ describe('the win and the loss (#1570)', () => {
       await judge(game, 'Encounter', { status: 1 });
       start(game, 'The Echo');
       move(game);
-      expect(cues(game).filter((c) => c !== 'click')).toEqual([]);
+      expect(cues(game)).toEqual([]); // no gesture, or the effects slider at 0: no cue at all, not even a selection
     }
   });
 
@@ -144,9 +155,9 @@ describe('the win and the loss (#1570)', () => {
     over.status = 1; // the end comes while the Replay is open, as when a peer's move lands
     byId('replay-prev').click();
     byId('replay-next').click();
-    expect(count(game, 'win')).toBe(0);
+    expect(count(game, 'boss-death')).toBe(0);
     byId('replay-live').click();
-    expect(count(game, 'win')).toBe(1);
+    expect([count(game, 'boss-death'), count(game, 'win')]).toEqual([1, 0]);
   });
 });
 
@@ -229,7 +240,7 @@ describe('the royale (#1570)', () => {
     return game;
   }
 
-  const heard = (game: Game): string[] => cues(game).filter((c) => c !== 'click');
+  const heard = (game: Game): string[] => cues(game).filter((c) => c !== 'click' && c !== 'royale-round');
 
   it('sounds an elimination when a marble set goes out, once for sets that go out together, and the loss at the end', async () => {
     const game = await royale();
@@ -244,6 +255,33 @@ describe('the royale (#1570)', () => {
     expect(heard(game)).toEqual(['elimination', 'elimination', 'loss']);
   });
 
+  it('sounds a round tick when a round is resolved and the next one is open: after its reveal, once, never for the round a game opens at', async () => {
+    const game = await royale();
+    expect(count(game, 'royale-round')).toBe(0);
+    byId('royale-hold').click();
+    expect(count(game, 'royale-round')).toBe(0); // the reveal of the round is playing
+    game.frame(10_000);
+    expect(count(game, 'royale-round')).toBe(1);
+    game.openSettings();
+    byId('setting-flat-hud').click();
+    expect(count(game, 'royale-round')).toBe(1);
+    byId('royale-hold').click();
+    game.frame(10_000);
+    expect(count(game, 'royale-round')).toBe(2);
+    game.hook('__royale', { seed: 7, rounds: [[], [], []] }); // a game that opens at round 4
+    expect(count(game, 'royale-round')).toBe(2);
+  });
+
+  it('sounds a round tick at once under reduced motion, where there is no reveal, and none in the draw that has an elimination or the end', async () => {
+    const game = await royale({ reducedMotion: true });
+    holdAll(game, 80);
+    const all = cues(game).filter((c) => c !== 'click');
+    const rounds = Number(document.body.dataset.royale) - 1;
+    expect(all.filter((c) => c === 'elimination')).toHaveLength(2);
+    expect(all.filter((c) => c === 'loss')).toHaveLength(1);
+    expect(all).toHaveLength(rounds); // each round sounds one cue: the tick, or the elimination or the end that takes its place
+  });
+
   it('a game file that opens already over sounds its win once, and no elimination for the sets already out', async () => {
     const game = await boot('?bot=off', { audio: true });
     gesture();
@@ -251,5 +289,145 @@ describe('the royale (#1570)', () => {
     expect(cues(game)).toEqual(['win']);
     game.hook('__royale', END);
     expect(cues(game)).toEqual(['win', 'win']); // a new game of its own
+  });
+});
+
+describe('the boss intro (#1570)', () => {
+  it('sounds once as a fight starts, after the click on the boss, and not when the plate is drawn again', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true, audio: true });
+    gesture();
+    start(game, 'The Echo');
+    expect(cues(game)).toEqual(['click', 'click', 'boss-intro']); // the mode menu, the boss list entry, the intro
+    game.openSettings();
+    byId('setting-flat-hud').click();
+    expect(count(game, 'boss-intro')).toBe(1);
+  });
+
+  it('is silent outside a boss fight, and sounds again for the next fight', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true, audio: true });
+    gesture();
+    game.openModes();
+    expect(count(game, 'boss-intro')).toBe(0);
+    start(game, 'The Echo');
+    start(game, 'The Echo');
+    expect(count(game, 'boss-intro')).toBe(2);
+  });
+});
+
+describe('the selection (#1570)', () => {
+  it('sounds when the selection changes to a group of marbles, not on a redraw nor when it is cleared', async () => {
+    const game = await boot('?bot=off', { audio: true });
+    gesture();
+    const mv = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1)!;
+    const [q, r] = mv.cells[0]!;
+    expect(count(game, 'selection')).toBe(0);
+    game.click(q, r);
+    expect(count(game, 'selection')).toBe(1);
+    game.openSettings();
+    byId('setting-flat-hud').click(); // the plate is drawn again
+    expect(count(game, 'selection')).toBe(1);
+    game.click(q, r); // a second press takes the selection back
+    expect(count(game, 'selection')).toBe(1);
+    game.click(q, r);
+    expect(count(game, 'selection')).toBe(2);
+  });
+
+  it('is silent for the move that clears the selection, and for a press on nothing', async () => {
+    const game = await boot('?bot=off', { audio: true });
+    gesture();
+    move(game);
+    expect(count(game, 'selection')).toBe(1); // the first press of the two selected the marble, the second played
+    game.click(0, 0); // an empty cell of the other side's turn, with nothing selected
+    expect(count(game, 'selection')).toBe(1);
+  });
+
+  it('is silent before a gesture and with the effects slider at 0', async () => {
+    for (const [storage, key] of [[{}, false], [{ 'ab-alone.volume.effects': '0' }, true]] as const) {
+      const game = await boot('?bot=off', { audio: true, storage });
+      if (key) gesture();
+      const [q, r] = game.hook<Move[]>('__legal')[0]!.cells[0]!;
+      game.click(q, r);
+      expect(cues(game)).toEqual([]);
+    }
+  });
+});
+
+describe('the illegal move (#1570)', () => {
+  it('sounds once for a press that is not a legal move after a selection, with the text that says so, never on a hover or without a selection', async () => {
+    const game = await boot('?bot=off', { audio: true });
+    gesture();
+    const mv = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1)!;
+    const [q, r] = mv.cells[0]!;
+    game.click(0, 0); // nothing selected: the engine has nothing to refuse
+    document.querySelector('canvas')!.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 10, clientY: 10 })); // a hover
+    expect(count(game, 'illegal-move')).toBe(0);
+    game.click(q, r);
+    game.click(q + 4, r + 4); // far from the marble: no legal move
+    expect(game.hud()).toContain('not a legal move');
+    expect(count(game, 'illegal-move')).toBe(1);
+    game.openSettings();
+    byId('setting-flat-hud').click(); // a redraw does not sound it again
+    expect(count(game, 'illegal-move')).toBe(1);
+  });
+});
+
+describe('the turn start (#1570)', () => {
+  it('sounds when the bot has answered and the turn is back to the player, not for the player own move', async () => {
+    const game = await boot('?nodes=50', { audio: true });
+    gesture();
+    move(game);
+    expect(count(game, 'turn-start')).toBe(0);
+    await game.settle();
+    game.frame(5000);
+    await game.settle();
+    expect(game.hook('__plies')).toBe(2); // the bot answered
+    expect(count(game, 'turn-start')).toBe(1);
+  });
+
+  it('is silent in a hot seat, where nobody answers', async () => {
+    const game = await boot('?bot=off', { audio: true });
+    gesture();
+    for (let ply = 0; ply < 2; ply++) {
+      const mv = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1)!; // either side's first one-marble move
+      const [q, r] = mv.cells[0]!;
+      game.click(q, r);
+      game.click(q + DIRS[mv.dir]![0], r + DIRS[mv.dir]![1]);
+      game.frame(5000);
+    }
+    expect(game.hook('__plies')).toBe(2);
+    expect(count(game, 'turn-start')).toBe(0);
+  });
+});
+
+describe('the shop and the relic (#1570)', () => {
+  it('the shop sounds when it comes up, not while it stays, and again for the next one', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { audio: true, indexedDB });
+    gesture();
+    const shop = { ...plainRun(1, 3), army: 12, path: [0], shop: true };
+    await game.hook('__run', shop);
+    expect(document.body.dataset.run).toBe('shop');
+    expect(count(game, 'shop')).toBe(1);
+    byId('run-map').querySelector<HTMLButtonElement>('button[data-leave]')!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(count(game, 'shop')).toBe(1);
+    await game.hook('__run', shop);
+    expect(count(game, 'shop')).toBe(2);
+  });
+
+  it('a relic taken sounds once, not for the relics a run is loaded with', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { audio: true, indexedDB });
+    gesture();
+    await game.hook('__run', { ...plainRun(3, 3), army: 12, path: [0, 2, 6, 9], reward: true, relic: true });
+    expect(document.body.dataset.run).toBe('relic');
+    expect(count(game, 'relic')).toBe(0);
+    byId('run-map').querySelectorAll<HTMLButtonElement>('button[data-relic]')[1]!.click();
+    expect(count(game, 'relic')).toBe(1);
+    game.openSettings();
+    byId('setting-flat-hud').click();
+    expect(count(game, 'relic')).toBe(1);
+    await game.hook('__run', { ...plainRun(3, 3), army: 12, relics: [1, 2] });
+    expect(count(game, 'relic')).toBe(1);
   });
 });

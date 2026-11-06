@@ -20,10 +20,19 @@ describe('the cue table of world.md section 7 (#1570)', () => {
     for (const row of played) expect(row, row.event).toMatchObject({ mode: CUES[row.event as CueEvent].mode, bus: CUES[row.event as CueEvent].bus });
   });
 
-  it('lists the events still planned, none of them played yet', () => {
-    expect(planned.length).toBeGreaterThanOrEqual(10);
-    for (const row of planned) expect(Object.keys(CUES), row.event).not.toContain(row.event);
+  it('lists all nineteen events as played, none planned any more, each event once', () => {
+    expect(played).toHaveLength(19);
+    expect(planned).toEqual([]);
     expect(new Set(rows.map((row) => row.event)).size).toBe(rows.length);
+  });
+
+  it('puts the time of day on the ambience bus and every other cue on the effects bus', () => {
+    for (const row of rows) expect(row.bus, row.event).toBe(row.event === 'time-of-day' ? 'ambience' : 'effects');
+  });
+
+  it('says in words that the boss death replaces the win, and that every cue is calculated, not heard', () => {
+    expect(audio).toMatch(/boss death[^.]*instead of the win|instead of the win[^.]*boss death/i);
+    expect(audio).toMatch(/calculated, not heard/);
   });
 
   it.each(played.map((row) => row.event))('%s: calls sfx and sounds through the bus of its row', (event) => {

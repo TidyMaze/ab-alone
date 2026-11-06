@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { EdgeWatch, EndWatch, OutWatch, PhaseWatch, clickable } from './cues';
+import { CountWatch, EdgeWatch, EndWatch, OutWatch, PhaseWatch, STEP_GAP_MS, SelectionWatch, StepWatch, clickable, turnBack } from './cues';
 
 // #1570: which game event plays which cue. The choice is pure, so main.ts only calls it.
 
@@ -18,12 +18,26 @@ describe('EndWatch, a win or a loss sounds once per game', () => {
     expect(watch.fresh({}, 'win')).toBe('win');
   });
 
-  it('is silent for a draw and for a game still running, and does not count them', () => {
+  it('is silent for a game still running, and does not count it', () => {
     const watch = new EndWatch();
     const game = {};
-    expect(watch.fresh(game, 'draw')).toBeNull();
     expect(watch.fresh(game, undefined)).toBeNull();
     expect(watch.fresh(game, 'win')).toBe('win');
+  });
+
+  it('a draw sounds its own cue once per game (#1570)', () => {
+    const watch = new EndWatch();
+    const game = {};
+    expect(watch.fresh(game, 'draw')).toBe('draw');
+    expect(watch.fresh(game, 'draw')).toBeNull();
+  });
+
+  it('the win of a boss fight is the boss death and not a win: one sound for the moment, the loss of it stays a loss', () => {
+    const watch = new EndWatch();
+    expect(watch.fresh({}, 'win', true)).toBe('boss-death');
+    expect(watch.fresh({}, 'loss', true)).toBe('loss');
+    expect(watch.fresh({}, 'draw', true)).toBe('draw');
+    expect(watch.fresh({}, 'win', false)).toBe('win');
   });
 });
 
@@ -42,6 +56,90 @@ describe('PhaseWatch, a boss phase change sounds when the phase moves', () => {
     const watch = new PhaseWatch();
     watch.changed({}, 1);
     expect(watch.changed({}, 2)).toBe(false);
+  });
+});
+
+describe('PhaseWatch, also for the phase of the day of the Open world', () => {
+  it('moves by name: the first sight is silent, day to dusk sounds once', () => {
+    const watch = new PhaseWatch();
+    const world = {};
+    expect(watch.changed(world, 'day')).toBe(false);
+    expect(watch.changed(world, 'day')).toBe(false);
+    expect(watch.changed(world, 'dusk')).toBe(true);
+    expect(watch.changed(world, 'dusk')).toBe(false);
+    expect(watch.changed({}, 'night')).toBe(false); // another world, another first sight
+  });
+});
+
+describe('CountWatch, a count that rises in the same game sounds (the relics of a run, the round of a royale)', () => {
+  it('is silent on the first sight, sounds each rise once, and starts over with the next game', () => {
+    const watch = new CountWatch();
+    const run = {};
+    expect(watch.rose(run, 2)).toBe(false);
+    expect(watch.rose(run, 2)).toBe(false);
+    expect(watch.rose(run, 3)).toBe(true);
+    expect(watch.rose(run, 3)).toBe(false);
+    expect(watch.rose({}, 4)).toBe(false);
+  });
+
+  it('does not sound a fall', () => {
+    const watch = new CountWatch();
+    const run = {};
+    watch.rose(run, 3);
+    expect(watch.rose(run, 1)).toBe(false);
+    expect(watch.rose(run, 2)).toBe(true);
+  });
+});
+
+describe('SelectionWatch, a selection sounds when it changes, not on a redraw (#1570)', () => {
+  it('sounds a new selection once, however often the plate is drawn', () => {
+    const watch = new SelectionWatch();
+    expect(watch.changed([])).toBe(false);
+    expect(watch.changed([[0, 0]])).toBe(true);
+    expect(watch.changed([[0, 0]])).toBe(false);
+    expect(watch.changed([[0, 0], [1, 0]])).toBe(true);
+  });
+
+  it('is silent when a selection is cleared, by a move or an Escape, and sounds the same cells again after', () => {
+    const watch = new SelectionWatch();
+    watch.changed([[0, 0]]);
+    expect(watch.changed([])).toBe(false);
+    expect(watch.changed([[0, 0]])).toBe(true);
+  });
+});
+
+describe('StepWatch, the hero steps no faster than one cue per step of a walk at normal speed (#1570)', () => {
+  it('sounds a step, then waits for the gap, which is under a normal step of 140 ms', () => {
+    const watch = new StepWatch();
+    expect(STEP_GAP_MS).toBeLessThan(140);
+    expect(watch.due(1000)).toBe(true);
+    expect(watch.due(1000 + STEP_GAP_MS - 1)).toBe(false);
+    expect(watch.due(1000 + STEP_GAP_MS)).toBe(true);
+  });
+
+  it('a step skipped does not push the next one back', () => {
+    const watch = new StepWatch();
+    watch.due(0);
+    watch.due(50);
+    expect(watch.due(STEP_GAP_MS)).toBe(true);
+  });
+
+  it('a walk at cruising speed (a step every 90 ms) sounds one step in two, not all', () => {
+    const watch = new StepWatch();
+    const heard = Array.from({ length: 10 }, (_, i) => watch.due(i * 90)).filter(Boolean).length;
+    expect(heard).toBe(5);
+  });
+});
+
+describe('turnBack, the turn comes back to the player after a move of the other side (#1570)', () => {
+  it('is true when the player is to move in a running game, outside a replay', () => {
+    expect(turnBack(1, 1, 0, false)).toBe(true);
+  });
+
+  it('is false when the other side is to move, the game is over, or a Replay is open', () => {
+    expect(turnBack(2, 1, 0, false)).toBe(false);
+    expect(turnBack(1, 1, 1, false)).toBe(false);
+    expect(turnBack(1, 1, 0, true)).toBe(false);
   });
 });
 

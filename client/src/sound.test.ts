@@ -334,12 +334,15 @@ describe('Sfx.pick, the sound of a node picked on the rogue-lite map (#1468)', (
 // #1570: the cue table of world.md section 7, one synthesized cue per event of the first slice.
 const events = Object.keys(CUES) as CueEvent[];
 describe('CUES, the cue table (world.md section 7, #1570)', () => {
-  it('has the six events of the first slice: win, loss, boss phase change, royale elimination, rogue-lite reward, UI click', () => {
-    expect(events).toEqual(['win', 'loss', 'phase', 'elimination', 'reward', 'click']);
+  it('has the nineteen events of the table, the six of the first slice first', () => {
+    expect(events).toEqual([
+      'win', 'loss', 'phase', 'elimination', 'reward', 'click',
+      'draw', 'turn-start', 'selection', 'illegal-move', 'boss-intro', 'boss-death', 'shop', 'relic', 'royale-round', 'step', 'pickup', 'time-of-day', 'online-join',
+    ]);
   });
 
-  it('puts every cue on the effects bus', () => {
-    for (const event of events) expect(CUES[event].bus).toBe('effects');
+  it('puts every cue on the effects bus, the time of day on the ambience bus', () => {
+    for (const event of events) expect(CUES[event].bus).toBe(event === 'time-of-day' ? 'ambience' : 'effects');
   });
 
   for (const event of events) {
@@ -380,9 +383,43 @@ describe('CUES, the cue table (world.md section 7, #1570)', () => {
     expect(freqs(last('loss'))[0]!).toBeLessThan(freqs(first('loss'))[0]!);
   });
 
-  it('the click is the quietest of them', () => {
+  it('the click and the three that come most often (selection, turn start, step) are the quietest of all: none of them above the click', () => {
     const level = (event: CueEvent) => cueDb(CUES[event].voices);
-    for (const event of events) if (event !== 'click') expect(level('click')).toBeLessThan(level(event));
+    const frequent: CueEvent[] = ['selection', 'turn-start', 'step'];
+    for (const event of frequent) expect(level(event), event).toBeLessThanOrEqual(level('click'));
+    for (const event of events) if (event !== 'click' && !frequent.includes(event)) expect(level('click'), event).toBeLessThan(level(event));
+  });
+
+  it('the draw is neither a win nor a loss: its note neither rises nor falls', () => {
+    const [note, second] = CUES.draw.voices.filter((v) => v.source !== 'noise');
+    expect(freqs(note!)[0]).toBe(freqs(note!)[1]);
+    expect(freqs(second!)[0]).toBe(freqs(note!)[0]);
+  });
+
+  it('the illegal move is a dull reject, never a buzz: one short falling tone, under a quarter second, no sustain', () => {
+    const tones = CUES['illegal-move'].voices.filter((v) => v.source !== 'noise');
+    expect(tones).toHaveLength(1);
+    const [from, to] = freqs(tones[0]!);
+    expect(from!).toBeGreaterThan(to!);
+    for (const voice of CUES['illegal-move'].voices) expect(end(voice)).toBeLessThanOrEqual(0.25);
+  });
+
+  it('the boss intro is short, under half a second, so that it does not stack with the tally line or the crossfade of the music', () => {
+    for (const voice of CUES['boss-intro'].voices) expect(end(voice)).toBeLessThanOrEqual(0.5);
+  });
+
+  it('the boss death is heavier than the win it replaces: a longer fall than the stamp of a win, below the win in pitch', () => {
+    const tone = (event: CueEvent) => CUES[event].voices.find((v) => v.source === 'triangle')!;
+    expect(freqs(tone('boss-death'))[0]!).toBeLessThan(freqs(tone('win'))[0]!);
+    expect(freqs(tone('boss-death'))[1]!).toBeLessThan(freqs(tone('boss-death'))[0]!);
+  });
+
+  it('the time of day is a slow soft swell, the only cue that does not strike: it rises before it falls', () => {
+    for (const voice of CUES['time-of-day'].voices) {
+      const top = voice.env.findIndex(([, g]) => g === peak(voice));
+      expect(voice.env[top]![0]).toBeGreaterThan(0.1);
+      expect(peak(voice)).toBeLessThanOrEqual(0.2);
+    }
   });
 });
 
