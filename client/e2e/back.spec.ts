@@ -63,3 +63,33 @@ test('a mode left by its own button leaves no entry to press twice, #1564', asyn
   await page.goBack(); // one press: the page pops the stale entry and goes on back at once
   await expect.poll(() => page.url()).not.toContain('bot=off');
 });
+
+test('Back from the Hub keeps the table game that was saved: its moves stay on the board and in the store, #1564', async ({ page }) => {
+  await page.goto('./?bot=off&net=hook');
+  await expect(page.locator('#hud')).toContainText('Black to move');
+  const click = (q: number, r: number) => page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [q, r]);
+  const plies = () => page.evaluate(() => (window as any).__plies() as number);
+  await click(0, 2);
+  await click(0, 1); // Black
+  await click(0, -2);
+  await click(0, -1); // White
+  expect(await plies()).toBe(2);
+  const saved = () =>
+    page.evaluate(
+      () =>
+        new Promise<number>((done) => {
+          const req = indexedDB.open('ab-alone');
+          req.onsuccess = () => {
+            const get = req.result.transaction('game').objectStore('game').get('local');
+            get.onsuccess = () => done(get.result?.moves.length ?? 0);
+          };
+        }),
+    );
+  await expect.poll(saved).toBe(2);
+  await pick(page, '#ship');
+  await expect(page.locator('#hud')).toContainText('Hub');
+  await page.goBack();
+  await expect(page.locator('#hud')).toContainText('Black to move');
+  expect(await plies()).toBe(2);
+  expect(await saved()).toBe(2);
+});

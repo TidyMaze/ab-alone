@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
-import type { Axial } from './board';
+import type { Axial, Move } from './board';
 import './test/openworldwasm';
 import { boot, type Game } from './test/harness';
 
@@ -13,9 +14,10 @@ const data = () => document.body.dataset;
 const marked = (): boolean => (history.state as { ab?: number } | null)?.ab === 1;
 const hubOn = (): boolean => data().hub !== undefined;
 /** Presses Back and waits for the page's popstate. */
+const realBack = history.back.bind(history);
 async function pressBack(game: Game): Promise<() => number> {
   const popped = new Promise((done) => window.addEventListener('popstate', done, { once: true }));
-  history.back();
+  realBack();
   const leave = vi.spyOn(history, 'back').mockImplementation(() => undefined); // the page's own call to go on back, which would leave the page: counted, not made
   await popped;
   await game.settle();
@@ -35,6 +37,14 @@ const bossPick = async (game: Game): Promise<void> => {
   await game.settle();
   game.frame();
 };
+/** Plays the first legal single-marble move of the side to move by two clicks, as a player does. */
+async function playMove(game: Game): Promise<void> {
+  const move = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1)!;
+  game.click(...move.cells[0]!);
+  game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);
+  await game.settle();
+  game.frame(1000); // the slide ends
+}
 const MODES: [string, (game: Game) => Promise<void>, () => boolean][] = [
   ['Battle royale', (g) => pick(g, 'battle-royale'), () => !byId('royale-hold').hidden],
   ['Rogue-lite run', (g) => pick(g, 'roguelite'), () => !byId('run-map').hidden],
@@ -69,6 +79,37 @@ describe('main.ts, browser Back (#1564)', () => {
     expect(game.hud()).toContain('Black to move');
     expect(marked()).toBe(false);
     expect(left()).toBe(0); // the table is the base screen: the page stays
+  });
+
+  it('Back from the Hub puts the saved table game back: its moves stay on the board and in the store', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await playMove(game);
+    await playMove(game);
+    await game.settle();
+    await pick(game, 'ship');
+    expect(hubOn()).toBe(true);
+    await pressBack(game);
+    await game.settle();
+    expect(hubOn()).toBe(false);
+    expect(game.hook('__plies')).toBe(2);
+    expect(game.hud()).toContain('Black to move');
+    expect((await boot('?bot=off', { indexedDB })).hook('__plies')).toBe(2); // the store still holds the game
+  });
+
+  it('Back from the Hub after a mode that took the engine still brings the saved table game', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await playMove(game);
+    await game.settle();
+    await bossPick(game);
+    await pressBack(game); // the Hub
+    await pressBack(game); // the table
+    await game.settle();
+    expect(hubOn()).toBe(false);
+    expect(data().boss).toBeUndefined();
+    expect(game.hook('__plies')).toBe(1);
+    expect(game.hud()).toContain('White to move');
   });
 
   it('a mode left by its own button to the Hub keeps its entry, and Back then goes to the table', async () => {
