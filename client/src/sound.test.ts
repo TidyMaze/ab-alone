@@ -14,8 +14,10 @@ import {
   DUCK_DB,
   DUCK_TAU,
   HUM,
+  KNOCK_PAN,
   MASTER_LEVEL,
   MUSIC_TRACK,
+  ROOM_WET,
   ROUTE,
   SILENT,
   Sfx,
@@ -23,6 +25,7 @@ import {
   TENSION,
   TellWatch,
   busGain,
+  columnOf,
   cueDb,
   cueFor,
   duckGains,
@@ -1037,5 +1040,218 @@ describe('Sfx.playLog and Sfx.stopLog, an audio log on the voice bus (#516)', ()
     expect(sfx.ducking).toBe(true);
     sfx.stopLog();
     expect(sfx.ducking).toBe(false);
+  });
+});
+
+describe('knockVoices, the push variant of a sumito (#1576)', () => {
+  const noises = (voices: readonly Voice[]): Voice[] => voices.filter((v) => v.source === 'noise');
+  const longest = (voices: readonly Voice[]): number => Math.max(...voices.map(end));
+
+  it('a plain move (nothing pushed) keeps the dull knock: no tail, under 0.2 s', () => {
+    expect(knockVoices(knockPitch(2))).toEqual(knockVoices(knockPitch(2), 0));
+    expect(longest(knockVoices(knockPitch(2), 0))).toBeLessThanOrEqual(0.2);
+  });
+
+  for (const pushed of [1, 2, 3]) {
+    it(`${pushed} marble(s) pushed: a grinding scrape with a longer decay than the plain knock, silent at both ends`, () => {
+      const voices = knockVoices(knockPitch(3), pushed);
+      expect(longest(voices)).toBeGreaterThan(0.25);
+      expect(longest(voices)).toBeLessThanOrEqual(0.7);
+      expect(noises(voices).length).toBeGreaterThanOrEqual(noises(knockVoices(knockPitch(3))).length);
+      expect(JSON.stringify(voices)).not.toBe(JSON.stringify(knockVoices(knockPitch(3))));
+      for (const v of voices) {
+        expect(start(v)).toBe(0);
+        expect(v.env[0]![1]).toBe(0);
+        expect(v.env.at(-1)![1]).toBe(0);
+        expect(peak(v)).toBeLessThanOrEqual(1);
+        for (const f of freqs(v)) expect(f).toBeGreaterThan(0);
+      }
+    });
+  }
+
+  it('is heavier for each marble pushed: a longer scrape and a louder grind', () => {
+    const grind = (pushed: number): Voice => noises(knockVoices(knockPitch(3), pushed)).reduce((a, b) => (end(a) > end(b) ? a : b));
+    expect(end(grind(2))).toBeGreaterThan(end(grind(1)));
+    expect(end(grind(3))).toBeGreaterThan(end(grind(2)));
+    expect(peak(grind(2))).toBeGreaterThan(peak(grind(1)));
+    expect(peak(grind(3))).toBeGreaterThan(peak(grind(2)));
+  });
+
+  it('the pitch still follows the marbles moved', () => {
+    const body = (pitch: number): readonly number[] => freqs(knockVoices(pitch, 1).find((v) => v.source === 'triangle')!);
+    expect(body(knockPitch(1))[0]).toBeGreaterThan(body(knockPitch(3))[0]!);
+  });
+});
+
+describe('columnOf, where on the board a move is (#1574)', () => {
+  it('is the screen column of the marbles moved, -1 at the left rim, 1 at the right, 0 in the middle', () => {
+    expect(columnOf([[0, 0]])).toBe(0);
+    expect(columnOf([[4, 0]])).toBeCloseTo(4 / 6);
+    expect(columnOf([[-4, 0]])).toBeCloseTo(-4 / 6);
+    expect(columnOf([[0, 0], [1, 0], [2, 0]])).toBeCloseTo(1 / 6); // the mean of the group
+  });
+  it('stays within -1 and 1', () => {
+    expect(columnOf([[4, 4]])).toBe(1);
+    expect(columnOf([[-4, -4]])).toBe(-1);
+  });
+});
+
+describe('Sfx.knock, the push variant and the variation (#1574, #1576)', () => {
+  const rigged = (random: () => number, cmd: (sfx: Sfx) => void = (sfx) => void sfx.knock(1)) => {
+    const ctx = new FakeContext();
+    const sfx = new Sfx(() => ctx as unknown as AudioContext, { ...FULL }, random);
+    sfx.unlock();
+    cmd(sfx);
+    return { ctx, sfx };
+  };
+  const voice = (ctx: FakeContext, i: number) => ctx.sources[STEADY + i]!;
+  const gainOf = (source: FakeNode): FakeGain => {
+    let node = next(source);
+    if (node instanceof FakeFilter) node = next(node);
+    return node as FakeGain;
+  };
+
+  it('plays the scrape when marbles are pushed: its noise outlasts the plain knock, the pitch is the same', () => {
+    const plain = rigged(() => 0.5, (sfx) => expect(sfx.knock(3)).toBe(knockPitch(3)));
+    const push = rigged(() => 0.5, (sfx) => expect(sfx.knock(3, 2)).toBe(knockPitch(3)));
+    const stop = (ctx: FakeContext): number => Math.max(...ctx.sources.slice(STEADY).map((s) => s.times.at(-1)!));
+    expect(stop(plain.ctx)).toBeLessThanOrEqual(5 + 0.2);
+    expect(stop(push.ctx)).toBeGreaterThan(5 + 0.25);
+  });
+
+  it('shifts the pitch by up to 3 % and the level by up to 10 % either way, and starts the noise at a random offset', () => {
+    const low = rigged(() => 0);
+    const mid = rigged(() => 0.5);
+    const high = rigged(() => 0.75);
+    const hz = (ctx: FakeContext): number => (voice(ctx, 0) as FakeOscillator).frequency.events[0]![1];
+    expect(hz(mid.ctx)).toBe(knockPitch(1));
+    expect(hz(low.ctx)).toBeCloseTo(knockPitch(1) * 0.97);
+    expect(hz(high.ctx)).toBeCloseTo(knockPitch(1) * 1.015);
+    const peakOf = (ctx: FakeContext): number => gainOf(voice(ctx, 0)).gain.events[1]![1];
+    expect(peakOf(mid.ctx)).toBeCloseTo(0.6);
+    expect(peakOf(low.ctx)).toBeCloseTo(0.6 * 0.9);
+    expect(peakOf(high.ctx)).toBeCloseTo(0.6 * 1.05);
+    const offset = (ctx: FakeContext): number => (voice(ctx, 1) as FakeBufferSource).offsets[0]!;
+    expect(offset(low.ctx)).toBe(0);
+    expect(offset(high.ctx)).toBeCloseTo(0.75);
+  });
+
+  it('plays no two knocks alike with a real random source', () => {
+    const ctx = new FakeContext();
+    const sfx = new Sfx(() => ctx as unknown as AudioContext, { ...FULL }, Math.random);
+    sfx.unlock();
+    for (let i = 0; i < 4; i++) sfx.knock(1);
+    const first = ctx.sources.slice(STEADY).filter((s) => s instanceof FakeOscillator).map((s) => (s as FakeOscillator).frequency.events[0]![1]);
+    expect(new Set(first).size).toBeGreaterThan(1);
+  });
+
+  it('an ejection varies too, a cue shifts only its noise: the tones keep the levels cueDb counts', () => {
+    const tones = (random: number, event: CueEvent) =>
+      rigged(() => random, (sfx) => sfx.cue(event)).ctx.sources.slice(STEADY).map((s, i) => {
+        const v = CUES[event].voices[i]!;
+        return v.source === 'noise' ? null : [gainOf(s).gain.events, (s as FakeOscillator).frequency.events];
+      });
+    for (const event of Object.keys(CUES) as CueEvent[]) {
+      expect(tones(0, event)).toEqual(tones(1, event));
+    }
+    const noisePeak = (random: number): number => {
+      const { ctx } = rigged(() => random, (sfx) => sfx.cue('win'));
+      const i = CUES.win.voices.findIndex((v) => v.source === 'noise');
+      return gainOf(voice(ctx, i)).gain.events[1]![1];
+    };
+    expect(noisePeak(1)).toBeGreaterThan(noisePeak(0));
+    const ej = (random: number): number => (voice(rigged(() => random, (sfx) => void sfx.ejection(1)).ctx, 0) as FakeBufferSource).offsets[0]!;
+    expect(ej(0.75)).toBeCloseTo(0.75);
+  });
+
+  it('pans the knock by the board column: left, centre, right', () => {
+    const pan = (column?: number): number => rigged(() => 0.5, (sfx) => void sfx.knock(1, 0, column)).ctx.panners[0]!.pan.value;
+    expect(pan(-1)).toBe(-KNOCK_PAN);
+    expect(pan(0)).toBe(0);
+    expect(pan(1)).toBe(KNOCK_PAN);
+    expect(pan()).toBe(0);
+    expect(KNOCK_PAN).toBeGreaterThan(0);
+    expect(KNOCK_PAN).toBeLessThanOrEqual(0.8); // never hard to one side
+  });
+
+  it('pans nothing else: the ejection has no panner', () => {
+    expect(rigged(() => 0.5, (sfx) => void sfx.ejection(1)).ctx.panners).toHaveLength(0);
+  });
+
+  it('the knock goes gain, panner, effects bus', () => {
+    const { ctx } = rigged(() => 0.5, (sfx) => void sfx.knock(1, 0, 1));
+    const panner = next(gainOf(voice(ctx, 0))) as FakeNode;
+    expect(panner).toBe(ctx.panners[0]);
+    expect(next(panner)).toBe(bus(ctx, ROUTE.knock));
+  });
+});
+
+describe('the room reverb of the effects bus (#1574)', () => {
+  const room = (random: () => number = () => 0.5) => {
+    const ctx = new FakeContext();
+    const sfx = new Sfx(() => ctx as unknown as AudioContext, { ...FULL }, random);
+    sfx.unlock();
+    return { ctx, sfx };
+  };
+
+  it('is built on the first effect, once: the effects bus feeds a convolver, a wet gain, the master', () => {
+    const { ctx, sfx } = room();
+    expect(ctx.convolvers).toHaveLength(0);
+    sfx.knock(1);
+    sfx.ejection(1);
+    sfx.cue('win');
+    expect(ctx.convolvers).toHaveLength(1);
+    const convolver = ctx.convolvers[0]!;
+    expect(bus(ctx, 'effects').outputs).toContain(convolver);
+    const wet = next(convolver) as FakeGain;
+    expect(wet.gain.value).toBe(ROOM_WET);
+    expect(ROOM_WET).toBeGreaterThan(0);
+    expect(ROOM_WET).toBeLessThanOrEqual(0.3);
+    expect(next(wet)).toBe(master(ctx));
+  });
+
+  it('is a synthesized impulse: a short decaying noise from the injected random source, no audio file', () => {
+    const { ctx, sfx } = room(() => 0);
+    sfx.knock(1);
+    const impulse = ctx.convolvers[0]!.buffer!;
+    expect(impulse).toBe(ctx.buffers[1]);
+    expect(impulse.channels).toBe(1);
+    const data = impulse.data;
+    expect(data.length).toBeGreaterThan(0.2 * ctx.sampleRate);
+    expect(data.length).toBeLessThanOrEqual(0.8 * ctx.sampleRate);
+    expect(data[0]).toBe(-1);
+    const energy = (from: number, to: number): number => data.slice(from, to).reduce((sum, x) => sum + x * x, 0);
+    const quarter = Math.floor(data.length / 4);
+    expect(energy(0, quarter)).toBeGreaterThan(4 * energy(3 * quarter, 4 * quarter));
+    expect(Math.abs(data.at(-1)!)).toBeLessThan(0.01);
+  });
+
+  it('builds nothing with the effects at 0, and nothing for the voice bus', () => {
+    const { ctx, sfx } = room();
+    sfx.setVolume('effects', 0);
+    sfx.knock(1);
+    sfx.cue('win');
+    sfx.playLog([]);
+    expect(ctx.convolvers).toHaveLength(0);
+    expect(ctx.buffers).toHaveLength(1); // only the white noise
+    expect(ctx.panners).toHaveLength(0);
+  });
+
+  it('is built when the slider is raised from 0 and an effect plays', () => {
+    const ctx = new FakeContext();
+    const sfx = new Sfx(() => ctx as unknown as AudioContext, { ...FULL, effects: 0 });
+    sfx.unlock();
+    sfx.knock(1);
+    expect(ctx.convolvers).toHaveLength(0);
+    sfx.setVolume('effects', 50);
+    sfx.knock(1);
+    expect(ctx.convolvers).toHaveLength(1);
+  });
+
+  it('is not built without a gesture', () => {
+    const ctx = new FakeContext();
+    const sfx = new Sfx(() => ctx as unknown as AudioContext, { ...FULL });
+    sfx.knock(1);
+    expect(ctx.convolvers).toHaveLength(0);
   });
 });

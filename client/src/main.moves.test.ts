@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BLACK_WINS } from '../e2e/end-games';
 import { type Axial, CELLS, DIRECTIONS, encodeMove, parseMoves } from './board';
 import { BLOOD_MS } from './blood';
@@ -9,6 +9,7 @@ import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { MOTION } from './motion';
 import { SLIDE_MS } from './slide';
+import { Sfx } from './sound';
 import { boot, slowKeys, type Game } from './test/harness';
 
 // The moves, the animation and the input of main.ts on the harness (decision #445, #452): a move and its slide, the
@@ -129,6 +130,16 @@ describe('a move and its slide', () => {
     dispatchEvent(new PointerEvent('pointerdown')); // the gesture
     playOne(game);
     expect(Number(data().knock)).toBeGreaterThan(0);
+  });
+
+  it('gives the knock what the move pushes and where on the board it is (#1574, #1576)', async () => {
+    const knock = vi.spyOn(Sfx.prototype, 'knock');
+    const game = await boot('?bot=off', { audio: true });
+    dispatchEvent(new PointerEvent('pointerdown'));
+    const mv = playOne(game);
+    const x = mv.cells.reduce((sum, [q, r]) => sum + q + r / 2, 0) / mv.cells.length;
+    expect(knock).toHaveBeenCalledWith(mv.cells.length, 0, x / 6); // nothing pushed on the first move
+    knock.mockRestore();
   });
 
   it('saves a local game after each move: a reload resumes it', async () => {

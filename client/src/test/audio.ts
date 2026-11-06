@@ -34,8 +34,10 @@ export class FakeFilter extends FakeNode {
 }
 export class FakeSource extends FakeNode {
   times: number[] = [];
-  start(t: number) {
+  offsets: (number | undefined)[] = [];
+  start(t: number, offset?: number) {
     this.times.push(t);
+    this.offsets.push(offset);
   }
   stop(t: number) {
     this.times.push(t);
@@ -48,6 +50,12 @@ export class FakeOscillator extends FakeSource {
 export class FakeBufferSource extends FakeSource {
   buffer: FakeBuffer | null = null;
   loop = false;
+}
+export class FakePanner extends FakeNode {
+  pan = new FakeParam();
+}
+export class FakeConvolver extends FakeNode {
+  buffer: FakeBuffer | null = null;
 }
 export class FakeAudio {
   loop = false;
@@ -93,6 +101,8 @@ export class FakeContext {
   tracks: FakeMediaElementSource[] = [];
   gains: FakeGain[] = [];
   buffers: FakeBuffer[] = [];
+  panners: FakePanner[] = [];
+  convolvers: FakeConvolver[] = [];
   resumed = 0;
   suspended = 0;
   rejection: Promise<void> | null = null;
@@ -139,6 +149,16 @@ export class FakeContext {
     const b = new FakeBuffer(channels, length, rate);
     this.buffers.push(b);
     return b;
+  }
+  createStereoPanner() {
+    const p = new FakePanner();
+    this.panners.push(p);
+    return p;
+  }
+  createConvolver() {
+    const c = new FakeConvolver();
+    this.convolvers.push(c);
+    return c;
   }
   createMediaElementSource(media: FakeAudio) {
     media.fail = this.failResume;
