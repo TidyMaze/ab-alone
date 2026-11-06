@@ -2757,7 +2757,7 @@ function exitNow(): Exit {
 }
 /** Draws the exit from the screen shown: its label names where it leads. A wild fight keeps Flee in the first slot (it leads to the same place). */
 function syncExit(): void {
-  if (!exitReady) return;
+  if (!exitReady || confirmExit !== null) return; // while it asks, the label is Sure?
   const to = exitNow();
   exitButton.hidden = !to || !wildFlee.hidden;
   if (!to || exitButton.dataset.label === EXIT_LABEL[to]) return;
@@ -5841,7 +5841,7 @@ function startLocal(bot: boolean): void {
 }
 /** The exit of the dock (#1517): to the Open world, the hero on the entrance cell the mode was entered from (a lair, a wild marble, a town, a gate),
  * or to the Hub, the saved world left as Esc leaves it. The Hub of a table's door keeps the door's cell. */
-exitButton.addEventListener('click', () => {
+function leaveByExit(): void {
   const to = exitNow();
   if (to === 'hub') return roomOf ? enterHub(roomOf) : shipButton.click();
   if (wildFrom) return returnFromWild();
@@ -5849,11 +5849,29 @@ exitButton.addEventListener('click', () => {
   const { seed, kind } = lairFrom ? { seed: lairFrom.seed, kind: 'tower' as const } : placeFrom!;
   leaveMode(); // the fight, the Hub or the run is left
   void openWorld.open(seed, innerWidth, innerHeight, true, kind).then(() => (fromLair ? restoreLocal() : undefined)); // the world as the place left it: the hero on the entrance (#1170, #1593); the table beneath is the saved game, not the fight's board
+}
+/** A fight in progress is not saved: once a ply is played, the first press asks "Sure?" for CONFIRM_MS, as New game does (newgame.ts). A fight over, a fight with
+ * no ply, a table, a run, the Trainer, the Hub and the world ask nothing. Browser Back asks nothing either (ui.md 4.9): it calls leaveByExit. */
+let confirmExit: Confirm = null;
+let lapseExit = 0;
+function askExit(confirm: Confirm): void {
+  confirmExit = confirm;
+  exitButton.classList.toggle('confirm', confirm !== null);
+  clearTimeout(lapseExit);
+  if (confirm !== null) lapseExit = setTimeout(askExit, CONFIRM_MS, null);
+  exitButton.dataset.label = confirm === null ? '' : 'Sure?'; // the label of where it leads is drawn again by syncExit
+  syncExit();
+}
+exitButton.addEventListener('click', () => {
+  const press = pressNewGame(confirmExit, performance.now(), fight !== null && engine.status() === 0 ? history.length : 0);
+  askExit(press.confirm);
+  if (press.start) leaveByExit();
 });
 // One mode at a time (#1275, docs/specs/ui.md): every mode's start leaves the mode on first, the hub by its controller's
 // exit(), each other mode by its leave, then clears what no mode owns (modeswitch.ts). Nothing of a mode stays in the next.
 // The Open world opens over the page instead (#1063): Esc gives the game beneath back as it was, and the next mode leaves it.
 function leaveMode(): void {
+  askExit(null); // a question of the exit lapses with the mode
   dropFirstRun();
   needBoard(); // a lair, a town or a gate has left the world already: the board is what shows next
   if (openWorld.active) openWorld.leave();
@@ -7336,7 +7354,7 @@ async function backToTable(): Promise<void> {
   void botTurn(); // a game saved while the bot was thinking
 }
 const WAYS: Record<Exclude<Way, 'stay'>, () => void> = {
-  exit: () => exitButton.click(), // the Hub or the Open world, as the control leads
+  exit: leaveByExit, // the Hub or the Open world, as the control leads, with no question
   hub: () => shipButton.click(),
   table: () => void backToTable(),
   leave: () => window.history.back(), // the base screen: the browser goes on back

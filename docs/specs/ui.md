@@ -677,6 +677,7 @@ hero to the entrance used. It replaces the Hub button of the Open world, "Back t
 sheet). Esc keeps its shortcut of the world (it leaves the world to the page beneath, which the exit does not change); Browser Back
 (section 4.9) presses the exit, so both land in one place. The plain table and the Hub, the home of the game, have none: their first
 slot stays New game. A wild fight keeps Flee (F) in the first slot until it is over, as Flee leads to the same place, then World.
+A boss or lair fight in progress with a ply played is not saved, so the exit asks for a second press, `Sure?` in the `.confirm` look, lapsing after `CONFIRM_MS` as New game does (`newgame.ts`); a fight over or with no ply, the world, the Hub, a town, a run, the Trainer and a table ask nothing, and Browser Back never asks.
 
 | Screen | Enter | Exit, first slot | State |
 |---|---|---|---|
