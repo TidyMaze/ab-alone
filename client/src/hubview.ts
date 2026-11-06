@@ -2,6 +2,7 @@
 // arrow key rolls the marble to, and the HUD plate. Pure: no DOM, no three.js.
 import { CELLS, VANISHED, type Axial } from './board';
 import { DECK_NAMES, deckOf, type Deck } from './deck';
+import { modeLabel, terminalLabel } from './doorlabels';
 import { medalLabel } from './medals';
 import { BOSS_IDS } from './tally';
 import { bossOpen, canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, type Door, type Spot } from './hub';
@@ -28,22 +29,6 @@ export function arrowCell([q, r]: Axial, key: string): Axial | null {
 }
 
 const title = (deck: string): string => deck[0]!.toUpperCase() + deck.slice(1);
-const DOORS: Record<Exclude<Door['kind'], 'lift'>, string> = {
-  boss: 'Boss door',
-  terminal: 'Terminal',
-  hotseat: 'Hot-seat table',
-  bot: 'Bot table',
-  online: 'Online table',
-  royale: 'Battle royale lobby',
-  medals: 'Medal room',
-  daily: 'Daily challenge',
-  run: 'Rogue-lite run',
-  together: 'Fight together',
-  ranked: 'Ranked',
-  world: 'Open world',
-  trainer: 'Trainer',
-};
-
 const BOSS_NAMES: Record<string, string> = {
   echo: 'The Echo',
   hull: 'The Hull',
@@ -81,6 +66,18 @@ const DESCRIPTORS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, string> = {
   trainer: 'Waves against the bot, one more each',
 };
 
+/** The line under a boss's name (#1547): the seat of a deck is the boss that opens the lift to the next one (the rail names it), any other boss of the deck is a station
+ * and never locks a lift. */
+const bossLine = (deck: Deck, boss: string): string => `boss, ${title(deck)} ${bossOf(deck) === boss ? 'seat' : 'station'}`;
+
+/** The name and the plain line of a room of the hub (#1547): the name in the ship's own voice, and what the room does. */
+function plain(deck: Deck, door: Door): { name: string; line: string } {
+  if (door.kind === 'lift') return { name: `Lift to ${title(door.to)}`, line: `Transit to ${title(door.to)}` };
+  if (door.kind === 'boss') return { name: bossTitle(door.boss), line: bossLine(deck, door.boss) };
+  const { name, line } = door.kind === 'terminal' ? terminalLabel(door.lore) : modeLabel(door.kind);
+  return { name, line };
+}
+
 /** Reachability hint for a hovered hub cell relative to the marble's position (#628). */
 export function reachabilityText(from: Axial, target: Axial): string {
   if (from[0] === target[0] && from[1] === target[1]) return 'Current position';
@@ -91,18 +88,9 @@ export function reachabilityText(from: Axial, target: Axial): string {
 /** Name, purpose subtitle and reachability affordance of any hub cell hovered by the player (#628). */
 export function hubTargetText(at: Spot, hovered: Axial): { name: string; desc: string; reach: string } {
   const door = roomAt(at.deck, hovered);
-  const name = !door
-    ? 'Deck floor'
-    : door.kind === 'lift'
-      ? `Lift to ${title(door.to)}`
-      : DOORS[door.kind];
-  const desc = !door
-    ? 'Open transit corridor'
-    : door.kind === 'boss'
-      ? `${bossTitle(door.boss)} (${title(at.deck)} boss)`
-      : door.kind === 'lift'
-        ? `Transit to ${title(door.to)}`
-        : DESCRIPTORS[door.kind];
+  const room = door && plain(at.deck, door);
+  const name = room ? room.name : 'Deck floor';
+  const desc = !door ? 'Open transit corridor' : door.kind === 'boss' || door.kind === 'lift' ? room!.line : DESCRIPTORS[door.kind];
   const reach = reachabilityText(at.cell, hovered);
   return { name, desc, reach };
 }
@@ -110,7 +98,8 @@ export function hubTargetText(at: Spot, hovered: Axial): { name: string; desc: s
 /** The HUD plate in the hub: the deck, the room the marble stands on, Tally's line, and target inspection (#628). */
 export function hubHtml({ deck, cell }: Spot, tally = '', hover: Axial | null = null): string {
   const door = roomAt(deck, cell);
-  const room = !door ? '' : door.kind === 'lift' ? `Lift to ${title(door.to)}` : DOORS[door.kind];
+  const here = door && plain(deck, door);
+  const room = !here ? '' : here.name + (door.kind === 'lift' ? '' : ` · ${here.line}`);
   const line = tally ? `<div class="tally">${tally}</div>` : '';
   const preview = hover
     ? (() => {
@@ -138,30 +127,16 @@ export interface RoomLabel {
   mark: '' | 'locked' | 'beaten';
 }
 
-const LABELS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, [name: string, state: string, short: string]> = {
-  hotseat: ['Hot-seat', '2 players', 'Hot-seat'],
-  bot: ['Bot table', 'vs the ship AI', 'Bot'],
-  online: ['Online', '1v1 peer room', 'Online'],
-  royale: ['Royale', 'battle royale', 'Royale'],
-  terminal: ['Terminal', 'lore entry', 'Terminal'],
-  medals: ['Medal room', 'best turns', 'Medals'],
-  daily: ['Daily', 'boss of the day', 'Daily'],
-  run: ['Rogue-lite', '3-act run', 'Run'],
-  together: ['Together', 'co-op vs a boss', 'Co-op'],
-  ranked: ['Ranked', 'Elo ladder', 'Ranked'],
-  world: ['Open world', 'walk Hollow', 'World'],
-  trainer: ['Trainer', 'bot waves', 'Trainer'],
-};
-
-/** The plate of a room of `deck`: a lift points up or down to its deck, a boss door names its boss, and once it is
- * beaten its medal's best turns (`medals`, boss id -> turns, medals.ts). A phone shows the boss's name without "The". */
+/** The plate of a room of `deck`: a lift points up or down to its deck, a boss door names its boss and says its seat or station, and once it is
+ * beaten its medal's best turns (`medals`, boss id -> turns, medals.ts); any other room wears its name of the ship and its plain line (doorlabels.ts, #1547). A phone
+ * shows the boss's name without "The". */
 export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}): RoomLabel {
   if (door.kind === 'boss') {
     const boss = bossTitle(door.boss);
     const won = beaten.includes(door.boss);
     const turns = medals[door.boss];
     const medal = turns === undefined ? 'beaten' : medalLabel(turns);
-    return { name: 'Boss door', state: won ? `${boss} · ${medal}` : boss, short: boss.replace(/^The /, ''), mark: won ? 'beaten' : '' };
+    return { name: boss, state: won ? medal : bossLine(deck, door.boss), short: boss.replace(/^The /, ''), mark: won ? 'beaten' : '' };
   }
   if (door.kind === 'lift') {
     const open = canEnter(door, beaten);
@@ -169,8 +144,8 @@ export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], med
     const to = title(door.to);
     return { name: `Lift ${arrow} ${to}`, state: open ? 'open' : 'locked', short: `${arrow} ${open ? to : 'Locked'}`, mark: open ? '' : 'locked' };
   }
-  const [name, state, short] = LABELS[door.kind];
-  return { name, state, short, mark: '' };
+  const { name, line, short } = door.kind === 'terminal' ? terminalLabel(door.lore) : modeLabel(door.kind);
+  return { name, state: line, short, mark: '' };
 }
 
 /** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked, and the room of the next `goal` is marked when it is on this deck: the deck's own boss door (not the Dual Room's) or the Rogue-lite room. Then every other plate is quiet, but the one under the marble (#1526). */
@@ -230,7 +205,7 @@ export function railHtml(at: Deck, beaten: readonly string[], goal: Goal | null 
   const rows = DECK_NAMES.map((deck, i) => {
     const state = deckState(deck, beaten);
     const boss = bossTitle(bossOf(deck));
-    const line = state === 'locked' ? 'Lift locked' : `${boss} ${state === 'beaten' ? 'beaten' : 'waits'}`;
+    const line = state === 'locked' ? 'Lift locked' : `Seat: ${boss} ${state === 'beaten' ? 'beaten' : 'waits'}`;
     const here = deck === at;
     return `<li data-deck="${deck}" data-state="${state}"${deck === goal?.deck ? ' data-goal' : ''}${here ? ' aria-current="location"' : ''}><span class="n">0${i + 1}</span><b>${title(deck)}</b><small>${line}${here ? ' · you are here' : ''}</small></li>`;
   });

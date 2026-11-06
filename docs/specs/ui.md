@@ -477,11 +477,42 @@ hidden in the hub and in a battle royale.
 The hub (game-design.md section 3.5) reads at a glance, with no hover:
 
 - **Label plates.** A plate over each room, always shown, placed on the window just south of its cell and moved with
-  the camera: the room's name in one of three colours (#1526: a mode in the accent, a boss in red or, in the neon look, violet, a locked lift in grey with a dashed edge) and a short state (`2 players`, the boss's name, a lift's `open` or
-  `locked`), and once a boss is beaten its medal (`Medal: 22 turns`). A narrow or short window (600 px wide or 500 px
+  the camera: the room's name in one of three colours (#1526: a mode in the accent, a boss in red or, in the neon look, violet, a locked lift in grey with a dashed edge) and a short plain line under it (`2 players, one screen`, a boss's `boss, Mess seat`, a lift's `open` or
+  `locked`), and once a boss is beaten its medal (`Medal: 22 turns`). The names are the ship's own (#1547, the table below). A narrow or short window (600 px wide or 500 px
   high and under) shows the short label alone (`Bot`, `Hull`, `▲ Locked`): a boss's name drops its "The". The marble's floor cell wears `YOU`; on a room, that room's plate is ringed in amber. The plates
   sit on the 3D deck, dark in both themes, so they keep fixed dark colours. The HUD plate still names the room under the
   marble and the hovered target (#628).
+- **Names of the ship (#1547).** A door and a terminal wear a name of the ship (`doorlabels.ts`, one table, using only the places and words of world.md: the Mess, the
+  ledger, table zero, the mining cuts, the muster points, the clamp) and, under it, a short plain line that says what the door does, so a new player
+  still understands at a glance; clarity wins over flavour. The HUD plate, the hover preview and the first-entry confirm read the same name and line
+  (`Enter House table (play the ship's bot)?`). The Modes menu keeps its own names. No name depends on the story's stage and none holds a secret word of
+  world.md section 12.2 (`doorlabels.test.ts` checks every label at every stage against `SECRETS`). A door with no name of its own wears the fallback, a tested default,
+  never an empty plate. A mode's door keeps its plain word on a phone (`World`, `Bot`, `Hot-seat`...), which has no second line; a terminal and a boss door keep their own
+  short name there. The first-entry confirm gives the full name and line, so the ship's name reaches a phone player; the signs of the Open world's towns, gates and towers use the same table (`placeSign`: the title of the place transition).
+
+  | Room | Name | Plain line | Phone |
+  |---|---|---|---|
+  | Hot-seat | Crew table | 2 players, one screen | Hot-seat |
+  | Bot | House table | play the ship's bot | Bot |
+  | Online | Comms desk | 1v1 online match | Online |
+  | Battle royale | Arena | battle royale | Royale |
+  | Medal room | Medal wall | medals and best turns | Medals |
+  | Daily | Morning count | the boss of the day | Daily |
+  | Rogue-lite run | Mining cut | rogue-lite run, 3 acts | Run |
+  | Fight together | Shift crew | co-op against a boss | Co-op |
+  | Ranked | Clamp list | ranked 1v1 online | Ranked |
+  | Open world | Airlock | walk the open world | World |
+  | Trainer | Table zero | drill: waves of the bot | Trainer |
+  | Terminal | the title of its entry: Captain's order, Galley log, Assay note, Loadmaster's log, Maintenance tag, Locker door, Chapel notice, Sermon notes, Clamp notice, Captain's console | read the log | Order, Galley, Assay, Loadmaster, Tag, Locker, Notice, Sermon, Clamp notice, Console |
+  | Boss door | the boss's name | boss fight, `<Deck>` seat (or station) | the name without "The" |
+  | Town (Open world) | Muster point | the Hub | |
+  | Dungeon gate (Open world) | Mining cut | Rogue-lite run | |
+  | Tower (Open world) | the boss's name | | |
+  | No name of its own | Ship's door | a room of the Ballast | Door |
+
+- **Seat and stations (#1547).** A deck has several boss doors (the Mess has The Echo and The Dual Room) but one **seat**: the boss that opens the lift to the next
+  deck (`canEnter`), the lore-slot boss of world.md section 3. The other bosses of the deck are **stations** and never lock a lift. The plates say which each
+  door is (`boss, Mess seat`, `boss, Mess station`) and the lift-shaft rail names the seat only (`Seat: The Echo waits`, `Seat: The Echo beaten`).
 - **One loud station (#1526).** While the plate of the next goal (section 4.7, `nextGoal`) is on the deck, it is the one solid amber plate and every
   other plate is quiet (`data-quiet`, 78 % opacity), but the one under the marble, which keeps its ring. When the goal is on another deck no plate
   is quiet, and the rail's ringed row points the way. The colours of the plates come down from a colour per mode to the three above. Not done under
@@ -597,7 +628,7 @@ A new player lands in the Hub with a goal and has to learn how to move there. Tw
   opens until the player has rolled once (`ab-alone.hubcoach = done`, localStorage, the only key), and never comes back. A player who
   beat a boss never sees it.
 - **First entry confirm.** Rolling onto a room that starts a mode (a boss door, a table, the Daily, the Rogue-lite, the Open world, any
-  but a lift, a terminal and the Medal room) does not roll yet: a plate names the room ("Enter Bot table?") with Stay and Enter, Enter
+  but a lift, a terminal and the Medal room) does not roll yet: a plate names the room ("Enter House table (play the ship's bot)?") with Stay and Enter, Enter
   taking the focus. Enter rolls onto the room and marks `ab-alone.entered = yes`: the confirm is never asked again. Stay, Escape, a
   tap on another cell or an arrow key closes it, the marble where it was. A tap on a plate that ends next to the room stops there and
   asks. A player who beat a boss is never asked, so the confirm never slows a returning player.

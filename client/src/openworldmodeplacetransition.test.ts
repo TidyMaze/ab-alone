@@ -64,7 +64,7 @@ describe('entering a place starts the transition without holding the place back 
     walk(gate.m, [5, 0], 'ArrowRight');
     expect(gate.onPlace).toHaveBeenCalledWith(7, 'dungeon', 0);
     expect(root().dataset.kind).toBe('dungeon');
-    expect(title()).toBe('Rogue-lite run');
+    expect(title()).toBe('Mining cut · Rogue-lite run');
   });
 
   it('a town shows the Hub and no cue of its own', () => {
@@ -75,7 +75,7 @@ describe('entering a place starts the transition without holding the place back 
     town.m.release('ArrowRight');
     expect(town.onPlace).toHaveBeenCalledWith(7, 'town', 0);
     expect(root().dataset.kind).toBe('town');
-    expect(title()).toBe('Hub');
+    expect(title()).toBe('Muster point · the Hub');
   });
 
   it('shows the title and no motion under reduced motion', () => {
@@ -85,17 +85,17 @@ describe('entering a place starts the transition without holding the place back 
     expect(title()).toBe('The Echo');
   });
 
-  it('draws no title for a tower of a mode that was not told the names', () => {
+  it("titles a tower of a mode that was not told the names with the ship's door, never an empty plate (#1547)", () => {
     const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => false, worldSaves(memoryStore(), 1), () => LAIRS);
     walk(m, [2, 0], 'ArrowRight');
-    expect(title()).toBe('');
+    expect(title()).toBe("Ship's door");
   });
 
-  it('draws no title for a mode told the bosses and not their names', () => {
+  it("titles a tower of a mode told the bosses and not their names with the ship's door (#1547)", () => {
     const gap: undefined[] = Array.from({ length: 9 }, () => undefined); // onLair to teleportersOf
     const m = new (OpenWorldMode as new (...args: unknown[]) => OpenWorldMode)(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => false, worldSaves(memoryStore(), 1), () => LAIRS, ...gap, () => IDS);
     walk(m, [2, 0], 'ArrowRight');
-    expect(title()).toBe('');
+    expect(title()).toBe("Ship's door");
   });
 });
 

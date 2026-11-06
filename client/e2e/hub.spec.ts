@@ -7,7 +7,7 @@ import { shot } from './shot';
 // marble, which rolls one cell at a time by a click on a neighbour or an arrow key. body[data-hub] names its deck and
 // cell. The spot is saved: after a reload, Ship lands on the same cell.
 // #522: rolling onto a boss door or a table starts its game, and once that game is over Back to the hub puts the
-// marble back on the door. The battle royale lobby is shown closed.
+// marble back on the door. The battle royale is shown closed.
 // #523: a lift wears an arrow toward its deck, with a bar across while it is locked. A locked lift keeps the marble out
 // and Tally says one short line; a boss win opens it. body[data-lifts] lists the lifts of the deck.
 // #524: rolling onto a terminal opens its lore entry in the reader; Esc leaves it to the hub on the same cell.
@@ -63,7 +63,7 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
 
   const rooms: [number, number, string][] = [
     [1, 1, 'Galley log'],
-    [0, 2, 'Ledger wall'], // #812
+    [0, 2, 'Medal wall'], // #812
   ];
   // One mouse click, then the same click without the raycast and the frames of a mouse click (__click), to stay fast.
   await clickCell(page, 1, 0);
@@ -108,7 +108,7 @@ test('the boss door starts the Echo, and Back to the hub after the defeat lands 
   await shot(page, { path: testInfo.outputPath('back-to-the-ship.png') });
   await back.click();
   await expect(body).toHaveAttribute('data-hub', 'mess 2,0');
-  await expect(page.locator('#hud')).toContainText('The Echo · boss fight, Mess seat');
+  await expect(page.locator('#hud')).toContainText('The Echo · boss, Mess seat');
   await expect(back).toBeHidden();
 });
 
@@ -175,7 +175,7 @@ test('the online table opens a room with its invite link, as Play online does, #
   await expect(page.locator('#hud')).toContainText('You are Black');
 });
 
-test('the battle royale lobby door starts battle royale, and Back to the hub lands on the door, #593', async ({ page }, testInfo) => {
+test('the battle royale door starts battle royale, and Back to the hub lands on the door, #593', async ({ page }, testInfo) => {
   await shipAt(page, './?bot=off', [-1, 1]);
   const body = page.locator('body');
   await hookClick(page, -2, 2);
@@ -205,7 +205,7 @@ test('the battle royale lobby door starts battle royale, and Back to the hub lan
   await expect(back).toBeVisible();
   await back.click();
   await expect(body).toHaveAttribute('data-hub', 'mess -2,2');
-  await expect(page.locator('#hud')).toContainText('Arena · battle royale lobby');
+  await expect(page.locator('#hud')).toContainText('Arena · battle royale');
   await shot(page, { path: testInfo.outputPath('royale-after.png') });
 });
 
@@ -342,7 +342,7 @@ test('every room wears its label plate without a hover, and a hover still names 
   const p2 = await page.evaluate(() => (window as any).__cellToScreen(2, 0));
   await page.mouse.move(p2.x, p2.y);
   await expect(page.locator('body')).toHaveAttribute('data-hub-hover', '2,0');
-  await expect(page.locator('#hud .hub-preview')).toContainText('Target: The Echo · boss fight, Mess seat');
+  await expect(page.locator('#hud .hub-preview')).toContainText('Target: The Echo · boss, Mess seat');
   await expect(page.locator('#hud .hub-preview')).toContainText('(Out of reach (roll closer))');
 });
 

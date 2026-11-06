@@ -16,17 +16,17 @@ const ALL: readonly Label[] = [...Object.values(MODE_LABELS), ...Object.values(T
 describe('the door labels', () => {
   it('name each mode of the ship, with a plain line that says what it does', () => {
     expect(MODE_LABELS).toEqual({
-      hotseat: { name: 'Crew table', line: '2 players, one screen', short: 'Crew' },
-      bot: { name: 'House table', line: "play the ship's bot", short: 'House' },
-      online: { name: 'Comms desk', line: '1v1 against a player online', short: 'Comms' },
-      royale: { name: 'Arena', line: 'battle royale lobby', short: 'Arena' },
-      medals: { name: 'Ledger wall', line: 'medals and best turns', short: 'Ledger' },
-      daily: { name: 'Morning count', line: 'the boss of the day', short: 'Count' },
-      run: { name: 'Mining cut', line: 'rogue-lite run, 3 acts', short: 'Mining cut' },
-      together: { name: 'Shift crew', line: 'co-op against a boss', short: 'Shift crew' },
-      ranked: { name: 'Clamp list', line: 'ranked 1v1 online', short: 'Clamp list' },
-      world: { name: 'Airlock', line: 'walk the open world', short: 'Airlock' },
-      trainer: { name: 'Table zero', line: 'drill: waves of the bot', short: 'Table zero' },
+      hotseat: { name: 'Crew table', line: '2 players, one screen', short: 'Hot-seat' },
+      bot: { name: 'House table', line: "play the ship's bot", short: 'Bot' },
+      online: { name: 'Comms desk', line: '1v1 online match', short: 'Online' },
+      royale: { name: 'Arena', line: 'battle royale', short: 'Royale' },
+      medals: { name: 'Medal wall', line: 'medals and best turns', short: 'Medals' },
+      daily: { name: 'Morning count', line: 'the boss of the day', short: 'Daily' },
+      run: { name: 'Mining cut', line: 'rogue-lite run, 3 acts', short: 'Run' },
+      together: { name: 'Shift crew', line: 'co-op against a boss', short: 'Co-op' },
+      ranked: { name: 'Clamp list', line: 'ranked 1v1 online', short: 'Ranked' },
+      world: { name: 'Airlock', line: 'walk the open world', short: 'World' },
+      trainer: { name: 'Table zero', line: 'drill: waves of the bot', short: 'Trainer' },
     });
   });
 
@@ -106,10 +106,10 @@ describe('the signage of a town, a gate and a tower (#1547)', () => {
 
 describe('the boss doors', () => {
   it('say the seat of the deck, which opens the next lift, and a station, which never locks one', () => {
-    expect(roomLabel('mess', { kind: 'boss', boss: 'echo' }, [])).toEqual({ name: 'The Echo', state: 'boss fight, Mess seat', short: 'Echo', mark: '' });
-    expect(roomLabel('mess', { kind: 'boss', boss: 'dual' }, [])).toEqual({ name: 'The Dual Room', state: 'boss fight, Mess station', short: 'Dual Room', mark: '' });
-    expect(roomLabel('bridge', { kind: 'boss', boss: 'ballast' }, [])).toMatchObject({ state: 'boss fight, Bridge seat' });
-    expect(roomLabel('cargo', { kind: 'boss', boss: 'swarm' }, [])).toMatchObject({ state: 'boss fight, Cargo station' });
+    expect(roomLabel('mess', { kind: 'boss', boss: 'echo' }, [])).toEqual({ name: 'The Echo', state: 'boss, Mess seat', short: 'Echo', mark: '' });
+    expect(roomLabel('mess', { kind: 'boss', boss: 'dual' }, [])).toEqual({ name: 'The Dual Room', state: 'boss, Mess station', short: 'Dual Room', mark: '' });
+    expect(roomLabel('bridge', { kind: 'boss', boss: 'ballast' }, [])).toMatchObject({ state: 'boss, Bridge seat' });
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'swarm' }, [])).toMatchObject({ state: 'boss, Cargo station' });
   });
 
   it('name every boss of the roster on its own deck', () => {

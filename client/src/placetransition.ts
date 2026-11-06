@@ -6,6 +6,8 @@
  * (`--dim`, `--open`, `--title`) that `placeFrame` gives, so the timing is a plain function.
  */
 
+import { placeSign } from './doorlabels';
+
 export type PlaceKind = 'tower' | 'dungeon' | 'town';
 
 /** The length of the transition into a place, the budget of a transition (motion.md story 10), and of the way back. */
@@ -39,11 +41,8 @@ export function placeFrame(t: number, titled: boolean): PlaceFrame {
   return { dim: 1 - x, open: eased, title: titled ? clamp(Math.min(x / IN, (1 - x) / OUT)) : 0 };
 }
 
-/** What the title says: the boss's name for a tower, and for a town and a gate the name the mode menu gives what they open. */
-export function placeTitle(kind: PlaceKind, boss: string): string {
-  if (kind === 'tower') return boss;
-  return kind === 'town' ? 'Hub' : 'Rogue-lite run';
-}
+/** What the title says: the boss's name for a tower, and for a town and a gate their name and the mode they open (doorlabels.ts, #1547). */
+export const placeTitle = placeSign;
 
 export class PlaceTransition {
   private root: HTMLElement | null = null;

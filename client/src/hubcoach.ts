@@ -27,5 +27,9 @@ export const markEntered = (store: Store): void => write(store, ENTERED_KEY, 'ye
 /** Whether rolling onto the room starts a mode: a lift, a terminal and the Medal room start none (the reader opens and Esc leaves it). */
 export const needsConfirm = (door: Door): boolean => door.kind !== 'lift' && door.kind !== 'terminal' && door.kind !== 'medals';
 
-/** The name the confirm gives the mode: a boss by its name, else the plate's own. */
-export const entryName = (deck: Deck, door: Door): string => (door.kind === 'boss' ? bossTitle(door.boss) : roomLabel(deck, door, []).name);
+/** The name the confirm gives the mode: a boss by its name, else the plate's own name and its plain line (#1547), so the one tap still says what it starts. */
+export const entryName = (deck: Deck, door: Door): string => {
+  if (door.kind === 'boss') return bossTitle(door.boss);
+  const { name, state } = roomLabel(deck, door, []);
+  return `${name} (${state})`;
+};

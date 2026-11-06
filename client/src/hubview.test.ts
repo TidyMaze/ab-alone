@@ -59,12 +59,12 @@ describe('the hub HUD plate', () => {
   });
 
   it('names the room the marble stands on', () => {
-    expect(at([2, 0])).toContain('<small>The Echo · boss fight, Mess seat</small>');
+    expect(at([2, 0])).toContain('<small>The Echo · boss, Mess seat</small>');
     expect(at([2, -1])).toContain("<small>Captain's order · read the log</small>");
     expect(at([-1, -1])).toContain('<small>Crew table · 2 players, one screen</small>');
     expect(at([-2, 0])).toContain("<small>House table · play the ship's bot</small>");
-    expect(at([-2, 1])).toContain('<small>Comms desk · 1v1 against a player online</small>');
-    expect(at([-2, 2])).toContain('<small>Arena · battle royale lobby</small>'); // #522, #593
+    expect(at([-2, 1])).toContain('<small>Comms desk · 1v1 online match</small>');
+    expect(at([-2, 2])).toContain('<small>Arena · battle royale</small>'); // #522, #593
     expect(at([1, -2])).toContain('<small>Lift to Cargo</small>');
     expect(at([-1, 2], 'bridge')).toContain('<small>Lift to Chapel</small>');
   });
@@ -113,12 +113,12 @@ describe('hub target inspection and reachability (#628)', () => {
     });
     expect(hubTargetText(at, [2, 0])).toEqual({
       name: 'The Echo',
-      desc: 'boss fight, Mess seat',
+      desc: 'boss, Mess seat',
       reach: 'Out of reach (roll closer)',
     });
     expect(hubTargetText({ deck: 'cargo', cell: [1, 0] }, [2, 0])).toEqual({
       name: 'The Hull',
-      desc: 'boss fight, Cargo seat',
+      desc: 'boss, Cargo seat',
       reach: 'Click to move',
     });
     expect(hubTargetText(at, [-1, -1])).toEqual({
@@ -142,7 +142,7 @@ describe('hub target inspection and reachability (#628)', () => {
       reach: 'Out of reach (roll closer)',
     });
     expect(hubTargetText(at, [0, 2])).toEqual({
-      name: 'Ledger wall',
+      name: 'Medal wall',
       desc: 'Every boss, its medal and best turns',
       reach: 'Out of reach (roll closer)',
     });
@@ -158,7 +158,7 @@ describe('hub target inspection and reachability (#628)', () => {
     });
     expect(hubTargetText(at, [3, -2])).toEqual({
       name: 'The Dual Room',
-      desc: 'boss fight, Mess station',
+      desc: 'boss, Mess station',
       reach: 'Out of reach (roll closer)',
     });
     const target = (deck: Spot['deck'], cell: Axial): string => {
@@ -199,23 +199,23 @@ describe('hub target inspection and reachability (#628)', () => {
 describe('the room labels (#1249)', () => {
   it('name each room in the voice of the ship, with a plain line and a short label for a phone', () => {
     const plate = (deck: 'mess' | 'cargo' | 'furnace' | 'bridge', door: Parameters<typeof roomLabel>[1]) => roomLabel(deck, door, []);
-    expect(plate('mess', { kind: 'hotseat' })).toEqual({ name: 'Crew table', state: '2 players, one screen', short: 'Crew', mark: '' });
-    expect(plate('mess', { kind: 'bot' })).toEqual({ name: 'House table', state: "play the ship's bot", short: 'House', mark: '' });
-    expect(plate('mess', { kind: 'online' })).toEqual({ name: 'Comms desk', state: '1v1 against a player online', short: 'Comms', mark: '' });
-    expect(plate('mess', { kind: 'royale' })).toEqual({ name: 'Arena', state: 'battle royale lobby', short: 'Arena', mark: '' });
+    expect(plate('mess', { kind: 'hotseat' })).toEqual({ name: 'Crew table', state: '2 players, one screen', short: 'Hot-seat', mark: '' });
+    expect(plate('mess', { kind: 'bot' })).toEqual({ name: 'House table', state: "play the ship's bot", short: 'Bot', mark: '' });
+    expect(plate('mess', { kind: 'online' })).toEqual({ name: 'Comms desk', state: '1v1 online match', short: 'Online', mark: '' });
+    expect(plate('mess', { kind: 'royale' })).toEqual({ name: 'Arena', state: 'battle royale', short: 'Royale', mark: '' });
     expect(plate('mess', { kind: 'terminal', lore: 'mess-house-rule' })).toEqual({ name: "Captain's order", state: 'read the log', short: 'Order', mark: '' });
     expect(plate('mess', { kind: 'terminal', lore: 'nobody-named-it' })).toEqual({ name: "Ship's door", state: 'a room of the Ballast', short: 'Door', mark: '' });
-    expect(plate('mess', { kind: 'medals' })).toEqual({ name: 'Ledger wall', state: 'medals and best turns', short: 'Ledger', mark: '' });
-    expect(plate('mess', { kind: 'daily' })).toEqual({ name: 'Morning count', state: 'the boss of the day', short: 'Count', mark: '' });
-    expect(plate('cargo', { kind: 'run' })).toEqual({ name: 'Mining cut', state: 'rogue-lite run, 3 acts', short: 'Mining cut', mark: '' });
-    expect(plate('cargo', { kind: 'world' })).toEqual({ name: 'Airlock', state: 'walk the open world', short: 'Airlock', mark: '' });
-    expect(plate('furnace', { kind: 'together' })).toEqual({ name: 'Shift crew', state: 'co-op against a boss', short: 'Shift crew', mark: '' });
-    expect(plate('bridge', { kind: 'ranked' })).toEqual({ name: 'Clamp list', state: 'ranked 1v1 online', short: 'Clamp list', mark: '' });
-    expect(plate('bridge', { kind: 'trainer' })).toEqual({ name: 'Table zero', state: 'drill: waves of the bot', short: 'Table zero', mark: '' });
+    expect(plate('mess', { kind: 'medals' })).toEqual({ name: 'Medal wall', state: 'medals and best turns', short: 'Medals', mark: '' });
+    expect(plate('mess', { kind: 'daily' })).toEqual({ name: 'Morning count', state: 'the boss of the day', short: 'Daily', mark: '' });
+    expect(plate('cargo', { kind: 'run' })).toEqual({ name: 'Mining cut', state: 'rogue-lite run, 3 acts', short: 'Run', mark: '' });
+    expect(plate('cargo', { kind: 'world' })).toEqual({ name: 'Airlock', state: 'walk the open world', short: 'World', mark: '' });
+    expect(plate('furnace', { kind: 'together' })).toEqual({ name: 'Shift crew', state: 'co-op against a boss', short: 'Co-op', mark: '' });
+    expect(plate('bridge', { kind: 'ranked' })).toEqual({ name: 'Clamp list', state: 'ranked 1v1 online', short: 'Ranked', mark: '' });
+    expect(plate('bridge', { kind: 'trainer' })).toEqual({ name: 'Table zero', state: 'drill: waves of the bot', short: 'Trainer', mark: '' });
   });
 
   it('name the boss behind the door, marked once beaten', () => {
-    expect(roomLabel('cargo', { kind: 'boss', boss: 'hull' }, [])).toEqual({ name: 'The Hull', state: 'boss fight, Cargo seat', short: 'Hull', mark: '' });
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'hull' }, [])).toEqual({ name: 'The Hull', state: 'boss, Cargo seat', short: 'Hull', mark: '' });
     expect(roomLabel('mess', { kind: 'boss', boss: 'echo' }, ['echo'])).toEqual({
       name: 'The Echo',
       state: 'beaten',
@@ -241,7 +241,7 @@ describe('the room labels (#1249)', () => {
       mark: 'beaten',
     });
     expect(roomLabel('mess', { kind: 'boss', boss: 'echo' }, ['echo'], { echo: 1 }).state).toBe('Medal: 1 turn');
-    expect(roomLabel('cargo', { kind: 'boss', boss: 'alien' }, [], { echo: 3 }).state).toBe('boss fight, Cargo station');
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'alien' }, [], { echo: 3 }).state).toBe('boss, Cargo station');
     expect(labelsHtml({ deck: 'cargo', cell: [0, 0] }, ['alien'], { alien: 22 })).toContain('<b>The Alien</b><small>Medal: 22 turns</small>');
   });
 
@@ -260,7 +260,7 @@ describe('the room labels (#1249)', () => {
     const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, []);
     expect(html.match(/class="hub-label"/g)).toHaveLength(12); // the eleven rooms and the lift up of the Mess
     expect(html).toContain(
-      '<div class="hub-label" data-cell="2,0" data-kind="boss"><b>The Echo</b><small>boss fight, Mess seat</small><span class="short">Echo</span></div>',
+      '<div class="hub-label" data-cell="2,0" data-kind="boss"><b>The Echo</b><small>boss, Mess seat</small><span class="short">Echo</span></div>',
     );
     expect(html).toContain('<div class="hub-label" data-cell="1,-2" data-kind="lift" data-mark="locked"><b>Lift ▲ Cargo</b>');
     expect(html).toContain('<div class="hub-label you" data-cell="0,0">You</div>');
@@ -287,7 +287,7 @@ describe('the lift-shaft rail (#1249)', () => {
     const html = railHtml('cargo', ['echo']);
     expect(html.match(/<li /g)).toHaveLength(5);
     expect(html.indexOf('Bridge')).toBeLessThan(html.indexOf('Mess'));
-    expect(html).toContain('<li data-deck="mess" data-state="beaten"><span class="n">01</span><b>Mess</b><small>The Echo beaten</small></li>');
+    expect(html).toContain('<li data-deck="mess" data-state="beaten"><span class="n">01</span><b>Mess</b><small>Seat: The Echo beaten</small></li>');
     expect(html).toContain(
       '<li data-deck="cargo" data-state="open" aria-current="location"><span class="n">02</span><b>Cargo</b><small>Seat: The Hull waits · you are here</small></li>',
     );
@@ -338,8 +338,8 @@ describe('the seat of a deck and its stations (#1547)', () => {
     expect(rail).toContain('Seat: The Echo waits');
     expect(rail).not.toContain('Dual Room');
     const plates = labelsHtml({ deck: 'mess', cell: [0, 0] }, []);
-    expect(plates).toContain('<b>The Echo</b><small>boss fight, Mess seat</small>');
-    expect(plates).toContain('<b>The Dual Room</b><small>boss fight, Mess station</small>');
+    expect(plates).toContain('<b>The Echo</b><small>boss, Mess seat</small>');
+    expect(plates).toContain('<b>The Dual Room</b><small>boss, Mess station</small>');
     expect(plates.match(/data-kind="boss"/g)).toHaveLength(2); // two boss doors on the Mess, one seat
   });
 });

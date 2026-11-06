@@ -153,20 +153,20 @@ the five decks (beaten, open, locked, and where the marble is) and boss pips cou
 
 | Room | Prop | Plate (short on a phone) |
 |---|---|---|
-| Boss | A blast door in a crimson frame with an amber core; open with a gold seal once its boss is beaten | Boss door, the boss's name, and once beaten its medal's best turns, or `beaten` with no medal (the boss's name without "The") |
-| Hot-seat | A table with two amber chairs | Hot-seat, 2 players (Hot-seat) |
-| Bot | A cyan robot | Bot table, vs the ship AI (Bot) |
-| Online | An antenna with two signal arcs | Online, 1v1 peer room (Online) |
-| BR lobby | An orange arena ring with six seats | Royale, battle royale (Royale) |
-| Terminal | A CRT, its screen green | Terminal, lore entry (Terminal) |
-| Medal room | A gold medal on a plinth | Medal room, best turns (Medals) |
+| Boss | A blast door in a crimson frame with an amber core; open with a gold seal once its boss is beaten | The boss's name and `boss, <Deck> seat` (or `station`, ui.md section 4.5), and once beaten its medal's best turns, or `beaten` with no medal (the boss's name without "The") |
+| Hot-seat | A table with two amber chairs | Crew table, 2 players, one screen (Hot-seat) |
+| Bot | A cyan robot | House table, play the ship's bot (Bot) |
+| Online | An antenna with two signal arcs | Comms desk, 1v1 online match (Online) |
+| BR lobby | An orange arena ring with six seats | Arena, battle royale (Royale) |
+| Terminal | A CRT, its screen green | The title of its entry, read the log (Order, Galley, ...) |
+| Medal room | A gold medal on a plinth | Medal wall, medals and best turns (Medals) |
 | Lift | A cage of four posts around its arrow, a bar across while locked | Lift ▲ or ▼ and its deck, open or locked (▲ and the deck, or ▲ Locked) |
-| Daily | A calendar with a sky-blue header | Daily, boss of the day (Daily) |
-| Rogue-lite | A map table with three grape route nodes | Rogue-lite, 3-act run (Run) |
-| Together | Two pink marbles on one plinth | Together, co-op vs a boss (Co-op) |
-| Ranked | A podium of three steps, the first one lime | Ranked, Elo ladder (Ranked) |
-| Open world | An indigo globe of Hollow on a stand | Open world, walk Hollow (World) |
-| Trainer | A target dummy: a post and a tan target disc | Trainer, bot waves (Trainer) |
+| Daily | A calendar with a sky-blue header | Morning count, the boss of the day (Daily) |
+| Rogue-lite | A map table with three grape route nodes | Mining cut, rogue-lite run, 3 acts (Run) |
+| Together | Two pink marbles on one plinth | Shift crew, co-op against a boss (Co-op) |
+| Ranked | A podium of three steps, the first one lime | Clamp list, ranked 1v1 online (Ranked) |
+| Open world | An indigo globe of Hollow on a stand | Airlock, walk the open world (World) |
+| Trainer | A target dummy: a post and a tan target disc | Table zero, drill: waves of the bot (Trainer) |
 
 Room kinds:
 

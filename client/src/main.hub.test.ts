@@ -276,7 +276,7 @@ describe('main.ts, walking the hub (#521)', () => {
     const p2 = game.hook<{ x: number; y: number }>('__cellToScreen', 2, 0);
     canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: p2.x, clientY: p2.y }));
     expect(document.body.dataset.hubHover).toBe('2,0');
-    expect(game.hud()).toContain('The Echo (Mess boss)');
+    expect(game.hud()).toContain('The Echo · boss, Mess seat');
     expect(game.hud()).toContain('(Out of reach (roll closer))');
 
     // Move pointer off-board where cellAt is null
@@ -421,7 +421,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(back().textContent).toBe('Back to the hub');
     back().click();
     expect(hub()).toBe('mess 2,0');
-    expect(game.hud()).toBe("Hub · MessThe Echo · boss fight, Mess seat");
+    expect(game.hud()).toBe("Hub · MessThe Echo · boss, Mess seat");
     expect(back().hidden).toBe(true);
     game.click(-2, 0); // not a neighbour: the marble stays on the door, and the door starts nothing again
     expect(hub()).toBe('mess 2,0');
@@ -519,7 +519,7 @@ describe('main.ts, the hub doors (#522)', () => {
     back().click();
     await game.settle(); // the closed room calls back: the hub stays
     expect(hub()).toBe('mess -2,1');
-    expect(game.hud()).toBe("Hub · MessComms desk · 1v1 against a player online");
+    expect(game.hud()).toBe("Hub · MessComms desk · 1v1 online match");
     expect(location.hash).toBe('');
     expect(byId('invite').hidden).toBe(true);
     expect(byId('invite-label').hidden).toBe(true);
@@ -556,7 +556,7 @@ const END_ROYALE = {
   ],
 };
 
-  it('the battle royale lobby door starts battle royale; Back to the hub lands on the door (#593)', async () => {
+  it('the battle royale door starts battle royale; Back to the hub lands on the door (#593)', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     shipAt(game, [-1, 1]);
@@ -573,7 +573,7 @@ const END_ROYALE = {
     expect(back().hidden).toBe(false);
     back().click();
     expect(hub()).toBe('mess -2,2');
-    expect(game.hud()).toBe("Hub · MessArena · battle royale lobby");
+    expect(game.hud()).toBe("Hub · MessArena · battle royale");
     expect(data().royale).toBeUndefined();
   });
 
@@ -915,7 +915,7 @@ describe('main.ts, the deck plan (#1249)', () => {
     window.dispatchEvent(new Event('resize'));
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.4).distance);
     vi.unstubAllGlobals();
-    game.click(-2, 2); // the battle royale lobby
+    game.click(-2, 2); // the battle royale
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
   });
 });

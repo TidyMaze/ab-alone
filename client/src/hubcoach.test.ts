@@ -52,7 +52,7 @@ describe('the entry confirm', () => {
     const name = (kind: string, deck: 'mess' | 'cargo' = 'mess') => entryName(deck, roomsOf(deck).find(({ door }) => door.kind === kind)!.door);
     expect(name('boss')).toBe('The Echo');
     expect(name('bot')).toBe("House table (play the ship's bot)");
-    expect(name('royale')).toBe('Arena (battle royale lobby)');
+    expect(name('royale')).toBe('Arena (battle royale)');
   });
 });
 

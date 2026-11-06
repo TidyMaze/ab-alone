@@ -182,7 +182,7 @@ describe('the transition of a place (#1519)', () => {
     expect(data().hub).toBeTruthy();
     expect(data().placeTransition).toBe('enter');
     expect(cue()!.dataset.kind).toBe('town');
-    expect(titled()).toBe('Hub');
+    expect(titled()).toBe('Muster point · the Hub');
     await settle();
     byId('exit').click();
     await settle();
@@ -197,7 +197,7 @@ describe('the transition of a place (#1519)', () => {
     await rollOnto(game, 'dungeon');
     expect(data().run).toBe('map');
     expect(cue()!.dataset.kind).toBe('dungeon');
-    expect(titled()).toBe('Rogue-lite run');
+    expect(titled()).toBe('Mining cut · Rogue-lite run');
     await settle();
     byId('exit').click();
     await settle();
@@ -228,7 +228,7 @@ describe('the transition of a place (#1519)', () => {
     const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
     await rollOnto(game, 'dungeon');
     expect(cue()!.dataset.motion).toBe('cut');
-    expect(titled()).toBe('Rogue-lite run');
+    expect(titled()).toBe('Mining cut · Rogue-lite run');
     window.dispatchEvent(new Event('pointerdown'));
     await settle();
     byId('exit').click();
