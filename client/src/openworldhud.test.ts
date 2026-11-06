@@ -88,7 +88,7 @@ describe('the exit of the Open world (#1373, #1517)', () => {
     expect(dock).toContain('bottom: calc(16px + env(safe-area-inset-bottom))');
     expect(dock).toContain('transform: none');
     expect(css).toContain('body[data-openworld] #dock-wrap > :not(#dock), body[data-openworld] #dock > :not(#exit) { display: none !important; }');
-    expect(css).toContain('@media (orientation: portrait) { #openworld-hud { bottom: 5.5rem; } }');
+    expect(css).toContain('@media (orientation: portrait) { #openworld-hud { bottom: 5.5rem; box-sizing: border-box; max-height: calc((50dvh - 5.5rem) / var(--ui-scale, 1)); } }');
   });
 
   it('names the keys on a keyboard only; a touch screen reads the stick, the tap and the Hub button (#1379)', () => {
