@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { EJECT_MS, PUSH_MS, VOID_MS } from './eject';
 import { FakeBufferSource, FakeContext, FakeFilter, FakeGain, FakeNode, FakeOscillator } from './test/audio';
 import {
+  AFTER_EJECTION,
   AMBIENCE_TRACKS,
   BUSES,
   CROSSFADE_TAU,
+  CUES,
   CUE_AT,
+  CUE_FLOOR_DB,
+  CUE_CEILING_DB,
   DUCKED,
   DUCK_DB,
   DUCK_TAU,
@@ -19,6 +23,7 @@ import {
   TENSION,
   TellWatch,
   busGain,
+  cueDb,
   cueFor,
   duckGains,
   ejectionVoices,
@@ -30,6 +35,7 @@ import {
   tellVoices,
   type Bus,
   type Cue,
+  type CueEvent,
   type Mix,
   type Tell,
   type Voice,
@@ -322,6 +328,125 @@ describe('Sfx.pick, the sound of a node picked on the rogue-lite map (#1468)', (
     const after = ctx.sources.length;
     expect(sfx.pick()).toBe(false);
     expect(ctx.sources.length).toBe(after);
+  });
+});
+
+// #1570: the cue table of world.md section 7, one synthesized cue per event of the first slice.
+const events = Object.keys(CUES) as CueEvent[];
+describe('CUES, the cue table (world.md section 7, #1570)', () => {
+  it('has the six events of the first slice: win, loss, boss phase change, royale elimination, rogue-lite reward, UI click', () => {
+    expect(events).toEqual(['win', 'loss', 'phase', 'elimination', 'reward', 'click']);
+  });
+
+  it('puts every cue on the effects bus', () => {
+    for (const event of events) expect(CUES[event].bus).toBe('effects');
+  });
+
+  for (const event of events) {
+    it(`${event}: a short synthesized cue, silent at both ends, moving forward in time, never above 0.5`, () => {
+      const { voices } = CUES[event];
+      expect(voices.length).toBeGreaterThan(0);
+      for (const voice of voices) {
+        expect(voice.env[0]![1]).toBe(0);
+        expect(voice.env.at(-1)![1]).toBe(0);
+        for (let i = 1; i < voice.env.length; i++) expect(voice.env[i]![0]).toBeGreaterThan(voice.env[i - 1]![0]);
+        expect(peak(voice)).toBeLessThanOrEqual(0.5);
+        expect(end(voice)).toBeLessThanOrEqual(1);
+      }
+      expect(Math.min(...voices.map(start))).toBe(0);
+    });
+
+    it(`${event}: carries a tone above ${SMALL_SPEAKER_HZ} Hz that a small speaker plays, between ${CUE_FLOOR_DB} and ${CUE_CEILING_DB} dBFS (#1572)`, () => {
+      const tonal = CUES[event].voices.filter((voice) => voice.source !== 'noise');
+      expect(tonal.some((voice) => Math.min(...freqs(voice)) > SMALL_SPEAKER_HZ)).toBe(true);
+      expect(cueDb(CUES[event].voices)).toBeGreaterThanOrEqual(CUE_FLOOR_DB);
+      expect(cueDb(CUES[event].voices)).toBeLessThanOrEqual(CUE_CEILING_DB);
+    });
+  }
+
+  it('is dry and low-key, not a fanfare: no cue holds more than three voices (and none rings past a second, above)', () => {
+    for (const event of events) expect(CUES[event].voices.length).toBeLessThanOrEqual(3);
+  });
+
+  it('gives each event its own sound, none the same as another cue, a tell, the pick or the knock', () => {
+    const all = [...events.map((event) => CUES[event].voices), PICK, knockVoices(330), ...tells.map(tellVoices)].map((voices) => JSON.stringify(voices));
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('the win rises and the loss falls, a ledger closing against a ledger struck', () => {
+    const last = (event: CueEvent) => CUES[event].voices.filter((v) => v.source === 'sine').at(-1)!;
+    const first = (event: CueEvent) => CUES[event].voices.find((v) => v.source === 'triangle')!;
+    expect(freqs(last('win'))[0]!).toBeGreaterThan(freqs(first('win'))[0]!);
+    expect(freqs(last('loss'))[0]!).toBeLessThan(freqs(first('loss'))[0]!);
+  });
+
+  it('the click is the quietest of them', () => {
+    const level = (event: CueEvent) => cueDb(CUES[event].voices);
+    for (const event of events) if (event !== 'click') expect(level('click')).toBeLessThan(level(event));
+  });
+});
+
+describe('cueDb, the level of a cue on a small speaker (#1572, #1570)', () => {
+  it('is silent for no voice and for noise alone: only the tones are counted, a floor that holds without the noise', () => {
+    expect(cueDb([])).toBe(-Infinity);
+    expect(cueDb([{ source: 'noise', filter: { type: 'lowpass', freq: [300, 120], q: 1 }, env: [[0, 0], [0.1, 0]] }])).toBe(-Infinity);
+  });
+
+  it('is the loudest tone by its peak: a sine at gain 0.1 and 1 kHz is smallSpeakerDb of that tone', () => {
+    const sine = { source: 'sine', freq: [1000, 1000], env: [[0, 0], [0.01, 0.1], [0.2, 0]] } as const;
+    expect(cueDb([sine])).toBeCloseTo(smallSpeakerDb([{ freq: 1000, gain: 0.1 }]), 6);
+    expect(cueDb([sine, { ...sine, env: [[0, 0], [0.01, 0.05], [0.2, 0]] }])).toBeCloseTo(cueDb([sine]), 6);
+  });
+
+  it('takes the first harmonic of a triangle, 8/pi^2 of its peak, and the middle of a glide', () => {
+    const triangle = { source: 'triangle', freq: [900, 1111.1], env: [[0, 0], [0.01, 0.1], [0.2, 0]] } as const;
+    expect(cueDb([triangle])).toBeCloseTo(smallSpeakerDb([{ freq: 1000, gain: 0.1 * (8 / Math.PI ** 2) }]), 2);
+  });
+
+  it('drops a tone under the cutoff: a 60 Hz sine is far below the floor', () => {
+    expect(cueDb([{ source: 'sine', freq: [60, 60], env: [[0, 0], [0.01, 0.4], [0.2, 0]] }])).toBeLessThan(CUE_FLOOR_DB);
+  });
+});
+
+describe('Sfx.cue, one call per event (#1570)', () => {
+  it('stays silent before a gesture: no context, no cue', () => {
+    const { make, sfx } = setup();
+    expect(sfx.cue('click')).toBe(false);
+    expect(make).not.toHaveBeenCalled();
+  });
+
+  for (const event of events) {
+    it(`${event}: plays every voice from now through its bus, and says so`, () => {
+      const { ctx, sfx } = setup();
+      sfx.unlock();
+      expect(sfx.cue(event)).toBe(true);
+      const { voices } = CUES[event];
+      expect(ctx.sources).toHaveLength(STEADY + voices.length);
+      voices.forEach((voice, i) => {
+        const source = ctx.sources[STEADY + i]!;
+        expect(source.times).toEqual([5 + start(voice), 5 + end(voice)]);
+        let node = next(source);
+        if (voice.source === 'noise') node = next(node);
+        expect(next(node)).toBe(bus(ctx, CUES[event].bus));
+      });
+    });
+
+    it(`${event}: is silent with the effects slider at 0: no source, no cue`, () => {
+      const { ctx, sfx } = setup();
+      sfx.unlock();
+      sfx.setVolume('effects', 0);
+      const before = ctx.sources.length;
+      expect(sfx.cue(event)).toBe(false);
+      expect(ctx.sources.length).toBe(before);
+    });
+  }
+
+  it('plays after a delay when asked: a cue that follows an ejection waits for its toll or clack', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    expect(sfx.cue('win', AFTER_EJECTION)).toBe(true);
+    expect(ctx.sources[STEADY]!.times[0]).toBeCloseTo(5 + AFTER_EJECTION + start(CUES.win.voices[0]!), 6);
+    expect(AFTER_EJECTION).toBeGreaterThan(CUE_AT);
   });
 });
 
