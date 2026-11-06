@@ -9,10 +9,10 @@ const doc = new DOMParser().parseFromString(page, 'text/html');
 const children = (id: string): string[] => [...doc.getElementById(id)!.children].map((el) => el.id);
 
 describe('The page controls', () => {
-  it('the thumb dock holds the game controls in order: Flee (a wild fight, #1511), Retry, Rematch, Goal, New game, View, Hint, Replay, the replay steps, Hold, Lobby, Modes, Auto-play', () => {
+  it('the thumb dock holds the game controls in order: Exit (#1517), Flee (a wild fight, #1511), Retry, Rematch, Goal, New game, View, Hint, Replay, the replay steps, Hold, Lobby, Modes, Auto-play', () => {
     expect(children('dock')).toEqual([
+      'exit',
       'wild-flee',
-      'place-back',
       'boss-retry',
       'rematch',
       'boss-goal',
@@ -28,8 +28,8 @@ describe('The page controls', () => {
     ]);
   });
 
-  it('the lobby sheet above the dock holds Start, Invite, Back to the hub and the invite link (#1044)', () => {
-    expect(children('lobby-sheet')).toEqual(['royale-start', 'royale-invite', 'ship-back', 'invite-label', 'invite-row']);
+  it('the lobby sheet above the dock holds Start, Invite and the invite link (#1044)', () => {
+    expect(children('lobby-sheet')).toEqual(['royale-start', 'royale-invite', 'invite-label', 'invite-row']);
   });
 
   it('the replay steps are the dock review: First, Previous, Next, Last, Live', () => {

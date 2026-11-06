@@ -103,7 +103,6 @@ test('the boss door starts the Echo, and Back to the hub after the defeat lands 
     await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(ply + 1);
   }
   await expect(page.locator('#hud')).toContainText('Defeat');
-  await page.getByRole('button', { name: 'Lobby' }).click(); // Back to the hub sits in the lobby sheet (#1044)
   const back = page.getByRole('button', { name: 'Back to the hub' });
   await expect(back).toBeVisible();
   await shot(page, { path: testInfo.outputPath('back-to-the-ship.png') });
@@ -202,7 +201,6 @@ test('the battle royale lobby door starts battle royale, and Back to the hub lan
     ],
   }));
   await expect(body).toHaveAttribute('data-over', 'win');
-  await page.getByRole('button', { name: 'Lobby' }).click(); // Back to the hub sits in the lobby sheet (#1044)
   const back = page.getByRole('button', { name: 'Back to the hub' });
   await expect(back).toBeVisible();
   await back.click();

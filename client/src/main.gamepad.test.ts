@@ -182,14 +182,12 @@ describe('the gamepad in the Open world', () => {
     pad.hold([], [Math.cos(angle), -Math.sin(angle), 0, 0]);
     pad.hold([]);
     pad.tap(A);
-    expect(byId('ship-back').hidden).toBe(false);
+    expect(byId('exit').hidden).toBe(false);
     const walkTo = (id: string): void => {
       for (let i = 0; i < 60 && document.activeElement !== byId(id); i++) pad.tap(RB);
       expect(document.activeElement).toBe(byId(id));
     };
-    walkTo('lobby'); // Back to the Open world sits in the Lobby sheet
-    pad.tap(A);
-    walkTo('ship-back');
+    walkTo('exit'); // Back to the Open world is the first slot of the dock (#1517)
     pad.tap(A);
     await settle();
     expect(data().openworldAt).toBe(`${q - 1},${r}`);

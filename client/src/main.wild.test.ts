@@ -83,7 +83,7 @@ describe('a wild fight (#1511)', () => {
     expect(wipe().dataset.phase).toBe('opening');
     expect(byId('wild-flee').hidden).toBe(false);
     expect(byId('wild-flee').textContent).toBe('Flee');
-    expect(byId('ship-back').hidden).toBe(true);
+    expect(byId('exit').hidden).toBe(true); // Flee holds the first slot of the fight (#1517)
     expect(byId('boss-retry').hidden).toBe(true);
     expect(byId('new-game').hidden).toBe(true);
     vi.advanceTimersByTime(500);
@@ -145,13 +145,13 @@ describe('a wild fight (#1511)', () => {
     game.click(q, r);
     game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
     expect(byId('wild-flee').hidden).toBe(true);
-    expect(byId('ship-back').hidden).toBe(false);
-    expect(byId('ship-back').textContent).toBe('Back to the Open world');
+    expect(byId('exit').hidden).toBe(false);
+    expect(byId('exit').textContent).toBe('Back to the Open world');
     expect(game.hud()).toContain('The marble is gone from the world.');
     byId('boss-goal').click(); // the HUD is drawn again: the marble is counted once
     expect(game.hud()).toContain('The marble is gone from the world.');
     await settle();
-    byId('ship-back').click();
+    byId('exit').click();
     await settle();
     expect(data().openworld).toBe(String(seed));
     expect(data().openworldBeaten).toBe('1');

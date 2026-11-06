@@ -164,7 +164,7 @@ describe('the entry confirm', () => {
     expect(hub()).toBeUndefined();
     expect(byId('hub-confirm').hidden).toBe(true);
     expect(localStorage.getItem('ab-alone.entered')).toBe('yes');
-    byId('ship-back').click();
+    byId('exit').click();
     game.click(-1, 0);
     game.click(-2, 0);
     expect(hub()).toBeUndefined(); // no second ask

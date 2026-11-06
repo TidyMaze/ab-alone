@@ -76,17 +76,19 @@ describe('the Open world help (#1252)', () => {
   });
 });
 
-describe('the Hub button of the Open world (#1373)', () => {
-  it('is a 44 px button at the bottom right on a touch screen, above the peers arrows, out of the joystick half', () => {
-    expect(html).toMatch(/<button id="openworld-ship" type="button"[^>]*>Hub<\/button>/);
-    expect(css).toContain('@media (pointer: coarse) { body[data-openworld] #openworld-ship { display: grid; } }');
-    const ship = rule('#openworld-ship');
-    expect(ship).toContain('min-width: var(--target)');
-    expect(ship).toContain('min-height: var(--target)');
-    expect(ship).toContain('right: 1rem');
-    expect(ship).toContain('z-index: 2');
-    expect(ship).toContain('display: none');
-    expect(css).toContain('@media (pointer: coarse) and (orientation: portrait) { #openworld-hud { bottom: calc(1.5rem + var(--target)); } }');
+describe('the exit of the Open world (#1373, #1517)', () => {
+  it('is the dock\'s first slot: no separate Hub button, the dock shows the exit alone at the bottom right, out of the stick\'s half, on a touch screen and on a desktop', () => {
+    expect(html).not.toContain('openworld-ship');
+    expect(css).not.toContain('openworld-ship');
+    expect(css).not.toContain('body[data-openworld] #dock-wrap { display: none !important; }');
+    const dock = rule('body[data-openworld] #dock-wrap');
+    expect(dock).toContain('left: auto');
+    expect(dock).toContain('right: 16px');
+    expect(dock).toContain('top: auto');
+    expect(dock).toContain('bottom: calc(16px + env(safe-area-inset-bottom))');
+    expect(dock).toContain('transform: none');
+    expect(css).toContain('body[data-openworld] #dock-wrap > :not(#dock), body[data-openworld] #dock > :not(#exit) { display: none !important; }');
+    expect(css).toContain('@media (orientation: portrait) { #openworld-hud { bottom: 5.5rem; } }');
   });
 
   it('names the keys on a keyboard only; a touch screen reads the stick, the tap and the Hub button (#1379)', () => {

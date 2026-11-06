@@ -170,7 +170,7 @@ describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
     game.click(2, 0);
     expect(document.body.dataset.boss).toBe('echo');
     await endFight(game, 2);
-    byId('ship-back').click();
+    byId('exit').click();
     await game.settle();
     game.hook('__drawNext');
     game.frame(400);
@@ -190,7 +190,7 @@ describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
     expect(document.body.dataset.boss).toBe('echo');
     await endFight(game, 2);
-    byId('ship-back').click();
+    byId('exit').click();
     await game.settle();
     expect(document.body.dataset.openworld).toBe('7');
     // Nothing of the lost fight shows over the world. The e2e spec read computed styles; here the page holds what those styles

@@ -24,7 +24,7 @@ for (const { name, viewport, touch } of sizes) {
   test.describe(name, () => {
     test.use({ viewport, isMobile: touch, hasTouch: touch });
 
-    for (const [kind, title, back] of [['tower', 'The Echo', 'ship-back'], ['dungeon', 'Rogue-lite run', 'place-back']] as const) {
+    for (const [kind, title, back] of [['tower', 'The Echo', 'exit'], ['dungeon', 'Rogue-lite run', 'exit']] as const) {
       test(`a ${kind} shows its transition with its title over the live place and the way back plays the matching one, #1519`, async ({ page }) => {
         await page.goto('./?bot=off&openworld=7');
         const body = page.locator('body');
@@ -41,7 +41,7 @@ for (const { name, viewport, touch } of sizes) {
         await expect(body).not.toHaveAttribute('data-place-transition', /.*/);
         await expect(cue).toBeHidden();
         if (kind === 'tower') await loseByRepetition(page); // The Echo, the first tower, is lost in a few moves: Back to the Open world shows
-        await page.evaluate((id) => document.getElementById(id)!.click(), back); // the lair's button sits in the lobby sheet, which this test does not open
+        await page.evaluate((id) => document.getElementById(id)!.click(), back); // the first slot of the dock (#1517); a click by script, as the tower's end light may cover it
         await expect(body).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
         await expect(cue).toHaveAttribute('data-kind', kind);
         await expect(body).toHaveAttribute('data-place-transition', 'back');

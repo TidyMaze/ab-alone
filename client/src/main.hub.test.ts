@@ -401,19 +401,20 @@ describe('main.ts, walking the hub (#521)', () => {
 // menu entry. Once that game is over, Back to the hub puts the marble back on the door's cell, in the hub. The battle
 // royale lobby is shown closed, a terminal opens nothing yet (#524).
 describe('main.ts, the hub doors (#522)', () => {
-  const back = (): HTMLButtonElement => byId('ship-back');
+  const back = (): HTMLButtonElement => byId('exit');
   const data = (): DOMStringMap => document.body.dataset;
 
   it('the boss door starts the deck boss; once the fight is lost, Back to the hub lands on the door', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     shipAt(game, [1, 0]);
-    expect(back().hidden).toBe(true);
+    expect(back().hidden).toBe(true); // the Hub is the home: no way out of it (#1517)
     game.click(2, 0);
     expect(hub()).toBeUndefined();
     expect(data().boss).toBe('echo');
     expect(data().deck).toBe('mess');
     expect(document.getElementById('boss-bar')!.textContent).toContain('The Echo');
-    expect(back().hidden).toBe(true); // the fight is on
+    expect(back().hidden).toBe(false); // the way out is there while the fight is on (#1517)
+    expect(back().dataset.label).toBe('Hub');
     await loseToTheEcho(game);
     expect(game.hud()).toContain('Defeat');
     expect(back().hidden).toBe(false);
@@ -566,7 +567,7 @@ const END_ROYALE = {
     game.click(-2, 2);
     expect(hub()).toBeUndefined();
     expect(data().royale).toBe('1');
-    expect(back().hidden).toBe(true); // while game is on
+    expect(back().hidden).toBe(false); // the way out is there while the game is on (#1517)
     game.hook('__royale', END_ROYALE);
     expect(data().over).toBe('win');
     expect(back().hidden).toBe(false);
@@ -657,7 +658,7 @@ const END_ROYALE = {
     expect(data().trainer).toBe('1');
   });
 
-  it('Back to the hub never shows after a game no room started', async () => {
+  it('no way out shows after a game no room started', async () => {
     const game = await boot('?nodes=100');
     await game.hook<Promise<number>>('__playTurns', 30, [4]);
     expect(data().over).toBe('loss');
@@ -693,7 +694,7 @@ describe('main.ts, the hub terminals (#524)', () => {
     expect(hub()).toBe('mess 1,1');
     expect(game.hud()).toBe('Hub · MessTerminal');
     expect(game.hook('__cellToScreen', 0, 0)).toEqual(view);
-    expect(byId('ship-back').hidden).toBe(true);
+    expect(byId('exit').hidden).toBe(true);
     game.frame(16);
     expect(data().console).toBe('mess-house-rule 1/2'); // the console screen shows the deck's first entry again
   });

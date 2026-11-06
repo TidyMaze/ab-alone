@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { backWay, needsEntry, type Screen, type Via } from './backnav';
+import { backWay, needsEntry, type Screen } from './backnav';
+import type { Exit } from './exitslot';
 
 // Browser Back and the Android Back gesture (#1564, docs/specs/ui.md section "Browser Back"): the page keeps one history entry
 // while a screen other than the one it started on is shown, and Back runs the way out the screen has already.
-
-const none: Via = { back: false, place: false };
 
 describe('needsEntry: the page asks for a history entry', () => {
   it('on a screen other than the base one when it holds none', () => {
@@ -24,7 +23,7 @@ describe('needsEntry: the page asks for a history entry', () => {
 });
 
 describe('backWay: what Back does on the screen it left', () => {
-  const way = (screen: Screen, base: Screen, via: Via = none, forward = false) => backWay(screen, base, via, forward);
+  const way = (screen: Screen, base: Screen, exit: Exit = null, forward = false) => backWay(screen, base, exit, forward);
   it('takes a mode to the Hub', () => {
     expect(way('mode', 'table')).toBe('hub');
     expect(way('table', 'hub')).toBe('hub');
@@ -32,23 +31,20 @@ describe('backWay: what Back does on the screen it left', () => {
   it('takes the Hub to the table', () => {
     expect(way('hub', 'table')).toBe('table');
   });
-  it('uses the Back button of the screen when it has one', () => {
-    expect(way('mode', 'table', { back: true, place: false })).toBe('back');
-    expect(way('mode', 'table', { back: true, place: true })).toBe('back');
-  });
-  it('uses Back to the Open world in the Hub or the run of a town', () => {
-    expect(way('hub', 'table', { back: false, place: true })).toBe('place');
-    expect(way('mode', 'table', { back: false, place: true })).toBe('place');
+  it('goes where the exit of the dock goes (#1517): the Hub, or the Open world', () => {
+    expect(way('mode', 'table', 'hub')).toBe('hub');
+    expect(way('mode', 'table', 'world')).toBe('world');
+    expect(way('hub', 'table', 'world')).toBe('world');
   });
   it('lets the page go when the base screen is shown: the entry was left behind by the mode\'s own button', () => {
     expect(way('table', 'table')).toBe('leave');
-    expect(way('hub', 'hub', { back: true, place: true })).toBe('leave');
+    expect(way('hub', 'hub', 'world')).toBe('leave');
   });
   it('keeps an online room as it is: the browser drops its address and nothing else', () => {
     expect(way('room', 'table')).toBe('stay');
     expect(way('room', 'room')).toBe('stay');
   });
   it('does nothing when Forward lands on the entry again', () => {
-    expect(way('mode', 'table', none, true)).toBe('stay');
+    expect(way('mode', 'table', null, true)).toBe('stay');
   });
 });

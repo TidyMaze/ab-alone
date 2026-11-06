@@ -36,23 +36,24 @@ async function rollOnto(game: Game, kind: 'town' | 'dungeon', open = true, nth =
 describe('a town of the Open world (#1593)', () => {
   it('rolling onto a town leaves the world and opens the Hub, with a button back to the world', async () => {
     const game = await boot('?bot=off&openworld=7');
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').dataset.label).toBe('Hub'); // the world's own way out (#1517)
     await rollOnto(game, 'town');
     expect(data().openworld).toBeUndefined();
     expect(data().hub).toBeTruthy();
-    expect(byId('place-back').hidden).toBe(false);
-    expect(byId('place-back').textContent).toBe('Back to the Open world');
+    expect(byId('exit').hidden).toBe(false);
+    expect(byId('exit').textContent).toBe('Back to the Open world');
+    expect(byId('exit').dataset.label).toBe('World');
   });
 
   it('the button puts the hero back on the entrance cell, and is gone', async () => {
     const game = await boot('?bot=off&openworld=7');
     const entrance = await rollOnto(game, 'town');
     await settle();
-    byId('place-back').click();
+    byId('exit').click();
     await settle();
     expect(data().hub).toBeUndefined();
     expect(data().openworldAt).toBe(entrance.join(','));
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').dataset.label).toBe('Hub'); // the world's own way out again
   });
 
   it('a table entered from the Hub of a town and left by the Hub of the menu keeps the way back to the world', async () => {
@@ -62,11 +63,11 @@ describe('a town of the Open world (#1593)', () => {
     expect(data().hub).toBe('mess -1,0');
     game.click(-1, -1); // the hot-seat table
     expect(data().hub).toBeUndefined();
-    expect(byId('place-back').hidden).toBe(true); // a game, not the Hub
+    expect(byId('exit').dataset.label).toBe('Hub'); // a game, not the Hub: it leads to the Hub
     game.openModes();
     byId('ship').click();
-    expect(byId('place-back').hidden).toBe(false);
-    byId('place-back').click();
+    expect(byId('exit').hidden).toBe(false);
+    byId('exit').click();
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
   });
@@ -76,7 +77,7 @@ describe('a town of the Open world (#1593)', () => {
     game.openModes();
     byId('ship').click();
     expect(data().hub).toBeTruthy();
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').hidden).toBe(true);
   });
 
   it('another mode picked in the Hub of a town ends the way back: it is no town\'s', async () => {
@@ -84,11 +85,11 @@ describe('a town of the Open world (#1593)', () => {
     await rollOnto(game, 'town');
     game.openModes();
     byId('trainer').click();
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').dataset.label).toBe('Hub');
     game.openModes();
     byId('ship').click();
     expect(data().hub).toBeTruthy();
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').hidden).toBe(true);
   });
 
   it('the Open world of the menu, from the Hub of a town, is the world as it was left, and the button is gone', async () => {
@@ -99,7 +100,7 @@ describe('a town of the Open world (#1593)', () => {
     byId('openworld').click();
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').dataset.label).toBe('Hub'); // in the world again
   });
 });
 
@@ -132,7 +133,7 @@ describe('the ledger line of a town (#1516)', () => {
     await rollOnto(game, 'town');
     game.click(-1, 0);
     expect(game.hud()).not.toContain(TOWN_LINES[0]!.line);
-    byId('place-back').click();
+    byId('exit').click();
     await settle();
     game.openModes();
     byId('ship').click();
@@ -147,18 +148,18 @@ describe('a dungeon gate of the Open world (#1593)', () => {
     expect(data().openworld).toBeUndefined();
     expect(data().run).toBe('map');
     expect(byId('run-map').hidden).toBe(false);
-    expect(byId('place-back').hidden).toBe(false);
+    expect(byId('exit').hidden).toBe(false);
   });
 
   it('the button leaves the run for the world, the hero on the entrance cell', async () => {
     const game = await boot('?bot=off&openworld=7');
     const entrance = await rollOnto(game, 'dungeon');
     await settle();
-    byId('place-back').click();
+    byId('exit').click();
     await settle();
     expect(data().run).toBeUndefined();
     expect(data().openworldAt).toBe(entrance.join(','));
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').dataset.label).toBe('Hub');
   });
 
   it('a run started from the menu has no way back to a world', async () => {
@@ -166,7 +167,7 @@ describe('a dungeon gate of the Open world (#1593)', () => {
     game.openModes();
     byId('roguelite').click();
     expect(data().run).toBe('map');
-    expect(byId('place-back').hidden).toBe(true);
+    expect(byId('exit').dataset.label).toBe('Hub');
   });
 });
 
@@ -183,7 +184,7 @@ describe('the transition of a place (#1519)', () => {
     expect(cue()!.dataset.kind).toBe('town');
     expect(titled()).toBe('Hub');
     await settle();
-    byId('place-back').click();
+    byId('exit').click();
     await settle();
     expect(data().openworld).toBe('7');
     expect(data().placeTransition).toBe('back');
@@ -198,7 +199,7 @@ describe('the transition of a place (#1519)', () => {
     expect(cue()!.dataset.kind).toBe('dungeon');
     expect(titled()).toBe('Rogue-lite run');
     await settle();
-    byId('place-back').click();
+    byId('exit').click();
     await settle();
     expect(data().placeTransition).toBe('back');
     expect(cue()!.dataset.kind).toBe('dungeon');
@@ -217,7 +218,7 @@ describe('the transition of a place (#1519)', () => {
     expect(cue()!.dataset.kind).toBe('tower');
     expect(titled()).toBe('The Echo');
     await settle();
-    byId('ship-back').click();
+    byId('exit').click();
     await settle();
     expect(data().placeTransition).toBe('back');
     expect(cue()!.dataset.kind).toBe('tower');
@@ -230,7 +231,7 @@ describe('the transition of a place (#1519)', () => {
     expect(titled()).toBe('Rogue-lite run');
     window.dispatchEvent(new Event('pointerdown'));
     await settle();
-    byId('place-back').click();
+    byId('exit').click();
     await settle();
     expect(data().placeTransition).toBeUndefined();
   });

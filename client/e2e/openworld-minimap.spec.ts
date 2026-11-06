@@ -24,7 +24,7 @@ for (const { name, viewport, touch } of sizes) {
       expect(box.x + box.width).toBeGreaterThan(viewport.width - 24);
       const cog = (await page.locator('#settings').boundingBox())!;
       expect(box.y).toBeGreaterThanOrEqual(cog.y + cog.height);
-      for (const selector of ['#openworld-ship', '#openworld-hud', '#openworld-chip', '#settings']) {
+      for (const selector of ['#exit', '#openworld-hud', '#openworld-chip', '#settings']) {
         const other = await page.locator(selector).boundingBox();
         if (!other) continue; // not shown here
         const apart = box.x + box.width <= other.x || other.x + other.width <= box.x || box.y + box.height <= other.y || other.y + other.height <= box.y;

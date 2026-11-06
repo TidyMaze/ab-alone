@@ -53,7 +53,7 @@ for (const { name, viewport, touch } of sizes) {
       const map = (await page.locator('#openworld-map-button').boundingBox())!;
       expect(box.y).toBeGreaterThanOrEqual(map.y + map.height);
       expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
-      for (const selector of ['#openworld-ship', '#openworld-hud', '#openworld-chip', '#settings', '#openworld-minimap']) {
+      for (const selector of ['#exit', '#openworld-hud', '#openworld-chip', '#settings', '#openworld-minimap']) {
         const other = await page.locator(selector).boundingBox();
         if (!other) continue; // not shown here
         const apart = box.x + box.width <= other.x || other.x + other.width <= box.x || box.y + box.height <= other.y || other.y + other.height <= box.y;

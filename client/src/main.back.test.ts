@@ -166,14 +166,14 @@ describe('main.ts, browser Back (#1564)', () => {
     expect(left()).toBe(0);
   });
 
-  it('Back to the hub is the way out of a table opened from the Hub, mid-fight or not', async () => {
+  it('the Hub exit is the way out of a table opened from the Hub, mid-fight or not, and Back takes it', async () => {
     const game = await boot('?bot=off');
     localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell: [1, 0], beaten: [] }));
     await pick(game, 'ship');
-    game.click(2, 0); // the boss door of the Mess: the fight is on, Back to the hub is hidden
+    game.click(2, 0); // the boss door of the Mess: the fight is on, the exit leads to the Hub
     game.frame();
     expect(data().boss).toBe('echo');
-    expect(byId('ship-back').hidden).toBe(true);
+    expect(byId('exit').dataset.label).toBe('Hub');
     await pressBack(game);
     expect(hubOn()).toBe(true);
     expect(data().hub).toBe('mess 2,0'); // the marble on the door's cell, as Back to the hub puts it
@@ -188,13 +188,13 @@ describe('main.ts, browser Back (#1564)', () => {
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
     game.frame();
     expect(hubOn()).toBe(true);
-    expect(byId('place-back').hidden).toBe(false);
+    expect(byId('exit').dataset.label).toBe('World');
     await pressBack(game);
     expect(hubOn()).toBe(false);
     expect(data().openworld).toBeDefined();
   });
 
-  it('Back in the fight of a boss lair goes to the Hub, as its menu does; once it is won, to the world', async () => {
+  it('Back in the fight of a boss lair goes back to the world, as the exit of the dock does', async () => {
     const game = await boot('?bot=off&openworld=7');
     await pick(game, 'openworld');
     const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
@@ -203,10 +203,12 @@ describe('main.ts, browser Back (#1564)', () => {
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
     game.frame();
     expect(data().boss).toBeDefined();
-    expect(byId('ship-back').hidden).toBe(true); // the fight is on
+    expect(byId('exit').dataset.label).toBe('World'); // the fight is on
     await pressBack(game);
+    await game.settle();
     expect(data().boss).toBeUndefined();
-    expect(hubOn()).toBe(true);
+    expect(hubOn()).toBe(false);
+    expect(data().openworld).toBeDefined();
   });
 
   it('Back once the fight of a boss lair is won goes back to the world, as its button does', async () => {
@@ -225,7 +227,7 @@ describe('main.ts, browser Back (#1564)', () => {
     game.click(mq, mr);
     game.click(mq + (move.dir === 2 ? 1 : -1), mr + (move.dir === 2 ? -1 : 1));
     game.frame();
-    expect(byId('ship-back').hidden).toBe(false);
+    expect(byId('exit').dataset.label).toBe('World');
     await pressBack(game);
     await game.settle();
     expect(hubOn()).toBe(false);

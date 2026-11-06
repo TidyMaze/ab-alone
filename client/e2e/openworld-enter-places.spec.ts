@@ -35,11 +35,11 @@ for (const { name, viewport, touch } of sizes) {
         await page.keyboard.press('ArrowRight');
         await expect(body).not.toHaveAttribute('data-openworld', /.*/);
         await expect(body).toHaveAttribute(shown, /.+/); // the Hub's deck and cell, the run's screen
-        await expect(page.locator('#place-back')).toBeVisible();
+        await expect(page.locator('#exit')).toBeVisible();
         await shot(page, { path: `test-results/place-${kind}-${name}-inside.png` });
-        await page.locator('#place-back').click();
+        await page.locator('#exit').click();
         await expect(body).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
-        await expect(page.locator('#place-back')).toBeHidden();
+        await expect(page.locator('#exit')).toBeHidden();
       });
     }
   });

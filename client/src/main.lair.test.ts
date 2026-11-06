@@ -43,7 +43,8 @@ describe('the boss lairs of the Open world (#1170)', () => {
     const first = data().boss;
     expect(first).toBeTruthy();
     expect(byId('boss-retry').hidden).toBe(false);
-    expect(byId('ship-back').hidden).toBe(true); // the fight is on
+    expect(byId('exit').hidden).toBe(false); // the way out is there while the fight is on (#1517)
+    expect(byId('exit').dataset.label).toBe('World');
     await settle();
     await walkOnto(game, 1);
     expect(data().boss).not.toBe(first);
@@ -61,10 +62,10 @@ describe('the boss lairs of the Open world (#1170)', () => {
     game.click(q, r);
     game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
     expect(game.hud()).toContain('Medal earned');
-    expect(byId('ship-back').hidden).toBe(false);
-    expect(byId('ship-back').textContent).toBe('Back to the Open world');
+    expect(byId('exit').hidden).toBe(false);
+    expect(byId('exit').textContent).toBe('Back to the Open world');
     await settle();
-    byId('ship-back').click();
+    byId('exit').click();
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(data().openworldLairsBeaten).toBe('0');
@@ -77,7 +78,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     const { Encounter } = await import('abalone-wasm');
     const entrance = await walkOnto(game, 2);
     byId('boss-retry').click();
-    expect(byId('ship-back').textContent).toBe('Back to the Open world');
+    expect(byId('exit').textContent).toBe('Back to the Open world');
     const lost = (): number => (game.hook<number>('__plies') > 0 ? 2 : 0);
     vi.spyOn(Encounter.prototype, 'status').mockImplementation(lost);
     vi.spyOn(Encounter.prototype, 'result').mockImplementation(lost);
@@ -85,15 +86,15 @@ describe('the boss lairs of the Open world (#1170)', () => {
     const [q, r] = move.cells[0]!;
     game.click(q, r);
     game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
-    expect(byId('ship-back').hidden).toBe(false);
-    byId('ship-back').click();
+    expect(byId('exit').hidden).toBe(false);
+    byId('exit').click();
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(data().openworldLairsBeaten).toBe('');
     expect(byId('openworld-medals').textContent).toBe(`Medals 0 / ${(await import('abalone-wasm')).boss_ids().length}`);
   });
 
-  it('a boss picked from the menu is no lair\'s: the back button stays hidden', async () => {
+  it('a boss picked from the menu is no lair\'s: its way out is the Hub, not the world', async () => {
     const game = await boot('?bot=off&openworld=7');
     await walkOnto(game, 0);
     game.openModes();
@@ -101,7 +102,8 @@ describe('the boss lairs of the Open world (#1170)', () => {
     (byId('boss-list').querySelector('button') as HTMLButtonElement).click();
     vi.spyOn((await import('abalone-wasm')).Encounter.prototype, 'status').mockImplementation(() => 2);
     byId('boss-goal').click();
-    expect(byId('ship-back').hidden).toBe(true);
+    expect(byId('exit').hidden).toBe(false);
+    expect(byId('exit').dataset.label).toBe('Hub');
   });
 });
 
@@ -139,7 +141,7 @@ describe('the day and the night of the Open world (#1496)', () => {
     const [q, r] = move.cells[0]!;
     game.click(q, r);
     game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
-    byId('ship-back').click();
+    byId('exit').click();
     await settle();
     expect(data().fightBoard).toBeUndefined(); // the world is back, the board is nobody's
     expect(data().openworldPhase).toBe('night');
