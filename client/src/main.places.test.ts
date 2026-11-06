@@ -55,8 +55,8 @@ describe('a town of the Open world (#1593)', () => {
   });
 
   it('a table entered from the Hub of a town and left by the Hub of the menu keeps the way back to the world', async () => {
-    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell: [-1, 0], beaten: [] }));
     const game = await boot('?bot=off&openworld=7');
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell: [-1, 0], beaten: [] }));
     const entrance = await rollOnto(game, 'town');
     expect(data().hub).toBe('mess -1,0');
     game.click(-1, -1); // the hot-seat table

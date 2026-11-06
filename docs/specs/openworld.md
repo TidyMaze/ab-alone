@@ -542,11 +542,11 @@ plan as the game.
 | Mode today | Place in the world | Enter | Leave | State |
 |---|---|---|---|---|
 | Open world (walk, troop, fights) | The whole hexagon, spawn `(0, 0)` | "Open world" in the mode menu; `#openworld` link | Leave button, back to where the player came from | Built |
-| Hub, bot, hot-seat, Medal room, terminals, Daily | **Spawn town**: the clearing of radius 3 round `(0, 0)`, the crash site | Walk into the clearing (the hero starts in it) | Walk out of it | Place and map icon built (this section). The Hub scene stays the front door; moving its stations into the town is planned |
-| Training yard (Trainer, Stalker), a bot table, a hot-seat table, a notice board | **The four other towns**, one per biome but the meadow and the archipelago (forest, tundra, desert, badlands), 40 to 120 ground units out | Walk in | Walk out | Place and map icon built. Their stations are planned, five towns sharing out the Hub's stations, one per deck |
+| Hub, bot, hot-seat, Medal room, terminals, Daily | **Spawn town**: the clearing of radius 3 round `(0, 0)`, the crash site | Walk into the clearing (the hero starts in it) | Walk out of it | Place, map icon and entrance built (#1593): rolling onto the town opens the Hub scene, the front door. Moving its stations into the town is planned |
+| Training yard (Trainer, Stalker), a bot table, a hot-seat table, a notice board | **The four other towns**, one per biome but the meadow and the archipelago (forest, tundra, desert, badlands), 40 to 120 ground units out | Walk in | Walk out | Place, map icon and entrance built (#1593): every town opens the same Hub for now. Their own stations are planned, five towns sharing out the Hub's stations, one per deck |
 | Online, Ranked, Leaderboard, Royale, co-op, boss duel | **Arena town**: one of the four other towns, chosen when it is built. An invite link `#room=` still opens the table at once | Walk in | Walk out | Planned (the town exists on the map, the table does not) |
 | The 15 bosses | **Towers**: the boss lairs of section 7, lair `k` in the sextant `k % 6`, 160 to 420 ground units out | Roll onto the lair from a neighbour | Win or lose, "Back to the Open world": the hero returns to the entrance cell | Built (section 7). The five story bosses as the gates of the five decks is planned |
-| Rogue-lite run | **Dungeon gates**: one in each biome but the meadow (forest, tundra, desert, badlands, archipelago), 160 to 420 ground units out. An act is one dungeon, in matching terrain | Roll onto the gate from a neighbour | Leave the run: the hero returns to the entrance cell | Gate and map icon built. Entering one is planned; the run is still started from the Hub |
+| Rogue-lite run | **Dungeon gates**: one in each biome but the meadow (forest, tundra, desert, badlands, archipelago), 160 to 420 ground units out. An act is one dungeon, in matching terrain | Roll onto the gate from a neighbour | Leave the run: the hero returns to the entrance cell | Gate, map icon and entrance built (#1593): rolling onto a gate starts the run. The gate's biome as the act's is planned |
 | Teleporters | Pads in the clearing and in the open ground, one a square of 8 x 8 chunks (section 10) | Roll onto a pad, Teleport button | Pick another pad | Built. Pads inside towns and gate clearings are planned |
 | Console | Leaves the player's UI | n/a | n/a | Planned |
 | Boss fight menu | Fast travel to the towers already found | Menu entry | n/a | Planned |
@@ -577,5 +577,19 @@ plan as the game.
   holds in a quarter of the tries), the places of 24 seeds hold them, the spawn town first, no two places within 3 cells, none on a
   lair, teleporter or log, each with open ground and no enemy round it, each in its biome; seed 7 is pinned. Client: the icons' shapes
   and contrast, the minimap and the map drawing them, the mode reading and publishing them.
-- **Not now**: walking into a town or a gate (no station and no run starts from the world yet), moving the Hub's stations, 3D models of
-  the places (#1518), the transitions (#1519), the door grammar (#1517).
+- **Enter** (#1593). Rolling onto a town or a gate from a neighbour is the lair's path of section 7 (`roll`, `enterPlace` of
+  `openworldmode.ts`): the world is saved with the hero on the entrance, the cell it came from, and left, and the page starts the place. A
+  town opens the Hub scene, the Hub of the mode menu (every town the same one for now, the stations are the Hub's), a gate starts a new
+  rogue-lite run at its start screen, as Rogue-lite run of the mode menu does. The gate's biome as the first act's is not done: a
+  run's first act is the Meadow (`biomeOf`), the exits never offer the Meadow and a saved run's biomes never hold it, so a first act elsewhere changes the run's data, its save and its exits: a follow-up. The
+  spawn clearing's town on `(0, 0)` is the cell the hero starts on, so it opens only when the hero rolls back onto it. A walk to a far
+  cell, the Dungeon button and the troop's arrival on a teleporter go round the places as they go round the lairs, and a held arrow into
+  a place enters it. The MCP server (`mcp/src/world.ts`) does not know the places: an agent steps over their cells as over ground.
+- **Exit.** `#place-back`, "Back to the Open world", is a dock button shown while the Hub or the run is on and came from a place
+  (`placeFrom` of `main.ts`): it leaves the Hub or the run (a run left is abandoned, as by another mode) and opens the world at the entrance,
+  as "Back to the Open world" of a lair. A table or a boss of that Hub keeps it, and the Hub of the mode menu after it. Any other mode, and the
+  Open world of the menu, end it. The Hub or the run reached from the menu has no such button. A reload keeps no `placeFrom`, as a reload
+  in a lair's fight keeps no `lairFrom`: the Open world of the menu opens the world saved on the entrance.
+- **Marker.** A flat pad on the cell, the teleporter's pad recoloured to the map icons' colours, green on a town and orange on a gate
+  (`town-pad`, `gate-pad`, `OpenWorldView.setPlaces`), lit at night as the teleporters are. No plate label: lairs have none. Real models are #1518.
+- **Not now**: moving the Hub's stations, 3D models of the places (#1518), the transitions (#1519), the door grammar (#1517).

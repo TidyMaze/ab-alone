@@ -19,9 +19,9 @@ function grass(_seed: number, cx: number, cy: number): Uint8Array {
 }
 // `kind, q, r` triples: the spawn town, a dungeon gate in the window, a town far away.
 const PLACES = Int32Array.of(0, 0, 0, 1, 6, 0, 0, 60, 0);
-const none = Array.from({ length: 12 }, () => undefined) as [];
+const none: undefined[] = Array.from({ length: 12 }, () => undefined); // the parameters before `read`
 const make = (placesOf?: (seed: number) => Int32Array, onPlace?: (seed: number, kind: 'town' | 'dungeon') => void, saves = worldSaves(memoryStore(), 1)) =>
-  new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, ...none, ...(placesOf ? [undefined, placesOf, onPlace] : []));
+  new (OpenWorldMode as new (...args: unknown[]) => OpenWorldMode)(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, ...none, undefined, placesOf, onPlace);
 const body = () => document.body.dataset;
 
 afterEach(() => {

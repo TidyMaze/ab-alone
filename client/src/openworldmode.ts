@@ -176,6 +176,8 @@ export class OpenWorldMode {
     private readonly read: (id: string) => void = () => {},
     /** The towns and dungeon gates of a seed's world: `kind, q, r` triples (the bridge's `world_places`, #1514). */
     private readonly placesOf: (seed: number) => Int32Array = () => new Int32Array(),
+    /** What starts a town or a dungeon gate rolled onto (#1593), given the seed of the world and the kind. */
+    private readonly onPlace: (seed: number, kind: 'town' | 'dungeon') => void = () => {},
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -232,6 +234,7 @@ export class OpenWorldMode {
     view.show(this.hero.at, this.hero.troop);
     this.drawLairs();
     view.setTeleporters(this.teleporters);
+    view.setPlaces(this.places);
     view.setLogs(this.logs, this.found);
     this.peers?.enter(seed, view.scene, view.camera, world);
     this.keepAlive();
@@ -551,18 +554,22 @@ export class OpenWorldMode {
    * glide, at the steady speed of a held walk. Nothing when there is no way. */
   private walkTo(to: Axial): void {
     const hero = this.hero!;
-    const lairs = this.lairs.flat();
-    const blocked = Int32Array.from([...this.fight.enemiesAround(this.world!, hero.at, PATH_REACH).flat(), ...lairs]);
+    const blocked = Int32Array.from([...this.fight.enemiesAround(this.world!, hero.at, PATH_REACH).flat(), ...this.landmarks()]);
     const cells = this.path(this.seed, hero.at, to, blocked, flat(this.world!.broken));
     const route = Array.from({ length: cells.length / 2 }, (_, i): Axial => [cells[2 * i]!, cells[2 * i + 1]!]);
     if (route.length > 0) this.arrows(() => (this.route = route));
+  }
+
+  /** The cells a walk goes round, `q, r` pairs: the lairs, and the towns and gates (#1593), which are entered by a roll onto them. */
+  private landmarks(): number[] {
+    return [...this.lairs.flat(), ...this.places.flatMap(({ cell }) => cell)];
   }
 
   /** The HUD's Dungeon button (#1291): walks the hero to the nearest tower with a way, the unbeaten first, by the route of a tap to
    * walk; the HUD's note says when there is none. Returns whether a walk began. */
   dungeon(): boolean {
     const hero = this.hero!;
-    const blocked = Int32Array.from([...this.fight.enemiesAround(this.world!, hero.at, PATH_REACH).flat(), ...this.lairs.flat()]);
+    const blocked = Int32Array.from([...this.fight.enemiesAround(this.world!, hero.at, PATH_REACH).flat(), ...this.landmarks()]);
     const cells = this.dungeonPath(this.seed, hero.at, Int32Array.from(this.beaten), blocked, flat(this.world!.broken));
     const note = document.getElementById('openworld-dungeon-note');
     if (note) note.textContent = cells.length > 0 ? '' : 'No tower in reach: walk on and try again.';
@@ -631,7 +638,7 @@ export class OpenWorldMode {
 
   /** Whether a marble can stand on `cell` now: open ground, no enemy, no lair (the troop's cells round a teleporter, #1412). */
   private readonly free = ([q, r]: Axial): boolean =>
-    WALKABLE.has(this.world!.tile(q, r)?.terrain ?? 'water') && !this.fight.occupied(this.world!, q, r) && !this.lairs.some((cell) => same(cell, [q, r]));
+    WALKABLE.has(this.world!.tile(q, r)?.terrain ?? 'water') && !this.fight.occupied(this.world!, q, r) && !this.lairs.some((cell) => same(cell, [q, r])) && !this.places.some(({ cell }) => same(cell, [q, r]));
 
   /** Shows the HUD's Teleport button while the hero stands on a teleporter. */
   private showTeleport(on: boolean): void {
@@ -800,7 +807,10 @@ export class OpenWorldMode {
     if (this.fighting) return false;
     this.closeLog(); // the next move closes the panel of a log (#1589)
     const lair = this.lairs.findIndex((cell) => same(cell, to));
-    if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair), false;
+    const next = neighbours(this.hero!.at).some((n) => same(n, to));
+    if (lair >= 0 && next) return this.enterLair(lair), false;
+    const place = this.places.find(({ cell }) => same(cell, to));
+    if (place && next) return this.enterPlace(place.kind), false; // a town or a dungeon gate is entered as a lair is (#1593)
     const from = this.hero!.at;
     if (!this.hero!.step(to)) return this.lean(to, at), false;
     this.cruising = pace !== 'tap';
@@ -863,6 +873,15 @@ export class OpenWorldMode {
     this.persist();
     this.leave();
     this.onLair(seed, lair);
+  }
+
+  /** The hero rolls onto a town or a dungeon gate (#1593): the world is saved with the hero on the entrance, as for a lair, and left; the page
+   * opens the Hub or starts the run. */
+  private enterPlace(kind: 'town' | 'dungeon'): void {
+    const seed = this.seed;
+    this.persist();
+    this.leave();
+    this.onPlace(seed, kind);
   }
 
   /** A blocked step leans the hero toward the cell it cannot take, and back: nothing under reduced motion (#1040). */

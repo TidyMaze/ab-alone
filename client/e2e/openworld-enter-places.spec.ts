@@ -1,0 +1,46 @@
+import { expect, test, type Page } from '@playwright/test';
+import { lowTierOnCi } from './modes';
+import { shot } from './shot';
+
+lowTierOnCi();
+
+// #1593: rolling onto a town opens the Hub, rolling onto a dungeon gate starts the rogue-lite run, and Back to the Open world returns the hero
+// to the entrance cell (docs/specs/openworld.md section 13). The test hook stands the hero next to the place of the public seed 7 (no walk).
+type Hooks = { __openworldFixture: (f: object) => void; __openworldTime: (ms: number) => void };
+const sizes = [
+  { name: 'desktop', viewport: { width: 1280, height: 720 }, touch: false },
+  { name: 'phone', viewport: { width: 390, height: 844 }, touch: true },
+];
+
+/** The cell of the first place of `kind`, from the page. */
+async function placeOf(page: Page, kind: 'town' | 'dungeon'): Promise<[number, number]> {
+  const listed = (await page.locator('body').getAttribute('data-openworld-places'))!.split(' ');
+  return listed.find((p) => p.startsWith(`${kind}:`))!.slice(kind.length + 1).split(',').map(Number) as [number, number];
+}
+
+for (const { name, viewport, touch } of sizes) {
+  test.describe(name, () => {
+    test.use({ viewport, isMobile: touch, hasTouch: touch });
+
+    for (const [kind, shown] of [['town', 'data-hub'], ['dungeon', 'data-run']] as const) {
+      test(`rolling onto a ${kind} enters it, and Back to the Open world returns to the entrance cell, #1593`, async ({ page }) => {
+        await page.goto('./?bot=off&openworld=7');
+        const body = page.locator('body');
+        await expect(body).toHaveAttribute('data-openworld-at', '0,0');
+        const [q, r] = await placeOf(page, kind);
+        await page.evaluate(([q, r]) => (window as unknown as Hooks).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] }), [q!, r!]);
+        await shot(page, { path: `test-results/place-${kind}-${name}-day.png` });
+        await page.evaluate(() => (window as unknown as Hooks).__openworldTime(9 * 60_000));
+        await shot(page, { path: `test-results/place-${kind}-${name}-night.png` });
+        await page.keyboard.press('ArrowRight');
+        await expect(body).not.toHaveAttribute('data-openworld', /.*/);
+        await expect(body).toHaveAttribute(shown, /.+/); // the Hub's deck and cell, the run's screen
+        await expect(page.locator('#place-back')).toBeVisible();
+        await shot(page, { path: `test-results/place-${kind}-${name}-inside.png` });
+        await page.locator('#place-back').click();
+        await expect(body).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
+        await expect(page.locator('#place-back')).toBeHidden();
+      });
+    }
+  });
+}

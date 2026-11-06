@@ -65,7 +65,7 @@ First to eject 6 wins. On top of it, the ship:
   across the water on small boats, with a minimap in the top right corner, a map of the world discovered round the hero (M, or the Map button) and
   teleporters to travel between the ones discovered (T, or the Teleport button, on a teleporter), a sky that goes through day, dusk and night
   in 12 minutes, a lair fight on a board dressed for the hour you entered it at, and wandering marbles that walk up to your hero and start a wild
-  fight against the bot you can flee with the Flee button or F, and twelve lore logs on stakes, each read by rolling onto it and kept in the world's save, and towns and dungeon gates placed by the seed that show on the map beside the towers (you cannot walk into them yet) ([spec](docs/specs/openworld.md)).
+  fight against the bot you can flee with the Flee button or F, and twelve lore logs on stakes, each read by rolling onto it and kept in the world's save, and towns and dungeon gates placed by the seed that show on the map beside the towers: roll onto a town to enter the Hub and onto a dungeon gate to start a rogue-lite run, and the Back to the Open world button returns you to the cell you came from ([spec](docs/specs/openworld.md)).
 - **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)).
 
 Rusted deck plates, cold light, fog at the rim. The camera orbits and zooms; a **Clear board**

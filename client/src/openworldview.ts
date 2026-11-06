@@ -16,6 +16,7 @@ import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, sway
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
 import { SUN, SUN_SHADOW, aimSunShadow, sunDirection } from './tablezero';
 import { Sky, WORLD_LOOKS } from './daynight';
+import { ICON } from './openworldlairicon';
 import { NEON, lightNeon, neonSunPosition, neonStars, neonWorldOn } from './neonlook';
 import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
@@ -332,6 +333,8 @@ const LOG_CAPACITY = 12;
 const LAIR_GLOW = 0.5;
 /** The most teleporters the widest loaded square holds: one a square of 4 x 4 chunks (abalone-core `TELEPORT_BLOCK`), 21 chunks across. */
 const TELEPORTER_CAPACITY = (Math.ceil((2 * MAX_REACH + 1) / 4) + 1) ** 2;
+/** The most towns, and the most gates, a world holds: five each (abalone-core `places`, #1514). */
+const PLACE_CAPACITY = 5;
 /** The looks of the marbles (#1138): glossy, with the ring colours of the interface, cyan on the hero and the troop (the last move), amber
  * on the foes (revealed). The stripe is the ring that shows the roll. */
 export const MARBLE_LOOK = {
@@ -538,6 +541,10 @@ export class OpenWorldView {
   private teleporterCells: readonly Axial[] = [];
   private readonly pads: THREE.InstancedMesh;
   private readonly rings: THREE.InstancedMesh;
+  /** The towns and dungeon gates of the world (#1593), and their pads: the teleporter's, green on a town and orange on a gate. */
+  private placeList: readonly { kind: 'town' | 'dungeon'; cell: Axial }[] = [];
+  private readonly townPads: THREE.InstancedMesh;
+  private readonly gatePads: THREE.InstancedMesh;
   /** The lore logs of the world (#1589), the numbers of the ones found, and their stakes, laid for the ones in the loaded chunks. */
   private logCells: readonly Axial[] = [];
   private logsFound: readonly number[] = [];
@@ -658,8 +665,11 @@ export class OpenWorldView {
     this.ejected.castShadow = true;
     this.ejected.visible = false;
     this.scene.add(this.ejected);
-    const glow = (): THREE.Material => new THREE.MeshStandardMaterial({ color: TELEPORTER_LOOK.colour, emissive: TELEPORTER_LOOK.colour, emissiveIntensity: TELEPORTER_LOOK.emissive, roughness: 0.4, flatShading: true });
-    this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, new THREE.CylinderGeometry(0.5, 0.56, 0.08, 6).translate(0, 0.04, 0), glow());
+    const glow = (colour = TELEPORTER_LOOK.colour): THREE.Material => new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: TELEPORTER_LOOK.emissive, roughness: 0.4, flatShading: true });
+    const pad = new THREE.CylinderGeometry(0.5, 0.56, 0.08, 6).translate(0, 0.04, 0);
+    this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, pad, glow());
+    this.townPads = this.instances('town-pad', PLACE_CAPACITY, pad, glow(new THREE.Color(ICON.town).getHex()));
+    this.gatePads = this.instances('gate-pad', PLACE_CAPACITY, pad, glow(new THREE.Color(ICON.dungeon).getHex()));
     this.rings = this.instances('teleporter-ring', TELEPORTER_CAPACITY, new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0), glow());
     const stake = (found: boolean): THREE.BufferGeometry => {
       const height = found ? LOG_LOOK.height.found : LOG_LOOK.height.open;
@@ -1299,7 +1309,7 @@ export class OpenWorldView {
     this.hemisphere.intensity = look.hemiIntensity;
     for (const material of this.waterTint) (material as THREE.MeshStandardMaterial).color.setHex(look.water);
     this.shine.value = look.glow;
-    for (const mesh of [this.pads, this.rings]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
+    for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
     (this.stakes.material as THREE.MeshStandardMaterial).emissiveIntensity = LOG_LOOK.emissive + LOG_LOOK.nightGlow * look.glow;
   }
 
@@ -1588,6 +1598,33 @@ export class OpenWorldView {
     this.pads.instanceMatrix.needsUpdate = this.rings.instanceMatrix.needsUpdate = true;
   }
 
+  /** The towns and dungeon gates of the world (#1593): a pad on each one in the loaded chunks, the others when the chunks get to them. */
+  setPlaces(places: readonly { kind: 'town' | 'dungeon'; cell: Axial }[]): void {
+    this.placeList = places;
+    this.placePads();
+  }
+
+  /** Lays a pad on the top of each town and each gate of the loaded chunks. */
+  private placePads(): void {
+    const [cx, cy] = this.centre;
+    const reach = this.loadedReach;
+    const { dummy } = this;
+    dummy.scale.set(1, 1, 1);
+    const counts = { town: 0, dungeon: 0 };
+    for (const { kind, cell: [q, r] } of this.placeList) {
+      const [kx, ky] = chunkOf([q, r]);
+      if (Math.abs(kx - cx) > reach || Math.abs(ky - cy) > reach) continue;
+      const tile = this.world.tile(q, r)!;
+      const p = axialTo3D(q, r);
+      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
+      dummy.updateMatrix();
+      (kind === 'town' ? this.townPads : this.gatePads).setMatrixAt(counts[kind]++, dummy.matrix);
+    }
+    this.townPads.count = counts.town;
+    this.gatePads.count = counts.dungeon;
+    this.townPads.instanceMatrix.needsUpdate = this.gatePads.instanceMatrix.needsUpdate = true;
+  }
+
   /** The lore logs of the world (#1589) and the numbers (places in `cells`) of the ones found: the ones in the loaded chunks are drawn, and
    * the others when the chunks get to them. */
   setLogs(cells: readonly Axial[], found: readonly number[]): void {
@@ -1706,6 +1743,7 @@ export class OpenWorldView {
     }
     if (terrain) this.updateEnemies();
     if (terrain) this.placeTeleporters();
+    if (terrain) this.placePads();
     if (terrain) this.placeLogs();
     for (const mesh of this.laid(terrain)) {
       if (grounds.includes(mesh) && !counts.has(mesh)) put(mesh, 0, -100, 0, 1e-4, 0); // a ground out of view keeps one speck: a mesh drawn the first time is a shader to compile

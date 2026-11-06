@@ -12,6 +12,7 @@ describe('The page controls', () => {
   it('the thumb dock holds the game controls in order: Flee (a wild fight, #1511), Retry, Rematch, Goal, New game, View, Hint, Replay, the replay steps, Hold, Lobby, Modes, Auto-play', () => {
     expect(children('dock')).toEqual([
       'wild-flee',
+      'place-back',
       'boss-retry',
       'rematch',
       'boss-goal',

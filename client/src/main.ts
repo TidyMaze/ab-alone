@@ -2633,6 +2633,7 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPale
 let hover: Axial | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the hub (#522)
 let lairFrom: { seed: number; lair: number; phase: Phase } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170), and the phase of the world it was entered in (#1496)
+let placeFrom: { seed: number } | null = null; // the Open world a town or a dungeon gate was entered from: the Hub or the run it opened has a way back (#1593)
 let wildFrom: { seed: number; home: Axial; phase: Phase } | null = null; // the Open world marble that started the wild fight (#1511): the world, the cell it starts on, and the phase it was met in
 /** Dresses the board for the phase the lair or the wild marble was met in (#1496, #1511): day, dusk or night, `body[data-fight-board]` reading the same. A fight that is neither has the ordinary board. */
 function syncBoardLook(): void {
@@ -2643,6 +2644,7 @@ function syncBoardLook(): void {
 }
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
 const wildFlee = document.getElementById('wild-flee') as HTMLButtonElement; // Flee, for the whole wild fight (#1511)
+const placeBack = document.getElementById('place-back') as HTMLButtonElement; // Back to the Open world, from the Hub or the run of a place (#1593)
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
 // (the rules e2e tests drive both sides by hand).
@@ -3613,6 +3615,7 @@ function drawHud(extra = ''): void {
   backButton.hidden = !(roomOf || lairFrom || wildFrom) || engine.status() === 0; // once the game a hub room, a lair or a wild marble started is over (#522, #1170, #1511)
   backButton.textContent = lairFrom || wildFrom ? 'Back to the Open world' : 'Back to the hub';
   wildFlee.hidden = !wildFrom || engine.status() !== 0; // Flee for the whole fight, not once it is over (#1511)
+  syncPlaceBack();
   if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
   if (hub || royale) showLore(undefined);
   if (hub) {
@@ -5492,7 +5495,9 @@ shipButton.disabled = false; // listener ready (#146)
 // the world (saved, as Esc does) for the hub.
 document.getElementById('openworld-ship')!.addEventListener('click', () => shipButton.click());
 function enterHub(at: HubSpot): void {
+  const from = placeFrom; // the Hub of a town keeps its way back to the world (#1593)
   leaveMode();
+  placeFrom = from;
   roomOf = null;
   hub = new HubController(at);
   hub.enter(at);
@@ -5574,6 +5579,7 @@ hubConfirmYes.addEventListener('click', () => {
 // kept for Back to the hub. A terminal opens its lore entry in the reader, and Esc leaves it to the hub on the same
 // cell (#524). A lift starts nothing here.
 function enterRoom(at: HubSpot): void {
+  const from = placeFrom; // a table or a boss of the Hub of a town is still that visit (#1593)
   const door = roomAt(at.deck, at.cell);
   if (door?.kind === 'terminal') return openReader(door.lore);
   if (door?.kind === 'medals') return openReader(MEDAL_ROOM);
@@ -5585,6 +5591,7 @@ function enterRoom(at: HubSpot): void {
   else if (door?.kind === 'ranked' && !rankedButton.disabled) rankedButton.click();
   else return enterModeRoom(door);
   roomOf = at;
+  placeFrom = from;
 }
 // The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the hub: Hub in the mode
 // menu takes the player back from a run, the Trainer and the Open world, and Fight together opens the mode menu on its
@@ -5604,6 +5611,16 @@ function startLocal(bot: boolean): void {
   worker = bot ? botWorker : null;
   newGame();
 }
+/** Shows Back to the Open world while the Hub or the run of a town or a gate is on (#1593). */
+function syncPlaceBack(): void {
+  placeBack.hidden = !(placeFrom && (hub || run));
+}
+placeBack.addEventListener('click', () => {
+  const { seed } = placeFrom!;
+  leaveMode(); // the Hub or the run is left
+  syncPlaceBack();
+  void openWorld.open(seed, innerWidth, innerHeight); // the world as the place left it: the hero on the entrance (#1593)
+});
 backButton.addEventListener('click', () => {
   if (wildFrom) return returnFromWild();
   if (lairFrom) {
@@ -5629,6 +5646,7 @@ function leaveMode(): void {
   fight = null;
   lairFrom = null;
   wildFrom = null;
+  placeFrom = null; // the next mode is no town's or gate's (#1593)
   wildMarked(false);
   wildFlee.hidden = true;
   syncBoardLook();
@@ -6456,6 +6474,12 @@ const openWorld = new OpenWorldMode(
   (seed) => Int32Array.from(world_logs(seed)), // the lore logs (#1589)
   (id) => markRead(store, id), // a log read joins the log archive (#1589)
   (seed) => Int32Array.from(world_places(seed)), // the towns and dungeon gates (#1514)
+  (seed, kind) => {
+    // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
+    (kind === 'town' ? shipButton : runButton).click();
+    placeFrom = { seed };
+    syncPlaceBack();
+  },
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;
@@ -6530,6 +6554,8 @@ async function publicWorldOnline(): Promise<boolean> {
 }
 /** Opens the world of `seed`, online first when it is the public one and the page may (the opt-in is asked before anything is contacted). */
 async function enterWorld(seed: number, resume = true): Promise<void> {
+  placeFrom = null; // the world is the player's place again (#1593)
+  syncPlaceBack();
   worldOnline = seed === PUBLIC_SEED && (await publicWorldOnline());
   return openWorld.open(seed, innerWidth, innerHeight, resume);
 }
