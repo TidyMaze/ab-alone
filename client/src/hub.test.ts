@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import { DECK_NAMES, deckOf, type Deck } from './deck';
-import { canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, START, step, type Spot } from './hub';
+import { canEnter, HUB_CELLS, hubPath, neighbours, roomAt, roomsOf, START, step, type Spot } from './hub';
 import { LORE } from './lore';
 
 // The hub (docs/specs/game-design.md section 3.5): one small hex map per deck, rooms on the outer ring.
@@ -206,5 +206,45 @@ describe('step: the marble rolls one cell at a time', () => {
 
   it('with no boss beaten the marble never leaves the Mess', () => {
     expect([...reachable([])].every((s) => s.startsWith('mess '))).toBe(true);
+  });
+});
+
+describe('the path to a room (#1522)', () => {
+  const at = (cell: Axial): Spot => ({ deck: 'mess', cell });
+  const cellsOf = (path: Axial[] | null) => path?.map((c) => `${c}`);
+
+  it('walks neighbour to neighbour from the marble to the room, over floor only, ending on the room', () => {
+    const path = hubPath(at([0, 0]), [-2, 0], [])!;
+    expect(path.length).toBeGreaterThan(0);
+    let from: Axial = [0, 0];
+    for (const cell of path) {
+      expect(neighbours(from).some((n) => `${n}` === `${cell}`)).toBe(true);
+      from = cell;
+    }
+    expect(`${from}`).toBe('-2,0');
+    for (const cell of path.slice(0, -1)) expect(roomAt('mess', cell)).toBeUndefined(); // no room is entered on the way
+  });
+
+  it('is the shortest way and empty on the marble\'s own cell', () => {
+    expect(cellsOf(hubPath(at([0, 0]), [1, 0], []))).toEqual(['1,0']);
+    expect(hubPath(at([2, 0]), [2, 0], [])).toEqual([]);
+  });
+
+  it('starts from a room too: the marble that came back from a game', () => {
+    expect(hubPath(at([-2, 0]), [2, 0], [])!.at(-1)).toEqual([2, 0]);
+  });
+
+  it('reaches every room of every deck from its centre, a locked lift included, as the last step', () => {
+    for (const deck of DECK_NAMES) {
+      for (const { cell } of roomsOf(deck)) {
+        const path = hubPath({ deck, cell: [0, 0] }, cell, []);
+        expect(path, `${deck} ${cell}`).not.toBeNull();
+        expect(`${path!.at(-1)}`).toBe(`${cell}`);
+      }
+    }
+  });
+
+  it('is null for a cell off the map', () => {
+    expect(hubPath(at([0, 0]), [9, 9], [])).toBeNull();
   });
 });
