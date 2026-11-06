@@ -189,7 +189,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(hub()).toBe('mess 1,0');
     game.click(2, -1);
     expect(hub()).toBe('mess 2,-1');
-    expect(game.hud()).toBe('Hub · MessTerminal');
+    expect(game.hud()).toBe("Hub · MessCaptain's order · read the log");
   });
 
   it('rolls the marble by the arrow keys in the hub only, never from a text field', async () => {
@@ -421,7 +421,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(back().textContent).toBe('Back to the hub');
     back().click();
     expect(hub()).toBe('mess 2,0');
-    expect(game.hud()).toBe('Hub · MessBoss door');
+    expect(game.hud()).toBe("Hub · MessThe Echo · boss fight, Mess seat");
     expect(back().hidden).toBe(true);
     game.click(-2, 0); // not a neighbour: the marble stays on the door, and the door starts nothing again
     expect(hub()).toBe('mess 2,0');
@@ -465,7 +465,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(game.turn()).toBe('Draw');
     back().click();
     expect(hub()).toBe('mess -1,-1');
-    expect(game.hud()).toBe('Hub · MessHot-seat table');
+    expect(game.hud()).toBe("Hub · MessCrew table · 2 players, one screen");
   });
 
   it('a hot-seat table game is back after a reload, still with no bot (#565)', async () => {
@@ -500,7 +500,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(data().over).toBe('loss');
     back().click();
     expect(hub()).toBe('mess -2,0');
-    expect(game.hud()).toBe('Hub · MessBot table');
+    expect(game.hud()).toBe("Hub · MessHouse table · play the ship's bot");
   });
 
   it('the online table opens a room as Play online does; Back to the hub after the game leaves it', async () => {
@@ -519,7 +519,7 @@ describe('main.ts, the hub doors (#522)', () => {
     back().click();
     await game.settle(); // the closed room calls back: the hub stays
     expect(hub()).toBe('mess -2,1');
-    expect(game.hud()).toBe('Hub · MessOnline table');
+    expect(game.hud()).toBe("Hub · MessComms desk · 1v1 against a player online");
     expect(location.hash).toBe('');
     expect(byId('invite').hidden).toBe(true);
     expect(byId('invite-label').hidden).toBe(true);
@@ -573,7 +573,7 @@ const END_ROYALE = {
     expect(back().hidden).toBe(false);
     back().click();
     expect(hub()).toBe('mess -2,2');
-    expect(game.hud()).toBe('Hub · MessBattle royale lobby');
+    expect(game.hud()).toBe("Hub · MessArena · battle royale lobby");
     expect(data().royale).toBeUndefined();
   });
 
@@ -583,7 +583,7 @@ const END_ROYALE = {
     localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'cargo', cell: [2, -2], beaten: ['echo', 'alien'] }));
     localStorage.setItem('ab-alone.medals', JSON.stringify({ alien: 22 }));
     ship(game);
-    expect(document.querySelector('#hub-labels [data-cell="3,-2"]')!.textContent).toContain('The Alien · Medal: 22 turns');
+    expect(document.querySelector('#hub-labels [data-cell="3,-2"]')!.textContent).toContain('The AlienMedal: 22 turns');
     game.click(3, -2);
     expect(hub()).toBeUndefined();
     expect(data().boss).toBe('alien');
@@ -692,7 +692,7 @@ describe('main.ts, the hub terminals (#524)', () => {
     expect(reader().hidden).toBe(true);
     expect(data().reading).toBeUndefined();
     expect(hub()).toBe('mess 1,1');
-    expect(game.hud()).toBe('Hub · MessTerminal');
+    expect(game.hud()).toBe('Hub · MessGalley log · read the log');
     expect(game.hook('__cellToScreen', 0, 0)).toEqual(view);
     expect(byId('exit').hidden).toBe(true);
     game.frame(16);

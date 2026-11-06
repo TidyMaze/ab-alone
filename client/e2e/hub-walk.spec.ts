@@ -71,11 +71,11 @@ for (const [name, viewport, touch] of [
 
     test('a tap on a plate walks the marble to the room, and the first entry asks first by name, covering no plate', async ({ page }) => {
       await firstHub(page);
-      await press(page, page.locator('#hub-labels [data-cell="-2,0"]')); // the Bot table
+      await press(page, page.locator('#hub-labels [data-cell="-2,0"]')); // the House table
       await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess -1,0'); // next to it: the confirm asks
       const confirm = page.locator('#hub-confirm');
       await expect(confirm).toBeVisible();
-      await expect(page.locator('#hub-confirm-text')).toHaveText('Enter Bot table?');
+      await expect(page.locator('#hub-confirm-text')).toHaveText("Enter House table (play the ship's bot)?");
       await coversNothing(page, confirm);
       await shot(page, { path: `test-results/hub-walk-confirm-${touch ? 'phone' : 'desktop'}.png` });
       await press(page, page.locator('#hub-confirm-no')); // Stay

@@ -62,8 +62,8 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
   await expect(hud).toContainText('Hub · Mess');
 
   const rooms: [number, number, string][] = [
-    [1, 1, 'Terminal'],
-    [0, 2, 'Medal room'], // #812
+    [1, 1, 'Galley log'],
+    [0, 2, 'Ledger wall'], // #812
   ];
   // One mouse click, then the same click without the raycast and the frames of a mouse click (__click), to stay fast.
   await clickCell(page, 1, 0);
@@ -108,7 +108,7 @@ test('the boss door starts the Echo, and Back to the hub after the defeat lands 
   await shot(page, { path: testInfo.outputPath('back-to-the-ship.png') });
   await back.click();
   await expect(body).toHaveAttribute('data-hub', 'mess 2,0');
-  await expect(page.locator('#hud')).toContainText('Boss door');
+  await expect(page.locator('#hud')).toContainText('The Echo · boss fight, Mess seat');
   await expect(back).toBeHidden();
 });
 
@@ -205,7 +205,7 @@ test('the battle royale lobby door starts battle royale, and Back to the hub lan
   await expect(back).toBeVisible();
   await back.click();
   await expect(body).toHaveAttribute('data-hub', 'mess -2,2');
-  await expect(page.locator('#hud')).toContainText('Battle royale lobby');
+  await expect(page.locator('#hud')).toContainText('Arena · battle royale lobby');
   await shot(page, { path: testInfo.outputPath('royale-after.png') });
 });
 
@@ -284,7 +284,7 @@ test('a terminal room opens its lore entry in the reader, and Esc gives the hub 
   await expect(body).not.toHaveAttribute('data-reading');
   await expect(page.locator('#reader')).toBeHidden();
   await expect(body).toHaveAttribute('data-hub', 'mess 1,1');
-  await expect(page.locator('#hud')).toContainText('Terminal');
+  await expect(page.locator('#hud')).toContainText('Galley log');
   await shot(page, { path: testInfo.outputPath('terminal-after.png') });
 });
 
@@ -342,7 +342,7 @@ test('every room wears its label plate without a hover, and a hover still names 
   const p2 = await page.evaluate(() => (window as any).__cellToScreen(2, 0));
   await page.mouse.move(p2.x, p2.y);
   await expect(page.locator('body')).toHaveAttribute('data-hub-hover', '2,0');
-  await expect(page.locator('#hud .hub-preview')).toContainText('Target: Boss door · The Echo (Mess boss)');
+  await expect(page.locator('#hud .hub-preview')).toContainText('Target: The Echo · boss fight, Mess seat');
   await expect(page.locator('#hud .hub-preview')).toContainText('(Out of reach (roll closer))');
 });
 

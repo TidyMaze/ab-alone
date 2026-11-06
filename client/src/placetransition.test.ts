@@ -50,10 +50,10 @@ describe('the numbers of the transition', () => {
 });
 
 describe('the title of a place', () => {
-  it('is the boss name for a tower, and the name the menu gives the mode for a town and a gate', () => {
+  it('is the boss name for a tower, and the name of the place with the mode it opens for a town and a gate (#1547)', () => {
     expect(placeTitle('tower', 'The Echo')).toBe('The Echo');
-    expect(placeTitle('town', 'The Echo')).toBe('Hub');
-    expect(placeTitle('dungeon', 'The Echo')).toBe('Rogue-lite run');
+    expect(placeTitle('town', 'The Echo')).toBe('Muster point · the Hub');
+    expect(placeTitle('dungeon', 'The Echo')).toBe('Mining cut · Rogue-lite run');
   });
 });
 

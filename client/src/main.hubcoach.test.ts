@@ -79,7 +79,7 @@ describe('a tap on a plate', () => {
   it('walks the marble to its room one cell at a time, and enters it as a roll onto it does', async () => {
     await firstHub(entered);
     fakeTimers();
-    plate('-2,0').click(); // the Bot table
+    plate('-2,0').click(); // the House table
     expect(hub()).not.toBe('mess 0,0'); // the first step is at once
     expect(hub()).not.toBeUndefined();
     walkFor(5);
@@ -94,7 +94,7 @@ describe('a tap on a plate', () => {
     walkFor(5);
     expect(hub()).toBe('mess -1,0');
     expect(byId('hub-confirm').hidden).toBe(false);
-    expect(byId('hub-confirm-text').textContent).toBe('Enter Bot table?');
+    expect(byId('hub-confirm-text').textContent).toBe("Enter House table (play the ship's bot)?");
   });
 
   it('does nothing on YOU, the marble\'s own cell', async () => {
@@ -148,10 +148,10 @@ describe('the entry confirm', () => {
   it('holds a tap on a cell next to a room: nothing starts, the marble stays where it was, the confirm names the mode', async () => {
     const game = await firstHub();
     game.click(-1, 0);
-    game.click(-2, 0); // the Bot table
+    game.click(-2, 0); // the House table
     expect(hub()).toBe('mess -1,0');
     expect(byId('hub-confirm').hidden).toBe(false);
-    expect(byId('hub-confirm-text').textContent).toBe('Enter Bot table?');
+    expect(byId('hub-confirm-text').textContent).toBe("Enter House table (play the ship's bot)?");
     expect(byId('hub-confirm').getAttribute('role')).toBe('alertdialog');
     expect(document.activeElement).toBe(byId('hub-confirm-yes'));
   });
@@ -193,7 +193,7 @@ describe('the entry confirm', () => {
     game.click(-1, 1);
     expect(byId('hub-confirm').hidden).toBe(true);
     expect(hub()).toBe('mess -1,1');
-    game.click(-2, 1); // the Online table
+    game.click(-2, 1); // the Comms desk
     expect(byId('hub-confirm').hidden).toBe(false);
     press('ArrowRight');
     expect(byId('hub-confirm').hidden).toBe(true);

@@ -146,7 +146,7 @@ describe('the scripted fight', () => {
     expect(document.body.dataset.hub).toBe('mess 0,0');
     const goal = document.querySelector('#hub-rail li[data-goal]')!;
     expect(goal.getAttribute('data-deck')).toBe('mess');
-    expect(goal.textContent).toContain('The Echo waits');
+    expect(goal.textContent).toContain('Seat: The Echo waits');
     expect(document.querySelector('#hub-rail p.goal')!.textContent).toBe('Next goal: Beat The Echo on the Mess deck.');
     expect(document.querySelectorAll('#hub-labels .hub-label[data-goal]')).toHaveLength(1);
     expect(document.querySelector('#hub-labels [data-goal]')!.getAttribute('data-kind')).toBe('boss');

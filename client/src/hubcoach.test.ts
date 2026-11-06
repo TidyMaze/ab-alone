@@ -48,11 +48,11 @@ describe('the entry confirm', () => {
     expect(free.sort()).toEqual(['lift', 'medals', 'terminal', 'terminal']);
   });
 
-  it('names the mode: a boss by its name, a table by its plate', () => {
+  it('names the mode: a boss by its name, a table by its plate and its plain line', () => {
     const name = (kind: string, deck: 'mess' | 'cargo' = 'mess') => entryName(deck, roomsOf(deck).find(({ door }) => door.kind === kind)!.door);
     expect(name('boss')).toBe('The Echo');
-    expect(name('bot')).toBe('Bot table');
-    expect(name('royale')).toBe('Royale');
+    expect(name('bot')).toBe("House table (play the ship's bot)");
+    expect(name('royale')).toBe('Arena (battle royale lobby)');
   });
 });
 

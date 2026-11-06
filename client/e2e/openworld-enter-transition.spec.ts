@@ -24,7 +24,7 @@ for (const { name, viewport, touch } of sizes) {
   test.describe(name, () => {
     test.use({ viewport, isMobile: touch, hasTouch: touch });
 
-    for (const [kind, title, back] of [['tower', 'The Echo', 'exit'], ['dungeon', 'Rogue-lite run', 'exit']] as const) {
+    for (const [kind, title, back] of [['tower', 'The Echo', 'exit'], ['dungeon', 'Mining cut · Rogue-lite run', 'exit']] as const) {
       test(`a ${kind} shows its transition with its title over the live place and the way back plays the matching one, #1519`, async ({ page }) => {
         await page.goto('./?bot=off&openworld=7');
         const body = page.locator('body');

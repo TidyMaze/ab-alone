@@ -47,7 +47,7 @@ async function firstRun(page: Page): Promise<void> {
 
 test('a fresh profile reaches its first ejection with no menu opened, then the Hub shows The Echo as the goal', async ({ page }) => {
   await firstRun(page);
-  await expect(page.locator('#hub-rail li[data-goal]')).toContainText('The Echo waits');
+  await expect(page.locator('#hub-rail li[data-goal]')).toContainText('Seat: The Echo waits');
   await expect(page.locator('#guide')).toBeHidden();
   await page.reload(); // it plays once: the next launch has no cold open, and no scripted game saved
   await expect(page.locator('#settings')).toBeEnabled();
