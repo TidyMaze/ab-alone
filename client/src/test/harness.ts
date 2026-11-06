@@ -58,6 +58,10 @@ export interface Game {
   online(): Promise<void>;
   /** The three.js scenes drawn so far. */
   draws(): number;
+  /** The model files (`arena.glb`, `openworld.glb`, ...) the page asked for so far, in order (#1520). */
+  models(): string[];
+  /** The tone mapping (three's constant) and the exposure the renderer draws with now (#1520). */
+  tone(): { mapping: number; exposure: number };
   /** The other end of the online room once the page goes online (Play online, an invite link), else null. */
   peer(): Transport | null;
   /** The room the page went online in, else null. */
@@ -174,6 +178,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
 
   // The KTX2 texture loader (#700): each file under assets/ loads as a texture named after it, but the missing ones. As
   // the real one, it needs the renderer up first.
+  const models: string[] = [];
   const missing = (url: string): boolean => !!options.missing?.includes(url.slice(url.lastIndexOf('/') + 1));
   vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', async () => {
     const { Texture } = await vi.importActual<typeof import('three')>('three');
@@ -197,7 +202,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
 
   // The renderer draws nothing: it keeps the animation loop for frame() and counts the draws.
   let loop: ((now: number) => void) | null = null;
-  let renderer: { info: { autoReset: boolean; reset(): void } } | null = null;
+  let renderer: { toneMapping: number; toneMappingExposure: number; info: { autoReset: boolean; reset(): void } } | null = null;
   let draws = 0;
   vi.resetModules();
   vi.doMock('abalone-wasm', async (importOriginal) => {
@@ -265,6 +270,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           return this; // the model is a few boxes: nothing to decode
         }
         loadAsync = async (url: string): Promise<{ scene: InstanceType<typeof Group> }> => {
+          models.push(url.slice(url.lastIndexOf('/') + 1));
           if (missing(url)) throw new Error(`404 ${url}`);
           // The terrace (#1314): the arena as one box, its kit as the pieces the game draws itself.
           const scene = new Group();
@@ -405,6 +411,8 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       while (document.body.dataset.online === undefined) await new Promise((done) => setTimeout(done));
     },
     draws: () => draws,
+    models: () => models,
+    tone: () => ({ mapping: renderer!.toneMapping, exposure: renderer!.toneMappingExposure }),
     peer: () => peer,
     room: () => room,
     world: () => world,
