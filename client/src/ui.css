@@ -631,7 +631,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 
 /* The plates are bolted on the frame (ui.md 1): a rivet in each corner, 4 px inside the border, drawn over the
    plate's own colour, so it takes no room and changes no size. */
-#hud, #eval, #guide .card, #coldopen .card, #coach {
+#hud, #eval, #guide .card, #coldopen .card, #epilogue .card, #coach {
   --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px);
   background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet);
   background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px;
@@ -1304,12 +1304,12 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 /* The first-launch guide (#1293, ui.md 4.7): a plate bolted over the dimmed game, one page at a time, its art on the dark
    deck in both themes. The controls page shows the paragraph of the input in use: the mouse and keys, touch on a coarse
    pointer, the pad's buttons once the pad is in use (body[data-pad]). Above every layer: it opens once the page is up. */
-#guide, #coldopen {
+#guide, #coldopen, #epilogue {
   position: fixed; inset: 0; z-index: 11; display: flex; align-items: center; justify-content: center; padding: 16px;
   box-sizing: border-box; background: rgba(11, 13, 15, 0.72); outline: none;
 }
-#guide[hidden], #coldopen[hidden] { display: none; }
-#guide .card, #coldopen .card {
+#guide[hidden], #coldopen[hidden], #epilogue[hidden] { display: none; }
+#guide .card, #coldopen .card, #epilogue .card {
   box-sizing: border-box; width: min(calc(26rem * var(--ui-scale)), 100%); max-height: 100%; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--space); padding: 1rem 1.25rem;
   color: var(--text); background-color: var(--panel); border: 1px solid var(--edge); border-left: 3px solid var(--plate-accent);
@@ -1328,22 +1328,22 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 }
 body[data-pad] #guide [data-controls] { display: none; }
 body[data-pad] #guide [data-controls='pad'] { display: block; }
-#guide .actions, #coldopen .actions, #coach .actions, #hub-confirm .actions { display: flex; gap: var(--space); margin-top: var(--space); }
-#guide .actions button, #coldopen .actions button, #coach .actions button, #hub-confirm .actions button {
+#guide .actions, #coldopen .actions, #epilogue .actions, #coach .actions, #hub-confirm .actions { display: flex; gap: var(--space); margin-top: var(--space); }
+#guide .actions button, #coldopen .actions button, #epilogue .actions button, #coach .actions button, #hub-confirm .actions button {
   min-height: var(--target); padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: var(--r-button); font: 500 0.9375rem/1.2 var(--ui);
 }
-#guide-skip, #coldopen-skip, #coach-skip, #hub-confirm-no { margin-right: auto; }
-#guide #guide-next, #coldopen-begin, #coach-hub, #hub-confirm-yes { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
+#guide-skip, #coldopen-skip, #epilogue-skip, #coach-skip, #hub-confirm-no { margin-right: auto; }
+#guide #guide-next, #coldopen-begin, #epilogue-next, #coach-hub, #hub-confirm-yes { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
 #guide .actions button:disabled { opacity: 0.4; cursor: default; }
-#guide .actions button:focus-visible, #coldopen .actions button:focus-visible, #coach .actions button:focus-visible, #hub-confirm .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#guide .actions button:focus-visible, #coldopen .actions button:focus-visible, #epilogue .actions button:focus-visible, #coach .actions button:focus-visible, #hub-confirm .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* The first run (#1521, ui.md 4.7): the cold open is the guide's plate with three lines of Tally's voice; the coach plate sits over the
    scripted fight, at the top between the HUD and the cog, or above the eval bar and the dock on a phone held upright. The line of the
    story is read, never animated: nothing here moves. */
-#coldopen-title { margin: 0; font: 600 1.375rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
-#coldopen-text { display: flex; flex-direction: column; gap: var(--space); }
-#coldopen-text p, #coach p, #hub-confirm p { margin: 0; }
+#coldopen-title, #epilogue-title { margin: 0; font: 600 1.375rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+#coldopen-text, #epilogue-text { display: flex; flex-direction: column; gap: var(--space); }
+#coldopen-text p, #epilogue-text p, #coach p, #hub-confirm p { margin: 0; }
 #coach, #hub-coach, #hub-confirm {
   position: fixed; z-index: 3; top: 16px; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(calc(26rem * var(--ui-scale)), calc(100vw - 32px));
   display: flex; align-items: center; gap: var(--space); padding: 0.5rem 0.75rem 0.5rem 1rem; color: var(--text); background-color: var(--panel);

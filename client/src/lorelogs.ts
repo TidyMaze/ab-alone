@@ -4,6 +4,7 @@
 // a player beats the bosses in any order, so a boss entry stands alone and never reads as if an earlier reveal had happened. None of it is
 // required to progress.
 import { deckOf, type Deck } from './deck';
+import { CLAMP_OPEN, EPILOGUE } from './epilogue';
 import { LORE } from './lore';
 
 /** An entry of the story: a title and a body, shown in the terminal reader, and the stage of the reveal ladder it may speak of. */
@@ -98,14 +99,15 @@ export const WORLD_LOGS: readonly WorldLog[] = [
   log('archipelago-far', 3, 'Stake: the last island', 'Survey stake on the last island of the chain. A boat lies beached, empty. Nobody drowned. Everyone walked inland in a line, and the line is still moving. Appended by TALLY: Crew, eleven. In good order.'),
 ];
 
-/** The entries of the story, the bosses then the logs of the world: the log archive lists the ones read after the terminals. */
-export const STORY: readonly StoryEntry[] = [...BOSS_LORE, ...WORLD_LOGS];
+/** The entries of the story, the bosses, the logs of the world, then the epilogue (#1546): the log archive lists the ones read after the terminals. */
+export const STORY: readonly StoryEntry[] = [...BOSS_LORE, ...WORLD_LOGS, { id: EPILOGUE.id, title: EPILOGUE.title, body: EPILOGUE.body, stage: EPILOGUE.stage }];
 
 /** The entry a win over `boss` shows, none for a boss the roster does not hold. */
 export const bossLore = (boss: string): BossLore | undefined => BOSS_LORE.find((e) => e.boss === boss);
 
-/** The entry of the terminal reader with this id, a terminal of a deck or an entry of the story. */
-export const entryOf = (id: string): Pick<StoryEntry, 'id' | 'title' | 'body'> | undefined => LORE.find((e) => e.id === id) ?? STORY.find((e) => e.id === id);
+/** The entry of the terminal reader with this id, a terminal of a deck or an entry of the story. From stage 7 the bridge console reads the clamp open (#1546). */
+export const entryOf = (id: string, stage = 1): Pick<StoryEntry, 'id' | 'title' | 'body'> | undefined =>
+  id === 'bridge-clamp' && stage >= EPILOGUE.stage ? { id, ...CLAMP_OPEN } : (LORE.find((e) => e.id === id) ?? STORY.find((e) => e.id === id));
 
 /** The deck whose audio log goes with an entry: a terminal's own, the deck a boss sat on; none for a log of the world. */
 export function audioDeckOf(id: string): Deck | null {

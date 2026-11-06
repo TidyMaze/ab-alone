@@ -18,11 +18,11 @@ describe('EPILOGUE (#1546)', () => {
     expect(EPILOGUE.pages[1]!.lines.at(-1)).toMatch(/You walk out\.$/);
   });
 
-  it('says the clamp is open and what changed in the world: the bridge console and the Open world panel', () => {
+  it('says the clamp is open and what changed in the world, in the ledger\'s words: no UI term', () => {
     const text = EPILOGUE.pages.flatMap((p) => p.lines).join(' ');
     expect(text).toContain('Docking clamp: open.');
     expect(text).toMatch(/Bridge console/);
-    expect(text).toMatch(/Open world/);
+    expect(text).not.toMatch(/Open world|panel/);
   });
 
   it('has no duplicate line', () => {

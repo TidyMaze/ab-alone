@@ -33,21 +33,25 @@ const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
   swarm: 'Waves on file. Forty turns to the evac.',
 };
 
+/** The Ballast Mind's line as its fight starts, from stage 6: it says its limit (#1588). Below, the fight keeps its line of `BOSS_LINES`. */
+const BALLAST_LINE_6 = 'I cannot push. Rule four. You can. Count carefully.';
+
 /** The line of the bot table once the story reached its stage 2, the first boss beaten (#1584): the one line the story changes in a match. */
 const BOT_LINE_2 = `${MODE_LINES.bot} It was never an enemy.`;
 
 /** The line Tally says at the start of a match: a boss fight takes its boss, other modes their mode. `stage` is the stage of the story (story.ts). */
 export function tallyLine({ mode, boss = '', stage = 1 }: { mode: TallyMode; boss?: string; stage?: number }): string {
-  if (mode === 'boss') return BOSS_LINES[boss as (typeof BOSS_IDS)[number]] ?? '';
+  if (mode === 'boss') return boss === 'ballast' && stage >= 6 ? BALLAST_LINE_6 : (BOSS_LINES[boss as (typeof BOSS_IDS)[number]] ?? '');
   return mode === 'bot' && stage >= 2 ? BOT_LINE_2 : MODE_LINES[mode];
 }
 
-/** Tally's line once the hero has entered every lair of the Open world (#1175): one line, no speech. `crew` is the crew attached. */
-export const endingLine = (crew: number): string => `Variance noted. Clamp: open. Crew attached: ${crew}.`;
+/** Tally's line once the hero has entered every lair of the Open world (#1175): one line, no speech. `crew` is the crew attached. The clamp is open
+ * from stage 7 of the story, the epilogue (#1546); the MCP server keeps no story and passes none: a world with every lair beaten has its clamp open. */
+export const endingLine = (crew: number, stage = 7): string => `Variance noted. Clamp: ${stage >= 7 ? 'open' : 'locked'}. Crew attached: ${crew}.`;
 
 /** Tally's line while some lairs of the Open world are beaten and not all (#1315): the seats on file out of the lairs, and one line of
- * lore (world.md section 2, what happened). One line, no speech, nothing gated. */
-export const ledgerLine = (filed: number, total: number): string => `Seats on file: ${filed} of ${total}. Slag-glass remembers heat.`;
+ * lore (world.md section 2, what happened), which gives way to the open clamp from stage 7 (#1546). One line, no speech, nothing gated. */
+export const ledgerLine = (filed: number, total: number, stage = 1): string => `Seats on file: ${filed} of ${total}. ${stage >= 7 ? 'Clamp: open.' : 'Slag-glass remembers heat.'}`;
 
 /** Tally's ledger line of a town of the Open world (#1516, world.md section 13), by the town's index: the spawn town first, then the towns of the
  * forest, the tundra, the desert and the badlands. Towns hold the delivered, so each line comes with the stage that may speak of it: `townLine`

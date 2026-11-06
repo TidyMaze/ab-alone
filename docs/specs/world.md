@@ -57,7 +57,7 @@ Written as facts the player can piece together, not as a story told in order.
   optional and never gate anything. Rogue-lite run over: "Run voided. Audit reopened." (lost) or
   "Reconciled: 14." (won, with the army left). Trainer wave start: "Drill: wave 5. Opponents: five.
   Seated." Trainer result: "Wave 7 filed. Best on record: 9." No new rule, no HP, no damage: the lines
-  only name what the player already sees. Open world with every lair beaten (#1175): "Variance noted. Clamp: open. Crew attached: 6."
+  only name what the player already sees. Open world with every lair beaten (#1175, #1546): "Variance noted. Clamp: open. Crew attached: 6." (the clamp reads "locked" until the story's stage 7, section 12.8)
 - **What the player wants.** The docking clamp release. Tally grants it only to a winner who
   has beaten the five "seats" (the senior crew, see section 3).
 - **Tone.** Cosmic dread, grief, bureaucracy. Never gore for its own sake: the horror is that the
@@ -340,7 +340,7 @@ can be re-pointed at towers and dungeons if Decision #1513 passes.
 | 4 | The shell is a disease | Cold lets go | The Hull beaten / night survived in the Open world, dungeon act 3 | Cargo audio log, Tally line |
 | 5 | I am the last clear survivor | I was delivered first, line 0412 | The Chaplain beaten / a lost run (optional extra line) | Lost-run summary, Chaplain line |
 | 6 | Tally wants me beaten | Tally cannot push, it needs me | The Ballast Mind fight starts | Boss line |
-| 7 | Winning opens the clamp | The last seat is Tally | Ballast Mind beaten / five towers (#1546) | Ending line |
+| 7 | Winning opens the clamp | The last seat is Tally | Ballast Mind beaten / five towers (#1546) | Ending line, epilogue (12.8) |
 
 **Secret words.** Withheld until stage 4: the cold and the word "delivered" (`deliver`, `cold`). Until stage 5: line 0412 (`0412`). Until
 stage 6: Tally's limit (`cannot push`). Until stage 7: Tally as cargo. A line of stage *n* holds no secret word of a stage after *n*.
@@ -416,6 +416,31 @@ sees "Slag fill 25 %" on the HUD. Nothing here is taken from any existing game, 
 prize is gone from the fight, its specs and its lore entry. Its lines hold no secret word of section 12.2, so they may be met at any
 stage; `overseer.test.ts` guards the banned framing and the secret words. Its mechanic and balance are unchanged.
 
+### 12.8 The finale (#1546, #1588)
+
+The story ends where the README promises: **you walk out**. It adds no mode and no scene, three small things.
+
+- **A victory line and a defeat line per boss** (`client/src/bossends.ts`, `BOSS_ENDS`): each of the 15 bosses has its own, in Tally's
+  register (section 12.7), in place of the one banner "The seat is empty." / "The seat holds." (the draw line of a boss fight is unchanged).
+  A line is data with a `stage`; every line of the 14 other bosses is stage 1 for good, since a boss menu starts any fight at any time, and
+  holds no secret word. `bossEndLine(boss, kind, stage)` picks the line of the highest stage reached. A test fails on a duplicate line. The
+  line is chosen after the win is recorded, so a win that reaches a stage speaks at it.
+- **The Ballast Mind says the story's answer at two stages.** Stage 6, as its fight starts (the `start` moment is the stage): "I cannot push.
+  Rule four. You can. Count carefully." (`tally.ts`). Stage 7, at its win: "Delivered: fourteen. Crew clear: all. Seat five: Tally. Books
+  balanced. Clamp: yours." Below those stages the fight keeps its old lines ("The ledger plays itself. Twelve out to balance." and "The
+  seat is empty."), so a player who beats it too early sees the sealed entry and no secret (`tally.test.ts`, `bossends.test.ts`).
+- **The epilogue** (`client/src/epilogue.ts`) plays when the story is at stage 7 after a boss win, which is the Ballast Mind's win with the
+  stages before it reached, or the win of any boss that completes the run to stage 7. Two pages in the dialog of the cold open, over the end
+  banner: Tally's closing log, then the clamp and the world, ending on "You walk out." Skip (any page) and Escape close it; Next then
+  Walk out close it too. It plays once (`ab-alone.epilogue` in the local store, set as it opens), and is filed in the log archive as one entry
+  (`story-epilogue`, stage 7), so it is read again there. `body[data-epilogue]` reads the page for the e2e tests.
+- **The world reads differently**: the Hub's bridge console (`bridge-clamp` of `lore.ts`, read by the terminal and in the archive) reads
+  "Docking clamp: open." from stage 7 (`CLAMP_OPEN`, `entryOf(id, stage)`), and the Open world's Tally line agrees: the ending line says
+  "Clamp: locked" until stage 7 and "Clamp: open" from it, and the ledger line "Seats on file: N of 15." ends on "Clamp: open." in
+  place of the lore sentence from stage 7. The MCP server keeps no story and its ending line (every lair beaten) stays "Clamp: open".
+
+Not now: the optional trigger of the ladder, "five towers" (it is the same moment as stage 7 here, `TRIGGERS` unchanged).
+
 ## 13. The Ballast on Hollow: every mode a place in the story (#1516, #1544)
 
 The Open world is the map of the whole game (openworld.md section 13). This section says what each place **is** in the story, so a bright
@@ -432,7 +457,7 @@ the vein (below).
 | Rogue-lite run | **Dungeon gates** | The **mining cuts**, where the crew followed the slag-glass vein into the moon. Tally audits each cut as a run (section 2, the Hollow Survey). An act is one cut. |
 | Hub, bot and hot-seat tables, Medal room, terminals, Daily, Trainer | **Towns** | **Muster points** round a table zero, each with a ledger station where Tally files who is present. Towns hold the **delivered**; the shelled stay in towers and dungeons (section 12.5). |
 | Open world | **The moon** | The ground of all of it. **Biomes** (meadow, forest, tundra, desert, badlands, archipelago): slag-glass remembers heat, so the crew's memories were **fixed into the moon** as remembered places. That is why a dead world with no atmosphere shows grass, pines, snow and a sea. |
-| Five towers beaten | **The clamp** | The ending of section 12.2 (#1546): the docking clamp opens. |
+| Ballast Mind beaten, the story at its stage 7 | **The clamp** | The ending of section 12.2 (#1546, section 12.8): the docking clamp opens, a short epilogue plays once. |
 
 **The ship in sections.** The five senior seats are the ladder of section 3. The ten later bosses are the other stations of the same
 sections, so the 15 read as one ship (`deckOf` of `deck.ts` is the table; each boss entry of `lorelogs.ts` is titled by its section, and

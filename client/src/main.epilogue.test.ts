@@ -95,7 +95,7 @@ describe("The Ballast Mind's ending line is held back until stage 7 (#1588)", ()
     early.openModes();
     byId('boss-fight').click();
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.includes('The Ballast Mind'))!.click();
-    expect(early.hud()).toContain('The seat holds') || expect(early.hud()).toContain('The ledger plays itself.');
+    expect(early.hud()).toContain('The ledger plays itself. Twelve out to balance.');
     expect(early.hud()).not.toContain('cannot push');
     const ready = await boot('?bot=off', { reducedMotion: true, storage: saved(2, 3, 4, 5) });
     ready.openModes();
@@ -144,6 +144,7 @@ describe('the epilogue (#1546)', () => {
     const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
     box().dispatchEvent(tab);
     expect(tab.defaultPrevented).toBe(true);
+    box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })); // and back
     const other = vi.fn();
     addEventListener('keydown', other);
     box().dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
@@ -167,7 +168,7 @@ describe('the epilogue (#1546)', () => {
     expect(game.hud()).toContain(line('hull', 'win'));
   });
 
-  it('is filed in the log archive and read again there, with its two pages in one entry', async () => {
+  it('is filed in the log archive and read again there, as one entry', async () => {
     const game = await play();
     byId('epilogue-skip').click();
     vi.restoreAllMocks();
@@ -175,7 +176,8 @@ describe('the epilogue (#1546)', () => {
     expect(rows.map((b) => b.textContent)).toContain(EPILOGUE.title);
     rows.find((b) => b.textContent === EPILOGUE.title)!.click();
     expect(data().reading).toBe(EPILOGUE.id);
-    expect(document.getElementById('reader')!.textContent).toContain('You walk out.');
+    expect(document.getElementById('reader')!.textContent).toContain(EPILOGUE.pages[0]!.lines[0]);
+    expect(data().console).toMatch(/^story-epilogue 1\/\d+$/);
   });
 
   it('is not due again after a reload: the flag is saved locally', async () => {

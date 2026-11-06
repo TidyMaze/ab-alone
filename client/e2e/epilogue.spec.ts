@@ -54,7 +54,7 @@ for (const { name, viewport, touch } of sizes) {
       await page.locator('#setting-log-archive').click();
       await page.locator('.setting-archive').getByRole('button', { name: EPILOGUE.title }).click();
       await expect(page.locator('body')).toHaveAttribute('data-reading', EPILOGUE.id);
-      await expect(page.locator('#reader')).toContainText('You walk out.');
+      await expect(page.locator('#reader')).toContainText(EPILOGUE.pages[0]!.lines[0]!);
     });
 
     test('the bridge console reads the clamp open from stage 7 and locked before it, #1546', async ({ page }) => {
@@ -93,6 +93,7 @@ for (const { name, viewport, touch } of sizes) {
       await expect(page.locator('#hud')).toContainText(line('swarm', 'win'));
       await expect(page.locator('#hud')).not.toContainText('The seat is empty.');
       await expect(page.locator('#epilogue')).toBeHidden();
+      await expect(page.locator('#hud .end')).toHaveCSS('opacity', '1'); // its slide-in is over
       await shot(page, { path: `test-results/boss-win-line-${slug}.png` });
     });
   });

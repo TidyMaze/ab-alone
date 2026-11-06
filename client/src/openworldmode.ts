@@ -181,6 +181,8 @@ export class OpenWorldMode {
     private readonly placesOf: (seed: number) => Int32Array = () => new Int32Array(),
     /** What starts a town or a dungeon gate rolled onto (#1593), given the seed of the world and the kind. */
     private readonly onPlace: (seed: number, kind: 'town' | 'dungeon', index: number) => void = () => {},
+    /** The stage of the story (#1546): the clamp of Tally's lines is open from stage 7. */
+    private readonly stage: () => number = () => 1,
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -380,9 +382,9 @@ export class OpenWorldMode {
     const tally = document.getElementById('openworld-tally');
     if (!tally) return;
     const [filed, total] = [this.beaten.length, this.lairs.length];
-    if (total > 0 && filed >= total) tally.textContent = endingLine(MARBLES);
+    if (total > 0 && filed >= total) tally.textContent = endingLine(MARBLES, this.stage());
     else if (!fresh) tally.textContent = '';
-    else tally.textContent = filed > 0 ? ledgerLine(filed, total) : this.claim();
+    else tally.textContent = filed > 0 ? ledgerLine(filed, total, this.stage()) : this.claim();
   }
 
   /** The page's first-visit line, with its explanation (#1530): the line names a claim, which says nothing to a player who has not met the word. */

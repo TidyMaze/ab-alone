@@ -18,13 +18,15 @@ function grass(_seed: number, cx: number, cy: number): Uint8Array {
   return out;
 }
 const LAIRS = Int32Array.of(3, 0, -4, 2);
-const NONE = Array<undefined>(13).fill(undefined) as [undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined]; // the parameters between onLair and the stage
+/** A mode with the stage of the story (#1546) and Tally's claim line, the parameters between them left to their defaults. */
+const withStage = (saves: ReturnType<typeof worldSaves>, stage: () => number, tally?: () => string, lairs: () => Int32Array = () => LAIRS, onLair: (seed: number, lair: number) => void = () => {}) =>
+  new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, lairs, onLair, undefined, undefined, tally, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, stage);
 const setup = (beaten: number[] = [], stage: () => number = () => 1) => {
   const store = memoryStore();
   const saves = worldSaves(store, 1);
   const lairsOf = vi.fn(() => LAIRS);
   const onLair = vi.fn();
-  const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, lairsOf, onLair, ...NONE, stage);
+  const m = withStage(saves, stage, undefined, lairsOf, onLair);
   return { m, saves, lairsOf, onLair, beaten };
 };
 const body = () => document.body.dataset;
@@ -175,7 +177,7 @@ describe('the ending line of the Open world (#1175)', () => {
     const { m, saves } = setup([], () => 7);
     await saves.put(7, [0, 0], [], await fightOf(), 0, [], [0]);
     await m.open(7, 800, 600);
-    expect(out.textContent).toBe('Seats on file: 1 of 2. Slag-glass remembers heat.'); // one lair of two: not over, the ledger line (#1315)
+    expect(out.textContent).toBe('Seats on file: 1 of 2. Clamp: open.'); // one lair of two: not over, the ledger line (#1315, #1546)
     m.leave();
     await saves.put(7, [0, 0], [], await fightOf(), 0, [], [1, 0]);
     await m.open(7, 800, 600);
@@ -186,7 +188,7 @@ describe('the ending line of the Open world (#1175)', () => {
   it('does not use up the claim line when the world is over', async () => {
     const out = hud();
     const tally = vi.fn(() => 'Claim 0412: unworked.');
-    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally, ...NONE.slice(0, 10), () => 7);
+    const m = withStage(worldSaves(memoryStore(), 1), () => 7, tally);
     m.enter(7, 800, 600, null);
     m.fixture({ hero: [0, 0], troop: [], enemies: [], beaten: [0, 1] });
     expect(tally).toHaveBeenCalledTimes(1);

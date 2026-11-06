@@ -182,7 +182,7 @@ describe('the rule of section 12.4', () => {
       ...(['local', 'bot', 'online'] as const).map((mode) => tallyLine({ mode, stage })),
       ...BOSS_IDS.map((boss) => tallyLine({ mode: 'boss', boss, stage })),
     ];
-    for (let stage = 1; stage <= 7; stage++) for (const line of lines(stage)) expect(leaks(1, line), `${line} (stage ${stage})`).toEqual([]);
+    for (let stage = 1; stage <= 7; stage++) for (const line of lines(stage)) expect(leaks(stage, line), `${line} (stage ${stage})`).toEqual([]); // served at this stage: the Ballast Mind says its limit from stage 6 (#1588)
   });
 
   it('every line of stage n holds no secret word of a later stage: the terminals, the audio logs, the bosses, the logs of the world', () => {

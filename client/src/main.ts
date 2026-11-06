@@ -223,6 +223,8 @@ import { AMBIENT } from './openworldparticles';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
+import { bossEndLine } from './bossends';
+import { EPILOGUE, epilogueDue, markEpilogue } from './epilogue';
 import { audioDeckOf, bossBlurb, bossLore, entryOf, STORY } from './lorelogs';
 import { atStake, claimReload } from './autoreload';
 import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
@@ -1310,6 +1312,42 @@ coldBox.addEventListener('keydown', (e) => {
     nextFocus(document.activeElement, e.shiftKey ? -1 : 1, coldBox).focus();
   }
 });
+// The epilogue (#1546, epilogue.ts, world.md section 12.8): the win that reaches stage 7 plays two pages once, over the end banner. Skip, Escape
+// or Walk out on the last page closes it; it is marked as it opens, and filed in the log archive. body[data-epilogue] reads the page, for the e2e tests.
+const epilogueBox = document.getElementById('epilogue')!;
+const epilogueNext = document.getElementById('epilogue-next') as HTMLButtonElement;
+let epiloguePage = 0;
+function showEpilogue(page: number): void {
+  epiloguePage = page;
+  const { title, lines } = EPILOGUE.pages[page]!;
+  document.getElementById('epilogue-title')!.textContent = title;
+  document.getElementById('epilogue-text')!.replaceChildren(...lines.map((line) => Object.assign(document.createElement('p'), { textContent: line })));
+  epilogueNext.textContent = page === EPILOGUE.pages.length - 1 ? 'Walk out' : 'Next';
+  document.body.dataset.epilogue = String(page + 1);
+}
+function openEpilogue(): void {
+  markEpilogue(store);
+  markRead(store, EPILOGUE.id);
+  epilogueBox.hidden = false;
+  showEpilogue(0);
+  epilogueNext.focus();
+}
+function closeEpilogue(): void {
+  epilogueBox.hidden = true;
+  delete document.body.dataset.epilogue;
+}
+epilogueNext.addEventListener('click', () => (epiloguePage + 1 < EPILOGUE.pages.length ? showEpilogue(epiloguePage + 1) : closeEpilogue()));
+document.getElementById('epilogue-skip')!.addEventListener('click', closeEpilogue);
+epilogueBox.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // the board and the menus never see it
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeEpilogue();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    nextFocus(document.activeElement, e.shiftKey ? -1 : 1, epilogueBox).focus();
+  }
+});
 // The online opt-in (#1338, consent.ts): every way online asks here first, before any relay or peer is contacted. Accept stores
 // it; Stay solo, Escape or the pad's B keep solo play. One question at a time: a second entry waits on the same answer.
 const consentBox = document.getElementById('consent')!;
@@ -1511,7 +1549,7 @@ let consoleSince = 0;
 const deckEntry = (): string => LORE.find((e) => e.deck === deck)!.id;
 function layoutConsole(id = deckEntry()): void {
   if (!consoleFonts) return;
-  const entry = id === MEDAL_ROOM ? { ...medalRoom(store, bossRoster()), id } : entryOf(id)!;
+  const entry = id === MEDAL_ROOM ? { ...medalRoom(store, bossRoster()), id } : entryOf(id, storyStage(store))!; // the bridge console reads the clamp open from stage 7 (#1546)
   consolePages = terminalPages(entry, uiScale, (text, font) => {
     consoleG.font = font;
     return consoleG.measureText(text).width;
@@ -3587,6 +3625,7 @@ function medalNote(boss: { id: string }): string {
     const turns = playerTurns(history.length);
     const result: MedalResult = recordMedal(store, boss.id, turns);
     storyEvent({ on: 'won', id: boss.id }); // before the lore of the win is chosen: the stage counts this win (#1584)
+    if (epilogueDue(store, storyStage(store))) openEpilogue(); // the win that reaches stage 7 (#1546)
     medalSeen = { game: engine, note: medalLine(result, result === 'kept' ? bestTurns(store, boss.id)! : turns) };
     if (lairFrom) void openWorldSaves.beat(lairFrom.seed, lairFrom.lair); // the lair is beaten in the Open world too (#1170)
     if (lairFrom) peersHost.lairWon(lairFrom.seed, lairCells(lairFrom.seed)[lairFrom.lair]!); // and seen beaten by the other heroes (#1305)
@@ -3639,7 +3678,10 @@ function drawHud(extra = ''): void {
     glass: glassOf(),
   });
   if (end?.anim === 'win' && (fight || worker || online?.role === 'player') && !replaying) winOnce(); // the wins of any mode, a hot seat and a spectator apart (#1584)
-  if (end?.anim === 'win' && fight) end.line = `${end.line} ${medalNote(fight)}`; // a won fight: Black is the player's side
+  if (end?.anim === 'win' && fight) {
+    const note = medalNote(fight); // a won fight: Black is the player's side. The story is at the stage this win reaches before its line is chosen (#1546)
+    end.line = `${bossEndLine(fight.id, 'win', storyStage(store))!} ${note}`;
+  } else if (end?.anim === 'loss' && fight && status !== 3) end.line = bossEndLine(fight.id, 'loss', storyStage(store))!; // each boss has its own (#1546)
   showLore(end?.anim === 'win' && fight ? bossLore(fight.id) : undefined); // the entry of the boss beaten, in the archive too (#1589)
   if (end?.anim === 'win' && wildFrom) end.line = `${end.line} ${wildWon(wildFrom)}`;
   if (end && trainer && status === 1 && engine.draw_reason() !== 0) Object.assign(end, { title: 'Stalled', line: 'A draw costs a marble.' }); // not "You win" (#1159)
@@ -6519,6 +6561,7 @@ const openWorld = new OpenWorldMode(
       hud();
     }
   },
+  () => storyStage(store), // the clamp of Tally's lines is open from stage 7 (#1546)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;

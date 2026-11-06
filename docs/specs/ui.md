@@ -178,7 +178,8 @@ doors, the Open world's lairs and the MCP do not go through the list and stay op
   wins" / "White wins" in hot-seat and for a spectator, "Draw", and "Victory" / "Defeat" in a boss or
   daily fight, a co-op one included (#530), where a draw is a "Defeat" (rules.md section 10.3). The reason line is in
   TALLY's tone, built by `client/src/endbanner.ts`: "The books balance.", "Tally strikes your name.",
-  "The seat is empty.", "The seat holds." (the ejected count is on the plate, #1038), "Same position three
+  "The seat is empty.", "The seat holds." (the ejected count is on the plate, #1038; in a boss fight each boss has its own victory and
+  defeat line instead, #1546, `bossends.ts`, world.md section 12.8), "Same position three
   times. Tally closes the page.", "100 plies, nothing ejected. Tally calls it even.", and against a boss
   "Repeated 3 times: a defeat." or "100 plies idle: a defeat.". The one action offered is the button
   already in the column: New game (local, bot), Retry (boss, daily), Rematch (online players), and Back to the

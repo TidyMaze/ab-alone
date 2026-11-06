@@ -40,7 +40,7 @@ First to eject 6 wins. On top of it, the ship:
 - **15 souls-like bosses**, each bends one rule, tells you one move ahead and has an answer on the
   board: The Echo, The Hull, The Choir, The Chaplain, The Ballast Mind, The Alien, The Rail Yard,
   The Magnetizer, The Pulsar, The Overseer, The Assembly Line, The Unstable Core, The Dual Room,
-  The Stalker and The Swarm. A medal per beaten boss, with your fewest turns. Die, read the tell,
+  The Stalker and The Swarm. A medal per beaten boss, with your fewest turns, and a victory and a defeat line of Tally's of its own for each. The story ends when the ladder reaches its top: a short skippable epilogue, once, and the docking clamp reads open on the bridge and in the Open world. Die, read the tell,
   retry with the same seed. Rules per boss: [docs/specs/boss-balance.md](docs/specs/boss-balance.md).
 - **Daily challenge**: one boss and one seed for everyone each UTC day.
 - **Rogue-lite run**: 3 acts (4 with the three keys) of an illustrated branching map (an icon per kind of node, a legend, the path taken and the nodes to pick marked) of fights, your army carried from fight to fight,
