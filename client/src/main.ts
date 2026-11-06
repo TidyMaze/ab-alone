@@ -32,6 +32,7 @@ import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joi
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFirstRunDone } from './firstrun';
 import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
+import { lazyWorker } from './lazyworker';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
@@ -2769,7 +2770,7 @@ function syncExit(): void {
 const botWorker =
   new URLSearchParams(location.search).get('bot') === 'off'
     ? null
-    : new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' });
+    : lazyWorker(() => new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' })); // created at its first request (#1579)
 let worker = botWorker; // the bot of this game: none at the hub's hot-seat table either (#522)
 const history: number[][] = [];
 let thinking = false;
@@ -2808,7 +2809,7 @@ if (resumed) {
 const evalBar = document.getElementById('eval')!;
 const evalMeter = evalBar.querySelector('.track')!;
 const evalLabel = evalBar.querySelector('.label')!;
-const analysisWorker = new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' });
+const analysisWorker = lazyWorker(() => new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' })); // created when the bar first asks (#1579)
 const analyst = new Analyst(
   (moves) => askEval(analysisWorker, moves),
   (score, { history: moves, side }) => {
