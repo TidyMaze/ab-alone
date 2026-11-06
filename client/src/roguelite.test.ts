@@ -838,7 +838,7 @@ describe('roguelite', () => {
     const boss = actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ids)!;
     expect(ids).toContain(boss.id);
     expect(boss.percent).toBe(ACT_PERCENT[0]);
-    expect(ACT_PERCENT).toEqual([50, 100, 200, 300]);
+    expect(ACT_PERCENT).toEqual([50, 120, 200, 300]); // #1537: act 2 raised from 100 (docs/specs/roguelite.md section 29)
     expect(actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ids)).toEqual(boss); // the same run: the same boss and seed
     const second = actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0, 2, 3), 5), ids)!;
     expect(second.percent).toBe(ACT_PERCENT[1]);
@@ -1124,7 +1124,7 @@ describe('roguelite relics', () => {
   it('Dampener: an act boss plays at three quarters of its act strength', () => {
     const ids = ['a', 'b'];
     expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0), 2), ids)!.percent).toBe(38);
-    expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0, 2, 3), 5), ids)!.percent).toBe(75);
+    expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0, 2, 3), 5), ids)!.percent).toBe(90);
   });
 
   it('War chest: an act boss beaten gives 2 marbles back', () => {
@@ -1945,7 +1945,7 @@ describe('roguelite biomes (#1472)', () => {
     }
     const dealt = boss({ path: [0, 1], biomes: [1] }, 3)!;
     expect(dealt.percent).toBe(ACT_PERCENT[1]);
-    expect(boss({ path: [0, 1], biomes: [1], relics: [Relic.Dampener] }, 3)!.percent).toBe(75);
+    expect(boss({ path: [0, 1], biomes: [1], relics: [Relic.Dampener] }, 3)!.percent).toBe(90);
     expect(dealt.seed).toBe(boss({ path: [0, 1], biomes: [5] }, 3)!.seed); // the fight's seed is the run\'s and the node\'s
     const deal = boss({ path: [0, 1], exits: false, biomes: [1] }, 3)!.id;
     expect(boss({ path: [0, 1] }, 3)!.id).toBe(deal); // the Meadow

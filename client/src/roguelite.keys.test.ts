@@ -107,7 +107,7 @@ describe('the keys and the fourth act', () => {
     const boss = actBoss(MAP, run, ['hull', 'ballast', 'echo'])!;
     expect(boss.id).toBe('ballast');
     expect(boss.percent).toBe(300);
-    expect(ACT_PERCENT).toEqual([50, 100, 200, 300]);
+    expect(ACT_PERCENT).toEqual([50, 120, 200, 300]);
     expect(actBoss(MAP, run, ['hull', 'echo'])!.id).not.toBe('ballast'); // a roster without it keeps the dealt boss
     expect(actBoss(MAP, fighting(base(), 0, 1, 4), ['hull', 'ballast'])!.percent).toBe(50);
   });
@@ -250,7 +250,7 @@ describe('the boss relics', () => {
     foePlan(MAP, { ...run, relics: [Relic.WarBanner, Relic.Saboteur] }, (_n, less) => (asked.push(less), [10, 0, 0]));
     expect(asked).toEqual([3]);
     expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4), relics: [Relic.WarBanner] }, ['hull'])!.percent).toBe(75);
-    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.WarBanner] }, ['hull'])!.percent).toBe(150);
+    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.WarBanner] }, ['hull'])!.percent).toBe(180);
   });
   it('Mending core: a marble back after every won fight, but a rest brings back only 3', () => {
     const run = { ...fighting({ ...base(), army: 10 }, 0), relics: [Relic.MendingCore] };
@@ -280,8 +280,8 @@ describe('the boss relics', () => {
     expect(offers({ ...reward, relics: [Relic.StaticShroud, Relic.LuckyCoin] })).toHaveLength(3);
   });
   it('Boss breaker: act bosses play at half their strength, but the bot searches 25 % more in fights and elites', () => {
-    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker] }, ['hull'])!.percent).toBe(50);
-    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker, Relic.WarBanner] }, ['hull'])!.percent).toBe(75);
+    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker] }, ['hull'])!.percent).toBe(60);
+    expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker, Relic.WarBanner] }, ['hull'])!.percent).toBe(90);
     expect(fightBudget(MAP, { ...fighting(base(), 0), relics: [Relic.BossBreaker] }, 100)).toBe(125);
     expect(fightBudget(MAP, { ...fighting(base(), 0, 1, 4), relics: [Relic.BossBreaker] }, 100)).toBe(100);
   });
