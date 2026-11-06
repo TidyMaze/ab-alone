@@ -798,7 +798,7 @@ describe('roguelite', () => {
     expect(foesOf(UNKNOWN, fight)).toBe(FIGHT_FOES);
     expect(foesOf(UNKNOWN, { ...fight, relics: [Relic.Saboteur] })).toBe(FIGHT_FOES - 1);
     expect(fightBudget(UNKNOWN, fight, 1000)).toBe(1000);
-    expect(fightBudget(UNKNOWN, { ...fight, relics: [Relic.Jammer] }, 1000)).toBe(750);
+    expect(fightBudget(UNKNOWN, { ...fight, relics: [Relic.Jammer] }, 1000)).toBe(1000);
     expect(runLine(UNKNOWN, fight)).toBe('Rogue-lite run · act 1 fight · army 14 marbles');
     expect(fightOver(UNKNOWN, fight, true, 1)).toMatchObject({ army: 13, scrap: SCRAP.fight, reward: true, relic: false });
     expect(foePlan(UNKNOWN, fight, (node, less) => [10 - less, node])).toEqual([10, 0]);
@@ -1144,7 +1144,7 @@ describe('roguelite relics', () => {
     expect([scrap(run(), 0), scrap(run(), 1), scrap(run(), 5)]).toEqual([10, 20, 30]);
     expect(scrap({ ...jammer, ascension: 5 }, 0)).toBe(3); // level 5's 7, half of it, down
     expect(fightBudget(ACT, pick(jammer, 0), 1000)).toBe(1000); // the search is no longer cut
-    expect(fightBudget(ACT, pick(run({ relics: [Relic.Jammer], keys: [Key.Emerald] }), 1), 1000)).toBe(3000);
+    expect(fightBudget(ACT, pick(run({ relics: [Relic.Jammer], keys: [Key.Emerald] }), 1), 1000)).toBe(2000); // an elite's own
   });
 
   it('Bunks: a rest also makes a plain marble a Heavy, an upgrade does not', () => {
@@ -1165,8 +1165,8 @@ describe('roguelite relics', () => {
     expect(label(pays!, 1)).toBe('Wager a marble · 40 %: +1 relic, otherwise -1 marble · Lucky coin: it will pay off');
     expect(label(fails!, 1)).toBe('Wager a marble · 40 %: +1 relic, otherwise -1 marble · Lucky coin: it will go wrong');
     expect(foretold(pays!, eventOf(pays!)!.choices[1]!, 1)).toBe(' · Lucky coin: it will pay off');
-    expect(foretold(pays!, eventOf(pays!)!.choices[0]!, 0)).toBe(''); // a sure choice
-    expect(label(pays!, 0)).not.toContain('Lucky coin');
+    expect(foretold(pays!, eventOf(pays!)!.choices[2]!, 2)).toBe(''); // a sure choice
+    expect(label(pays!, 2)).not.toContain('Lucky coin');
     expect(label({ ...pays!, relics: [] }, 1)).toBe('Wager a marble · 40 %: +1 relic, otherwise -1 marble'); // without the coin
     expect(foretold({ ...pays!, relics: [] }, eventOf(pays!)!.choices[1]!, 1)).toBe('');
     const short = { ...run({ army: 12 }), reward: true };
@@ -1196,7 +1196,7 @@ describe('roguelite relics', () => {
     const ids = ['a', 'b'];
     expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0), 2), ids)!.percent).toBe(63);
     expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0, 2, 3), 5), ids)!.percent).toBe(150);
-    const damp = run({ relics: [Relic.Dampener] });
+    const damp = run({ relics: [Relic.Dampener], spent: [] }); // no count: no bonus room before the boss
     expect(visit(ACT, damp, 5).tactics).toEqual([4]);
     expect(visit(ACT, damp, 0).tactics).toEqual([]); // a fight, an elite
     expect(visit(ACT, damp, 1).tactics).toEqual([]);
@@ -1205,7 +1205,8 @@ describe('roguelite relics', () => {
     expect(visit(ACT, { ...damp, tactics: [1, 2, 3] }, 5).tactics).toEqual([1, 2, 3]); // the hand is full
     expect(takeBonus({ ...damp, bonus: true })).toMatchObject({ fighting: true, tactics: [4] }); // the boss behind the bonus room
     expect(takeBonus({ ...run(), bonus: true }).tactics).toEqual([]);
-    expect(visit(ACT, run(), 5).tactics).toEqual([]);
+    expect(visit(ACT, run({ spent: [] }), 5).tactics).toEqual([]);
+    expect(visit(ACT, run({ relics: [Relic.Dampener] }), 5)).toMatchObject({ bonus: true, fighting: false, tactics: [] }); // the room first
   });
 
   it('a run saved holding a reworked relic loads and plays on with the new rule', async () => {
@@ -1218,7 +1219,7 @@ describe('roguelite relics', () => {
     expect(loaded.engine).toMatchObject({ army: 9, played: [1, 2] });
     const won = fightOver(archetype(3), loaded.state, true, 1);
     expect(won).toMatchObject({ army: 10, end: '', reward: true, scrap: loaded.state.scrap + 10, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
-    expect(visit(archetype(3), { ...won, reward: false, path: [0] }, 5)).toMatchObject({ fighting: true, tactics: [4] });
+    expect(visit(archetype(3), { ...won, reward: false, path: [0], spent: [] }, 5)).toMatchObject({ fighting: true, tactics: [4] });
     expect(visit(archetype(3), { ...won, reward: false, path: [0] }, 0).tactics).toEqual([2]);
   });
 
@@ -2040,7 +2041,7 @@ describe('roguelite biomes (#1472)', () => {
     }
     const dealt = boss({ path: [0, 1], biomes: [1] }, 3)!;
     expect(dealt.percent).toBe(ACT_PERCENT[1]);
-    expect(boss({ path: [0, 1], biomes: [1], relics: [Relic.Dampener] }, 3)!.percent).toBe(90);
+    expect(boss({ path: [0, 1], biomes: [1], relics: [Relic.Dampener] }, 3)!.percent).toBe(150);
     expect(dealt.seed).toBe(boss({ path: [0, 1], biomes: [5] }, 3)!.seed); // the fight's seed is the run\'s and the node\'s
     const deal = boss({ path: [0, 1], exits: false, biomes: [1] }, 3)!.id;
     expect(boss({ path: [0, 1] }, 3)!.id).toBe(deal); // the Meadow

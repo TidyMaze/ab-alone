@@ -232,25 +232,69 @@ relic at most once, in the order taken, and starts with none: only variety carri
   waits for it. The relics offered are dealt from those the run does not hold by the run seed and
   the node (a 32-bit hash, as the reward offers), so a reload offers the same ones; with none left, a
   treasure is empty and an elite or a boss gives none.
-- **The 12 relics** and where each acts:
+- **The 12 relics**, where each acts and what it changes about play (#1539). Four of them change a tactic, the others stay a
+  plain effect (below):
 
-  | Code | Relic | Rule | Where |
-  |---|---|---|---|
-  | 0 | Gyroscope | once per fight, your first push of a tie (2 against 2, for example) goes through | engine: a push |
-  | 1 | Hull plating | the first marble you lose in each fight comes back after it | the end of a fight |
-  | 2 | Salvage magnet | a won elite gives 1 more marble back (3, up to 14) | the end of an elite |
-  | 3 | Jammer | the bot searches 25 % fewer positions in fights and elites, not against a boss | the bot's budget |
-  | 4 | Detonator | your Sparks burst 2 cells | engine: a Spark's burst |
-  | 5 | Bunks | a rest also makes a plain marble a Heavy | a rest |
-  | 6 | Lucky coin | rewards offer 4 choices | the reward screen |
-  | 7 | Bargain | an event trade costs 1 marble less | an event |
-  | 8 | Saboteur | the bot has 1 marble fewer in fights and elites (9 and 13) | a fight's board |
-  | 9 | Dampener | act bosses play at 75 % of their act's strength (38, 90 and 150 %) | an act boss |
-  | 10 | War chest | an act boss beaten gives 2 marbles back (up to 14) | the end of a boss |
-  | 11 | Quartermaster | a fight holds 4 of each special marble type | the placement |
+  | Code | Relic | Rule | What it changes about play | Where |
+  |---|---|---|---|---|
+  | 0 | Gyroscope | once per fight, your first push of a tie (2 against 2, for example) goes through | you can plan one push that is a tie, once | engine: a push |
+  | 1 | Hull plating | the first marble you lose in each fight comes back after it | your first loss of a fight is free, so you can open with a risk | the end of a fight |
+  | 2 | Salvage magnet | a won elite turns a plain marble into its own: an Anchor from The Wall, a Spark from The Artificer, a Heavy from The Brute | you pick the elite for the marble you want, on the map | the end of an elite |
+  | 3 | Jammer | a Freeze joins your tactics at the start of each fight and elite, but a win gives half the scrap | you plan a double move in every fight, and shop less | the start of a fight, the end of a win |
+  | 4 | Detonator | your Sparks burst 2 cells | you place a Spark where its burst reaches the bot's line | engine: a Spark's burst |
+  | 5 | Bunks | a rest also makes a plain marble a Heavy | a rest adds weight to your army as well as marbles | a rest |
+  | 6 | Lucky coin | an event shows how each of its gambles turns out before you take it | you take the gambles that pay and leave the others | an event |
+  | 7 | Bargain | an event trade costs 1 marble less | you accept trades you would have refused | an event |
+  | 8 | Saboteur | the bot has 1 marble fewer in fights and elites (9 and 13) | one marble fewer to push off, in every fight | a fight's board |
+  | 9 | Dampener | a Fall back joins your tactics at the start of each act boss fight, but act bosses play at 125 % of their act's strength (63, 150 and 250 %) | you try a move against a boss and take it back, against a boss that is stronger | an act boss |
+  | 10 | War chest | an act boss beaten gives 2 marbles back (up to 14) | you go into a boss with a thinner army | the end of a boss |
+  | 11 | Quartermaster | a fight holds 4 of each special marble type | you build around one type | the placement |
+
+  The lines of the right column are the ones on the relic cards in the game (`RELICS`, the rule in one line, and the tooltip of the relic bar).
 
   The issue's "rest heals up to 15" does not fit the 14 cells of the army's layout: Bunks gives a
   Heavy instead.
+- **The four reworked (#1539)**: Salvage magnet, Jammer, Lucky coin and Dampener were plus or minus one marble, a quarter of the
+  bot's search, one choice or a quarter of a boss's strength, and a run holding the Jammer and the Dampener had 56 % of the budgets
+  for nothing. Each now alters a tactic, with the game's own pieces (a tactic of section 11, the elite archetypes of section 14, the
+  odds of section 16) and no new engine rule, and none adds a mechanic a boss has. They were chosen as the four that give the most
+  different play, one at each place of a run: **the map** (Salvage magnet: which elite to go for), **a fight** (Jammer: a Freeze to
+  plan), **an event** (Lucky coin: which gamble to take) and **an act boss** (Dampener: a Fall back to probe with). The other eight
+  stay a plain effect on purpose: the Gyroscope, the Detonator, the Quartermaster and the Bunks already change the board or the army,
+  and Hull plating, Bargain, Saboteur and War chest are small prices a build can use without choosing between them.
+  - **Salvage magnet**: a won elite (not a lost one) of a run with the varied armies (section 14) turns one of the army's plain marbles
+    into the special marble of the elite's archetype, The Wall's Anchor, The Artificer's Spark, The Brute's Heavy, whatever the types
+    unlocked, and gives no marble more than section 7's 2. With no plain marble left, an elite with no archetype or a run saved before
+    the varied armies, it gives nothing more. The elites are named on the map, so the marble is a choice of route.
+  - **Jammer**: at the start of a fight or an elite (not an act boss: Freeze is not played there, section 28) a Freeze joins the tactics
+    the run holds, one at a time (no second while it holds one) and only while the hand has room (3, section 11). A fight, an elite or
+    a boss won gives half the scrap (rounded down after ascension level 5's 70 %). The bot's search is no longer cut. The Freeze takes
+    a place in the hand of 3, so the Jammer costs the other tactics a place as well as scrap.
+  - **Dampener**: at the start of an act boss fight, also after the bonus room (section 26), a Fall back joins the tactics, on the same
+    terms. Reinforce and Fall back are played against a boss (section 28), and a Fall back takes back the player's move and the boss's
+    answer: the player probes the boss's tell and takes the move back. The boss plays at 125 % of its act's strength, which multiplies
+    with the War banner, the Boss breaker and ascension level 7 as before. Three bosses fight without the build (The Echo, The Choir,
+    The Swarm, section 28): the Fall back is handed there too and waits in the hand for the next fight, and the map's tip already says
+    which boss ends the act and whether it takes the build.
+  - **Lucky coin**: a gamble of an event, whose draw is the run seed's, the node's and the choice's (section 16), reads
+    "· Lucky coin: it will pay off" or "· Lucky coin: it will go wrong" after what it gives and costs, on the page and in the MCP
+    server. A sure choice says nothing. A reward offers 3 again.
+  - **Balance** (the run simulator of section 30, **bot numbers only**, The Captain at level 0, 40 seeds, 0 to 39, the command of
+    section 30 with `RUN_SIM_LEVELS=0` and `0` for the commander): the simulator plays no relic but the Warden's Hull plating, so
+    it does not see the Freeze, the Fall back, the Salvage magnet's marble, the Lucky coin or the scrap (#1598 is the follow-up that
+    would), and it gives no win rate by relic. **The numbers do not cover those four effects.** What it can play is the boss's strength
+    (`RUN_SIM_PERCENTS`), the one number of the Dampener that changed:
+
+    | Dampener | act bosses at | act 1 | act 2 | the run |
+    |---|---|---|---|---|
+    | none (the table of section 30, before and after: the simulator plays none of the four relics) | 50, 120, 200 % | 32/40 | 15/32 | 8/40 (20 %) |
+    | before (75 %) | 38, 90, 150 % | 31/40 | 18/31 | 14/40 (35 %) |
+    | after (125 %) | 63, 150, 250 % | 30/40 | 16/30 | 10/40 (25 %) |
+
+    With the old Dampener the bot cleared 15 points more runs than with none, so a fight bot had every reason to take it; with the new
+    one the gain is 5 points, inside the error of 40 runs (about 7 points), and the Fall back, which only the player plays, is not in
+    the number. None of the four is plainly the best pick for a bot that fights, as far as the simulator can say; whether a person
+    prefers the Freeze, the Fall back, the elite's marble or the foretold gamble is not measured.
 - **In the engine**: the Gyroscope and the Detonator act inside a fight, so the bot plays them in
   its search. The army's relics are set on its fight's board before the first move
   (`Game::set_relics`, `Engine::set_relics(mask)`, bit `code` per relic), behind the rogue-lite
@@ -535,7 +579,7 @@ events, one trade each.
   `roguelite.ts`), drawn from the run seed and the node as the reward offers are (a 32-bit hash), so a reload and a
   replay see the same. A fight it turns into is a fight node of its act: 10 foes (one fewer with the Saboteur), the
   Standard formation and `act + 1` special marbles of `run::foe_plan`, scrap and rewards as a fight's, the Jammer's
-  effect. The map names it `?` and `Act 1, unknown` (aria-label); the summary of a run over names what it turned into.
+  Freeze and halved scrap. The map names it `?` and `Act 1, unknown` (aria-label); the summary of a run over names what it turned into.
 - **Choices**: a choice has a verb, what it gives, and for a **gamble** the odds in 100 (`odds`) and what it gives
   otherwise. A gamble is drawn from the run seed, the node and the choice, never twice differently. A button reads
   `Touch the vein · 50 %: +1 Heavy, otherwise -2 marbles`; a sure choice reads `Chip off a shard · +25 scrap, -1 marble`;
@@ -658,7 +702,7 @@ client's run, and a test checks it on a short scripted path. The tools are in `d
   taken now (an event choice that cannot be paid, a purchase short of scrap) is listed `ok: false` and refused.
 - **The fight is the session's game**: `run_pick` on a fight, an elite or a boss node starts it as the game of `get_state`,
   `legal_moves` and `play_move` (the agent is Black, the bot or the boss replies in `play_move`), with the army, the bot's plan,
-  the relics and the budget of the client (an elite twice, the Jammer a quarter less) or the act boss at its act's strength.
+  the relics and the budget of the client (an elite twice) or the act boss at its act's strength.
   `run_place` puts the special marbles before the first move, `run_tactic` plays a tactic and `run_flask` drinks a flask on the map (section 25). The run reads the fight's end
   after every move and folds it in as `runMoved` does (`fightOver`); `resign` loses it, a draw loses it. Starting another game
   while a fight is on leaves the run, as another mode does in the client.
@@ -684,8 +728,8 @@ never a stronger army.
 | 6 | Thin ranks | the run starts with 12 marbles, not 14 |
 | 7 | Hardened bosses | act bosses play at a quarter more strength (section 7) |
 | 8 | Armed to the teeth | the bot has 2 more special marbles in fights and elites, one more than level 3 gave |
-| 9 | Meagre rewards | a reward offers one choice fewer (2, or 3 with the Lucky coin) |
-| 10 | Hunted | the bot searches a quarter more positions in fights and elites, the Jammer's quarter less (section 9) included |
+| 9 | Meagre rewards | a reward offers one choice fewer (2) |
+| 10 | Hunted | the bot searches a quarter more positions in fights and elites |
 
 - **Unlock**: a run **won** at level N unlocks level N + 1, up to 10, kept next to the acts won (`ab-alone.roguelite.ascension`,
   the highest level unlocked, 0 when none). A run lost unlocks nothing, and a win at a lower level than the highest never
@@ -767,8 +811,8 @@ Slay the Spire's boss relics and its three keys: the end of a won run holds one 
   | 15 | Boss breaker | act bosses play at half their strength | the bot searches 25 % more positions in fights and elites |
 
   The knobs are the ones of the ordinary relics (the bot's marbles and budget, a boss's strength, the marbles back, the rest, the
-  number of offers) and stack with them, multiplying: the Jammer and the Static shroud leave 0.375 of the budget. The Mending core's
-  marble adds to the Salvage magnet's and the War chest's.
+  number of offers) and stack with them, multiplying: the Boss breaker and ascension level 10 make the budget 1.5625 times a fight's. The Mending core's
+  marble adds to the War chest's.
 - **Keys**: three, each taken by a costly choice, once each. A key is saved with the run (`keys`, the codes in the order taken).
   - **Ruby**: at a rest site, Give up the rest (no marble back, no upgrade) takes the Ruby key.
   - **Sapphire**: at a treasure, Give up the relic takes the Sapphire key.
@@ -977,7 +1021,7 @@ The special marbles, relics, affinities and tactics a run built over its act cou
   (`place_special`), and the tactics. Their rules, the Gyroscope and the Detonator, and the affinities' bonuses are the engine's
   and play on the army's marbles as in a fight. The boss's search plays the same moves and rules (it searches the game the
   `Encounter` holds, as the bot does in a fight), so it pushes, avoids and answers the Heavies, Anchors, Sparks and the rest. Boss-only
-  relic effects (section 22: the Dampener, the War banner, the Boss breaker) are the page's and unchanged.
+  relic effects (section 22: the Dampener, the War banner, the Boss breaker) are the page's and unchanged (the Dampener's Fall back is one of the two tactics played here).
 - **Which bosses take it**: twelve of the fifteen, those that play Abalone on a board of their own with hooks that either remove marbles
   or move them with their special mark (#1495, below): **The Hull, The Chaplain, The Alien, The Rail Yard, The Overseer, The
   Stalker** (#1494), and **The Magnetizer, The Pulsar, The Assembly Line, The Unstable Core, The Dual Room and The Ballast Mind**

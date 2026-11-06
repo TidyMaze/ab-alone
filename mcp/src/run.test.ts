@@ -14,6 +14,7 @@ import {
   newRun,
   offers,
   parseMap,
+  Relic,
   RELICS,
   RUN_KEY,
   tacticOffer,
@@ -347,7 +348,7 @@ describe('pick', () => {
     expect(failure(run.pick({ node: 1 })).code).toBe('not_now');
   });
 
-  test('an elite has 14 marbles and a search twice as long, a quarter less with the Jammer', async () => {
+  test('an elite has 14 marbles and a search twice as long', async () => {
     const elite = at('elite', { fighting: false, path: before('elite').save.path });
     const { run, calls, session } = setup(false);
     value(await run.newRun({ save: elite, bot_nodes: 100 }));
@@ -359,7 +360,9 @@ describe('pick', () => {
     value(session.playMove({ move: FIRST_MOVE }));
     expect(calls.nodes).toEqual([200]);
     value(await run.newRun({ save: { ...elite, relics: [3] }, bot_nodes: 100 }));
-    expect(value(run.pick({ node })).fight!.bot_nodes).toBe(150);
+    const jammed = value(run.pick({ node }));
+    expect(jammed.fight!.bot_nodes).toBe(200); // the Jammer no longer cuts the search: it hands a Freeze
+    expect(jammed.tactics).toEqual(['Freeze']);
   });
 
   test('a boss node is the act boss of the run at its act strength; one that takes no build starts at once, with no placement', async () => {
@@ -459,6 +462,18 @@ describe('the screens that wait for a choice', () => {
     const left = value(run.choose({ choice: state.options!.length - 1 }));
     expect(left.screen).toBe('map');
     expect(left.title).toBeUndefined();
+  });
+
+  test('with the Lucky coin an event choice that is a gamble says how it turns out, a sure one nothing', async () => {
+    const gamble = (r: Run) => eventOf(r)!.choices.some((c) => c.odds < 100);
+    const save = at('fight', { event: true, relics: [Relic.LuckyCoin] }, gamble);
+    const { run } = setup();
+    const state = value(await run.newRun({ save }));
+    const choices = eventOf(save)!.choices;
+    for (const [i, option] of state.options!.entries()) {
+      if (choices[i]!.odds >= 100) expect(option.text).not.toContain('Lucky coin');
+      else expect(option.text).toMatch(/ · Lucky coin: it will (pay off|go wrong)$/);
+    }
   });
 
   test('an event choice that is taken is told on the map until the next node', async () => {

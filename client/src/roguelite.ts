@@ -185,14 +185,14 @@ const BOSS_RELICS = 12;
 export const RELICS: readonly { name: string; help: string; icon: string }[] = [
   { name: 'Gyroscope', help: 'once per fight, your first push of a tie goes through', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c4 3 4 15 0 18' },
   { name: 'Hull plating', help: 'the first marble you lose in each fight comes back after it', icon: 'M12 3l8 3v6c0 5-4 8-8 9c-4-1-8-4-8-9V6z' },
-  { name: 'Salvage magnet', help: 'a won elite gives 1 more marble back', icon: 'M6 4h4v8a2 2 0 0 0 4 0V4h4v8a6 6 0 0 1-12 0z' },
-  { name: 'Jammer', help: 'the bot searches 25 % fewer positions in fights and elites', icon: 'M4 8q4-4 8 0t8 0M4 16q4-4 8 0t8 0M5 5l14 14' },
+  { name: 'Salvage magnet', help: 'a won elite turns a plain marble into its own: an Anchor from The Wall, a Spark from The Artificer, a Heavy from The Brute', icon: 'M6 4h4v8a2 2 0 0 0 4 0V4h4v8a6 6 0 0 1-12 0z' },
+  { name: 'Jammer', help: 'a Freeze joins your tactics at the start of each fight and elite, but a win gives half the scrap', icon: 'M4 8q4-4 8 0t8 0M4 16q4-4 8 0t8 0M5 5l14 14' },
   { name: 'Detonator', help: 'your Sparks burst 2 cells', icon: 'M12 2l2 6 6-2-4 5 6 3-7 1 1 7-4-5-4 5 1-7-7-1 6-3-4-5 6 2z' },
   { name: 'Bunks', help: 'a rest also makes a plain marble a Heavy', icon: 'M3 18V6M3 14h18v4M21 14v-3a3 3 0 0 0-3-3h-7v6M7 10h1' },
-  { name: 'Lucky coin', help: 'rewards offer 4 choices', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v10M15 9c-1-2-6-2-6 0s6 2 6 4-5 2-6 0' },
+  { name: 'Lucky coin', help: 'an event shows how each of its gambles turns out before you take it', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v10M15 9c-1-2-6-2-6 0s6 2 6 4-5 2-6 0' },
   { name: 'Bargain', help: 'an event trade costs 1 marble less', icon: 'M3 12V3h9l9 9-9 9zM8 8h.01' },
   { name: 'Saboteur', help: 'the bot has 1 marble fewer in fights and elites', icon: 'M14 6a4 4 0 1 0 4 4l-9 9a2 2 0 0 1-3-3l9-9' },
-  { name: 'Dampener', help: 'act bosses play at 75 % of their strength', icon: 'M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6' },
+  { name: 'Dampener', help: 'a Fall back joins your tactics at the start of each act boss fight, but act bosses play at 125 % of their strength', icon: 'M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6' },
   { name: 'War chest', help: 'an act boss beaten gives 2 marbles back', icon: 'M3 9h18v11H3zM3 9l2-5h14l2 5M10 13h4' },
   { name: 'Quartermaster', help: 'a fight holds 4 of each special marble type', icon: 'M8 3h8v3H8zM6 4H4v17h16V4h-2M8 11h8M8 16h8' },
   { name: 'War banner', help: 'the bot has 2 marbles fewer in fights and elites, but act bosses play at 150 % of their strength', icon: 'M5 21V4M5 5h13l-3 4 3 4H5' },
@@ -530,7 +530,18 @@ export function visit(map: MapNode[], run: Run, node: number): Run {
   if (kind === 'rest') return { ...from, path, rest: true };
   if (kind === 'treasure') return { ...from, path, relic: unheld(run).length > 0 };
   if (kind === 'shop') return { ...from, path, shop: true };
-  return kind === 'event' ? { ...from, path, event: true } : pick(from, node);
+  return kind === 'event' ? { ...from, path, event: true } : handed(pick(from, node), kind);
+}
+
+/** The tactics of the Freeze and of the Fall back by their code (TACTICS). */
+const FREEZE = 2;
+const FALL_BACK = 4;
+
+/** The run once the fight of a `kind` node starts (#1539): the Jammer hands a Freeze at a fight or an elite, the Dampener a Fall back
+ * at an act boss (Freeze is not played against one, section 28), each one at a time and while the hand has room. */
+function handed(run: Run, kind: NodeKind): Run {
+  const code = kind === 'boss' ? (has(run, Relic.Dampener) ? FALL_BACK : 0) : has(run, Relic.Jammer) ? FREEZE : 0;
+  return code && !run.tactics.includes(code) && run.tactics.length < MAX_TACTICS ? { ...run, tactics: [...run.tactics, code] } : run;
 }
 
 /** The army a rest brings back: START_ARMY, 12 from ascension level 2. */
@@ -630,20 +641,25 @@ export const foePlan = (map: MapNode[], run: Run, planOf: (node: number, less: n
 export const ELITE_BUDGET = 2;
 /** Marbles back after a won elite, up to START_ARMY: its better reward (#800). */
 const ELITE_MARBLES = 2;
+/** The special marble the Salvage magnet takes from an elite, by its archetype (ELITES, the bridge's code): The Wall's Anchor, The Artificer's Spark,
+ * The Brute's Heavy (#1539), as the bridge's kinds. Archetype 0, none, takes nothing. */
+const ELITE_KIND = [0, 2, 3, 1];
 
-/** What the Jammer and the Dampener leave of the bot's search budget, and of an act boss's strength (#1457). */
-const JAMMED = 0.75;
+/** What the Dampener multiplies an act boss's strength by (#1539), the price of its Fall back. */
+const DAMPENED = 1.25;
+/** What the Jammer leaves of the scrap a win gives (#1539), the price of its Freeze. */
+const JAMMED = 0.5;
 /** What the bot's search budget is multiplied by from ascension level 10, and an act boss's strength from level 7 (#1465). */
 const HUNTED = 1.25;
 
 /** The bot's search budget in the run's fight: `nodes`, or ELITE_BUDGET times it against an elite (one more from ascension
- * level 1, one more against the marked elite of #1467), then in a fight or an elite a quarter less with the Jammer, half with the
- * Static shroud, a quarter more with the Boss breaker and from ascension level 10. */
+ * level 1, one more against the marked elite of #1467), then in a fight or an elite half with the Static shroud, a quarter more with
+ * the Boss breaker and from ascension level 10. */
 export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
   const kind = run.fighting ? lastNode(map, run)!.kind : null;
   const marked = kind === 'elite' && bearsKey(map, run, run.path[run.path.length - 1]!);
   const budget = kind === 'elite' ? nodes * (ELITE_BUDGET + Number(from(run, 1)) + Number(marked)) : nodes;
-  const factor = (has(run, Relic.Jammer) ? JAMMED : 1) * (has(run, Relic.StaticShroud) ? 0.5 : 1) * (has(run, Relic.BossBreaker) ? 1.25 : 1) * (from(run, 10) ? HUNTED : 1);
+  const factor = (has(run, Relic.StaticShroud) ? 0.5 : 1) * (has(run, Relic.BossBreaker) ? 1.25 : 1) * (from(run, 10) ? HUNTED : 1);
   return kind === 'fight' || kind === 'elite' ? Math.round(budget * factor) : budget;
 }
 
@@ -668,7 +684,7 @@ export function bossOfAct(run: Run, act: number, ids: string[]): string {
 export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; seed: number; percent: number } | null {
   const node = lastNode(map, run);
   if (!run.fighting || node?.kind !== 'boss') return null;
-  const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? JAMMED : 1) * (has(run, Relic.WarBanner) ? 1.5 : 1) * (has(run, Relic.BossBreaker) ? 0.5 : 1) * (from(run, 7) ? HUNTED : 1);
+  const percent = ACT_PERCENT[node.act]! * (has(run, Relic.Dampener) ? DAMPENED : 1) * (has(run, Relic.WarBanner) ? 1.5 : 1) * (has(run, Relic.BossBreaker) ? 0.5 : 1) * (from(run, 7) ? HUNTED : 1);
   return { id: bossOfAct(run, node.act, ids), seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: Math.round(percent) };
 }
 
@@ -806,6 +822,13 @@ export function choiceText(run: Run, c: EventChoice, stage = 1): string {
   return effects ? `${verb} · ${effects}` : verb;
 }
 
+/** Whether choice `choice`, which has the odds of `c`, pays off at the run's last node: drawn from the run seed and the node. */
+const pays = (run: Run, c: EventChoice, choice: number): boolean => c.odds >= 100 || nodeDraw(run, 100 + choice) % 100 < c.odds;
+
+/** What the Lucky coin says of a gamble before it is taken (#1539): how choice `choice` of odds `c` turns out, or nothing for a sure choice or without the coin. */
+export const foretold = (run: Run, c: EventChoice, choice: number): string =>
+  has(run, Relic.LuckyCoin) && c.odds < 100 ? ` · Lucky coin: it will ${pays(run, c, choice) ? 'pay off' : 'go wrong'}` : '';
+
 /** The run once choice `choice` of `e` is taken, or null when it does not exist or cannot be paid: both sides of a
  * gamble must be payable. A gamble is drawn from the run seed and the node. `told` says what it gave or cost. */
 export function takeEvent(run: Run, e: RunEvent, choice: number): Run | null {
@@ -813,7 +836,7 @@ export function takeEvent(run: Run, e: RunEvent, choice: number): Run | null {
   if (!c) return null;
   const [win, fail] = [give(run, c.win, choice), give(run, c.fail, choice)];
   if (!win || (c.odds < 100 && !fail)) return null;
-  const won = c.odds >= 100 || nodeDraw(run, 100 + choice) % 100 < c.odds;
+  const won = pays(run, c, choice);
   const after = won ? win : fail!;
   const gist = describe(run, won ? c.win : c.fail);
   const luck = c.odds < 100 ? `${won ? 'it paid off' : 'it went wrong'}, ` : '';
@@ -839,8 +862,9 @@ const CHEST_MARBLES = 2;
 /** The run after the fight of its last node, `won` or not, the army having lost `lost` marbles and kept `kept` of each
  * special marble type placed (all by default): a loss or an army below MIN_ARMY ends it, the boss of the last act wins
  * it, any other win offers a reward, and an elite or an act boss a relic first (#1457). The army never holds more special
- * marbles than marbles: past that, they go in the order FALL. A win earns scrap (#1459). The relics act here: Hull
- * plating brings one lost marble back, the Salvage magnet and the War chest more marbles after an elite and a boss. */
+ * marbles than marbles: past that, they go in the order FALL. A win earns scrap (#1459), half of it with the Jammer. The relics act here: Hull
+ * plating brings one lost marble back, the War chest more marbles after a boss, and the Salvage magnet turns a plain marble into the special
+ * marble of a won elite's archetype (#1539). */
 export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, kept = countOf(run.placed)): Run {
   const node = lastNode(map, run)!;
   const left = run.army - Math.max(0, lost - Number(has(run, Relic.HullPlating))) * (run.curse > 0 ? CURSE_COST : 1); // a cursed chest's curse (#1474)
@@ -848,13 +872,15 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   const end = !won || left < MIN_ARMY ? 'lost' : node.kind === 'boss' && node.act === final ? 'won' : '';
   const back =
     (node.kind === 'elite'
-      ? ELITE_MARBLES + Number(has(run, Relic.SalvageMagnet))
+      ? ELITE_MARBLES
       : node.kind === 'boss' && has(run, Relic.WarChest)
         ? CHEST_MARBLES
         : 0) + Number(has(run, Relic.MendingCore));
   const army = end === '' ? Math.min(START_ARMY, left + back) : left;
   const placed = countOf(run.placed);
   const specials = run.specials.map((n, k) => n - placed[k]! + kept[k]!);
+  const salvaged = end === '' && node.kind === 'elite' && run.enemies && has(run, Relic.SalvageMagnet) && sum(specials) < army ? ELITE_KIND[node.elite] : undefined; // an elite's own marble (#1539)
+  if (salvaged) specials[salvaged - 1]! += 1;
   let over = sum(specials) - army;
   for (const k of FALL) {
     const drop = Math.max(0, Math.min(specials[k]!, over));
@@ -863,7 +889,7 @@ export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, 
   }
   const tier = node.kind === 'boss' ? 'boss' : node.kind === 'elite' ? 'elite' : 'fight';
   const earns = end !== 'lost';
-  const scrap = run.scrap + (earns ? Math.floor(SCRAP[tier] * (from(run, 5) ? LEAN : 1)) : 0);
+  const scrap = run.scrap + (earns ? Math.floor(SCRAP[tier] * (from(run, 5) ? LEAN : 1) * (has(run, Relic.Jammer) ? JAMMED : 1)) : 0);
   const cells = run.cells + (earns ? CELLS[tier] : 0);
   const found = earns && tier !== 'fight' && node.act < final ? dropOf(run) : -1; // no Collector follows the last act
   const carried = found < 0 ? run.carried : [...run.carried, found];
@@ -922,7 +948,7 @@ export function bonusRelic(run: Run): number {
 export function takeBonus(run: Run): Run {
   if (!run.bonus) return run;
   const relic = bonusRelic(run);
-  return { ...run, bonus: false, fighting: true, moves: [], placed: [], scrap: run.scrap + BONUS_SCRAP, relics: relic >= 0 ? [...run.relics, relic] : run.relics };
+  return handed({ ...run, bonus: false, fighting: true, moves: [], placed: [], scrap: run.scrap + BONUS_SCRAP, relics: relic >= 0 ? [...run.relics, relic] : run.relics }, 'boss');
 }
 
 /** A 32-bit hash of two integers (murmur3's finaliser): the reward offers' only randomness. */
@@ -943,7 +969,7 @@ export function offers(run: Run): number[] {
     const j = hash(run.seed, run.path[run.path.length - 1]! * 8 + i) % (i + 1); // the node won, an index of the map
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
-  return pool.slice(0, 3 + Number(has(run, Relic.LuckyCoin)) - Number(has(run, Relic.StaticShroud)) - Number(from(run, 9)));
+  return pool.slice(0, 3 - Number(has(run, Relic.StaticShroud)) - Number(from(run, 9)));
 }
 
 /** The tactic a won fight also offers (#1460): its code, dealt by the run seed and the node, or 0 when no reward waits or
@@ -1334,7 +1360,7 @@ export function eventHtml(run: Run, stage = 1): string {
   const e = eventOf(run)!;
   const buttons = e.choices.map((c, i) => {
     const bargain = (c.win.army < 0 || c.fail.army < 0) && has(run, Relic.Bargain) ? ' · Bargain: 1 marble less' : '';
-    return `<button type="button" data-choice="${i}"${takeEvent(run, e, i) ? '' : ' disabled'}>${choiceText(run, c, stage)}${bargain}</button>`;
+    return `<button type="button" data-choice="${i}"${takeEvent(run, e, i) ? '' : ' disabled'}>${choiceText(run, c, stage)}${bargain}${foretold(run, c, i)}</button>`;
   });
   return `<p class="run-line">Event · ${e.title}</p><p class="run-help">${e.text}</p><div class="run-kinds">${buttons.join('')}</div>`;
 }

@@ -31,6 +31,7 @@ import {
   ELITES,
   eventOf,
   fightBudget,
+  foretold,
   fightOver,
   foePlan,
   keyOffers,
@@ -469,7 +470,7 @@ export class RogueRun {
         ...(tactic ? [{ text: tacticText(tactic), apply: () => claimTactic(state) }] : []),
       ];
     }
-    if (state.event) return eventOf(state)!.choices.map((c, i) => ({ text: choiceText(state, c), apply: () => resolve(state, i) }));
+    if (state.event) return eventOf(state)!.choices.map((c, i) => ({ text: choiceText(state, c) + foretold(state, c, i), apply: () => resolve(state, i) }));
     if (state.rest) {
       const upgrades = upgradable(state).map((k) => ({
         text: `Upgrade ${SPECIAL_LOOKS[k - 1]!.name}: ${SPECIAL_LOOKS[k + 2]!.name} ${SPECIAL_LOOKS[k + 2]!.help}`,
