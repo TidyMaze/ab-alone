@@ -698,6 +698,8 @@ duel, Battle royale, Ranked, Leaderboard, Boss fight, Daily, Trainer and Rogue-l
 in the menu until their rows above are built. The rows of the table that wait are the online room, the arena and the other towns, the
 Quick game button, the Console and the fast travel.
 
+Held upright in the world the plate stands above the exit and in the lower half of the screen, the hero at the middle stays seen: a taller plate scrolls, the online row last (#1606).
+
 The dock keeps New game, View, Hint, Replay and Modes clear of the exit: held upright, the gaps shrink from 8 px to what a 360 px
 window leaves, so seven buttons (the exit with Auto-play at a bot's table) fit; the buttons stay 44 px. Held sideways the column scrolls from six
 buttons on, as before (thumb-dock.md section 2).

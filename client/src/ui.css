@@ -942,8 +942,9 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #openworld-chip:active { border-color: var(--plate-accent); }
 /* The minimap (#1410): top right, under the settings cog (16px from the top, 2.75rem high), over nothing else; the settings menu opens above it. The mode adds the canvas when a world opens and removes it when it is left. */
 #openworld-minimap { position: fixed; z-index: 0; top: calc(16px + 2.75rem + 0.5rem); right: 16px; width: 9rem; height: 9rem; pointer-events: none; zoom: var(--ui-scale); }
-/* Held upright the plate spans the width: it stands above the dock's exit (62 px high, 16 px up), not under it (#1517). */
-@media (orientation: portrait) { #openworld-hud { bottom: 5.5rem; } }
+/* Held upright the plate spans the width: it stands above the dock's exit (62 px high, 16 px up), not under it (#1517), and in the lower half, the hero
+   stands at the middle: a plate taller than that scrolls, the online row last. */
+@media (orientation: portrait) { #openworld-hud { bottom: 5.5rem; box-sizing: border-box; max-height: calc((50dvh - 5.5rem) / var(--ui-scale, 1)); } }
 /* The map (#1411, openworldmap.ts): full screen over the world, its HUD and the minimap. The box takes the drag, the wheel and the pinch;
    its canvas ignores the pointer, as the touch stick takes a press on a canvas. It covers #chrome (z-index 1); the Map button under the
    minimap is out of #chrome, over the map, to close it. */
