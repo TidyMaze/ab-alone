@@ -468,10 +468,10 @@ describe('Sfx.cue, one call per event (#1570)', () => {
       });
     });
 
-    it(`${event}: is silent with the effects slider at 0: no source, no cue`, () => {
+    it(`${event}: is silent with the slider of its bus (${CUES[event].bus}) at 0: no source, no cue`, () => {
       const { ctx, sfx } = setup();
       sfx.unlock();
-      sfx.setVolume('effects', 0);
+      sfx.setVolume(CUES[event].bus, 0);
       const before = ctx.sources.length;
       expect(sfx.cue(event)).toBe(false);
       expect(ctx.sources.length).toBe(before);

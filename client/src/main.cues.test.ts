@@ -297,7 +297,7 @@ describe('the boss intro (#1570)', () => {
     const game = await boot('?bot=off', { reducedMotion: true, audio: true });
     gesture();
     start(game, 'The Echo');
-    expect(cues(game)).toEqual(['click', 'click', 'boss-intro']); // the mode menu, the boss list entry, the intro
+    expect(cues(game)).toEqual(['click', 'click', 'boss-intro', 'click']); // the mode menu, the boss list, the intro (the entry starts the fight, then its click bubbles to the page's listener)
     game.openSettings();
     byId('setting-flat-hud').click();
     expect(count(game, 'boss-intro')).toBe(1);

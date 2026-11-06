@@ -3,6 +3,7 @@
 // untouched.
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
+import { PhaseWatch, StepWatch, type WorldCue } from './cues';
 import { phaseOf, type Phase, wrapTime } from './daynight';
 import { type Biome, chunkOf, Hero, neighbours, same, type Tile, WALKABLE, World } from './openworld';
 import { FightState } from './openworldfight';
@@ -85,6 +86,10 @@ export class OpenWorldMode {
   hero: Hero | null = null;
   /** The online layer of the public world (#1305): told of each world entered and left, and of each frame. None draws solo. */
   peers: PeerHost | null = null;
+  /** What the page plays for a step of the hero, a pickup and the phase of the day moving (#1570, world.md section 7). */
+  cue: (event: WorldCue) => void = () => {};
+  private readonly steps = new StepWatch();
+  private readonly phases = new PhaseWatch();
   /** The tick of the clock the enemy marbles wander by (#1511): the same on every peer. The default stands them where they start. */
   wander: () => number = () => 0;
   /** The tick the marbles stand at now. */
@@ -817,6 +822,7 @@ export class OpenWorldMode {
     this.counted = now;
     if (this.view.setTime(this.tod, !reduced)) this.dirty = true; // the sky and the sun, drawn again as they change
     this.markPhase();
+    if (this.phases.changed(this.view, this.phase)) this.cue('time-of-day'); // dusk, night, day: the first sight of a world is silent
     this.stepWander(now);
     if (this.calmUntil > 0 && now >= this.calmUntil) {
       this.calmUntil = 0;
@@ -937,7 +943,11 @@ export class OpenWorldMode {
     const joined = played !== null && this.recruit(played);
     this.view!.updateEnemies();
     const log = this.logs.findIndex((cell) => same(cell, this.hero!.at));
+    const picked = joined || (log >= 0 && !this.found.includes(log)); // a marble joins the troop, or a log is found for the first time (#1570)
     if (log >= 0) this.readLog(log); // rolled onto a lore log (#1589)
+    // One cue for the move: the pickup, else the step, which a walk to a far cell sounds only for its last cell and a fast walk one in two.
+    if (picked) this.cue('pickup');
+    else if (this.route.length === 0 && this.steps.due(at)) this.cue('step');
     if (played && now !== null) {
       this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
       const landed = now + span * slowBy();

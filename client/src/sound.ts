@@ -138,10 +138,14 @@ export const PICK: Voice[] = [
 ];
 
 /** The events with a cue (world.md section 7, the cue table; #1570). */
-export type CueEvent = 'win' | 'loss' | 'phase' | 'elimination' | 'reward' | 'click';
+export type CueEvent =
+  | 'win' | 'loss' | 'phase' | 'elimination' | 'reward' | 'click'
+  | 'draw' | 'turn-start' | 'selection' | 'illegal-move' | 'boss-intro' | 'boss-death' | 'shop' | 'relic' | 'royale-round' | 'step' | 'pickup' | 'time-of-day' | 'online-join';
 
 /** A fight ends, a boss changes phase: the cue follows the ejection that caused it, after its toll or clack. */
 export const AFTER_EJECTION = CUE_AT + 0.3;
+/** The turn comes back to the player: the cue waits for the marbles of the other side's move to arrive (200 ms). */
+export const AFTER_SLIDE = 0.25;
 
 // Dry and mechanical, the register of the ship (world.md section 7): a latch, a stamp, a relay, never a fanfare. Each
 // has a tone above 150 Hz for a small speaker (#1572) and a dull body of noise, short, no tail over a second.
@@ -221,6 +225,126 @@ export const CUES = {
     voices: [
       { source: 'triangle', freq: [1100, 900], env: strike(0, 0.1, 0.025) },
       { source: 'noise', filter: { type: 'bandpass', freq: [3200, 2400], q: 2 }, env: strike(0, 0.12, 0.012) },
+    ],
+  },
+  // The ledger balances: the stamp and one plain note twice, neither rising nor falling.
+  draw: {
+    mode: 'fights, royale',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [370, 370], env: strike(0, 0.28, 0.3) },
+      { source: 'sine', freq: [370, 370], env: strike(0.14, 0.2, 0.5) },
+      { ...STAMP, filter: { type: 'lowpass', freq: [350, 130], q: 0.7 } },
+    ],
+  },
+  // The turn is yours again: a soft, short tap, under the level of a click.
+  'turn-start': {
+    mode: 'every mode',
+    bus: 'effects',
+    voices: [{ source: 'sine', freq: [660, 660], env: strike(0, 0.07, 0.05) }],
+  },
+  // A group of marbles is taken up: a tick, under the level of a click.
+  selection: {
+    mode: 'every mode',
+    bus: 'effects',
+    voices: [
+      { source: 'sine', freq: [1320, 1320], env: strike(0, 0.06, 0.02) },
+      { source: 'noise', filter: { type: 'bandpass', freq: [2600, 2000], q: 2 }, env: strike(0, 0.06, 0.008) },
+    ],
+  },
+  // A move the engine refuses: a dull short drop, never a buzz.
+  'illegal-move': {
+    mode: 'every mode',
+    bus: 'effects',
+    voices: [
+      { source: 'sine', freq: [260, 180], env: strike(0, 0.22, 0.12) },
+      { source: 'noise', filter: { type: 'lowpass', freq: [260, 110], q: 0.7 }, env: strike(0, 0.25, 0.05) },
+    ],
+  },
+  // A bulkhead latches as the fight opens: a dull latch and two low notes close together, short so that it clears the tally line.
+  'boss-intro': {
+    mode: 'boss',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [220, 220], env: strike(0.03, 0.26, 0.22) },
+      { source: 'sine', freq: [330, 330], env: strike(0.03, 0.16, 0.22) },
+      { source: 'noise', filter: { type: 'lowpass', freq: [320, 120], q: 0.7 }, env: strike(0, 0.45, 0.08) },
+    ],
+  },
+  // The boss is gone, and the win does not play: a heavy stamp, a low note that falls a fourth and a plain note above it.
+  'boss-death': {
+    mode: 'boss',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [262, 196], env: strike(0, 0.3, 0.5) },
+      { source: 'sine', freq: [523, 523], env: strike(0.16, 0.2, 0.7) },
+      { source: 'noise', filter: { type: 'lowpass', freq: [300, 100], q: 0.7 }, env: strike(0, 0.45, 0.1) },
+    ],
+  },
+  // The shop opens: a till, a counter bell and its octave.
+  shop: {
+    mode: 'rogue-lite',
+    bus: 'effects',
+    voices: [
+      { source: 'sine', freq: [740, 740], env: strike(0, 0.2, 0.18) },
+      { source: 'sine', freq: [1480, 1480], env: strike(0, 0.08, 0.1) },
+      { source: 'noise', filter: { type: 'bandpass', freq: [2800, 2000], q: 3 }, env: strike(0, 0.1, 0.015) },
+    ],
+  },
+  // A relic is taken: a rising fourth with its octave, a latch closing on it.
+  relic: {
+    mode: 'rogue-lite',
+    bus: 'effects',
+    voices: [
+      { source: 'sine', freq: [440, 587], env: strike(0, 0.2, 0.4) },
+      { source: 'sine', freq: [1174, 1174], env: strike(0.05, 0.08, 0.3) },
+      { source: 'noise', filter: { type: 'lowpass', freq: [500, 200], q: 0.7 }, env: strike(0, 0.3, 0.04) },
+    ],
+  },
+  // The next round is open: a counter ticks over.
+  'royale-round': {
+    mode: 'royale',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [349, 349], env: strike(0, 0.2, 0.1) },
+      { source: 'noise', filter: { type: 'bandpass', freq: [1500, 800], q: 3 }, env: strike(0, 0.15, 0.05) },
+    ],
+  },
+  // The hero steps: the softest of all, a pad on the deck, under the level of a click.
+  step: {
+    mode: 'Open world',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [420, 380], env: strike(0, 0.07, 0.03) },
+      { source: 'noise', filter: { type: 'lowpass', freq: [900, 500], q: 0.7 }, env: strike(0, 0.12, 0.02) },
+    ],
+  },
+  // Something is picked up: a small ding and its fifth.
+  pickup: {
+    mode: 'Open world',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [784, 784], env: strike(0, 0.2, 0.08) },
+      { source: 'sine', freq: [1175, 1175], env: strike(0.04, 0.14, 0.2) },
+    ],
+  },
+  // The light changes: a slow soft swell of a note and its fifth, on the ambience bus (the only cue that does not strike).
+  'time-of-day': {
+    mode: 'Open world',
+    bus: 'ambience',
+    voices: [
+      { source: 'sine', freq: [262, 262], env: [[0, 0], [0.35, 0.18], [0.95, 0]] },
+      { source: 'sine', freq: [392, 392], env: [[0, 0], [0.4, 0.12], [0.95, 0]] },
+    ],
+  },
+  // The opponent is in: two equal knocks on the hull and a high note on the second.
+  'online-join': {
+    mode: 'online',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [587, 587], env: strike(0, 0.2, 0.07) },
+      { source: 'triangle', freq: [587, 587], env: strike(0.11, 0.2, 0.07) },
+      { source: 'sine', freq: [880, 880], env: strike(0.11, 0.1, 0.2) },
     ],
   },
 } as const satisfies Record<CueEvent, { mode: string; bus: Bus; voices: readonly Voice[] }>;

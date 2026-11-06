@@ -1,27 +1,31 @@
 // Which game event plays which cue (world.md section 7, the cue table; #1570). Pure, so main.ts only asks and plays:
 // each watch remembers what it last saw, so that a redraw of the plate never sounds a cue twice.
 
+import type { Axial } from './board';
 import type { EndAnim } from './endbanner';
 
-/** A win or a loss sounds once per game: the plate is drawn again on every refresh. A draw has no cue. */
+/** The cues the Open world asks for (the mode tells, the page plays them). */
+export type WorldCue = 'step' | 'pickup' | 'time-of-day';
+
+/** The end of a game sounds once per game: the plate is drawn again on every refresh. */
 export class EndWatch {
   private last: unknown = null;
 
-  /** The cue of the end of `game`, the first time it shows one; null for a draw, a running game or a game already told. */
-  fresh(game: unknown, anim: EndAnim | undefined): 'win' | 'loss' | null {
-    if (anim !== 'win' && anim !== 'loss') return null;
-    if (game === this.last) return null;
+  /** The cue of the end of `game`, the first time it shows one; null for a running game or a game already told. The win of a
+   * boss fight is the boss death and not a win: one sound for that moment. */
+  fresh(game: unknown, anim: EndAnim | undefined, boss = false): 'win' | 'loss' | 'draw' | 'boss-death' | null {
+    if (anim === undefined || game === this.last) return null;
     this.last = game;
-    return anim;
+    return boss && anim === 'win' ? 'boss-death' : anim;
   }
 }
 
-/** A boss phase change sounds when the phase of the same game moves: the first sight of a game is its starting phase. */
+/** A boss phase change, or the phase of the day, sounds when the phase of the same game moves: the first sight of a game is its starting phase. */
 export class PhaseWatch {
   private game: unknown = null;
-  private phase = 0;
+  private phase: number | string = 0;
 
-  changed(game: unknown, phase: number): boolean {
+  changed(game: unknown, phase: number | string): boolean {
     const same = game === this.game;
     const moved = same && phase !== this.phase;
     this.game = game;
@@ -44,6 +48,52 @@ export class OutWatch {
     return !first && news;
   }
 }
+
+/** A count that rises in the same game sounds (the relics of a run, the round of a royale): the first sight of a game is silent. */
+export class CountWatch {
+  private game: unknown = null;
+  private count = 0;
+
+  rose(game: unknown, count: number): boolean {
+    const rose = game === this.game && count > this.count;
+    this.game = game;
+    this.count = count;
+    return rose;
+  }
+}
+
+/** A selection sounds when it changes to a group of marbles, never on a redraw of the plate, and not when it is cleared (a move
+ * clears it, and a move has its own knock). */
+export class SelectionWatch {
+  private last = '';
+
+  changed(cells: readonly Axial[]): boolean {
+    const key = JSON.stringify(cells);
+    const changed = cells.length > 0 && key !== this.last;
+    this.last = key;
+    return changed;
+  }
+}
+
+/** The least time between two steps that sound, in ms: under a step at normal speed (140 ms), so that every step of a walk sounds
+ * and a walk at cruising speed (80 ms) sounds one in two. */
+export const STEP_GAP_MS = 120;
+
+/** The steps of the hero sound no faster than `STEP_GAP_MS`. */
+export class StepWatch {
+  private last = -Infinity;
+
+  /** Whether the step at `at` (ms) sounds. A step that is skipped does not push the next one back. */
+  due(at: number): boolean {
+    const due = at - this.last >= STEP_GAP_MS;
+    if (due) this.last = at;
+    return due;
+  }
+}
+
+/** Whether the turn has come back to the player (`mine`) after a move of the other side: the game runs, and no Replay is open.
+ * Called only where a bot or an online opponent has just moved, so a hot seat never sounds it. */
+export const turnBack = (toMove: number, mine: number, status: number, replaying: boolean): boolean => toMove === mine && status === 0 && !replaying;
 
 /** Something that comes up (the reward of a won rogue-lite fight) sounds when it appears, not while it stays. */
 export class EdgeWatch {

@@ -179,7 +179,7 @@ import { worldKeys } from './worldevents';
 import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner, type EndAnim } from './endbanner';
-import { EdgeWatch, EndWatch, OutWatch, PhaseWatch, clickable } from './cues';
+import { CountWatch, EdgeWatch, EndWatch, OutWatch, PhaseWatch, SelectionWatch, clickable, turnBack } from './cues';
 import { tallyLine, townLine } from './tally';
 import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
 import { generateKeys, type Keys, type Report } from './moverecord';
@@ -301,7 +301,7 @@ import { nextPalette, paletteById, themeColors, type Palette } from './palettes'
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { sceneOf } from './scenes';
-import { AFTER_EJECTION, BUSES, Sfx, TellWatch, type Bus, type CueEvent, type Tell } from './sound';
+import { AFTER_EJECTION, AFTER_SLIDE, BUSES, Sfx, TellWatch, type Bus, type CueEvent, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
 import { ACCENTS, CORE, GLASS, HEAT, pulseAt, SHELL, type Accent } from './marbles';
@@ -852,9 +852,12 @@ function tellSound(tell: Tell, marks: readonly unknown[]): void {
   const cue = sfx.tell(tell);
   if (cue) tellCues.push(cue);
 }
-// The cues of the first slice of world.md section 7 (#1570): which event plays which cue is cues.ts, the cues played are
-// read by the tests (`__cues`). A win, a loss and a phase change wait for the toll or clack of the ejection that caused them.
-const cueWatch = { end: new EndWatch(), phase: new PhaseWatch(), out: new OutWatch(), reward: new EdgeWatch() };
+// The cues of world.md section 7 (#1570): which event plays which cue is cues.ts, the cues played are read by the tests
+// (`__cues`). A win, a loss and a phase change wait for the toll or clack of the ejection that caused them.
+const cueWatch = {
+  end: new EndWatch(), phase: new PhaseWatch(), out: new OutWatch(), reward: new EdgeWatch(),
+  selection: new SelectionWatch(), shop: new EdgeWatch(), relics: new CountWatch(), round: new CountWatch(),
+};
 const cuesPlayed: CueEvent[] = [];
 function playCue(event: CueEvent, after = 0): void {
   if (sfx.cue(event, after)) cuesPlayed.push(event);
@@ -864,7 +867,7 @@ document.addEventListener('click', (e) => {
 });
 // The end of the game on the plate sounds once, never while the Replay is open: the live game's end sounds when it is back.
 function endCue(game: unknown, anim: EndAnim, after: number): void {
-  const heard = cueWatch.end.fresh(game, anim);
+  const heard = cueWatch.end.fresh(game, anim, fight !== null); // the win of a boss fight is the boss death
   if (heard) playCue(heard, after);
 }
 // The frame's radius, for the fog that starts at its edge (#399): drawFrame sets it.
@@ -2969,6 +2972,7 @@ async function botTurn(): Promise<void> {
       if (!autoPlay) return void refresh(); // turned off while the bot thought
     }
     playMove(move);
+    if (bots && turnBack(engine.to_move(), PLAYER, engine.status(), replaying !== null)) playCue('turn-start', AFTER_SLIDE); // the bot has answered
     refresh();
     void botTurn(); // the other side's reply, or the next auto-played move
   });
@@ -4099,6 +4103,7 @@ function syncTableZero(): void {
   updateFog();
 }
 function refresh(): void {
+  if (!replaying && cueWatch.selection.changed(selected)) playCue('selection'); // when the selection changes, not on each redraw
   syncTableZero();
   dirty = CHANGE_DRAWS;
   syncSpace();
@@ -4790,6 +4795,7 @@ function click(q: number, r: number): void {
   if (side === engine.to_move() && outOfTurn(dualShown, [q, r])) {
     // The Dual Room (#992): the marbles of the room out of turn are not this turn's.
     cue(document.body, 'refused', MOTION.fast);
+    playCue('illegal-move');
     return hud(` · ${roomTurn(dualShown!.room!)}`);
   }
   if (side === engine.to_move()) {
@@ -4803,6 +4809,7 @@ function click(q: number, r: number): void {
     else if (selected.length > 0) {
       refresh();
       cue(document.body, 'refused', MOTION.fast); // the turn line shakes (#1097); the text says why nothing moved
+      playCue('illegal-move'); // a hover never comes here: only a press with a selection
       return hud(' · not a legal move');
     }
   }
@@ -5500,6 +5507,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
   applyDeck(deckOf('boss', id));
+  playCue('boss-intro', 0.12); // after the click on the boss, short so as not to ride on the tally line
   refresh(); // the HUD of the fight first: the view keeps off its plate
   view = fitted = fightView();
   applyView();
@@ -6093,6 +6101,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
   link = net;
   signalingTimeout(side);
   let netState = '';
+  const joined = new EdgeWatch(); // the opponent comes in: one cue, as the status line is drawn again and again
   // An extra peer is a spectator: it follows the game and never sends (the spectator view is #34).
   // The status line shows our color and whether the key bound to the other seat is connected (#121).
   // Our color is the session's: it swaps at each rematch.
@@ -6107,6 +6116,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
     if (opponent !== 'waiting') closeLobby(); // the opponent is in: the lobby folds
+    if (joined.entered(opponent !== 'waiting' && role !== 'spectator')) playCue('online-join');
     document.body.dataset.coordinator = String(session.coordinatorSeq); // join_seq of the coordinator, read by the e2e tests (#359)
     document.body.dataset.handover = session.handover;
     onlineLine = duel ? duelStatus(mine, role, opponent, session.isAgent(other)) : coop ? coopStatus(role, opponent, session.isAgent(other)) : onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
@@ -6145,7 +6155,10 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
       // A seat's turn is its main move and the Echo's free moves before it (#958).
       ...(coop && !duel && { mover: () => seatAfter(history.length - (engine as Encounter).free_taken(), 2) }),
     },
-    onMove: () => refresh(),
+    onMove: () => {
+      if (online!.role === 'player' && turnBack(engine.to_move(), online!.side, engine.status(), replaying !== null)) playCue('turn-start', AFTER_SLIDE); // the opponent has moved
+      refresh();
+    },
     onRefuse: (reason) => {
       diag.refused(reason);
       hud(` · refused move: ${reason}`);
@@ -6323,6 +6336,8 @@ function showRun(): void {
   recordRunes(store, state.found); // an elite archetype beaten for the first time keeps its rune for good (#1476)
   recordSeen(store, state); // the compendium (#1466)
   if (cueWatch.reward.entered(state.reward)) playCue('reward', AFTER_EJECTION + 0.7); // after the win of the fight that earned it
+  if (cueWatch.shop.entered(state.shop)) playCue('shop');
+  if (cueWatch.relics.rose(map, state.relics.length)) playCue('relic'); // taken, from a boss, the shop or an event: not the ones a run is loaded with
   const done = finished(map, state);
   if (done) recordFinished(store, done); // the history, and the daily run's score
   const placed = placing(state) && built();
@@ -6679,6 +6694,7 @@ const openWorld = new OpenWorldMode(
   (seed) => Int32Array.from(world_pads(seed)), // the pad a tower beaten through the world leaves (#1531)
   (id) => boss_name(id)!, // the title of a tower entered (#1519)
 );
+openWorld.cue = (event) => playCue(event); // the step, the pickup and the time of day (#1570)
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;
 mapButton.addEventListener('click', () => {
@@ -6974,9 +6990,11 @@ function royaleHud(game: Royale): void {
   const { board, cracks } = arenaView(game);
   const out = outSeats(board);
   const gone = cueWatch.out.fresh(game, out);
-  if (end) endCue(game, end.anim, 0);
-  else if (gone) playCue('elimination'); // the end has its own cue
   const log = parseLog(game.round_log());
+  const round = cueWatch.round.rose(game, nextRound(log) - (reveal ? 1 : 0)); // the next round is open once its reveal is over
+  if (end) endCue(game, end.anim, 0);
+  else if (gone) playCue('elimination'); // the end has its own cue, and an elimination takes the place of the tick
+  else if (round) playCue('royale-round');
   const shown = log && reveal ? { ...log, turns: log.turns.slice(0, shownAt(reveal.plan, reveal.ms)) } : log;
   const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet), left: royaleNet.left };
   document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out, cracks, standings: placed, ...room });

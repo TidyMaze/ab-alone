@@ -218,22 +218,46 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   played when the tell appears or changes, never on a tell that stays the same: a low creak of the
   frame for The Hull's crack countdown, a small high bell for The Chaplain's flip tell, two hummed
   voices a fifth apart for The Choir's next army.
-- **Cues (#1570).** One cue per game event, all synthesized in code through `Sfx` on the effects bus, no audio file: dry,
-  mechanical and low-key, as the ship is. A win is not a fanfare: a stamp, a plain note and its fifth above; a loss the same
-  stamp with a note and a minor third below it. A boss phase change is a gear shifting down (a falling tritone and a grind), an
-  elimination in the royale a short drop, a rogue-lite reward two small ticks a major third apart, a UI click the shortest and
-  quietest of all. A win or a loss plays once per game, after the toll or clack of the last ejection (about 1.1 s), in the royale
-  as soon as the banner shows, never during a Replay and never for a draw, a hot seat or a spectator. A phase change plays
-  once, after the ejection that caused it, never during a Replay. The royale plays one elimination cue for the marble sets that
-  went out in the same draw of the arena, however many, none in the draw that shows the end banner (its own cue), and none for a set
-  already out when a game opens. The reward plays once
-  as it comes up, after the win. The click is one delegated listener on the buttons of the page, on the effects slider and the
-  first gesture like every cue; the board, the sliders, a node of the rogue-lite map and Start (which have their own pick) never
-  click. Every cue carries a tone above 150 Hz, so `cueDb` (`sound.ts`) calculates what a small speaker plays of the loudest
-  tone of it at its peak (the same high-pass as below, a triangle by its first harmonic, noise not counted): at least -36 and at
-  most -10 dBFS, which `sound.test.ts` asserts. Today: win -17.4, loss -17.5, phase -17.0, elimination -15.5, reward -21.7, click
-  -26.8 dBFS. This is calculated, not heard: an owner should listen on a laptop and a phone. `cuetable.test.ts` reads this
-  table: a row marked played needs its cue, a cue its row.
+- **Cues (#1570).** One cue per game event, all synthesized in code through `Sfx` on the effects bus (the time of day on the ambience
+  bus), no audio file: dry, mechanical and low-key, as the ship is. A win is not a fanfare: a stamp, a plain note and its fifth above;
+  a loss the same stamp with a note and a minor third below it; a draw the stamp and one plain note twice, neither rising nor
+  falling. A boss phase change is a gear shifting down (a falling tritone and a grind), an elimination in the royale a short drop, a
+  rogue-lite reward two small ticks a major third apart, a UI click the shortest and quietest of all. A win, a loss or a draw plays
+  once per game, after the toll or clack of the last ejection (about 1.1 s), in the royale as soon as the banner shows, never during
+  a Replay and never for a hot seat or a spectator. The win of a boss fight is the boss death, which plays instead of the win: one sound for
+  that moment, a heavy stamp, a low note that falls a fourth and a plain note above it (a boss fight lost still plays the loss). A boss
+  intro plays once as a boss fight opens, 120 ms after the click that opens it and under half a second, so that it clears the tally
+  line and does not ride on the crossfade of the music: a latch and two low notes. A phase change plays once, after the ejection that
+  caused it, never during a Replay. The royale plays one elimination cue for the marble sets that went out in the same draw of the
+  arena, however many, none in the draw that shows the end banner (its own cue), and none for a set already out when a game opens;
+  once a round is resolved and its reveal is over (at once under reduced motion) a round tick sounds, a counter turning over, unless
+  that draw has an elimination or the end, which take its place, and never for the round a game opens at. The reward plays once as it
+  comes up, after the win; the shop plays once as it opens, a till (a bell and its octave); a relic plays once each time a run holds one
+  more (taken from a boss, the shop or an event; not the relics a loaded run already has): a rising fourth. The click is one delegated
+  listener on the buttons of the page, on the effects slider and the first gesture like every cue; the board, the sliders, a node of
+  the rogue-lite map and Start (which have their own pick) never click.
+
+  The frequent cues are the quietest of all, at most the level of the click, so they do not tire. The selection plays when the
+  selection changes to a group of marbles (a press, a drag that reaches a new marble, Tab), never on a redraw of the plate, never when
+  it is cleared (a move clears it and has its own knock) and not in a Replay. The turn start plays only when the turn has come back
+  to the player after a move of the bot or of an online opponent, 250 ms later (when the marbles have arrived): never in a hot seat,
+  never for the player's own move, never in a Replay, never when that move ended the game, and not for a co-op partner or the boss's
+  reply. The illegal move is a dull reject, a short falling tone and a muffled thud, never a buzz: it plays once for a press that is
+  not a legal move after a selection (and for a marble of the other room in the Dual Room), never when the pointer only hovers. In
+  the Open world a step plays for a step of the hero, no faster than one cue per 120 ms (every step of a walk at normal speed, 140 ms,
+  one in two at the cruise pace of 80 ms), none for a blocked step, a teleport or the troop's marbles, which make no step of their
+  own, and none for the first cells of a walk to a far cell, which sounds only its last step (and nothing is played under the
+  transition into a tower, a town or a fight, where no step is made); a step that picks something up plays the pickup instead: a
+  marble that joins the troop or a lore log found for the first time. The time of day plays when the phase of the day moves (day,
+  dusk, night), never at the start of a world, a slow soft swell of a note and its fifth on the ambience bus. The online join plays
+  once as the opponent (or the co-op partner) comes into the room, two equal knocks and a high note, not for a spectator and not
+  again as the status is drawn again. Every cue carries a tone above 150 Hz, so `cueDb` (`sound.ts`) calculates what a small speaker
+  plays of the loudest tone of it at its peak (the same high-pass as below, a triangle by its first harmonic, noise not counted): at
+  least -36 and at most -10 dBFS, which `sound.test.ts` asserts. Today: win -17.4, loss -17.5, draw -17.9, phase -17.0, elimination
+  -15.5, reward -21.7, click -26.8, turn start -28.1, selection -29.4, illegal move -19.0, boss intro -19.3, boss death -18.0, shop
+  -18.9, relic -19.0, royale round -20.9, step -30.0, pickup -20.8, time of day -20.3, online join -20.8 dBFS. This is calculated, not
+  heard: an owner should listen on a laptop and a phone. `cuetable.test.ts` reads this table: a row marked played needs its cue, a
+  cue its row.
 
   | Event | Mode | Bus | Status |
   |---|---|---|---|
@@ -243,19 +267,19 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   | `elimination` | royale | effects | played |
   | `reward` | rogue-lite | effects | played |
   | `click` | every mode | effects | played |
-  | `draw` | fights | effects | planned |
-  | `turn-start` | every mode | effects | planned |
-  | `selection` | every mode | effects | planned |
-  | `illegal-move` | every mode | effects | planned |
-  | `boss-intro` | boss | effects | planned |
-  | `boss-death` | boss | effects | planned |
-  | `shop` | rogue-lite | effects | planned |
-  | `relic` | rogue-lite | effects | planned |
-  | `royale-round` | royale | effects | planned |
-  | `step` | Open world | effects | planned |
-  | `pickup` | Open world | effects | planned |
-  | `time-of-day` | Open world | ambience | planned |
-  | `online-join` | online | effects | planned |
+  | `draw` | fights, royale | effects | played |
+  | `turn-start` | every mode | effects | played |
+  | `selection` | every mode | effects | played |
+  | `illegal-move` | every mode | effects | played |
+  | `boss-intro` | boss | effects | played |
+  | `boss-death` | boss | effects | played |
+  | `shop` | rogue-lite | effects | played |
+  | `relic` | rogue-lite | effects | played |
+  | `royale-round` | royale | effects | played |
+  | `step` | Open world | effects | played |
+  | `pickup` | Open world | effects | played |
+  | `time-of-day` | Open world | ambience | played |
+  | `online-join` | online | effects | played |
 
 - **Music.** No melodic loops. Drone and texture layers, 2 to 3 tension layers driven by game
   state (marbles in danger, boss phase). Boss themes are a slow pulse that speeds up per phase.
@@ -338,7 +362,7 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
 - **Mix.** Four sliders: music, ambience, effects, voice (#438), each the gain of its bus into one
   master gain, 0 to 100 %, at 100 % by default and saved locally. The hum is ambience, the
-  tension drones and the layers of a scene (a wind excepted, which is ambience) music, the knock, the ejection, the tells, the pick of a rogue-lite map node (#1468) and the cues (#1570) effects, the audio logs voice (#516).
+  tension drones and the layers of a scene (a wind excepted, which is ambience) music, the knock, the ejection, the tells, the pick of a rogue-lite map node (#1468) and the cues (#1570) effects (the time of day of the Open world ambience), the audio logs voice (#516).
   A Sound off saved by the old toggle sets every slider to 0. With every slider at 0 no audio
   context is made. The game is fully playable on mute: every audio cue has a visual twin (the
   ejection animation for the ejection sound, the tells on the board for their sounds, the transcript for an

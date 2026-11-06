@@ -59,15 +59,11 @@ describe('the step of the hero (#1570)', () => {
     m.enter(7, 800, 600);
     tap(m, 'ArrowRight');
     expect(heard).toEqual(['step']);
-    const sea = make((_s, cx, cy) => {
-      if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-      const out = new Uint8Array(CHUNK * CHUNK * 3);
-      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0, 0], i * 3); // a lake everywhere
-      return out;
-    });
-    sea.m.enter(7, 800, 600);
-    tap(sea.m, 'ArrowRight');
-    expect(sea.heard).toEqual([]);
+    clock += 1000;
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[1, 0], [1, -1], [0, 1]] }); // a wall of enemies ahead: the hero leans and stays
+    tap(m, 'ArrowRight');
+    expect(body().openworldAt).toBe('0,0');
+    expect(heard).toEqual(['step']);
   });
 
   it('a held walk at normal speed sounds each step: one cell every 140 ms is more than the gap', () => {
