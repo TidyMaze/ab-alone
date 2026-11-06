@@ -46,6 +46,8 @@ import {
   choiceText,
   eventHtml,
   eventOf,
+  foretold,
+  relicText,
   CURSE_FIGHTS,
   EVENTS,
   fightBudget,
@@ -1018,6 +1020,7 @@ describe('roguelite relics', () => {
   const ACT = parseMap([0, 0, 0, 0, 0b1111, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 1, 1, 3, 1, 0, 0, 0, 1, 2, 4, 1, 0, 0, 0, 1, 3, 5, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0]);
   const run = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [0], ...state });
   const ALL = RELICS.map((_, code) => code);
+  const NONE = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
   it('twelve relics, by their code on the bridge, each a name, a one-line rule and its own glyph', () => {
     expect(RELICS).toHaveLength(16);
@@ -1027,6 +1030,13 @@ describe('roguelite relics', () => {
     for (const r of RELICS) expect(r.help).toMatch(/^[^.]+$/); // one line, no full stop
     expect(relicMask(run({ relics: [Relic.Gyroscope, Relic.Detonator] }))).toBe(0b10001);
     expect(relicMask(run())).toBe(0);
+  });
+
+  it('the four reworked relics say what they change on their card, in the words of the game', () => {
+    expect(relicText(Relic.SalvageMagnet)).toBe('Salvage magnet: a won elite turns a plain marble into its own: an Anchor from The Wall, a Spark from The Artificer, a Heavy from The Brute');
+    expect(relicText(Relic.Jammer)).toBe('Jammer: a Freeze joins your tactics at the start of each fight and elite, but a win gives half the scrap');
+    expect(relicText(Relic.LuckyCoin)).toBe('Lucky coin: an event shows how each of its gambles turns out before you take it');
+    expect(relicText(Relic.Dampener)).toBe('Dampener: a Fall back joins your tactics at the start of each act boss fight, but act bosses play at 125 % of their strength');
   });
 
   it('a treasure holds one relic, dealt by the run seed and the node, never one the run holds', () => {
@@ -1101,18 +1111,40 @@ describe('roguelite relics', () => {
     expect(fightOver(ACT, { ...pick(newRun(1, 3, LEGACY_UNLOCKED), 0), relics: [Relic.HullPlating] }, false, 3).end).toBe('lost');
   });
 
-  it('Salvage magnet: a won elite gives one more marble back', () => {
-    const elite = pick(run({ army: 10, relics: [Relic.SalvageMagnet] }), 1);
-    expect(fightOver(ACT, elite, true, 0).army).toBe(13);
-    expect(fightOver(ACT, { ...elite, army: 13 }, true, 0).army).toBe(START_ARMY);
-    expect(fightOver(ACT, { ...pick(newRun(1, 3, LEGACY_UNLOCKED), 0), army: 10, relics: [Relic.SalvageMagnet] }, true, 0).army).toBe(10); // a fight
+  // The elites' archetypes by the bridge's code (section 14): The Wall 1, The Artificer 2, The Brute 3. The test map's elite is archetype 0.
+  const archetype = (code: number): MapNode[] => ACT.map((n) => (n.kind === 'elite' ? { ...n, elite: code } : n));
+
+  it('Salvage magnet: a won elite turns a plain marble into its own, an Anchor from The Wall, a Spark from The Artificer, a Heavy from The Brute', () => {
+    const magnet = run({ army: 10, enemies: true, relics: [Relic.SalvageMagnet] });
+    const kept = (code: number, state: Partial<Run> = {}) => fightOver(archetype(code), pick({ ...magnet, ...state }, 1), true, 0);
+    expect(kept(1)).toMatchObject({ army: 12, specials: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0] }); // the elite's 2 marbles, none more
+    expect(kept(2).specials).toEqual([0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
+    expect(kept(3).specials).toEqual([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(kept(1, { specials: [1, 1, 0, 0, 0, 0, 0, 0, 0, 0] }).specials).toEqual([1, 2, 0, 0, 0, 0, 0, 0, 0, 0]); // on top of the ones it holds
+    expect(kept(1, { army: 14, specials: [14, 0, 0, 0, 0, 0, 0, 0, 0, 0] }).specials).toEqual([14, 0, 0, 0, 0, 0, 0, 0, 0, 0]); // no plain marble left
+    expect(kept(0).specials).toEqual(NONE); // an elite with no archetype
+    expect(kept(1, { enemies: false }).specials).toEqual(NONE); // a run saved before the varied armies
+    expect(kept(1, { relics: [] }).specials).toEqual(NONE);
+    expect(fightOver(archetype(1), pick(magnet, 0), true, 0).specials).toEqual(NONE); // a fight
+    expect(fightOver(archetype(1), pick(magnet, 1), false, 0).specials).toEqual(NONE); // lost
   });
 
-  it('Jammer: the bot searches a quarter fewer positions in fights and elites, not against a boss', () => {
-    const jammed = { relics: [Relic.Jammer] };
-    expect(fightBudget(ACT, { ...pick(newRun(1, 3, LEGACY_UNLOCKED), 0), ...jammed }, 1000)).toBe(750);
-    expect(fightBudget(ACT, pick(run({ ...jammed, keys: [Key.Emerald] }), 1), 1000)).toBe(1500);
-    expect(fightBudget(ACT, pick(run(jammed), 5), 1000)).toBe(1000);
+  it('Jammer: a Freeze joins your tactics at the start of a fight or an elite, but a win gives half the scrap', () => {
+    const jammer = run({ relics: [Relic.Jammer] });
+    expect(visit(ACT, jammer, 0).tactics).toEqual([2]);
+    expect(visit(ACT, jammer, 1).tactics).toEqual([2]);
+    expect(visit(ACT, jammer, 5).tactics).toEqual([]); // Freeze is not played against an act boss
+    expect(visit(ACT, jammer, 2).tactics).toEqual([]); // a rest
+    expect(visit(ACT, { ...jammer, tactics: [1] }, 0).tactics).toEqual([1, 2]);
+    expect(visit(ACT, { ...jammer, tactics: [2, 3] }, 0).tactics).toEqual([2, 3]); // one Freeze at a time
+    expect(visit(ACT, { ...jammer, tactics: [1, 3, 4] }, 0).tactics).toEqual([1, 3, 4]); // the hand is full
+    expect(visit(ACT, run(), 0).tactics).toEqual([]);
+    const scrap = (state: Run, node: number): number => fightOver(ACT, pick(state, node), true, 0).scrap - state.scrap;
+    expect([scrap(jammer, 0), scrap(jammer, 1), scrap(jammer, 5)]).toEqual([5, 10, 15]);
+    expect([scrap(run(), 0), scrap(run(), 1), scrap(run(), 5)]).toEqual([10, 20, 30]);
+    expect(scrap({ ...jammer, ascension: 5 }, 0)).toBe(3); // level 5's 7, half of it, down
+    expect(fightBudget(ACT, pick(jammer, 0), 1000)).toBe(1000); // the search is no longer cut
+    expect(fightBudget(ACT, pick(run({ relics: [Relic.Jammer], keys: [Key.Emerald] }), 1), 1000)).toBe(3000);
   });
 
   it('Bunks: a rest also makes a plain marble a Heavy, an upgrade does not', () => {
@@ -1121,13 +1153,24 @@ describe('roguelite relics', () => {
     expect(upgrade(visit(ACT, run({ specials: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0], relics: [Relic.Bunks] }), 2), 2).specials).toEqual([0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
   });
 
-  it('Lucky coin: a reward offers 4 instead of 3', () => {
+  it('Lucky coin: an event shows how each of its gambles turns out before it is taken', () => {
+    const coin = visit(ACT, run({ relics: [Relic.LuckyCoin] }), 3);
+    const seeds = Array.from({ length: 600 }, (_, seed) => seed);
+    const dice = (seed: number): Run => ({ ...coin, seed });
+    const outcome = (state: Run): boolean => takeEvent(state, eventOf(state)!, 1)!.told.includes('it paid off');
+    const [pays, fails] = [true, false].map((paid) => dice(seeds.find((seed) => eventOf(dice(seed))!.title === 'Dice' && outcome(dice(seed)) === paid)!));
+    const label = (state: Run, choice: number): string => parse(eventHtml(state)).querySelector(`button[data-choice="${choice}"]`)!.textContent!;
+    expect(outcome(pays!)).toBe(true);
+    expect(outcome(fails!)).toBe(false);
+    expect(label(pays!, 1)).toBe('Wager a marble · 40 %: +1 relic, otherwise -1 marble · Lucky coin: it will pay off');
+    expect(label(fails!, 1)).toBe('Wager a marble · 40 %: +1 relic, otherwise -1 marble · Lucky coin: it will go wrong');
+    expect(foretold(pays!, eventOf(pays!)!.choices[1]!, 1)).toBe(' · Lucky coin: it will pay off');
+    expect(foretold(pays!, eventOf(pays!)!.choices[0]!, 0)).toBe(''); // a sure choice
+    expect(label(pays!, 0)).not.toContain('Lucky coin');
+    expect(label({ ...pays!, relics: [] }, 1)).toBe('Wager a marble · 40 %: +1 relic, otherwise -1 marble'); // without the coin
+    expect(foretold({ ...pays!, relics: [] }, eventOf(pays!)!.choices[1]!, 1)).toBe('');
     const short = { ...run({ army: 12 }), reward: true };
-    expect(offers(short)).toHaveLength(3);
-    const coin = offers({ ...short, relics: [Relic.LuckyCoin] });
-    expect(coin).toHaveLength(4);
-    expect(new Set(coin).size).toBe(4);
-    expect(coin.slice(0, 3)).toEqual(offers(short)); // the same three first
+    expect(offers({ ...short, relics: [Relic.LuckyCoin] })).toEqual(offers(short)); // a reward still offers 3
   });
 
   it('Bargain: an event trade costs a marble less', () => {
@@ -1149,10 +1192,34 @@ describe('roguelite relics', () => {
     expect(foesOf(ACT, pick(run({ relics: [Relic.Saboteur] }), 1))).toBe(START_ARMY - 1);
   });
 
-  it('Dampener: an act boss plays at three quarters of its act strength', () => {
+  it('Dampener: a Fall back joins your tactics at the start of an act boss fight, but the boss plays at 125 % of its strength', () => {
     const ids = ['a', 'b'];
-    expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0), 2), ids)!.percent).toBe(38);
-    expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0, 2, 3), 5), ids)!.percent).toBe(90);
+    expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0), 2), ids)!.percent).toBe(63);
+    expect(actBoss(MAP, pick(at({ ...newRun(1, 3, LEGACY_UNLOCKED), relics: [Relic.Dampener] }, 0, 2, 3), 5), ids)!.percent).toBe(150);
+    const damp = run({ relics: [Relic.Dampener] });
+    expect(visit(ACT, damp, 5).tactics).toEqual([4]);
+    expect(visit(ACT, damp, 0).tactics).toEqual([]); // a fight, an elite
+    expect(visit(ACT, damp, 1).tactics).toEqual([]);
+    expect(visit(ACT, { ...damp, tactics: [2] }, 5).tactics).toEqual([2, 4]);
+    expect(visit(ACT, { ...damp, tactics: [4, 1] }, 5).tactics).toEqual([4, 1]); // one Fall back at a time
+    expect(visit(ACT, { ...damp, tactics: [1, 2, 3] }, 5).tactics).toEqual([1, 2, 3]); // the hand is full
+    expect(takeBonus({ ...damp, bonus: true })).toMatchObject({ fighting: true, tactics: [4] }); // the boss behind the bonus room
+    expect(takeBonus({ ...run(), bonus: true }).tactics).toEqual([]);
+    expect(visit(ACT, run(), 5).tactics).toEqual([]);
+  });
+
+  it('a run saved holding a reworked relic loads and plays on with the new rule', async () => {
+    const store = memoryStore();
+    const relics = [Relic.SalvageMagnet, Relic.Jammer, Relic.LuckyCoin, Relic.Dampener];
+    const saved = { ...pick(run({ army: 9, enemies: true, relics }), 1), moves: [MV, [2, ...MV.slice(1)]] };
+    await saveRun(store, saved);
+    const loaded = (await loadRun(store, () => archetype(3), engine))!;
+    expect(loaded.state).toEqual(saved);
+    expect(loaded.engine).toMatchObject({ army: 9, played: [1, 2] });
+    const won = fightOver(archetype(3), loaded.state, true, 1);
+    expect(won).toMatchObject({ army: 10, end: '', reward: true, scrap: loaded.state.scrap + 10, specials: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(visit(archetype(3), { ...won, reward: false, path: [0] }, 5)).toMatchObject({ fighting: true, tactics: [4] });
+    expect(visit(archetype(3), { ...won, reward: false, path: [0] }, 0).tactics).toEqual([2]);
   });
 
   it('War chest: an act boss beaten gives 2 marbles back', () => {
@@ -1790,7 +1857,7 @@ describe('roguelite Collector (#1470)', () => {
     expect(doc.querySelector('.run-line')!.textContent).toBe('Collector · 6 cells');
     const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-collect]')];
     expect(buttons.map((b) => b.dataset.collect)).toEqual(['0', '6', '9']);
-    expect(buttons[0]!.textContent).toBe('Relic blueprint · Lucky coin: rewards offer 4 choices · 5 cells');
+    expect(buttons[0]!.textContent).toBe('Relic blueprint · Lucky coin: an event shows how each of its gambles turns out before you take it · 5 cells');
     expect(buttons[1]!.textContent).toMatch(/^Tactic blueprint · Swap: /);
     expect(buttons[2]!.textContent).toMatch(/^Special marble blueprint · Spark: /);
     expect(buttons.map((b) => b.disabled)).toEqual([false, false, false]);
@@ -1800,13 +1867,13 @@ describe('roguelite Collector (#1470)', () => {
     expect(doc.querySelector('button[data-depart]')!.textContent).toBe('Leave');
     const poor = [...parse(collectorHtml(fresh({ path: [0, 1, 2], cells: 4, carried: [0], collector: true }))).querySelectorAll<HTMLButtonElement>('button[data-collect]')];
     expect(poor[0]!.disabled).toBe(true);
-    expect(poor[0]!.textContent).toBe('Relic blueprint · Lucky coin: rewards offer 4 choices · 5 cells · not enough cells');
+    expect(poor[0]!.textContent).toBe('Relic blueprint · Lucky coin: an event shows how each of its gambles turns out before you take it · 5 cells · not enough cells');
   });
 
   it('the reward and relic screens of an elite or a boss say which blueprint it dropped', () => {
     const rest = BLUEPRINTS.map((_, id) => id).filter((id) => id !== 0);
     const elite = won([0, 1], { unlocked: rest, keys: [Key.Emerald] }); // only Lucky coin is left to drop
-    const line = 'Blueprint found · Relic blueprint · Lucky coin: rewards offer 4 choices · kept for the Collector, lost if the run ends first';
+    const line = 'Blueprint found · Relic blueprint · Lucky coin: an event shows how each of its gambles turns out before you take it · kept for the Collector, lost if the run ends first';
     expect(parse(rewardHtml(TWO, elite)).querySelector('.run-help')!.textContent).toBe(line);
     expect(parse(relicHtml(TWO, { ...elite, relic: true })).querySelector('.run-help')!.textContent).toBe(line);
     expect(parse(rewardHtml(TWO, won([0]))).querySelector('.run-help')).toBeNull(); // a fight drops none
@@ -2122,21 +2189,19 @@ describe('roguelite ascension', () => {
     const boss = (n: number, relics: number[] = []): number => actBoss(ACT, pick(level(n, { path: [0], relics }), 4), ids)!.percent;
     expect(boss(6)).toBe(50);
     expect(boss(7)).toBe(63);
-    expect(boss(7, [Relic.Dampener])).toBe(47);
+    expect(boss(7, [Relic.Dampener])).toBe(78);
   });
 
   it('level 9: a reward offers one choice fewer', () => {
     const short = { ...level(8, { army: 12 }), reward: true };
     expect(offers(short)).toHaveLength(3);
     expect(offers({ ...short, ascension: 9 })).toEqual(offers(short).slice(0, 2));
-    expect(offers({ ...short, ascension: 9, relics: [Relic.LuckyCoin] })).toHaveLength(3);
   });
 
   it('level 10: the bot searches a quarter more in fights and elites, not against a boss', () => {
     expect(fightBudget(ACT, pick(level(9), 0), 1000)).toBe(1000);
     expect(fightBudget(ACT, pick(level(10), 0), 1000)).toBe(1250);
     expect(fightBudget(ACT, pick(level(10, { path: [0], keys: [Key.Emerald] }), 1), 1000)).toBe(3750);
-    expect(fightBudget(ACT, pick(level(10, { path: [0], relics: [Relic.Jammer], keys: [Key.Emerald] }), 1), 1000)).toBe(2813);
     expect(fightBudget(ACT, pick(level(10, { path: [0] }), 4), 1000)).toBe(1000);
   });
 

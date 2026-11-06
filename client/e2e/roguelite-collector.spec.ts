@@ -17,7 +17,7 @@ test('the Collector: a drop on the reward screen, the room after the act boss, a
 
   await hook(run({ reward: true, cells: 8, carried: [0], drop: 1 }));
   await expect(line).toHaveText('Fight won · pick a reward');
-  await expect(panel.locator('.run-help')).toHaveText(/^Blueprint found · Relic blueprint · Lucky coin: rewards offer 4 choices · kept for the Collector/);
+  await expect(panel.locator('.run-help')).toHaveText(/^Blueprint found · Relic blueprint · Lucky coin: an event shows how each of its gambles turns out before you take it · kept for the Collector/);
   await shot(page, { path: testInfo.outputPath('roguelite-blueprint-drop.png') });
 
   await hook(run({ cells: 12, carried: [0, 8], collector: true }));

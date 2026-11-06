@@ -272,12 +272,11 @@ describe('the boss relics', () => {
   it('Static shroud: the bot searches half the positions, but rewards offer one choice fewer', () => {
     const run = { ...fighting(base(), 0), relics: [Relic.StaticShroud] };
     expect(fightBudget(MAP, run, 100)).toBe(50);
-    expect(fightBudget(MAP, { ...fighting(base(), 0, 1), relics: [Relic.StaticShroud, Relic.Jammer] }, 100)).toBe(113); // 300 x .5 x .75
+    expect(fightBudget(MAP, { ...fighting(base(), 0, 1), relics: [Relic.StaticShroud] }, 100)).toBe(150); // 300 x .5
     expect(fightBudget(MAP, { ...fighting(base(), 0, 1, 4), relics: [Relic.StaticShroud] }, 100)).toBe(100); // not against a boss
     const reward = { ...base(), reward: true, army: 10, path: [0] };
     expect(offers(reward)).toHaveLength(3);
     expect(offers({ ...reward, relics: [Relic.StaticShroud] })).toHaveLength(2);
-    expect(offers({ ...reward, relics: [Relic.StaticShroud, Relic.LuckyCoin] })).toHaveLength(3);
   });
   it('Boss breaker: act bosses play at half their strength, but the bot searches 25 % more in fights and elites', () => {
     expect(actBoss(MAP, { ...fighting(base(), 0, 1, 4, 5, 6, 8), relics: [Relic.BossBreaker] }, ['hull'])!.percent).toBe(60);
