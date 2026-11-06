@@ -20,7 +20,7 @@ function grass(_seed: number, cx: number, cy: number): Uint8Array {
 // `kind, q, r` triples: the spawn town, a dungeon gate in the window, a town far away.
 const PLACES = Int32Array.of(0, 0, 0, 1, 6, 0, 0, 60, 0);
 const none: undefined[] = Array.from({ length: 12 }, () => undefined); // the parameters before `read`
-const make = (placesOf?: (seed: number) => Int32Array, onPlace?: (seed: number, kind: 'town' | 'dungeon') => void, saves = worldSaves(memoryStore(), 1)) =>
+const make = (placesOf?: (seed: number) => Int32Array, onPlace?: (seed: number, kind: 'town' | 'dungeon', index: number) => void, saves = worldSaves(memoryStore(), 1)) =>
   new (OpenWorldMode as new (...args: unknown[]) => OpenWorldMode)(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, ...none, undefined, placesOf, onPlace);
 const body = () => document.body.dataset;
 
@@ -71,7 +71,7 @@ describe('entering a town or a dungeon gate (#1593)', () => {
     m.enter(7, 800, 600);
     m.fixture({ hero: [5, 0], troop: [[4, 0]], enemies: [] });
     roll(m, 'ArrowRight');
-    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon');
+    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0);
     expect(m.active).toBe(false);
     for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
     expect((await saves.load(7))!.hero).toEqual([5, 0]);
@@ -85,8 +85,17 @@ describe('entering a town or a dungeon gate (#1593)', () => {
     expect(m.active).toBe(true);
     m.fixture({ hero: [-1, 0], troop: [], enemies: [] });
     roll(m, 'ArrowRight');
-    expect(onPlace).toHaveBeenCalledWith(7, 'town');
+    expect(onPlace).toHaveBeenCalledWith(7, 'town', 0);
     expect(m.active).toBe(false);
+  });
+
+  it('tells the index of the place among those of its kind, so the second town is 1 (#1516)', () => {
+    const onPlace = vi.fn();
+    const m = make(() => PLACES, onPlace);
+    m.enter(7, 800, 600);
+    m.fixture({ hero: [59, 0], troop: [], enemies: [] });
+    roll(m, 'ArrowRight');
+    expect(onPlace).toHaveBeenCalledWith(7, 'town', 1);
   });
 
   it('ignores a press on a place the hero is not next to, and leaves the world on one even when nothing is listening', () => {

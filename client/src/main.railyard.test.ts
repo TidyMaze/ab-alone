@@ -68,7 +68,7 @@ describe('main.ts The Rail Yard (#626)', () => {
     expect(body().boss).toBe('railyard');
     expect(body().deck).toBe('cargo');
     expect(document.getElementById('boss-bar')!.textContent).toContain('The Rail Yard');
-    expect(game.hud()).toContain('Freight on schedule. Six out to balance the books.');
+    expect(game.hud()).toContain('Freight on schedule. Nothing on the line stops it.');
     expect(trains(game)).toEqual([]); // none at the start
     expect(body().trains).toBe('0');
     plies(game, 1); // the end of the player's turn 1

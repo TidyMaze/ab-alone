@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BOSS_IDS, endingLine, ledgerLine, tallyLine } from './tally';
+import { SECRETS } from './story';
+import { BOSS_IDS, endingLine, ledgerLine, TOWN_LINES, tallyLine, townLine } from './tally';
 
 describe('tallyLine', () => {
   it('has a non-empty line for every mode', () => {
@@ -35,6 +36,61 @@ describe('tallyLine', () => {
       expect(line).not.toContain('\n');
       expect(line.length).toBeLessThanOrEqual(72);
     }
+  });
+});
+
+// #1544: every boss has its own Tally line. The line is met from the boss menu at any stage, so it holds no secret word of the story (world.md section 12.2).
+describe('the Tally line of each boss (#1544)', () => {
+  const lines = BOSS_IDS.map((id) => tallyLine({ mode: 'boss', boss: id }));
+  const LATER = BOSS_IDS.slice(5);
+  const sentences = (line: string): string[] => line.split(/(?<=\.)\s+/);
+
+  it('is different for each of the 15 bosses', () => {
+    expect(new Set(lines).size).toBe(15);
+  });
+
+  it('gives each of the ten later bosses sentences no other boss says, so none ends on the same words', () => {
+    for (const id of LATER) {
+      const others = BOSS_IDS.filter((o) => o !== id).flatMap((o) => sentences(tallyLine({ mode: 'boss', boss: o })));
+      for (const sentence of sentences(tallyLine({ mode: 'boss', boss: id }))) expect(others, `${id}: ${sentence}`).not.toContain(sentence);
+    }
+  });
+
+  it('holds no secret word at any stage', () => {
+    for (const line of lines) for (const { word } of SECRETS) expect(line).not.toMatch(word);
+  });
+});
+
+// #1516: each town of the Open world has one ledger line of Tally, by the town's index (the spawn town first), held back until its stage.
+describe('the ledger line of each town (#1516)', () => {
+  it('holds one line for each of the five towns, each with the stage it is met at', () => {
+    expect(TOWN_LINES).toHaveLength(5);
+    for (const { stage, line } of TOWN_LINES) {
+      expect(Number.isInteger(stage)).toBe(true);
+      expect(stage).toBeGreaterThanOrEqual(2);
+      expect(stage).toBeLessThanOrEqual(7);
+      expect(line.length).toBeGreaterThan(0);
+      expect(line.length).toBeLessThanOrEqual(90);
+      expect(line).not.toMatch(/[<>&\n]/);
+    }
+    expect(new Set(TOWN_LINES.map((t) => t.line)).size).toBe(5);
+  });
+
+  it('holds no secret word of a later stage than its own', () => {
+    for (const { stage, line } of TOWN_LINES) for (const { word, from } of SECRETS) if (stage < from) expect(line).not.toMatch(word);
+  });
+
+  it('says nothing before its stage, the line from it on, and nothing for a town that does not exist', () => {
+    TOWN_LINES.forEach(({ stage, line }, index) => {
+      for (let s = 1; s < stage; s++) expect(townLine(index, s)).toBe('');
+      for (let s = stage; s <= 7; s++) expect(townLine(index, s)).toBe(line);
+    });
+    expect(townLine(5, 7)).toBe('');
+    expect(townLine(-1, 7)).toBe('');
+  });
+
+  it('is nothing at the first stage: a new player meets no line of the story in a town', () => {
+    for (let index = 0; index < 5; index++) expect(townLine(index, 1)).toBe('');
   });
 });
 

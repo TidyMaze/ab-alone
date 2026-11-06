@@ -1288,6 +1288,102 @@ mod tests {
         assert_eq!(boss_goal("nobody"), None);
     }
 
+    // #1544: the goals of the ten later bosses speak in the boss's register and keep every rule they stated, and the win and loss
+    // sentence the other bosses end on.
+    #[test]
+    fn the_goals_of_the_ten_later_bosses_keep_their_rules_in_the_register_of_the_boss() {
+        let goals: [(&str, &str, &[&str]); 10] = [
+            (
+                "alien",
+                "The brood is warm, and its eggs hatch.",
+                &["land on one to crush it"],
+            ),
+            (
+                "railyard",
+                "Freight runs on schedule",
+                &["trains sweep the marked lines"],
+            ),
+            (
+                "magnetizer",
+                "Charge against charge:",
+                &["your + and − marbles repel and push any line"],
+            ),
+            (
+                "pulsar",
+                "A beacon pulses on schedule",
+                &["pushes every lone marble or pair away"],
+            ),
+            (
+                "overseer",
+                "Watch begun.",
+                &[
+                    "Push its cores onto or next to the vents",
+                    "Eject 6 to win, cores count",
+                    "40 turns",
+                ],
+            ),
+            (
+                "assembly",
+                "Throughput is the only measure.",
+                &[
+                    "Belts carry every marble off the board",
+                    "later, presses strike",
+                ],
+            ),
+            (
+                "core",
+                "The core runs hot.",
+                &[
+                    "Centre cells charge marbles",
+                    "a charged marble weighs more in a push",
+                    "4 blow it off",
+                ],
+            ),
+            (
+                "dual",
+                "Two rooms on the books",
+                &[
+                    "comes back in the other room",
+                    "at 5 a bridge fills the void",
+                ],
+            ),
+            (
+                "stalker",
+                "From the fog",
+                &[
+                    "sees your whole army",
+                    "You see its marbles only near your own",
+                    "a move may be stopped by one you cannot see",
+                ],
+            ),
+            (
+                "swarm",
+                "Wave on wave, and no queen.",
+                &[
+                    "You start in the centre",
+                    "Survive 40 turns to win",
+                    "the evac 2 turns closer",
+                    "ejects 2 of your marbles",
+                ],
+            ),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        for (id, opening, rules) in goals {
+            let goal = boss_goal(id).unwrap();
+            assert!(goal.starts_with(opening), "{id}: {goal}");
+            for rule in rules {
+                assert!(goal.contains(rule), "{id} keeps {rule}: {goal}");
+            }
+            if id != "overseer" && id != "swarm" {
+                assert!(
+                    goal.ends_with("Eject 6 to win; lose 6 or draw to lose."),
+                    "{id}: {goal}"
+                );
+            }
+            assert!(seen.insert(goal.clone()), "{id} repeats a goal");
+        }
+    }
+
     #[test]
     fn an_unknown_boss_is_refused() {
         assert_eq!(
@@ -1977,7 +2073,9 @@ mod tests {
     fn the_stalker_shows_the_player_a_fogged_board_and_its_sight() {
         let f = Encounter::new("stalker", 3).unwrap();
         assert_eq!(f.name(), "The Stalker");
-        assert!(f.goal().starts_with("The stalker sees your whole army."));
+        assert!(f
+            .goal()
+            .starts_with("From the fog the stalker sees your whole army."));
         assert_eq!((f.phase(), f.phases(), f.sight()), (0, 3, 3));
         assert_eq!(f.stalker(), vec![3, 3], "sight 3, 3 ejections to go");
         assert!(f.board().contains(&2) && !f.seen_board().contains(&2));
@@ -2677,7 +2775,7 @@ mod tests {
     fn the_dual_room_goal_names_the_void_and_the_bridge() {
         assert_eq!(
             boss_goal("dual").unwrap(),
-            "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose."
+            "Two rooms on the books, a void between them: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose."
         );
     }
 

@@ -74,7 +74,7 @@ describe('main.ts The Alien (#588)', () => {
     expect(body().boss).toBe('alien');
     expect(body().deck).toBe('cargo');
     expect(document.getElementById('boss-bar')!.textContent).toContain('The Alien');
-    expect(game.hud()).toContain('Brood on file. Six out to balance the books.');
+    expect(game.hud()).toContain('Brood on file. It bred while the count was open.');
     expect(body().eggs).toBe('0');
     expect(game.hook('__notches')).toEqual({ lit: 2, dark: 0, glyph: true }); // P2 after 2 ejections (#621)
     plies(game, 3);

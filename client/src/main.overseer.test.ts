@@ -148,7 +148,7 @@ describe('main.ts The Overseer (#635)', () => {
     fightOverseer(game);
     expect(body().boss).toBe('overseer');
     expect(body().deck).toBe('chapel');
-    expect(game.hud()).toContain('Cores on file. Six burnt to balance the books.');
+    expect(game.hud()).toContain('Watch begun. Cores on file. Six burnt closes the watch.');
     expect(tell()).toBe(toxinText(40));
     const start = drawn(game);
     expect(start.overseer).toEqual([0, 0]);

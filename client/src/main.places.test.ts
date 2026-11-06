@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
+import { TOWN_LINES } from './tally';
 import { boot, type Game } from './test/harness';
 
 // The towns and dungeon gates of the Open world (#1593, docs/specs/openworld.md section 13): rolling onto a town opens the Hub, rolling onto a
@@ -14,7 +15,7 @@ const settle = async (): Promise<void> => {
 const hooks = () => window as unknown as { __openworldFixture: (f: { hero: Axial; troop: Axial[]; enemies: Axial[] }) => void };
 
 /** Opens the world of seed 7, stands the hero west of the first place of `kind` and rolls onto it. Returns the entrance cell. */
-async function rollOnto(game: Game, kind: 'town' | 'dungeon', open = true): Promise<Axial> {
+async function rollOnto(game: Game, kind: 'town' | 'dungeon', open = true, nth = 0): Promise<Axial> {
   if (open) {
     game.openModes();
     byId('openworld').click();
@@ -22,7 +23,7 @@ async function rollOnto(game: Game, kind: 'town' | 'dungeon', open = true): Prom
   }
   const [q, r] = data()
     .openworldPlaces!.split(' ')
-    .find((p) => p.startsWith(`${kind}:`))!
+    .filter((p) => p.startsWith(`${kind}:`))[nth]!
     .slice(kind.length + 1)
     .split(',')
     .map(Number) as unknown as Axial;
@@ -99,6 +100,43 @@ describe('a town of the Open world (#1593)', () => {
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(byId('place-back').hidden).toBe(true);
+  });
+});
+
+// #1516: a town enters on Tally's ledger line for it, by its index, from its stage (world.md section 13): nothing before.
+describe('the ledger line of a town (#1516)', () => {
+  const story = (...moments: number[]): { storage: Record<string, string> } => ({ storage: { 'ab-alone.story': JSON.stringify({ moments, wins: 0 }) } });
+
+  it('shows the line of the spawn town on the plate of the Hub when the stage is reached', async () => {
+    const game = await boot('?bot=off&openworld=7', story(2));
+    await rollOnto(game, 'town');
+    expect(game.hud()).toContain(TOWN_LINES[0]!.line);
+  });
+
+  it('shows the line of the town entered, not the first one: the index counts the towns', async () => {
+    const game = await boot('?bot=off&openworld=7', story(2, 3, 4, 5));
+    await rollOnto(game, 'town', true, 3);
+    expect(game.hud()).toContain(TOWN_LINES[3]!.line);
+    expect(game.hud()).not.toContain(TOWN_LINES[0]!.line);
+  });
+
+  it('shows nothing before the stage of the line', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await rollOnto(game, 'town');
+    for (const { line } of TOWN_LINES) expect(game.hud()).not.toContain(line);
+    expect(byId('hud').querySelector('.tally')).toBeNull();
+  });
+
+  it('shows no line on the Hub of the mode menu, and none once the player moves', async () => {
+    const game = await boot('?bot=off&openworld=7', story(2));
+    await rollOnto(game, 'town');
+    game.click(-1, 0);
+    expect(game.hud()).not.toContain(TOWN_LINES[0]!.line);
+    byId('place-back').click();
+    await settle();
+    game.openModes();
+    byId('ship').click();
+    expect(game.hud()).not.toContain(TOWN_LINES[0]!.line);
   });
 });
 

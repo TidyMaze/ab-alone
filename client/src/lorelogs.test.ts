@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AUDIO_LOGS } from './audiologs';
 import { LORE } from './lore';
-import { audioDeckOf, BOSS_LORE, bossLore, entryOf, STORY, WORLD_LOGS, type StoryEntry } from './lorelogs';
+import { deckOf, DECK_NAMES } from './deck';
+import { audioDeckOf, BOSS_BLURBS, BOSS_LORE, bossBlurb, bossLore, entryOf, STORY, WORLD_LOGS, type StoryEntry } from './lorelogs';
 import { SECRETS } from './story';
 import { BOSS_IDS } from './tally';
 
@@ -66,6 +67,49 @@ describe('BOSS_LORE', () => {
 
   it('a body holds 200 characters at most', () => {
     for (const e of BOSS_LORE) expect(e.body.length, e.id).toBeLessThanOrEqual(200);
+  });
+});
+
+// #1516, #1544: every boss is a tower, a station of one section of the Ballast (a deck, world.md section 13), with its blurb and its entry.
+describe('the tower of each boss (#1516, #1544)', () => {
+  const section = (boss: string): string => deckOf('boss', boss).replace(/^./, (c) => c.toUpperCase());
+
+  it('has a blurb for each of the 15 bosses, in the order of the roster, at stage 1: a boss menu shows it at any time', () => {
+    expect(BOSS_BLURBS.map((b) => b.boss)).toEqual([...BOSS_IDS]);
+    for (const b of BOSS_BLURBS) {
+      expect(b.stage, b.boss).toBe(1);
+      expect(b.blurb.length, b.boss).toBeGreaterThan(0);
+      expect(b.blurb.length, b.boss).toBeLessThanOrEqual(80);
+      expect(b.blurb, b.boss).not.toMatch(/[<>&\n]/);
+    }
+  });
+
+  it('holds no secret word of the story, at any stage, and repeats no blurb', () => {
+    for (const { boss, blurb } of BOSS_BLURBS) for (const { word } of SECRETS) expect(blurb, boss).not.toMatch(word);
+    expect(new Set(BOSS_BLURBS.map((b) => b.blurb)).size).toBe(15);
+  });
+
+  it('repeats no sentence of a boss entry, a terminal or an audio log', () => {
+    const old = new Set([...BOSS_LORE.map((e) => e.body), ...LORE.map((e) => e.body), ...AUDIO_LOGS.flatMap((l) => l.lines.map((line) => line.text))].flatMap(sentences));
+    for (const { boss, blurb } of BOSS_BLURBS) for (const sentence of sentences(blurb)) expect(old.has(sentence), `${boss}: ${sentence}`).toBe(false);
+  });
+
+  it('gives the blurb of a boss, none for a boss the roster does not hold', () => {
+    for (const id of BOSS_IDS) expect(bossBlurb(id)).toBe(BOSS_BLURBS.find((b) => b.boss === id)!.blurb);
+    expect(bossBlurb('nobody')).toBeUndefined();
+  });
+
+  it('puts every boss in a section of the ship: its entry is titled by that section, and the section keeps its two terminals', () => {
+    for (const id of BOSS_IDS) {
+      expect(DECK_NAMES, id).toContain(deckOf('boss', id));
+      expect(bossLore(id)!.title, id).toMatch(new RegExp(`^${section(id)}: `));
+    }
+    for (const deck of DECK_NAMES) expect(LORE.filter((e) => e.deck === deck)).toHaveLength(2);
+  });
+
+  it('keeps the five senior seats on the five sections, one each, and the ten later bosses on the same five', () => {
+    expect(BOSS_IDS.slice(0, 5).map((id) => deckOf('boss', id))).toEqual([...DECK_NAMES]);
+    expect(new Set(BOSS_IDS.slice(5).map((id) => deckOf('boss', id)))).toEqual(new Set(DECK_NAMES));
   });
 });
 

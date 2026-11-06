@@ -8,6 +8,7 @@ import { CONVERTED_AT, EXPLODED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
 import { parseRecorded } from './test/chaplain-game';
 import echoWin from '../../crates/abalone-core/tests/fixtures/echo.txt?raw';
+import { BOSS_BLURBS } from './lorelogs';
 import { SLIDE_MS } from './slide';
 import { boot, slowKeys, type Game } from './test/harness';
 
@@ -87,6 +88,12 @@ const DAY = Date.parse('2027-03-30T08:00:00Z'); // its daily boss is The Echo, w
 const NEXT_DAY = Date.parse('2027-03-31T08:00:00Z');
 
 describe('main.ts boss fights', () => {
+  it("gives each boss of the list its blurb as its title, the tower's one line of the story (#1544)", async () => {
+    await boot('?bot=off');
+    const buttons = [...byId('boss-list').querySelectorAll('button')];
+    expect(buttons.map((b) => b.title)).toEqual(BOSS_BLURBS.map((b) => b.blurb));
+  });
+
   it('lists the bosses behind Boss fight, the button opens and closes the list', async () => {
     await boot('?bot=off');
     const button = byId('boss-fight');
