@@ -54,7 +54,7 @@ Written as facts the player can piece together, not as a story told in order.
   paperwork outlived it: Tally treats every rogue-lite run as an open **audit** of the books and every
   Trainer run as the crew's **drill**. The drill is held at **table zero** of the Mess, the table nobody
   sat at, with **crew attached: 6** (the Trainer's pool of 6 marbles, #1159). Tally's lines are short,
-  optional and never gate anything. Rogue-lite run over: "Run voided. Audit reopened." (lost) or
+  optional and never gate anything. Rogue-lite run over: "Run voided. Audit reopened." (lost; from the story's stage 5 it adds "Line 0412 carries a mark from before. Entered without comment.", section 12.9) or
   "Reconciled: 14." (won, with the army left). Trainer wave start: "Drill: wave 5. Opponents: five.
   Seated." Trainer result: "Wave 7 filed. Best on record: 9." No new rule, no HP, no damage: the lines
   only name what the player already sees. Open world with every lair beaten (#1175, #1546): "Variance noted. Clamp: open. Crew attached: 6." (the clamp reads "locked" until the story's stage 7, section 12.8)
@@ -417,12 +417,13 @@ so it can be re-pointed at towers later; `main.ts` fires the events through one 
 | Stage | Main trigger (the event) | Fired from |
 |---|---|---|
 | 2 | the first boss beaten (`won`, any boss) | the win of a boss fight, once per game |
-| 3 | the Medal room first visited (`room`, `medal-room`), or a second boss beaten (`won`, 2 different bosses) | the reader opening the Medal room, a boss win |
+| 3 | the Medal room first visited (`room`, `medal-room`) or a town of the Open world entered (`town`, #1586), or a second boss beaten (`won`, 2 different bosses) | the reader opening the Medal room, the Open world rolling onto a town, a boss win |
 | 4 | The Hull beaten (`won`, `hull`) | the win of a boss fight |
 | 5 | The Chaplain beaten (`won`, `chaplain`) | the win of a boss fight |
 | 6 | The Ballast Mind's fight starts (`start`, `ballast`) | the start of a boss fight |
 | 7 | The Ballast Mind beaten (`won`, `ballast`) | the win of a boss fight |
 
+- **More than one main trigger.** A stage may have several main moments, any of which begins it: `main` of a `TRIGGERS` entry is a list (stage 3 holds the Medal room and a town). The main line needs one of them, so skipping a room or a town never blocks the ending.
 - **Optional trigger.** Stage 2 also comes from 3 wins in any mode (`win`, counted once per finished game against a boss, a bot or an online
   opponent; a hot-seat game and a spectator count none; a replay counts none). An optional trigger counts for its own stage only. The
   other optional triggers of the ladder (an ejected crewmate of the rogue-lite, a night survived, a dungeon act 3, a lost run, five towers) are
@@ -479,6 +480,31 @@ The story ends where the README promises: **you walk out**. It adds no mode and 
   place of the lore sentence from stage 7. The MCP server keeps no story and its ending line (every lair beaten) stays "Clamp: open".
 
 Not now: the optional trigger of the ladder, "five towers" (it is the same moment as stage 7 here, `TRIGGERS` unchanged).
+
+### 12.9 The Ledger and the lines of stages 3 to 5 (#1585, #1586, #1587)
+
+**The lines.** Each declares its stage and holds no secret word of a later one (`ledger.test.ts` checks every source of the Ledger at each of the 7 stages).
+All are in Tally's register (section 12.7). The stage 3 sample of the issue held "delivered", which section 12.2 withholds until stage 4, so it reads
+"breathing" in its place (a word of stage 3: the ejected breathe).
+
+| Stage | Line | Delivered through |
+|---|---|---|
+| 3 | "Seat 3: not on board. Not on the books as lost. Entered: breathing." | The Medal room: a line of Tally before the list, on its first page, from stage 3. The visit that reaches stage 3 shows it. A town of the Open world also begins stage 3 (below), and shows its own ledger line (section 13) |
+| 4 | "Outside: minus one hundred and sixty. The glass lets go of what it held. Entered as weather." | The end of the Cargo audio log, one line of Tally at 50 s (`stage` of a transcript line, `lineAt`) |
+| 5 | "Run voided. Audit reopened. Line 0412 carries a mark from before. Entered without comment." | A lost run (rogue-lite), replacing "Run voided. Audit reopened." from stage 5; a won run keeps "Reconciled: N." |
+| 5 | "Read count: two. Line 0412 read this first, and walked on." | An appended note of Tally under every terminal of the Hub (the bridge console too), from stage 5 |
+
+- **First town visited.** `TRIGGERS` binds stage 3 to the Medal room or the `town` event, fired when the hero rolls onto a town of the Open world (#1593). The
+  story moment is recorded before the town's ledger line is chosen, so the visit that reaches stage 3 speaks at stage 3.
+- **The Shelled crewmate** (rogue-lite event, roguelite.md): from stage 4 the choice "Crack its shell" reads "Cool it until the shell lets go", the same trade
+  (+30 scrap), worded as stage 4 teaches (cold lets go). Below stage 4 it is unchanged.
+- **The Ledger** is a button beside Logs in the settings menu (id `setting-ledger`). A press shows, on the same plate as the log archive, the story lines
+  the player has seen, one paragraph each, **in stage order**, "Nothing filed yet." before any. It lists the lines of `LEDGER` (`ledger.ts`): the bot
+  table's line of stage 2, the five town lines, the four lines above, the Ballast Mind's lines of stages 6 and 7. **Nothing above the player's stage is
+  ever listed**, even if its id is saved.
+- **The save** is `ab-alone.ledger` in the local store, the ids of the lines seen (`bot`, `medal`, `cargo`, `voided`, `terminal`, `town-<n>`, `ballast-6`,
+  `ballast-7`) joined by commas, never the text (`lorestore.ts`). A profile from before has no key and an empty Ledger; an id this version does not know is ignored.
+  A line is filed as it reaches the player: the match start, the end banner, a town's plate, a page of the console, a transcript line, the run panel.
 
 ## 13. The Ballast on Hollow: every mode a place in the story (#1516, #1544)
 
@@ -539,5 +565,5 @@ no blurb, Tally line or goal.
 | 3 | desert | 4 | Muster: the dunes. Residents arrive clear and dazed, no name on file. Entered: delivered. |
 | 4 | badlands | 5 | Muster: the ridge. Line 0412 was first. The rest came after, one hand free each. |
 
-**Not now.** A tower's own Hub room and terminals, a town's own stations (openworld.md section 13), and binding "first town visited" to
-stage 3 (the ladder names it, `TRIGGERS` does not yet).
+**Not now.** A tower's own Hub room and terminals, and a town's own stations (openworld.md section 13). "First town visited" is bound to stage 3
+(section 12.6, #1586).

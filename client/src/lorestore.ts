@@ -5,6 +5,7 @@ import { read, write, type Store } from './quality';
 
 const READ = 'ab-alone.lore-read';
 const COLLECTED = 'ab-alone.logs-collected';
+const LINES = 'ab-alone.ledger';
 
 const ids = (store: Store, key: string): string[] => (read(store, key) ?? '').split(',').filter(Boolean);
 function add(store: Store, key: string, id: string): void {
@@ -23,3 +24,9 @@ export const collectedLogs = (store: Store): string[] => ids(store, COLLECTED);
 
 /** Saves an audio log as collected; one collected before keeps its place. */
 export const markCollected = (store: Store, id: string): void => add(store, COLLECTED, id);
+
+/** The ids of the story lines seen (#1585, ledger.ts), in the order first seen. An older profile has none. */
+export const seenLines = (store: Store): string[] => ids(store, LINES);
+
+/** Saves a story line as seen; one seen before keeps its place. Only the id is saved, never the text. */
+export const markSeen = (store: Store, id: string): void => add(store, LINES, id);

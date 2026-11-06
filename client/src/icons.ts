@@ -17,6 +17,7 @@ export const ICONS = {
   motion: 'M17 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M3 9h7M2 12h8M3 15h7',
   flat: 'M4 5h16v14H4zM7 9h10M7 12h10M7 15h6',
   transcript: 'M3 6h18v12H3zM6 11h5M13 11h5M6 14h9',
+  ledger: 'M6 3h12v18H6zM9 8h6M9 12h6M9 16h3', // the Ledger of the settings menu (#1585)
   render: 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12l-9-5',
   steer: 'M6 16a2 2 0 1 0 0 4a2 2 0 1 0 0-4M18 4a2 2 0 1 0 0 4a2 2 0 1 0 0-4M8 18h5a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h5',
   camera: 'M3 7h4l2-3h6l2 3h4v13H3zM12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7',

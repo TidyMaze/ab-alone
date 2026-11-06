@@ -1,6 +1,7 @@
 // Boss medals (#791): one per beaten boss, with the fewest player turns the player needed, kept in localStorage as a
 // JSON object boss id -> turns. Daily and co-op wins count too (main.ts records every boss win). Pure functions only:
 // main.ts gives the storage. `hasMedal` is what the auto-play task (#792) asks. Safe in private mode (quality read/write).
+import { MEDAL_LINE } from './ledger';
 import { read, write, type Store } from './quality';
 
 export type Medals = Record<string, number>;
@@ -90,13 +91,14 @@ export const medalLabel = (turns: number): string => `Medal: ${plural(turns)}`;
 export const medalLine = (result: MedalResult, turns: number): string =>
   `${{ first: 'Medal earned', record: 'New record', kept: 'Medal best' }[result]}: ${plural(turns)}.`;
 
-/** The Medal room's screen (#812): every boss in the given order with its best turns, or Not beaten, then its wins of its attempts (#1538). */
-export const medalRoom = (store: Store, bosses: readonly { id: string; name: string }[]): { title: string; body: string } => {
+/** The Medal room's screen (#812): every boss in the given order with its best turns, or Not beaten, then its wins of its attempts (#1538), and from `stage` 3 the line of Tally before them. */
+export const medalRoom = (store: Store, bosses: readonly { id: string; name: string }[], stage = 1): { title: string; body: string } => {
   const medals = loadMedals(store);
   const tallies = loadTallies(store);
   const line = ({ id, name }: { id: string; name: string }): string => {
     const tally = tallies[id];
     return `${name}: ${medals[id] === undefined ? 'Not beaten' : plural(medals[id])}.${tally ? ` ${tallyLine(tally)}` : ''}`;
   };
-  return { title: 'Medal room', body: bosses.map(line).join(' ') };
+  const list = bosses.map(line).join(' ');
+  return { title: 'Medal room', body: stage >= 3 ? `TALLY: ${MEDAL_LINE} ${list}` : list }; // from stage 3 a line of Tally before the list, on its first page (#1586)
 };

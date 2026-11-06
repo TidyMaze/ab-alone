@@ -5,6 +5,7 @@
 // required to progress.
 import { deckOf, type Deck } from './deck';
 import { CLAMP_OPEN, EPILOGUE } from './epilogue';
+import { appended, TERMINAL_LINE } from './ledger';
 import { LORE } from './lore';
 
 /** An entry of the story: a title and a body, shown in the terminal reader, and the stage of the reveal ladder it may speak of. */
@@ -105,9 +106,16 @@ export const STORY: readonly StoryEntry[] = [...BOSS_LORE, ...WORLD_LOGS, { id: 
 /** The entry a win over `boss` shows, none for a boss the roster does not hold. */
 export const bossLore = (boss: string): BossLore | undefined => BOSS_LORE.find((e) => e.boss === boss);
 
-/** The entry of the terminal reader with this id, a terminal of a deck or an entry of the story. From stage 7 the bridge console reads the clamp open (#1546). */
-export const entryOf = (id: string, stage = 1): Pick<StoryEntry, 'id' | 'title' | 'body'> | undefined =>
-  id === 'bridge-clamp' && stage >= EPILOGUE.stage ? { id, ...CLAMP_OPEN } : (LORE.find((e) => e.id === id) ?? STORY.find((e) => e.id === id));
+/** The stage from which a terminal of the Hub carries an appended note of Tally (#1587). */
+const NOTE_STAGE = 5;
+
+/** The entry of the terminal reader with this id, a terminal of a deck or an entry of the story. From stage 7 the bridge console reads the clamp open (#1546),
+ * and from stage 5 every terminal of the Hub carries an appended note of Tally (#1587). */
+export function entryOf(id: string, stage = 1): Pick<StoryEntry, 'id' | 'title' | 'body'> | undefined {
+  const terminal = id === 'bridge-clamp' && stage >= EPILOGUE.stage ? { id, ...CLAMP_OPEN } : LORE.find((e) => e.id === id);
+  if (!terminal) return STORY.find((e) => e.id === id);
+  return stage >= NOTE_STAGE ? { id: terminal.id, title: terminal.title, body: appended(terminal.body, TERMINAL_LINE) } : terminal;
+}
 
 /** The deck whose audio log goes with an entry: a terminal's own, the deck a boss sat on; none for a log of the world. */
 export function audioDeckOf(id: string): Deck | null {

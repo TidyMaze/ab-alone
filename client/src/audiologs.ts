@@ -4,12 +4,15 @@
 // as the other sounds (sound.ts), and its words exist only in the transcript. Data, and the two lookups of the player
 // (#516).
 import type { Deck } from './deck';
+import { CARGO_LINE } from './ledger';
 import { knockVoices, tellVoices, type Envelope, type Voice } from './sound';
 
 /** A transcript line, shown `at` seconds after the log starts. A line in brackets is a sound, not words. */
 export interface LogLine {
   at: number;
   text: string;
+  /** The stage of the story that hears this line (#1586); the log's own when it has none. */
+  stage?: number;
 }
 
 export interface AudioLog {
@@ -145,6 +148,7 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
       { at: 37, text: 'I asked him for a game at the break. He said play fast. Then he laughed. I think he laughed.' },
       { at: 45, text: '[The crane stops. Only the frame now.]' },
       { at: 48, text: 'Still clocked in. Still on time. End.' },
+      { at: 50, stage: 4, text: `TALLY: ${CARGO_LINE}` }, // what the log holds once the player knows the glass lets go (#1586)
     ],
   },
   {
@@ -243,6 +247,6 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
 /** The audio log of `deck`: every deck has one (audiologs.test.ts). */
 export const logOf = (deck: Deck): AudioLog => AUDIO_LOGS.find((log) => log.deck === deck)!;
 
-/** The transcript line shown `seconds` after `log` started: the last line reached, null before the first. */
-export const lineAt = (log: AudioLog, seconds: number): string | null =>
-  log.lines.filter((line) => line.at <= seconds).at(-1)?.text ?? null;
+/** The transcript line shown `seconds` after `log` started: the last line reached that the `stage` of the story hears, null before the first. */
+export const lineAt = (log: AudioLog, seconds: number, stage = 1): string | null =>
+  log.lines.filter((line) => line.at <= seconds && (line.stage ?? log.stage) <= stage).at(-1)?.text ?? null;

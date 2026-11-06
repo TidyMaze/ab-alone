@@ -177,9 +177,10 @@ describe('the lookups of the reader and the win screen', () => {
   it('give the bridge console its open-clamp text from stage 7 and the locked one before, the other entries the same at every stage', () => {
     const locked = entryOf('bridge-clamp')!;
     expect(locked.body).toMatch(/^Docking clamp: locked\./);
-    for (const stage of [1, 5, 6]) expect(entryOf('bridge-clamp', stage)).toBe(locked);
-    expect(entryOf('bridge-clamp', 7)).toEqual({ id: 'bridge-clamp', title: CLAMP_OPEN.title, body: CLAMP_OPEN.body });
-    expect(entryOf('mess-house-rule', 7)).toBe(entryOf('mess-house-rule'));
+    for (const stage of [1, 4]) expect(entryOf('bridge-clamp', stage)).toBe(locked);
+    expect(entryOf('bridge-clamp', 6)!.body).toMatch(/^Docking clamp: locked\./); // from stage 5 with the note of Tally under it (#1587)
+    expect(entryOf('bridge-clamp', 7)).toMatchObject({ id: 'bridge-clamp', title: CLAMP_OPEN.title, body: expect.stringContaining(CLAMP_OPEN.body) });
+    expect(entryOf('mess-house-rule', 4)).toBe(entryOf('mess-house-rule'));
     expect(entryOf('story-epilogue')!.title).toBe(EPILOGUE.title);
     expect(audioDeckOf('story-epilogue')).toBeNull();
   });

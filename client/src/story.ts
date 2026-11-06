@@ -5,9 +5,10 @@
 import type { Medals } from './medals';
 import { read, write, type Store } from './quality';
 
-/** Something that happened in the game: a boss `won` or a fight that `start`s (`id` the boss), a Hub `room` entered (`id` the reader's id), a `win` of any mode. */
+/** Something that happened in the game: a boss `won` or a fight that `start`s (`id` the boss), a Hub `room` entered (`id` the reader's id), a `town` of the
+ * Open world entered (#1586), a `win` of any mode. */
 export interface StoryEvent {
-  on: 'won' | 'start' | 'room' | 'win';
+  on: 'won' | 'start' | 'room' | 'town' | 'win';
   id?: string;
 }
 
@@ -16,22 +17,22 @@ export interface Trigger extends StoryEvent {
   times?: number;
 }
 
-/** The moment that begins `stage`: the main one, which the main line of the game fires, and an optional one, a second way to the same stage
- * (it counts for that stage only, as the main one does). Today's events only: the optional triggers of the ladder that need content the game has
- * not got yet (an ejected crewmate of the rogue-lite, a night survived, a lost run, five towers) are not bound. */
+/** The moment that begins `stage`: the main ones, any of which the main line of the game fires (stage 3 is the Medal room or a town), and an optional
+ * one, a second way to the same stage (it counts for that stage only, as a main one does). Today's events only: the optional triggers of the ladder
+ * that need content the game has not got yet (an ejected crewmate of the rogue-lite, a night survived, a lost run, five towers) are not bound. */
 export interface StageTrigger {
   stage: number;
-  main: Trigger;
+  main: readonly Trigger[];
   optional?: Trigger;
 }
 
 export const TRIGGERS: readonly StageTrigger[] = [
-  { stage: 2, main: { on: 'won' }, optional: { on: 'win', times: 3 } }, // the first boss beaten, or 3 wins in any mode
-  { stage: 3, main: { on: 'room', id: 'medal-room' }, optional: { on: 'won', times: 2 } }, // the Medal room first visited, or a second boss beaten: nobody is stuck for not opening a room
-  { stage: 4, main: { on: 'won', id: 'hull' } }, // The Hull beaten
-  { stage: 5, main: { on: 'won', id: 'chaplain' } }, // The Chaplain beaten
-  { stage: 6, main: { on: 'start', id: 'ballast' } }, // The Ballast Mind's fight starts
-  { stage: 7, main: { on: 'won', id: 'ballast' } }, // The Ballast Mind beaten
+  { stage: 2, main: [{ on: 'won' }], optional: { on: 'win', times: 3 } }, // the first boss beaten, or 3 wins in any mode
+  { stage: 3, main: [{ on: 'room', id: 'medal-room' }, { on: 'town' }], optional: { on: 'won', times: 2 } }, // the Medal room or a town first visited, or a second boss beaten: nobody is stuck for not opening a room
+  { stage: 4, main: [{ on: 'won', id: 'hull' }] }, // The Hull beaten
+  { stage: 5, main: [{ on: 'won', id: 'chaplain' }] }, // The Chaplain beaten
+  { stage: 6, main: [{ on: 'start', id: 'ballast' }] }, // The Ballast Mind's fight starts
+  { stage: 7, main: [{ on: 'won', id: 'ballast' }] }, // The Ballast Mind beaten
 ];
 
 /** The secret words of the ladder and the stage that may first hold each (world.md section 12.2): a line of an earlier stage holds none. */
@@ -87,7 +88,7 @@ export function fire(store: Store, event: StoryEvent): number {
   const newBoss = event.on === 'won' && !story.bosses.includes(event.id!);
   const bosses = newBoss ? [...story.bosses, event.id!] : story.bosses;
   const count = event.on === 'win' ? wins : bosses.length;
-  const hit = TRIGGERS.filter(({ stage, main, optional }) => !story.moments.includes(stage) && [main, optional].some((t) => t && matches(t, event, count))).map((t) => t.stage);
+  const hit = TRIGGERS.filter(({ stage, main, optional }) => !story.moments.includes(stage) && [...main, optional].some((t) => t && matches(t, event, count))).map((t) => t.stage);
   const next = { moments: [...story.moments, ...hit], wins, bosses };
   if (hit.length > 0 || wins !== story.wins || newBoss) write(store, STORY_KEY, JSON.stringify(next));
   return stageOf(next);

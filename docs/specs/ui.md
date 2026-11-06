@@ -115,7 +115,7 @@ locally), then Theme (#317, Dark, Light or System: a press cycles them, see sect
 then Logs, the log archive of world.md section 4 (#513): a short word beside Import game, as FPS is beside Clear board,
 titled "Log archive"; a press shows the lore entries read, then the audio logs heard (#517), one button per title
 in ship order, in place of the items ("Nothing read yet." before any), and a press on one closes the menu and opens that
-entry in the terminal reader, or replays that log. The last rows of the menu are three light sliders
+entry in the terminal reader, or replays that log. Ledger (#1585) is a second short word in the same item: a press shows the story lines seen, in stage order and none above the player's stage, on the same plate (world.md section 12.9). The last rows of the menu are three light sliders
 (#861), Bloom, Lamps and Lights, each a range of 0 to 300 % of the tuned power (defaults 20, 25 and 215), saved on its
 own under `ab-alone.light.<name>`, then a Reset lights button (#899, #900) that puts the three back to their defaults
 and saves them, so a phone that kept low levels is not left dark (`client/src/main.ts`, `client/src/quality.ts`). Each

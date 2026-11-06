@@ -556,7 +556,7 @@ events, one trade each.
   |---|---|
   | Slag-glass vein | touch it: 50 % a Heavy, else -2 marbles; chip off a shard: +25 scrap, -1 marble |
   | Ledger terminal | read it: a tactic, -1 marble; call the shelled crew back: +2 marbles, -20 scrap |
-  | Shelled crewmate | take it along: +1 marble; crack its shell: +30 scrap |
+  | Shelled crewmate | take it along: +1 marble; crack its shell: +30 scrap (from the story's stage 4 it reads "cool it until the shell lets go", the same trade, world.md section 12.9) |
   | Dice | wager 20 scrap: 50 % +40 scrap, else -20; wager a marble: 40 % a relic, else -1 marble |
   | Cold locker | force the latch: 60 % healed to 14, else -1 marble; strip the compressor: +15 scrap |
   | Airlock | step out: 50 % a relic, else -2 marbles; strip the hatch: +15 scrap |

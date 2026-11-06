@@ -4,6 +4,7 @@
 import { cellIndex, DIRECTIONS, isMarble, MOVE_STRIDE, RADIUS, type Axial, type Move } from './board';
 import { BLUEPRINTS, blueprintId, CELLS, COLLECT_COST, LEGACY_UNLOCKED, type BlueprintType } from './collector';
 import { SEAT_GLYPHS, SHELL } from './marbles';
+import { VOIDED_LINE } from './ledger';
 import { read, write, type Store } from './quality';
 import { replay, type KeyStore, type ReplayEngine } from './savegame';
 
@@ -696,6 +697,8 @@ export interface EventChoice {
   odds: number;
   win: Outcome;
   fail: Outcome;
+  /** The verb the choice has from a stage of the story on (#1587): the same trade, worded as what that stage teaches. */
+  later?: { stage: number; verb: string };
 }
 const deal = (verb: string, win: Partial<Outcome>): EventChoice => ({ verb, odds: 100, win: outcome(win), fail: NOTHING });
 const gamble = (verb: string, odds: number, win: Partial<Outcome>, fail: Partial<Outcome>): EventChoice => ({ verb, odds, win: outcome(win), fail: outcome(fail) });
@@ -720,7 +723,7 @@ export const EVENTS: readonly RunEvent[] = [
   { title: 'Sick bay', text: 'A cot and a medic kit, still stocked.', choices: [deal('Staff a Medic', { army: -2, special: 10 }), LEAVE] },
   { title: 'Slag-glass vein', text: 'A vein of slag-glass glows in the hull. It remembers heat, and it is warm.', choices: [gamble('Touch the vein', 50, { special: 1 }, { army: -2 }), deal('Chip off a shard', { army: -1, scrap: 25 }), LEAVE] },
   { title: 'Ledger terminal', text: 'A ledger terminal lists the crew, one line each. Yours is the last without a mark.', choices: [deal('Read the ledger', { army: -1, tactic: true }), deal('Call the shelled crew back', { army: 2, scrap: -20 }), LEAVE] },
-  { title: 'Shelled crewmate', text: 'A shelled crewmate rocks in a corner, rounding off a little more each hour.', choices: [deal('Take it along', { army: 1 }), deal('Crack its shell', { scrap: 30 }), LEAVE] },
+  { title: 'Shelled crewmate', text: 'A shelled crewmate rocks in a corner, rounding off a little more each hour.', choices: [deal('Take it along', { army: 1 }), { ...deal('Crack its shell', { scrap: 30 }), later: { stage: 4, verb: 'Cool it until the shell lets go' } }, LEAVE] },
   { title: 'Dice', text: 'Three marbles and a worn board on a mess table. The house is long dead, the odds are not.', choices: [gamble('Wager 20 scrap', 50, { scrap: 40 }, { scrap: -20 }), gamble('Wager a marble', 40, { relic: true }, { army: -1 }), LEAVE] },
   { title: 'Cold locker', text: 'A cold locker, frost thick on the latch. Something hums behind the door.', choices: [gamble('Force the latch', 60, { heal: true }, { army: -1 }), deal('Strip the compressor', { scrap: 15 }), LEAVE] },
   { title: 'Airlock', text: "An airlock cycles on its own, the outer door open on Hollow's dust.", choices: [gamble('Step out', 50, { relic: true }, { army: -2 }), deal('Strip the hatch', { scrap: 15 }), LEAVE] },
@@ -796,10 +799,11 @@ function describe(run: Run, o: Outcome): string {
     .join(', ');
 }
 
-/** The label of choice `c`: its verb and what it gives, with the odds of a gamble. */
-export function choiceText(run: Run, c: EventChoice): string {
+/** The label of choice `c`: its verb (the one of the `stage` of the story, #1587) and what it gives, with the odds of a gamble. */
+export function choiceText(run: Run, c: EventChoice, stage = 1): string {
   const effects = c.odds < 100 ? `${c.odds} %: ${describe(run, c.win)}, otherwise ${describe(run, c.fail)}` : describe(run, c.win);
-  return effects ? `${c.verb} · ${effects}` : c.verb;
+  const verb = c.later && stage >= c.later.stage ? c.later.verb : c.verb;
+  return effects ? `${verb} · ${effects}` : verb;
 }
 
 /** The run once choice `choice` of `e` is taken, or null when it does not exist or cannot be paid: both sides of a
@@ -1240,8 +1244,9 @@ function summaryHtml(map: MapNode[], run: Run): string {
     .join('');
 }
 
-/** Tally's closing line of a run over (#1174): the audit reconciled with the army left, or voided. Optional flavour. */
-export const auditLine = (run: Run): string => (run.end === 'won' ? `Reconciled: ${run.army}.` : 'Run voided. Audit reopened.');
+/** Tally's closing line of a run over (#1174): the audit reconciled with the army left, or voided; after stage 5 of the story a voided one speaks of the
+ * player's own line (#1587). Optional flavour. */
+export const auditLine = (run: Run, stage = 1): string => (run.end === 'won' ? `Reconciled: ${run.army}.` : stage >= 5 ? VOIDED_LINE : 'Run voided. Audit reopened.');
 
 /** The line that says where the run stands, on the map and in the HUD of its fights. */
 export function runLine(map: MapNode[], run: Run): string {
@@ -1324,12 +1329,12 @@ export function restHtml(run: Run): string {
 }
 
 /** The event screen: its title and text, a button per choice with what it gives (disabled when it cannot be paid), the
- * last one Leave. */
-export function eventHtml(run: Run): string {
+ * last one Leave. `stage` is the stage of the story: a choice may be worded as it teaches (#1587). */
+export function eventHtml(run: Run, stage = 1): string {
   const e = eventOf(run)!;
   const buttons = e.choices.map((c, i) => {
     const bargain = (c.win.army < 0 || c.fail.army < 0) && has(run, Relic.Bargain) ? ' · Bargain: 1 marble less' : '';
-    return `<button type="button" data-choice="${i}"${takeEvent(run, e, i) ? '' : ' disabled'}>${choiceText(run, c)}${bargain}</button>`;
+    return `<button type="button" data-choice="${i}"${takeEvent(run, e, i) ? '' : ' disabled'}>${choiceText(run, c, stage)}${bargain}</button>`;
   });
   return `<p class="run-line">Event · ${e.title}</p><p class="run-help">${e.text}</p><div class="run-kinds">${buttons.join('')}</div>`;
 }
@@ -1568,10 +1573,10 @@ function introHtml(run: Run, more: boolean): string {
  * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
  * score, summary and New run. The fourth act (#1467) is drawn once the run holds the three keys; an elite that holds a key is marked. `book` is what the start screen holds besides (#1466): the daily run, the history and the
  * compendium. Before the first pick the screen says what a run is, with Start and More (#1524); `more` shows the details More holds (open by default, the page
- * passes false until the player opens it). */
-export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster, more = true): string {
+ * passes false until the player opens it). `stage` is the stage of the story: a run over speaks of the player's own line from stage 5 (#1587). */
+export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster, more = true, stage = 1): string {
   const head = `<p class="run-line">${runLine(map, run)}</p>`;
-  if (run.end) return `${head}${scoreLine(map, run)}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
+  if (run.end) return `${head}${scoreLine(map, run)}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run, stage)}</p><button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
   const max = lastAct(map, run);
   const rows = Math.max(...map.map((n) => n.row)) + 1;

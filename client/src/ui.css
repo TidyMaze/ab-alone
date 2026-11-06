@@ -124,6 +124,9 @@ body[data-scene='table-zero']::after { display: none; }
 }
 .setting-archive:not(:has(button)) { padding: 0.5rem 0.75rem; border: 1px solid var(--edge); border-radius: 2px; }
 #settings-menu .setting-archive button { justify-content: flex-start; text-align: left; }
+/* The Ledger (#1585) is the same plate, its story lines paragraphs a little apart. */
+.setting-archive.ledger { gap: 0.5rem; }
+.setting-archive.ledger p { margin: 0; }
 /* The two skin buttons share the item's width, half each, a name cut with an ellipsis: the menu keeps its width (#377). */
 .skin-pair > button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The FPS readout (#426): off by default, a corner that ignores the pointer. */
@@ -349,6 +352,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
      lower than the rows when the plate is tall (#284, #287). */
   #settings-menu { top: 0; left: calc(100% + 0.5rem); right: auto; flex-flow: row wrap; max-width: calc(100vw - 32px - 100% - 0.5rem); }
   #settings-menu :is(.setting-volume, .setting-lights, .setting-archive, #level-reset) { flex: 1 0 100%; box-sizing: border-box; } /* Reset lights spans the row (#904) */
+  .setting-archive.ledger { max-height: calc(100dvh - 25rem); overflow-y: auto; } /* a full Ledger scrolls in its plate, above the eval bar and the dock (#1585) */
   #settings-menu #level-reset { justify-content: center; }
   /* The open mode menu starts a new row. #666: an open boss list is one row of its own under Boss fight (or Fight
      together) that scrolls sideways, so a new boss adds no row over the board: the menu is no wider than the
@@ -408,7 +412,9 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 @media (orientation: landscape) and (max-width: 1100px), (orientation: landscape) and (max-height: 500px) {
   #settings-menu { display: grid; grid-template-columns: repeat(3, 2.75rem); grid-auto-flow: dense; }
   #settings-menu .setting-group { grid-column: span 2; }
+  #settings-menu .setting-group:has(#setting-ledger) { grid-column: span 3; gap: 2px; } /* Import game, Logs and Ledger: three squares of 44 px in the width of the three columns (#1585) */
   #settings-menu #level-reset { grid-column: 1 / -1; } /* bug #904: one row of the grid, not a 44 px cell that wraps */
+  #settings-menu[data-page='archive']:has(.ledger) { grid-template-columns: minmax(0, 14rem); } /* the Ledger's lines are sentences: a column wide enough to read (#1585) */
   #settings-menu .skin-pair { flex-wrap: nowrap; }}
 
 #hud {

@@ -229,7 +229,8 @@ import { bossEndLine } from './bossends';
 import { EPILOGUE, epilogueDue, markEpilogue } from './epilogue';
 import { audioDeckOf, bossBlurb, bossLore, entryOf, STORY } from './lorelogs';
 import { atStake, claimReload } from './autoreload';
-import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
+import { collectedLogs, markCollected, markRead, markSeen, readLore, seenLines } from './lorestore';
+import { ledgerList, linesIn } from './ledger';
 import { catchUp, fire, gated, SEALED, storyStage, type StoryEvent } from './story';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
@@ -512,6 +513,8 @@ const store = (() => {
 catchUp(store, loadMedals(store)); // the medals of a player who played before the story fire their boss moments (#1584)
 /** Records what happened in the game for the story (story.ts, #1584): the stage may rise, and the lore held back opens. */
 const storyEvent = (event: StoryEvent): number => fire(store, event);
+/** Files the story lines of the Ledger that `text` holds as seen (#1585): called wherever a line reaches the player. Only ids are saved. */
+const sawLines = (text: string): void => linesIn(text).forEach(({ id }) => markSeen(store, id));
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
@@ -1157,12 +1160,17 @@ const importRow = document.getElementById('setting-import-game')!;
 const importGroup = document.createElement('div');
 importGroup.className = 'setting-group';
 importRow.replaceWith(importGroup);
-importGroup.append(importRow, archiveButton);
+// The Ledger (#1585): a second short word in the same item, the story lines seen so far in stage order, on the same plate.
+const ledgerButton = Object.assign(document.createElement('button'), { id: 'setting-ledger', type: 'button', title: 'Ledger', innerHTML: `${icon('ledger')}<span>Ledger</span>` }); // an icon only where the menu is narrow, as its other items
+ledgerButton.setAttribute('aria-label', 'Ledger');
+importGroup.append(importRow, archiveButton, ledgerButton);
 archiveButton.addEventListener('click', openArchive);
+ledgerButton.addEventListener('click', openLedger);
 const archive = menu.appendChild(document.createElement('div'));
 archive.className = 'setting-archive';
 function openArchive(): void {
   menu.dataset.page = 'archive';
+  archive.classList.remove('ledger');
   const row = (title: string, open: () => void): HTMLButtonElement => {
     const button = Object.assign(document.createElement('button'), { type: 'button', textContent: title });
     button.addEventListener('click', () => {
@@ -1177,6 +1185,12 @@ function openArchive(): void {
   ];
   archive.replaceChildren(...(rows.length ? rows : ['Nothing read yet.']));
   rows[0]?.focus();
+}
+function openLedger(): void {
+  menu.dataset.page = 'archive';
+  archive.classList.add('ledger');
+  const lines = ledgerList(seenLines(store), storyStage(store)); // nothing above the player's stage is listed
+  archive.replaceChildren(...(lines.length ? lines.map(({ line }) => Object.assign(document.createElement('p'), { textContent: line })) : ['Nothing filed yet.']));
 }
 fpsButton.addEventListener('click', () => {
   fpsOn = !fpsOn;
@@ -1569,7 +1583,10 @@ let consoleSince = 0;
 const deckEntry = (): string => LORE.find((e) => e.deck === deck)!.id;
 function layoutConsole(id = deckEntry()): void {
   if (!consoleFonts) return;
-  const entry = id === MEDAL_ROOM ? { ...medalRoom(store, bossRoster()), id } : entryOf(id, storyStage(store))!; // the bridge console reads the clamp open from stage 7 (#1546)
+  if (id === MEDAL_ROOM) storyEvent({ on: 'room', id: MEDAL_ROOM }); // the Medal room first visited is stage 3 (#1584), before its note is chosen (#1586)
+  const stage = storyStage(store);
+  const entry = id === MEDAL_ROOM ? { ...medalRoom(store, bossRoster(), stage), id } : entryOf(id, stage)!; // the bridge console reads the clamp open from stage 7 (#1546)
+  sawLines(entry.body); // a note of Tally on the screen (#1585)
   consolePages = terminalPages(entry, uiScale, (text, font) => {
     consoleG.font = font;
     return consoleG.measureText(text).width;
@@ -1616,7 +1633,6 @@ function openReader(id?: string): void {
   reader.classList.toggle('flat', flatHud || sceneRenderer.terraceOn);
   document.body.dataset.reading = consoleEntry; // read by the e2e tests
   if (consoleEntry !== MEDAL_ROOM) markRead(store, consoleEntry);
-  else storyEvent({ on: 'room', id: MEDAL_ROOM }); // the Medal room first visited is stage 3 (#1584)
   showConsole(0);
   applyView();
   paintLog();
@@ -1677,12 +1693,15 @@ addEventListener('keyup', (e) => {
 // it; the game goes on meanwhile. Its transcript shows line by line unless the Transcript toggle is off.
 const logButton = document.getElementById('log-button') as HTMLButtonElement;
 const transcript = document.getElementById('transcript')!;
-let playing: { log: AudioLog; since: number } | null = null;
+let playing: { log: AudioLog; since: number; stage: number } | null = null;
 function paintLog(): void {
   logButton.hidden = !playing && !(reading && audioDeckOf(consoleEntry)); // a log of the world and the Medal room have no recording (#1589)
   logButton.textContent = playing ? 'Skip log' : 'Play log';
-  const line = (playing && transcriptOn && lineAt(playing.log, (performance.now() - playing.since) / 1000)) || '';
-  if (transcript.textContent !== line) transcript.textContent = line; // aria-live: a line is read once
+  const line = (playing && transcriptOn && lineAt(playing.log, (performance.now() - playing.since) / 1000, playing.stage)) || '';
+  if (transcript.textContent !== line) {
+    transcript.textContent = line; // aria-live: a line is read once
+    sawLines(line); // the line of stage 4 the Cargo log ends on (#1586)
+  }
   transcript.hidden = !line;
 }
 function stopLog(): void {
@@ -1694,7 +1713,7 @@ function stopLog(): void {
 // Any log heard joins the log archive (#517).
 function playLog(log: AudioLog): void {
   markCollected(store, log.id);
-  playing = { log, since: performance.now() };
+  playing = { log, since: performance.now(), stage: storyStage(store) };
   document.body.dataset.logSound = sfx.playLog(log.voices) ? 'voice' : 'none'; // read by the tests
   document.body.dataset.log = log.id; // read by the e2e tests
   paintLog();
@@ -3726,6 +3745,8 @@ function drawHud(extra = ''): void {
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
   const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
+  const tally = (shownPly() === 0 || firstRun === 'fight') && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '';
+  sawLines(tally); // the line of the story at the start of a match (#1585)
   const moves = run?.state.fighting ? movesLine(run.map, run.state) : ''; // the budget and the count of the act in a fight (#1473), the map has its own
   // End banner (#282): body[data-over] carries the animation id for the CSS and the e2e tests.
   const end = endBanner({
@@ -3739,7 +3760,9 @@ function drawHud(extra = ''): void {
   if (end?.anim === 'win' && (fight || worker || online?.role === 'player') && !replaying) winOnce(); // the wins of any mode, a hot seat and a spectator apart (#1584)
   if (end?.anim === 'win' && fight) {
     const note = medalNote(fight); // a won fight: Black is the player's side. The story is at the stage this win reaches before its line is chosen (#1546)
-    end.line = `${bossEndLine(fight.id, 'win', storyStage(store))!} ${note}`;
+    const won = bossEndLine(fight.id, 'win', storyStage(store))!;
+    sawLines(won);
+    end.line = `${won} ${note}`;
   } else if (end?.anim === 'loss' && fight && status !== 3) end.line = bossEndLine(fight.id, 'loss', storyStage(store))!; // each boss has its own (#1546)
   showLore(end?.anim === 'win' && fight ? bossLore(fight.id) : undefined); // the entry of the boss beaten, in the archive too (#1589)
   if (end?.anim === 'win' && wildFrom) end.line = `${end.line} ${wildWon(wildFrom)}`;
@@ -3761,7 +3784,7 @@ function drawHud(extra = ''): void {
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
     tallyNote: firstRun === 'fight' ? COACH.tally : '', // the first Tally line explained once, under it (#1521)
-    tally: (shownPly() === 0 || firstRun === 'fight') && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '',
+    tally,
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
     rematch:
       online?.role !== 'player' || status === 0
@@ -6298,6 +6321,7 @@ function showRun(): void {
   const done = finished(map, state);
   if (done) recordFinished(store, done); // the history, and the daily run's score
   const placed = placing(state) && built();
+  const stage = storyStage(store); // an event's wording and a lost run's line follow the story (#1587)
   runPanel.innerHTML = state.bonus
     ? bonusHtml(map, state)
     : state.relic
@@ -6305,7 +6329,7 @@ function showRun(): void {
     : state.reward
       ? rewardHtml(map, state)
       : state.event
-        ? eventHtml(state)
+        ? eventHtml(state, stage)
         : state.rest
           ? restHtml(state)
           : state.shop
@@ -6318,7 +6342,8 @@ function showRun(): void {
                   ? exitHtml(map, state, exitsFor(state), boss_name)
                   : placed
                     ? placeHtml(state, armed)
-                    : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))), { ids: boss_ids(), name: boss_name, builds: boss_takes_build }, runMore);
+                    : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))), { ids: boss_ids(), name: boss_name, builds: boss_takes_build }, runMore, stage);
+  sawLines(runPanel.textContent!); // the line of a lost run (#1587)
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
   const next = runPanel.querySelector('button.node:not(:disabled)'); // after a pick the map scrolls to the nodes to pick, in the middle of the plate (#1468); before the first the commanders stay in view
@@ -6638,7 +6663,9 @@ const openWorld = new OpenWorldMode(
     placeFrom = { seed };
     syncPlaceBack();
     if (kind === 'town') {
+      storyEvent({ on: 'town' }); // the first town visited is stage 3 (#1586), before the line of this town is chosen
       hub!.bumped = townLine(index, storyStage(store)); // Tally's ledger line of this town on the plate, once its stage is reached (#1516)
+      sawLines(hub!.bumped);
       hud();
     }
   },

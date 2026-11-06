@@ -662,6 +662,7 @@ describe('the settings toggles', () => {
       'setting-difficulty',
       'setting-import-game',
       'setting-log-archive',
+      'setting-ledger', // #1585
       'level-reset', // beside the light sliders, which are no buttons (#899)
       'copy-diagnostics', // the last row (#1032)
     ]);
