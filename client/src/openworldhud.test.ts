@@ -162,3 +162,22 @@ describe('the teleporters of the Open world (#1412)', () => {
     expect(html).toMatch(/<span class="pad-hint">[^<]*Y on a teleporter to teleport[^<]*<\/span>/);
   });
 });
+
+describe('the goal and the collapsed controls of the Open world plate (#1530)', () => {
+  it('opens on the goal, the bearing and the medal count, with the controls behind a closed hint and a button named for what it does', () => {
+    expect(html).toMatch(/<p id="openworld-goal"><\/p>\s*<p id="openworld-bearing"><\/p>/);
+    expect(html.indexOf('id="openworld-goal"')).toBeLessThan(html.indexOf('id="openworld-medals"'));
+    expect(html).toMatch(/<details id="openworld-controls">\s*<summary>Controls<span class="keys-hint"> \(H\)<\/span><\/summary>/);
+    expect(html).not.toMatch(/<details id="openworld-controls" open/);
+    expect(html).toMatch(/<details id="openworld-controls">[\s\S]*class="keys-hint">arrows[^<]*Q E[^<]*H to close this[^<]*Esc to leave\.<[\s\S]*<p id="openworld-mode"><\/p>[\s\S]*<\/details>/);
+    expect(html).toMatch(/<button id="openworld-dungeon" type="button">Nearest tower<\/button>/);
+    expect(html).not.toContain('>Dungeon<');
+    expect(html).not.toContain('Open world: <span class="keys-hint">');
+  });
+
+  it('makes the summary a 44 px target', () => {
+    const summary = rule('#openworld-controls summary');
+    expect(summary).toContain('min-height: var(--target)');
+    expect(summary).toContain('cursor: pointer');
+  });
+});

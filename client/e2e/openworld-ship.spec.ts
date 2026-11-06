@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { lowTierOnCi, showHud } from './modes';
+import { lowTierOnCi, openControls } from './modes';
 
 lowTierOnCi();
 
@@ -32,11 +32,11 @@ for (const { name, viewport } of viewports) {
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
       expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
       expect(box.x).toBeGreaterThan(viewport.width / 2); // not in the stick's half
-      await showHud(page, '#openworld-hud .tap-hint'); // the plate folds 8 s after the entry, before a slow runner gets here (#1436)
+      await openControls(page); // the plate folds 8 s after the entry, before a slow runner gets here (#1436); the hints are behind its summary (#1530)
       expect(await clearOf(page, '#openworld-hud')).toBe(true);
       expect(await clearOf(page, '#settings')).toBe(true);
       await expect(page.locator('#openworld-hud .tap-hint')).toBeVisible();
-      await expect(page.locator('#openworld-hud .keys-hint')).toBeHidden();
+      await expect(page.locator('#openworld-hud .keys-hint:visible')).toHaveCount(0);
       // A trial tap checks that the button is the hit target (nothing covers it) without leaving the world: the Hub it leads to
       // is unit tested (main.openworldlink.test.ts, 'leaves the world, saved as Esc does, for the Hub'); the hub boot costs 1.4 s here (#1481).
       await ship.tap({ trial: true });

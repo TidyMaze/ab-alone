@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import './test/openworldwasm';
 import type { Axial } from './board';
 import { CHUNK } from './openworld';
+import { CLAIM_NOTE } from './openworldgoal';
 import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
@@ -139,7 +140,7 @@ describe("Tally's line in the Open world HUD (#1171)", () => {
     const lines = ['Claim 0412: unworked.', ''];
     const m = withTally(() => lines.shift()!);
     m.enter(7, 800, 600);
-    expect(out.textContent).toBe('Claim 0412: unworked.');
+    expect(out.textContent).toBe(`Claim 0412: unworked. ${CLAIM_NOTE}`); // the line is explained once, in one sentence (#1530)
     m.enter(7, 800, 600);
     expect(out.textContent).toBe('');
     out.remove();

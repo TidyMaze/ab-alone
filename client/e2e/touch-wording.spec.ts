@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openControls } from './modes';
 
 // #1379: on a phone no visible text, tooltip or label names a keyboard key.
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -49,6 +50,7 @@ test('the board, the settings, the modes and the guide name no key', async ({ pa
 test('the Open world plate and the replay buttons name no key', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await expect(page.locator('body')).toHaveAttribute('data-openworld', '7');
+  await openControls(page); // the hints are behind the summary (#1530)
   await expect(page.locator('#openworld-hud .tap-hint')).toBeVisible();
   await expectNoKey(page);
   for (const id of ['replay-prev', 'replay-next', 'replay-live']) {

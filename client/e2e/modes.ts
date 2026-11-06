@@ -22,6 +22,12 @@ export async function clickHud(page: Page, selector: string): Promise<void> {
   await page.locator(selector).click();
 }
 
+/** Opens the Open world's controls hint (#1530) behind the plate's summary, showing the plate first when it is folded: the hints are not shown until it is open. */
+export async function openControls(page: Page): Promise<void> {
+  await showHud(page, '#openworld-controls summary');
+  if (!(await page.locator('#openworld-controls').evaluate((d) => (d as HTMLDetailsElement).open))) await page.locator('#openworld-controls summary').click();
+}
+
 /** The invite link of the room just opened: it shows once the room's keys are made, with their fingerprint (#1323). */
 export async function inviteLink(page: Page): Promise<string> {
   const invite = page.locator('#invite');
