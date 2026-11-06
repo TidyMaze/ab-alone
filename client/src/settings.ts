@@ -2,7 +2,9 @@
 // Reduced motion (#379) and Flat HUD (#391), Sound (#284, which opens the four volume sliders of #438), the audio log
 // Transcript (#516), Safe mode (#380),
 // the Theme choice (#317), the Shell skin and Glass skin choices (#377), the UI scale (#382), then the actions Export game and Import
-// game (#287), and the list of the Log archive (#513). Pure functions only: main.ts feeds them the clicks and builds the DOM.
+// game (#287), and the list of the Log archive (#513). Pure functions only: main.ts feeds them the clicks and builds the DOM. The
+// menu shows them in five groups (settingsgroups.ts, #1566); a label says what the item is, so the three that were a value are
+// Shell: Leather, Glass: Marble and Difficulty: 100%.
 import type { IconName } from './icons';
 import type { Bus } from './sound';
 import type { Level } from './lightpanel';
@@ -72,14 +74,14 @@ export const settingsList = (
   { id: 'transcript', label: 'Transcript', icon: 'transcript', on: transcript },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme', on: safe },
   { id: 'palette', label: `Palette: ${PALETTE_NAMES[palette]}`, icon: 'palette' },
-  { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
-  { id: 'glass-skin', label: glassSkinById(glass).name, icon: 'skin' },
+  { id: 'shell-skin', label: `Shell: ${skinById(skin).name}`, icon: 'skin' },
+  { id: 'glass-skin', label: `Glass: ${glassSkinById(glass).name}`, icon: 'skin' },
   { id: 'render-mode', label: `Render: ${RENDER_MODE_NAMES[renderMode]}`, icon: 'render' },
   { id: 'free-cam', label: 'Free camera', icon: 'camera', on: freeCam }, // a developer view (#938), shortcut C
   { id: 'steering', label: 'Steering', icon: 'steer', on: steering }, // Open world: go round obstacles, tap to walk (#1137)
   { id: 'guide', label: 'Guide', icon: 'guide' }, // the first-launch guide again (#1293)
   { id: 'export-game', label: 'Export game', icon: 'export' },
-  { id: 'difficulty', label: DIFFICULTY_LABELS[difficulty], icon: 'scale' },
+  { id: 'difficulty', label: `Difficulty: ${DIFFICULTY_LABELS[difficulty]}`, icon: 'scale' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];
 

@@ -99,10 +99,21 @@ body[data-scene='table-zero']::after { display: none; }
 }
 #settings { padding: 0.5rem; anchor-name: --cog; }
 #settings-menu button[hidden] { display: none; }
-/* The FPS switch beside Clear board in one item, so the menu keeps its rows (#426). */
-.setting-group { display: flex; gap: 0.25rem; }
-#setting-difficulty { padding-inline: 0.5rem; justify-content: center; }
-#setting-difficulty svg { display: none; }
+/* The menu in five groups (#1566, ui.md section 4.11): a heading, then its items, one per row with its icon and its label at every window
+   size. Advanced is a disclosure, shut until a press. A target is 44 px, whatever the pointer. */
+#settings-menu button { justify-content: flex-start; text-align: left; box-sizing: border-box; width: 100%; min-height: 2.75rem; }
+.setting-section, .setting-section::details-content { display: flex; flex-direction: column; gap: 0.125rem; }
+#settings-menu details.setting-section:not([open]) > :not(summary) { display: none; } /* shut Advanced: its items are neither drawn nor reachable */
+.setting-heading { margin: 0; padding: 0.25rem 0.25rem 0; color: var(--muted); font: 600 0.75rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+#settings-menu button:not(:has(svg)) { padding-inline-start: calc(0.75rem + 20px + 0.5rem); } /* FPS and Logs have no icon: their label lines up with the others */
+#settings-menu summary.setting-heading {
+  display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; min-height: 2.75rem; padding: 0.5rem 0.75rem; cursor: pointer;
+  color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); list-style: none;
+}
+#settings-menu summary.setting-heading::-webkit-details-marker { display: none; }
+#settings-menu summary.setting-heading::after { content: '+'; font-size: 1rem; }
+#settings-menu details[open] > summary.setting-heading::after { content: '\2212'; }
+#settings-menu summary.setting-heading:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* What the level changes (#1538), a line of the menu's own width under the control. */
 #difficulty-note { flex: 1 0 100%; grid-column: 1 / -1; margin: 0; padding: 0 0.25rem; font: 0.75rem/1.3 var(--ui); color: var(--muted); overflow-wrap: anywhere; }
 /* The volume page (#438): Sound shows the four sliders in place of the items, so the menu is never taller than its items
@@ -128,8 +139,6 @@ body[data-scene='table-zero']::after { display: none; }
 /* The Ledger (#1585) is the same plate, its story lines paragraphs a little apart. */
 .setting-archive.ledger { gap: 0.5rem; }
 .setting-archive.ledger p { margin: 0; }
-/* The two skin buttons share the item's width, half each, a name cut with an ellipsis: the menu keeps its width (#377). */
-.skin-pair > button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The FPS readout (#426): off by default, a corner that ignores the pointer. */
 #fps {
   position: fixed; left: 4px; bottom: 4px; z-index: 2; pointer-events: none; padding: 0.125rem 0.375rem;
@@ -157,11 +166,19 @@ body[data-pad] .pad-hint { display: inline; }
 body[data-pad] .tap-hint { display: none; }
 #settings-box { position: relative; display: flex; flex-direction: column; align-items: flex-end; }
 #hud, #hud-fold, #settings-box, #eval { zoom: var(--ui-scale); } /* the HUD, its fold button, the menu and the score bar grow with the UI scale (#382, #927), the board does not */
+/* Hung from the cog, fixed to the window (the landscape column scrolls and would clip it, bugs #427 #458). A menu taller than the window
+   scrolls inside itself, and ends above the dock (--settings-clear) so nothing of it is cut (#1566). */
 #settings-menu {
-  position: absolute; z-index: 1; top: calc(100% + 0.25rem); right: 0; width: max-content;
-  display: flex; flex-direction: column; gap: 0.125rem; align-items: stretch;
+  --settings-clear: 132px; position: fixed; z-index: 1; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: min(20rem, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch; box-sizing: border-box;
+  max-height: calc((100dvh - 16px - 2.75rem - 0.25rem - var(--settings-clear)) / var(--ui-scale)); overflow-y: auto; overscroll-behavior: contain;
   background: var(--panel); pointer-events: auto; /* no tap through the gaps */
 }
+/* Under the cog wherever it is, the menu as tall as its items and no taller than the space down to --settings-clear. */
+@supports (anchor-name: --cog) and (max-height: stretch) {
+  #settings-menu { position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); bottom: calc(var(--settings-clear) / var(--ui-scale)); height: fit-content; max-height: stretch; }
+}
+body[data-openworld] #settings-menu { --settings-clear: 68px; } /* the exit is alone at the bottom right (16 px, 44 px, 8 px) */
 #settings-menu[hidden] { display: none; }
 #online { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
 /* The HUD buttons in groups (#839, ui.md): the view (Reset view, Cam), the game controls, the tools (Hint, Replay,
@@ -333,31 +350,12 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
     margin: -4px; padding: 4px;
   }
   #chrome #online *:not(#settings-menu, #settings-menu *) { max-width: 100%; }
-  #settings-box { align-self: stretch; } /* as wide as the column: the menu under the cog fits in it */
-  /* Bug #483: a skin pair gives the menu no width, so the menu keeps the width of its other rows and covers no cell; its
-     two buttons share that width, or each takes a row of its own when their names do not fit side by side (#458). */
-  .skin-pair { contain: inline-size; flex-wrap: wrap; }
-  /* Bug #427, #458: the column scrolls, so a menu inside it is clipped at its bottom edge or left edge once the UI scale grows it or when it is wider than the column. Fixed to the
-     viewport and hung from the cog, it leaves that clip on every browser. */
-  #settings-menu { position: fixed; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: max-content; max-width: calc(100vw - 32px); }
-  /* With the light sliders the menu is taller than a phone held sideways: it scrolls, so every row stays reachable. */
-  /* Bug #904: the menu ends 8 px above the clipboard band (16 px, a 44 px button, then 8 px), so it covers none of it. Its
-     top is under the cog (16 px, the cog's --touch height, then 0.25rem): both are taken off the window, in the zoomed
-     units of the menu (#382). */
-  #settings-menu { max-height: calc((100dvh - 84px) / var(--ui-scale) - var(--touch) - 0.25rem); overflow-y: auto; }
-  @supports (anchor-name: --cog) {
-    #settings-menu { position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
-  }
+  #settings-box { align-self: stretch; } /* as wide as the column: the cog at its right edge */
 }
 @media (orientation: portrait) {
   #chrome { flex-direction: column; gap: 0.5rem; }
-  #online { align-self: stretch; flex-flow: row wrap; }
-  /* The cog starts the first row: the open menu lies beside it, over that row, its items side by side, so it reaches no
-     lower than the rows when the plate is tall (#284, #287). */
-  #settings-menu { top: 0; left: calc(100% + 0.5rem); right: auto; flex-flow: row wrap; max-width: calc(100vw - 32px - 100% - 0.5rem); }
-  #settings-menu :is(.setting-volume, .setting-lights, .setting-archive, #level-reset) { flex: 1 0 100%; box-sizing: border-box; } /* Reset lights spans the row (#904) */
-  .setting-archive.ledger { max-height: calc(100dvh - 25rem); overflow-y: auto; } /* a full Ledger scrolls in its plate, above the eval bar and the dock (#1585) */
-  #settings-menu #level-reset { justify-content: center; }
+  /* The cog at the right of the row under the plate (#1566): the plate takes the top row, and the open menu hangs from the cog. */
+  #online { align-self: stretch; flex-flow: row wrap; justify-content: flex-end; }
   /* The open mode menu starts a new row. #666: an open boss list is one row of its own under Boss fight (or Fight
      together) that scrolls sideways, so a new boss adds no row over the board: the menu is no wider than the
      window (min-width), the padding keeps the focus outlines inside the scroll box. */
@@ -379,8 +377,6 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 @media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
   #chrome, #online, #mode-menu { gap: 0.25rem; }
   #boss-bar { margin-bottom: 0.25rem; } /* #929: the bar ends 8 px above the plate, as in a window, not 4 */
-  #settings-menu { left: calc(100% + 0.25rem); max-width: calc(100vw - 32px - 100% - 0.25rem); gap: 2px; }
-  #settings-menu .setting-group { gap: 2px; }
   #daily-copy { min-height: 2.75rem; }
   #daily-result { max-width: calc(100vw - 32px); }
   #mode-menu button { padding-inline: 0.25rem; min-width: 2.75rem; font-size: 0.75rem; }
@@ -404,23 +400,6 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   body[data-look='neon'] #settings-menu[data-page='volume'] { display: grid; grid-template-columns: 1fr 1fr; }
   body[data-look='neon'] #settings-menu[data-page='volume'] > .setting-volume { grid-column: auto; min-width: 0; }
 }
-/* Held upright, or in a narrow or short window, each item is its icon only, a 44 px square, so every item fits without
-   reaching the board (#414): the name is its aria-label and title. Roomy windows keep icon then label. */
-@media (orientation: portrait), (max-width: 1100px), (max-height: 500px) {
-  #settings-menu button { justify-content: center; min-width: 2.75rem; min-height: 2.75rem; padding: 0.5rem; }
-  #settings-menu button span { display: none; }
-  #setting-difficulty svg { display: block; }
-  #settings-menu :is(#setting-difficulty, #setting-log-archive) { padding-inline: 0.25rem; }
-}
-/* Wider than tall, those icons sit in rows of 3 under the cog, as narrow as the column band. */
-@media (orientation: landscape) and (max-width: 1100px), (orientation: landscape) and (max-height: 500px) {
-  #settings-menu { display: grid; grid-template-columns: repeat(3, 2.75rem); grid-auto-flow: dense; }
-  #settings-menu .setting-group { grid-column: span 2; }
-  #settings-menu .setting-group:has(#setting-ledger) { grid-column: span 3; gap: 2px; } /* Import game, Logs and Ledger: three squares of 44 px in the width of the three columns (#1585) */
-  #settings-menu #level-reset { grid-column: 1 / -1; } /* bug #904: one row of the grid, not a 44 px cell that wraps */
-  #settings-menu[data-page='archive']:has(.ledger) { grid-template-columns: minmax(0, 14rem); } /* the Ledger's lines are sentences: a column wide enough to read (#1585) */
-  #settings-menu .skin-pair { flex-wrap: nowrap; }}
-
 #hud {
   box-sizing: border-box; max-width: 22rem;
   padding: 0.75rem 1rem; color: var(--text); background: var(--panel);
@@ -1168,8 +1147,9 @@ body[data-reading] #lore { display: none; }
 }
 /* A sheet over the dock hides the evaluation plate and the diagnostics box, which sit above the dock (#1032). */
 body:has(#dock-wrap :is(#mode-menu, #daily-card, #lobby-sheet):not([hidden])) #support { display: none; }
-/* Held sideways the settings menu lies left of the dock column, not over it (#1032). */
+/* Held sideways the settings menu lies left of the dock column, not over it (#1032), and the score bar lies at its left, bottom 16 px: the menu ends above it. */
 @media (orientation: landscape) and (max-height: 660px) {
+  #settings-menu { --settings-clear: 68px; }
   body:not([data-openworld]) #settings-menu { right: 68px; }
 }
 /* The Game modes sheet, the boss list and the settings menu (#1136): the theme's look, refined. Rows are 6 px cards on an 8 px

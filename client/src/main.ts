@@ -206,6 +206,7 @@ import { toleranceWindow } from './matchmaking';
 import { boardHtml, buildBoard, loadRivals, ratingHistory, visitBoard } from './leaderboard';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
+import { groupSettings } from './settingsgroups';
 import { icon } from './icons';
 import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
@@ -1078,42 +1079,14 @@ for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, redu
   });
 }
 paintMenu();
-// The FPS switch (#426) is a second button in the Clear board item's group: no row of its own, so the menu keeps its height.
+// The FPS switch (#426) is a developer tool: the Advanced group of the menu holds it (#1566).
 const fpsBox = document.getElementById('fps') as HTMLDivElement;
 const fpsButton = document.createElement('button');
 fpsButton.id = 'setting-fps';
 fpsButton.type = 'button';
 fpsButton.textContent = 'FPS';
 fpsButton.setAttribute('aria-pressed', String(fpsOn));
-const clearRow = document.getElementById('setting-clear-board')!;
-const clearGroup = document.createElement('div');
-clearGroup.className = 'setting-group';
-clearRow.replaceWith(clearGroup);
-clearGroup.append(clearRow, fpsButton);
-// The glass skin (#377) is a second button in the shell skin's item: no row of its own, so the menu keeps its height.
-const shellSkinRow = document.getElementById('setting-shell-skin')!;
-const skinGroup = document.createElement('div');
-skinGroup.className = 'setting-group skin-pair';
-shellSkinRow.replaceWith(skinGroup);
-skinGroup.append(shellSkinRow, document.getElementById('setting-glass-skin')!);
-// The palette choice (#381) is a second button in the theme item: no row of its own, so the menu keeps its height.
-const themeRow = document.getElementById('setting-theme')!;
-const themeGroup = document.createElement('div');
-themeGroup.className = 'setting-group skin-pair';
-themeRow.replaceWith(themeGroup);
-themeGroup.append(themeRow, document.getElementById('setting-palette')!);
-// The audio log Transcript toggle (#516) is a second button in the Sound item, as Palette is in the Theme item.
-const soundRow = document.getElementById('setting-sound')!;
-const soundGroup = document.createElement('div');
-soundGroup.className = 'setting-group skin-pair';
-soundRow.replaceWith(soundGroup);
-soundGroup.append(soundRow, document.getElementById('setting-transcript')!);
-// The guide (#1293) is a second button in the Steering item, as Transcript is in the Sound item.
-const steeringRow = document.getElementById('setting-steering')!;
-const steeringGroup = document.createElement('div');
-steeringGroup.className = 'setting-group skin-pair';
-steeringRow.replaceWith(steeringGroup);
-steeringGroup.append(steeringRow, document.getElementById('setting-guide')!);
+menu.append(fpsButton);
 fpsBox.hidden = !fpsOn;
 // The four volume sliders (#438), the page Sound opens: 0 to 100 %, each saved on its own.
 for (const bus of BUSES) {
@@ -1155,15 +1128,8 @@ resetLights.addEventListener('click', () => {
   }
   scaleLights();
 });
-// The difficulty setting (#704) is a second button in the Export game item, so the menu keeps its height.
-const exportRow = document.getElementById('setting-export-game')!;
-const exportGroup = document.createElement('div');
-exportGroup.className = 'setting-group';
-exportRow.replaceWith(exportGroup);
-exportGroup.append(exportRow, document.getElementById('setting-difficulty')!);
-exportGroup.after(difficultyNote);
-// The log archive (#513): its button, Logs, is a short word beside Import game, as FPS is beside Clear board, so the menu
-// keeps its height. It opens a page of one button per entry read, then per audio log collected (#517), in place of the
+menu.append(difficultyNote); // what each level changes (#1538), under Difficulty in the Controls group
+// The log archive (#513): its button, Logs, is a row of the Sound group (#1566). It opens a page of one button per entry read, then per audio log collected (#517), in place of the
 // items; a press on one closes the menu and reopens the entry in the terminal reader, or replays the log.
 const archiveButton = Object.assign(document.createElement('button'), {
   id: 'setting-log-archive',
@@ -1171,16 +1137,13 @@ const archiveButton = Object.assign(document.createElement('button'), {
   textContent: 'Logs',
   title: 'Log archive',
 });
-const importRow = document.getElementById('setting-import-game')!;
-const importGroup = document.createElement('div');
-importGroup.className = 'setting-group';
-importRow.replaceWith(importGroup);
-// The Ledger (#1585): a second short word in the same item, the story lines seen so far in stage order, on the same plate.
-const ledgerButton = Object.assign(document.createElement('button'), { id: 'setting-ledger', type: 'button', title: 'Ledger', innerHTML: `${icon('ledger')}<span>Ledger</span>` }); // an icon only where the menu is narrow, as its other items
+// The Ledger (#1585): a second row in the same group, the story lines seen so far in stage order, on the same plate.
+const ledgerButton = Object.assign(document.createElement('button'), { id: 'setting-ledger', type: 'button', title: 'Ledger', innerHTML: `${icon('ledger')}<span>Ledger</span>` });
 ledgerButton.setAttribute('aria-label', 'Ledger');
-importGroup.append(importRow, archiveButton, ledgerButton);
+menu.append(archiveButton, ledgerButton);
 archiveButton.addEventListener('click', openArchive);
 ledgerButton.addEventListener('click', openLedger);
+groupSettings(menu); // the items under their headings (#1566), Copy diagnostics from the page into Advanced
 const archive = menu.appendChild(document.createElement('div'));
 archive.className = 'setting-archive';
 function openArchive(): void {
@@ -7329,9 +7292,8 @@ addEventListener('popstate', (e) => {
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
 // text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
 const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElement;
-// The clipboard is the last row of the settings list (#1032), an action with its icon and its label, as the other items.
+// The clipboard is the last row of the Advanced group of the settings list (#1032, #1566), an action with its icon and its label, as the other items.
 setButton(copyButton, 'Copy diagnostics', `${icon('diagnostics')}<span>Copy diagnostics</span>`);
-menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 const renderCost = (): RenderCost => {
   let pointLights = 0;

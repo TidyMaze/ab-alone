@@ -104,7 +104,8 @@ Invite link (#839): the caption, then the link and a Copy button on one row. Cop
 then the caption, the link and Copy close for good (a new room shows them again). When the browser refuses the
 clipboard, or the page has none, the link stays, selected, and the plate says "invite link selected: copy it by hand".
 
-Settings (#277): a cog button, first in the column, opens a menu, one button per item: the toggles Clear board,
+Settings (#277): a cog button, first in the column, opens a menu, one button per item (since #1566 in five headed groups, section 4.11, which fixes
+where each item sits; the text below says what each does): the toggles Clear board,
 then Reduced motion (#379, see section 6: it follows `prefers-reduced-motion` until pressed, then keeps the player's
 choice), then Flat HUD (#391, off by default: the flat HUD fallback of world.md section 6 rule 8, see the Flat HUD
 item below), then Sound (#284, no longer a button of the column; a press shows the four volume sliders of #438, Music, Ambience,
@@ -122,12 +123,9 @@ and saves them, so a phone that kept low levels is not left dark (`client/src/ma
 item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
 strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, lines in a box for Flat HUD, a speaker for Sound, an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
-or closing it moves no button: under the cog in the column, beside the cog over the first row when the buttons are
-rows. It covers no cell either. Held upright (`orientation: portrait`), or in a narrow or short window (up to 1100 px
-wide or 500 px tall), each item shows its icon only, a 44 px square, so every item fits without reaching the board
-(#414): held upright side by side beside the cog, wider than tall in rows of 3 under the cog (Clear board and FPS
-share one row of two). Roomy windows keep icon then label, one item per row. Each item keeps its
-name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it and a pointer shows it. On a touch screen each item is at least 44 px tall. It closes on Escape, on a press
+or closing it moves no button: it hangs under the cog, at its right edge (section 4.11). Every item shows its icon then its label, one item per row, at
+every window size (the icon-only items of #414 and the rows of 3 are gone, #1566). Each item keeps its
+name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it and a pointer shows it. Each item is at least 44 px tall. It closes on Escape, on a press
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
@@ -701,6 +699,35 @@ game (`client/src/backnav.ts`, wired in `main.ts`).
   does nothing else; leaving a room is the mode menu's Hub, as before. A `popstate` that comes with a change of the address hash
   (Chrome fires one when the link is written) is that entry's, never a Back from ours.
 - **Guard.** `client/src/main.back.test.ts` and `client/e2e/back.spec.ts` press Back from every mode of the README table and the Hub.
+
+### 4.11 The settings menu in five groups (#1566)
+
+The menu is five groups, each under a visible heading (an `h3` in a `role="group"` named by it), in this order. Every item is the element it was, with its
+id and its listener, moved under its heading (`client/src/settingsgroups.ts`); no setting is added, removed or changed.
+
+| Group | Items |
+|---|---|
+| Sound | Sound (opens the volume page), Transcript, Logs, Ledger |
+| Display | Theme (with its UI scale and Safe mode), Shell skin, Glass skin, Clear board, the Bloom, Lamps and Lights sliders, Reset lights |
+| Accessibility | Reduced motion, Flat HUD, Palette (the colour-blind palettes) |
+| Controls | Difficulty with its note, Steering, Guide |
+| Advanced | FPS, Render, Free camera, Export game, Import game, Copy diagnostics |
+
+- **Where the logs are.** Logs and the Ledger are for the player, not a developer tool, so they are in Sound, the last two rows: Logs replays the audio logs
+  (whose text is the Transcript, the row above) and opens the lore read, and the Ledger is the written record of the story lines beside it. They stay a page of
+  the menu in place of the items, as before.
+- **Advanced** is a `details` disclosure, shut at every start and kept as the player left it while the page is open; its summary is a 44 px row with a + or a minus.
+  The developer tools in it keep their rules in the other specs (Export game and Import game are hidden in the Hub and online, Copy diagnostics is the last row of the menu).
+- **Labels.** Every item shows a visible label, an icon then a word, on a phone as on a desktop. The three that were a bare value say what they are:
+  Difficulty: 100%, Shell: Leather, Glass: Marble. A toggle shows its state as it did, filled while it is on (`aria-pressed`).
+- **Size and place.** The menu is a column 20 rem wide at most (the window less 32 px), hung under the cog at its right edge and fixed to the window. It is as tall
+  as its items and no taller than the window less a clearance at the bottom (above the score bar and the dock held upright and on a desktop, above the score bar
+  held sideways, above the exit in the Open world). Taller than that, it scrolls inside itself, nothing is cut, and every item and heading stays 44 px. It covers
+  cells while it is open, as the Game modes sheet does; a press outside closes it.
+- **The cog** is at the right edge of the window in every state, as `thumb-dock.md` section 1 says: top right wherever the window is wider than tall, and held upright
+  at the right of the row under the HUD plate (at the top right when there is no plate, in the Open world). It was at the left, under the plate; the plate
+  keeps the whole top row, so the cog is not beside it: it is 44 px and a 360 px window leaves the plate 305 px. It clears the HUD plate, the minimap and the
+  Map button at 390x844, 360x800, 844x390 and 960x540 (`e2e/settings-groups.spec.ts`).
 
 ### 4.10 One door grammar (#1517, Decision #1513)
 

@@ -36,7 +36,7 @@ Dock = the bottom bar (one row, 44 px buttons). Sheet = a panel above the dock (
 | Transcript and log (`#log`) | Not in the dock | Log archive stays in Settings | Transcript line stays under the HUD as today |
 
 Notes:
-- Settings (cog) is the only control at the top right in every state, so the thumb never has to reach it except to open it. It stays 44×44.
+- Settings (cog) is the only control at the right edge of the top band in every state, so the thumb never has to reach it except to open it. It stays 44×44. Wider than tall it is top right (16 px from the top and the right). Held upright it is at the right of the first row under the HUD plate, not in the plate's row (the plate takes 305 of the 358 px of a 360 px window and its fold button is in its corner), and at the top right when there is no plate (the Open world, #1566).
 - Clipboard (`#copy-diagnostics`) leaves the bottom-right corner (open question 1).
 - `#support` (the support container with the replay bar and clipboard) is emptied: the replay bar goes to the dock and the top band (replay review), the clipboard moves (open question 1).
 
@@ -71,7 +71,7 @@ Keyboard: the dock is a toolbar (`role="toolbar"`), DOM order = Tab order. Arrow
 - Focus: moves to the first item on open; returns to the trigger button on close.
 - Focus ring: 2 px solid `--accent`, offset 2 px (matches ui.css:144).
 - Only one sheet open at a time.
-- Settings stays at the cog (top right) as a list under the cog, as today (ui.css:117-124). Its position is out of scope for this spec.
+- Settings stays at the cog as a list under the cog, in five headed groups, scrolling inside itself when taller than the window (ui.md section 4.11, #1566).
 
 ## 4. What leaves the old top column
 
@@ -115,5 +115,5 @@ Measured failures on the mockup (before the real build):
 
 - The real HUD height, the real board placement and the joystick size: measure on the build (`layout:check`).
 - The Auto-play rules (when it is allowed): unchanged.
-- Settings position under the cog: unchanged.
+- Settings position under the cog: unchanged. Its groups and its scroll are ui.md section 4.11.
 - No code, no test, no issue or PR change.
