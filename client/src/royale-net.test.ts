@@ -172,6 +172,8 @@ describe('RoyaleNet lobby', () => {
     expect([a.net.you, b.net.you, watcher.net.you]).toEqual([0, 2, -1]);
     expect(b.net.names).toEqual(['Player 1', 'Bot 2', 'You', 'Bot 4']);
     expect(a.net.players).toBe(2);
+    expect(a.net.status(true)).toEqual(netStatus('lobby', true, 2, 0)); // the HUD line, asked of the room (#1578)
+    expect(b.net.status(false)).toEqual(netStatus('lobby', false, 2, 0));
     await b.net.start(); // not the coordinator
     await room.settle();
     expect(kinds(room.sent)).toEqual([]);

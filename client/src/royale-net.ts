@@ -196,6 +196,11 @@ export class RoyaleNet<G extends NetGame> {
     return this.lineup.filter((k) => k !== '').length;
   }
 
+  /** The HUD status line of the room, `coordinating` being whether this peer starts the rounds (the page cannot call `netStatus` itself: it loads this module on demand, #1578). */
+  status(coordinating: boolean): OnlineStatus {
+    return netStatus(this.phase, coordinating, this.players, this.desync);
+  }
+
   get phase(): Phase {
     if (!this.seats) return 'lobby';
     if (this.o.royale.placement().length) return 'over';

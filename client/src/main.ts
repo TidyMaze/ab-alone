@@ -396,7 +396,7 @@ import {
 import { bookHtml, compendiumHtml, finished, historyHtml, ranRun, readDaily, readHistory, readSeen, recordFinished, recordSeen, startDailyTry } from './runbook';
 import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
-import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } from './royale-net';
+import type { RoyaleNet } from './royale-net';
 import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 import './ui.css';
 
@@ -7124,13 +7124,14 @@ function royaleStatus(net: RoyaleNet<Royale>): OnlineStatus {
   document.body.dataset.net = net.phase;
   document.body.dataset.desync = String(net.desync);
   startButton.hidden = net.phase !== 'lobby' || !session.isCoordinator;
-  return netStatus(net.phase, session.isCoordinator, net.players, net.desync);
+  return net.status(session.isCoordinator);
 }
 // The keys first: from the arena on, every order goes to the room, and the creator's invite link carries their
 // fingerprint. A joiner from a link with one, `creator`, takes seat 1 only from that key (#1323).
+const royaleNetCode = lazyChunk('online Battle royale', () => import('./royale-net')); // the room and the rounds are a chunk of the build (#1578)
 async function goRoyale(room: string, side: number, creator?: string): Promise<void> {
   if (consentWanted() && !(await onlineAllowed())) return; // Stay solo (#1338)
-  const keys = await generateKeys();
+  const [{ parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf }, keys] = await Promise.all([royaleNetCode(), generateKeys()]);
   const key = await fingerprint(keys.pub);
   leaveRoyale();
   startRoyale({ seed: seedOf(room), rounds: [] });
