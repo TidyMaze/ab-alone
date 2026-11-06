@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
+import { world_chunk } from 'abalone-wasm';
+import { CHUNK } from './openworld';
+import { BIOMES } from './roguelite';
 import { TOWN_LINES } from './tally';
 import { boot, type Game } from './test/harness';
 
@@ -160,6 +163,23 @@ describe('a dungeon gate of the Open world (#1593)', () => {
     expect(data().run).toBeUndefined();
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(byId('exit').dataset.label).toBe('Hub');
+  });
+
+  it('the run starts in the biome of the ground the gate stands in, #1597', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const gates = data().openworldPlaces!.split(' ').filter((p) => p.startsWith('dungeon:')).map((p) => p.slice(8).split(',').map(Number) as Axial);
+    const biomeAt = ([q, r]: Axial): number => {
+      const [cx, cy] = [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
+      return world_chunk(7, cx, cy)[((r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)) * 3 + 2]!;
+    };
+    const nth = gates.findIndex((gate) => biomeAt(gate) > 0);
+    expect(nth, 'one gate of seed 7 stands outside the Meadow').toBeGreaterThanOrEqual(0);
+    await rollOnto(game, 'dungeon', false, nth);
+    expect(data().run).toBe('map');
+    expect(data().biome).toBe(BIOMES[biomeAt(gates[nth]!)]!.id);
   });
 
   it('a run started from the menu has no way back to a world', async () => {

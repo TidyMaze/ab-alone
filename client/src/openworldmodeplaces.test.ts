@@ -20,8 +20,8 @@ function grass(_seed: number, cx: number, cy: number): Uint8Array {
 // `kind, q, r` triples: the spawn town, a dungeon gate in the window, a town far away.
 const PLACES = Int32Array.of(0, 0, 0, 1, 6, 0, 0, 60, 0);
 const none: undefined[] = Array.from({ length: 12 }, () => undefined); // the parameters before `read`
-const make = (placesOf?: (seed: number) => Int32Array, onPlace?: (seed: number, kind: 'town' | 'dungeon', index: number) => void, saves = worldSaves(memoryStore(), 1)) =>
-  new (OpenWorldMode as new (...args: unknown[]) => OpenWorldMode)(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, ...none, undefined, placesOf, onPlace);
+const make = (placesOf?: (seed: number) => Int32Array, onPlace?: (seed: number, kind: 'town' | 'dungeon', index: number, biome: string) => void, saves = worldSaves(memoryStore(), 1), chunk = grass) =>
+  new (OpenWorldMode as new (...args: unknown[]) => OpenWorldMode)(chunk, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, ...none, undefined, placesOf, onPlace);
 const body = () => document.body.dataset;
 
 afterEach(() => {
@@ -71,10 +71,24 @@ describe('entering a town or a dungeon gate (#1593)', () => {
     m.enter(7, 800, 600);
     m.fixture({ hero: [5, 0], troop: [[4, 0]], enemies: [] });
     roll(m, 'ArrowRight');
-    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0);
+    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, 'meadow');
     expect(m.active).toBe(false);
     for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
     expect((await saves.load(7))!.hero).toEqual([5, 0]);
+  });
+
+  it('tells the page the biome of the gate\'s ground, so its run begins there, #1597', () => {
+    const desert = (seed: number, cx: number, cy: number): Uint8Array => {
+      const out = grass(seed, cx, cy);
+      for (let i = 2; i < out.length; i += 3) out[i] = 3; // the biome byte of every cell
+      return out;
+    };
+    const onPlace = vi.fn();
+    const m = make(() => PLACES, onPlace, worldSaves(memoryStore(), 1), desert);
+    m.enter(7, 800, 600);
+    m.fixture({ hero: [5, 0], troop: [[4, 0]], enemies: [] });
+    roll(m, 'ArrowRight');
+    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, 'desert');
   });
 
   it('rolling back onto the spawn town starts the town, the hero having started on it did not', () => {

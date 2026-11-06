@@ -170,7 +170,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false, runes: 0, found: 0, map: 0 });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], first: 0, flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false, runes: 0, found: 0, map: 0 });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -1968,6 +1968,24 @@ describe('roguelite biomes (#1472)', () => {
     expect(biomeOf(fresh({ biomes: [2] }), 2)).toBe(0); // not picked yet
   });
 
+  it('a run that began on a gate has the gate\'s biome in act 1, the exits after it, and the Meadow throughout without exits, #1597', () => {
+    const run = fresh({ first: 3, biomes: [2, 5] });
+    expect([0, 1, 2].map((act) => biomeOf(run, act))).toEqual([3, 2, 5]);
+    expect([0, 1, 2].map((act) => biomeOf({ ...run, exits: false }, act))).toEqual([0, 0, 0]);
+    expect(biomeOf(fresh({ first: 3 }), 0)).toBe(3);
+  });
+
+  it('a saved run keeps the biome it began in, and one saved before it began in the Meadow, #1597', async () => {
+    const store = memoryStore();
+    const kept = fresh({ path: [0, 1], first: 3, biomes: [2] });
+    await store.put(RUN_KEY, kept);
+    expect((await loadRun(store, () => THREE, engine))!.state).toEqual(kept);
+    const older: Record<string, unknown> = { ...kept };
+    delete older.first;
+    await store.put(RUN_KEY, older);
+    expect((await loadRun(store, () => THREE, engine))!.state).toEqual({ ...kept, first: 0 });
+  });
+
   it('an act boss beaten opens the exits unless it is the last one or the run has none; nothing else does', () => {
     expect(won([0, 1])).toMatchObject({ exit: true, end: '' });
     expect(won([0, 1, 2, 3])).toMatchObject({ exit: true });
@@ -2101,6 +2119,9 @@ describe('roguelite biomes (#1472)', () => {
     ['an unknown biome', { biomes: [6] }],
     ['a biome twice', { biomes: [2, 2] }],
     ['three biomes', { biomes: [1, 2, 3] }],
+    ['an unknown first biome', { first: 6 }],
+    ['a first biome that is no integer', { first: 'forest' }],
+    ['the first biome chosen again by an exit', { first: 2, biomes: [2] }],
   ])('drops a saved run with %s', async (_, bad) => {
     const store = memoryStore();
     await store.put(RUN_KEY, { ...fresh({ path: [0] }), ...bad });

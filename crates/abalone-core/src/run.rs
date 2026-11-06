@@ -3709,4 +3709,25 @@ mod runes {
             .collect();
         assert!(Biome::ALL[1..].iter().all(|b| offered.contains(b)));
     }
+
+    #[test]
+    fn a_run_that_began_in_a_biome_is_never_offered_it_again_by_any_exit() {
+        for seed in 0..60 {
+            for act in 1..ACTS {
+                for from in Biome::ALL {
+                    for first in Biome::ALL {
+                        let offered = exits_after(seed, act, from, first, RUNE_EXIT);
+                        assert_eq!(offered.len(), 3);
+                        assert!(offered
+                            .iter()
+                            .all(|&b| b != Biome::Meadow && b != from && b != first));
+                    }
+                    assert_eq!(
+                        exits_after(seed, act, from, Biome::Meadow, RUNE_EXIT),
+                        exits_with(seed, act, from, RUNE_EXIT)
+                    );
+                }
+            }
+        }
+    }
 }

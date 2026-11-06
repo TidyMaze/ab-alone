@@ -172,9 +172,11 @@ mod tests {
     #[test]
     fn run_exits_flattens_the_core_exits() {
         let core = run::exits(7, 2, Biome::Tundra).map(|b| b as u8);
-        assert_eq!(run_exits(7, 2, 2, None), core);
-        assert_eq!(run_exits(7, 2, 99, None), run_exits(7, 2, 0, None));
-        assert_eq!(run_exits(7, 2, 2, Some(RUNE_ROOM)), core);
+        assert_eq!(run_exits(7, 2, 2, None, None), core);
+        assert_eq!(run_exits(7, 2, 99, None, None), run_exits(7, 2, 0, None, None));
+        assert_eq!(run_exits(7, 2, 2, Some(RUNE_ROOM), None), core);
+        let after = run_exits(7, 2, 3, None, Some(Biome::Forest as u8));
+        assert!(!after.contains(&(Biome::Forest as u8)) && !after.contains(&3));
     }
 
     #[test]
@@ -192,9 +194,9 @@ mod tests {
             assert_eq!(record[4], links | skips);
         }
         assert!(flat.chunks(NODE_STRIDE).any(|r| r[4] >> 8 != 0));
-        let exits = run_exits(7, 2, 2, Some(RUNE_EXIT));
+        let exits = run_exits(7, 2, 2, Some(RUNE_EXIT), None);
         assert_eq!(exits.len(), 3);
-        assert_eq!(exits[..2], run_exits(7, 2, 2, None));
+        assert_eq!(exits[..2], run_exits(7, 2, 2, None, None));
     }
 
     #[test]
