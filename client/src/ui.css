@@ -1189,6 +1189,9 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
   color: #c9d1d6; background: rgba(14, 18, 20, 0.86); border: 1px solid var(--k); border-radius: 3px;
   font: 0.6875rem/1.25 var(--ui);
 }
+.hub-label { pointer-events: auto; cursor: pointer; } /* a tap on a plate walks the marble to its room (#1522); YOU is no room, and a finger's hit area reaches 12 px past a plate */
+.hub-label.you { pointer-events: none; }
+@media (pointer: coarse) { .hub-label::after { content: ''; position: absolute; inset: -12px; } }
 .hub-label b, .hub-label .short { display: block; color: var(--k); font: 600 0.75rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .hub-label small { display: block; font-size: inherit; }
 .hub-label .short { display: none; }
@@ -1293,35 +1296,35 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 }
 body[data-pad] #guide [data-controls] { display: none; }
 body[data-pad] #guide [data-controls='pad'] { display: block; }
-#guide .actions, #coldopen .actions, #coach .actions { display: flex; gap: var(--space); margin-top: var(--space); }
-#guide .actions button, #coldopen .actions button, #coach .actions button {
+#guide .actions, #coldopen .actions, #coach .actions, #hub-confirm .actions { display: flex; gap: var(--space); margin-top: var(--space); }
+#guide .actions button, #coldopen .actions button, #coach .actions button, #hub-confirm .actions button {
   min-height: var(--target); padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: var(--r-button); font: 500 0.9375rem/1.2 var(--ui);
 }
-#guide-skip, #coldopen-skip, #coach-skip { margin-right: auto; }
-#guide #guide-next, #coldopen-begin, #coach-hub { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
+#guide-skip, #coldopen-skip, #coach-skip, #hub-confirm-no { margin-right: auto; }
+#guide #guide-next, #coldopen-begin, #coach-hub, #hub-confirm-yes { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
 #guide .actions button:disabled { opacity: 0.4; cursor: default; }
-#guide .actions button:focus-visible, #coldopen .actions button:focus-visible, #coach .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#guide .actions button:focus-visible, #coldopen .actions button:focus-visible, #coach .actions button:focus-visible, #hub-confirm .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* The first run (#1521, ui.md 4.7): the cold open is the guide's plate with three lines of Tally's voice; the coach plate sits over the
    scripted fight, at the top between the HUD and the cog, or above the eval bar and the dock on a phone held upright. The line of the
    story is read, never animated: nothing here moves. */
 #coldopen-title { margin: 0; font: 600 1.375rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 #coldopen-text { display: flex; flex-direction: column; gap: var(--space); }
-#coldopen-text p, #coach p { margin: 0; }
-#coach {
+#coldopen-text p, #coach p, #hub-confirm p { margin: 0; }
+#coach, #hub-coach, #hub-confirm {
   position: fixed; z-index: 3; top: 16px; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(calc(26rem * var(--ui-scale)), calc(100vw - 32px));
   display: flex; align-items: center; gap: var(--space); padding: 0.5rem 0.75rem 0.5rem 1rem; color: var(--text); background-color: var(--panel);
   border: 1px solid var(--edge); border-left: 3px solid var(--plate-accent); border-radius: var(--r-card); font: 0.9375rem/1.35 var(--ui);
 }
-#coach[hidden] { display: none; }
-#coach-step { flex: 1; font-weight: 600; }
-#coach .actions { margin-top: 0; }
-#coach .actions button { min-height: var(--target); }
+#coach[hidden], #hub-coach[hidden], #hub-confirm[hidden] { display: none; }
+#coach-step, #hub-coach, #hub-confirm-text { flex: 1; font-weight: 600; }
+#coach .actions, #hub-confirm .actions { margin-top: 0; }
+#coach .actions button, #hub-confirm .actions button { min-height: var(--target); }
 #hud .tally-note { margin-top: 0.25rem; font-size: 0.8125rem; color: var(--text); }
 body[data-firstrun] #hud .tally { animation: none; } /* the line stays while the note explains it */
 @media (orientation: portrait) {
-  #coach { top: auto; bottom: calc(9.5rem + env(safe-area-inset-bottom)); }
+  #coach, #hub-coach, #hub-confirm { top: auto; bottom: calc(9.5rem + env(safe-area-inset-bottom)); }
 }
 
 /* The online opt-in (#1338): the guide's card, two buttons and a link, all 44 px targets. */

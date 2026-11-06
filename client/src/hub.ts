@@ -117,3 +117,22 @@ export function step(at: Spot, to: Axial, beaten: readonly string[]): Spot {
   const up = DECK_NAMES.indexOf(door.to) > DECK_NAMES.indexOf(at.deck);
   return { deck: door.to, cell: up ? LIFT_DOWN : LIFT_UP };
 }
+
+/** The cells a marble rolls over from `at` to `target`, one neighbour at a time, the way a walk on a plate takes (#1522): the shortest over floor
+ * cells, so no room is entered on the way, ending on the `target` (a room's own cell, a locked lift too: its last roll is the bump). Empty on
+ * the marble's own cell, `null` when `target` is off the map. */
+export function hubPath(at: Spot, target: Axial): Axial[] | null {
+  if (!HUB_CELLS.some((c) => same(c, target))) return null;
+  const from = new Map<string, Axial>();
+  const queue: Axial[] = [at.cell];
+  for (let i = 0; i < queue.length && !same(queue[i]!, target); i++) {
+    for (const n of neighbours(queue[i]!)) {
+      if (same(n, at.cell) || from.has(`${n}`) || (roomAt(at.deck, n) && !same(n, target))) continue;
+      from.set(`${n}`, queue[i]!);
+      queue.push(n);
+    }
+  }
+  const path: Axial[] = [];
+  for (let cell = target; !same(cell, at.cell); cell = from.get(`${cell}`)!) path.unshift(cell);
+  return path;
+}

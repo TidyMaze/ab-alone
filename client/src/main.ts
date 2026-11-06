@@ -302,7 +302,8 @@ import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
 import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { HUB_CELLS, roomAt, type Door, type Spot as HubSpot } from './hub';
+import { HUB_CELLS, hubPath, roomAt, step, type Door, type Spot as HubSpot } from './hub';
+import { entryConfirmDue, entryName, HUB_COACH, hubCoachDue, hubHelpOn, markEntered, markHubCoachDone, needsConfirm } from './hubcoach';
 import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
 import { goalDeck, labelsHtml, pipsHtml, railHtml } from './hubview';
@@ -4619,7 +4620,11 @@ function legalMoves(): Move[] {
 }
 
 function click(q: number, r: number): void {
-  if (hub) return walk([q, r]);
+  if (hub) {
+    cancelHubWalk();
+    walk([q, r]);
+    return;
+  }
   if (royale) return pickRoyale(q, r);
   if (armed) return placeAt(q, r); // only during a placement
   if (swapping) return swapAt(q, r);
@@ -5492,6 +5497,7 @@ function enterHub(at: HubSpot): void {
   hub = new HubController(at);
   hub.enter(at);
   hubPlan.hidden = false;
+  hubCoach.hidden = !(helpOn && hubCoachDue(store, loadProgress(store).beaten));
   view = fitted = fightView(); // the deck plan, framed closer (#1249)
   applyView();
   evalBar.hidden = hintButton.hidden = exportButton.hidden = importButton.hidden = true; // no game on in the hub: a new game shows them again (#583, #589)
@@ -5499,16 +5505,71 @@ function enterHub(at: HubSpot): void {
   applyDeck(at.deck);
   refresh();
 }
-function walk(to: Axial): void {
+// The first minutes in the Hub (#1522, hubcoach.ts, ui.md 4.5): a coach line says how to roll until the player has rolled once, a tap on a
+// plate walks the marble to its room over floor cells, and until the player has entered a mode once, a roll onto a room asks first.
+// An automated browser shows the line and the confirm only under ?firstrun, so the specs that walk into rooms boot as before.
+const hubCoach = document.getElementById('hub-coach')!;
+hubCoach.textContent = HUB_COACH;
+const hubConfirm = document.getElementById('hub-confirm')!;
+const hubConfirmText = document.getElementById('hub-confirm-text')!;
+const hubConfirmYes = document.getElementById('hub-confirm-yes')!;
+const helpOn = hubHelpOn(location.search, navigator.webdriver);
+const HUB_STEP_MS = 160; // between the rolls of a walk to a plate
+let hubWalking: ReturnType<typeof setTimeout> | null = null;
+let askedFor: Axial | null = null; // the cell whose room the confirm asks about
+/** Stops the walk to a plate and closes the confirm: the player took over, or the hub is left. */
+function cancelHubWalk(): void {
+  if (hubWalking !== null) clearTimeout(hubWalking);
+  hubWalking = null;
+  askedFor = null;
+  hubConfirm.hidden = true;
+}
+/** One roll to a neighbour cell; false when the marble did not roll (a locked lift, a room that asks first). */
+function walk(to: Axial): boolean {
   const progress = loadProgress(store);
   const deck = hub!.at.deck;
+  const next = step(hub!.at, to, progress.beaten);
+  const door = next === hub!.at ? undefined : roomAt(next.deck, next.cell);
+  if (door && helpOn && needsConfirm(door) && entryConfirmDue(store, progress.beaten)) {
+    askedFor = to;
+    hubConfirmText.textContent = `Enter ${entryName(next.deck, door)}?`;
+    hubConfirm.hidden = false;
+    hubConfirmYes.focus();
+    return false;
+  }
   const { stepped, at } = hub!.onCellClick(to, progress.beaten);
-  if (!stepped) return hud();
+  if (!stepped) {
+    hud();
+    return false;
+  }
+  markHubCoachDone(store); // the player rolled: the coach line has done its job
+  hubCoach.hidden = true;
   saveProgress(store, { ...progress, at });
   if (at.deck !== deck) applyDeck(at.deck);
   refresh();
   enterRoom(at);
+  return true;
 }
+/** A tap on a plate: the marble rolls toward its room, one cell every few frames. */
+function walkTo(target: Axial): void {
+  cancelHubWalk();
+  const path = hubPath(hub!.at, target)!;
+  const roll = (): void => {
+    if (walk(path.shift()!) && hub && path.length) hubWalking = setTimeout(roll, HUB_STEP_MS);
+  };
+  if (path.length) roll();
+}
+hubLabels.addEventListener('click', (e) => {
+  const [q, r] = (e.target as Element).closest<HTMLElement>('[data-cell]')!.dataset.cell!.split(',').map(Number);
+  walkTo([q!, r!]);
+});
+document.getElementById('hub-confirm-no')!.addEventListener('click', cancelHubWalk);
+hubConfirmYes.addEventListener('click', () => {
+  const to = askedFor!;
+  markEntered(store);
+  cancelHubWalk();
+  walk(to);
+});
 // The doors (#522): rolling onto a boss door or a table starts the same game as its mode menu entry, and the room is
 // kept for Back to the hub. A terminal opens its lore entry in the reader, and Esc leaves it to the hub on the same
 // cell (#524). A lift starts nothing here.
@@ -5579,6 +5640,7 @@ function leaveMode(): void {
 }
 function leaveHub(): void {
   if (!hub) return;
+  cancelHubWalk();
   hub.exit();
   hub = null;
   hubPlan.hidden = true;
@@ -5590,7 +5652,13 @@ addEventListener('keydown', (e) => {
   const to = hub && !openWorld.active && !(e.target instanceof HTMLInputElement) ? hub.onKeyDown(e.key, Boolean(reading)) : null;
   if (!to) return;
   e.preventDefault(); // no page scroll
+  cancelHubWalk();
   walk(to);
+});
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || hubConfirm.hidden) return;
+  e.preventDefault();
+  cancelHubWalk(); // Stay
 });
 
 // Daily result card (#196): once a daily fight is over, the text to share, and Copy. The text is

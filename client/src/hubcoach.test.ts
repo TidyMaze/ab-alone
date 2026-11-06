@@ -43,7 +43,7 @@ describe('the entry confirm', () => {
 
   it('asks for every room that starts a mode and for no other', () => {
     const asked = roomsOf('mess').filter(({ door }) => needsConfirm(door)).map(({ door }) => door.kind);
-    expect(asked.sort()).toEqual(['bot', 'boss', 'boss', 'daily', 'hotseat', 'online', 'royale', 'world']);
+    expect(asked.sort()).toEqual(['boss', 'boss', 'bot', 'daily', 'hotseat', 'online', 'royale', 'world']);
     const free = roomsOf('mess').filter(({ door }) => !needsConfirm(door)).map(({ door }) => door.kind);
     expect(free.sort()).toEqual(['lift', 'medals', 'terminal', 'terminal']);
   });

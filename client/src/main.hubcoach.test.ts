@@ -117,13 +117,13 @@ describe('a tap on a plate', () => {
   it('is cut short by the next tap on a cell, by an arrow key and by leaving the Hub', async () => {
     const game = await firstHub(entered);
     fakeTimers();
-    plate('-2,2').click();
+    plate('2,0').click();
     game.click(3, 3); // the player takes over
     let at = hub();
     walkFor(10);
     expect(hub()).toBe(at);
     plate('-2,2').click();
-    press('ArrowRight');
+    press('ArrowLeft');
     at = hub();
     walkFor(10);
     expect(hub()).toBe(at);
@@ -164,7 +164,7 @@ describe('the entry confirm', () => {
     expect(hub()).toBeUndefined();
     expect(byId('hub-confirm').hidden).toBe(true);
     expect(localStorage.getItem('ab-alone.entered')).toBe('yes');
-    byId('back').click();
+    byId('ship-back').click();
     game.click(-1, 0);
     game.click(-2, 0);
     expect(hub()).toBeUndefined(); // no second ask

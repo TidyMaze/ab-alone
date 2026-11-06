@@ -480,6 +480,11 @@ The hub (game-design.md section 3.5) reads at a glance, with no hover:
   open, dotted while locked. Top right, left of the cog; held upright, over the rail's right end.
 - The deck, radius 3, is framed a little closer than a board (Reset view frames it again): distance of a radius 3.6
   board, radius 3.4 held upright, so no edge plate is cut off at 360 px wide. A game the hub starts frames its own board.
+- **A plate is a button (#1522).** A tap or a click on a plate walks the marble to its room (`hubPath` in `hub.ts`: the shortest way
+  over floor cells, so no room is entered on the way, one roll every 160 ms, the same roll as a tapped cell). A tap on a cell, an arrow
+  key or leaving the Hub stops the walk. A room that starts a mode asks first until the player entered one (section 4.7); a locked lift
+  is walked up to and bumps as a roll onto it does. YOU is no room and takes no tap. On a coarse pointer the hit area reaches 12 px past
+  the plate. The hover-only "Tap to move" is gone: the coach line of section 4.7 says it, and a touch screen has no hover.
 - Hidden while the terminal reader or the Open world has the screen.
 
 ### 4.6 One mode at a time (#1275)
@@ -535,6 +540,22 @@ A new player does not get five pages of rules first (#1521). A fresh profile on 
   Hub shows The Echo as the goal, well inside the 60 s of #1521). `body[data-firstrun]` reads `open`, `fight` or `done`.
 - **Vocabulary.** White and Black everywhere in rules text, as the HUD says (#1523): the guide no longer says pale glass and
   black shells.
+
+#### The Hub's first minutes (#1522)
+
+A new player lands in the Hub with a goal and has to learn how to move there. Two small plates, both of the coach plate's look
+(`hubcoach.ts`; one line at the top between the HUD and the cog, above the dock on a phone held upright, over no room plate):
+
+- **Coach line.** "This is the Mess. Tap or click the cell next to you to roll. Roll onto a room to enter it." It shows when the Hub
+  opens until the player has rolled once (`ab-alone.hubcoach = done`, localStorage, the only key), and never comes back. A player who
+  beat a boss never sees it.
+- **First entry confirm.** Rolling onto a room that starts a mode (a boss door, a table, the Daily, the Rogue-lite, the Open world, any
+  but a lift, a terminal and the Medal room) does not roll yet: a plate names the room ("Enter Bot table?") with Stay and Enter, Enter
+  taking the focus. Enter rolls onto the room and marks `ab-alone.entered = yes`: the confirm is never asked again. Stay, Escape, a
+  tap on another cell or an arrow key closes it, the marble where it was. A tap on a plate that ends next to the room stops there and
+  asks. A player who beat a boss is never asked, so the confirm never slows a returning player.
+- **Tests.** An automated browser shows neither unless `?firstrun` asks, so every spec that walks into rooms boots as before
+  (`hubHelpOn`); `client/e2e/hub-walk.spec.ts` covers both, and the tap on a plate, on a desktop window and a phone.
 
 #### Guide
 

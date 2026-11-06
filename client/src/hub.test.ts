@@ -214,7 +214,7 @@ describe('the path to a room (#1522)', () => {
   const cellsOf = (path: Axial[] | null) => path?.map((c) => `${c}`);
 
   it('walks neighbour to neighbour from the marble to the room, over floor only, ending on the room', () => {
-    const path = hubPath(at([0, 0]), [-2, 0], [])!;
+    const path = hubPath(at([0, 0]), [-2, 0])!;
     expect(path.length).toBeGreaterThan(0);
     let from: Axial = [0, 0];
     for (const cell of path) {
@@ -226,18 +226,18 @@ describe('the path to a room (#1522)', () => {
   });
 
   it('is the shortest way and empty on the marble\'s own cell', () => {
-    expect(cellsOf(hubPath(at([0, 0]), [1, 0], []))).toEqual(['1,0']);
-    expect(hubPath(at([2, 0]), [2, 0], [])).toEqual([]);
+    expect(cellsOf(hubPath(at([0, 0]), [1, 0]))).toEqual(['1,0']);
+    expect(hubPath(at([2, 0]), [2, 0])).toEqual([]);
   });
 
   it('starts from a room too: the marble that came back from a game', () => {
-    expect(hubPath(at([-2, 0]), [2, 0], [])!.at(-1)).toEqual([2, 0]);
+    expect(hubPath(at([-2, 0]), [2, 0])!.at(-1)).toEqual([2, 0]);
   });
 
   it('reaches every room of every deck from its centre, a locked lift included, as the last step', () => {
     for (const deck of DECK_NAMES) {
       for (const { cell } of roomsOf(deck)) {
-        const path = hubPath({ deck, cell: [0, 0] }, cell, []);
+        const path = hubPath({ deck, cell: [0, 0] }, cell);
         expect(path, `${deck} ${cell}`).not.toBeNull();
         expect(`${path!.at(-1)}`).toBe(`${cell}`);
       }
@@ -245,6 +245,6 @@ describe('the path to a room (#1522)', () => {
   });
 
   it('is null for a cell off the map', () => {
-    expect(hubPath(at([0, 0]), [9, 9], [])).toBeNull();
+    expect(hubPath(at([0, 0]), [9, 9])).toBeNull();
   });
 });
