@@ -320,6 +320,7 @@ test('the tension drones calm to 0 over the hub, #586', async ({ page }) => {
 });
 
 test('every room wears its label plate without a hover, and a hover still names the target, #628, #1249', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 }); // a window where no plate lies over cell (1, 0): plates take the pointer (#1522)
   await page.goto('./');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');

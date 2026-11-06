@@ -95,7 +95,7 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await page.locator('#daily').click();
   const goal = page.locator('#hud .goal');
   const control = page.getByRole('button', { name: 'Goal' });
-  await expect(goal).toHaveText(/^Goal: .+/); // before the first move the HUD line holds the goal
+  await expect(goal).toHaveText(/^Eject 6 .+/); // before the first move the HUD line holds the goal: this date's boss is The Echo, its two-step card (#1524)
   await expect(control).toHaveAttribute('aria-expanded', 'false'); // the Goal sheet is shut (#1032)
   expect(await page.evaluate(() => (window as any).__history())).toEqual([]);
   await shot(page, { path: testInfo.outputPath('daily-goal-desktop.png') });
