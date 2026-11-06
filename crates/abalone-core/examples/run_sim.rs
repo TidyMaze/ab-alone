@@ -7,7 +7,8 @@
 //! every cell), `RUN_SIM_LEVELS=0,5,10` the ascension levels, `RUN_SIM_THREADS` the runs played at once,
 //! `RUN_SIM_BOSS_X` the player's search in a boss fight as a multiple of the boss's own budget (the ladder's 10 is
 //! the pro level), `RUN_SIM_PERCENTS=50,100,200` the strength of the act bosses to try in place of `ACT_PERCENT`,
-//! `RUN_SIM_JSONL=<file>` one JSON line per run. Arguments are the commanders to play, by index (0 to 3), none
+//! `RUN_SIM_JSONL=<file>` one JSON line per run, `RUN_SIM_POOL=1` to play every act's boss for every seed, whatever the
+//! run before it did, and print how many it won per act (the tuning sample). Arguments are the commanders to play, by index (0 to 3), none
 //! for all four. The progress goes to stderr.
 
 use abalone_core::encounter::ladder::{play_act_boss, LadderBoss, PLY_CAP};
@@ -66,6 +67,30 @@ fn boss_of(seed: u64, act: usize, biome: Biome) -> LadderBoss {
     }
 }
 
+/// The biome of each act of a run of `seed`: the Meadow, then the first exit offered.
+fn biomes(seed: u64) -> [Biome; ACTS] {
+    let second = exits(seed, 1, Biome::Meadow)[0];
+    [Biome::Meadow, second, exits(seed, 2, second)[0]]
+}
+
+/// The act boss fight at node `i` of the map of `seed`, `boss` at `percent` of its budget: whether the bot won it and the
+/// marbles it lost. Played once, then shared.
+fn boss_fight(set: &Settings, seed: u64, i: usize, boss: LadderBoss, percent: u32) -> (bool, u8) {
+    let fight_seed = mix(seed ^ i as u64);
+    let shared = set
+        .bosses
+        .lock()
+        .unwrap()
+        .entry((boss.id(), fight_seed, percent))
+        .or_default()
+        .clone();
+    *shared.get_or_init(|| {
+        let budget = (f64::from(boss.node_budget()) * set.boss_x) as u32;
+        let (record, lost) = play_act_boss(boss, fight_seed, budget, percent, PLY_CAP);
+        (record.result == AttemptResult::Won, lost)
+    })
+}
+
 /// How a run ended: the acts cleared (0 to 3) and where it was lost.
 struct Ended {
     cleared: usize,
@@ -94,7 +119,7 @@ fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
     let map = run_map(seed);
     let rest_to = FULL_ARMY - 2 * u8::from(level >= 2);
     let mut army = FULL_ARMY - 2 * u8::from(level >= 6);
-    let mut biome = Biome::Meadow;
+    let biomes = biomes(seed);
     let mut at = None;
     let mut cleared = 0;
     loop {
@@ -111,9 +136,6 @@ fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
             .expect("a node leads on");
         let node = &map[i];
         at = Some(i);
-        if node.act > 0 && node.row == 0 {
-            biome = exits(seed, node.act, biome)[0];
-        }
         let hull = u8::from(relic == Relic::HullPlating);
         let lost = match node.kind {
             NodeKind::Rest => {
@@ -123,21 +145,9 @@ fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
             NodeKind::Fight => FIGHT_LOSS.saturating_sub(hull),
             NodeKind::Elite => ELITE_LOSS.saturating_sub(hull),
             NodeKind::Boss => {
-                let boss = boss_of(seed, node.act, biome);
+                let boss = boss_of(seed, node.act, biomes[node.act]);
                 let percent = set.percents[node.act] * if level >= 7 { 5 } else { 4 } / 4;
-                let fight_seed = mix(seed ^ i as u64);
-                let shared = set
-                    .bosses
-                    .lock()
-                    .unwrap()
-                    .entry((boss.id(), fight_seed, percent))
-                    .or_default()
-                    .clone();
-                let (won, lost) = *shared.get_or_init(|| {
-                    let budget = (f64::from(boss.node_budget()) * set.boss_x) as u32;
-                    let (record, lost) = play_act_boss(boss, fight_seed, budget, percent, PLY_CAP);
-                    (record.result == AttemptResult::Won, lost)
-                });
+                let (won, lost) = boss_fight(set, seed, i, boss, percent);
                 if !won {
                     return Ended {
                         cleared,
@@ -179,6 +189,66 @@ fn setting(name: &str, default: u32) -> u32 {
         .unwrap_or(default)
 }
 
+/// `f(0)` to `f(n - 1)`, `threads` at a time, in the order of their index.
+fn parallel<T: Send>(n: usize, threads: u32, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
+    let next = AtomicUsize::new(0);
+    let done: Mutex<Vec<Option<T>>> = Mutex::new((0..n).map(|_| None).collect());
+    std::thread::scope(|s| {
+        for _ in 0..threads {
+            s.spawn(|| loop {
+                let j = next.fetch_add(1, Ordering::SeqCst);
+                if j >= n {
+                    break;
+                }
+                let out = f(j);
+                done.lock().unwrap()[j] = Some(out);
+            });
+        }
+    });
+    done.into_inner()
+        .unwrap()
+        .into_iter()
+        .map(|o| o.expect("every job ran"))
+        .collect()
+}
+
+/// The tuning sample: the boss of each act of seeds `0..runs` played at its strength, whatever happened before it, so
+/// every act has `runs` fights; how many the bot won, per act, and the bosses it lost to.
+fn pool(set: &Settings, runs: u64, threads: u32) {
+    let fights = parallel(runs as usize * ACTS, threads, |j| {
+        let (seed, act) = ((j / ACTS) as u64, j % ACTS);
+        let map = run_map(seed);
+        let i = map
+            .iter()
+            .position(|n| n.kind == NodeKind::Boss && n.act == act)
+            .expect("a boss ends the act");
+        let boss = boss_of(seed, act, biomes(seed)[act]);
+        (boss, boss_fight(set, seed, i, boss, set.percents[act]).0)
+    });
+    println!("| act | percent | fights won | lost to |");
+    println!("|---|---|---|---|");
+    for act in 0..ACTS {
+        let of: Vec<_> = fights.iter().skip(act).step_by(ACTS).collect();
+        let won = of.iter().filter(|f| f.1).count();
+        let mut lost: Vec<String> = LadderBoss::ALL
+            .iter()
+            .filter_map(|b| {
+                let n = of.iter().filter(|f| f.0 == *b && !f.1).count();
+                (n > 0).then(|| format!("{} {n}", b.id()))
+            })
+            .collect();
+        lost.sort();
+        println!(
+            "| {} | {} | {won}/{} ({:.0} %) | {} |",
+            act + 1,
+            set.percents[act],
+            of.len(),
+            100.0 * won as f64 / of.len() as f64,
+            lost.join(", ")
+        );
+    }
+}
+
 fn main() {
     let list = |name: &str, default: &str| -> Vec<u32> {
         std::env::var(name)
@@ -218,25 +288,20 @@ fn main() {
                 .flat_map(move |&l| (0..runs).map(move |s| (c, l, s)))
         })
         .collect();
-    let next = AtomicUsize::new(0);
-    let done: Mutex<Vec<Option<Ended>>> = Mutex::new((0..jobs.len()).map(|_| None).collect());
-    std::thread::scope(|s| {
-        for _ in 0..setting("RUN_SIM_THREADS", 4) {
-            s.spawn(|| loop {
-                let j = next.fetch_add(1, Ordering::SeqCst);
-                let Some(&(c, l, seed)) = jobs.get(j) else {
-                    break;
-                };
-                let out = play_run(seed, c, l, &set);
-                eprintln!(
-                    "{} level {l} seed {seed}: {} acts, {}",
-                    COMMANDERS[c].0, out.cleared, out.end
-                );
-                done.lock().unwrap()[j] = Some(out);
-            });
-        }
+    let threads = setting("RUN_SIM_THREADS", 4);
+    if std::env::var("RUN_SIM_POOL").is_ok() {
+        pool(&set, runs, threads);
+        return;
+    }
+    let done = parallel(jobs.len(), threads, |j| {
+        let (c, l, seed) = jobs[j];
+        let out = play_run(seed, c, l, &set);
+        eprintln!(
+            "{} level {l} seed {seed}: {} acts, {}",
+            COMMANDERS[c].0, out.cleared, out.end
+        );
+        out
     });
-    let done = done.into_inner().unwrap();
     let mut jsonl = String::new();
     println!("| commander | level | runs | act 1 | act 2 | act 3 = the run |");
     println!("|---|---|---|---|---|---|");
@@ -251,7 +316,7 @@ fn main() {
         for &l in &levels {
             let outs: Vec<_> = jobs
                 .iter()
-                .zip(done.iter().map(|o| o.as_ref().unwrap()))
+                .zip(done.iter())
                 .filter(|(j, _)| j.0 == c && j.1 == l)
                 .collect();
             // Act `k` cleared: of the runs that reached it, and of all the runs.
