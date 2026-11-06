@@ -191,7 +191,7 @@ import { coopStatus, duelStatus, onlineStatus, type OnlineStatus } from './prese
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { KICK_MS, REST, kickAt, unkick, type Kick } from './kick';
-import { MARBLE_RADIUS, SLIDE_MS, SQUASH_MS, slideAt, slideTracks, squashAt, type SlideTrack } from './slide';
+import { MARBLE_RADIUS, SLIDE_MS, SQUASH_MS, pushedCells, slideAt, slideTracks, squashAt, type SlideTrack } from './slide';
 import { fuseDigit, fuseNote, parseFuses, pullTrack, specialCues, type Pull } from './specialcues';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml, passNote } from './hud';
@@ -300,7 +300,7 @@ import { nextPalette, paletteById, themeColors, type Palette } from './palettes'
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { sceneOf } from './scenes';
-import { AFTER_EJECTION, AFTER_SLIDE, BUSES, Sfx, TellWatch, type Bus, type CueEvent, type Tell } from './sound';
+import { AFTER_EJECTION, AFTER_SLIDE, BUSES, Sfx, TellWatch, columnOf, type Bus, type CueEvent, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
 import { ACCENTS, CORE, GLASS, HEAT, pulseAt, SHELL, type Accent } from './marbles';
@@ -854,7 +854,7 @@ applySafe();
 // The sounds (docs/specs/world.md section 7) through four buses, each with its volume slider in the menu (#438). The
 // audio context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and moving a slider up from 0 starts it too (setVolume).
-const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store, navigator.webdriver));
+const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store, navigator.webdriver), Math.random);
 // The sound twin of each boss tell (#358), only when the tell appears or changes. The cues played, read by the e2e tests.
 const tells = new TellWatch();
 const tellCues: Tell[] = [];
@@ -3105,7 +3105,7 @@ function afterPlay(before: number[], record: number[], live = true, pulls: Pull[
     slide = { game: engine, tracks, start: performance.now() };
     document.body.dataset.sliding = '1';
   }
-  document.body.dataset.knock = String(sfx.knock(mv.cells.length) ?? 'none'); // the knock's pitch in Hz, read by the e2e tests (#289)
+  document.body.dataset.knock = String(sfx.knock(mv.cells.length, pushedCells(before, mv).length - mv.cells.length, columnOf(mv.cells)) ?? 'none'); // the knock's pitch in Hz, read by the e2e tests (#289)
   startPasses(before, mv, reduced);
   if (repulsions.length > 0) {
     // Each repulsion slides from its board to the next one's, the last to the engine's; then the engine's own tells.

@@ -832,11 +832,12 @@ describe('Sfx.ejection', () => {
   }
 
   it('makes one second of white noise, once, for every noise voice', () => {
-    const { ctx, sfx } = setup();
+    const ctx = new FakeContext();
+    const sfx = new Sfx(() => ctx as unknown as AudioContext, { ...FULL }, Math.random);
     sfx.unlock();
     sfx.ejection(2);
     sfx.ejection(1);
-    expect(ctx.buffers).toHaveLength(1);
+    expect(ctx.buffers).toHaveLength(2); // the noise, then the impulse of the room, each once
     const [noise] = ctx.buffers;
     expect(noise!.channels).toBe(1);
     expect(noise!.data).toHaveLength(ctx.sampleRate);
@@ -1086,9 +1087,10 @@ describe('knockVoices, the push variant of a sumito (#1576)', () => {
 describe('columnOf, where on the board a move is (#1574)', () => {
   it('is the screen column of the marbles moved, -1 at the left rim, 1 at the right, 0 in the middle', () => {
     expect(columnOf([[0, 0]])).toBe(0);
-    expect(columnOf([[4, 0]])).toBeCloseTo(4 / 6);
-    expect(columnOf([[-4, 0]])).toBeCloseTo(-4 / 6);
-    expect(columnOf([[0, 0], [1, 0], [2, 0]])).toBeCloseTo(1 / 6); // the mean of the group
+    expect(columnOf([[4, 0]])).toBe(1);
+    expect(columnOf([[-4, 0]])).toBe(-1);
+    expect(columnOf([[2, 0]])).toBe(0.5);
+    expect(columnOf([[0, 0], [1, 0], [2, 0]])).toBeCloseTo(1 / 4); // the mean of the group
   });
   it('stays within -1 and 1', () => {
     expect(columnOf([[4, 4]])).toBe(1);

@@ -209,7 +209,19 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 - **Ambience.** Bed per deck: low hum, creaks, distant metal, wet dripping. Low-frequency heavy.
   Silence is a tool: dead air before a boss phase change.
 - **Push sounds.** Weight first: dull glass-on-steel knock for a plain move, a grinding scrape
-  for a sumito push, pitch dropping with push size (1, 2, 3 marbles).
+  for a sumito push, pitch dropping with push size (1, 2, 3 marbles). The pitch follows the marbles
+  moved; the scrape (#1576) plays when the move pushes opposing marbles (the cells `pushedCells`
+  gives, the same the slide animates), a lower body and a swelling band of noise with a longer decay,
+  longer and louder for each marble pushed. A plain move keeps the dull knock.
+- **Variation (#1574).** No two hits sound the same: each knock, ejection and cue is played with its
+  pitch within 3 % either way, its level within 10 % and its noise started at a random offset of the
+  looped noise, from a random source the page injects (tests pass a fixed one). The tones of a cue
+  keep their pitch and level, so the small-speaker bounds of `cueDb` hold; only its noise varies.
+  The knock pans by the board column of the marbles moved, at most 60 % to either side. The effects
+  bus rings in a short shared room reverb (0.4 s impulse of decaying noise built in code, no audio
+  file, at 20 % under the dry sound), built with the first effect: effects at 0 builds none.
+  Calculated, not heard: the pitch, level, pan and reverb values are checked by the unit tests, not
+  judged by ear; an owner listens before they are tuned.
 - **Ejection.** A sharp inhale (air leaving) on the 200 ms push over the rim, a muffled thud as
   the void takes the marble, then vacuum silence while it falls, for the 600 ms of the void
   (section 5). Once it is gone, a distinct low "toll" for the player's loss (glass), a dry
@@ -362,7 +374,7 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
 - **Mix.** Four sliders: music, ambience, effects, voice (#438), each the gain of its bus into one
   master gain, 0 to 100 %, at 100 % by default and saved locally. The hum is ambience, the
-  tension drones and the layers of a scene (a wind excepted, which is ambience) music, the knock, the ejection, the tells, the pick of a rogue-lite map node (#1468) and the cues (#1570) effects (the time of day of the Open world ambience), the audio logs voice (#516).
+  tension drones and the layers of a scene (a wind excepted, which is ambience) music, the knock, the ejection, the tells, the pick of a rogue-lite map node (#1468) and the cues (#1570) effects (the time of day of the Open world ambience), the audio logs voice (#516). The effects bus also feeds the shared room reverb (#1574) into the master.
   A Sound off saved by the old toggle sets every slider to 0. With every slider at 0 no audio
   context is made. The game is fully playable on mute: every audio cue has a visual twin (the
   ejection animation for the ejection sound, the tells on the board for their sounds, the transcript for an

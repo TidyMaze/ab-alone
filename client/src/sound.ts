@@ -6,6 +6,7 @@
 // muffled thud as the void takes the marble, vacuum silence while it falls, then, once it is gone, a low toll for a
 // lost player marble or a dry clack for an enemy one. The boss tells have their sound twins too (#358).
 
+import { RADIUS, type Axial } from './board';
 import { EJECT_MS, PUSH_MS } from './eject';
 import { pulseRate, sceneMix, SMALL_SPEAKER_HZ, type SceneId, type SceneLayer } from './scenes';
 import type { Tension } from './tension';
@@ -84,13 +85,53 @@ const KNOCK_HZ = [330, 247, 196] as const;
 /** The pitch of the knock of a move that pushes `marbles` marbles (1 to 3). */
 export const knockPitch = (marbles: number): number => KNOCK_HZ[marbles - 1]!;
 
-/** The knock of a move: a short glass-on-steel hit, a bright click over a dull body, no tail. */
-export function knockVoices(pitch: number): Voice[] {
+/** The knock of a move: a short glass-on-steel hit, a bright click over a dull body, no tail. When the move pushes
+ * `pushed` opposing marbles (a sumito, #1576) a grinding scrape lasts under it: a lower body and a swelling band of
+ * noise, longer and louder for each marble pushed (3 at most). */
+export function knockVoices(pitch: number, pushed = 0): Voice[] {
+  const click: Voice = { source: 'noise', filter: { type: 'bandpass', freq: [pitch * 6, pitch * 4], q: 3 }, env: strike(0, 0.3, 0.02) };
+  if (pushed === 0) return [{ source: 'triangle', freq: [pitch, pitch * 0.9], env: strike(0, 0.6, 0.12) }, click];
+  const weight = Math.min(pushed, 3);
+  const decay = 0.2 + 0.1 * weight;
+  const grind = 0.3 + 0.1 * weight;
   return [
-    { source: 'triangle', freq: [pitch, pitch * 0.9], env: strike(0, 0.6, 0.12) },
-    { source: 'noise', filter: { type: 'bandpass', freq: [pitch * 6, pitch * 4], q: 3 }, env: strike(0, 0.3, 0.02) },
+    { source: 'triangle', freq: [pitch, pitch * 0.6], env: strike(0, 0.6, decay) },
+    click,
+    {
+      source: 'noise',
+      filter: { type: 'bandpass', freq: [pitch * 3, pitch * 1.5], q: 1.5 },
+      env: [
+        [0, 0],
+        [0.03, grind],
+        [decay * 0.5, grind * 0.7],
+        [decay, 0],
+      ],
+    },
   ];
 }
+
+/** The pan of a knock at the rim of the board: never hard to one side. */
+export const KNOCK_PAN = 0.6;
+/** Where a move is across the board, -1 at the left rim to 1 at the right: the mean screen column of its marbles. */
+export const columnOf = (cells: readonly Axial[]): number => {
+  const x = cells.reduce((sum, [q, r]) => sum + q + r / 2, 0) / cells.length;
+  return Math.max(-1, Math.min(1, x / RADIUS));
+};
+
+/** The variation of a play (#1574), from one draw each: the pitch within 3 % either way, the level within 10 %, and
+ * where in the looped noise the voice starts, in seconds. */
+const PITCH_JITTER = 0.06;
+const LEVEL_JITTER = 0.2;
+interface Shape {
+  rate: number;
+  level: number;
+  offset: number;
+}
+const FLAT: Shape = { rate: 1, level: 1, offset: 0 };
+/** The short room of the effects bus: a synthesized impulse of this many seconds, heard at this level under the dry
+ * sound. Calculated, not heard. */
+const ROOM_SECONDS = 0.4;
+export const ROOM_WET = 0.2;
 
 /** A boss tell with a sound twin (world.md sections 3 and 8, #358): The Hull's crack countdown, The Chaplain's
  * flip tell, The Choir's next army. */
@@ -477,6 +518,8 @@ interface Graph {
   layers: GainNode[];
   ducks: GainNode[];
   noise: AudioBuffer;
+  master: GainNode;
+  reverb: ConvolverNode | null; // the room of the effects bus, built with the first effect (#1574)
   room: GainNode; // the gate of the reactor room tones, open in the ship and closed outdoors (#1571)
   song: GainNode; // the gate of the music track
   open: { room: boolean; track: boolean }; // what the gates let through
@@ -504,6 +547,7 @@ export class Sfx {
   constructor(
     private readonly create: () => AudioContext | null,
     private readonly mix: Mix,
+    private readonly random: () => number = () => 0.5, // the middle of every variation; the page passes Math.random
   ) {}
 
   /** The volume of `bus`, 0 to 100 %. */
@@ -567,7 +611,7 @@ export class Sfx {
         return layer;
       });
       startTracks(ctx, [MUSIC_TRACK], song);
-      this.graph = { ctx, buses, layers, ducks, noise: whiteNoise(ctx), room, song, open: opened };
+      this.graph = { ctx, buses, layers, ducks, noise: whiteNoise(ctx, this.random), master, reverb: null, room, song, open: opened };
       this.applyScene();
     }
     if (this.graph.ctx.state === 'suspended') this.graph.ctx.resume().catch(() => undefined);
@@ -738,14 +782,14 @@ export class Sfx {
    * yet). */
   ejection(side: number, glass = 2): Cue | null {
     const cue = cueFor(side, glass);
-    return this.playAll(ROUTE.ejection, ejectionVoices(cue)) ? cue : null;
+    return this.playAll(ROUTE.ejection, ejectionVoices(cue), 0, 'all') ? cue : null;
   }
 
-  /** Plays the knock of a move that pushes `marbles` from now. Its pitch, or null when silent (effects at 0, or no
-   * gesture yet). */
-  knock(marbles: number): number | null {
+  /** Plays the knock of a move of `marbles` marbles that pushes `pushed` opposing ones, at `column` of the board
+   * (-1 to 1, see `columnOf`), from now. Its pitch, or null when silent (effects at 0, or no gesture yet). */
+  knock(marbles: number, pushed = 0, column = 0): number | null {
     const pitch = knockPitch(marbles);
-    return this.playAll(ROUTE.knock, knockVoices(pitch)) ? pitch : null;
+    return this.playAll(ROUTE.knock, knockVoices(pitch, pushed), 0, 'all', column * KNOCK_PAN) ? pitch : null;
   }
 
   /** Plays the sound twin of `tell` from now. The tell, or null when silent (effects at 0, or no gesture yet). */
@@ -761,18 +805,44 @@ export class Sfx {
   /** Plays the cue of `event` `after` seconds from now. False when silent (effects at 0, or no gesture yet). */
   cue(event: CueEvent, after = 0): boolean {
     const { bus, voices } = CUES[event];
-    return this.playAll(bus, voices, after);
+    return this.playAll(bus, voices, after, 'noise');
   }
 
-  /** Plays `voices` from now through `bus`. False when silent: the bus at 0, or no gesture yet. */
-  private playAll(bus: Bus, voices: readonly Voice[], after = 0): boolean {
-    if (this.mix[bus] === 0 || !this.graph) return false;
-    const now = this.graph.ctx.currentTime + after;
-    for (const voice of voices) this.play(this.graph, this.graph.buses[bus], voice, now);
+  /** Plays `voices` from now through `bus`, `pan` across the stereo field when given. `vary` is how much a play
+   * varies (#1574): in every voice, in the noise only (the tones of a cue keep the levels `cueDb` counts), or not at
+   * all. False when silent: the bus at 0, or no gesture yet. */
+  private playAll(bus: Bus, voices: readonly Voice[], after = 0, vary: 'all' | 'noise' | 'none' = 'none', pan?: number): boolean {
+    const graph = this.graph;
+    if (this.mix[bus] === 0 || !graph) return false;
+    if (bus === 'effects') this.room(graph);
+    const now = graph.ctx.currentTime + after;
+    const draw = (): Shape =>
+      vary === 'none'
+        ? FLAT
+        : { rate: 1 + (this.random() - 0.5) * PITCH_JITTER, level: 1 + (this.random() - 0.5) * LEVEL_JITTER, offset: this.random() * NOISE_SECONDS };
+    const shape = draw();
+    for (const voice of voices) {
+      const varied = vary === 'all' || voice.source === 'noise';
+      this.play(graph, graph.buses[bus], voice, now, varied ? shape : FLAT, pan);
+    }
     return true;
   }
 
-  private play({ ctx, noise }: Graph, bus: GainNode, voice: Voice, now: number): AudioScheduledSourceNode {
+  /** The short room of the effects bus: the bus also feeds a convolver of a synthesized impulse, a decaying noise,
+   * into the master. Built once, with the first effect, so a bus at 0 builds nothing. */
+  private room(graph: Graph): void {
+    if (graph.reverb) return;
+    const { ctx, buses, master } = graph;
+    const convolver = ctx.createConvolver();
+    convolver.buffer = impulse(ctx, this.random);
+    const wet = ctx.createGain();
+    wet.gain.value = ROOM_WET;
+    buses.effects.connect(convolver);
+    convolver.connect(wet).connect(master);
+    graph.reverb = convolver;
+  }
+
+  private play({ ctx, noise }: Graph, bus: GainNode, voice: Voice, now: number, shape: Shape = FLAT, pan?: number): AudioScheduledSourceNode {
     const from = now + voice.env[0]![0];
     const to = now + voice.env.at(-1)![0];
     let source: AudioScheduledSourceNode;
@@ -784,23 +854,28 @@ export class Sfx {
       const filter = ctx.createBiquadFilter();
       filter.type = voice.filter.type;
       filter.Q.value = voice.filter.q;
-      glide(filter.frequency, voice.filter.freq, from, to);
+      glide(filter.frequency, voice.filter.freq.map((f) => f * shape.rate) as [number, number], from, to);
       source = buffer;
       out = buffer.connect(filter);
     } else {
       const osc = ctx.createOscillator();
       osc.type = voice.source;
-      glide(osc.frequency, voice.freq, from, to);
+      glide(osc.frequency, voice.freq.map((f) => f * shape.rate) as [number, number], from, to);
       source = out = osc;
     }
     const gain = ctx.createGain();
     voice.env.forEach(([t, g], i) => {
-      const value = Math.max(g, SILENT);
+      const value = Math.max(g * shape.level, SILENT);
       if (i === 0) gain.gain.setValueAtTime(value, now + t);
       else gain.gain.exponentialRampToValueAtTime(value, now + t);
     });
-    out.connect(gain).connect(bus);
-    source.start(from);
+    if (pan === undefined) out.connect(gain).connect(bus);
+    else {
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = pan;
+      out.connect(gain).connect(panner).connect(bus);
+    }
+    (source as AudioBufferSourceNode).start(from, voice.source === 'noise' ? shape.offset : undefined); // a tone has no offset
     source.stop(to);
     return source;
   }
@@ -844,10 +919,21 @@ function startTracks(ctx: AudioContext, tracks: readonly Track[], out: AudioNode
   }
 }
 
+/** The length of the looped noise in seconds. */
+const NOISE_SECONDS = 1;
 /** One second of white noise, looped by every noise voice. */
-function whiteNoise(ctx: AudioContext): AudioBuffer {
-  const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+function whiteNoise(ctx: AudioContext, random: () => number): AudioBuffer {
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * NOISE_SECONDS, ctx.sampleRate);
   const data = buffer.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < data.length; i++) data[i] = random() * 2 - 1;
+  return buffer;
+}
+
+/** The impulse of the room: white noise dying away to nothing over `ROOM_SECONDS`. */
+function impulse(ctx: AudioContext, random: () => number): AudioBuffer {
+  const length = Math.round(ctx.sampleRate * ROOM_SECONDS);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = (random() * 2 - 1) * (1 - i / length) ** 3;
   return buffer;
 }
