@@ -849,12 +849,12 @@ body[data-reading] #log { visibility: visible; }
 }
 #run-map[hidden] { display: none; }
 #run-map .run-line { margin: 0; text-align: center; font-family: var(--display); font-weight: 600; }
-#run-map .run-graph { position: relative; width: 100%; height: calc(var(--slots) * 3.75rem * var(--ui-scale)); flex: none; }
+#run-map .run-graph { position: relative; width: 100%; height: calc(var(--slots) * 4.5rem * var(--ui-scale)); flex: none; }
 #run-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-#run-map line { stroke: var(--edge); stroke-width: 2; vector-effect: non-scaling-stroke; }
-#run-map line.shortcut { stroke: var(--hazard); stroke-width: 3; stroke-dasharray: 1 6; stroke-linecap: round; } /* the shortcut of the rune of the shortcut (#1476) */
-#run-map line.next { stroke: var(--accent); stroke-dasharray: 4 4; } /* the links to the nodes to pick (#1468) */
-#run-map line.taken { stroke: var(--accent); stroke-width: 4; }
+#run-map :is(line, polyline) { fill: none; stroke: var(--edge); stroke-width: 2; vector-effect: non-scaling-stroke; }
+#run-map polyline.shortcut { stroke: var(--hazard); stroke-width: 3; stroke-dasharray: 1 6; stroke-linecap: round; } /* the shortcut of the rune of the shortcut (#1476) */
+#run-map :is(line, polyline).next { stroke: var(--accent); stroke-dasharray: 4 4; } /* the links to the nodes to pick (#1468) */
+#run-map :is(line, polyline).taken { stroke: var(--accent); stroke-width: 4; }
 #run-map button {
   padding: 0.25rem 0.5rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
   font: inherit; cursor: pointer;

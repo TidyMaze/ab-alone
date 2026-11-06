@@ -1209,18 +1209,18 @@ describe('main.ts, the ascension levels of a run (#1465)', () => {
 });
 
 describe('main.ts, the map scrolls to the nodes to pick (#1468)', () => {
-  it('after a pick, puts the first node that can be picked in the middle of the plate, and leaves a screen without nodes at its top', async () => {
+  it('after a pick, opens the plate on the header of the act of the first node that can be picked, and leaves a screen without nodes at its top', async () => {
     const game = await boot('?bot=off');
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      return { top: this.matches('button.node:not(:disabled)') ? 700 : 100 } as DOMRect;
+      return { top: this.matches('button.node:not(:disabled)') ? 700 : this.matches('.act-head') ? 600 : 100, height: 40 } as DOMRect; // the plate at 100, the header of the act 600, the node 700
     });
     Object.defineProperty(map(), 'clientHeight', { configurable: true, value: 200 });
     await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [] });
     expect(map().scrollTop).toBe(0); // before the first pick the commanders stay in view above the map
     await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [0, 2, 6, 9] });
-    expect(map().scrollTop).toBe(500); // 700 - 100 - half of 200
+    expect(map().scrollTop).toBe(496); // the header 600 - 100, 4 px above it (#1569)
     await game.hook('__run', { ...plainRun(3, 3), army: 9, path: [0, 2, 6, 9], end: 'lost' });
-    expect(map().scrollTop).toBe(500); // the end of a run has no node: the plate is left where it is
+    expect(map().scrollTop).toBe(496); // the end of a run has no node: the plate is left where it is
     rect.mockRestore();
   });
 });
@@ -1269,7 +1269,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     const game = await startRun('?bot=off');
     const { dailyRun } = await import('./roguelite');
     localStorage.setItem('ab-alone.roguelite.daily', JSON.stringify({ day: today(), score: null }));
-    await game.hook('__run', { ...dailyRun(today(), 3), army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
+    await game.hook('__run', { ...dailyRun(today(), 3), map: 0, army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
     expect(map().querySelector('.run-score')!.textContent).toBe('Score: 180 (acts 1 × 100, elites 2 × 25, marbles 3 × 10)');
     expect(JSON.parse(localStorage.getItem('ab-alone.roguelite.daily')!)).toEqual({ day: today(), score: 180 });
     byId('run-new').click();
@@ -1373,7 +1373,7 @@ describe('main.ts, the runes (#1476)', () => {
     openMore();
     expect(secrets()).toHaveLength(0);
     expect(helps().join()).toContain('Runes to find: Rune of Stone (beat The Wall: a secret room in every act)');
-    expect(map().querySelectorAll('line.shortcut')).toHaveLength(0);
+    expect(map().querySelectorAll('polyline.shortcut')).toHaveLength(0);
   });
 
   it('a run of a player who owns the runes shows its secret room in each act, saved and resumed on reload', async () => {
@@ -1387,11 +1387,11 @@ describe('main.ts, the runes (#1476)', () => {
     expect(map().querySelector('.run-runes')!.textContent).toContain('Rune of Stone (a secret room in every act) · Rune of Spark');
     openMore();
     expect(helps().join()).not.toContain('Runes to find');
-    expect(map().querySelectorAll('line.shortcut')).toHaveLength(3);
+    expect(map().querySelectorAll('polyline.shortcut')).toHaveLength(3);
     await game.settle();
     await boot('?bot=off', { indexedDB });
     expect(secrets()).toHaveLength(3);
-    expect(map().querySelectorAll('line.shortcut')).toHaveLength(3);
+    expect(map().querySelectorAll('polyline.shortcut')).toHaveLength(3);
     localStorage.clear();
   });
 

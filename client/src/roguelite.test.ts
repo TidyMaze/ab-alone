@@ -170,7 +170,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false, runes: 0, found: 0 });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false, runes: 0, found: 0, map: 0 });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -222,7 +222,7 @@ describe('roguelite', () => {
     expect(nodes[0]!.getAttribute('style')).toBe('left:25%;top:20%'); // below its act's header, which takes half a row
     expect(nodes[4]!.getAttribute('style')).toBe('left:75%;top:70%');
     const lines = [...doc.querySelectorAll('line')];
-    expect(lines).toHaveLength(6); // 2 fights to the boss in each act, the act 1 boss to the 2 fights of act 2
+    expect(lines).toHaveLength(4); // 2 fights to the boss in each act, none from a boss to the next act (#1543)
     expect(lines.filter((l) => l.classList.contains('taken'))).toHaveLength(1);
     expect(doc.querySelector('.run-line')!.textContent).toBe('Rogue-lite run · army 14 marbles · pick a fight');
     expect(doc.getElementById('run-new')).toBeNull();
@@ -247,10 +247,11 @@ describe('roguelite', () => {
   });
 
   it('marks the links to the nodes that can be picked next, and lists the icons in a legend', () => {
-    const doc = new DOMParser().parseFromString(mapHtml(MAP, at(newRun(1, 3, LEGACY_UNLOCKED), 0, 2)), 'text/html');
+    const doc = new DOMParser().parseFromString(mapHtml(MAP, at(newRun(1, 3, LEGACY_UNLOCKED), 1)), 'text/html');
     const lines = [...doc.querySelectorAll('line')];
-    expect(lines.filter((l) => l.classList.contains('next'))).toHaveLength(2); // the boss 2 to the two fights of act 2
-    expect(lines.filter((l) => l.classList.contains('taken'))).toHaveLength(1);
+    expect(lines.filter((l) => l.classList.contains('next'))).toHaveLength(1); // the fight 1 to the boss 2
+    expect(lines.filter((l) => l.classList.contains('taken'))).toHaveLength(0);
+    expect([...new DOMParser().parseFromString(mapHtml(MAP, at(newRun(1, 3, LEGACY_UNLOCKED), 1, 2)), 'text/html').querySelectorAll('line')].filter((l) => l.classList.contains('taken'))).toHaveLength(1);
     expect([...doc.querySelectorAll('.run-legend li')].map((li) => li.textContent)).toEqual(['Fight', 'Elite', 'Rest', 'Treasure', 'Shop', 'Unknown', 'Boss', 'Open', 'Taken']);
     expect(doc.querySelectorAll('.run-legend li svg.glyph')).toHaveLength(7);
   });

@@ -46,14 +46,37 @@ first pair of nodes to the last that steps one row, the other or both at random:
 on, every node of the next row is reached, and no two paths cross. A boss leads to every node of the
 next act's first row.
 
+**The paced map (#1543).** The map has a version, `MAP_VERSION` (`run::run_map_v`, the bridge's `run_map(seed, runes, version)` and
+`run_foes(..., version)`), saved with the run as `map`. A new run is dealt the current one (1); a run saved before has none, which is 0:
+the map of every earlier run, frozen (a test holds a digest of its kinds, formations and elites for 50 seeds), so a run in progress keeps
+the nodes and the bot's armies it was dealt. Version 1 has the same acts, rows, widths and kinds' draws as 0, and three rules on top,
+tested over 2000 seeds:
+
+- **A rest or a shop on the way to each boss**: every node of the row before the last has, among the nodes of the last row it leads to,
+  a rest or a shop (one is dealt, a rest or a shop by the seed, in place of what the draw gave, when it had none). So a route never runs
+  out of a way to recover before an act boss, and the player still chooses whether to take it.
+- **At most one elite a row**: the first elite of a row stays, the others are fights (the formation redrawn for the fight).
+- **A fork in each act where a pick closes a branch**: in the first two transitions of an act, two neighbouring nodes lead to nodes none
+  of which they share, so taking one leaves the other's way behind. The walk of the links is the one of 0 and is redrawn from its
+  own draw only when an act has no such fork, so the other acts do not shift.
+
+The Daily's seed makes one map for everyone, so its map is now the paced one: the Daily of a day that was started before this change
+keeps the map it was saved with, and a Daily started after it is dealt version 1, so on the day of the change two players may not have
+the same map. From the next day every player is dealt version 1. The MCP server and the run simulator (section 30,
+`RUN_SIM_MAP=0` plays the map of before) deal version 1 as well.
+
 The map screen (#1468) is an illustrated map. From the top: the run line, a legend (the icon and name of each kind of node, then
 what an open ring and a filled one mean), and the acts one under the other, each under a header (`Act 2 · Tundra`: the biome is named
 once it is picked, and for every act of a run that has exits, section 18). A node is a round line icon with its name under it (a
 fight's crossed swords, an elite's skull with its archetype under the name, a rest's flame, a treasure's chest, a shop's bag, an
-unknown's dashed "?", a boss's horned head, larger). The links are drawn under the nodes. The nodes a pick may take next have an accent
+unknown's dashed "?", a boss's horned head, larger). The links are drawn under the nodes, in the band between two rows: each leaves from under the labels of its row (the name and, for an elite,
+the archetype and `key` under it) and ends above the icon of the next, so none crosses a label (#1543, a test tests it on the
+laid-out page). A boss has no link to the next act: its header and the nodes to pick say where it goes on. A shortcut (section 27) goes
+down the gap between two nodes of the row it skips. The nodes a pick may take next have an accent
 ring, and the links to them are dashed; the nodes taken are filled with the accent colour, the last of them with a second ring, and the
 links taken are thick. Only the nodes that may be picked are enabled: the first row of act 1, then the links of the last node. After a
-pick, the plate scrolls to put the first of them in the middle (before the first pick the commanders stay in view). Held upright on a
+pick, the plate opens on the act of the first of them (#1569): that act's header at the top of the plate, whole, unless the node would
+then fall off the bottom, when the node stands at the bottom (before the first pick the commanders stay in view). Held upright on a
 phone the plate sits above the thumb dock and scrolls inside itself (#1477); on a desktop it keeps clear of the toolbar. Every node
 button keeps its `aria-label` (`Act 1, elite, The Wall`) and `data-node`, and holds its kind in `data-node-kind`.
 
@@ -1105,7 +1128,7 @@ cannot say. The table is a measure of the curve (act against act, boss against b
   command gives the same table on any machine, after about 20 minutes on 8 threads. `RUN_SIM_RUNS`, `RUN_SIM_LEVELS`,
   `RUN_SIM_BOSS_X` and a list of commanders (`... run_sim 0 1`) change the sample, `RUN_SIM_PERCENTS=50,120,200` tries other
   strengths, and `RUN_SIM_POOL=1` plays the boss of every act for every seed, whatever the runs before did (the tuning sample).
-- **The map and the route**: the engine's (`run::run_map`, a run seed per row of the table). The bot takes a rest when the army is
+- **The map and the route**: the engine's (`run::run_map_v` at the current `MAP_VERSION`, since the paced map of section 2, #1543; `RUN_SIM_MAP=0` plays the map of before; a run seed per row of the table). The bot takes a rest when the army is
   under its ceiling (14, 12 from level 2), else a fight or the boss, else a node with nothing to play (an event, a "?", a
   treasure, a shop, a secret room: left at once), an elite last. At the end of an act it takes the first exit offered
   (`run::exits`), so acts 2 and 3 are the biome's boss (section 18); act 1 deals one of the 15 bosses of the roster from the seed
@@ -1134,6 +1157,12 @@ cannot say. The table is a measure of the curve (act against act, boss against b
   of 250, 0 of 8 at 4000 against 250 and 0 of 6 at 1000 against 500; the rest are draws (100 plies without an ejection, a threefold repetition, often at 4 or 5 of
   6 ejections), and a draw is a loss. At about 24 ms per 1000 nodes the page's own 20000-node bot costs 0.5 s a ply, so a run of 7
   fights is minutes. The follow-up is #1598.
+
+**The paced map changed nothing here (#1543).** The Captain at level 0 on the 40 seeds, the paced map against the map of before: act 1 32/40,
+act 2 15/32, the run 8/15 for both, and the result of each of the 40 runs identical (`RUN_SIM_MAP=0`). **Bot numbers only**: the bot wins
+every fight and elite it takes and plays no shop, so a rest or a shop before a boss, one elite fewer in a row and a fork it never chooses
+by can only move its army by a marble, never an act boss fight, and the act boss fights are what the table measures. What the pacing does
+for a person (a way to recover before a boss, a route to choose) is not in these numbers.
 
 ### The targets and the table
 

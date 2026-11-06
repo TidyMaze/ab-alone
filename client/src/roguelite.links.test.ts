@@ -23,7 +23,7 @@ const NOTE_BELOW = 2.75;
 
 describe('the links of the map keep clear of the labels (#1543)', () => {
   const doc = html(fresh());
-  const height = Number(doc.querySelector('svg')!.getAttribute('viewBox')!.split(' ')[3]); // rem
+  const height = Number(doc.querySelector('.run-graph > svg')!.getAttribute('viewBox')!.split(' ')[3]); // rem
   const nodes = [...doc.querySelectorAll<HTMLButtonElement>('button[data-node]')].map((b) => ({
     x: Number(/left:([\d.]+)%/.exec(b.getAttribute('style')!)![1]),
     y: (Number(/top:([\d.]+)%/.exec(b.getAttribute('style')!)![1]) * height) / 100,
@@ -48,12 +48,13 @@ describe('the links of the map keep clear of the labels (#1543)', () => {
   });
 
   it('a link leaves from under the labels of its row and arrives above the icon of the next, so no link crosses a label', () => {
-    for (const { from, to } of segments) {
+    for (const { from, to, shortcut } of segments) {
       const [y1, y2] = [Math.min(from[1]!, to[1]!), Math.max(from[1]!, to[1]!)];
       for (const n of nodes) {
         const top = n.y - (n.boss ? 1.375 : 1.125);
         const bottom = n.y + (rowNote(n.y) ? NOTE_BELOW : NAME_BELOW);
-        expect(y2 <= top || y1 >= bottom, `a link from ${from} to ${to} crosses the node at ${n.x}, ${n.y}`).toBe(true);
+        const clear = shortcut && from[0] === to[0] ? Math.abs(n.x - from[0]!) >= 10 : false; // straight down, a link needs the gap beside a label
+        expect(y2 <= top || y1 >= bottom || clear, `a link from ${from} to ${to} crosses the node at ${n.x}, ${n.y}`).toBe(true);
       }
     }
   });
@@ -78,7 +79,7 @@ describe('the plate opens on the act of the node to pick (#1569)', () => {
     panel.innerHTML = '<span class="act-head">Act 2</span><button class="node">x</button>';
     const rect = (top: number, h: number) => () => ({ top: top - panel.scrollTop, height: h, bottom: top - panel.scrollTop + h }) as DOMRect;
     Object.defineProperty(panel, 'clientHeight', { value: height });
-    panel.getBoundingClientRect = rect(0, height);
+    panel.getBoundingClientRect = () => ({ top: 0, height, bottom: height }) as DOMRect; // the plate stays where it is, its content scrolls
     panel.querySelector<HTMLElement>('.act-head')!.getBoundingClientRect = rect(headTop, 20);
     panel.querySelector<HTMLElement>('button')!.getBoundingClientRect = rect(nodeTop, 40);
     panel.scrollTop = scroll;

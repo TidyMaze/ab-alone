@@ -352,6 +352,7 @@ import {
   left,
   loadRun,
   MAP_VERSION,
+  scrollMap,
   mapHtml,
   newRun,
   parseMap,
@@ -6443,7 +6444,7 @@ function showRun(): void {
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
   const next = runPanel.querySelector('button.node:not(:disabled)'); // after a pick the map scrolls to the nodes to pick, in the middle of the plate (#1468); before the first the commanders stay in view
-  if (next && state.path.length) runPanel.scrollTop += next.getBoundingClientRect().top - runPanel.getBoundingClientRect().top - runPanel.clientHeight / 2;
+  if (next && state.path.length) scrollMap(runPanel);
   const screen = state.bonus ? 'bonus' : state.relic ? 'relic' : state.reward ? 'reward' : state.event ? 'event' : state.rest ? 'rest' : state.shop ? 'shop' : state.scroll ? 'scroll' : state.collector ? 'collector' : state.exit ? 'exit' : placed ? 'place' : state.fighting ? 'fight' : 'map';
   document.body.dataset.run = state.end || screen; // read by the e2e tests
   const biome = currentBiome(map, state); // the tint of the map and the board (#1472); the Meadow has none

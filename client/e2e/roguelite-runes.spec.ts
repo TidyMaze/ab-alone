@@ -22,7 +22,7 @@ test('a player who owns the runes sees a secret room and a shortcut in each act,
   await load(page, { runes: 7 });
   await openMore(page);
   await expect(panel.locator('button[data-node-kind="secret"]')).toHaveCount(3); // one per act
-  await expect(panel.locator('line.shortcut')).toHaveCount(3);
+  await expect(panel.locator('polyline.shortcut')).toHaveCount(3);
   await expect(panel.locator('.run-runes')).toContainText('Rune of Stone (a secret room in every act) · ');
   await expect(panel.locator('.run-legend')).toContainText('Secret');
   await expect(panel.getByText('Runes to find')).toHaveCount(0);
@@ -42,7 +42,7 @@ test('a player without runes has the plain map and is told which runes there are
   await load(page, { path: [] });
   await openMore(page);
   await expect(panel.locator('button[data-node-kind="secret"]')).toHaveCount(0);
-  await expect(panel.locator('line.shortcut')).toHaveCount(0);
+  await expect(panel.locator('polyline.shortcut')).toHaveCount(0);
   await expect(panel.locator('.run-runes')).toHaveCount(0);
   await expect(panel.getByText('Runes to find: Rune of Stone (beat The Wall: a secret room in every act)')).toBeVisible();
 });

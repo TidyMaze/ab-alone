@@ -1600,6 +1600,27 @@ function introHtml(run: Run, more: boolean): string {
   );
 }
 
+/** The map's geometry in rem (#1543): the height of a row, how far an icon and a boss's reach above and a name, then a name with a note
+ * under it, below the centre of a node, and the gap a link keeps from them. `ui.css` sets the plate's rows at LINK_ROW. */
+const LINK_ROW = 4.5;
+const ICON_UP = 1.125;
+const BOSS_UP = 1.375;
+const NAME_BELOW = 2.1;
+const NOTE_BELOW = 2.75;
+const LINK_GAP = 0.15;
+
+/** After a pick the plate opens on the act of the node to pick (#1569): that act's header at its top, whole, unless the node would then
+ * fall off the bottom, when it stands at the bottom; a plate with no header puts the node in the middle (#1468). Does nothing when no node
+ * is open. */
+export function scrollMap(panel: HTMLElement): void {
+  const node = panel.querySelector('button.node:not(:disabled)');
+  if (!node) return;
+  const at = (el: Element): number => el.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
+  const head = [...panel.querySelectorAll('.act-head')].filter((h) => at(h) <= at(node)).pop();
+  const bottom = at(node) + node.getBoundingClientRect().height - panel.clientHeight + 4;
+  panel.scrollTop = Math.max(0, head ? Math.max(at(head) - 4, bottom) : at(node) - panel.clientHeight / 2);
+}
+
 /** The map screen: the run line, the unlocks and commanders before the first pick, a legend, the nodes act by act from the
  * top under the header of their act (half a row), each placed on its row with the icon of its kind, the links between them
  * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
@@ -1623,13 +1644,28 @@ export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster
   const here = run.path[run.path.length - 1];
   const taken = (i: number, j: number): boolean => run.path.some((p, k) => p === i && run.path[k + 1] === j);
   const marked = markedElites(map).filter(() => !run.keys.includes(Key.Emerald));
+  const noteOf = (n: MapNode, i: number): string => [run.enemies && n.elite ? ELITES[n.elite - 1]!.name.replace('The ', '') : '', marked.includes(i) ? 'key' : ''].filter(Boolean).join(' · ');
+  const noted = new Set(map.flatMap((n, i) => (noteOf(n, i) ? [`${n.act}:${n.row}`] : []))); // the rows with a note under a name: their labels are taller
+  // The links are drawn in rem down the plate (the viewBox is `total` rows of LINK_ROW rem tall), from under the labels of a row to
+  // above the icons of the next, so none crosses a label (#1543): none from a boss, which leaves the act's header alone, and a shortcut
+  // goes down the gap between two nodes of the row it skips.
+  const rem = (n: MapNode): number => (n.act * slot + 1 + n.row) * LINK_ROW;
+  const under = (n: MapNode): number => rem(n) + (noted.has(`${n.act}:${n.row}`) ? NOTE_BELOW : NAME_BELOW) + LINK_GAP;
+  const above = (n: MapNode): number => rem(n) - (n.kind === 'boss' ? BOSS_UP : ICON_UP) - LINK_GAP;
   const lines = map.flatMap((n, i) =>
-    next(map, [i], max).map((j) => {
-      const [[x1, y1], [x2, y2]] = [spot(n), spot(map[j]!)];
-      const classes = [...(map[j]!.act === n.act && map[j]!.row === n.row + 2 ? ['shortcut'] : []), ...(taken(i, j) ? ['taken'] : i === here && open.includes(j) ? ['next'] : [])];
-      const mark = classes.length ? ` class="${classes.join(' ')}"` : '';
-      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${mark}/>`;
-    }),
+    n.kind === 'boss'
+      ? []
+      : next(map, [i], max).map((j) => {
+          const [m, [x1], [x2]] = [map[j]!, spot(n), spot(map[j]!)];
+          const classes = [...(m.row === n.row + 2 ? ['shortcut'] : []), ...(taken(i, j) ? ['taken'] : i === here && open.includes(j) ? ['next'] : [])];
+          const mark = classes.length ? ` class="${classes.join(' ')}"` : '';
+          if (m.row === n.row + 1) return `<line x1="${x1}" y1="${under(n)}" x2="${x2}" y2="${above(m)}"${mark}/>`;
+          const mid = map.find((o) => o.act === n.act && o.row === n.row + 1)!;
+          const width = map.filter((o) => o.act === n.act && o.row === n.row + 1).length;
+          const gaps = Array.from({ length: Math.max(width - 1, 1) }, (_, k) => ((k + 1) / width) * 100); // between two nodes of the row skipped
+          const channel = gaps.reduce((a, g) => (Math.abs(g - (x1 + x2) / 2) < Math.abs(a - (x1 + x2) / 2) ? g : a));
+          return `<polyline points="${x1},${under(n)} ${channel},${above(mid)} ${channel},${under(mid)} ${x2},${above(m)}"${mark}/>`;
+        }),
   );
   const nodes = map.flatMap((n, i) => {
     if (n.act > max) return [];
@@ -1639,16 +1675,16 @@ export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster
     const elite = run.enemies && n.elite ? ELITES[n.elite - 1]!.name : '';
     const key = marked.includes(i);
     const tip = [elite ? `Elite: ${elite} (${ELITES[n.elite - 1]!.help})` : NODE_LOOKS[n.kind].name, run.enemies && n.formation ? `Formation: ${FORMATIONS[n.formation]}` : '', `Act ${n.act + 1}${biome(n.act)}`, n.kind === 'boss' && bosses && (!run.exits || n.act <= run.biomes.length) ? bossTip(bosses, bossOfAct(run, n.act, bosses.ids)) : '']; // what hovering or focusing the node shows (#1468); a boss node names its boss once the act's biome is known, and says whether it takes the build (#1495)
-    const note = [elite.replace('The ', ''), key ? 'key' : ''].filter(Boolean).join(' · ');
+    const note = noteOf(n, i);
     return [
       `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}${key ? ' marked' : ''}" data-node="${i}" data-node-kind="${n.kind}" data-tip="${tip.filter(Boolean).join('&#10;')}" data-tip-side="${x < 34 ? 'left' : x > 66 ? 'right' : 'mid'}" style="left:${x}%;top:${y}%" ` +
-        `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}${key ? ', marked: its key' : ''}"${open.includes(i) ? '' : ' disabled'}>${lineGlyph(NODE_LOOKS[n.kind].icon)}${kind}${note && `<small>${note}</small>`}</button>`,
+        `aria-label="Act ${n.act + 1}, ${n.kind}${elite && `, ${elite}`}${key ? ', marked: its key' : ''}"${open.includes(i) ? '' : ' disabled'}>${lineGlyph(NODE_LOOKS[n.kind].icon)}<span>${kind}</span>${note && `<small>${note}</small>`}</button>`,
     ];
   });
   const heads = Array.from({ length: acts }, (_, act) => {
     return `<span class="act-head" style="top:${((act * slot + 0.25) * 100) / total}%">Act ${act + 1}${biome(act)}</span>`;
   });
-  const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
+  const svg = `<svg viewBox="0 0 100 ${total * LINK_ROW}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
   const moves = movesLine(map, run);
   const starting = !run.path.length;

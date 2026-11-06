@@ -167,9 +167,10 @@ describe('the runes on the screens', () => {
     expect(secret.disabled).toBe(true);
     const icons = [...doc.querySelectorAll('button[data-node] > svg.glyph path')].map((p) => p.getAttribute('d'));
     expect(icons.filter((d) => d === secret.querySelector('path')!.getAttribute('d'))).toHaveLength(1);
-    const lines = [...doc.querySelectorAll('line')];
+    const lines = [...doc.querySelectorAll('line, polyline')];
     expect(lines.filter((l) => l.classList.contains('shortcut'))).toHaveLength(1);
-    expect(lines).toHaveLength(MAP.reduce((n, m) => n + m.links.length + m.skips.length, 0)); // a link each, the shortcut too
+    expect(lines.filter((l) => l.classList.contains('shortcut'))[0]!.tagName).toBe('polyline');
+    expect(lines).toHaveLength(MAP.filter((m) => m.kind !== 'boss').reduce((n, m) => n + m.links.length + m.skips.length, 0)); // a link each, the shortcut too, none from a boss
   });
 
   it('the secret room opens in the legend only with its rune, and picking it works from the node before', () => {
