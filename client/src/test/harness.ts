@@ -15,6 +15,8 @@ import type { Transport } from '../transport';
 import { FakeContext } from './audio';
 
 export interface BootOptions {
+  /** Called each time the page creates a bot worker (the bot's or the analysis one). */
+  onWorker?: () => void;
   /** navigator.webdriver, true by default as under Playwright: `?nodes=` sets the bot's budget, `__playTurns` exists. */
   webdriver?: boolean;
   /** The IndexedDB the page opens, a fresh one by default. Pass the same one to two boots to reload a saved game. */
@@ -371,6 +373,9 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     'Worker',
     class {
       onmessage: ((e: MessageEvent<BotResponse>) => void) | null = null;
+      constructor() {
+        options.onWorker?.();
+      }
       postMessage(req: BotRequest): void {
         setTimeout(() => {
           if (options.fails === 'worker') return void this.onmessage?.({ data: { id: req.id, error: 'Error: boom' } } as never);
