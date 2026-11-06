@@ -2585,14 +2585,10 @@ mod tests {
 
     #[test]
     fn every_seed_from_1_to_2000_puts_the_easiest_tower_nearest_and_the_echo_first() {
-        sweep(
-            "towers never end",
-            |seed| towers(seed),
-            |seed, found| {
-                assert_eq!(found.len(), 15, "seed {seed}");
-                check_towers(seed, &found);
-            },
-        );
+        sweep("towers never end", towers, |seed, found| {
+            assert_eq!(found.len(), 15, "seed {seed}");
+            check_towers(seed, &found);
+        });
     }
 
     #[test]

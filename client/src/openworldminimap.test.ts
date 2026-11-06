@@ -200,6 +200,13 @@ describe('drawMinimap', () => {
     expect(at(fills, COLOURS.lairBeaten)).toHaveLength(0);
   });
 
+  it('draws no arrow for a lair outside the ring to beat, which is not guided (#1532)', () => {
+    const { ctx, fills } = fakeContext();
+    const far = (q: number, guided: boolean) => ({ cell: [q, 0] as Axial, beaten: false, guided });
+    drawMinimap(ctx, SIZE, data({ lairs: [far(60, false), far(100, true), far(300, false)] }));
+    expect(at(fills, COLOURS.lair)).toHaveLength(1);
+  });
+
   it('still draws every lair in the window, whatever the arrows', () => {
     const { ctx, fills } = fakeContext();
     const near = [3, 4, 5, 6].map((q) => ({ cell: [q, 0] as Axial, beaten: false }));

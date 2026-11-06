@@ -78,3 +78,11 @@ describe('the goal lines (#1530)', () => {
     for (const { goal, bearing } of states) for (const { word } of SECRETS) expect(`${goal} ${bearing}`).not.toMatch(word);
   });
 });
+
+describe('the goal lines of the ring to beat (#1532)', () => {
+  const at = { hero: [0, 0] as Axial, yaw: 0, logsLeft: 0 };
+  it('points at the nearest tower that is guided, not a nearer one outside the ring to beat', () => {
+    const lairs = [{ cell: [5, 0] as Axial, beaten: false, guided: false }, { cell: [30, 0] as Axial, beaten: false, guided: true }];
+    expect(goalLines({ ...at, lairs }).bearing).toBe('Nearest tower: 30 cells, to the right.');
+  });
+});
