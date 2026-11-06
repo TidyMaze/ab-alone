@@ -169,3 +169,69 @@ describe('a dungeon gate of the Open world (#1593)', () => {
     expect(byId('place-back').hidden).toBe(true);
   });
 });
+
+// The transition of a place (#1519, docs/specs/motion.md story 10): started with the place, never in its way, and the matching one on the way back.
+describe('the transition of a place (#1519)', () => {
+  const cue = () => document.getElementById('place-transition');
+  const titled = () => cue()!.querySelector('.pt-title')!.textContent;
+
+  it('a town shows its cue and its name while the Hub is already live, and the way back shows the same cue without a name', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await rollOnto(game, 'town');
+    expect(data().hub).toBeTruthy();
+    expect(data().placeTransition).toBe('enter');
+    expect(cue()!.dataset.kind).toBe('town');
+    expect(titled()).toBe('Hub');
+    await settle();
+    byId('place-back').click();
+    await settle();
+    expect(data().openworld).toBe('7');
+    expect(data().placeTransition).toBe('back');
+    expect(cue()!.dataset.kind).toBe('town');
+    expect(titled()).toBe('');
+  });
+
+  it('a gate shows its cue and the name of the run, and comes back with it', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await rollOnto(game, 'dungeon');
+    expect(data().run).toBe('map');
+    expect(cue()!.dataset.kind).toBe('dungeon');
+    expect(titled()).toBe('Rogue-lite run');
+    await settle();
+    byId('place-back').click();
+    await settle();
+    expect(data().placeTransition).toBe('back');
+    expect(cue()!.dataset.kind).toBe('dungeon');
+  });
+
+  it('a tower shows its cue and the name of its boss over the fight that is live, and comes back with it', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
+    hooks().__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
+    expect(data().boss).toBe('echo');
+    expect(cue()!.dataset.kind).toBe('tower');
+    expect(titled()).toBe('The Echo');
+    await settle();
+    byId('ship-back').click();
+    await settle();
+    expect(data().placeTransition).toBe('back');
+    expect(cue()!.dataset.kind).toBe('tower');
+  });
+
+  it('under reduced motion the name stays and nothing moves, and the way back is a cut', async () => {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+    await rollOnto(game, 'dungeon');
+    expect(cue()!.dataset.motion).toBe('cut');
+    expect(titled()).toBe('Rogue-lite run');
+    window.dispatchEvent(new Event('pointerdown'));
+    await settle();
+    byId('place-back').click();
+    await settle();
+    expect(data().placeTransition).toBeUndefined();
+  });
+});

@@ -143,3 +143,32 @@ describe('the Hint ghost fades in (#1097, motion.md story 7)', () => {
     expect(ghostFade(0, true)).toBe(1);
   });
 });
+
+describe('the transition of a place (#1519)', () => {
+  const block = css.match(/\/\* Place transition \(#1519[^]*?(?=\n\/\* [A-Z]|$)/)![0];
+
+  it('is a layer over the page that never takes a press, below the HUD', () => {
+    expect(block).toMatch(/#place-transition \{[^}]*position: fixed;[^}]*pointer-events: none;/);
+    expect(block).toMatch(/#place-transition\[hidden\] \{ display: none; \}/);
+  });
+
+  it('moves opacity and transform only, from the numbers the script writes, and has no transition or animation of its own', () => {
+    expect(block).not.toMatch(/\b(transition|animation|@keyframes)\b/);
+    expect(block).not.toMatch(/\b(width|height|top|left|right|bottom|margin):\s*[^;]*var\(--(dim|open|title)/);
+    expect(block).toMatch(/\.pt-dim \{[^}]*opacity: var\(--dim\)/);
+    expect(block).toMatch(/\.pt-title \{[^}]*opacity: var\(--title\)/);
+  });
+
+  it('gives the tower two doors that part and the gate an arch that opens, and the town only the dim', () => {
+    expect(block).toMatch(/\[data-kind='tower'\] \.pt-door/);
+    expect(block).toMatch(/translateX\(calc\(var\(--open\) \* -100%\)\)/);
+    expect(block).toMatch(/\[data-kind='dungeon'\] \.pt-arch/);
+    expect(block).toMatch(/scale\(calc\(/);
+    expect(block).toMatch(/\[data-kind='tower'\] \.pt-dim \{ display: none; \}/);
+    expect(block).toMatch(/\[data-kind='town'\] :is\(\.pt-door, \.pt-arch\) \{ display: none; \}/);
+  });
+
+  it('cuts the dim and the cue under reduced motion and keeps the title', () => {
+    expect(block).toMatch(/\[data-motion='cut'\] :is\(\.pt-dim, \.pt-door, \.pt-arch\) \{ display: none; \}/);
+  });
+});
