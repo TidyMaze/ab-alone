@@ -94,7 +94,8 @@ export interface MapNode {
  * while the choice of the scroll that grows one waits after an act boss; a run saved before has no affinity.
  * `spent` counts the army's moves in the fights of each act so far (#1473), `[]` for a run saved before it, which has no bonus room; `bonus` is on while the bonus room before an act boss waits.
  * `runes` is the mask of the runes the player owned when the run began (#1476, docs/specs/roguelite.md section 27), which shapes its
- * map and its exits, and `found` the mask of those it found for the first time; a run saved before has neither. */
+ * map and its exits, and `found` the mask of those it found for the first time; a run saved before has neither.
+ * `map` is the generation of its map (#1543, `MAP_VERSION`, docs/specs/roguelite.md section 2): a run saved before the pacing has 0 and keeps the map it was dealt. */
 export interface Run {
   seed: number;
   army: number;
@@ -139,7 +140,11 @@ export interface Run {
   bonus: boolean;
   runes: number;
   found: number;
+  map: number;
 }
+
+/** The generation of the map a new run is dealt: the engine's `MAP_VERSION` (a test compares the two). */
+export const MAP_VERSION = 1;
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
 export const FIGHT_CAP = 3;
@@ -361,7 +366,7 @@ const tacticPool = (run: Run): number[] => TACTICS.flatMap((_, k) => (isOn(run, 
 /** A new run of `seed`, with what `best` acts won in one run unlocked, the blueprints `unlocked` (readUnlocked), the
  * ascension levels up to `top` (readAscension) and the `runes` owned (readRunes), at level 0 (chooseAscension), no commander yet (chooseCommander): the standard
  * army and no relic. */
-export const newRun = (seed: number, best: number, unlocked: readonly number[], top = 0, runes = 0): Run => ({
+export const newRun = (seed: number, best: number, unlocked: readonly number[], top = 0, runes = 0, map = 0): Run => ({
   seed,
   army: START_ARMY,
   path: [],
@@ -405,12 +410,13 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   bonus: false,
   runes,
   found: 0,
+  map,
 });
 
 /** The daily run of `day` (#1466, docs/specs/roguelite.md section 20), the same for everyone: the seed of the day, every unlock open
  * so that no player's progress changes its offers, and no Collector (nothing is left to find), the Captain picked. */
 export const dailyRun = (day: string, seed: number): Run =>
-  chooseCommander({ ...newRun(seed, ALL_ACTS, BLUEPRINTS.map((_, id) => id)), daily: day }, 0);
+  chooseCommander({ ...newRun(seed, ALL_ACTS, BLUEPRINTS.map((_, id) => id), 0, 0, MAP_VERSION), daily: day }, 0);
 
 /** The run with the commander `commander` (an index of COMMANDERS): its special marbles and its relic, before the first pick
  * and only once unlocked. Picking another commander drops the first one's. */
@@ -1669,10 +1675,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room, one saved before the runes (#1476) none. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room, one saved before the runes (#1476) none, one saved before the pacing of the map (#1543) the map of version 0. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, runes = 0, found = 0, spent = [], bonus = false } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, runes = 0, found = 0, spent = [], bonus = false, map = 0 } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1728,6 +1734,7 @@ function decodeRun(raw: unknown): Run | null {
     isInt(flasks, MAX_FLASKS) &&
     isInt(runes, ALL_RUNES) &&
     isInt(found, ALL_RUNES) &&
+    isInt(map, MAP_VERSION) &&
     typeof scroll === 'boolean' &&
     Array.isArray(affinities) &&
     affinities.length === AFFINITIES.length &&
@@ -1736,7 +1743,7 @@ function decodeRun(raw: unknown): Run | null {
     (spent.length === 0 || (spent.length === MOVE_BUDGET.length && spent.every((n) => isInt(n, MAX_SPENT)))) &&
     typeof bonus === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll, runes, found, spent: [...spent], bonus }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll, runes, found, spent: [...spent], bonus, map }
     : null;
 }
 
@@ -1764,14 +1771,14 @@ export async function clearRun(store: KeyStore): Promise<void> {
  * does not replay is deleted, but a boss fight that does not replay starts over. */
 export async function loadRun<E extends ReplayEngine>(
   store: KeyStore,
-  mapOf: (seed: number, runes: number) => MapNode[],
+  mapOf: (seed: number, runes: number, version: number) => MapNode[],
   make: (run: Run, map: MapNode[]) => E,
 ): Promise<{ state: Run; map: MapNode[]; engine: E | null } | null> {
   try {
     const raw = await store.get(RUN_KEY);
     if (raw === undefined) return null;
     const state = decodeRun(raw);
-    const map = state ? mapOf(state.seed, state.runes) : [];
+    const map = state ? mapOf(state.seed, state.runes, state.map) : [];
     const walked = state !== null && state.path.every((n, i) => next(map, state.path.slice(0, i), lastAct(map, state)).includes(n));
     const fight = walked && state.fighting && state.path.length ? replay(state.moves, () => make(state, map)) : null;
     // A boss node's fight saved when it was an army fight (before #800) does not replay on the boss's board: it starts over.

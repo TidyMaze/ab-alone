@@ -11,6 +11,7 @@ import {
   BONUS_SCRAP,
   MOVE_BUDGET,
   loadRun,
+  MAP_VERSION,
   newRun,
   offers,
   parseMap,
@@ -121,12 +122,14 @@ function setup(won = true, lost = 0) {
 }
 
 const FIRST_MOVE = '(1,3)>NE';
-const mapOf = (seed: number): MapNode[] => parseMap(runRules().run_map(seed));
+/** A new run on the map a new run is dealt (#1543), as the session deals it. */
+const fresh = (seed: number, best: number, unlocked: number[], top = 0, runes = 0): Run => newRun(seed, best, unlocked, top, runes, MAP_VERSION);
+const mapOf = (seed: number): MapNode[] => parseMap(runRules().run_map(seed, 0, MAP_VERSION));
 const SEEDS = Array.from({ length: 40 }, (_, seed) => seed);
 
 /** The nodes picked to reach the first node `target` says yes to, or null. */
 function pathTo(map: MapNode[], target: (node: MapNode, index: number) => boolean, from: number[] = []): number[] | null {
-  for (const n of choices(map, { ...newRun(0, 0, []), path: from })) {
+  for (const n of choices(map, { ...fresh(0, 0, []), path: from })) {
     if (target(map[n]!, n)) return [...from, n];
     const deeper = pathTo(map, target, [...from, n]);
     if (deeper) return deeper;
@@ -138,7 +141,7 @@ function pathTo(map: MapNode[], target: (node: MapNode, index: number) => boolea
 function at(kind: MapNode['kind'], patch: Partial<Run> = {}, accept: (run: Run) => boolean = () => true): Run {
   for (const seed of SEEDS) {
     const path = pathTo(mapOf(seed), (n) => n.kind === kind);
-    const run = path && { ...newRun(seed, 3, []), path, ...patch };
+    const run = path && { ...fresh(seed, 3, []), path, ...patch };
     if (run && accept(run)) return run;
   }
   throw new Error(`no seed has a ${kind} node that fits`);
@@ -163,7 +166,7 @@ function bossBefore(ids: string[], patch: Partial<Run> = {}): { save: Run; node:
 /** A run of seed 0 with the third act's boss to fight: the last of a run without the three keys (the fourth act's two nodes come after it). */
 function lastBoss(keys: number[] = []): Run {
   const map = mapOf(0);
-  return { ...newRun(0, 3, []), path: pathTo(map, (_, i) => i === map.length - 3)!, fighting: true, keys, spent: [] };
+  return { ...fresh(0, 3, []), path: pathTo(map, (_, i) => i === map.length - 3)!, fighting: true, keys, spent: [] };
 }
 
 describe('before a run is started', () => {
@@ -250,7 +253,7 @@ describe('the same seed and the same choices give the same run as the client', (
     const { run, session } = setup(true, 2);
     const map = mapOf(0);
     value(await run.newRun({ seed: 0, best: 3 }));
-    let expected = chooseCommander(newRun(0, 3, []), 0);
+    let expected = chooseCommander(fresh(0, 3, []), 0);
 
     // pick a fight, win it with two marbles lost: the army, the scrap and the cells are the client's
     value(run.pick({ node: 0 }));
@@ -287,12 +290,12 @@ describe('the same seed and the same choices give the same run as the client', (
     const map = mapOf(seed);
     value(await run.newRun({ seed, save: undefined }));
     value(run.pick({ node: 0 }));
-    const plan = foePlan(map, { ...newRun(seed, 0, []), path: [0] }, (node, less, biome) => runRules().run_foes(seed, node, less, biome));
+    const plan = foePlan(map, { ...fresh(seed, 0, []), path: [0] }, (node, less, biome) => runRules().run_foes(seed, node, less, biome, undefined, MAP_VERSION));
     expect(calls.fights[0]).toEqual([14, plan, [], 1]); // the Captain's Gyroscope
-    const saboteur = { ...newRun(seed, 0, []), relics: [8] };
+    const saboteur = { ...fresh(seed, 0, []), relics: [8] };
     value(await run.newRun({ save: saboteur }));
     value(run.pick({ node: 0 }));
-    expect(calls.fights[1]![1]).toEqual(foePlan(map, { ...saboteur, path: [0] }, (node, less, biome) => runRules().run_foes(seed, node, less, biome)));
+    expect(calls.fights[1]![1]).toEqual(foePlan(map, { ...saboteur, path: [0] }, (node, less, biome) => runRules().run_foes(seed, node, less, biome, undefined, MAP_VERSION)));
     expect(calls.fights[1]![3]).toBe(1 << 8);
   });
 });
@@ -349,10 +352,11 @@ describe('pick', () => {
   });
 
   test('an elite has 14 marbles and a search twice as long', async () => {
-    const elite = at('elite', { fighting: false, path: before('elite').save.path });
+    const full = at('elite', { keys: [2] }); // holding the Emerald, no elite is marked: a marked one is searched one more time (#1467)
+    const elite = { ...full, fighting: false, path: full.path.slice(0, -1) };
     const { run, calls, session } = setup(false);
     value(await run.newRun({ save: elite, bot_nodes: 100 }));
-    const node = before('elite').node;
+    const node = full.path[full.path.length - 1]!;
     const state = value(run.pick({ node }));
     expect(state.fight).toMatchObject({ kind: 'elite', bot_nodes: 200 });
     expect(state.fight!.foes).toMatch(/The (Wall|Artificer|Brute)/);
@@ -614,7 +618,7 @@ describe('the screens that wait for a choice', () => {
   });
 
   test('a save from before the scrolls still loads, with no affinity', async () => {
-    const old: Record<string, unknown> = { ...newRun(2, 0, []) };
+    const old: Record<string, unknown> = { ...fresh(2, 0, []) };
     for (const key of ['affinities', 'scroll']) delete old[key];
     const { run } = setup();
     expect(value(await run.newRun({ save: old })).screen).toBe('map');
@@ -776,7 +780,7 @@ describe('a fight ends the run or the node', () => {
     const map = mapOf(0);
     const path = pathTo(map, (n) => n.kind === 'boss')!;
     const { run, session } = setup(true);
-    value(await run.newRun({ save: { ...newRun(0, 3, []), path: path.slice(0, -1), spent: [] } }));
+    value(await run.newRun({ save: { ...fresh(0, 3, []), path: path.slice(0, -1), spent: [] } }));
     value(run.pick({ node: path.at(-1)! }));
     value(session.playMove({ move: FIRST_MOVE }));
     const state = value(run.state({}));
@@ -883,12 +887,12 @@ describe('save and resume', () => {
     const { run } = setup();
     value(await run.newRun({ seed: 4 }));
     expect(failure(await run.newRun({ save: { seed: 1 } })).code).toBe('bad_save');
-    expect(failure(await run.newRun({ save: { ...newRun(1, 0, []), path: [5] } })).code).toBe('bad_save');
+    expect(failure(await run.newRun({ save: { ...fresh(1, 0, []), path: [5] } })).code).toBe('bad_save');
     expect(value(run.state({})).seed).toBe(4);
   });
 
   test('a save from before the Collector still loads, with its relics and tactics unlocked', async () => {
-    const old: Record<string, unknown> = { ...newRun(2, 0, []) };
+    const old: Record<string, unknown> = { ...fresh(2, 0, []) };
     for (const key of ['unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'curse']) delete old[key];
     const { run } = setup();
     expect(value(await run.newRun({ save: old })).screen).toBe('map');
@@ -929,7 +933,7 @@ describe('flasks (#1475)', () => {
     const map = mapOf(0);
     const boss = map.findIndex((n) => n.kind === 'boss' && n.act === 0);
     const path = pathTo(map, (_, i) => i === boss)!;
-    value(await run.newRun({ save: { ...newRun(0, 3, []), path, flasks: 0, army: 8 } }));
+    value(await run.newRun({ save: { ...fresh(0, 3, []), path, flasks: 0, army: 8 } }));
     const next = value(run.state({})).nodes![0]!.node;
     expect(value(run.pick({ node: next })).flasks).toBe(2);
   });
@@ -994,7 +998,7 @@ describe('the bonus room before an act boss (#1473)', () => {
 });
 
 describe('the runes (#1476)', () => {
-  const withRunes = (seed: number, runes: number): MapNode[] => parseMap(runRules().run_map(seed, runes));
+  const withRunes = (seed: number, runes: number): MapNode[] => parseMap(runRules().run_map(seed, runes, MAP_VERSION));
 
   test('new_run takes the runes the player owns: the map lists a secret room per act and the shortcut, the state names the runes', async () => {
     const { run } = setup();
@@ -1018,7 +1022,7 @@ describe('the runes (#1476)', () => {
     const room = nodes.findIndex((n) => n.kind === 'secret' && n.act === 0);
     const from = nodes.findIndex((n) => n.act === 0 && n.row === 0 && n.links.includes(nodes[room]!.col) && n.row + 1 === nodes[room]!.row);
     const { run } = setup();
-    value(await run.newRun({ save: { ...newRun(0, 3, [], 0, 1), path: [from], fighting: false } }));
+    value(await run.newRun({ save: { ...fresh(0, 3, [], 0, 1), path: [from], fighting: false } }));
     const state = value(run.state({}));
     expect(state.nodes).toContainEqual({ node: room, kind: 'secret' });
     const entered = value(run.pick({ node: room }));

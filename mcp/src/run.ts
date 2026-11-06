@@ -45,6 +45,7 @@ import {
   left,
   loadRun,
   moveCount,
+  MAP_VERSION,
   newRun,
   offers,
   parseMap,
@@ -100,9 +101,9 @@ export interface RunBoss extends EncounterLike {
 /** What a run uses of abalone-wasm. */
 export interface RunRules {
   /** The map of a run seed of a player who owns the runes `runes` (default none): records of `[act, row, col, kind, links, formation, elite]`. */
-  run_map(seed: number, runes?: number): Int32Array;
+  run_map(seed: number, runes?: number, version?: number): Int32Array;
   /** The bot's army at a node, `less` marbles short, in a biome: `[count, formation, biome, ...]` then `[q, r, kind]` per special marble. */
-  run_foes(seed: number, node: number, less: number, biome: number): Int32Array;
+  run_foes(seed: number, node: number, less: number, biome: number, more?: number, version?: number): Int32Array;
   /** The codes of the two biomes the exits lead to for act `act` (1 or 2) of a run that left the biome `from`, a third with the rune of the exit. */
   run_exits(seed: number, act: number, from: number, runes?: number): Uint8Array;
   /** The army's fight: `army` marbles, the bot's `foes` (a count, or a plan of `run_foes`), the special marbles `placed` as `[q, r, kind]`, the relics as a bit mask. */
@@ -296,14 +297,14 @@ export class RogueRun {
   /** Starts the run of `seed`, or resumes `save`, and drops the run in progress. A bad save keeps it. */
   async newRun({ seed = 0, best = 0, unlocked = [], runes = 0, commander = 0, bot_nodes = BOT_NODES, save }: NewRunInput): Promise<Result<RunState>> {
     if (save === undefined) {
-      const state = chooseCommander(newRun(seed, best, unlocked, 0, runes), commander);
+      const state = chooseCommander(newRun(seed, best, unlocked, 0, runes, MAP_VERSION), commander);
       if (state.commander !== commander) return fail('bad_choice', `commander ${commander} is not unlocked: best is ${best}`);
-      this.active = { map: this.mapOf(seed, runes), state, fight: null, nodes: bot_nodes };
+      this.active = { map: this.mapOf(seed, runes, MAP_VERSION), state, fight: null, nodes: bot_nodes };
       return ok(this.describe(this.active));
     }
     const store = memoryStore();
     await store.put(RUN_KEY, save);
-    const loaded = await loadRun(store, (s, owned) => this.mapOf(s, owned), (state, map) => this.engineFor(state, map));
+    const loaded = await loadRun(store, (s, owned, version) => this.mapOf(s, owned, version), (state, map) => this.engineFor(state, map));
     if (!loaded) return fail('bad_save', 'not a run of the client, or it does not walk its map, or its fight does not replay');
     const active: Active = { map: loaded.map, state: loaded.state, fight: null, nodes: bot_nodes };
     if (loaded.engine) this.begin(active, loaded.engine, loaded.state.moves.map((mv) => [...mv]));
@@ -419,15 +420,15 @@ export class RogueRun {
     active.fight = null;
   }
 
-  private mapOf(seed: number, runes: number): MapNode[] {
-    return parseMap(this.rules.run_map(seed, runes));
+  private mapOf(seed: number, runes: number, version: number): MapNode[] {
+    return parseMap(this.rules.run_map(seed, runes, version));
   }
 
   /** The fight of the run's last node, as main.ts `runEngine` stands it: the act's boss, or the army against the bot's plan. */
   private engineFor(state: Run, map: MapNode[]): RunEngine | RunBoss {
     const boss = actBoss(map, state, this.bossIds());
     if (boss) return this.rules.boss(boss.id, boss.seed, boss.percent, state.placed, relicMask(state));
-    const plan = foePlan(map, state, (node, less, biome) => this.rules.run_foes(state.seed, node, less, biome));
+    const plan = foePlan(map, state, (node, less, biome) => this.rules.run_foes(state.seed, node, less, biome, undefined, state.map));
     return this.rules.fight(state.army, plan, state.placed, relicMask(state));
   }
 

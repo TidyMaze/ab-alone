@@ -93,7 +93,7 @@
 //!   Detonator, `5` Bunks, `6` Lucky coin, `7` Bargain, `8` Saboteur, `9` Dampener, `10` War chest,
 //!   `11` Quartermaster (docs/specs/roguelite.md section 9). The same mask carries the army's affinities from bit 16:
 //!   the level, 0 to 2, of Force, Tactics and Chaos on 2 bits each, in that order (section 23).
-//! - Rogue-lite map (`run_map(seed, runes)`, `runes` the optional mask of the runes the player owns, `1` room, `2` shortcut, `4` exit,
+//! - Rogue-lite map (`run_map(seed, runes, version)`, `version` the optional generation of the map, `0` of a run saved before the pacing (the default), `1` the paced map of docs/specs/roguelite.md section 2, `runes` the optional mask of the runes the player owns, `1` room, `2` shortcut, `4` exit,
 //!   section 27): records of 7 integers `[act, row, col, kind, links, formation, elite]` per node,
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
 //!   an act), `2` elite, `3` rest, `4` event (no longer drawn), `5` treasure, `6` shop, `7` unknown (a "?" the page turns
@@ -101,7 +101,7 @@
 //!   to, its bits `8 + c` the columns `c` of the row after the next it skips to (the shortcut); a boss leads to every node of the next act's first row (docs/specs/roguelite.md). `formation` is how the bot's marbles stand in
 //!   a fight or an elite: `0` standard, `1` Belgian daisy, `2` German daisy, `3` snake, `4` wedge (`0` on the other nodes); `elite` is
 //!   `0` for a node that is no elite, else `1` The Wall, `2` The Artificer, `3` The Brute (section 14).
-//! - The bot's army of a fight (`run_foes(seed, node, less, biome, more)`, `more` optional special marbles for the ascension levels, section 20): `[count, formation, biome, ...]` then a record `[q, r, kind]` per
+//! - The bot's army of a fight (`run_foes(seed, node, less, biome, more, version)`, `more` optional special marbles for the ascension levels, section 20, `version` the map's generation as `run_map`'s): `[count, formation, biome, ...]` then a record `[q, r, kind]` per
 //!   special marble it holds; `Engine::with_foes(army, plan)` stands it, the biome's holes opened (sections 14 and 18). `biome` is
 //!   the Open world's code below (`0` meadow, the act 1 default, which opens none).
 //! - The exits at the end of an act (`run_exits(seed, act, from, runes)`): the codes of the two biomes the exits lead to for act `act`

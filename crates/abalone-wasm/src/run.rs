@@ -9,11 +9,11 @@ use wasm_bindgen::prelude::*;
 /// Integers per map node: `[act, row, col, kind, links, formation, elite]`.
 pub const NODE_STRIDE: usize = 7;
 
-/// The map of the run `seed` of a player who owns the runes `runes` (none when omitted, section 27), one record of
-/// `NODE_STRIDE` integers per node.
+/// The map of the run `seed` of a player who owns the runes `runes` (none when omitted, section 27) at the generation `version`
+/// (the one of a run saved before the pacing when omitted, section 2), one record of `NODE_STRIDE` integers per node.
 #[wasm_bindgen]
-pub fn run_map(seed: u32, runes: Option<u8>) -> Vec<i32> {
-    run::run_map_with(u64::from(seed), runes.unwrap_or(0))
+pub fn run_map(seed: u32, runes: Option<u8>, version: Option<u8>) -> Vec<i32> {
+    run::run_map_v(u64::from(seed), runes.unwrap_or(0), version.unwrap_or(0))
         .iter()
         .flat_map(|node| {
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
@@ -35,14 +35,22 @@ pub fn run_map(seed: u32, runes: Option<u8>) -> Vec<i32> {
 /// levels, none when omitted), in the biome of code `biome` (`0`, the Meadow, for an unknown code): `[count, formation,
 /// biome, ...]` then a record `[q, r, kind]` per special marble, the plan `Engine::with_foes` stands.
 #[wasm_bindgen]
-pub fn run_foes(seed: u32, node: u32, less: u8, biome: u8, more: Option<u8>) -> Vec<i32> {
+pub fn run_foes(
+    seed: u32,
+    node: u32,
+    less: u8,
+    biome: u8,
+    more: Option<u8>,
+    version: Option<u8>,
+) -> Vec<i32> {
     let biome = Biome::from_code(biome).unwrap_or(Biome::Meadow);
-    let plan = run::foe_plan_with(
+    let plan = run::foe_plan_v(
         u64::from(seed),
         node as usize,
         less,
         biome,
         more.unwrap_or(0),
+        version.unwrap_or(0),
     );
     [
         i32::from(plan.count),
@@ -78,7 +86,7 @@ mod tests {
 
     #[test]
     fn run_map_flattens_the_core_map() {
-        let flat = run_map(3, None);
+        let flat = run_map(3, None, None);
         let core = run::run_map(3);
         assert_eq!(flat.len(), core.len() * NODE_STRIDE);
         for (record, node) in flat.chunks(NODE_STRIDE).zip(&core) {
@@ -113,6 +121,24 @@ mod tests {
     }
 
     #[test]
+    fn the_version_picks_the_generation_of_the_map_and_of_its_foes() {
+        let old = run_map(3, None, None);
+        assert_eq!(run_map(3, None, Some(0)), old);
+        let paced = run_map(3, None, Some(run::MAP_VERSION));
+        assert_eq!(paced.len(), old.len());
+        assert_ne!(paced, old);
+        let core = run::run_map_v(3, 0, run::MAP_VERSION);
+        let (index, node) = core
+            .iter()
+            .enumerate()
+            .find(|(_, n)| n.kind == NodeKind::Fight && n.row > 0)
+            .expect("a fight after the first row");
+        let plan = run::foe_plan_v(3, index, 0, Biome::Meadow, 0, run::MAP_VERSION);
+        let flat = run_foes(3, index as u32, 0, 0, None, Some(run::MAP_VERSION));
+        assert_eq!(flat[..2], [i32::from(plan.count), node.formation as i32]);
+    }
+
+    #[test]
     fn run_foes_flattens_the_core_plan() {
         let core = run::run_map(5);
         let (index, _) = core
@@ -121,7 +147,7 @@ mod tests {
             .find(|(_, n)| n.kind == NodeKind::Elite)
             .expect("seed 5 has an elite");
         let plan = run::foe_plan(5, index, 1, Biome::Meadow);
-        let flat = run_foes(5, index as u32, 1, 0, None);
+        let flat = run_foes(5, index as u32, 1, 0, None, None);
         assert_eq!(flat[..3], [i32::from(plan.count), plan.formation as i32, 0]);
         assert_eq!(plan.count, run::FULL_ARMY - 1);
         assert_eq!(flat.len(), 3 + 3 * plan.specials.len());
@@ -133,9 +159,12 @@ mod tests {
 
     #[test]
     fn run_foes_carries_the_biome_and_an_unknown_one_is_the_meadow() {
-        let flat = run_foes(5, 0, 0, 3, None);
+        let flat = run_foes(5, 0, 0, 3, None, None);
         assert_eq!(flat[2], 3);
-        assert_eq!(run_foes(5, 0, 0, 99, None), run_foes(5, 0, 0, 0, None));
+        assert_eq!(
+            run_foes(5, 0, 0, 99, None, None),
+            run_foes(5, 0, 0, 0, None, None)
+        );
         let plan = run::foe_plan(5, 0, 0, Biome::Desert);
         assert_eq!(flat[3..].len(), 3 * plan.specials.len());
     }
@@ -150,10 +179,10 @@ mod tests {
 
     #[test]
     fn the_runes_reach_the_bridge_as_a_secret_room_a_shortcut_mask_and_a_third_exit() {
-        let plain = run_map(3, None);
-        assert_eq!(run_map(3, Some(0)), plain);
+        let plain = run_map(3, None, None);
+        assert_eq!(run_map(3, Some(0), None), plain);
         let core = run::run_map_with(3, RUNE_ROOM | RUNE_SHORTCUT);
-        let flat = run_map(3, Some(RUNE_ROOM | RUNE_SHORTCUT));
+        let flat = run_map(3, Some(RUNE_ROOM | RUNE_SHORTCUT), None);
         assert_eq!(flat.len(), core.len() * NODE_STRIDE);
         let secret = flat.chunks(NODE_STRIDE).filter(|r| r[3] == 8).count();
         assert_eq!(secret, run::ACTS);
@@ -176,9 +205,9 @@ mod tests {
             .enumerate()
             .find(|(_, n)| n.kind == NodeKind::Fight)
             .expect("seed 5 has a fight");
-        let plain = run_foes(5, index as u32, 0, 0, None);
-        assert_eq!(run_foes(5, index as u32, 0, 0, Some(0)), plain);
-        let more = run_foes(5, index as u32, 0, 0, Some(2));
+        let plain = run_foes(5, index as u32, 0, 0, None, None);
+        assert_eq!(run_foes(5, index as u32, 0, 0, Some(0), None), plain);
+        let more = run_foes(5, index as u32, 0, 0, Some(2), None);
         assert_eq!(more.len(), plain.len() + 6);
         assert_eq!(more[..3], plain[..3]);
     }

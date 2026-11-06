@@ -351,6 +351,7 @@ import {
   foePlan,
   left,
   loadRun,
+  MAP_VERSION,
   mapHtml,
   newRun,
   parseMap,
@@ -2783,7 +2784,7 @@ const resumed = await loadLocal();
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 // The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
-const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less, biome, more) => run_foes(state.seed, node, less, biome, more));
+const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less, biome, more) => run_foes(state.seed, node, less, biome, more, state.map));
 // The exits at the end of an act (#1472) and the roster names of their bosses.
 const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from, state.runes);
 const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesFor(map, state), undefined, relicMask(state));
@@ -2792,7 +2793,7 @@ const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
   const boss = actBoss(map, state, boss_ids());
   return boss ? encounterFor(Encounter, boss.id, boss.seed, state.placed, relicMask(state)) : armyEngine(state, map); // an act boss takes the army's build when its rules allow it (#1494)
 };
-const loadSavedRun = () => loadRun(gameStore, (seed, runes) => parseMap(run_map(seed, runes)), runEngine);
+const loadSavedRun = () => loadRun(gameStore, (seed, runes, version) => parseMap(run_map(seed, runes, version)), runEngine);
 const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
@@ -6366,13 +6367,13 @@ let runMore = false; // More is open on the start screen (#1524): shut for each 
 function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
   const runes = readRunes(store); // the runes found in earlier runs open hidden branches on this map (#1476)
-  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store), readAscension(store), runes), 0), parseMap(run_map(seed, runes))); // the Captain until another is picked (#1464)
+  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store), readAscension(store), runes, MAP_VERSION), 0), parseMap(run_map(seed, runes, MAP_VERSION))); // the Captain until another is picked (#1464)
 }
 // The daily run (#1466): the seed of the day for everyone, one try a day (its button is shut once tried), its score kept when it ends.
 function beginDailyRun(): void {
   const day = utcDay(Date.now());
   startDailyTry(store, day);
-  startRun(dailyRun(day, dailySeed(day)), parseMap(run_map(dailySeed(day))));
+  startRun(dailyRun(day, dailySeed(day)), parseMap(run_map(dailySeed(day), 0, MAP_VERSION)));
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
@@ -6834,7 +6835,7 @@ addEventListener('blur', () => openWorld.release()); // no key stays held once t
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
 // shows its summary (#801), what it leaves out taken from a new run, as a save is decoded (no relic before #1457).
 hookHost.__run = async (state: Run) => {
-  if (state.end) return startRun({ ...newRun(state.seed, state.best, LEGACY_UNLOCKED), ...state }, parseMap(run_map(state.seed, state.runes)));
+  if (state.end) return startRun({ ...newRun(state.seed, state.best, LEGACY_UNLOCKED), ...state }, parseMap(run_map(state.seed, state.runes, state.map)));
   await saveRun(gameStore, state);
   resumeRun((await loadSavedRun())!); // the browser checks load valid runs
 };

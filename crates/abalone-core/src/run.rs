@@ -459,6 +459,50 @@ fn foes_of(seed: u64, index: usize, kind: NodeKind) -> (Formation, Option<Elite>
     }
 }
 
+/// Whether two neighbours of a row, whose links are `out`, lead to nodes none of which they share: taking one leaves the other's way behind.
+fn forks(out: &[Vec<usize>]) -> bool {
+    out.windows(2).any(|w| w[0].last() < w[1].first())
+}
+
+/// The pacing of an act of the map of version 1 (#1543): the nodes `nodes` of an act, the first of them at index `first` of the map,
+/// get at most one elite a row (the others fight) and a rest or a shop to go to after every node of the row before the last.
+fn pace(nodes: &mut [Node], seed: u64, first: usize) {
+    let set = |nodes: &mut [Node], i: usize, kind: NodeKind| {
+        let (formation, elite) = foes_of(seed, first + i, kind);
+        nodes[i].kind = kind;
+        nodes[i].formation = formation;
+        nodes[i].elite = elite;
+    };
+    let rows = |nodes: &[Node], row: usize| -> Vec<usize> {
+        (0..nodes.len()).filter(|&i| nodes[i].row == row).collect()
+    };
+    for row in 1..FIGHT_ROWS {
+        let elites: Vec<usize> = rows(nodes, row)
+            .into_iter()
+            .filter(|&i| nodes[i].kind == NodeKind::Elite)
+            .collect();
+        for &i in elites.iter().skip(1) {
+            set(nodes, i, NodeKind::Fight);
+        }
+    }
+    let last = rows(nodes, FIGHT_ROWS - 1);
+    for i in rows(nodes, FIGHT_ROWS - 2) {
+        let ways: Vec<usize> = nodes[i].links.iter().map(|&c| last[c]).collect();
+        if !ways
+            .iter()
+            .any(|&j| matches!(nodes[j].kind, NodeKind::Rest | NodeKind::Shop))
+        {
+            let j = ways[ways.len() - 1];
+            let kind = if mix(seed ^ mix((first + j) as u64 | 7 << 32)).is_multiple_of(2) {
+                NodeKind::Rest
+            } else {
+                NodeKind::Shop
+            };
+            set(nodes, j, kind);
+        }
+    }
+}
+
 /// The map of the run `seed`: act by act, row by row, column ascending. A fight row has 2 to 4
 /// nodes, the boss row one; the fourth act (`FINAL_ACT`) has an elite and its boss.
 pub fn run_map(seed: u64) -> Vec<Node> {
@@ -476,7 +520,6 @@ pub const MAP_VERSION: u8 = 1;
 
 /// `run_map_with` at the generation `version` of the map: the version a run was dealt is saved with it, so a run in progress keeps its nodes.
 pub fn run_map_v(seed: u64, runes: u8, version: u8) -> Vec<Node> {
-    let _ = version;
     let mut state = seed;
     let mut map = Vec::new();
     for act in 0..ACTS {
@@ -484,13 +527,22 @@ pub fn run_map_v(seed: u64, runes: u8, version: u8) -> Vec<Node> {
             .map(|_| 2 + (draw(&mut state) % 3) as usize)
             .collect();
         widths.push(1);
-        for row in 0..=FIGHT_ROWS {
-            let out = match widths.get(row + 1) {
+        let mut outs: Vec<Vec<Vec<usize>>> = (0..=FIGHT_ROWS)
+            .map(|row| match widths.get(row + 1) {
                 Some(&next) => links(widths[row], next, &mut state),
                 None => vec![Vec::new()],
-            };
-            let first = map.len();
-            map.extend(out.into_iter().enumerate().map(|(col, links)| {
+            })
+            .collect();
+        if version >= 1 && !(0..FIGHT_ROWS - 1).any(|r| forks(&outs[r])) {
+            let mut own = mix(seed ^ mix(act as u64 | 6 << 32));
+            while !forks(&outs[0]) {
+                outs[0] = links(widths[0], widths[1], &mut own);
+            }
+        }
+        let mut nodes = Vec::new();
+        for (row, out) in outs.into_iter().enumerate() {
+            let first = map.len() + nodes.len();
+            nodes.extend(out.into_iter().enumerate().map(|(col, links)| {
                 let kind = kind(seed, first + col, row);
                 let (formation, elite) = foes_of(seed, first + col, kind);
                 Node {
@@ -505,6 +557,10 @@ pub fn run_map_v(seed: u64, runes: u8, version: u8) -> Vec<Node> {
                 }
             }));
         }
+        if version >= 1 {
+            pace(&mut nodes, seed, map.len());
+        }
+        map.extend(nodes);
     }
     for (row, kind) in [NodeKind::Elite, NodeKind::Boss].into_iter().enumerate() {
         let (formation, elite) = foes_of(seed, map.len(), kind);
@@ -821,8 +877,7 @@ pub fn foe_plan_v(
     more: u8,
     version: u8,
 ) -> FoePlan {
-    let _ = version;
-    let map = run_map(seed);
+    let map = run_map_v(seed, 0, version);
     let Some(node) = map.get(index).filter(|n| {
         matches!(
             n.kind,

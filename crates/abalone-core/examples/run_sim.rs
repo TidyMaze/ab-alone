@@ -7,13 +7,15 @@
 //! every cell), `RUN_SIM_LEVELS=0,5,10` the ascension levels, `RUN_SIM_THREADS` the runs played at once,
 //! `RUN_SIM_BOSS_X=3` the player's search in a boss fight as a multiple of the boss's own budget (the ladder's 10 is
 //! the pro level, too slow to play a table), `RUN_SIM_PERCENTS=50,120,200` the strength of the act bosses to try in place of `ACT_PERCENT`,
-//! `RUN_SIM_JSONL=<file>` one JSON line per run, `RUN_SIM_POOL=1` to play every act's boss for every seed, whatever the
+//! `RUN_SIM_MAP=0` the map of the runs saved before the pacing (#1543) in place of the current one, `RUN_SIM_JSONL=<file>` one JSON line per run, `RUN_SIM_POOL=1` to play every act's boss for every seed, whatever the
 //! run before it did, and print how many it won per act (the tuning sample). Arguments are the commanders to play, by index (0 to 3), none
 //! for all four. The progress goes to stderr.
 
 use abalone_core::encounter::ladder::{play_act_boss, LadderBoss, PLY_CAP};
 use abalone_core::encounter::telemetry::AttemptResult;
-use abalone_core::run::{exits, run_map, Node, NodeKind, Relic, ACTS, FULL_ARMY, MIN_ARMY};
+use abalone_core::run::{
+    exits, run_map_v, Node, NodeKind, Relic, ACTS, FULL_ARMY, MAP_VERSION, MIN_ARMY,
+};
 use abalone_core::world::Biome;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -116,7 +118,7 @@ fn choices(map: &[Node], at: Option<usize>) -> Vec<usize> {
 /// docs/specs/roguelite.md section 30.
 fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
     let relic = COMMANDERS[c].1;
-    let map = run_map(seed);
+    let map = run_map_v(seed, 0, map_version());
     let rest_to = FULL_ARMY - 2 * u8::from(level >= 2);
     let mut army = FULL_ARMY - 2 * u8::from(level >= 6);
     let biomes = biomes(seed);
@@ -217,7 +219,7 @@ fn parallel<T: Send>(n: usize, threads: u32, f: impl Fn(usize) -> T + Sync) -> V
 fn pool(set: &Settings, runs: u64, threads: u32) {
     let fights = parallel(runs as usize * ACTS, threads, |j| {
         let (seed, act) = ((j / ACTS) as u64, j % ACTS);
-        let map = run_map(seed);
+        let map = run_map_v(seed, 0, map_version());
         let i = map
             .iter()
             .position(|n| n.kind == NodeKind::Boss && n.act == act)
@@ -247,6 +249,13 @@ fn pool(set: &Settings, runs: u64, threads: u32) {
             lost.join(", ")
         );
     }
+}
+
+/// The generation of the map the runs are dealt: the current one, or `RUN_SIM_MAP=0` for the map of before the pacing (#1543).
+fn map_version() -> u8 {
+    std::env::var("RUN_SIM_MAP").map_or(MAP_VERSION, |v| {
+        v.parse().expect("RUN_SIM_MAP is a map version")
+    })
 }
 
 fn main() {
