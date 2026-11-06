@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { Discovered, SIGHT } from '../../client/src/openworlddiscovered';
 import { Hero, World } from '../../client/src/openworld';
 import { FightState } from '../../client/src/openworldfight';
+import { RECRUIT_MAX, recruitCell } from '../../client/src/openworldrecruit';
 import { decodeWorld, RECORD, worldSaves } from '../../client/src/openworldsave';
 import { memoryStore } from '../../client/src/savegame';
 import { endingLine } from '../../client/src/tally';
@@ -389,6 +390,8 @@ describe('the troop herds a foe to the water, as the client does (#1506)', () =>
         hero.at = at!;
         hero.troop = troop;
         if (played.push.enemies.length > 0) herded++;
+        const cell = played.push.ejected.length > 0 ? recruitCell(hero.at, hero.troop, hero.troop.length - 15, ([q, r]) => [1, 2, 3].includes(terrainOf(w, q, r)) && !fight.occupied(w, q, r)) : null;
+        if (cell) hero.troop = [...hero.troop, cell]; // the mode's recruit (#1531)
       }
       const mcp = value(open.step({ direction: d })).state;
       expect(mcp.hero).toBe(`(${hero.at[0]},${hero.at[1]})`);
@@ -399,6 +402,57 @@ describe('the troop herds a foe to the water, as the client does (#1506)', () =>
     expect(herded).toBeGreaterThanOrEqual(2); // the foe was pushed along the sand before it fell
     expect(fight.beaten).toBe(1);
     expect(value(open.state({ radius: 8 })).enemies).toEqual([]);
+    expect(value(open.state({})).recruits).toBe(1);
+  });
+});
+
+/** The terrain code of a cell of the client's world `w`, `-1` off it. */
+function terrainOf(w: World, q: number, r: number): number {
+  const terrain = w.tile(q, r)?.terrain;
+  return terrain === undefined ? -1 : ['water', 'sand', 'grass', 'rock'].indexOf(terrain);
+}
+
+// A marble a push ejects joins the troop (#1531, docs/specs/openworld.md section 16): the rule of client/src/openworldrecruit.ts.
+describe('a recruit', () => {
+  // Seed 1: the hero on (11,-29) steps NW to (11,-30); the foe on (12,-30) has water behind it, and the lone hero shoves it in.
+  const rules = { ...worldRules(), world_enemies: (_seed: number, cx: number, cy: number) => (cx === 0 && cy === -2 ? Int32Array.of(12, -30) : new Int32Array()) };
+  const resume = (recruits?: number): OpenWorld => {
+    const open = new OpenWorld(rules, bossIds);
+    value(open.newWorld({ seed: 1 }));
+    const save = value(open.save());
+    value(open.newWorld({ save: { ...save, hero: [11, -29], troop: [], ...(recruits === undefined ? {} : { recruits }) } }));
+    return open;
+  };
+
+  test('a push that ejects a marble brings one, told in the push and in the state, saved in the record 7', () => {
+    const open = resume();
+    const stepped = value(open.step({ direction: 'NW' }));
+    expect(stepped.push?.ejected).toHaveLength(1);
+    expect(stepped.push?.recruit).toMatch(/^\(-?\d+,-?\d+\)$/);
+    expect(stepped.state.recruits).toBe(1);
+    expect(stepped.state.troop).toEqual([stepped.push!.recruit]);
+    const save = value(open.save());
+    expect(save.record).toBe(RECORD);
+    expect(save.recruits).toBe(1);
+    expect(save.troop).toHaveLength(1);
+  });
+
+  test('past the cap the marble is ejected and nothing joins; a save of the client resumes with its recruits', () => {
+    const open = resume(RECRUIT_MAX);
+    const stepped = value(open.step({ direction: 'NW' }));
+    expect(stepped.push?.ejected).toHaveLength(1);
+    expect(stepped.push?.recruit).toBeNull();
+    expect(stepped.state.recruits).toBe(RECRUIT_MAX);
+    expect(value(open.save()).recruits).toBe(RECRUIT_MAX);
+  });
+
+  test('a push that ejects nothing recruits nothing, and a save from before the recruits resumes with none', () => {
+    const open = world();
+    value(open.newWorld({ seed: 1 }));
+    expect(value(open.state({})).recruits).toBe(0);
+    const old = value(open.save());
+    const { recruits: _recruits, ...before } = old;
+    expect(value(world().newWorld({ save: { ...before, record: 6 } })).recruits).toBe(0);
   });
 });
 

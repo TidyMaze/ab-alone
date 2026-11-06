@@ -5,6 +5,7 @@ import type { Axial } from './board';
 import { indexedDbStore } from './idb';
 import { FightState } from './openworldfight';
 import { Discovered, type DiscoveredSave } from './openworlddiscovered';
+import { RECRUIT_MAX } from './openworldrecruit';
 import { worldSaves } from './openworldsave';
 import { memoryStore, type KeyStore } from './savegame';
 
@@ -47,7 +48,7 @@ describe('the save of the camera yaw (#1026)', () => {
 
   it('discards a record of a record version this build does not know, a later one', async () => {
     const store = memoryStore();
-    store.data.set('openworld:7', { ...record(7), record: 7, yaw: 0 });
+    store.data.set('openworld:7', { ...record(7), record: 8, yaw: 0 });
     expect(await worldSaves(store, 1).load(7)).toBeNull();
     expect(store.data.has('openworld:7')).toBe(false);
   });
@@ -270,12 +271,69 @@ describe('the save of the lore logs found (#1589)', () => {
   });
 });
 
+describe('the save of the recruits (#1531)', () => {
+  const crowd = (n: number): Axial[] => Array.from({ length: n }, (_, i): Axial => [i, 0]);
+  const v6 = { ...record(7), record: 6, yaw: 0, lairs: [], discovered: [], time: 0, logs: [] };
+
+  it('saves the recruits with the world and loads them back, the troop holding the fifteen and the recruits', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, crowd(17), new FightState(), 0, [], [], [], 0, [], 2);
+    const back = (await saves.load(7))!;
+    expect(back.recruits).toBe(2);
+    expect(back.troop).toHaveLength(17);
+  });
+
+  it('loads a record of the record version 6 or before, saved before the recruits, as none: old saves still load', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', v6);
+    expect((await worldSaves(store, 1).load(7))!.recruits).toBe(0);
+    store.data.set('openworld:7', record(7));
+    expect((await worldSaves(store, 1).load(7))!.recruits).toBe(0);
+  });
+
+  it('discards a record of this record version whose recruits are not a whole number up to the cap, or whose troop is longer than 15 and them', async () => {
+    const bad: [unknown, Axial[]][] = [['x', crowd(2)], [undefined, crowd(2)], [-1, crowd(2)], [1.5, crowd(2)], [RECRUIT_MAX + 1, crowd(2)], [0, crowd(16)], [2, crowd(18)]];
+    for (const [recruits, troop] of bad) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...v6, record: 7, recruits, troop });
+      expect(await worldSaves(store, 1).load(7), String(recruits)).toBeNull();
+      expect(store.data.has('openworld:7')).toBe(false);
+    }
+  });
+
+  it('keeps a troop of fifteen and the cap as the most a world holds, and a record of version 6 to the fifteen it always held', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', { ...v6, record: 7, recruits: RECRUIT_MAX, troop: crowd(15 + RECRUIT_MAX) });
+    expect((await worldSaves(store, 1).load(7))!.troop).toHaveLength(15 + RECRUIT_MAX);
+    store.data.set('openworld:7', { ...v6, troop: crowd(16) });
+    expect(await worldSaves(store, 1).load(7)).toBeNull();
+  });
+
+  it('beat and beatMarble keep the recruits, and on a record of version 6 write a record that still loads', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, crowd(16), new FightState(), 0, [], [], [], 0, [], 1);
+    await saves.beat(7, 2);
+    await saves.beatMarble(7, [5, 5]);
+    const back = (await saves.load(7))!;
+    expect(back.recruits).toBe(1);
+    expect(back.troop).toHaveLength(16);
+    for (const act of [(s: ReturnType<typeof worldSaves>) => s.beat(7, 3), (s: ReturnType<typeof worldSaves>) => s.beatMarble(7, [5, 5])]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', v6);
+      await act(worldSaves(store, 1));
+      const after = await worldSaves(store, 1).load(7);
+      expect(after, 'a record 6 stays loadable after it is touched').not.toBeNull();
+      expect(after!.recruits).toBe(0);
+    }
+  });
+});
+
 describe('worldSaves', () => {
   it('saves a world under its seed and loads it back with its hero, troop and fight', async () => {
     const saves = worldSaves(memoryStore(), 1);
     expect(await saves.put(7, hero, troop, fightWithPush(), 0)).toBe(true);
     const back = await saves.load(7);
-    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], time: 0, logs: [], savedAt: expect.any(Number) });
+    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], time: 0, logs: [], recruits: 0, savedAt: expect.any(Number) });
     expect(back!.fight.beaten).toBe(1);
   });
 
