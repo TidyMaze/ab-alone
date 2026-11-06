@@ -47,3 +47,39 @@ test('the fade really plays when the Open world is entered by its button (#1099)
   await expect(page.locator('#openworld-hud')).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as any).__started)).toContain('screen-in-world');
 });
+
+// #1562, motion.md story 11: the new screen is live and a dim over it lifts in about 120 ms. Read on the frames: opaque at the first, gone by the 120 ms.
+test('the screen exit is a dim that starts opaque and lifts in about 120 ms, the new screen live under it (#1562)', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
+  const frames = await page.evaluate(
+    () =>
+      new Promise<{ t: number; o: number; live: boolean }[]>((done) => {
+        const out: { t: number; o: number; live: boolean }[] = [];
+        document.getElementById('ship')!.click();
+        const t0 = performance.now();
+        const tick = (): void => {
+          const layer = document.getElementById('screen-exit');
+          const o = layer ? Number(getComputedStyle(layer).opacity) : 0;
+          out.push({ t: performance.now() - t0, o, live: document.body.dataset.hub !== undefined });
+          if (performance.now() - t0 < 300) requestAnimationFrame(tick);
+          else done(out);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  expect(frames[0]!.live).toBe(true); // the Hub took the page in the click, before any fade
+  const first = frames.find((f) => f.o > 0)!;
+  expect(first.o).toBeGreaterThan(0.5); // starts nearly opaque
+  const sorted = frames.filter((f) => f.t >= first.t);
+  expect(sorted.at(-1)!.o).toBe(0); // clear at the end
+  const last = sorted.filter((f) => f.o > 0).at(-1)!;
+  expect(last.t - first.t).toBeLessThan(220); // about 120 ms, with room for a slow frame on CI
+});
+
+test('the screen exit is cut under reduced motion (#1562)', async ({ page }) => {
+  await ready(page, true);
+  await page.evaluate(() => document.getElementById('ship')!.click());
+  await page.waitForTimeout(100);
+  expect(await page.locator('#screen-exit').count()).toBe(0);
+});

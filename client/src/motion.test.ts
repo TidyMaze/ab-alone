@@ -176,3 +176,19 @@ describe('the transition of a place (#1519)', () => {
     expect(block).not.toMatch(/\[data-motion='cut'\][^{]*\.pt-title/);
   });
 });
+
+describe('exit of a screen (#1562)', () => {
+  const block = css.match(/\/\* Exit of a screen \(#1562[^]*?\n\n/)![0];
+
+  it('lifts a dim over the new screen, opaque at the start, with two keyframe names so each change replays', () => {
+    expect(block).toMatch(/#screen-exit\[data-flip='a'\] \{[^}]*animation: screen-out-a 120ms var\(--ease-out\)/);
+    expect(block).toMatch(/#screen-exit\[data-flip='b'\] \{[^}]*animation: screen-out-b 120ms/);
+    expect(block).toMatch(/@keyframes screen-out-a \{ from \{ opacity: 1; \} \}/);
+    expect(block).toMatch(/@keyframes screen-out-b \{ from \{ opacity: 1; \} \}/);
+  });
+
+  it('takes no press, rests clear, and gives way to the transition of a place', () => {
+    expect(block).toMatch(/#screen-exit \{[^}]*pointer-events: none[^}]*opacity: 0/);
+    expect(block).toMatch(/body\[data-place-transition\] #screen-exit \{ display: none; \}/);
+  });
+});
