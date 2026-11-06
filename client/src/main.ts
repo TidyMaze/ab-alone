@@ -401,7 +401,7 @@ import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } fr
 import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 import './ui.css';
 
-import { BONE, COLORS, FRAME_LOOK, SceneRenderer } from './scene';
+import { BONE, clearDrawn, COLORS, FRAME_LOOK, SceneRenderer } from './scene';
 import { visibleCells } from './stalker';
 const BOT_SIDE = 2; // the human plays side 1 (the glass), the bot plays side 2
 declare const __BUILD__: string; // the commit, set by vite.config.ts
@@ -524,6 +524,11 @@ const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Mate
 // The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
 // build) and in a dev build, so the room specs and its code live on. A production page ignores it.
 const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
+const WILD_KEY = 'ab-alone.wild'; // the world of a wild fight under way, so a reload puts the player back in it
+const openWorldParam = (new URLSearchParams(location.search).get('openworld') ?? '').trim();
+// A page that opens in the Open world (a link with ?openworld, or a reload during a wild fight, #1511) asks for the files of the board, the
+// bay and the terrace (620 KB), when the world is left for a fight or the ship (loadBoard, #1520); any other page asks at the load.
+const bootsInWorld = openWorldParam !== '' || Boolean(read(store, WILD_KEY));
 // Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
@@ -567,7 +572,9 @@ const loader = new KTX2Loader().detectSupport(renderer);
 // The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
 // as soon as the scene is. mountBay takes them when the scene exists. The terrace draws no bay, its walls, grates and deck maps
 // are the room's: they are asked for under `?scene=room` only (#1370).
-const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, keepRoom ? loader : null, hasNormalMaps(tier));
+let bayRequest: ReturnType<typeof loadSpaceshipBay> | undefined;
+const bayLoad = (): ReturnType<typeof loadSpaceshipBay> => (bayRequest ??= loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, keepRoom ? loader : null, hasNormalMaps(tier)));
+if (!bootsInWorld) bayLoad();
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   if (!loadsTexture(tonal ? 'tonal' : 'pbr', name, keepRoom)) return null; // the terrace draws no board or plate (#1370)
   if (/-normal\.ktx2$/.test(name) && !hasNormalMaps(tier)) return null; // the low tier fetches and draws no normal map (#849)
@@ -2631,15 +2638,19 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   if (currentBay) {
     document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)
   }
-  const plate = document.getElementById('loading')!; // the loading plate (#901): fades, then leaves, a missing bay too
+  hidePlate();
+};
+/** The loading plate (#901) fades, then leaves: with the bay, a missing bay too, or with the first frame of a world that opened the page (#1520). */
+function hidePlate(): void {
+  const plate = document.getElementById('loading')!;
+  if (plate.hidden) return; // the world calls it at every frame
   if (navigator.webdriver) plate.hidden = true; // a check waiting on data-bay never sees the plate fade
-  else if (!plate.hidden) {
+  else {
     plate.classList.add('done');
     setTimeout(() => (plate.hidden = true), 400);
   }
-};
+}
 hookHost.__mountBay = mountBay;drawProps();
-void bayLoad.then(mountBay);
 
 let frame: FrameShape | null = null;
 function drawFrame(board: ArrayLike<number>): void {
@@ -2668,7 +2679,7 @@ function drawTally(): void {
   const lost = [engine.ejected(2), engine.ejected(1)] as const; // a side loses what the other ejects
   const slots = tallySlots(lost);
   tallies.forEach((group, s) => {
-    group.clear();
+    clearDrawn(group);
     for (const m of tallyRow(frame!, s === 0 ? 1 : 2, slots[s]!)) {
       for (const geometry of m.marked ? [grooveGeometry, scratchGeometry] : [grooveGeometry]) {
         const mesh = new THREE.Mesh(geometry, geometry === grooveGeometry ? grooveMaterial : scratchMaterial);
@@ -4030,7 +4041,18 @@ function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
   mesh.position.y = y - TERRACE_LIFT; // the marbles' group stands 0.11 higher on the terrace
 }
 const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
-void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual'), terraceFile('slab-hub'), terraceFile('slab-royale')])
+let boardRequested = false;
+/** The board shows next: a page that opened in the world asks for its files now (#1520), and the canvas stays veiled until the terrace is drawn: not the room, not a blank board. */
+function needBoard(): void {
+  loadBoard();
+  if (!terraceReady) veilCanvas();
+}
+/** Asks for the files of the board once: the bay of the room and the terrace. At the load, or for a page that opened in the Open world, when it is left (#1520). */
+function loadBoard(): void {
+  if (boardRequested) return;
+  boardRequested = true;
+  void bayLoad().then(mountBay);
+  void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual'), terraceFile('slab-hub'), terraceFile('slab-royale')])
   .then(([arena, kit, hint, props, ballast, dual, hubDeck, royaleSlab]) => {
     const drawn = mergeByMaterial(arena.scene, true, neonLook); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
@@ -4070,6 +4092,8 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
     terraceReady = true;
     refresh();
   });
+}
+if (!bootsInWorld) loadBoard();
 // The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
 // clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
 const terraceShell = new THREE.MeshPhysicalMaterial({ color: neonLook ? NEON.blackMarble : 0x0a0c0f, roughness: 0.3, metalness: 0, specularIntensity: 0.12, envMapIntensity: 6 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
@@ -5597,7 +5621,6 @@ addEventListener('pointerdown', (e) => {
 // The wild fight (#1511, docs/specs/openworld.md section 3c): a wandering marble of the Open world that touches the hero starts the normal
 // Abalone fight against a modest bot (WILD_NODES), on the arena board of the hour it was met at. After the wipe the world is left, saved with the
 // hero where it stands. Flee, a loss and a reload put the hero back there; a win takes the marble out of the world, saved as a marble the troop ejected.
-const WILD_KEY = 'ab-alone.wild'; // the world of a wild fight under way, so a reload puts the player back in it
 /** Marks, or unmarks, that a wild fight is under way. */
 function wildMarked(on: boolean, seed = 0): void {
   write(store, WILD_KEY, on ? String(seed) : '');
@@ -5819,6 +5842,7 @@ backButton.addEventListener('click', () => {
 // The Open world opens over the page instead (#1063): Esc gives the game beneath back as it was, and the next mode leaves it.
 function leaveMode(): void {
   dropFirstRun();
+  needBoard(); // a lair, a town or a gate has left the world already: the board is what shows next
   if (openWorld.active) openWorld.leave();
   leaveRun();
   leaveTrainer();
@@ -6628,7 +6652,6 @@ hookHost.__board = () => Array.from(engine.board());
 // is on. Its entry is in the mode menu for everyone (#1000). ?openworld=<seed> fixes the seed, ?openworld=new starts a fresh
 // random world; else a click resumes the last world played when it has a save (#968), or rolls a new seed.
 const openWorldButton = document.getElementById('openworld') as HTMLButtonElement;
-const openWorldParam = (new URLSearchParams(location.search).get('openworld') ?? '').trim();
 // #1361, owner's choice: for now a player cannot change the seed, everybody plays together in the public world. The seed of the
 // URL is read only under automation (navigator.webdriver), so the e2e specs and test hooks keep their private worlds.
 const openWorldFresh = navigator.webdriver && openWorldParam === 'new';
@@ -6747,6 +6770,7 @@ function lairCells(seed: number): Axial[] {
 openWorld.peers = peersHost;
 const wildWipe = document.getElementById('wild-wipe')!;
 openWorld.onWild = (seed, home) => {
+  loadBoard(); // as the wipe closes, half a second before the fight starts (#1520)
   const phase = openWorld.phase; // the hour the marble was met at dresses the arena
   wipe(wildWipe, reducedMotion(), () => startWild({ seed, home, phase }));
 };
@@ -6815,6 +6839,7 @@ addEventListener('keydown', (e) => {
   if (!openWorld.active || e.target instanceof HTMLInputElement || (e.key === 'Escape' && sheetOpen) || !openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
   if (openWorld.active) return;
+  needBoard(); // Escape left the world
   dirty = CHANGE_DRAWS; // left: the board draws again
   drawAsked = true;
   refresh();
@@ -7386,10 +7411,7 @@ refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 // Until the terrace is drawn the room would show (#1389): the canvas stays hidden on a plain dark page, and shows after a terrace frame.
-if (!keepRoom) {
-  renderer.domElement.style.opacity = '0'; // not `visibility`: a hidden canvas takes no click, and a first tap would be lost
-  document.body.dataset.veil = 'on';
-}
+veilCanvas();
 document.body.appendChild(renderer.domElement);
 if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed); // a Stalker fight comes back under its fog (#1122)
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
@@ -7422,6 +7444,12 @@ function moving(): boolean {
   );
 }
 
+/** Hides the canvas on a plain dark page until a frame that is not the room's is drawn, unless the room is asked for (#1389). */
+function veilCanvas(): void {
+  if (keepRoom) return;
+  renderer.domElement.style.opacity = '0'; // not `visibility`: a hidden canvas takes no click, and a first tap would be lost
+  document.body.dataset.veil = 'on';
+}
 /** Shows the canvas: called after a frame that is not the room's (#1389), the terrace, its plain background, or the Open world. */
 function unveil(): void {
   renderer.domElement.style.opacity = '';
@@ -7439,10 +7467,12 @@ renderer.setAnimationLoop((now) => {
       driveSkyGlow(scene, accentOn(tier, software));
       driveAccents(scene.children.filter((o): o is THREE.PointLight => o.name === 'neon accent'), accentOn(tier, software), now, reducedMotion());
       renderer.info.reset();
+      if (!sceneRenderer.terraceOn) sceneRenderer.setWorldTone(neonLook); // a page that opened in the world has no terrace to set them (#1520)
       sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
       renderer.render(scene, camera);
     }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
     unveil();
+    hidePlate(); // a page that opened in the world has no bay to wait for (#1520)
     if (software && !navigator.webdriver) adaptResolution(now); // the Open world steps its resolution down on a software renderer only (#1483)
     if (fpsOn) {
       // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.

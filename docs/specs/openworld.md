@@ -715,3 +715,46 @@ section 10.
   ejection, none past the cap or with no free cell, the plate line, the save and its reload, `openworldmoderecruit.test.ts`), the record 7 and the
   older records (`openworldsave.test.ts`), the pad in the network (`openworldmodepads.test.ts`). MCP: the recruit and the pad, the schema of the save.
   E2E (`openworld-gains.spec.ts`): a recruit joins on a shove and a pad stands by a beaten tower, on a desktop and a phone, each under 15 s.
+
+## 17. Budget: the world as the first screen (#1520, Decision #1513)
+
+The world is where a new player lands, so its load, its memory and the switch to a fight are budgeted like the frame of `tech.md` section 5.5 (under 150 draw
+calls). One fixed script measures them: `bun run e2e:budget` (`client/e2e/world-budget.spec.ts`, tag `@budget`). It is a report by hand, not a gate, like the contrast
+report (`e2e:contrast`): five fresh pages on `?openworld=3` (a marble stands within sight of the spawn), each loads the world, waits 1.5 s, reads `window.__renderCost`
+(`renderer.info` of one frame), collects the garbage with the DevTools collector (`HeapProfiler.collectGarbage`, twice, no `--expose-gc`) and reads the JS heap, puts the hero
+beside the marble (a wild fight, section 3c), waits for the arena, Flees, collects and reads the heap, and does it a second time. The longest task is the longest `longtask`
+entry of the page. The last test prints the median and the range of the five runs. Run on a loaded machine the long tasks grow by a quarter or more: the numbers below
+are of a quiet moment (load average 4 on 10 cores), Chromium on the GPU of an Apple M4 at 1280x720, local build of the e2e mode.
+
+| Measure | Median (range of 5) | Budget |
+|---|---|---|
+| Triangles in one frame | 712 511 (712 491 to 712 511) | 750 000 |
+| Draw calls in one frame | 40 (40 to 40) | 45 |
+| JS heap after load, collected | 16.3 MB (16.2 to 16.3) | 20 MB |
+| Longest task, load to the first world frame and 1.5 s after | 309 ms (305 to 353) | 500 ms |
+| Longest task, touch of a marble to its arena and 1.5 s after | 84 ms (83 to 98) | 200 ms |
+| Same, a second fight of the page | 0 ms (0 to 0) | 200 ms |
+| JS heap after the first fight, back in the world, collected, against before it | +9.8 MB (+9.7 to +9.9) | +12 MB |
+| Growth of that heap for each further round trip (fight and Flee) | +0.8 MB (+0.8 to +0.9) | 1 MB |
+
+- **What the first fight adds.** A page that opens in the world has not asked for the files of the board, so the first fight loads them: the bay of the room and the
+  terrace, 622 KB over 9 files. That is 5.6 MB of the +9.8 MB (the heap after load fell from 21.9 to 16.3 MB): the heap after the first fight, 26.0 MB, is the heap the board always had after a fight; it moved from the load
+  (21.9 MB before this section) to the first fight. The rest of the margin is the arena's own state (its marbles, materials and shader programs).
+- **No ship file at the entry.** `?openworld=<seed>` (and a reload during a wild fight, section 3c, which comes back to the world) fetches none of `spaceship-bay.glb`, `arena.glb`,
+  `kit-*.glb` and `slab-*.glb`: it asks for the world's models (`openworld*.glb`) only, and the Loading plate (`#loading`) leaves with the first world frame instead of with the
+  bay. `loadBoard()` of `main.ts` asks for the nine files once: at the load of any other page, as the wipe of a wild fight closes (`openWorld.onWild`, half a second before the arena opens),
+  and as the board is shown next by any other way (a lair, a town, a gate, the Modes menu: `leaveMode`; Escape in the world: its key handler), through `needBoard()`. When a page leaves the world before the terrace is in, the canvas stays veiled (`body[data-veil]`) until the terrace is drawn: the room never shows, and a blank board never does. A fight looks as before (checked at 960x540: the same arena, 61 dishes, the same frame), and so does the world: a world frame of a page that opened in it is pixel for pixel the one
+  it was (default look and neon, reduced motion, time of day 1000 ms). The renderer's tone mapping (AgX, none in the neon look) and its exposure used to reach the world from the terrace, which was in first; a page that
+  opens in the world sets them itself (`SceneRenderer.setWorldTone`) until the terrace does (the 32:9 edge check of `openworld.spec.ts` read the difference on the software renderer).
+  The Mess deck's maps (`deck-mess*.ktx2`, `deck-albedo`, `deck-roughness`, `crack-decal`, 90 KB) are still fetched at the load: the board's materials are made with them at the top
+  of the page, a change of its own.
+- **World to fight.** No long task over 200 ms: the longest, with the files loaded on the way, is 84 ms, the same as with them loaded in advance (89 ms), so no shader pre-warming
+  was needed. The 309 ms of the entry is the page's own first draw (the wasm of the engine, the world's first chunks, the shaders) and is a budget, not a target of this section.
+- **Leaks found and fixed.** A round trip from the world to a fight and back used to leave 4 GPU textures (the sun's shadow map and the nodes of the lights of each world entered,
+  `OpenWorldView.dispose` now disposes its lights) and 12 render objects (the notches and tally marks the board redraws: each mesh taken out of the scene kept its render object, and the
+  scene through it, until `clearDrawn` of `scene.ts` disposes it). The heap grew by 1.5 MB for each round trip before, 0.8 MB now.
+- **Leak left.** The 0.8 MB left for each round trip is held by the renderer's own full-screen pass (its `RenderObject`s keep the node builder, and through it the scene of the world left); it
+  is three.js's, not a mesh of the game, and its fix needs a look of its own: it is a follow-up of this section.
+- **Tests.** Client: the files fetched at the load, by a world page, a wild fight's reload, the wipe and the ship (`main.boardload.test.ts`), the lights and the marks freed
+  (`openworldview.test.ts`, `scene.test.ts`, `main.board.test.ts`). E2E: the network log of `?openworld=7`, of a wild fight and of a page that does not open in the world
+  (`openworld-assets.spec.ts`); the budget by hand (`world-budget.spec.ts`).

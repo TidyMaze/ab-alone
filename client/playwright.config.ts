@@ -74,8 +74,9 @@ export default defineConfig({
     {
       name: 'chromium',
       // The contrast checks (tag @contrast) are a report for the art director, not a gate: `bun run e2e:contrast` runs them (#1383).
+      // The Open world budget (tag @budget, #1520) is a report too: `bun run e2e:budget` runs it.
       // The frame-time check (bug #777) runs alone in chromium-serial below: under the other workers' load it drops frames (#1391).
-      grepInvert: [...(process.env.E2E_CONTRAST ? [] : [/@contrast/]), /bug #777/],
+      grepInvert: [...(process.env.E2E_CONTRAST ? [] : [/@contrast/]), ...(process.env.E2E_BUDGET ? [] : [/@budget/]), /bug #777/],
       use: chromiumUse,
     },
     {

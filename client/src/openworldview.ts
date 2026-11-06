@@ -1539,6 +1539,7 @@ export class OpenWorldView {
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {
+      if ((object as THREE.Light).isLight) object.dispose(); // the sun's shadow map and the node of each light: a world left leaves no texture behind (#1520)
       if (!(object as THREE.Mesh).isMesh) return;
       geometries.add((object as THREE.Mesh).geometry);
       materials.add((object as THREE.Mesh).material as THREE.Material);

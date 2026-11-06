@@ -127,6 +127,13 @@ class DrawnScene extends THREE.Scene {
   }
 }
 
+/** Empties a group of marks the game redraws. A mesh taken out of the scene keeps the renderer's record of it, and the scene through it, until it is
+ * disposed: its shared geometry and material are never freed, so the mesh is, or each redraw leaves its marks behind (#1520). */
+export function clearDrawn(group: THREE.Group): void {
+  for (const mesh of group.children) mesh.dispose();
+  group.clear();
+}
+
 export class SceneRenderer {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
@@ -448,7 +455,7 @@ export class SceneRenderer {
   }
 
   drawNotches(row: NotchRow | null): void {
-    this.notches.clear();
+    clearDrawn(this.notches);
     if (!row) return;
 
     const add = (geometry: THREE.BufferGeometry, material: THREE.Material, p: Point, y: number): void => {
@@ -513,6 +520,13 @@ export class SceneRenderer {
     this.camera.updateProjectionMatrix();
     this.setShadows(on && shadows);
     if (on && this.boardLook && !this.neon) this.applyBoardLook(this.boardLook); // a lair fight asked for its look before the terrace was in (#1496)
+  }
+
+  /** The tone mapping and the exposure the Open world is drawn with: the terrace's (none in the neon look), which the world took from the renderer when the terrace was in
+   * first. A page that opens in the world has no terrace yet (#1520). */
+  setWorldTone(neon: boolean): void {
+    this.renderer.toneMapping = neon ? THREE.NoToneMapping : THREE.AgXToneMapping;
+    this.renderer.toneMappingExposure = neon ? NEON_LIGHT.exposure : TERRACE_EXPOSURE;
   }
 
   /** The neon look (#1424, `?look=neon`): black sky with fine stars, a cold sun, ACES, in place of the terrace's own light. Asked once, after `setTerrace`. */
