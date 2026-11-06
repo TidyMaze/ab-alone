@@ -140,6 +140,40 @@ for (const { name, viewport, touch } of sizes) {
   });
 }
 
+test('a lair fight with a ply played asks for a second press, labelled Sure?, as New game does; Back asks nothing, #1517', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await expect(body(page)).toHaveAttribute('data-openworld-at', '0,0');
+  const [q, r] = await cellOf(page, 'tower');
+  await page.evaluate(([q, r]) => (window as unknown as Hooks).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] }), [q!, r!]);
+  await page.keyboard.press('ArrowRight');
+  await expect(body(page)).toHaveAttribute('data-boss', /.+/);
+  await page.mouse.click(5, 5); // a press skips the transition of the place to its end (#1519)
+  await firstSlot(page).click(); // no ply played: nothing to lose, the first press leaves at once
+  await expect(body(page)).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
+  await page.keyboard.press('ArrowRight'); // back onto the tower
+  await expect(body(page)).toHaveAttribute('data-boss', /.+/);
+  await page.mouse.click(5, 5);
+  const click = (a: number, b: number) => page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [a, b]);
+  await click(0, 2);
+  await click(0, 1); // the Echo's board, Black up one
+  await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBeGreaterThan(0);
+  await firstSlot(page).click();
+  await expect(firstSlot(page)).toHaveAttribute('data-label', 'Sure?');
+  await expect(firstSlot(page)).toHaveClass(/confirm/);
+  await expect(body(page)).toHaveAttribute('data-boss', /.+/); // the fight is still there
+  await firstSlot(page).click();
+  await expect(body(page)).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
+  await exitIs(page, 'Hub');
+  await page.keyboard.press('ArrowRight');
+  await expect(body(page)).toHaveAttribute('data-boss', /.+/);
+  await page.mouse.click(5, 5);
+  await click(0, 2);
+  await click(0, 1);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBeGreaterThan(0);
+  await page.goBack(); // Browser Back leaves with no question (ui.md 4.9)
+  await expect(body(page)).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
+});
+
 test('a wild fight is left by the first slot too: Flee, and the hero is back in the world, #1517', async ({ page }) => {
   await page.goto('./?openworld=3&nodes=200');
   await page.locator('canvas[aria-label="Abalone board"]').waitFor();

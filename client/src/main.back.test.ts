@@ -224,6 +224,93 @@ describe('main.ts, browser Back (#1564)', () => {
     expect(data().openworld).toBeDefined();
   });
 
+  describe('the exit of a fight in progress asks twice, Back never (#1517)', () => {
+    /** One ply of the fight, played as a player does: a single marble one cell. */
+    const fightPly = (game: Game): void => {
+      const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4))!;
+      const [mq, mr] = move.cells[0]!;
+      game.click(mq, mr);
+      game.click(mq + (move.dir === 2 ? 1 : -1), mr + (move.dir === 2 ? -1 : 1));
+    };
+    const intoLair = async (game: Game): Promise<void> => {
+      await pick(game, 'openworld');
+      const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
+      (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] });
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
+      game.frame();
+      expect(data().boss).toBeDefined();
+    };
+    it('leaves a lair fight with no ply played at the first press', async () => {
+      const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+      await intoLair(game);
+      byId('exit').click();
+      await game.settle();
+      expect(data().boss).toBeUndefined();
+      expect(data().openworld).toBeDefined();
+    });
+    it('asks for a second press once a ply is played: Sure? in the first slot, the fight stays, and the second press leaves', async () => {
+      const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+      await intoLair(game);
+      fightPly(game);
+      byId('exit').click();
+      expect(byId('exit').dataset.label).toBe('Sure?');
+      expect(byId('exit').classList.contains('confirm')).toBe(true);
+      expect(data().boss).toBeDefined();
+      byId('exit').click();
+      await game.settle();
+      expect(data().boss).toBeUndefined();
+      expect(data().openworld).toBeDefined();
+      expect(byId('exit').classList.contains('confirm')).toBe(false);
+    });
+    it('lapses as New game\'s does, and the label is World again', async () => {
+      const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+      await intoLair(game);
+      fightPly(game);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }); // after the setup, which waits on real timers
+      try {
+        byId('exit').click();
+        vi.advanceTimersByTime(4001);
+        expect(byId('exit').classList.contains('confirm')).toBe(false);
+        byId('exit').click();
+        expect(byId('exit').dataset.label).toBe('Sure?'); // asked again, nothing left
+        expect(data().boss).toBeDefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+    it('asks for a boss fight of the menu too, whose exit is the Hub', async () => {
+      const game = await boot('?bot=off');
+      await bossPick(game);
+      fightPly(game);
+      byId('exit').click();
+      expect(byId('exit').dataset.label).toBe('Sure?');
+      expect(hubOn()).toBe(false);
+      byId('exit').click();
+      await game.settle();
+      expect(hubOn()).toBe(true);
+    });
+    it('asks nothing of a table game, which is saved', async () => {
+      const game = await boot('?bot=off');
+      localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell: [-1, 0], beaten: [] }));
+      await pick(game, 'ship');
+      game.click(-1, -1);
+      await playMove(game);
+      byId('exit').click();
+      await game.settle();
+      expect(hubOn()).toBe(true);
+    });
+    it('Back asks nothing: it leaves the fight at once', async () => {
+      const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+      await intoLair(game);
+      fightPly(game);
+      await pressBack(game);
+      await game.settle();
+      expect(data().boss).toBeUndefined();
+      expect(data().openworld).toBeDefined();
+    });
+  });
+
   it('Back once the fight of a boss lair is won goes back to the world, as its button does', async () => {
     const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
     const { Encounter } = await import('abalone-wasm');
