@@ -8,6 +8,7 @@ import { phaseOf, type Phase, wrapTime } from './daynight';
 import { type Biome, chunkOf, Hero, neighbours, same, type Tile, WALKABLE, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
+import { HIT_HOLD_MS } from './openworldhit';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
 import { endingLine, ledgerLine } from './tally';
@@ -949,7 +950,7 @@ export class OpenWorldMode {
     if (picked) this.cue('pickup');
     else if (this.route.length === 0 && this.steps.due(at)) this.cue('step');
     if (played && now !== null) {
-      this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
+      this.view!.playPush(played, now, slowBy(), HIT_HOLD_MS * slowBy()); // the push lunges once the step has landed, holding its contact frame (#1561)
       const landed = now + span * slowBy();
       this.view!.punch(landed); // the camera feels the push (#1103)
       if (played.push.ejected.length > 0) this.view!.shake(landed); // and shakes when an enemy is ejected

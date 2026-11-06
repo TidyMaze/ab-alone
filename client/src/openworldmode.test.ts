@@ -654,7 +654,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     render.mockClear();
     for (const now of [100, 200, 300, 400]) m.frame(render, now);
     expect(render).toHaveBeenCalledTimes(4);
-    m.frame(render, 560); // the step glides 140 ms, the push lunges from its landing and ends at 550 ms: that frame draws the final cells
+    m.frame(render, 610); // the step glides 140 ms, the push lunges from its landing, holds 50 ms on the contact and ends at 600 ms: that frame draws the final cells
     expect(body().openworldAnim).toBeUndefined();
     for (const now of [800, 1000]) m.frame(render, now); // the follow settles on the hero
     render.mockClear();

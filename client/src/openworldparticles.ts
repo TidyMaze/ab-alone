@@ -53,6 +53,12 @@ export const SHARDS = {
   speed: 1.5,
   look: { rate: 0, life: 700, lift: 0, spread: 0, rise: -0.9, sway: 0, size: 0.14, colour: 0xffffff } satisfies Look,
 };
+/** The sparks of a push's contact (#1561): `count` grains, never more than that alive from the burst, thrown out from the contact cell. */
+export const BURST = {
+  count: 4,
+  speed: 2,
+  look: { rate: 0, life: 300, lift: 0, spread: 0, rise: 0.5, sway: 0, size: 0.14, colour: 0xffe070 } satisfies Look,
+};
 /** Reduced motion: the prop just fades where it stood, as one particle of its size that does not move. */
 export const FADE: Look = { rate: 0, life: 300, lift: 0, spread: 0, rise: 0, sway: 0, size: 0.3, colour: 0xffffff };
 
@@ -89,6 +95,8 @@ export class ParticlePool {
   private readonly life: Float32Array;
   /** The slots that hold a fade (#1147): reduced motion keeps them while it clears the rest. */
   private readonly fades: Uint8Array;
+  /** The slots that hold a spark of a contact burst (#1561): a burst owes only what its four leave free. */
+  private readonly burstSlots: Uint8Array;
   private last = -Infinity;
   private owed = 0;
   private warm = false;
@@ -109,6 +117,7 @@ export class ParticlePool {
     this.born = new Float64Array(cap).fill(-Infinity); // no slot is alive at any time, past times included
     this.life = new Float32Array(cap);
     this.fades = new Uint8Array(cap);
+    this.burstSlots = new Uint8Array(cap);
   }
 
   /** The next number in `[0, 1)`: a xorshift, so a pool is the same every run and allocates nothing. */
@@ -144,7 +153,7 @@ export class ParticlePool {
   }
 
   /** Puts a particle of `look` at the place and speed given, in the first free slot; false (nothing born) when the pool is full. */
-  private spawn(look: Look, x: number, y: number, z: number, now: number, vx: number, vz: number, colour = look.colour, fade = 0): boolean {
+  private spawn(look: Look, x: number, y: number, z: number, now: number, vx: number, vz: number, colour = look.colour, fade = 0, burst = 0): boolean {
     for (let i = 0; i < this.cap; i++) {
       if (now - this.born[i]! < this.life[i]!) continue;
       this.ox[i] = x;
@@ -159,6 +168,7 @@ export class ParticlePool {
       this.size[i] = look.size;
       this.colour[i] = colour;
       this.fades[i] = fade;
+      this.burstSlots[i] = burst;
       this.born[i] = now;
       this.life[i] = look.life;
       return true;
@@ -197,6 +207,16 @@ export class ParticlePool {
     for (let k = 0; k < PUFF.count; k++) {
       const angle = ((k + this.random()) / PUFF.count) * 2 * Math.PI;
       this.spawn(PUFF.look, x, y, z, now, Math.cos(angle) * PUFF.speed, Math.sin(angle) * PUFF.speed);
+    }
+  }
+
+  /** The sparks of a contact at (`x`, `y`, `z`), born at `at` (ms): up to `BURST.count` grains, fewer while the sparks of an earlier burst still live. */
+  burst(x: number, y: number, z: number, at: number): void {
+    let live = 0;
+    for (let i = 0; i < this.cap; i++) if (this.burstSlots[i] && at - this.born[i]! < this.life[i]!) live++;
+    for (let k = live; k < BURST.count; k++) {
+      const angle = ((k + this.random()) / BURST.count) * 2 * Math.PI;
+      this.spawn(BURST.look, x, y, z, at, Math.cos(angle) * BURST.speed, Math.sin(angle) * BURST.speed, BURST.look.colour, 0, 1);
     }
   }
 

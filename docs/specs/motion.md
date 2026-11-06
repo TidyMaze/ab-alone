@@ -82,6 +82,8 @@ One switch, already in the code: `motionReduced(system, saved)` (the Reduced mot
 - **Browser checks.** `body[data-place-transition]` is `enter` or `back` while it runs, `#place-transition[data-kind]` is `tower`, `dungeon` or `town`.
 - **Not done.** The world's last frame is not held under the cue: the world is freed in the step the place starts (as before), so the first frame is the dim over the new place. Holding it would delay the place or read the canvas back. A sound for the cues is #1570's, the music is #1571's. Not measured: how it feels; 600 and 400 ms, the 60 % centre of the dim and the 15 / 20 % of the title are constants at the top of `placetransition.ts` and `ui.css`.
 
+**11. Hit moment of the Open world (#1561).** A troop push holds its contact frame 50 ms (`HIT_HOLD_MS`) and bursts four sparks at the contact cell (`openworld.md` section 4); the ejection keeps its one shake. Input never waits for the hold. Reduced: neither.
+
 ## 5. Measures: frame time on a phone viewport, before and after (#1036)
 
 Method (#1036, 2026-11-01): headed Chromium (`--enable-gpu`) on an Apple laptop with a 60 Hz display, `vite build --mode e2e` of each

@@ -1529,10 +1529,10 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     expect(placeOf(view, 'hero').x).toBeGreaterThan(at);
     expect(view.tick(430)).toBe(true); // 400 ms of lunge are not enough any more
     expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(false);
-    view.tick(450);
+    view.tick(460); // the slide ends at 410 ms, 460 ms with the hold
     expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
     expect(inCell(placeOf(view, 'enemies'), [3, 0])).toBe(true);
-    expect(view.tick(451)).toBe(false);
+    expect(view.tick(461)).toBe(false);
   });
 
   it('a snap during the hold ends the push on its final cells at once, the hold delays nothing (#1561)', () => {

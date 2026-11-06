@@ -15,6 +15,7 @@ import { RECRUIT_MAX } from './openworldrecruit';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
 import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
+import { contactOf, heldClock } from './openworldhit';
 import { SUN, SUN_SHADOW, aimSunShadow, sunDirection } from './tablezero';
 import { Sky, WORLD_LOOKS } from './daynight';
 import { ICON } from './openworldlairicon';
@@ -568,6 +569,9 @@ export class OpenWorldView {
   readonly ejected: THREE.Mesh;
   /** The marbles of the push being drawn (none when there is no animation), and the time it ends in ms. */
   private moves: Move[] = [];
+  /** The time of the contact of the push drawn, in ms, and how long its frame is held (#1561). */
+  private holdAt = 0;
+  private hold = 0;
   private end = 0;
   /** The turn of the camera round the hero, in radians: `yawNow` follows `yawGoal`, which the keys, a drag and a twist set (#1026), by
    * the spring of the gap between them (#1333). */
@@ -1101,7 +1105,7 @@ export class OpenWorldView {
   /** Plays a push whose state is already final (the mode lays the cells first): each marble of the pushing line starts on its old
    * cell and lunges to the new one from `now` (ms), the enemies slide from the contact, the ejected one slides into the water and
    * sinks. `slow` multiplies every duration. Nothing is laid here: `tick` draws the marbles in between (docs/specs/openworld.md section 4). */
-  playPush({ from, foes, push }: Played, now: number, slow = 1): void {
+  playPush({ from, foes, push }: Played, now: number, slow = 1, hold = 0): void {
     this.settle();
     const begin = Math.max(now, this.landed); // the lunge starts once the step's glide has landed (#1040)
     const [hero] = push.troop;
@@ -1113,6 +1117,8 @@ export class OpenWorldView {
       const to = push.troop[i]!;
       if (!same(cell, to)) moves.push(this.move(i === 0 ? 'hero' : 'troop', i === 0 ? 0 : i - 1, cell, to, lunge));
     });
+    const contact = begin + at(CONTACT);
+    let hit = push.ejected.length > 0; // an enemy is pushed or ejected: the line touched it
     const slide: Timing = { start: begin + at(CONTACT), span: at(SLIDE_MS), fall: 0, lunge: false };
     const [ejected] = push.ejected;
     let next = 0; // the enemies are kept in the order of the push, the ejected one left out
@@ -1120,6 +1126,7 @@ export class OpenWorldView {
       if (ejected && same(cell, ejected)) continue;
       const to = push.enemies[next++]!;
       const index = same(cell, to) ? -1 : this.enemyCells.findIndex((enemy) => same(enemy, to)); // not drawn: off the loaded chunks
+      if (!same(cell, to)) hit = true;
       if (index >= 0) moves.push(this.move('foes', index, cell, to, slide));
     }
     if (ejected) {
@@ -1127,11 +1134,18 @@ export class OpenWorldView {
       moves.push(this.move('ejected', 0, ejected, beyond, { start: begin + at(CONTACT), span: at(SLIDE_MS), fall: at(FALL_MS), lunge: false }));
       if (this.drawnLevel <= ROLL_ZOOM) {
         const p = axialTo3D(beyond[0], beyond[1]);
-        this.particles.splash(p.x, topOf('water', 0, beyond[0], beyond[1]) + 0.05, p.z, begin + at(CONTACT) + at(SLIDE_MS)); // the droplets rise as the fall starts (#1101)
+        this.particles.splash(p.x, topOf('water', 0, beyond[0], beyond[1]) + 0.05, p.z, begin + at(CONTACT) + hold + at(SLIDE_MS)); // the droplets rise as the fall starts (#1101)
       }
     }
+    const spot = hit && this.drawnLevel <= ROLL_ZOOM ? contactOf(from, push.troop) : null;
+    if (spot) {
+      const p = axialTo3D(spot[0], spot[1]);
+      this.particles.burst(p.x, this.hero.position.y + 0.3, p.z, contact); // the sparks of the hit (#1561)
+    }
     this.moves = moves;
-    this.end = Math.max(...moves.map((m) => m.start + m.span + m.fall));
+    this.holdAt = contact;
+    this.hold = hold;
+    this.end = Math.max(...moves.map((m) => m.start + m.span + m.fall)) + hold; // the hold on the contact frame delays the end by as much (#1561)
     this.ejected.visible = Boolean(ejected);
   }
 
@@ -1163,7 +1177,8 @@ export class OpenWorldView {
 
   /** Writes every marble of the push at `now`: the camera follows the hero's drawn place (`follow`). */
   private play(now: number): void {
-    for (const m of this.moves) this.write(m, now);
+    const held = heldClock(now, this.holdAt, this.hold); // every marble of the push waits for the hold on the contact frame (#1561)
+    for (const m of this.moves) this.write(m, held);
     this.sail(); // the boats of the pushing line follow their marbles (#1441)
   }
 

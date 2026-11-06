@@ -259,7 +259,10 @@ the hour, reached and left the way a boss lair is (section 7). No new rule.
      hero's mesh with it when it is in the line. The ease goes a tenth of a cell past the new cell at 80 % of
      the lunge, then settles back on it. The camera follows the hero's drawn place.
   2. **Slide** (160 to 410 ms): each pushed enemy slides one cell along the push, starting at the contact
-     (40 % of the lunge).
+     (40 % of the lunge). The contact frame is held 50 ms (`HIT_HOLD_MS`, #1561): the whole push stands still
+     for that long and the slide starts after it, so the push ends 50 ms later. The hold only pauses the push's
+     clock, a step or a click snaps the push at once and waits for nothing. Four sparks (`BURST`, at most four
+     alive, from the particle pool) fly from the contact cell. Reduced motion plays no push, so no hold and no spark.
   3. **Fall** (160 to 410 ms slide, then 410 to 710 ms sinking): an ejected enemy slides into the water cell
      (or past the edge), then drops 0.6 below the ground while it shrinks to nothing. It has its own mesh
      (`ejected`), shown only while it falls.

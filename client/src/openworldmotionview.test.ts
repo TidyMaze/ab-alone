@@ -190,13 +190,13 @@ describe('the water and the trees move (#1101, #1102)', () => {
     view.playPush(played, 0);
     view.sparkle(100, false);
     expect(mesh(view, 'particles').count).toBe(0); // the fall has not started
-    view.sparkle(430, false);
+    view.sparkle(470, false);
     expect(mesh(view, 'particles').count).toBe(6);
     view.sparkle(1100, false);
     expect(mesh(view, 'particles').count).toBe(0);
     zoomed(view, MAX_ZOOM);
     view.playPush(played, 2000);
-    view.sparkle(2430, false);
+    view.sparkle(2470, false);
     expect(mesh(view, 'particles').count).toBe(0);
   });
 });
