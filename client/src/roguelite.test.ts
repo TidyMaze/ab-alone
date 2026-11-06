@@ -42,6 +42,8 @@ import {
   choices,
   claim,
   ELITE_BUDGET,
+  auditLine,
+  choiceText,
   eventHtml,
   eventOf,
   CURSE_FIGHTS,
@@ -979,6 +981,32 @@ describe('roguelite', () => {
     ]);
     expect(none.querySelector('.run-tally')!.textContent).toBe('Reconciled: 14.');
     expect(parse(mapHtml(MAP, newRun(1, 3, LEGACY_UNLOCKED))).querySelector('.run-tally')).toBeNull(); // only a run over
+  });
+
+  // #1587: after stage 5 the audit of a lost run speaks of the player's own line; below it, and for a won run, the text is as it was.
+  it('shows the player their own ledger line on a lost run from stage 5, and the audit as before below it', () => {
+    const over = { ...at(newRun(1, 0, LEGACY_UNLOCKED), 0, 2, 3), army: 3, end: 'lost' as const };
+    const tally = (stage?: number): string => parse(mapHtml(MAP, over, '', undefined, true, stage)).querySelector('.run-tally')!.textContent!;
+    for (const stage of [undefined, 1, 4]) expect(tally(stage)).toBe('Run voided. Audit reopened.');
+    for (const stage of [5, 6, 7]) expect(tally(stage)).toBe('Run voided. Audit reopened. Line 0412 carries a mark from before. Entered without comment.');
+    expect(auditLine(over, 5)).toBe(auditLine(over, 7));
+    const won = { ...over, end: 'won' as const, army: 14 };
+    for (const stage of [1, 5, 7]) expect(auditLine(won, stage)).toBe('Reconciled: 14.');
+  });
+
+  // #1587: after stage 4 the Shelled crewmate's second choice reads as what stage 4 teaches (the shell lets go), and gives the same.
+  it('words "Crack its shell" as what stage 4 teaches from stage 4, with the same scrap, and nothing else of the event', () => {
+    const shelled = EVENTS.find((e) => e.title === 'Shelled crewmate')!;
+    const run = (): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), path: [0] });
+    const ACT = parseMap([0, 0, 0, 0, 0b1111, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 1, 1, 3, 1, 0, 0, 0, 1, 2, 4, 1, 0, 0, 0, 1, 3, 5, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0]);
+    const event = (stage?: number): string[] => [...parse(eventHtml(waitingAt('Shelled crewmate', visit(ACT, run(), 3)), stage)).querySelectorAll('button')].map((b) => b.textContent!);
+    for (const stage of [undefined, 1, 3]) expect(event(stage)).toEqual(['Take it along · +1 marble', 'Crack its shell · +30 scrap', 'Leave']);
+    for (const stage of [4, 5, 7]) expect(event(stage)).toEqual(['Take it along · +1 marble', 'Cool it until the shell lets go · +30 scrap', 'Leave']);
+    expect(choiceText(run(), shelled.choices[1]!)).toBe('Crack its shell · +30 scrap');
+    expect(choiceText(run(), shelled.choices[1]!, 4)).toBe('Cool it until the shell lets go · +30 scrap');
+    expect(choiceText(run(), shelled.choices[0]!, 4)).toBe('Take it along · +1 marble'); // no other choice has a verb of a later stage
+    expect(takeEvent(run(), shelled, 1)).toEqual(takeEvent(run(), { ...shelled, choices: shelled.choices.map((c) => ({ ...c, later: undefined })) }, 1)); // the effect is the same
+    expect(EVENTS.filter((e) => e.choices.some((c) => c.later)).map((e) => e.title)).toEqual(['Shelled crewmate']);
   });
 });
 

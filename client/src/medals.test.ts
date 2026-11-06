@@ -90,6 +90,14 @@ describe('boss medals', () => {
     expect(medalRoom(null, bosses).body).toBe('Echo: Not beaten. Hull: Not beaten. Choir: Not beaten.');
   });
 
+  it('appends the line of stage 3 from stage 3 on, as a note of Tally, and not before (#1586)', () => {
+    const bosses = [{ id: 'echo', name: 'Echo' }];
+    const plain = medalRoom(null, bosses).body;
+    expect(medalRoom(null, bosses, 1).body).toBe(plain);
+    expect(medalRoom(null, bosses, 2).body).toBe(plain);
+    for (const stage of [3, 4, 7]) expect(medalRoom(null, bosses, stage).body).toBe(`${plain} Appended by TALLY: Seat 3: not on board. Not on the books as lost. Entered: breathing.`);
+  });
+
   it('lists the wins of the attempts after the best turns, and nothing for a boss never tried (#1538)', () => {
     const bosses = [
       { id: 'echo', name: 'Echo' },

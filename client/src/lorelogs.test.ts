@@ -184,6 +184,21 @@ describe('the lookups of the reader and the win screen', () => {
     expect(audioDeckOf('story-epilogue')).toBeNull();
   });
 
+  // #1585: after stage 5 every terminal of the Hub carries an appended note of Tally.
+  it('append the note of Tally to every terminal from stage 5, the bridge console too, and to nothing else', () => {
+    const note = ' Appended by TALLY: Read count: two. Line 0412 read this first, and walked on.';
+    for (const { id, body } of LORE) {
+      for (const stage of [1, 2, 3, 4]) expect(entryOf(id, stage)!.body, `${id} ${stage}`).toBe(entryOf(id)!.body);
+      for (const stage of [5, 6]) expect(entryOf(id, stage)!.body, `${id} ${stage}`).toBe(`${body}${note}`);
+    }
+    expect(entryOf('bridge-clamp', 7)!.body).toBe(`${CLAMP_OPEN.body}${note}`);
+    expect(entryOf('cargo-assay', 7)!.title).toBe(LORE.find((e) => e.id === 'cargo-assay')!.title);
+    for (const stage of [5, 7]) {
+      expect(entryOf('boss-hull', stage)).toBe(BOSS_LORE[1]);
+      expect(entryOf('log-meadow-near', stage)).toBe(WORLD_LOGS[0]);
+    }
+  });
+
   it('give the audio log of an entry: the deck of a terminal or of a boss, none for a log of the world', () => {
     expect(audioDeckOf('cargo-assay')).toBe('cargo');
     expect(audioDeckOf('boss-echo')).toBe('mess');

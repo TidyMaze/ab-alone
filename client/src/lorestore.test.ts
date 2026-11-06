@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
+import { collectedLogs, markCollected, markRead, markSeen, readLore, seenLines } from './lorestore';
 
 // The lore entries read (#512) and the audio logs collected (#517), saved locally for the log archive of
 // docs/specs/world.md section 4.
@@ -48,5 +48,26 @@ describe('lorestore', () => {
     expect(collectedLogs(store)).toEqual(['mess-first-game', 'bridge-crew-count']);
     expect(store.getItem('ab-alone.logs-collected')).toBe('mess-first-game,bridge-crew-count');
     expect(readLore(store)).toEqual([]);
+  });
+});
+
+// The Ledger (#1585): only the ids of the story lines seen are saved, in one key, and an older profile has none.
+describe('the story lines seen (#1585)', () => {
+  it('reads nothing for a profile that has none, an empty key and a blocked store', () => {
+    expect(seenLines(memory())).toEqual([]);
+    const empty = memory();
+    empty.setItem('ab-alone.ledger', '');
+    expect(seenLines(empty)).toEqual([]);
+    expect(seenLines(null)).toEqual([]);
+  });
+
+  it('saves each id once, in the order first seen, in one key of ids only', () => {
+    const store = memory();
+    markSeen(store, 'bot');
+    markSeen(store, 'town-1');
+    markSeen(store, 'bot');
+    expect(seenLines(store)).toEqual(['bot', 'town-1']);
+    expect(store.getItem('ab-alone.ledger')).toBe('bot,town-1');
+    expect(store.getItem('ab-alone.lore-read')).toBeNull();
   });
 });

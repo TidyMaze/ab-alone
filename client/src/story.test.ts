@@ -29,12 +29,12 @@ describe('TRIGGERS', () => {
 
   it('bind each main-line moment of the ladder to the events of today', () => {
     expect(TRIGGERS.map((t) => t.main)).toEqual([
-      { on: 'won' },
-      { on: 'room', id: 'medal-room' },
-      { on: 'won', id: 'hull' },
-      { on: 'won', id: 'chaplain' },
-      { on: 'start', id: 'ballast' },
-      { on: 'won', id: 'ballast' },
+      [{ on: 'won' }],
+      [{ on: 'room', id: 'medal-room' }, { on: 'town' }], // the Medal room or a town of the Open world (#1586)
+      [{ on: 'won', id: 'hull' }],
+      [{ on: 'won', id: 'chaplain' }],
+      [{ on: 'start', id: 'ballast' }],
+      [{ on: 'won', id: 'ballast' }],
     ]);
     expect(TRIGGERS[0]!.optional).toEqual({ on: 'win', times: 3 });
   });
@@ -42,7 +42,7 @@ describe('TRIGGERS', () => {
   it('have a real call site: main.ts fires every kind of event the table binds', () => {
     const fired = new Set([...main.matchAll(/storyEvent\(\{ on: '(\w+)'/g)].map((m) => m[1]));
     for (const { stage, main: trigger, optional } of TRIGGERS) {
-      for (const t of [trigger, optional]) if (t) expect(fired.has(t.on), `stage ${stage}: ${t.on}`).toBe(true);
+      for (const t of [...trigger, optional]) if (t) expect(fired.has(t.on), `stage ${stage}: ${t.on}`).toBe(true);
     }
   });
 });
@@ -71,6 +71,12 @@ describe('the stage', () => {
     expect(at(2, 3, 4, 5, 6, 7)).toBe(7);
   });
 
+  it('reaches 7 with a town in place of the Medal room: either is the main trigger of stage 3 (#1586)', () => {
+    const store = memory();
+    const stages = MAIN_LINE.map((event) => fire(store, event.on === 'room' ? { on: 'town' } : event));
+    expect(stages).toEqual([2, 3, 4, 5, 6, 7]);
+  });
+
   it('reaches 7 on the main line alone: the optional triggers are never needed', () => {
     const store = memory();
     const stages = MAIN_LINE.map((event) => fire(store, event));
@@ -93,6 +99,15 @@ describe('fire', () => {
     expect(saved(store)).toMatchObject({ moments: [2], wins: 0 });
     expect(fire(store, { on: 'won', id: 'hull' })).toBe(4); // a second boss is stage 3 as well
     expect(saved(store)).toMatchObject({ moments: [2, 3, 4], wins: 0 });
+  });
+
+  it('records a town entered as stage 3, once, and a town before stage 2 waits for it (#1586)', () => {
+    const store = memory();
+    expect(fire(store, { on: 'town' })).toBe(1);
+    expect(saved(store)).toMatchObject({ moments: [3] });
+    expect(fire(store, { on: 'town' })).toBe(1); // the moment is recorded once
+    expect(saved(store)).toMatchObject({ moments: [3] });
+    expect(fire(store, { on: 'won', id: 'echo' })).toBe(3);
   });
 
   it('records a moment once, and writes nothing when an event changes nothing', () => {
@@ -187,7 +202,10 @@ describe('the rule of section 12.4', () => {
 
   it('every line of stage n holds no secret word of a later stage: the terminals, the audio logs, the bosses, the logs of the world', () => {
     for (const e of LORE) expect(leaks(e.stage, `${e.title} ${e.body}`), e.id).toEqual([]);
-    for (const log of AUDIO_LOGS) expect(leaks(log.stage, `${log.title} ${log.lines.map((l) => l.text).join(' ')}`), log.id).toEqual([]);
+    for (const log of AUDIO_LOGS) {
+      expect(leaks(log.stage, log.title), log.id).toEqual([]);
+      for (const l of log.lines) expect(leaks(l.stage ?? log.stage, l.text), `${log.id} at ${l.at}`).toEqual([]); // a line may carry a stage of its own (#1586)
+    }
     for (const e of STORY) expect(leaks(e.stage, `${e.title} ${e.body}`), e.id).toEqual([]);
   });
 

@@ -76,3 +76,28 @@ describe('logOf and lineAt, the audio log player (#516)', () => {
     expect(lineAt(log, log.seconds)).toBe(log.lines.at(-1)!.text);
   });
 });
+
+// #1586: the Cargo log ends on a line of Tally that only stage 4 hears; a line without a stage of its own is the log's.
+describe('the transcript by stage (#1586)', () => {
+  const cargo = logOf('cargo');
+  const CARGO_LINE = 'TALLY: Outside: minus one hundred and sixty. The glass lets go of what it held. Entered as weather.';
+
+  it('adds the line of Tally to the Cargo log from stage 4, after its last line, inside the recording', () => {
+    const own = cargo.lines.filter((line) => line.stage !== undefined);
+    expect(own).toEqual([{ at: 50, stage: 4, text: CARGO_LINE }]);
+    expect(own[0]!.at).toBeGreaterThan(cargo.lines.at(-2)!.at);
+    expect(own[0]!.at).toBeLessThan(cargo.seconds);
+  });
+
+  it('shows it from stage 4, and the line before it below', () => {
+    const before = cargo.lines.at(-2)!.text;
+    for (const stage of [1, 2, 3]) expect(lineAt(cargo, cargo.seconds, stage)).toBe(before);
+    for (const stage of [4, 5, 7]) expect(lineAt(cargo, cargo.seconds, stage)).toBe(CARGO_LINE);
+    expect(lineAt(cargo, cargo.seconds)).toBe(before); // the stage of a new player
+    expect(lineAt(cargo, 40, 4)).toBe(lineAt(cargo, 40, 1)); // the rest of the log is the same
+  });
+
+  it('changes no other log', () => {
+    for (const log of AUDIO_LOGS.filter((l) => l.id !== cargo.id)) expect(log.lines.every((line) => line.stage === undefined), log.id).toBe(true);
+  });
+});
