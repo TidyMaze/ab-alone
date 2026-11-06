@@ -327,6 +327,8 @@ test('on a phone the name field and Hide are 44 px high and the plate leaves the
   console.log('plate', JSON.stringify(plate), 'field', JSON.stringify(field), 'hide', JSON.stringify(hide));
   await page.screenshot({ path: 'test-results/peers-phone-hud.png' });
   expect(plate.y).toBeGreaterThanOrEqual(844 * 0.5); // the lower half only: the hero stands at the middle
+  const tower = (await page.locator('#openworld-dungeon').boundingBox())!;
+  expect(tower.y + tower.height).toBeLessThanOrEqual(plate.y + plate.height); // the plate's main button stays in view: the online row is what scrolls
 });
 
 // #1305: the army of another hero. Its troop goes over as offsets (15 bytes for six marbles) and is drawn in the colour of its hero.
