@@ -113,7 +113,10 @@
 //!   all but sand, grass and rock are blocked; `biome` `0` meadow, `1` forest, `2` tundra, `3` desert,
 //!   `4` badlands, `5` archipelago, one per sextant of the hexagon (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
 //! - Open world lairs (`world_lairs(seed)`): one boss lair per boss of the roster, `q, r` pairs, lair 0 first, each at least 150 cells from the
-//!   spawn on open ground, lair `k` in the sextant `k % 6` (docs/specs/openworld.md section 7).
+//!   spawn on open ground, lair `k` the boss `k` on the cell its tier gives it: the nearest is the easiest (docs/specs/openworld.md sections 7
+//!   and 15).
+//! - Open world rings (`world_rings(seed)`): the ring of each boss's tower, boss 0 first, then one per place of `world_places` (`0` for a town,
+//!   the dungeon tier for a gate), docs/specs/openworld.md section 15.
 //! - Open world teleporters (`world_teleporters(seed)`): `q, r` pairs, the spawn's first, one a square of 8 x 8 chunks, kept off
 //!   the lairs (docs/specs/openworld.md section 10).
 //! - Open world places (`world_places(seed)`): the towns then the dungeon gates, `kind, q, r` triples (`kind` `0` a town, `1` a dungeon
@@ -139,7 +142,8 @@ pub use game::{replay_score, Engine};
 pub use royale::Royale;
 pub use run::{run_exits, run_foes, run_map};
 pub use world::{
-    world_chunk, world_lairs, world_logs, world_places, world_teleporters, world_version,
+    world_chunk, world_lairs, world_logs, world_places, world_rings, world_teleporters,
+    world_version,
 };
 
 #[cfg(test)]

@@ -89,10 +89,11 @@ pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
         .collect()
 }
 
-/// The boss lairs of the world `seed`, one per boss of the roster: `q, r` pairs, lair 0 first (docs/specs/openworld.md section 7).
+/// The boss lairs of the world `seed`, one per boss of the roster: `q, r` pairs, lair 0 first (docs/specs/openworld.md section 7). Lair
+/// `k` is the boss `k`, standing on the cell its tier gives it (section 15): the nearest to the spawn is the easiest.
 #[wasm_bindgen]
 pub fn world_lairs(seed: u32) -> Vec<i32> {
-    world::lairs(u64::from(seed), crate::encounter::boss_ids().len())
+    world::towers(u64::from(seed))
         .into_iter()
         .flat_map(|(q, r)| [q, r])
         .collect()
@@ -134,14 +135,33 @@ pub const LOG_LEFT_OUT: i32 = i32::MIN;
 /// town and `1` for a dungeon gate, the spawn town first, kept off the lairs, the teleporters and the logs.
 #[wasm_bindgen]
 pub fn world_places(seed: u32) -> Vec<i32> {
+    places_of(seed)
+        .into_iter()
+        .flat_map(|(kind, (q, r))| [kind as i32, q, r])
+        .collect()
+}
+
+/// The places of the world `seed`, kept off the lairs, the teleporters and the logs.
+fn places_of(seed: u32) -> Vec<(world::PlaceKind, (i32, i32))> {
     let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
     let mut taken = world::teleporters(u64::from(seed), &lairs);
     taken.extend(lairs);
     let logs = world::logs(u64::from(seed), &taken);
     taken.extend(logs.into_iter().flatten());
     world::places(u64::from(seed), &taken)
-        .into_iter()
-        .flat_map(|(kind, (q, r))| [kind as i32, q, r])
+}
+
+/// The rings of the world `seed` (docs/specs/openworld.md section 15): the ring of the tower of each boss of the roster, boss 0 first, then
+/// one for each place of `world_places`, `0` for a town and the gate's dungeon tier for a gate.
+#[wasm_bindgen]
+pub fn world_rings(seed: u32) -> Vec<u8> {
+    let towers = world::towers(u64::from(seed));
+    (0..towers.len())
+        .map(world::tower_ring)
+        .chain(places_of(seed).into_iter().map(|(kind, cell)| match kind {
+            world::PlaceKind::Town => 0,
+            world::PlaceKind::Dungeon => world::gate_ring(&towers, cell),
+        }))
         .collect()
 }
 
@@ -182,7 +202,7 @@ pub fn world_dungeon(
     blocked: Vec<i32>,
     broken: Vec<i32>,
 ) -> Vec<i32> {
-    let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
+    let lairs = world::towers(u64::from(seed));
     let beaten: Vec<usize> = beaten.iter().map(|&k| k as usize).collect();
     let Some((lair, path)) = world::dungeon_walk(
         u64::from(seed),
@@ -579,12 +599,64 @@ mod tests {
     fn the_lairs_are_q_r_pairs_that_match_the_core() {
         let flat = world_lairs(7);
         let roster = crate::encounter::boss_ids().len();
-        let lairs: Vec<(i32, i32)> = world::lairs(7, roster);
+        let lairs: Vec<(i32, i32)> = world::towers(7);
         assert_eq!(flat.len(), 2 * roster);
         assert_eq!(
             flat,
             lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn the_tower_order_names_every_boss_of_the_roster_once_from_the_echo_to_the_choir() {
+        let ids = crate::encounter::boss_ids();
+        assert_eq!(world::TOWER_ORDER.len(), ids.len());
+        let order: Vec<&str> = world::TOWER_ORDER
+            .iter()
+            .map(|&k| ids[k].as_str())
+            .collect();
+        assert_eq!(
+            order,
+            [
+                "echo",
+                "alien",
+                "pulsar",
+                "assembly",
+                "dual",
+                "stalker",
+                "chaplain",
+                "overseer",
+                "core",
+                "swarm",
+                "railyard",
+                "ballast",
+                "magnetizer",
+                "hull",
+                "choir"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_rings_are_one_for_each_boss_then_one_for_each_place_with_no_ring_for_a_town() {
+        let flat = world_rings(7);
+        let towers = world::towers(7);
+        let places = world_places(7);
+        assert_eq!(flat.len(), towers.len() + places.len() / 3);
+        assert_eq!(flat[0], 1, "the Echo is in the first ring");
+        assert_eq!(flat[2], 5, "the Choir in the last");
+        for (k, &ring) in flat[..towers.len()].iter().enumerate() {
+            assert_eq!(ring, world::tower_ring(k));
+        }
+        for (i, triple) in places.chunks(3).enumerate() {
+            let ring = flat[towers.len() + i];
+            if triple[0] == 0 {
+                assert_eq!(ring, 0, "a town has no ring");
+            } else {
+                assert_eq!(ring, world::gate_ring(&towers, (triple[1], triple[2])));
+                assert!((1..=5).contains(&ring));
+            }
+        }
     }
 
     #[test]
@@ -650,6 +722,7 @@ mod tests {
         let pairs: Vec<(i32, i32)> = lairs.chunks(2).map(|c| (c[0], c[1])).collect();
         let (lair, path) = world::dungeon_walk(3, (0, 0), &pairs, &[], &[], &pairs).unwrap();
         assert_eq!(flat[0], lair as i32);
+        assert_eq!(lair, 0, "the nearest tower is the Echo's");
         assert_eq!(
             flat[1..],
             path.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()

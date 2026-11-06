@@ -646,19 +646,37 @@ pub const TOWER_ORDER: [usize; 15] = [0, 5, 8, 10, 12, 13, 3, 9, 11, 14, 6, 4, 7
 pub const RING_SIZE: usize = 3;
 
 /// The cell of the tower of each boss of the roster, boss 0 first (docs/specs/openworld.md section 15): the cells of `lairs` do not
-/// move, the boss of `TOWER_ORDER[i]` stands on the `i`-th nearest to the spawn.
-pub fn towers(_seed: u64) -> Vec<(i32, i32)> {
-    Vec::new()
+/// move, the boss of `TOWER_ORDER[i]` stands on the `i`-th nearest to the spawn (hex distance, a tie goes to the lower lair). So lair
+/// `k` of the client is still the boss `k`: a save's beaten lairs and a medal keep their boss. From the seed alone.
+pub fn towers(seed: u64) -> Vec<(i32, i32)> {
+    let cells = lairs(seed, TOWER_ORDER.len());
+    let mut nearest: Vec<usize> = (0..cells.len()).collect();
+    nearest.sort_by_key(|&i| (hex_distance((0, 0), cells[i]), i));
+    let mut found = vec![(0, 0); cells.len()];
+    for (&boss, &lair) in TOWER_ORDER.iter().zip(&nearest) {
+        found[boss] = cells[lair];
+    }
+    found
 }
 
 /// The ring, and so the tier, of the tower of the boss `boss`: 1 for the nearest `RING_SIZE` towers, up to 5.
-pub fn tower_ring(_boss: usize) -> u8 {
-    0
+pub fn tower_ring(boss: usize) -> u8 {
+    let place = TOWER_ORDER
+        .iter()
+        .position(|&b| b == boss)
+        .expect("a boss of the roster");
+    (place / RING_SIZE) as u8 + 1
 }
 
-/// The ring, and so the dungeon tier, of a gate on `cell`: the ring of the tower that comes next as the cells go out from the spawn.
-pub fn gate_ring(_towers: &[(i32, i32)], _cell: (i32, i32)) -> u8 {
-    0
+/// The ring, and so the dungeon tier, of a gate on `cell`: that of a tower as far from the spawn, the number of `towers` nearer
+/// to it counted by `RING_SIZE`, the last ring past the last tower.
+pub fn gate_ring(towers: &[(i32, i32)], cell: (i32, i32)) -> u8 {
+    let d = hex_distance((0, 0), cell);
+    let nearer = towers
+        .iter()
+        .filter(|&&t| hex_distance((0, 0), t) < d)
+        .count();
+    (nearer.min(TOWER_ORDER.len() - 1) / RING_SIZE) as u8 + 1
 }
 
 /// A lair is drawn in its share of the sextant for its first `LAIR_SLOT_TRIES` tries (the most any seed of 1 to 2000 but 711 needs is
@@ -2611,9 +2629,10 @@ mod tests {
         sorted.sort_unstable();
         let at = |d: i32| (d, 0);
         assert_eq!(gate_ring(&found, at(10)), 1, "inside the nearest tower");
+        assert_eq!(gate_ring(&found, at(sorted[2])), 1, "two towers nearer");
         assert_eq!(
             gate_ring(&found, at(sorted[2] + 1)),
-            1,
+            2,
             "three towers nearer"
         );
         assert_eq!(gate_ring(&found, at(sorted[3] + 1)), 2);
