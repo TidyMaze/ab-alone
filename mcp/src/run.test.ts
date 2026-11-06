@@ -24,6 +24,7 @@ import {
   visit,
   type MapNode,
   type Run,
+  runNodes,
 } from '../../client/src/roguelite';
 import { memoryStore } from '../../client/src/savegame';
 import { bossIds, newEncounter, newEngine, runRules } from './engine';
@@ -341,7 +342,8 @@ describe('pick', () => {
     value(await run.newRun({ seed: 0 }));
     const state = value(run.pick({ node: 0 }));
     expect(state.screen).toBe('fight');
-    expect(state.fight).toMatchObject({ kind: 'fight', bot_nodes: 20000, placed: [] });
+    expect(state.fight).toMatchObject({ kind: 'fight', bot_nodes: 5000, placed: [] }); // the first fight of a run is a quarter of the peak (#1611)
+    expect(state.fight).toMatchObject({ kind: 'fight', placed: [] });
     expect(state.nodes).toBeUndefined();
     const game = value(session.getState());
     expect(game.mode).toBe('bot');
@@ -358,14 +360,16 @@ describe('pick', () => {
     value(await run.newRun({ save: elite, bot_nodes: 100 }));
     const node = full.path[full.path.length - 1]!;
     const state = value(run.pick({ node }));
-    expect(state.fight).toMatchObject({ kind: 'elite', bot_nodes: 200 });
+    const peak = runNodes(mapOf(full.seed), { ...full, fighting: true }, 100); // the elite's row: its share of the run's curve (#1611), then twice for the elite
+    expect(peak).toBeLessThan(100);
+    expect(state.fight).toMatchObject({ kind: 'elite', bot_nodes: 2 * peak });
     expect(state.fight!.foes).toMatch(/The (Wall|Artificer|Brute)/);
     expect(value(session.getState()).board.split('W').length).toBeGreaterThan(11);
     value(session.playMove({ move: FIRST_MOVE }));
-    expect(calls.nodes).toEqual([200]);
+    expect(calls.nodes).toEqual([2 * peak]);
     value(await run.newRun({ save: { ...elite, relics: [3] }, bot_nodes: 100 }));
     const jammed = value(run.pick({ node }));
-    expect(jammed.fight!.bot_nodes).toBe(200); // the Jammer no longer cuts the search: it hands a Freeze
+    expect(jammed.fight!.bot_nodes).toBe(2 * peak); // the Jammer no longer cuts the search: it hands a Freeze
     expect(jammed.tactics).toEqual(['Freeze']);
   });
 

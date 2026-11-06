@@ -431,6 +431,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .score.run { font-size: 0.9375rem; }
 #hud .score.run .lost { color: var(--danger); font-weight: 600; white-space: nowrap; }
 #hud small { display: block; color: var(--muted); font-size: 0.8125rem; }
+#hud .bot-rating { white-space: nowrap; }
 /* #1541: the legend of the special marbles on the board, a line each, and the card of the one hovered or tapped, which takes the lines'
    place (the plate stays as tall as the lines were, held sideways it has no room for more). A line and the card are buttons: a tap is
    the touch way to the card and puts it away, while a press on a marble selects it, as always. */

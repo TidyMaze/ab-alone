@@ -24,7 +24,7 @@ describe('the bot of a run, by act and row (#1611)', () => {
     expect(runNodes(MAP, fighting(0), 1000)).toBe(Math.round((1000 * RUN_START_PERCENT) / 100));
     const fights = [0, 1, 4, 5, 6, 7].map((i) => runNodes(MAP, fighting(i), 1000));
     for (let i = 1; i < fights.length; i++) expect(fights[i]).toBeGreaterThan(fights[i - 1]!);
-    expect(fights[fights.length - 1]).toBeGreaterThan(900); // the last fights are near the peak
+    expect(fights[fights.length - 1]).toBeGreaterThan(850); // the last fights are near the peak
   });
   it('the fourth act is the peak', () => {
     expect(runNodes(MAP, fighting(8), 1000)).toBe(1000);

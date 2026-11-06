@@ -31,6 +31,7 @@ import {
   ELITES,
   eventOf,
   fightBudget,
+  runNodes,
   foretold,
   fightOver,
   foePlan,
@@ -86,6 +87,9 @@ import {
 import { memoryStore } from '../../client/src/savegame';
 import { BOT_NODES, type EncounterLike, type EngineLike, type ErrorCode, type Result, type ToolError } from './game';
 import type { Session, State } from './game';
+
+/** The bot's search in the run's fight: the peak `nodes` along the run's curve (#1611), then the elite and relic factors, as the page's. */
+const budgetOf = (map: MapNode[], state: Run, nodes: number): number => fightBudget(map, state, runNodes(map, state, nodes));
 
 /** What a run uses of the army's `Engine` in abalone-wasm: a game against the bot and the special marbles still on its board. */
 export interface RunEngine extends EngineLike {
@@ -436,7 +440,7 @@ export class RogueRun {
   private begin(active: Active, engine: RunEngine | RunBoss, moves: number[][]): void {
     const boss = actBoss(active.map, active.state, this.bossIds());
     const recorded = recording(engine, moves, () => this.played(active));
-    const started = boss ? this.session.runBoss(boss.id, recorded as EncounterLike) : this.session.runFight(recorded as RunEngine, fightBudget(active.map, active.state, active.nodes));
+    const started = boss ? this.session.runBoss(boss.id, recorded as EncounterLike) : this.session.runFight(recorded as RunEngine, budgetOf(active.map, active.state, active.nodes));
     active.fight = { engine, moves, game: started.game_id, boss: boss !== null, nodes: active.nodes };
   }
 
@@ -569,7 +573,7 @@ export class RogueRun {
             fight: {
               kind: node!.kind === 'elite' ? 'elite' : bossFight ? 'boss' : 'fight',
               ...(this.foes(node!) && !bossFight ? { foes: this.foes(node!) } : {}),
-              ...(bossFight ? { boss: { id: bossFight.id, strength: bossFight.percent } } : { bot_nodes: fightBudget(map, state, fight.nodes) }),
+              ...(bossFight ? { boss: { id: bossFight.id, strength: bossFight.percent } } : { bot_nodes: budgetOf(map, state, fight.nodes) }),
               game: fight.game,
               placed: state.placed.map(([q, r, kind]) => `${text([q!, r!])} ${SPECIAL_LOOKS[kind! - 1]!.name}`),
               ...(screen === 'place' ? { left: named(SPECIAL_LOOKS.map((_, k) => (state.specials[k] ? left(state, k + 1) : 0))) } : {}),

@@ -22,7 +22,7 @@ describe('the bot rating (#1611)', () => {
 
   test('a doubling of the budget is worth the measured 65 points, and a rating is shown to the nearest ten', () => {
     expect(RATING_PER_DOUBLING).toBe(65);
-    expect(ratingOfBudget(BOT_NODES * 2)).toBe(1560); // 1565
+    expect(ratingOfBudget(BOT_NODES * 2)).toBe(1570); // 1565
     expect(ratingOfBudget(BOT_NODES / 2)).toBe(1440);
     expect(ratingOfBudget(200)).toBe(1070);
     expect(ratingOfBudget(60000)).toBe(1600);

@@ -33,11 +33,12 @@ import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './g
 import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFirstRunDone } from './firstrun';
 import { openWorldLeads } from './menuorder';
 import { worldSaves } from './openworldsave';
-import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
+import { askBot, askEval, BOT_NODES, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
 import { askMirror } from './traitchoice';
 import { lazyWorker } from './lazyworker';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
+import { BOT_NOTE, botLine, progressBudget, ratingOfBudget } from './botrating';
 import { bootFailed } from './bootfail';
 import { ScreenExit } from './screenexit';
 import { backWay, needsEntry, type Screen, type Way } from './backnav';
@@ -355,6 +356,7 @@ import {
   drink,
   leaveShop,
   fightBudget,
+  runNodes,
   armyKept,
   fightOver,
   bonusHtml,
@@ -2965,6 +2967,23 @@ function botFailed(): void {
   syncHint();
 }
 
+/** The bot's search in a plain game or a run's fight (#1611): BOT_NODES grown with the bosses beaten, along the run in a run, times the difficulty
+ * setting. The Trainer keeps the fixed budget, and so does a test budget (?nodes). */
+function gameNodes(): number {
+  const grows = budget === BOT_NODES;
+  const base = grows && !trainer ? progressBudget(budget, difficulty, Object.keys(loadMedals(store)).length) : scaleBudget(budget, difficulty);
+  return run ? fightBudget(run.map, run.state, grows ? runNodes(run.map, run.state, base) : base) : base;
+}
+
+/** The HUD note `others`, then the estimated rating and level of the bot in a game it scales in: a plain bot game or a run's fight (#1611). A boss, the
+ * Trainer, a wild marble and an online game have a fixed strength. The tooltip says it is an estimate; the test hook is the number. */
+function botNote(others: string): string {
+  if (!worker || fight || online || trainer || wildFrom || (run && !run.state.fighting)) return others;
+  const nodes = gameNodes();
+  document.body.dataset.botRating = String(ratingOfBudget(nodes));
+  return `${others && `${others} · `}<span class="bot-rating" title="${BOT_NOTE}">${botLine(nodes)}</span>`;
+}
+
 async function botTurn(): Promise<void> {
   if (online || replaying || thinking || engine.status() !== 0 || firstRun === 'done') return;
   const bots = worker !== null && engine.to_move() === BOT_SIDE;
@@ -2976,7 +2995,7 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = liveGame();
   const started = performance.now();
-  const normal = wildFrom ? Math.min(WILD_NODES, budget) : run ? fightBudget(run.map, run.state, scaleBudget(budget, difficulty)) : scaleBudget(budget, difficulty); // an elite searches more (#800); a wild marble a modest fixed search (#1511)
+  const normal = wildFrom ? Math.min(WILD_NODES, budget) : gameNodes(); // an elite searches more (#800); a wild marble a modest fixed search (#1511)
   const searchBudget = trainer ? trainerBudget(trainer.wave, normal) : normal; // past a full army, the bot searches more (#1159)
   const diffPercent = (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]; // an act boss at its act's strength
   let move: number[];
@@ -3791,6 +3810,7 @@ function showLore(lore: { id: string; title: string; body: string; stage: number
   markRead(store, lore.id);
 }
 function drawHud(extra = ''): void {
+  delete document.body.dataset.botRating; // set again by the note of a game the bot scales in
   syncReplay();
   wildFlee.hidden = !wildFrom || engine.status() !== 0; // Flee for the whole fight, not once it is over (#1511)
   syncExit();
@@ -3843,7 +3863,7 @@ function drawHud(extra = ''): void {
     runScore: run?.state.fighting && engine instanceof Engine ? runScoreHtml(engine.board(), ejected, win) : undefined, // an army fight of a run reads the army, not both sides' ejections (#1540)
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${built() ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
+    note: botNote(`${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${built() ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`), // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,

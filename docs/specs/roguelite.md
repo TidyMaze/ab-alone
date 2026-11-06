@@ -1255,3 +1255,70 @@ the marbles on the board do. Every number is the engine's own count, never a rul
   compendium's short help are in the rule), use no word the story keeps back (`SECRETS` of `story.ts`) and no term the player has not met
   by then (a push, an ejection, a burst).
 - **Not in this slice**: the bot's marbles left, a card on a marble of another mode, the upgraded forms in the legend beyond their name and rule.
+
+## 32. The bot's estimated rating, and a bot that grows (#1611)
+
+The bot is a search budget in positions (`BOT_NODES`, 20000 on the plain bot at Normal). The player sees a rating and a level for it,
+and meets a weaker one at the start that grows with the game. `client/src/botrating.ts` holds the numbers, pure and tested.
+
+- **The measure** (`crates/abalone-core/examples/bot_rating.rs`, `cargo run --release --example bot_rating`): self-play between adjacent
+  budgets, half of the games with each colour, from the same random opening of 8 plies for a pair of games (so a deterministic search does
+  not play one game 30 times), 300 plies at most (an unfinished game is a draw). It prints each budget's score against the one below, the rating
+  difference that score means (Elo, `400 log10(s / (1 - s))`) and its standard error. `BOT_RATING_LADDER=nodes:noise,...`,
+  `BOT_RATING_GAMES`, `BOT_RATING_ANCHOR` and `BOT_RATING_PLIES` change it; `noise` is the percent of random moves, for a low budget
+  that still plays well. None was needed: the lowest budget measured, 100 positions, is already under 1000.
+- **The table**, 30 games a pair, 9 pairs, about 20 minutes on 10 cores (the dearest pair, 20000 against 40000, plays 117-ply games at
+  about 0.7 s a move). The rating is anchored at 20000 = 1500; the error is one standard error, summed from the bottom (so it grows up
+  the ladder):
+
+  | positions | score against the budget below | difference | error | rating |
+  |---|---|---|---|---|
+  | 100 | | | | 960 (+/- 0) |
+  | 200 | 0.617 | +83 | 46 | 1042 (+/- 46) |
+  | 400 | 0.667 | +120 | 34 | 1163 (+/- 57) |
+  | 800 | 0.483 | -12 | 12 | 1151 (+/- 58) |
+  | 1600 | 0.500 | 0 | 0 | 1151 (+/- 58) |
+  | 3200 | 0.500 | 0 | 0 | 1151 (+/- 58) |
+  | 6400 | 0.683 | +134 | 56 | 1285 (+/- 81) |
+  | 12800 | 0.633 | +95 | 54 | 1380 (+/- 97) |
+  | 20000 | 0.667 | +120 | 57 | 1500 (+/- 113) |
+  | 40000 | 0.633 | +95 | 36 | 1595 (+/- 118) |
+
+  The error of 0 on 800, 1600 and 3200 is not a precise zero: the 30 games of those pairs were all draws, or too nearly all of them (two
+  deterministic searches that agree repeat a position, and a repetition is a draw), so they carry no information, and the flat stretch
+  is a measure artefact. The line a least squares fit gives through the ten points is **65 points a doubling of the budget** (the code's
+  `RATING_PER_DOUBLING`); the points lie within 180 of it, most within 50. So a rating is `1500 + 65 log2(positions / 20000)`, to the
+  nearest ten: 200 positions is 1070, 2000 is 1290, 20000 is 1500, 60000 is 1600.
+- **The anchor is a decision, not a measure.** Only differences are measured. The plain bot at `BOT_NODES` on Normal is 1500 because no
+  average Abalone rating is published (a search found none on Board Game Arena, Little Golem or the apps), and Board Game Arena's
+  starting rating is 1500 (above 1600 a good player, 1800 an expert, 2000 a master: site-wide figures). So every rating shown is an
+  **estimate**, the HUD and its tooltip say so, and it is not comparable with the player's Ranked rating, which starts at 1200 on its own
+  scale (`elo.ts`, unchanged).
+- **The levels**: Easy under 1300, Normal 1300 to 1599, Hard 1600 to 1799, Very hard 1800 to 1999, Master 2000 and up. At 65 points a
+  doubling, Hard starts at 58000 positions, Very hard at about 500000 and Master at about 4.2 million (30 s or more a move on a native
+  machine): out of reach of a bot that answers in seconds. The curves below therefore peak at 60000, **Hard**, and Very hard and
+  Master are not reached by search alone. Reaching them would take a stronger evaluation, not a bigger budget.
+- **Over the game**: the bot of a plain game searches `BOT_NODES` times `PROGRESS_PERCENT[medals]`, the medals count (the bosses beaten, 0 to
+  15), from 1 % (200 positions, 1070, the bottom of Easy) geometrically up to 300 % (60000, Hard, with all 15 medals; 300 % is the fourth act
+  boss's own strength): 1, 1.5, 2.1, 3.1, 4.6, 6.7, 9.8, 14.3, 21, 30.6, 44.8, 65.5, 95.8, 140, 205, 300 %. It never goes down. The
+  player's difficulty setting still multiplies it (50, 100, 200 %), so Hard at the peak searches 120000 positions, about 1700.
+- **Over a run**: a fight or an elite of a run searches `runNodes` = that budget times a share that grows with the node's place,
+  `25 * 4^t` percent, `t` = (act + row / rows of the act) / 3 from 0 at the first fight to 1 on the fourth act (the peak), then the
+  factors of `fightBudget` as before (an elite twice, three times when marked, relics, ascension). An elite stays above the fights of its
+  row. The rows of the act are read from the map, so a run saved before the pacing, with fewer rows, keeps working. Nothing of the curve is saved
+  in a run. The act bosses keep `ACT_PERCENT`: the curve is for the bot of a fight, and the boss is its own measure (section 30).
+- **Fixed strength** (nothing above applies): the Daily, the boss fight, the duel and co-op, online games, the Trainer, a wild marble
+  of the Open world, and the test budget of `?nodes=`. Boss fights outside a run keep their own `node_budget` and balance, with no progress
+  scaling. The MCP's run follows `runNodes` (its `bot_nodes` is the peak) and its plain bot the fixed `bot_nodes`.
+- **The HUD** shows `Bot ~1070 · Easy` after the note of a plain bot game and of a run's fight, nowhere else for now: a boss's budget is
+  in the engine, not on the page, and a boss has rules of its own that are not in a rating (the rating counts the search only, and the tooltip
+  says it). The map of a run has no such line: a fight node has no bot yet to rate. The test hook is `body[data-bot-rating]`.
+- **The simulator** (`run_sim`, section 30) plays only the act bosses, at `ACT_PERCENT`, and counts every fight and elite as won, so
+  the curve cannot change its table: it is the same before and after (bot-only numbers, 12 seeds, level 0, the same seeds as the first 12
+  of section 30's table).
+
+  `RUN_SIM_RUNS=12 RUN_SIM_LEVELS=0 cargo run --release --example run_sim`, before (the code of main) and after (this commit), bot-only numbers:
+
+  | commander | level | runs | act 1 | act 2 | act 3 = the run |
+  |---|---|---|---|---|---|
+  | The Captain, The Warden, The Saboteur, The Juggernaut (identical rows) | 0 | 12 | 9/12 (75 %) | 5/9 (56 %) | 2/5 (40 %) |

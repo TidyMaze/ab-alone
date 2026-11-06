@@ -4,6 +4,7 @@
 import { cellIndex, DIRECTIONS, isMarble, MOVE_STRIDE, RADIUS, type Axial, type Move } from './board';
 import { BLUEPRINTS, blueprintId, CELLS, COLLECT_COST, LEGACY_UNLOCKED, type BlueprintType } from './collector';
 import { SEAT_GLYPHS, SHELL } from './marbles';
+import { runPercent } from './botrating';
 import { VOIDED_LINE } from './ledger';
 import { read, write, type Store } from './quality';
 import { replay, type KeyStore, type ReplayEngine } from './savegame';
@@ -670,6 +671,15 @@ export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
   const budget = kind === 'elite' ? nodes * (ELITE_BUDGET + Number(from(run, 1)) + Number(marked)) : nodes;
   const factor = (has(run, Relic.StaticShroud) ? 0.5 : 1) * (has(run, Relic.BossBreaker) ? 1.25 : 1) * (from(run, 10) ? HUNTED : 1);
   return kind === 'fight' || kind === 'elite' ? Math.round(budget * factor) : budget;
+}
+
+/** The search budget of a fight or an elite of a run before the elite and the relic factors of `fightBudget` (#1611): `nodes`, the peak, times
+ * a share that grows from the run's first fight to its last ones, by the act and the row of the node. Any other node keeps `nodes`. */
+export function runNodes(map: MapNode[], run: Run, nodes: number): number {
+  const node = run.fighting ? lastNode(map, run) : null;
+  if (node?.kind !== 'fight' && node?.kind !== 'elite') return nodes;
+  const rows = Math.max(...map.filter((n) => n.act === node.act).map((n) => n.row)) + 1; // the rows of its act, whatever the map it was dealt
+  return Math.max(1, Math.round((nodes * runPercent((node.act + node.row / rows) / FINAL_ACT)) / 100));
 }
 
 /** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, then 120 % (#1537), then hard, then
