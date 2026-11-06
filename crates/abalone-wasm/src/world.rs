@@ -109,6 +109,20 @@ pub fn world_teleporters(seed: u32) -> Vec<i32> {
         .collect()
 }
 
+/// The pad of each tower of the world `seed` (docs/specs/openworld.md section 15): `q, r` pairs, in the order of `world_lairs`, the boss
+/// of the tower first. A pad is a teleporter on a cell next to its tower, which the client adds to the network once the tower is beaten
+/// through the world.
+#[wasm_bindgen]
+pub fn world_pads(seed: u32) -> Vec<i32> {
+    world::towers(u64::from(seed))
+        .into_iter()
+        .flat_map(|tower| {
+            let (q, r) = world::tower_pad(u64::from(seed), tower);
+            [q, r]
+        })
+        .collect()
+}
+
 /// The lore logs of the world `seed` (#1589, docs/specs/openworld.md section 12): `q, r` pairs, log 0 first, 12 in all so that a log keeps
 /// its number, kept off the lairs and the teleporters. A log with no fit (#1595, seeds of one in a thousand) is the pair `LOG_LEFT_OUT`, a
 /// cell no hero reaches and no chunk holds.
@@ -605,6 +619,16 @@ mod tests {
             flat,
             lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn the_pads_are_q_r_pairs_one_beside_each_tower_in_the_order_of_the_lairs() {
+        let (pads, lairs) = (world_pads(7), world_lairs(7));
+        assert_eq!(pads.len(), lairs.len());
+        for (pad, lair) in pads.chunks(2).zip(lairs.chunks(2)) {
+            assert_eq!(world::hex_distance((pad[0], pad[1]), (lair[0], lair[1])), 1);
+            assert_eq!((pad[0], pad[1]), world::tower_pad(7, (lair[0], lair[1])));
+        }
     }
 
     #[test]

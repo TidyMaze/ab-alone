@@ -679,6 +679,20 @@ pub fn gate_ring(towers: &[(i32, i32)], cell: (i32, i32)) -> u8 {
     (nearer.min(TOWER_ORDER.len() - 1) / RING_SIZE) as u8 + 1
 }
 
+/// The pad a tower beaten through the world leaves (docs/specs/openworld.md section 15): a teleporter on the first of the tower's six
+/// neighbours, in the order of `STEPS`, that is open ground and holds no generated enemy, so the hero can come back to that part of the
+/// world. A tower's neighbours are all open ground of its biome (`lair_try`), so the search ends in six looks; if every one held an enemy
+/// the first would take it. From the seed alone: it reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
+pub fn tower_pad(seed: u64, tower: (i32, i32)) -> (i32, i32) {
+    let next = |(dq, dr): (i32, i32)| (tower.0 + dq, tower.1 + dr);
+    STEPS
+        .into_iter()
+        .map(next)
+        .filter(|&(q, r)| cell(seed, q, r).is_some_and(|c| !c.terrain.blocked()))
+        .min_by_key(|&(q, r)| is_enemy(seed, q, r))
+        .expect("a tower stands on open ground")
+}
+
 /// A lair is drawn in its share of the sextant for its first `LAIR_SLOT_TRIES` tries (the most any seed of 1 to 2000 but 711 needs is
 /// 5 666), then in the whole sextant (#1594: the third of seed 711's tundra that lair 14 is drawn in holds no open ground). So the
 /// lairs of a seed that found them in the share do not move. The search ends after `LAIR_TRIES` tries.
@@ -2696,6 +2710,12 @@ mod tests {
         let first = STEPS.iter().find(|&&step| free(step)).unwrap();
         assert_eq!(pad, (tower.0 + first.0, tower.1 + first.1));
         assert_eq!(tower_pad(7, tower), pad, "from the seed alone");
+    }
+
+    #[test]
+    fn the_pads_of_seed_7_are_pinned() {
+        let found: Vec<(i32, i32)> = pads(7).into_iter().map(|p| p.1).collect();
+        assert_eq!(found[..3], [(74, -208), (-129, -285), (155, 288)]);
     }
 
     /// The cells the logs, then the places, keep off, as the bridge passes them (the 15 towers' lairs and the teleporters, then the logs).

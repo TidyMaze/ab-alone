@@ -666,3 +666,27 @@ cell, and what the map shows.
 - **Tests.** Rust: on the seeds 1 to 2000 and 24 random 32-bit seeds the towers stand on the lairs' cells, the distance never falls along
   `TOWER_ORDER`, and The Echo is the nearest tower; the order is the roster once; the rings and the gate rule. The bridge: the order names the
   bosses by id, the lairs are the towers, the rings. Client: the map, the minimap, the bearing, the button and an older save.
+
+## 16. Things to find, risk and earn (#1531)
+
+The world has a reason to leave the spawn besides the 15 towers: places to find, a gain for the pushes the troop already plays, and a thing a tower gives
+only to a hero who came by walking. All three are about marbles on the board and places on the map: no currency, no HP, no stats, no item, so section 1's
+"Not now" (#313) stays true. A recruit is one more marble of the troop, which the rules of the troop already know; a pad is one more teleporter of
+section 10.
+
+- **Points of interest.** The non-boss points of interest are the 12 lore logs (section 12) and the 5 dungeon gates (section 13), 17 in a world of
+  603 457 cells, one for 35 500 cells (the 15 towers are one for 40 200). Each biome holds two or three: the logs are two a biome (one in the near ring,
+  30 to 140 ground units out, one in the far ring), and the gates one in each biome but the meadow, so the meadow holds 2 and every other biome 3. A hero who
+  leaves the spawn in any direction meets one within 165 cells, before the nearest tower (at 160 cells or more, section 15). No new kind of place (no
+  cache, no camp). The density is a function of the seed alone and is tested over the seeds 1 to 300 (`world::tests`, the count, the biome and the
+  distance).
+- **Pads.** A tower the hero beats by walking onto it in the Open world (section 7) leaves a teleporter pad on an open cell next to it. The pad joins
+  the network of section 10: it is drawn and discovered as any pad, the Teleport button and the map pick it, and the teleport arrives and refuses as for
+  any pad. It is found by `world::tower_pad(seed, tower)`, a pure function of the seed and the tower: the first of the tower's six neighbours, in the order
+  of `STEPS` (E, W, NE, SW, NW, SE), that is open ground and holds no generated enemy. The six neighbours of a tower are open ground of its biome by
+  construction (`lair_try`), so the search ends in at most six looks; the bridge's `world_pads(seed)` gives the 15 pads in the order of `world_lairs`, and a
+  test sweeps the seeds 1 to 2000 (the pad is next to its tower, on open ground, off every enemy's start, never on a tower, never the same as another pad).
+  The pads and the places of sections 10 and 13 keep 3 cells off every lair, so a pad never shares a cell with a teleporter, a log or a place.
+  Which pads exist is the list of the towers beaten in the world's save (`lairs`, section 5): a boss beaten from the Modes menu or the Hub is a medal and
+  adds nothing to that list, so it leaves no pad. No save field is added: `lairs` already holds only the lairs beaten through the world. A pad shows once its
+  tower is beaten, wherever the save is read.
