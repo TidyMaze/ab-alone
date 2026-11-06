@@ -82,6 +82,7 @@ async function partner(transport: Transport, room: string, side: number, fight =
 async function invited(hash: string) {
   const game = await boot(`?bot=off&net=hook${hash}`, calm);
   const w = window as unknown as Record<string, (...args: unknown[]) => void>;
+  await until(game, () => typeof w.__netIn === 'function'); // the hook transport comes up with the room: a slow page has none yet when the partner greets (#1608)
   const end: Transport & { leave(): void } = {
     state: 'open',
     send: (message) => w.__netIn!(message, 'creator'),
