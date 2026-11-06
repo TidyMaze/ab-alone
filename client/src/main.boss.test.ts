@@ -833,3 +833,68 @@ describe('main.ts boss tells', () => {
     expect(vReset.distance).toBeCloseTo((5 / 4) * Math.hypot(11, 8));
   });
 });
+
+// The boss menu follows the Hub's lifts (#1527): a boss the Hub would not let the player reach is locked, with its reason. A player's browser
+// (no automation) or `?locks` has the lock; the automated pages of the other specs, and the links, keep the menu open.
+describe('the boss menu locks the bosses the Hub would not reach (#1527)', () => {
+  const entries = (): HTMLButtonElement[] => [...byId('boss-list').querySelectorAll('button')];
+  const entry = (name: string): HTMLButtonElement => entries().find((b) => b.textContent!.startsWith(name))!;
+  const open = (game: Game): void => {
+    game.openModes();
+    byId('boss-fight').click();
+  };
+  const progress = (...beaten: string[]) => ({ 'ab-alone.progress': JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0], beaten }) });
+
+  it('shows the bosses above the progress locked with the boss to beat, and starts none of them', async () => {
+    const game = await boot('?bot=off', { webdriver: false });
+    open(game);
+    expect(entry('The Echo').getAttribute('aria-disabled')).toBeNull();
+    expect(entry('The Dual Room').getAttribute('aria-disabled')).toBeNull();
+    expect(entries().filter((b) => b.getAttribute('aria-disabled') === 'true')).toHaveLength(13);
+    const choir = entry('The Choir');
+    expect(choir.getAttribute('aria-disabled')).toBe('true');
+    expect(choir.dataset.locked).toBe('Beat The Hull first');
+    expect(choir.querySelector('.lock')!.textContent).toBe('Beat The Hull first');
+    expect(entry('The Hull').querySelector('.lock')!.textContent).toBe('Beat The Echo first');
+    drawSeed(1);
+    choir.click();
+    entry('The Ballast Mind').click();
+    expect(body().boss).toBeUndefined(); // no fight started
+    expect(byId('boss-list').hidden).toBe(false); // the menu stays open
+    entry('The Echo').click();
+    expect(body().boss).toBe('echo');
+  });
+
+  it('opens a deck as its lift opens, and keeps open the bosses already beaten of an older save', async () => {
+    const game = await boot('?bot=off', { webdriver: false, storage: progress('echo', 'pulsar') });
+    open(game);
+    for (const name of ['The Hull', 'The Alien', 'The Swarm']) expect(entry(name).getAttribute('aria-disabled'), name).toBeNull();
+    expect(entry('The Choir').getAttribute('aria-disabled')).toBe('true');
+    expect(entry('The Pulsar').getAttribute('aria-disabled')).toBeNull(); // beaten, whatever its deck
+    expect(entry('The Pulsar').querySelector('.lock')).toBeNull();
+    drawSeed(1);
+    entry('The Hull').click();
+    expect(body().boss).toBe('hull');
+  });
+
+  it('reads the progress each time the menu opens, and drops a lock that no longer holds', async () => {
+    const game = await boot('?bot=off', { webdriver: false });
+    open(game);
+    expect(entry('The Hull').getAttribute('aria-disabled')).toBe('true');
+    byId('boss-fight').click(); // closed
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0], beaten: ['echo'] }));
+    byId('boss-fight').click();
+    expect(entry('The Hull').getAttribute('aria-disabled')).toBeNull();
+    expect(entry('The Hull').dataset.locked).toBeUndefined();
+    expect(entry('The Hull').querySelector('.lock')).toBeNull();
+  });
+
+  it('is open on an automated page, and locked there with ?locks', async () => {
+    const open_ = await boot('?bot=off');
+    open(open_);
+    expect(entries().filter((b) => b.getAttribute('aria-disabled') === 'true')).toHaveLength(0);
+    const locked = await boot('?bot=off&locks');
+    open(locked);
+    expect(entries().filter((b) => b.getAttribute('aria-disabled') === 'true')).toHaveLength(13);
+  });
+});

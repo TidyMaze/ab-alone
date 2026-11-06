@@ -4,7 +4,8 @@ import { DECK_NAMES } from './deck';
 import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, type Spot } from './hub';
 import { SECRETS } from './story';
-import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
+import { BOSS_IDS } from './tally';
+import { arrowCell, bossLockLine, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -287,17 +288,36 @@ describe('the lift-shaft rail (#1249)', () => {
   });
 });
 
-describe('the boss pips (#1249)', () => {
-  it('count the bosses beaten, a pip each in deck order: beaten, open or locked', () => {
-    expect(pipsHtml(['echo'])).toBe(
-      '<span class="count">Bosses 1/5</span>' +
-        '<span class="pip" data-state="beaten" title="The Echo: beaten"></span>' +
-        '<span class="pip" data-state="open" title="The Hull: open"></span>' +
-        '<span class="pip" data-state="locked" title="The Choir: locked"></span>' +
-        '<span class="pip" data-state="locked" title="The Chaplain: locked"></span>' +
-        '<span class="pip" data-state="locked" title="The Ballast Mind: locked"></span>',
+describe('the boss pips (#1249, #1527)', () => {
+  it('count the medals out of the fifteen bosses as the Open world does, a pip a deck in deck order: beaten, open or locked', () => {
+    expect(pipsHtml(['echo'], { echo: 12 })).toBe(
+      '<span class="count">Medals 1 / 15</span>' +
+        '<span class="pip" data-state="beaten" title="Mess deck, The Echo: beaten"></span>' +
+        '<span class="pip" data-state="open" title="Cargo deck, The Hull: open"></span>' +
+        '<span class="pip" data-state="locked" title="Furnace deck, The Choir: locked"></span>' +
+        '<span class="pip" data-state="locked" title="Chapel deck, The Chaplain: locked"></span>' +
+        '<span class="pip" data-state="locked" title="Bridge deck, The Ballast Mind: locked"></span>',
     );
-    expect(pipsHtml([])).toContain('Bosses 0/5');
+    expect(pipsHtml([], {})).toContain('Medals 0 / 15');
+    expect(pipsHtml([], { echo: 3, alien: 9, dual: 4, nobody: 1 })).toContain('Medals 3 / 15'); // a medal of a boss the roster has not does not count
+  });
+});
+
+describe('the lock of a boss in the boss menu (#1527)', () => {
+  it('says nothing for a boss the Hub lets the player reach, and names the boss to beat for one it does not', () => {
+    expect(bossLockLine('echo', [])).toBe('');
+    expect(bossLockLine('hull', [])).toBe('Beat The Echo first');
+    expect(bossLockLine('hull', ['echo'])).toBe('');
+    expect(bossLockLine('swarm', [])).toBe('Beat The Echo first');
+    expect(bossLockLine('choir', ['echo'])).toBe('Beat The Hull first');
+    expect(bossLockLine('overseer', ['echo', 'hull'])).toBe('Beat The Choir first');
+    expect(bossLockLine('pulsar', [])).toBe('Beat The Chaplain first');
+    expect(bossLockLine('pulsar', ['chaplain'])).toBe('');
+    expect(bossLockLine('ballast', ['ballast'])).toBe(''); // beaten already
+  });
+
+  it('holds no secret word of a later stage', () => {
+    for (const id of BOSS_IDS) for (const { word } of SECRETS) expect(bossLockLine(id, []), id).not.toMatch(word);
   });
 });
 

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import { DECK_NAMES, deckOf, type Deck } from './deck';
-import { canEnter, HUB_CELLS, hubPath, neighbours, roomAt, roomsOf, START, step, type Spot } from './hub';
+import { bossOpen, canEnter, HUB_CELLS, hubPath, neighbours, roomAt, roomsOf, START, step, type Spot } from './hub';
 import { LORE } from './lore';
+import { BOSS_IDS } from './tally';
 
 // The hub (docs/specs/game-design.md section 3.5): one small hex map per deck, rooms on the outer ring.
 const key = (s: Spot) => `${s.deck} ${s.cell[0]},${s.cell[1]}`;
@@ -153,6 +154,33 @@ describe('canEnter: only the lifts are gated', () => {
 
   it('the lift down to the Mess is always open', () => {
     expect(canEnter({ kind: 'lift', to: 'mess' }, [])).toBe(true);
+  });
+});
+
+describe('bossOpen: the Hub's rule for a boss (#1527)', () => {
+  it('opens the bosses of the Mess at the start, and the bosses of a deck once its lift is open', () => {
+    expect(['echo', 'dual'].map((id) => bossOpen(id, []))).toEqual([true, true]);
+    for (const id of ['hull', 'alien', 'railyard', 'assembly', 'swarm']) {
+      expect(bossOpen(id, [])).toBe(false);
+      expect(bossOpen(id, ['echo'])).toBe(true);
+    }
+    for (const id of ['choir', 'magnetizer', 'core']) expect(bossOpen(id, ['echo'])).toBe(false);
+    for (const id of ['choir', 'magnetizer', 'core']) expect(bossOpen(id, ['hull'])).toBe(true);
+    for (const id of ['ballast', 'pulsar']) expect(bossOpen(id, ['echo', 'hull', 'choir'])).toBe(false);
+    for (const id of ['chaplain', 'overseer', 'stalker']) expect(bossOpen(id, ['choir'])).toBe(true);
+  });
+
+  it('keeps open a boss already beaten, whatever its deck, so an older save loses nothing', () => {
+    expect(bossOpen('ballast', ['ballast'])).toBe(true);
+    expect(bossOpen('pulsar', ['ballast'])).toBe(false); // only the boss itself
+  });
+
+  it('agrees with the lift of the boss's deck for every boss and every progress', () => {
+    for (const id of BOSS_IDS) {
+      for (const beaten of [[], ['echo'], ['echo', 'hull'], ['echo', 'hull', 'choir'], ['echo', 'hull', 'choir', 'chaplain']]) {
+        expect(bossOpen(id, beaten)).toBe(canEnter({ kind: 'lift', to: deckOf('boss', id) }, beaten));
+      }
+    }
   });
 });
 

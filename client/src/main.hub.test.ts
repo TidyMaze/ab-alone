@@ -829,7 +829,7 @@ describe('main.ts, the deck plan (#1249)', () => {
     placed(game, [2, 0]);
     placed(game, [0, 0]);
     expect(byId('hub-rail').querySelector('[aria-current]')!.textContent).toContain('Cargo');
-    expect(byId('hub-pips').textContent).toBe('Bosses 1/5');
+    expect(byId('hub-pips').textContent).toBe('Medals 0 / 15'); // one count of medals on every screen (#1527)
 
     game.click(1, 0); // the marble rolls: YOU follows it
     expect(plate('1,0').textContent).toBe('You');
