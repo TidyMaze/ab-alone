@@ -218,6 +218,45 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   played when the tell appears or changes, never on a tell that stays the same: a low creak of the
   frame for The Hull's crack countdown, a small high bell for The Chaplain's flip tell, two hummed
   voices a fifth apart for The Choir's next army.
+- **Cues (#1570).** One cue per game event, all synthesized in code through `Sfx` on the effects bus, no audio file: dry,
+  mechanical and low-key, as the ship is. A win is not a fanfare: a stamp, a plain note and its fifth above; a loss the same
+  stamp with a note and a minor third below it. A boss phase change is a gear shifting down (a falling tritone and a grind), an
+  elimination in the royale a short drop, a rogue-lite reward two small ticks a major third apart, a UI click the shortest and
+  quietest of all. A win or a loss plays once per game, after the toll or clack of the last ejection (about 1.1 s), in the royale
+  as soon as the banner shows, never during a Replay and never for a draw, a hot seat or a spectator. A phase change plays
+  once, after the ejection that caused it, never during a Replay. The royale plays one elimination cue for the marble sets that
+  went out in the same draw of the arena, however many, none in the draw that shows the end banner (its own cue), and none for a set
+  already out when a game opens. The reward plays once
+  as it comes up, after the win. The click is one delegated listener on the buttons of the page, on the effects slider and the
+  first gesture like every cue; the board, the sliders, a node of the rogue-lite map and Start (which have their own pick) never
+  click. Every cue carries a tone above 150 Hz, so `cueDb` (`sound.ts`) calculates what a small speaker plays of the loudest
+  tone of it at its peak (the same high-pass as below, a triangle by its first harmonic, noise not counted): at least -36 and at
+  most -10 dBFS, which `sound.test.ts` asserts. Today: win -17.4, loss -17.5, phase -17.0, elimination -15.5, reward -21.7, click
+  -26.8 dBFS. This is calculated, not heard: an owner should listen on a laptop and a phone. `cuetable.test.ts` reads this
+  table: a row marked played needs its cue, a cue its row.
+
+  | Event | Mode | Bus | Status |
+  |---|---|---|---|
+  | `win` | fights, royale | effects | played |
+  | `loss` | fights, royale | effects | played |
+  | `phase` | boss | effects | played |
+  | `elimination` | royale | effects | played |
+  | `reward` | rogue-lite | effects | played |
+  | `click` | every mode | effects | played |
+  | `draw` | fights | effects | planned |
+  | `turn-start` | every mode | effects | planned |
+  | `selection` | every mode | effects | planned |
+  | `illegal-move` | every mode | effects | planned |
+  | `boss-intro` | boss | effects | planned |
+  | `boss-death` | boss | effects | planned |
+  | `shop` | rogue-lite | effects | planned |
+  | `relic` | rogue-lite | effects | planned |
+  | `royale-round` | royale | effects | planned |
+  | `step` | Open world | effects | planned |
+  | `pickup` | Open world | effects | planned |
+  | `time-of-day` | Open world | ambience | planned |
+  | `online-join` | online | effects | planned |
+
 - **Music.** No melodic loops. Drone and texture layers, 2 to 3 tension layers driven by game
   state (marbles in danger, boss phase). Boss themes are a slow pulse that speeds up per phase.
   Today two drone layers of steady low sines under the hum (#439), through the music bus: the
@@ -238,7 +277,7 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
 - **Mix.** Four sliders: music, ambience, effects, voice (#438), each the gain of its bus into one
   master gain, 0 to 100 %, at 100 % by default and saved locally. The hum is ambience, the
-  tension drones music, the knock, the ejection, the tells and the pick of a rogue-lite map node (#1468) effects, the audio logs voice (#516).
+  tension drones music, the knock, the ejection, the tells, the pick of a rogue-lite map node (#1468) and the cues (#1570) effects, the audio logs voice (#516).
   A Sound off saved by the old toggle sets every slider to 0. With every slider at 0 no audio
   context is made. The game is fully playable on mute: every audio cue has a visual twin (the
   ejection animation for the ejection sound, the tells on the board for their sounds, the transcript for an

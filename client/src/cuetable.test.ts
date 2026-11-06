@@ -9,7 +9,7 @@ const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
 const world = new TextDecoder().decode(await readFile(new URL('../../docs/specs/world.md', import.meta.url)));
 const audio = world.split('\n## ').find((section) => section.startsWith('7. Audio direction'))!;
-const rows = [...audio.matchAll(/^\| `([\w-]+)` \| ([^|]+) \| (\w+) \| (played|planned) \|$/gm)].map(([, event, mode, bus, status]) => ({ event: event!, mode: mode!.trim(), bus: bus!, status: status! }));
+const rows = [...audio.matchAll(/^ *\| `([\w-]+)` \| ([^|]+) \| (\w+) \| (played|planned) \|$/gm)].map(([, event, mode, bus, status]) => ({ event: event!, mode: mode!.trim(), bus: bus!, status: status! }));
 
 describe('the cue table of world.md section 7 (#1570)', () => {
   const played = rows.filter((row) => row.status === 'played');

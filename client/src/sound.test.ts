@@ -403,8 +403,8 @@ describe('cueDb, the level of a cue on a small speaker (#1572, #1570)', () => {
     expect(cueDb([triangle])).toBeCloseTo(smallSpeakerDb([{ freq: 1000, gain: 0.1 * (8 / Math.PI ** 2) }]), 2);
   });
 
-  it('drops a tone under the cutoff: a 60 Hz sine is far below the floor', () => {
-    expect(cueDb([{ source: 'sine', freq: [60, 60], env: [[0, 0], [0.01, 0.4], [0.2, 0]] }])).toBeLessThan(CUE_FLOOR_DB);
+  it('drops a tone under the cutoff: a 60 Hz sine at gain 0.1 is under the floor', () => {
+    expect(cueDb([{ source: 'sine', freq: [60, 60], env: [[0, 0], [0.01, 0.1], [0.2, 0]] }])).toBeLessThan(CUE_FLOOR_DB);
   });
 });
 

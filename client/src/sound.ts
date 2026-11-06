@@ -136,6 +136,94 @@ export const PICK: Voice[] = [
   { source: 'sine', freq: [660, 880], env: strike(0.05, 0.15, 0.2) },
 ];
 
+/** The events with a cue (world.md section 7, the cue table; #1570). */
+export type CueEvent = 'win' | 'loss' | 'phase' | 'elimination' | 'reward' | 'click';
+
+/** A fight ends, a boss changes phase: the cue follows the ejection that caused it, after its toll or clack. */
+export const AFTER_EJECTION = CUE_AT + 0.3;
+
+// Dry and mechanical, the register of the ship (world.md section 7): a latch, a stamp, a relay, never a fanfare. Each
+// has a tone above 150 Hz for a small speaker (#1572) and a dull body of noise, short, no tail over a second.
+const STAMP: Voice = { source: 'noise', filter: { type: 'lowpass', freq: [400, 150], q: 0.7 }, env: strike(0, 0.4, 0.05) };
+
+/** The cue table: the mode where it plays, the bus, the voices. The spec table of world.md section 7 lists the same rows
+ * (cuetable.test.ts). */
+export const CUES = {
+  // The ledger closes: a stamp, a plain note and its fifth above.
+  win: {
+    mode: 'fights, royale',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [330, 330], env: strike(0, 0.3, 0.3) },
+      { source: 'sine', freq: [495, 495], env: strike(0.14, 0.22, 0.6) },
+      STAMP,
+    ],
+  },
+  // The ledger is struck: the same stamp, a plain note and a minor third below it.
+  loss: {
+    mode: 'fights, royale',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [294, 294], env: strike(0, 0.3, 0.3) },
+      { source: 'sine', freq: [247, 247], env: strike(0.16, 0.25, 0.8) },
+      { ...STAMP, filter: { type: 'lowpass', freq: [300, 100], q: 0.7 } },
+    ],
+  },
+  // A gear shifts down: a falling tritone and a grind of noise.
+  phase: {
+    mode: 'boss',
+    bus: 'effects',
+    voices: [
+      {
+        source: 'sine',
+        freq: [523, 370],
+        env: [
+          [0, 0],
+          [0.02, 0.25],
+          [0.4, 0],
+        ],
+      },
+      {
+        source: 'triangle',
+        freq: [262, 185],
+        env: [
+          [0, 0],
+          [0.02, 0.15],
+          [0.4, 0],
+        ],
+      },
+      { source: 'noise', filter: { type: 'bandpass', freq: [1200, 300], q: 3 }, env: strike(0, 0.2, 0.2) },
+    ],
+  },
+  // A set of marbles goes out: a short drop, like a drip into the dark.
+  elimination: {
+    mode: 'royale',
+    bus: 'effects',
+    voices: [
+      { source: 'sine', freq: [700, 250], env: strike(0, 0.3, 0.12) },
+      { source: 'noise', filter: { type: 'bandpass', freq: [2000, 1000], q: 3 }, env: strike(0, 0.15, 0.03) },
+    ],
+  },
+  // Scrap into the hold: two small bright ticks, a major third apart.
+  reward: {
+    mode: 'rogue-lite',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [880, 880], env: strike(0, 0.18, 0.12) },
+      { source: 'sine', freq: [1109, 1109], env: strike(0.08, 0.14, 0.28) },
+    ],
+  },
+  // A key of the console: the shortest and quietest.
+  click: {
+    mode: 'every mode',
+    bus: 'effects',
+    voices: [
+      { source: 'triangle', freq: [1100, 900], env: strike(0, 0.1, 0.025) },
+      { source: 'noise', filter: { type: 'bandpass', freq: [3200, 2400], q: 2 }, env: strike(0, 0.12, 0.012) },
+    ],
+  },
+} as const satisfies Record<CueEvent, { mode: string; bus: Bus; voices: readonly Voice[] }>;
+
 /** Every voice of the sound twin of `tell`. */
 export const tellVoices = (tell: Tell): Voice[] => TELLS[tell];
 
@@ -240,6 +328,19 @@ export const smallSpeakerDb = (tones: readonly HumTone[]): number => {
   }, 0);
   return 10 * Math.log10(power);
 };
+/** What a cue must leave on a small speaker (#1570, #1572): the loudest tone of it, at its peak, between these in dBFS
+ * (RMS, master included, bus at 100 %). The floor is above the hum and the drones, the ceiling under a shout. */
+export const CUE_FLOOR_DB = -36;
+export const CUE_CEILING_DB = -10;
+/** The level in dBFS of the loudest tone of `voices` on a small speaker, at its peak: a sine by its gain, a triangle by
+ * 8/pi^2 of it (its first harmonic), at the middle of its glide. Noise is not counted, so the floor holds without it.
+ * Calculated, not rendered. */
+export const cueDb = (voices: readonly Voice[]): number =>
+  voices.reduce((loudest, voice) => {
+    if (voice.source === 'noise') return loudest;
+    const gain = Math.max(...voice.env.map(([, g]) => g)) * (voice.source === 'triangle' ? 8 / Math.PI ** 2 : 1);
+    return Math.max(loudest, smallSpeakerDb([{ freq: Math.sqrt(voice.freq[0] * voice.freq[1]), gain }]));
+  }, -Infinity);
 /** The gain of each tension layer at `level`: level n plays the first n layers. */
 export const layerGains = (level: Tension): number[] => TENSION.map((_, i) => (i < level ? 1 : 0));
 
@@ -411,10 +512,16 @@ export class Sfx {
     return this.playAll(ROUTE.pick, PICK);
   }
 
+  /** Plays the cue of `event` `after` seconds from now. False when silent (effects at 0, or no gesture yet). */
+  cue(event: CueEvent, after = 0): boolean {
+    const { bus, voices } = CUES[event];
+    return this.playAll(bus, voices, after);
+  }
+
   /** Plays `voices` from now through `bus`. False when silent: the bus at 0, or no gesture yet. */
-  private playAll(bus: Bus, voices: Voice[]): boolean {
+  private playAll(bus: Bus, voices: readonly Voice[], after = 0): boolean {
     if (this.mix[bus] === 0 || !this.graph) return false;
-    const now = this.graph.ctx.currentTime;
+    const now = this.graph.ctx.currentTime + after;
     for (const voice of voices) this.play(this.graph, this.graph.buses[bus], voice, now);
     return true;
   }

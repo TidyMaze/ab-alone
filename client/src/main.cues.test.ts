@@ -24,9 +24,9 @@ function start(game: Game, name: string): void {
   [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.includes(name))!.click();
 }
 /** The engine's answers once a ply was played, with `over` as its status: 0 running, 1 Black wins, 2 White wins, 3 draw. */
-async function judge(kind: 'Encounter' | 'Engine', over: { status: number }): Promise<void> {
+async function judge(game: Game, kind: 'Encounter' | 'Engine', over: { status: number }): Promise<void> {
   const wasm = await import('abalone-wasm');
-  const status = (): number => over.status;
+  const status = (): number => (game.hook<number>('__plies') > 0 ? over.status : 0);
   if (kind === 'Encounter') vi.spyOn(wasm.Encounter.prototype, 'result').mockImplementation(status);
   vi.spyOn(wasm[kind].prototype, 'status').mockImplementation(status);
 }
@@ -81,7 +81,7 @@ describe('the win and the loss (#1570)', () => {
     const game = await boot('?bot=off', { reducedMotion: true, audio: true });
     gesture();
     const over = { status: 0 };
-    await judge('Encounter', over);
+    await judge(game, 'Encounter', over);
     start(game, 'The Echo');
     over.status = 1;
     move(game);
@@ -96,7 +96,7 @@ describe('the win and the loss (#1570)', () => {
     const game = await boot('?bot=off', { reducedMotion: true, audio: true });
     gesture();
     const over = { status: 0 };
-    await judge('Encounter', over);
+    await judge(game, 'Encounter', over);
     start(game, 'The Echo');
     over.status = 2;
     move(game);
@@ -107,7 +107,7 @@ describe('the win and the loss (#1570)', () => {
     for (const [status, expected] of [[1, 1], [3, 0]] as const) {
       const game = await boot('?nodes=50', { audio: true });
       gesture();
-      await judge('Engine', { status });
+      await judge(game, 'Engine', { status });
       move(game);
       expect(count(game, 'win'), `status ${status}`).toBe(expected);
     }
@@ -116,7 +116,7 @@ describe('the win and the loss (#1570)', () => {
   it('a hot seat is silent: nobody there wins or loses', async () => {
     const game = await boot('?bot=off', { audio: true });
     gesture();
-    await judge('Engine', { status: 1 });
+    await judge(game, 'Engine', { status: 1 });
     move(game);
     expect(document.body.dataset.over).toBe('win');
     expect([count(game, 'win'), count(game, 'loss')]).toEqual([0, 0]);
@@ -126,7 +126,7 @@ describe('the win and the loss (#1570)', () => {
     for (const [storage, key] of [[{}, true], [{ 'ab-alone.volume.effects': '0' }, false]] as const) {
       const game = await boot('?bot=off', { reducedMotion: true, audio: true, storage });
       if (!key) gesture();
-      await judge('Encounter', { status: 1 });
+      await judge(game, 'Encounter', { status: 1 });
       start(game, 'The Echo');
       move(game);
       expect(cues(game).filter((c) => c !== 'click')).toEqual([]);
@@ -137,7 +137,7 @@ describe('the win and the loss (#1570)', () => {
     const game = await boot('?bot=off', { reducedMotion: true, audio: true });
     gesture();
     const over = { status: 0 };
-    await judge('Encounter', over);
+    await judge(game, 'Encounter', over);
     start(game, 'The Echo');
     move(game);
     byId('replay').click();
@@ -225,25 +225,23 @@ describe('the royale (#1570)', () => {
   async function royale(options: { reducedMotion?: boolean } = {}): Promise<Game> {
     const game = await boot('?bot=off', { audio: true, ...options });
     gesture();
-    game.openModes();
-    byId('battle-royale').click();
+    game.hook('__royale', { seed: 7, rounds: [] }); // a fixed seed: the same bots every time
     return game;
   }
 
-  it('sounds an elimination when a marble set goes out, once however many go in the same round, and the loss at the end', async () => {
+  const heard = (game: Game): string[] => cues(game).filter((c) => c !== 'click');
+
+  it('sounds an elimination when a marble set goes out, once for sets that go out together, and the loss at the end', async () => {
     const game = await royale();
     holdAll(game, 80);
-    expect(byId('hud').querySelector('.turn')!.textContent).toContain('You place');
-    expect(count(game, 'elimination')).toBeGreaterThanOrEqual(1);
-    expect(count(game, 'elimination')).toBeLessThanOrEqual(5);
-    expect(count(game, 'loss')).toBe(1);
+    expect(byId('hud').querySelector('.turn')!.textContent).toBe('You place 6th');
+    expect(heard(game)).toEqual(['elimination', 'elimination', 'loss']);
   });
 
-  it('plays the end alone when the last set goes out in the same draw as the banner', async () => {
+  it('plays the same cues under reduced motion, where the arena jumps to each round', async () => {
     const game = await royale({ reducedMotion: true });
     holdAll(game, 80);
-    expect(count(game, 'loss') + count(game, 'win')).toBe(1);
-    expect(cues(game).at(-1)).not.toBe('elimination');
+    expect(heard(game)).toEqual(['elimination', 'elimination', 'loss']);
   });
 
   it('a game file that opens already over sounds its win once, and no elimination for the sets already out', async () => {

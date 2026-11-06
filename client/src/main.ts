@@ -177,7 +177,8 @@ import { WorldPeersHost } from './worldnet';
 import { worldKeys } from './worldevents';
 import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
 import type { Transport } from './transport';
-import { endBanner, royaleBanner } from './endbanner';
+import { endBanner, royaleBanner, type EndAnim } from './endbanner';
+import { EdgeWatch, EndWatch, OutWatch, PhaseWatch, clickable } from './cues';
 import { tallyLine, townLine } from './tally';
 import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
 import { generateKeys, type Keys, type Report } from './moverecord';
@@ -296,7 +297,7 @@ import {
 import { nextPalette, paletteById, themeColors, type Palette } from './palettes';
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
-import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
+import { AFTER_EJECTION, BUSES, Sfx, TellWatch, type Bus, type CueEvent, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
 import { ACCENTS, CORE, GLASS, HEAT, pulseAt, SHELL, type Accent } from './marbles';
@@ -844,6 +845,21 @@ function tellSound(tell: Tell, marks: readonly unknown[]): void {
   if (!tells.changed(tell, marks)) return;
   const cue = sfx.tell(tell);
   if (cue) tellCues.push(cue);
+}
+// The cues of the first slice of world.md section 7 (#1570): which event plays which cue is cues.ts, the cues played are
+// read by the tests (`__cues`). A win, a loss and a phase change wait for the toll or clack of the ejection that caused them.
+const cueWatch = { end: new EndWatch(), phase: new PhaseWatch(), out: new OutWatch(), reward: new EdgeWatch() };
+const cuesPlayed: CueEvent[] = [];
+function playCue(event: CueEvent, after = 0): void {
+  if (sfx.cue(event, after)) cuesPlayed.push(event);
+}
+document.addEventListener('click', (e) => {
+  if (clickable(e.target)) playCue('click'); // one place for every button; the board is a canvas and the map has its own pick
+});
+// The end of the game on the plate sounds once, never while the Replay is open: the live game's end sounds when it is back.
+function endCue(game: unknown, anim: EndAnim, after: number): void {
+  const heard = cueWatch.end.fresh(game, anim);
+  if (heard) playCue(heard, after);
 }
 // The frame's radius, for the fog that starts at its edge (#399): drawFrame sets it.
 let fogRadius = RADIUS;
@@ -3719,6 +3735,7 @@ function drawHud(extra = ''): void {
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
     glass: glassOf(),
   });
+  if (end && (fight || worker || online?.role === 'player') && !replaying) endCue(engine, end.anim, AFTER_EJECTION);
   if (end?.anim === 'win' && (fight || worker || online?.role === 'player') && !replaying) winOnce(); // the wins of any mode, a hot seat and a spectator apart (#1584)
   if (end?.anim === 'win' && fight) {
     const note = medalNote(fight); // a won fight: Black is the player's side. The story is at the stage this win reaches before its line is chosen (#1546)
@@ -3784,6 +3801,7 @@ function drawHud(extra = ''): void {
   if (boss) {
     // The vents note (#741): the change that starts burning the player's marbles, shown for 2 plies.
     const phase = boss.phase();
+    if (!replaying && cueWatch.phase.changed(boss, phase)) playCue('phase', AFTER_EJECTION);
     if (phaseSeen.game !== engine) phaseSeen = { game: engine, phase, since: -1 };
     else if (phaseSeen.phase !== phase) {
       phaseSeen = { game: engine, phase, since: boss.incinerators().length > 0 && startsBurningPlayer(phaseSeen.phase, phase) ? shownPly() : -1 };
@@ -5234,6 +5252,8 @@ hookHost.__gain = (bus: Bus) => sfx.gain(bus);
 hookHost.__tension = () => ({ level: sfx.tension, layers: sfx.layers });
 // The sound twins of the boss tells played so far (#358).
 hookHost.__tellCues = () => tellCues;
+// The cues of the cue table played so far (#1570).
+hookHost.__cues = () => cuesPlayed;
 // Whether music and ambience are ducked under an audio log (#516).
 hookHost.__ducked = () => sfx.ducking;
 hookHost.__palette = () => palette;
@@ -6274,6 +6294,7 @@ function showRun(): void {
   recordAscension(store, state); // a run won unlocks the next ascension level (#1465)
   recordRunes(store, state.found); // an elite archetype beaten for the first time keeps its rune for good (#1476)
   recordSeen(store, state); // the compendium (#1466)
+  if (cueWatch.reward.entered(state.reward)) playCue('reward', AFTER_EJECTION + 0.7); // after the win of the fight that earned it
   const done = finished(map, state);
   if (done) recordFinished(store, done); // the history, and the daily run's score
   const placed = placing(state) && built();
@@ -6916,10 +6937,14 @@ function royaleHud(game: Royale): void {
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
   const { board, cracks } = arenaView(game);
+  const out = outSeats(board);
+  const gone = cueWatch.out.fresh(game, out);
+  if (end) endCue(game, end.anim, 0);
+  else if (gone) playCue('elimination'); // the end has its own cue
   const log = parseLog(game.round_log());
   const shown = log && reveal ? { ...log, turns: log.turns.slice(0, shownAt(reveal.plan, reveal.ms)) } : log;
   const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet), left: royaleNet.left };
-  document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed, ...room });
+  document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out, cracks, standings: placed, ...room });
   if (rankedMode === 'royale') {
     if (placed.length > 0 && !rankedDone && ratedRoyale !== game) {
       rankedDelta = settleRankedRoyale(store, placed, me()).delta;
