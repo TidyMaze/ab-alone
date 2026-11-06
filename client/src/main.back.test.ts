@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
+import './test/openworldwasm';
 import { boot, type Game } from './test/harness';
 
 // Browser Back and the Android Back gesture (#1564, docs/specs/ui.md section "Browser Back"): a screen other than the one the page
@@ -129,7 +130,7 @@ describe('main.ts, browser Back (#1564)', () => {
     expect(data().openworld).toBeDefined();
   });
 
-  it('Back from the fight of a boss lair goes back to the world, played or not', async () => {
+  it('Back in the fight of a boss lair goes to the Hub, as its menu does; once it is won, to the world', async () => {
     const game = await boot('?bot=off&openworld=7');
     await pick(game, 'openworld');
     const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
@@ -138,10 +139,70 @@ describe('main.ts, browser Back (#1564)', () => {
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
     game.frame();
     expect(data().boss).toBeDefined();
+    expect(byId('ship-back').hidden).toBe(true); // the fight is on
+    await pressBack(game);
+    expect(data().boss).toBeUndefined();
+    expect(hubOn()).toBe(true);
+  });
+
+  it('Back once the fight of a boss lair is won goes back to the world, as its button does', async () => {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+    const { Encounter } = await import('abalone-wasm');
+    await pick(game, 'openworld');
+    const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
+    const won = (): number => (game.hook<number>('__plies') > 0 ? 1 : 0);
+    vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
+    vi.spyOn(Encounter.prototype, 'status').mockImplementation(won);
+    const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4))!;
+    const [mq, mr] = move.cells[0]!;
+    game.click(mq, mr);
+    game.click(mq + (move.dir === 2 ? 1 : -1), mr + (move.dir === 2 ? -1 : 1));
+    game.frame();
+    expect(byId('ship-back').hidden).toBe(false);
     await pressBack(game);
     await game.settle();
-    expect(data().boss).toBeUndefined();
+    expect(hubOn()).toBe(false);
     expect(data().openworld).toBeDefined();
+  });
+
+  it('Back in a wild fight of the Open world is Flee: the hero is back in the world', async () => {
+    const { world_enemies } = await import('abalone-wasm');
+    const world = (() => {
+      for (let n = 1; n < 100; n++) {
+        for (const [cx, cy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]] as Axial[]) {
+          const flat = world_enemies(n, cx, cy);
+          for (let i = 0; i < flat.length; i += 2) if (Math.max(Math.abs(flat[i]!), Math.abs(flat[i + 1]!), Math.abs(flat[i]! + flat[i + 1]!)) <= 10) return { seed: n, home: [flat[i]!, flat[i + 1]!] as Axial };
+        }
+      }
+      throw new Error('no seed');
+    })();
+    const game = await boot(`?bot=off&openworld=${world.seed}`, { reducedMotion: true });
+    await pick(game, 'openworld');
+    const beside: Axial = [world.home[0] + 1, world.home[1]];
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: beside, troop: [] });
+    await new Promise((done) => setTimeout(done, 400)); // the wipe closes, the arena opens
+    await game.settle();
+    game.frame();
+    expect(byId('wild-flee').hidden).toBe(false);
+    await pressBack(game);
+    await game.settle();
+    expect(byId('wild-flee').hidden).toBe(true);
+    expect(data().openworld).toBeDefined();
+  });
+
+  it('writing the online address fires popstate in Chrome: the room is not left', async () => {
+    const game = await boot('?bot=off&net=hook');
+    window.addEventListener('hashchange', () => window.dispatchEvent(new PopStateEvent('popstate', { state: null }))); // Chrome fires it with the write
+    game.openModes();
+    byId('play-online').click();
+    await game.online();
+    await game.settle();
+    expect(location.hash).not.toBe('');
+    expect(data().online).toBeDefined();
+    expect(hubOn()).toBe(false);
   });
 
   it('an online room keeps what the browser does: Back drops the address and the room stays', async () => {

@@ -60,6 +60,6 @@ test('a mode left by its own button leaves no entry to press twice, #1564', asyn
   await pick(page, '#ship');
   await page.locator('#new-game').click();
   await expect(page.locator('#hud')).toContainText('Black to move');
-  await page.goBack(); // one press leaves
-  expect(page.url()).not.toContain('bot=off');
+  await page.goBack(); // one press: the page pops the stale entry and goes on back at once
+  await expect.poll(() => page.url()).not.toContain('bot=off');
 });

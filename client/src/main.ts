@@ -35,6 +35,7 @@ import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from 
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
+import { backWay, needsEntry, type Screen, type Way } from './backnav';
 import { bossHtml, goalShown } from './bosshud';
 import { goalCardHtml } from './goalcard';
 import { drawBossBar } from './bossbar';
@@ -7239,6 +7240,38 @@ else if (!resumed && firstRunDue(store, location.search, navigator.webdriver, lo
 else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Hub (#602)
 else analyse(); // the start position
 
+// Browser Back and the Android Back gesture (#1564, backnav.ts, ui.md "Browser Back"): the screens other than the one the page started on
+// hold one history entry, and Back runs the way out the screen has already: its Back button where it shows one (Flee in a wild fight), else
+// the Hub, or New game from the Hub. No confirmation is asked, a fight in progress included.
+const baseScreen: Screen = screenNow();
+let holdsEntry = (window.history.state as { ab?: number } | null)?.ab === 1; // a reload keeps the entry it was made on
+function screenNow(): Screen {
+  if (online) return 'room';
+  return openWorld.active || run || trainer || fight || royale || roomOf || lairFrom || wildFrom ? 'mode' : hub ? 'hub' : 'table';
+}
+/** Asks the browser for the entry of the screen shown, once a frame. */
+function watchBack(): void {
+  if (!needsEntry(screenNow(), baseScreen, holdsEntry)) return;
+  window.history.pushState({ ab: 1 }, '', location.href);
+  holdsEntry = true;
+}
+const WAYS: Record<Exclude<Way, 'stay'>, () => void> = {
+  back: () => backButton.click(),
+  place: () => placeBack.click(),
+  hub: () => shipButton.click(),
+  table: newGame,
+  leave: () => window.history.back(), // the base screen: the browser goes on back
+};
+let seenHash = location.hash;
+addEventListener('popstate', (e) => {
+  const moved = location.hash !== seenHash; // Chrome fires popstate when the online address is written, and Back drops it: the room's own entry, not ours (Play online keeps what it did)
+  seenHash = location.hash;
+  if (moved) return;
+  holdsEntry = (e.state as { ab?: number } | null)?.ab === 1;
+  const way = backWay(screenNow(), baseScreen, { back: !backButton.hidden || wildFrom !== null, place: !placeBack.hidden }, holdsEntry);
+  if (way !== 'stay') WAYS[way]();
+});
+
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
 // text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
 const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElement;
@@ -7361,6 +7394,7 @@ renderer.setAnimationLoop((now) => {
   const heroBiome = openWorld.active ? openWorld.biome : null;
   const music = sceneOf({ hub: hub !== null, royale: royale !== null, run: run ? (run.state.fighting ? 'fight' : 'map') : null, boss: fight?.id ?? null, world: heroBiome ? { biome: heroBiome, phase: openWorld.phase } : null });
   sfx.setScene(music, music.startsWith('boss:') && engine instanceof Encounter ? engine.phase() : 0); // the music follows where the player is (#1571)
+  watchBack();
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {

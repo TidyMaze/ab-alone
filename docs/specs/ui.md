@@ -629,6 +629,28 @@ always holds the strip and the steps. The other bosses keep their one line; thei
 `boss.goal()` of the bridge is unchanged (the MCP server reads it). Tests: `goalcard.test.ts`, `main.boss.test.ts` and the Echo
 spec of `client/e2e/echo.spec.ts` (the card in the HUD, then in the sheet, inside the window and clear of the boss bar).
 
+### 4.9 Browser Back (#1564)
+
+The browser's Back button and the Android Back gesture take the player out of a mode the way its own button does, not out of the
+game (`client/src/backnav.ts`, wired in `main.ts`).
+
+- **One entry.** The page notes the screen it started on (the table, or the Hub for a new player). While another screen is shown
+  (a mode, the Hub, a table played from the Hub), it holds one history entry of its own, pushed once a frame when it has none. The
+  address never changes. Switching from one mode to another adds nothing.
+- **Back runs the existing way out.** The entry is popped and the page does what the screen's own control does: Back to the hub or
+  Back to the Open world when the screen shows it (a won lair, a table from a hub door, a town's Hub or run), Flee in a wild fight,
+  else Hub in the mode menu (Battle royale, the rogue-lite run, Daily, Trainer, a fight in progress, the Open world), and New game
+  from the Hub. The entry is pushed again for the Hub, so a second Back reaches the table, and a third leaves the page.
+- **No stale entry.** The mode's own button leaves the entry where it is. When Back pops it with the base screen already shown, the
+  page goes on back at once: one press leaves, never two, and the mode is never entered again.
+- **No confirmation.** A fight in progress is not asked about; Back leaves it as the Hub entry of the mode menu does. A
+  confirmation is not built.
+- **Play online keeps what it does.** Its invite link writes the address hash, which is its own history entry: Back drops the hash
+  and the room goes on (a room is not broken by it, the invite box keeps the link). The page pushes no entry in a room and Back there
+  does nothing else; leaving a room is the mode menu's Hub, as before. A `popstate` that comes with a change of the address hash
+  (Chrome fires one when the link is written) is that entry's, never a Back from ours.
+- **Guard.** `client/src/main.back.test.ts` and `client/e2e/back.spec.ts` press Back from every mode of the README table and the Hub.
+
 ## 5. Board framing
 
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
