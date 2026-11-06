@@ -140,6 +140,21 @@ describe('the lore logs of the Open world mode (#1589)', () => {
     expect(body().openworldAt).toBe('4,0');
   });
 
+  it('a log left out (#1595: the bridge gives it as `i32::MIN` twice) keeps the numbers of the others: no stake, none published, and the next log is still log 1', () => {
+    document.body.innerHTML = PAGE;
+    const saves = worldSaves(memoryStore(), 1);
+    const none = Array.from({ length: 11 }, () => undefined) as [];
+    const left = -2147483648;
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, ...none, () => Int32Array.of(left, left, 4, 0));
+    m.enter(7, 800, 600);
+    expect(body().openworldLogs).toBe('4,0'); // the cell of log 1 only
+    m.fixture({ hero: [3, 0], troop: [], enemies: [] });
+    m.key('ArrowRight');
+    m.release('ArrowRight');
+    expect(body().openworldLog).toBe(WORLD_LOGS[1]!.id); // the second log's text, not the first's
+    expect(body().openworldLogsFound).toBe('1');
+  });
+
   it('a world with no logs and no archive callback still works', () => {
     const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1));
     m.enter(7, 800, 600);

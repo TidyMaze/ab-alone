@@ -746,21 +746,30 @@ const LOG_RINGS: [(f64, f64); 2] = [(30.0, 140.0), (160.0, 420.0)];
 /// The cells of the `LOGS` lore logs of the world `seed`: log `k` is drawn in the sextant `k % 6` (ring `k / 6`, near then far), the first
 /// draw whose cell and six neighbours are open ground of that sextant's biome, off the spawn's `SAFE` radius, 2 cells or more inside its
 /// chunk with no generated enemy within 2 cells, and no cell of `avoid` (the lairs and the teleporters) within 3. From the seed alone: it
-/// reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
-pub fn logs(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
+/// reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move. Log `k` is the `k`-th of the answer, `None` for a
+/// log that has no fit (see `LOG_RING_TRIES`), so the others keep their numbers.
+pub fn logs(seed: u64, avoid: &[(i32, i32)]) -> Vec<Option<(i32, i32)>> {
     (0..LOGS as i32)
-        .map(|k| {
-            (0..)
-                .find_map(|n| log_try(seed, k, n, avoid))
-                .expect("an endless search")
-        })
+        .map(|k| (0..LOG_TRIES).find_map(|n| log_try(seed, k, n, avoid)))
         .collect()
 }
 
+/// A log is drawn in its own ring and wedge for its first `LOG_RING_TRIES` tries (the most any seed of 1 to 2000 needs is 4 053; the seeds
+/// of #1595 had none in 100 000), then anywhere in its whole sextant out to the lairs' `LAIR_FAR`. So the logs of a seed that found them
+/// in their ring do not move. The search ends after `LOG_TRIES` tries and a log with no fit is left out (`None`, the others keep their
+/// numbers).
+const LOG_RING_TRIES: i32 = 30_000;
+const LOG_TRIES: i32 = 60_000;
+
 /// The `n`-th try of log `k`: its cell when it is a fit one.
 fn log_try(seed: u64, k: i32, n: i32, avoid: &[(i32, i32)]) -> Option<(i32, i32)> {
-    let ring = LOG_RINGS[k as usize / 6];
-    spot(seed, LOG_SALT, k, n, k as usize % 6, ring, avoid)
+    let (wedge, (near, far)) = (k as usize % 6, LOG_RINGS[k as usize / 6]);
+    let ring = if n < LOG_RING_TRIES {
+        (near, far, 0.8)
+    } else {
+        (LOG_RINGS[0].0, LOG_RINGS[1].1, 1.0)
+    };
+    spot(seed, LOG_SALT, k, n, wedge, ring, avoid)
 }
 
 /// The `n`-th try of the spot `k` drawn from `salt` in the sextant `wedge`, 30 to 140 or 160 to 420 ground units out (`reach`): its cell
@@ -772,10 +781,11 @@ fn spot(
     k: i32,
     n: i32,
     wedge: usize,
-    (near, far): (f64, f64),
+    (near, far, span): (f64, f64, f64),
     avoid: &[(i32, i32)],
 ) -> Option<(i32, i32)> {
-    let angle = (wedge as f64 - 0.4 + 0.8 * unit(seed, salt, k, n)) * std::f64::consts::FRAC_PI_3;
+    let angle =
+        (wedge as f64 - span / 2.0 + span * unit(seed, salt, k, n)) * std::f64::consts::FRAC_PI_3;
     let reach = near + (far - near) * unit(seed, salt + 1, k, n);
     // The pointy-top layout of the client's `cellAtPoint`, as the lairs.
     let r = (-reach * angle.sin() / (3f64.sqrt() / 2.0)).round() as i32;
@@ -840,7 +850,7 @@ fn places_within(seed: u64, avoid: &[(i32, i32)], tries: i32) -> Vec<(PlaceKind,
                 .map(|k| (PlaceKind::Dungeon, 10 + k, k as usize + 1, DUNGEON_RING)),
         );
     for (kind, k, wedge, (near, far)) in wanted {
-        let ring = |n: i32| (near, (far + f64::from(n) / 2.0).min(LAIR_FAR));
+        let ring = |n: i32| (near, (far + f64::from(n) / 2.0).min(LAIR_FAR), 0.8);
         let fit = (0..tries).find_map(|n| spot(seed, PLACE_SALT, k, n, wedge, ring(n), &taken));
         if let Some(cell) = fit {
             taken.push(cell);
@@ -1949,6 +1959,13 @@ mod tests {
     }
 
     /// The cells the lore logs of a seed keep off: the lairs and the teleporters, as the bridge passes them.
+    fn log_cells(seed: u64, avoid: &[(i32, i32)]) -> Vec<(i32, i32)> {
+        logs(seed, avoid)
+            .into_iter()
+            .map(|c| c.expect("a fit log"))
+            .collect()
+    }
+
     fn log_avoid(seed: u64) -> Vec<(i32, i32)> {
         let lairs = lairs(seed, ROSTER);
         let mut avoid = teleporters(seed, &lairs);
@@ -1960,20 +1977,20 @@ mod tests {
     fn twelve_log_cells_come_from_the_seed_alone_and_are_all_different() {
         for seed in [1, 7, 1305] {
             let avoid = log_avoid(seed);
-            let found = logs(seed, &avoid);
+            let found = log_cells(seed, &avoid);
             assert_eq!(found.len(), LOGS, "seed {seed}");
-            assert_eq!(logs(seed, &avoid), found);
+            assert_eq!(log_cells(seed, &avoid), found);
             for (i, a) in found.iter().enumerate() {
                 assert!(!found[i + 1..].contains(a), "seed {seed}: {a:?}");
             }
         }
-        assert_ne!(logs(1, &log_avoid(1)), logs(2, &log_avoid(2)));
+        assert_ne!(log_cells(1, &log_avoid(1)), log_cells(2, &log_avoid(2)));
     }
 
     #[test]
     fn a_log_and_its_six_neighbours_are_open_ground_in_its_own_biome_off_the_spawn() {
         for seed in [1, 7, 1305, 2, 3, 4, 5, 6] {
-            for (k, &(q, r)) in logs(seed, &log_avoid(seed)).iter().enumerate() {
+            for (k, &(q, r)) in log_cells(seed, &log_avoid(seed)).iter().enumerate() {
                 assert!(distance(q, r) > SAFE, "seed {seed}: log {k} at ({q}, {r})");
                 for (dq, dr) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
                     let c = cell(seed, q + dq, r + dr).expect("on the world");
@@ -1992,7 +2009,7 @@ mod tests {
     fn a_log_keeps_off_the_lairs_the_teleporters_and_the_enemies() {
         for seed in [1, 7, 1305, 2, 3] {
             let avoid = log_avoid(seed);
-            for &(q, r) in &logs(seed, &avoid) {
+            for &(q, r) in &log_cells(seed, &avoid) {
                 assert!(
                     avoid.iter().all(|&c| hex_distance(c, (q, r)) > 3),
                     "seed {seed}: ({q}, {r})"
@@ -2012,7 +2029,7 @@ mod tests {
     #[test]
     fn every_sextant_holds_two_logs_one_near_the_spawn_and_one_far() {
         for seed in [1, 7, 1305, 2, 3, 4] {
-            let found = logs(seed, &log_avoid(seed));
+            let found = log_cells(seed, &log_avoid(seed));
             for wedge in 0..6 {
                 let (near, far) = (found[wedge], found[wedge + 6]);
                 assert_eq!(cell(seed, near.0, near.1).unwrap().biome, SEXTANTS[wedge]);
@@ -2025,8 +2042,8 @@ mod tests {
 
     #[test]
     fn a_log_moves_off_a_cell_it_is_told_to_avoid() {
-        let free = logs(7, &[]);
-        let moved = logs(7, &[free[3]]);
+        let free = log_cells(7, &[]);
+        let moved = log_cells(7, &[free[3]]);
         assert_eq!(moved.len(), free.len());
         assert!(hex_distance(moved[3], free[3]) > 3);
         assert_eq!(moved[..3], free[..3]);
@@ -2034,13 +2051,16 @@ mod tests {
 
     #[test]
     fn the_logs_of_seed_7_are_pinned() {
-        assert_eq!(logs(7, &log_avoid(7))[..3], [(29, 5), (60, -36), (24, -67)]);
+        assert_eq!(
+            log_cells(7, &log_avoid(7))[..3],
+            [(29, 5), (60, -36), (24, -67)]
+        );
     }
 
     /// The cells the towns and dungeon gates of a seed keep off: the lairs, the teleporters and the logs, as the bridge passes them.
     fn place_avoid(seed: u64) -> Vec<(i32, i32)> {
         let mut avoid = log_avoid(seed);
-        avoid.extend(logs(seed, &avoid));
+        avoid.extend(logs(seed, &avoid).into_iter().flatten());
         avoid
     }
 
@@ -2261,33 +2281,57 @@ mod tests {
         );
     }
 
-    /// Seeds whose logs had no fit in their wedge and ring (#1595): the search of `logs` never ended on them.
-    const LOG_HANG_SEEDS: [u64; 8] = [
-        2381,
-        3074,
-        3486,
-        7825,
-        8664,
-        10972,
-        205_585_469,
-        1_437_627_643,
+    /// The seeds of 1 to 22 000 and the random 32-bit ones found so far whose log `k` has no fit in its own ring and wedge (#1595): the
+    /// search of `logs` never ended on them.
+    const LOG_HANG_SEEDS: [(u64, i32); 21] = [
+        (2381, 2),
+        (3074, 4),
+        (3486, 1),
+        (7825, 4),
+        (8664, 2),
+        (10972, 1),
+        (11027, 2),
+        (11665, 5),
+        (12177, 5),
+        (14993, 5),
+        (16583, 4),
+        (16640, 1),
+        (16808, 5),
+        (18491, 1),
+        (19010, 5),
+        (19426, 5),
+        (20105, 4),
+        (21003, 1),
+        (21272, 3),
+        (205_585_469, 0),
+        (1_437_627_643, 0),
     ];
 
     #[test]
-    fn the_seeds_whose_log_search_never_ended_get_their_logs_and_the_search_returns() {
+    fn the_seeds_whose_log_search_never_ended_get_all_their_logs_and_the_search_returns() {
         let (tx, rx) = std::sync::mpsc::channel();
-        for seed in LOG_HANG_SEEDS {
+        for (seed, k) in LOG_HANG_SEEDS {
             let tx = tx.clone();
             std::thread::spawn(move || {
-                let _ = tx.send((seed, logs(seed, &log_avoid(seed))));
+                let _ = tx.send((seed, k, logs(seed, &log_avoid(seed))));
             });
         }
         drop(tx);
         for _ in LOG_HANG_SEEDS {
-            let (seed, found) = rx
-                .recv_timeout(std::time::Duration::from_secs(30))
+            let (seed, k, found) = rx
+                .recv_timeout(std::time::Duration::from_secs(60))
                 .expect("logs never end");
             assert_eq!(found.len(), LOGS, "seed {seed}");
+            assert!(found.iter().all(Option::is_some), "seed {seed}");
+            // The log that had no fit in its ring is anywhere in its own sextant, on open ground of its biome, off the spawn.
+            let (q, r) = found[k as usize].unwrap();
+            let wedge = k as usize % 6;
+            assert!(distance(q, r) > SAFE, "seed {seed}: log {k}");
+            for (dq, dr) in TELEPORT_PAD {
+                let c = cell(seed, q + dq, r + dr).expect("on the world");
+                assert!(!c.terrain.blocked(), "seed {seed}: log {k}");
+                assert_eq!(c.biome, SEXTANTS[wedge], "seed {seed}: log {k}");
+            }
         }
     }
 

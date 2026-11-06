@@ -108,17 +108,27 @@ pub fn world_teleporters(seed: u32) -> Vec<i32> {
         .collect()
 }
 
-/// The lore logs of the world `seed` (#1589, docs/specs/openworld.md section 12): `q, r` pairs, log 0 first, kept off the lairs and the teleporters.
+/// The lore logs of the world `seed` (#1589, docs/specs/openworld.md section 12): `q, r` pairs, log 0 first, 12 in all so that a log keeps
+/// its number, kept off the lairs and the teleporters. A log with no fit (#1595, seeds of one in a thousand) is the pair `LOG_LEFT_OUT`, a
+/// cell no hero reaches and no chunk holds.
 #[wasm_bindgen]
 pub fn world_logs(seed: u32) -> Vec<i32> {
     let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
     let mut taken = world::teleporters(u64::from(seed), &lairs);
     taken.extend(lairs);
-    world::logs(u64::from(seed), &taken)
-        .into_iter()
-        .flat_map(|(q, r)| [q, r])
+    flat_logs(&world::logs(u64::from(seed), &taken))
+}
+
+/// The logs as `q, r` pairs, a log left out as `LOG_LEFT_OUT` twice.
+fn flat_logs(cells: &[Option<(i32, i32)>]) -> Vec<i32> {
+    cells
+        .iter()
+        .flat_map(|cell| cell.map_or([LOG_LEFT_OUT; 2], |(q, r)| [q, r]))
         .collect()
 }
+
+/// The `q` and the `r` of a log left out (docs/specs/openworld.md section 12): far off the world.
+pub const LOG_LEFT_OUT: i32 = i32::MIN;
 
 /// The towns then the dungeon gates of the world `seed` (#1514, docs/specs/openworld.md section 13): `kind, q, r` triples, `kind` `0` for a
 /// town and `1` for a dungeon gate, the spawn town first, kept off the lairs, the teleporters and the logs.
@@ -128,7 +138,7 @@ pub fn world_places(seed: u32) -> Vec<i32> {
     let mut taken = world::teleporters(u64::from(seed), &lairs);
     taken.extend(lairs);
     let logs = world::logs(u64::from(seed), &taken);
-    taken.extend(logs);
+    taken.extend(logs.into_iter().flatten());
     world::places(u64::from(seed), &taken)
         .into_iter()
         .flat_map(|(kind, (q, r))| [kind as i32, q, r])
@@ -599,10 +609,15 @@ mod tests {
         taken.extend(lairs);
         let cells = world::logs(7, &taken);
         assert_eq!(cells.len(), world::LOGS);
-        assert_eq!(
-            flat,
-            cells.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
-        );
+        assert_eq!(flat, flat_logs(&cells));
+        assert!(cells.iter().all(Option::is_some));
+        assert_eq!(flat[..2], [cells[0].unwrap().0, cells[0].unwrap().1]);
+    }
+
+    #[test]
+    fn a_log_left_out_keeps_the_numbers_of_the_others_and_is_a_cell_off_the_world() {
+        let flat = flat_logs(&[Some((4, -2)), None, Some((6, 1))]);
+        assert_eq!(flat, [4, -2, LOG_LEFT_OUT, LOG_LEFT_OUT, 6, 1]);
     }
 
     #[test]
@@ -613,7 +628,7 @@ mod tests {
         let mut taken = world::teleporters(7, &lairs);
         taken.extend(lairs);
         let logs = world::logs(7, &taken);
-        taken.extend(logs);
+        taken.extend(logs.into_iter().flatten());
         let cells = world::places(7, &taken);
         assert_eq!(cells.len(), world::TOWNS + world::DUNGEONS);
         assert_eq!(

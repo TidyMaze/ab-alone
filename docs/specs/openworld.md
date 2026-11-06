@@ -510,7 +510,12 @@ The Open world holds twelve logs of the story (`docs/specs/world.md` section 12)
   far, and the same seed gives the same cells on every peer. A draw is kept when its cell and its six neighbours are open ground of the sextant's biome
   (never water, a peak, a tree, a boulder or a wall), it is more than `SAFE` (8) cells from the spawn, it lies 2 cells or more inside its chunk with no
   generated enemy within 2 cells, and no lair or teleporter is within 3 cells (the bridge passes both as `avoid`). It reads the terrain and the enemies,
-  never changes them, so `WORLD_VERSION` does not move and the saves keep loading.
+  never changes them, so `WORLD_VERSION` does not move and the saves keep loading. After 30 000 tries in its own ring and wedge a log is
+  drawn anywhere in its whole sextant, 30 to 420 ground units out, and the search ends after 60 000 tries (#1595: seeds such as 2381, 3074, 3486,
+  7825 and 205585469 had no fit for one log in its ring, 38 in 40 000 seeds sampled, and the world never opened); a log found in its ring does
+  not move. A log with no fit at all is left out: the bridge's `world_logs` still gives 12 pairs, so every log keeps its number, and a log left
+  out is the pair `i32::MIN, i32::MIN`, a cell no hero reaches that no chunk holds (no stake, no icon, never found). None was left out in the
+  40 000 seeds sampled.
 - **Text.** `client/src/lorelogs.ts` holds the twelve entries by log number (`WORLD_LOGS`): a title, a body of 320 characters at most, a `stage` of the reveal
   ladder (1 to 3) and a `reread` flag (three of them carry the hint of a reread). Tally's register, short, original. No log holds a secret word of a later
   stage (`lorelogs.test.ts`).
