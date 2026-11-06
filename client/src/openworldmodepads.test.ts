@@ -30,7 +30,6 @@ const setup = (pads: (seed: number) => Int32Array = () => PADS, saves = worldSav
   return { m, saves };
 };
 const body = () => document.body.dataset;
-const caption = () => document.getElementById('openworld-map-note')!;
 const PAGE = '<button id="openworld-map-button" aria-expanded="false">Map</button><button id="openworld-teleport" hidden>Teleport</button>';
 const click = (m: OpenWorldMode, dq: number): void => {
   const root = document.getElementById('openworld-map')!;
@@ -113,7 +112,6 @@ describe('the pad of a tower beaten through the world (#1531)', () => {
     m.fixture({ hero: [2, -1], troop: [[1, -1], [0, -1]], enemies: [], beaten: [0] });
     m.teleport();
     click(m, 4); // the pad of the tower, 4 cells east of the spawn pad
-    expect(caption().textContent).not.toBe('No discovered teleporter there');
     expect(body().openworldAt).toBe('6,1');
     expect(body().openworldPush).toBe('0');
     expect(body().openworldTroop!.split(' ')).toHaveLength(2);

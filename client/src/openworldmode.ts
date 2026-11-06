@@ -107,8 +107,11 @@ export class OpenWorldMode {
   private beaten: number[] = [];
   /** Lairs other heroes reported taken (#1305): drawn beaten for the visit, never counted, filed or saved, since no fight proves them. */
   private heard: number[] = [];
-  /** The teleporters of the world entered (#1412), the spawn's first. */
+  /** The teleporters of the world entered (#1412), the spawn's first, then the pad of each tower beaten through the world (#1531). */
   private teleporters: Axial[] = [];
+  /** The teleporters the seed places, and the pad beside each tower by number (#1531): the network is the first, plus the pads of the towers beaten. */
+  private seedTeleporters: Axial[] = [];
+  private pads: Axial[] = [];
   /** The lore logs of the world entered (#1589), by number, and the numbers of the ones found. */
   private logs: Axial[] = [];
   /** The towns and dungeon gates of the world entered (#1514), with the dungeon tier of a gate (#1532, 0 for a town). */
@@ -189,6 +192,8 @@ export class OpenWorldMode {
     /** The rings of a seed's world (the bridge's `world_rings`, #1532): the ring of each tower by number, then one per place (0 for a town, the
      * gate's dungeon tier). None puts every tower in the first ring. */
     private readonly ringsOf: (seed: number) => Uint8Array = () => new Uint8Array(),
+    /** The pad beside each tower of a seed's world: `q, r` pairs in the order of the lairs (the bridge's `world_pads`, #1531). */
+    private readonly padsOf: (seed: number) => Int32Array = () => new Int32Array(),
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -221,7 +226,9 @@ export class OpenWorldMode {
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
     this.beaten = saved ? [...saved.lairs] : [];
     this.heard = [];
-    this.teleporters = pairs(this.teleportersOf(seed));
+    this.seedTeleporters = pairs(this.teleportersOf(seed));
+    this.pads = pairs(this.padsOf(seed));
+    this.teleporters = this.network();
     this.logs = pairs(this.logsOf(seed));
     this.places = placesIn(this.placesOf(seed));
     const rings = Array.from(this.ringsOf(seed));
@@ -454,6 +461,8 @@ export class OpenWorldMode {
     this.view!.snap();
     if (beaten) {
       this.beaten = [...beaten];
+      this.teleporters = this.network();
+      this.view!.setTeleporters(this.teleporters);
       this.drawLairs();
       this.showTally(false);
       this.persist();
@@ -516,6 +525,12 @@ export class OpenWorldMode {
     this.drawLairs();
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
+  }
+
+  /** The teleporter network (#1531): the seed's teleporters, then the pad beside each tower beaten through the world (`beaten`, not the towers other
+   * heroes took). */
+  private network(): Axial[] {
+    return [...this.seedTeleporters, ...this.beaten.flatMap((lair) => (this.pads[lair] ? [this.pads[lair]!] : []))];
   }
 
   private drawLairs(): void {
