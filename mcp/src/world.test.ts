@@ -21,9 +21,9 @@ function failure(result: Result<unknown>): ToolError {
 }
 
 /** The real rules of the engine, with the lairs of the world put at `lairs` (q, r pairs) when given, and the game of `games`. */
-function world(lairs?: number[], games?: { outcome(): Outcome | null }): OpenWorld {
+function world(lairs?: number[], games?: { outcome(): Outcome | null }, pads?: number[]): OpenWorld {
   const rules: WorldRules = lairs ? { ...worldRules(), world_lairs: () => Int32Array.from(lairs) } : worldRules();
-  return new OpenWorld(rules, bossIds, games);
+  return new OpenWorld(pads ? { ...rules, world_pads: () => Int32Array.from(pads) } : rules, bossIds, games);
 }
 
 const chunks = new Map<string, Uint8Array>();
@@ -562,6 +562,47 @@ describe('a lair fight won, back in the world', () => {
 
   test('a world with no lair has no ending', () => {
     expect(value(world([]).newWorld({ seed: 0 })).ending).toBeUndefined();
+  });
+});
+
+// The pad of a tower beaten through the world (#1531, docs/specs/openworld.md section 15): a teleporter beside it, in the network of the client.
+describe('the pad of a tower beaten', () => {
+  const BOSS = bossIds()[0]!;
+  const PAD = '(1,-1)';
+
+  test('a lair won from the world adds its pad to the teleporters, a save carries the lair and resumes with the pad', () => {
+    const session = games();
+    const open = world([1, 0], session, [1, -1]);
+    value(open.newWorld({ seed: 0 }));
+    session.now = { game: 'before', boss: null };
+    value(open.step({ direction: 'E' }));
+    expect(value(open.state({})).teleporters.map((t) => t.cell)).toEqual(['(2,-1)']);
+    session.now = { game: 'fight', boss: BOSS };
+    expect(value(open.state({})).teleporters.map((t) => t.cell)).toEqual(['(2,-1)', PAD]);
+    const saved = value(open.save());
+    expect(saved.lairs).toEqual([0]);
+    const again = world([1, 0], undefined, [1, -1]);
+    expect(value(again.newWorld({ save: saved })).teleporters.map((t) => t.cell)).toEqual(['(2,-1)', PAD]);
+  });
+
+  /** A new world of seed 0 saved, with the lairs `lairs` beaten and the hero on the spawn pad. */
+  const saveOf = (open: OpenWorld, lairs: number[]): WorldSave => {
+    value(open.newWorld({ seed: 0 }));
+    return { ...value(open.save()), lairs, hero: [2, -1] };
+  };
+
+  test('the hero teleports from the spawn pad to the pad of a beaten tower, by the rules of the client', () => {
+    const open = world([1, 0], undefined, [1, -1]);
+    const resumed = value(open.newWorld({ save: saveOf(open, [0]) }));
+    expect(resumed.teleporters.map((t) => t.cell)).toEqual(['(2,-1)', PAD]);
+    expect(value(open.teleport({ q: 1, r: -1 })).hero).toBe(PAD);
+  });
+
+  test('a tower past the pads the engine gave, or an engine with none, adds nothing', () => {
+    const short = world([1, 0, 9, 0], undefined, [1, -1]);
+    expect(value(short.newWorld({ save: saveOf(short, [1]) })).teleporters.map((t) => t.cell)).toEqual(['(2,-1)']);
+    const none = world([1, 0], undefined, []);
+    expect(value(none.newWorld({ save: saveOf(none, [0]) })).teleporters.map((t) => t.cell)).toEqual(['(2,-1)']);
   });
 });
 
