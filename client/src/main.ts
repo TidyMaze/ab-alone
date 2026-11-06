@@ -197,7 +197,7 @@ import { skinKinds, startOnce } from './skinmaps';
 import { neonBreachGeometry, neonEggGeometry, nextToSight, neonLookOn, neonPedestal, neonTells, neonVeil, tellLook, NEON } from './neonlook';
 import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
-import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
+import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_NOTES, DIFFICULTY_PERCENT, TELL_MODE, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { toleranceWindow } from './matchmaking';
 import { boardHtml, buildBoard, loadRivals, ratingHistory, visitBoard } from './leaderboard';
@@ -303,7 +303,7 @@ import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight, type FrameShape, typ
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
-import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
+import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, tallyAttempt, tallyWin, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
 import { HUB_CELLS, hubPath, roomAt, step, type Door, type Spot as HubSpot } from './hub';
 import { entryConfirmDue, entryName, HUB_COACH, hubCoachDue, hubHelpOn, markEntered, markHubCoachDone, needsConfirm } from './hubcoach';
@@ -1015,11 +1015,13 @@ const toggles: Record<string, () => void> = {
   },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
+const difficultyNote = Object.assign(document.createElement('p'), { id: 'difficulty-note' }); // what each level changes (#1538), placed beside the control below
 const paintMenu = (): void => {
+  difficultyNote.textContent = DIFFICULTY_NOTES[difficulty];
   for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode, freeCam.active, steering)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
-    const full = id === 'difficulty' ? `Difficulty: ${difficulty} (${DIFFICULTY_PERCENT[difficulty]}%)` : label;
+    const full = id === 'difficulty' ? `Difficulty: ${difficulty} (${DIFFICULTY_PERCENT[difficulty]}%). ${DIFFICULTY_NOTES[difficulty]}` : label;
     row.setAttribute('aria-label', full); // held upright only the icon shows (#414): the name stays for screen readers
     row.title = full; // and as a tooltip
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
@@ -1124,6 +1126,7 @@ const exportGroup = document.createElement('div');
 exportGroup.className = 'setting-group';
 exportRow.replaceWith(exportGroup);
 exportGroup.append(exportRow, document.getElementById('setting-difficulty')!);
+exportGroup.after(difficultyNote);
 // The log archive (#513): its button, Logs, is a short word beside Import game, as FPS is beside Clear board, so the menu
 // keeps its height. It opens a page of one button per entry read, then per audio log collected (#517), in place of the
 // items; a press on one closes the menu and reopens the entry in the terminal reader, or replays the log.
@@ -2978,6 +2981,7 @@ interface Ejecting {
 const ejecting: Ejecting[] = [];
 function playMove(record: number[]): void {
   leaveReplay(); // a bot reply or a peer's move shows the live game
+  if (fight && history.length === 0) tallyAttempt(store, fight.id); // the first move makes the attempt: a fight opened and left is not one (#1538)
   const before = Array.from(engine.board());
   const army = built() ? engine : null;
   const specials = army ? parseSpecials(army.specials()) : [];
@@ -3624,6 +3628,7 @@ function medalNote(boss: { id: string }): string {
   if (medalSeen.game !== engine) {
     const turns = playerTurns(history.length);
     const result: MedalResult = recordMedal(store, boss.id, turns);
+    tallyWin(store, boss.id);
     storyEvent({ on: 'won', id: boss.id }); // before the lore of the win is chosen: the stage counts this win (#1584)
     if (epilogueDue(store, storyStage(store))) openEpilogue(); // the win that reaches stage 7 (#1546)
     medalSeen = { game: engine, note: medalLine(result, result === 'kept' ? bestTurns(store, boss.id)! : turns) };
@@ -4572,10 +4577,26 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   const mv = keyDir >= 0 ? moveFor(moves, selected, keyDir) : hover ? moveForClick(moves, selected, hover) : null;
   const record = mv ? encodeMove(mv) : hint.shown(here()); // the hovered move, else the hint (#192)
   const list = ghostMarbles(history, record, makeGame);
-  if (record && engine instanceof Encounter) {
+  // The hover tells follow the difficulty (#1538): the hovered move on normal, every move of the selected marble too on easy, none on hard.
+  const mode = TELL_MODE[difficulty];
+  const asked: number[][] = mode === 'never' || !(engine instanceof Encounter) || !record ? [] : [record];
+  if (mode === 'always' && engine instanceof Encounter) {
+    for (const { cell } of groupTargets(moves, selected)) {
+      const other = encodeMove(moveForClick(moves, selected, cell)!);
+      if (!asked.some((a) => a.join() === other.join())) asked.push(other);
+    }
+  }
+  if (record && mode !== 'never' && engine instanceof Encounter) {
     // The tell: the boss reply announced for the hovered move, drawn on the position after it.
     const reply = Array.from(engine.tell_move(Int32Array.from(record)));
     if (reply.length) list.push(...ghostMarbles([...history, record], reply, makeGame));
+  }
+  if (record && mode === 'never' && engine instanceof Encounter) {
+    // The Echo's bonus is a ghost marble on the move's board, the same tell as its ring: left out on hard, the move's own landing stays.
+    const own = landing(parseMoves(record)[0]!);
+    const bonus = parseEchoTell(engine.echo_tell(Int32Array.from(record))).flatMap((b) => landing(b.mv));
+    const hidden = bonus.filter(([q, r]) => !own.some(([oq, or]) => oq === q && or === r));
+    list.splice(0, list.length, ...list.filter(({ cell: [q, r] }) => !hidden.some(([hq, hr]) => hq === q && hr === r)));
   }
   ghosts.clear();
   const hintKey = !mv && record ? record.join() : ''; // a hint that just appeared fades in, a hovered move shows at once
@@ -4590,7 +4611,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   }
   document.body.dataset.ghosts = String(list.length);
   // The Echo's tell (#859): each bonus the hovered move gives the other side, ringed, or crossed when it would be skipped.
-  const tell = record && engine instanceof Encounter ? parseEchoTell(engine.echo_tell(Int32Array.from(record))) : [];
+  const tell = asked.flatMap((rec) => parseEchoTell((engine as Encounter).echo_tell(Int32Array.from(rec))));
   const counts = { played: 0, skipped: 0 };
   for (const { mv: bonus, skipped } of tell) {
     for (const [q, r] of landing(bonus)) {
@@ -4617,7 +4638,8 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   }
   document.body.dataset.echoBonus = String(counts.played); // read by the tests
   document.body.dataset.echoSkipped = String(counts.skipped);
-  const flips = engine instanceof Encounter ? previewFlips(history, record, makeGame as () => Encounter) : [];
+  const flipsOf = asked.map((rec) => previewFlips(history, rec, makeGame as () => Encounter));
+  const flips = [...new Map(flipsOf.flat().map((cell) => [cell.join(), cell])).values()];
   for (const [q, r] of flips) {
     const p = axialTo3D(q, r);
     const ring = new THREE.Mesh(outlineGeometry, paleMaterial);
@@ -4629,8 +4651,9 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   }
   tellSound('flip', flips);
   document.body.dataset.flips = String(flips.length); // read by the e2e tests
-  if (flips.length !== exposed) {
-    exposed = flips.length;
+  const hovered = record && mode !== 'never' ? (flipsOf[0]?.length ?? 0) : 0; // the HUD counts the flips of the move in hand, not of the others
+  if (hovered !== exposed) {
+    exposed = hovered;
     hud();
   }
 }

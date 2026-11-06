@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestTurns, countAttempt, countWin, hasMedal, loadMedals, loadTallies, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, tallyLine } from './medals';
+import { bestTurns, tallyAttempt, tallyWin, hasMedal, loadMedals, loadTallies, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, tallyLine } from './medals';
 
 const KEY = 'ab-alone.medals';
 const TALLY = 'ab-alone.boss-tally';
@@ -127,16 +127,16 @@ describe('boss win and attempt counters (#1538)', () => {
 
   it('counts an attempt, then a win of the same fight', () => {
     const store = memory();
-    countAttempt(store, 'echo');
-    countAttempt(store, 'echo');
-    countWin(store, 'echo');
-    countAttempt(store, 'hull');
+    tallyAttempt(store, 'echo');
+    tallyAttempt(store, 'echo');
+    tallyWin(store, 'echo');
+    tallyAttempt(store, 'hull');
     expect(JSON.parse(store.getItem(TALLY)!)).toEqual({ echo: { wins: 1, attempts: 2 }, hull: { wins: 0, attempts: 1 } });
   });
 
   it('a win of a fight started before the counters existed still has an attempt', () => {
     const store = memory();
-    countWin(store, 'echo');
+    tallyWin(store, 'echo');
     expect(loadTallies(store)).toEqual({ echo: { wins: 1, attempts: 1 } });
   });
 
@@ -146,7 +146,7 @@ describe('boss win and attempt counters (#1538)', () => {
   });
 
   it('does not throw in private mode', () => {
-    expect(() => countAttempt(null, 'echo')).not.toThrow();
-    expect(() => countWin(null, 'echo')).not.toThrow();
+    expect(() => tallyAttempt(null, 'echo')).not.toThrow();
+    expect(() => tallyWin(null, 'echo')).not.toThrow();
   });
 });

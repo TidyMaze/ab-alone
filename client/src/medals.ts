@@ -40,6 +40,47 @@ export function recordMedal(store: Store, boss: string, turns: number): MedalRes
   return best === undefined ? 'first' : 'record';
 }
 
+/** The fights of one boss on this device (#1538): the ones whose first move was played, and the ones won. */
+export interface Tally {
+  wins: number;
+  attempts: number;
+}
+
+const TALLY_KEY = 'ab-alone.boss-tally';
+
+/** The saved counters, boss id -> tally; an entry with no whole counts is dropped, and there are never fewer attempts than wins. */
+export function loadTallies(store: Store): Record<string, Tally> {
+  const tallies: Record<string, Tally> = {};
+  try {
+    const saved: unknown = JSON.parse(read(store, TALLY_KEY) ?? '{}');
+    if (saved === null || typeof saved !== 'object' || Array.isArray(saved)) return tallies;
+    for (const [id, tally] of Object.entries(saved)) {
+      const { wins, attempts } = (tally ?? {}) as Partial<Tally>;
+      if (Number.isInteger(wins) && Number.isInteger(attempts) && wins! >= 0 && attempts! >= 0) {
+        tallies[id] = { wins: wins!, attempts: Math.max(attempts!, wins!) };
+      }
+    }
+  } catch {
+    // Not JSON: no counter.
+  }
+  return tallies;
+}
+
+function bump(store: Store, boss: string, change: (tally: Tally) => Tally): void {
+  const tallies = loadTallies(store);
+  write(store, TALLY_KEY, JSON.stringify({ ...tallies, [boss]: change(tallies[boss] ?? { wins: 0, attempts: 0 }) }));
+}
+
+/** A fight against `boss` had its first move played. */
+export const tallyAttempt = (store: Store, boss: string): void => bump(store, boss, (t) => ({ ...t, attempts: t.attempts + 1 }));
+
+/** A fight against `boss` was won; a fight started before the counters existed still counts as an attempt. */
+export const tallyWin = (store: Store, boss: string): void =>
+  bump(store, boss, ({ wins, attempts }) => ({ wins: wins + 1, attempts: Math.max(attempts, wins + 1) }));
+
+/** The wins of the attempts, the second sentence of a boss's line in the Medal room. */
+export const tallyLine = ({ wins, attempts }: Tally): string => `Won ${wins} of ${attempts}.`;
+
 const plural = (turns: number): string => `${turns} turn${turns === 1 ? '' : 's'}`;
 
 /** The medal next to a beaten boss in the boss menu. */
@@ -49,10 +90,13 @@ export const medalLabel = (turns: number): string => `Medal: ${plural(turns)}`;
 export const medalLine = (result: MedalResult, turns: number): string =>
   `${{ first: 'Medal earned', record: 'New record', kept: 'Medal best' }[result]}: ${plural(turns)}.`;
 
-/** The Medal room's screen (#812): every boss in the given order with its best turns, or Not beaten. */
+/** The Medal room's screen (#812): every boss in the given order with its best turns, or Not beaten, then its wins of its attempts (#1538). */
 export const medalRoom = (store: Store, bosses: readonly { id: string; name: string }[]): { title: string; body: string } => {
   const medals = loadMedals(store);
-  const line = ({ id, name }: { id: string; name: string }): string =>
-    `${name}: ${medals[id] === undefined ? 'Not beaten' : plural(medals[id])}.`;
+  const tallies = loadTallies(store);
+  const line = ({ id, name }: { id: string; name: string }): string => {
+    const tally = tallies[id];
+    return `${name}: ${medals[id] === undefined ? 'Not beaten' : plural(medals[id])}.${tally ? ` ${tallyLine(tally)}` : ''}`;
+  };
   return { title: 'Medal room', body: bosses.map(line).join(' ') };
 };

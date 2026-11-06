@@ -12,6 +12,17 @@ Measured with the bot ladder of #173 (`cargo run --release --example ladder`), 1
 300 plies at most, a draw counts as a loss. Everything is node-limited and seeded, so a run gives
 the same numbers on every machine.
 
+**These win rates are a bot's, not a human's difficulty (#1538).** Every "wins /10" in this file is the
+pro-level player of section 1: a search with 10 times the boss's nodes that reads the tell (the Chaplain's
+flips, the Echo's bonus) at no cost. At 1x the same ladder gives 0 to 2 of 20 on several bosses. A person who
+reads the tells, plans and tires does better or worse in ways nobody here measured, and no human playtest
+exists yet. The tables measure one boss against another and a change against the one before it, not how
+hard a boss is for a player. The player-facing levels are the difficulty setting (#704, #1538): Easy, Normal
+and Hard multiply the boss's nodes by 0.5, 1 and 2 (the tables are Normal), and show The Echo's and The
+Chaplain's hover tells always, on a hover, never. The other bosses have no tell that needs a hover: their tells
+stay on the board and only the nodes change. The Medal room counts the wins of the attempts of each boss on the
+player's device, the first real numbers of how hard a boss is for a person.
+
 ## 1. Definitions
 
 - **Pro-level player**: the alpha-beta search of `search.rs` with at least **10 times the boss node

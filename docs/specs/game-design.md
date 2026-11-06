@@ -33,8 +33,9 @@ Feature issues: #38 (input), #40 (anti-stalling), #41 (online), #42 (encounter f
    and every other mode and the open-world fights (#313, #720) stay bit for bit unchanged.
 2. **Readable dread.** Every threat is shown one turn before it hits (tell). Horror comes from
    the mood and the pressure, never from hidden rules.
-3. **Die, learn, retry.** A loss teaches one thing. Retry in under 5 seconds. No difficulty
-   slider, no stat grind: the player gets better, not the character. A rogue-lite run, a secondary
+3. **Die, learn, retry.** A loss teaches one thing. Retry in under 5 seconds. No stat grind: the
+   player gets better, not the character. The difficulty setting (Easy, Normal, Hard, #704, #1538)
+   changes the opponent and what the player is shown, never the player's own marbles or powers. A rogue-lite run, a secondary
    mode like the boss fights (the core of the game stays Abalone 1v1), may grow its army inside
    the run; a run starts from zero, and what carries over is variety (other starting armies,
    always 14 marbles), never power (Decision #934).
@@ -116,7 +117,8 @@ slow side does not move within a 10 s grace. It stays advisory (no rating, no re
 | Delta | Board mask, boss rule hooks, phases on marble-count triggers |
 | Win / loss | Normal win by 6 ejections, loss if you lose 6. **A draw is a loss** (the ship keeps the tie), so stalling never works against a boss |
 | Retry | Same boss, same seed, instant restart |
-| Difficulty | One tuning per boss, no slider |
+| Difficulty | One tuning per boss, and a setting (#704, #1538): Easy, Normal, Hard multiply the boss's search nodes by 0.5, 1 and 2, and show the tells that need a hover (The Echo's bonus, The Chaplain's flips) for every move of the selected marble, on a hovered move, never. The other bosses' tells are on the board whatever the level: only their nodes change. The tuning and the win rates below are Normal |
+| Counters | The Medal room lists, per boss, the wins of the attempts on this device (#1538): an attempt is a fight whose first move was played, so a fight opened and left does not count. localStorage `ab-alone.boss-tally`, next to the medals |
 
 Boss structure (all five follow it):
 - **Concept**: the fiction, one line.
@@ -174,7 +176,7 @@ Room kinds:
 | Mode rooms | A mode with no table of its own, the same as its mode menu entry (#1249): the Daily challenge and the Open world on the Mess, the Rogue-lite run on the Cargo, Fight together on the Furnace (it opens the mode menu on its boss list), Ranked and the Trainer on the Bridge (Ranked offline opens nothing, as the online table). Every entry of the mode menu has its room. Back to the hub comes back from the daily and a ranked game; from a run, the Trainer and the Open world, Hub in the mode menu does |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
-| Medal room | On the Mess only (0, 2), a gold medal prop (#812, #1249). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
+| Medal room | On the Mess only (0, 2), a gold medal prop (#812, #1249). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten, then Won n of m attempts when the boss was tried (#1538) |
 | Lift | The deck above or below. The marble arrives on that deck's lift back. Its prop holds a near-black arrow up or down the map, toward its deck, with a bar across while it is locked (3:1 on the lit cell, as a target arrow) |
 | BR lobby | Shown closed until battle royale ships (Phase 4): a bar across its glyph, the HUD says closed, the marble may stand on it. Every deck has one |
 
@@ -413,7 +415,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   down, it counts its own +1 (below). You still win at 6 (a credit that reaches 6 by flips wins),
   and your own count of lost marbles is unchanged by a flip. Void and off-board cells are not
   neighbours.
-- **Tell**: when you hover a move, each of your marbles that the move would flip (the check runs
+- **Tell**: when you hover a move (on Easy, every move of the selected marble; on Hard, none, #1538), each of your marbles that the move would flip (the check runs
   right after your own move) shows a steady glyph and outline. Not a black halo: it would vanish
   against a black shell. A flipped marble shows shell growing over the glass.
 - **Counter**: break contact (move or push), or surround a boss marble with 4 of yours.
@@ -472,7 +474,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Anti-stalling**: each bonus played is a ply: it counts for the 100-ply no-ejection cap and for
   the repetitions, and the position hash includes the moves never echoed (section 5). A declined
   free move is not a ply. The offer itself is not in the position hash.
-- **Tell**: while you prepare a move, its ghost shows the bonus moves it gives the Echo (the
+- **Tell**: while you prepare a move (on Easy for every move of the selected marble at once, on Hard never: no ring and no
+  bonus marble on the ghost, #1538), its ghost shows the bonus moves it gives the Echo (the
   mirror, and in P2 the older move that will be echoed), each landing marble ringed in teal. Once
   played, the Echo's bonus plies slide one after the other like a normal move (reduced motion: no
   slide), then keep a teal ring on the marbles they moved until the next move. On your turn the

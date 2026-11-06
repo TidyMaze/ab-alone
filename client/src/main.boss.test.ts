@@ -400,18 +400,8 @@ describe('main.ts boss fights', () => {
       expect((await echoTell('normal', true)).bonus).toBe(1);
     });
 
-    it('hard: the Echo shows no bonus and no reply, only the ghost of the hovered move', async () => {
-      const { bonus, ghosts } = await echoTell('hard', true);
-      expect(bonus).toBe(0);
-      const hull = await (async () => {
-        const game = await boot('?bot=off', { reducedMotion: true, storage: level('hard') });
-        fightBoss(game, 'The Hull');
-        const mv = forward(game);
-        game.click(...mv.cells[0]!);
-        hover(game, [mv.cells[0]![0] + DIRS[mv.dir]![0], mv.cells[0]![1] + DIRS[mv.dir]![1]]);
-        return Number(body().ghosts);
-      })();
-      expect(ghosts).toBe(hull); // the Echo's reply is not announced: its ghosts are those of any other boss
+    it('hard: the Echo shows no bonus on a hovered move, only the ghost of the move', async () => {
+      expect(await echoTell('hard', true)).toEqual({ bonus: 0, ghosts: 1 });
     });
 
     it('easy: the Echo shows the bonus of every move of the selected marble, with nothing hovered', async () => {

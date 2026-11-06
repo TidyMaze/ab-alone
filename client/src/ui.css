@@ -102,6 +102,8 @@ body[data-scene='table-zero']::after { display: none; }
 .setting-group { display: flex; gap: 0.25rem; }
 #setting-difficulty { padding-inline: 0.5rem; justify-content: center; }
 #setting-difficulty svg { display: none; }
+/* What the level changes (#1538), a line of the menu's own width under the control. */
+#difficulty-note { flex: 1 0 100%; grid-column: 1 / -1; margin: 0; padding: 0 0.25rem; font: 0.75rem/1.3 var(--ui); color: var(--muted); overflow-wrap: anywhere; }
 /* The volume page (#438): Sound shows the four sliders in place of the items, so the menu is never taller than its items
    and covers no cell. Each slider is its name over a range of 0 to 100 %. */
 #settings-menu[data-page='volume'] > :not(.setting-volume), #settings-menu:not([data-page='volume']) > .setting-volume { display: none; }
