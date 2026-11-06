@@ -187,7 +187,7 @@ describe('the scripted fight', () => {
   });
 
   it('shows the next goal of the path to a player who beat a boss: a first run, then the next deck\'s boss (#1524)', async () => {
-    const progress = JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0], beaten: ['echo'] });
+    const progress = JSON.stringify({ version: 1, deck: 'cargo', cell: [0, 0], beaten: ['echo'] }); // the marble on the deck of the goal room
     await boot('/', { storage: { 'ab-alone.progress': progress } });
     expect(document.querySelector('#hub-rail p.goal')!.textContent).toBe('Next goal: Start a rogue-lite run on the Cargo deck.');
     expect(document.querySelector('#hub-rail li[data-goal]')!.getAttribute('data-deck')).toBe('cargo');

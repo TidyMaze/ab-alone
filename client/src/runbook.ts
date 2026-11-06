@@ -2,7 +2,7 @@
 // a day and the compendium of what the runs held, kept in the browser next to the other progress (roguelite.ts). Only variety
 // is kept, never power (Decision #934).
 
-import { EVENTS, eventOf, glyph, lineGlyph, MAX_ASCENSION, RELICS, runScore, SPECIAL_LOOKS, TACTICS, COMMANDERS, type MapNode, type Run } from './roguelite';
+import { EVENTS, eventOf, glyph, lineGlyph, MAX_ASCENSION, readBest, RELICS, runScore, SPECIAL_LOOKS, TACTICS, COMMANDERS, type MapNode, type Run } from './roguelite';
 import { read, write, type Store } from './quality';
 
 /** A run over, as the history keeps it: its seed (a run is kept once), commander (an index of COMMANDERS, -1 for none),
@@ -122,6 +122,10 @@ export function readSeen(store: Store): Seen {
   ];
   return relics && specials && tactics && events ? { relics, specials, tactics, events } : { ...NOTHING };
 }
+
+/** Whether the player has started a run (#1524, the Hub's next goal): the compendium is written from a run's first screen (its commander's relic is
+ * held at once), and the history and the acts won tell of a run of an older build. A daily run left at its first screen has none of them. */
+export const ranRun = (store: Store): boolean => Object.values(readSeen(store)).some((list) => list.length > 0) || readHistory(store).length > 0 || readBest(store) > 0;
 
 /** Adds what `run` holds, and the event on its screen, to the compendium. */
 export function recordSeen(store: Store, run: Run): void {

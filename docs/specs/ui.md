@@ -526,10 +526,10 @@ A new player does not get five pages of rules first (#1521). A fresh profile on 
    the bot answers as in any game, and the first ejection of the player ends the fight.
 3. **First ejection.** The bot does not answer. The coach plate reads "White ejected 1/6: Tally enters it. Six win a match.
    The Echo, the first boss, waits in the Hub." with To the Hub, which opens the Hub.
-4. **Hub with a goal.** While no boss is beaten the Hub marks the next goal (`goalDeck` in `hubview.ts`): The Echo's door is
-   the one solid amber plate, and the Mess row of the lift-shaft rail is ringed in amber and reads "The Echo waits · next
-   goal". The door's glow breathes; Reduced motion zeroes the animation and keeps the ring. This marks every Hub visit
-   until a boss falls, a returning player who beat none included.
+4. **Hub with a goal.** The Hub says the next thing to do (#1524, below): until a boss is beaten it is The Echo. Its door is the one
+   solid amber plate (`goalRoom` in `hubview.ts`), the Mess row of the lift-shaft rail is ringed in amber, and the line of the rail
+   reads "Next goal: Beat The Echo on the Mess deck." The door's glow breathes; Reduced motion zeroes the animation and keeps the
+   ring. This marks every Hub visit, a returning player who beat none included.
 
 - **Who sees it.** `firstRunDue`: the plain root URL (no query, no hash), not played, no guide seen, no game saved and no
   boss beaten. A returning player, or one who saw the guide, gets the Hub as before (#602). The first run is marked done
@@ -540,6 +540,29 @@ A new player does not get five pages of rules first (#1521). A fresh profile on 
   Hub shows The Echo as the goal, well inside the 60 s of #1521). `body[data-firstrun]` reads `open`, `fight` or `done`.
 - **Vocabulary.** White and Black everywhere in rules text, as the HUD says (#1523): the guide no longer says pale glass and
   black shells.
+
+#### The next goal (#1524)
+
+One line of the Hub always says what to do next: a line under the five decks of the lift-shaft rail (`<p class="goal">Next goal: ...`),
+shown on a desktop window and on a phone held upright, where the rail is a row of deck names and the plates are short (the line drops its "Next goal:" lead there and keeps one row, so it stays above the board of a 360x640 phone). The room it
+points to is the amber plate and the deck of that room is the ringed row of the rail. It replaces the "The Echo waits · next goal" of
+the row of #1521: one line, said in words, for every step.
+
+It is computed by one pure function, `nextGoal(beaten, ran)` (`hubview.ts`), from what the player has done, with no store of its own:
+`beaten` is the progress's bosses, `ran` is `ranRun(store)` (`runbook.ts`): a run was started, read from the stores that already are
+(the compendium, written from a run's first screen, the history of the runs over, and the acts won). The path today:
+
+1. **The first run** (#1521): played or skipped before the Hub is reached, so the Hub's line starts at the next step.
+2. **Beat The Echo** on the Mess deck, while The Echo is not beaten.
+3. **Start a rogue-lite run** on the Cargo deck, the Rogue-lite room (the amber plate), while no run was started.
+4. **Beat the boss of the next deck**: the first deck, in order, whose boss is not beaten ("Beat The Hull on the Cargo deck."). It names
+   only a boss the rail names already (its lift is open), never one above the progress, and holds no secret word of `SECRETS`
+   (`story.ts`): `hubview.test.ts` checks every state of the path against both.
+5. **All five bosses beaten**: "All bosses beaten. Try the Daily or a run." No room is marked.
+
+Not on the path yet: the Open world's first move (a later step) and town training, which comes under Decision #1513. A step is added
+to `nextGoal` when its content ships. Tests: `client/e2e/next-goal.spec.ts` (the line at two progress states, on 960x540 and 390x844,
+covering no plate), `hubview.test.ts` and `main.firstrun.test.ts`.
 
 #### The Hub's first minutes (#1522)
 
@@ -580,6 +603,24 @@ it. It keeps its pages over the dimmed game, one at a time.
   focus goes back where it was (the cog when the menu opened it).
 - **Tests.** `?guide` opens it, also in an automated browser (`client/e2e/guide.spec.ts`).
 - **Language.** English, as the rest of the UI, which has no translations.
+
+### 4.8 The goal card of The Echo (#1524)
+
+The Echo opens on a card in place of one long line: a picture of the game's marbles over two short steps (`client/src/goalcard.ts`).
+
+1. "Push 6 Black marbles off the edge to win. Lose 6, or draw, and you lose."
+2. "Moves are mirrored for free, both ways. Take the ringed mirror of its move, then play your own."
+
+The picture is an inline SVG strip on the dark deck colour, as the guide's art: a line of three White marbles on the left of an amber dashed
+mirror line, and the Echo's marbles in the point-symmetric cells on the right, dashed in amber (the free move). It uses flat colours, no
+gradient id (an id of another inline picture, the guide's, may sit in a hidden dialog, where it paints nothing). The card shows where
+the goal line did (the goal is shown once, #1032): in the HUD before the first move, and in the Goal sheet after it. The plate of the HUD
+has room for a few lines and covers no cell (`phone-layout.spec.ts`, every window it lists), so the HUD holds the two steps always and the
+strip only where it fits: on a landscape window of at most 1100 px (9 rem wide), not on a phone held upright nor on a wide short window
+(1101 px and more, at most 760 px high, where the goal keeps to three lines, #1067: the two steps are three lines there). The Goal sheet
+always holds the strip and the steps. The other bosses keep their one line; their cards are a later step.
+`boss.goal()` of the bridge is unchanged (the MCP server reads it). Tests: `goalcard.test.ts`, `main.boss.test.ts` and the Echo
+spec of `client/e2e/echo.spec.ts` (the card in the HUD, then in the sheet, inside the window and clear of the boss bar).
 
 ## 5. Board framing
 

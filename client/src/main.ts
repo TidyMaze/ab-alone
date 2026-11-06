@@ -36,6 +36,7 @@ import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
+import { goalCardHtml } from './goalcard';
 import { drawBossBar } from './bossbar';
 import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
@@ -306,7 +307,7 @@ import { HUB_CELLS, hubPath, roomAt, step, type Door, type Spot as HubSpot } fro
 import { entryConfirmDue, entryName, HUB_COACH, hubCoachDue, hubHelpOn, markEntered, markHubCoachDone, needsConfirm } from './hubcoach';
 import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
-import { goalDeck, labelsHtml, pipsHtml, railHtml } from './hubview';
+import { labelsHtml, nextGoal, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
@@ -327,6 +328,7 @@ import {
   claim,
   clearRun,
   dailyRun,
+  choices,
   collect,
   collectorHtml,
   leaveCollector,
@@ -384,7 +386,7 @@ import {
   type MapNode,
   type Run,
 } from './roguelite';
-import { bookHtml, compendiumHtml, finished, historyHtml, readDaily, readHistory, readSeen, recordFinished, recordSeen, startDailyTry } from './runbook';
+import { bookHtml, compendiumHtml, finished, historyHtml, ranRun, readDaily, readHistory, readSeen, recordFinished, recordSeen, startDailyTry } from './runbook';
 import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
 import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } from './royale-net';
@@ -3689,7 +3691,11 @@ function drawHud(extra = ''): void {
   goalButton.disabled = shownPly() === 0; // the goal is on the plate until the first move
   goalButton.setAttribute('aria-expanded', String(sheetOpen));
   goalSheet.hidden = !sheetOpen;
-  if (sheetOpen) goalSheet.textContent = (engine as Encounter).goal();
+  if (sheetOpen) {
+    const card = goalCardHtml(fight?.id); // The Echo has a card (#1524), the other bosses a line
+    if (card) goalSheet.innerHTML = card;
+    else goalSheet.textContent = (engine as Encounter).goal();
+  }
   const boss = engine instanceof Encounter ? engine : null;
   if (boss) {
     // The vents note (#741): the change that starts burning the player's marbles, shown for 2 plies.
@@ -3731,6 +3737,7 @@ function drawHud(extra = ''): void {
         phases: boss.phases(),
         result: end ? 0 : boss.result(), // the end banner already says Victory or Defeat, one line less in the plate
         goal: showGoal ? boss.goal() : '',
+        card: showGoal ? goalCardHtml(fight?.id) : '',
         tell,
         // The daily line, or the attempt of a co-op room (#531).
         daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : online ? (duel ? DUEL_LINE : attemptLine(online.attempt)) : '',
@@ -3976,8 +3983,9 @@ function refresh(): void {
     const glyphOf = props && ((door: Door, options: GlyphOptions) => { const room = createKitGlyph(props, door, options); room.position.y = -TERRACE_LIFT - 0.02; return room; });
     hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim, glyphOf ?? undefined);
     syncDishes();
-    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store), goalDeck(beaten)); // a beaten boss's door shows its medal (#1249)
-    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten, goalDeck(beaten));
+    const goal = nextGoal(beaten, ranRun(store)); // the next thing to do (#1524)
+    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store), goal); // a beaten boss's door shows its medal (#1249)
+    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten, goal);
     document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
     placeHubLabels();
     hud();
@@ -6100,6 +6108,7 @@ const playOnlineButton = document.getElementById('play-online') as HTMLButtonEle
 // marble types and commanders (#801, #1464), picked on the map before the first node.
 const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
+let runMore = false; // More is open on the start screen (#1524): shut for each new run, kept while a commander or a level is picked and through the book
 function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
   const runes = readRunes(store); // the runes found in earlier runs open hidden branches on this map (#1476)
@@ -6113,6 +6122,7 @@ function beginDailyRun(): void {
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
+  runMore = false;
   armed = 0;
   swapping = false;
   moveModes('pick');
@@ -6168,7 +6178,7 @@ function showRun(): void {
                   ? exitHtml(map, state, exitsFor(state), boss_name)
                   : placed
                     ? placeHtml(state, armed)
-                    : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))), { ids: boss_ids(), name: boss_name, builds: boss_takes_build });
+                    : mapHtml(map, state, bookHtml(utcDay(Date.now()), readDaily(store, utcDay(Date.now()))), { ids: boss_ids(), name: boss_name, builds: boss_takes_build }, runMore);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
   const next = runPanel.querySelector('button.node:not(:disabled)'); // after a pick the map scrolls to the nodes to pick, in the middle of the plate (#1468); before the first the commanders stay in view
@@ -6285,7 +6295,13 @@ function resumeRun(saved: NonNullable<Awaited<ReturnType<typeof loadSavedRun>>>)
 runPanel.addEventListener('click', (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
   if (button?.id === 'run-new') beginRun();
-  else if (button?.dataset.bonus) {
+  else if (button?.id === 'run-start') pickNode(choices(run!.map, run!.state)[0]!); // Start takes the first fight of the map (#1524)
+  else if (button?.dataset.more) {
+    runMore = !runMore;
+    showRun();
+    const details = runPanel.querySelector('.run-more');
+    if (details) runPanel.scrollTop += details.getBoundingClientRect().top - runPanel.getBoundingClientRect().top; // the details start at the top of the plate
+  } else if (button?.dataset.bonus) {
     run!.state = takeBonus(run!.state);
     void saveRun(gameStore, run!.state);
     fightRun(runEngine(run!.state, run!.map)); // the boss fight (#1473)
@@ -6352,14 +6368,16 @@ runPanel.addEventListener('click', (e) => {
     run!.state = drink(run!.state);
     void saveRun(gameStore, run!.state);
     showRun();
-  } else if (button) {
-    document.body.dataset.pick = sfx.pick() ? 'pick' : 'none'; // the pick's sound (#1468), read by the e2e tests
-    run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
-    void saveRun(gameStore, run!.state);
-    if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));
-    else showRun(); // a rest site, an event, a treasure or a shop
-  }
+  } else if (button) pickNode(Number(button.dataset.node));
 });
+// A pick of a node of the map, from its button or from Start (#1524).
+function pickNode(node: number): void {
+  document.body.dataset.pick = sfx.pick() ? 'pick' : 'none'; // the pick's sound (#1468), read by the e2e tests
+  run!.state = visit(run!.map, run!.state, node);
+  void saveRun(gameStore, run!.state);
+  if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));
+  else showRun(); // a rest site, an event, a treasure or a shop
+}
 runButton.addEventListener('click', beginRun);
 runButton.disabled = false; // listener ready (#146)
 // Trainer (#1159): a 1 vs 1 against the bot, which starts with one marble and gets one more each wave, until the player

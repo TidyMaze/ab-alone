@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { shot } from './shot';
+import { openMore } from './runstart';
 
 // The score of a run over, the daily run, the run history and the compendium of the rogue-lite run (#1466,
 // docs/specs/roguelite.md section 21) in the browser. Seed 3: the act 1 boss 9 is reached by 0, 2 and 6 (two elites), and
@@ -15,6 +16,7 @@ test('the rogue-lite run: a score at the end, the daily run, the history and the
   await shot(page, { path: 'test-results/roguelite-score-summary.png' });
 
   await map.getByRole('button', { name: 'New run' }).click();
+  await openMore(page);
   const day = new Date().toISOString().slice(0, 10);
   await expect(map.getByRole('button', { name: `Daily run ${day}`, exact: true })).toBeEnabled();
   await map.getByRole('button', { name: 'Run history' }).click();
@@ -30,6 +32,7 @@ test('the rogue-lite run: a score at the end, the daily run, the history and the
 
   await map.getByRole('button', { name: `Daily run ${day}`, exact: true }).click();
   await expect(map.locator('.run-line')).toHaveText(`Daily run ${day} · army 14 marbles · pick a fight`);
+  await openMore(page); // a new run starts with More shut
   await expect(map.getByRole('button', { name: /^Daily run .* tried today/ })).toBeDisabled();
   await page.reload();
   await page.waitForFunction(() => typeof (window as any).__run === 'function');

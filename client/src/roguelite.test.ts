@@ -2675,10 +2675,10 @@ describe('the start screen (#1524)', () => {
     expect(doc.querySelector('#run-start')).not.toBeNull(); // Start stays in reach
   });
 
-  it('names the choices a run has already, the level too, and nothing for a daily run, which has no commander', () => {
+  it('names the choices a run has already, the level too, and nothing when none is made', () => {
     expect(screen(chooseAscension(chooseCommander(newRun(1, 1, LEGACY_UNLOCKED, 3), 1), 2), false).querySelector('.run-picks')!.textContent).toBe('Commander: The Warden · Ascension 2');
     expect(screen(newRun(1, 0, LEGACY_UNLOCKED), false).querySelector('.run-picks')).toBeNull();
-    expect(screen(dailyRun('2026-11-06', 5), false).querySelector('.run-picks')).toBeNull();
+    expect(screen(dailyRun('2026-11-06', 5), false).querySelector('.run-picks')!.textContent).toBe('Commander: The Captain'); // a daily run plays with the Captain
   });
 
   it('is the start only: a run on, or over, has no intro, no Start and no More', () => {

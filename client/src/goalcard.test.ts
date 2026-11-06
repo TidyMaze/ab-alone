@@ -18,9 +18,9 @@ describe('the goal card of The Echo (#1524)', () => {
     expect(svg.querySelectorAll('[stroke-dasharray]').length).toBeGreaterThan(0); // the mirror line and the free move's ghosts
   });
 
-  it('says win and lose, and the free mirror, in the HUD\'s words: White, Black, eject', () => {
-    expect(ECHO_STEPS[0]).toMatch(/6 Black marbles.*win/);
-    expect(ECHO_STEPS[0]).toMatch(/lose 6/i);
+  it('says how it is won and that a draw loses, then the free mirror, in the HUD\'s words: Black, eject', () => {
+    expect(ECHO_STEPS[0]).toMatch(/Eject 6 Black marbles to win/);
+    expect(ECHO_STEPS[0]).toMatch(/draw loses/);
     expect(ECHO_STEPS[1]).toMatch(/mirror/);
     expect(ECHO_STEPS[1]).toMatch(/free/);
   });

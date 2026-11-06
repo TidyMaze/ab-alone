@@ -320,7 +320,7 @@ describe('the next goal (#1521, #1524)', () => {
   });
 
   it('says what is left to do when all five bosses are beaten, on no deck', () => {
-    expect(nextGoal(BOSSES, true)).toEqual({ text: 'All five bosses are beaten. Play on in the Daily or a rogue-lite run.', deck: null, room: null });
+    expect(nextGoal(BOSSES, true)).toEqual({ text: 'All bosses beaten. Try the Daily or a run.', deck: null, room: null });
   });
 
   it('never spoils: no secret word, and no boss of a deck above the goal named', () => {
@@ -338,13 +338,13 @@ describe('the next goal (#1521, #1524)', () => {
 
   it('puts the goal in a line of the rail, under the five decks, and rings the row of its deck', () => {
     const html = railHtml('mess', [], nextGoal([], false));
-    expect(html).toContain('<p class="goal">Next goal: Beat The Echo on the Mess deck.</p>');
+    expect(html).toContain('<p class="goal"><span class="lead">Next goal: </span>Beat The Echo on the Mess deck.</p>');
     expect(html).toContain('<li data-deck="mess" data-state="open" data-goal aria-current="location"><span class="n">01</span><b>Mess</b><small>The Echo waits · you are here</small></li>');
     expect(html.match(/data-goal/g)).toHaveLength(1);
     expect(html.indexOf('</ul>')).toBeLessThan(html.indexOf('class="goal"'));
     expect(railHtml('cargo', ['echo'], nextGoal(['echo'], false))).toContain('<li data-deck="cargo" data-state="open" data-goal aria-current="location">');
     const done = railHtml('mess', BOSSES, nextGoal(BOSSES, true));
-    expect(done).toContain('<p class="goal">Next goal: All five bosses are beaten. Play on in the Daily or a rogue-lite run.</p>');
+    expect(done).toContain('<p class="goal"><span class="lead">Next goal: </span>All bosses beaten. Try the Daily or a run.</p>');
     expect(done).not.toContain('<li data-deck="mess" data-state="beaten" data-goal');
     expect(done).not.toContain('data-goal'); // no row to ring
   });

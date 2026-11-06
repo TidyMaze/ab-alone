@@ -510,6 +510,15 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 @media (orientation: landscape) and (min-width: 1101px) and (max-height: 760px) {
   #hud .boss .goal { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 }
+/* The goal card of The Echo (#1524): a thin strip of marbles over two numbered steps, all of it shown (no clamp of its lines). The plate of the HUD has room for a few lines
+   only (it covers no cell, phone-layout.spec.ts): the strip is gone from the plate of a short window, where the Goal sheet has it. */
+#hud .boss .goal.goal-card { display: block; overflow: visible; }
+@media (orientation: landscape) and (min-width: 1101px) and (max-height: 760px) { #hud .boss .goal.goal-card { display: -webkit-box; -webkit-line-clamp: 3; overflow: hidden; } }
+#hud .boss .goal-card svg, #goal-sheet svg { display: block; width: 100%; max-width: 12rem; height: auto; margin-bottom: 0.25rem; }
+#hud .boss .goal-card ol, #goal-sheet ol { margin: 0; padding-left: 1.25rem; }
+#hud .boss .goal-card li + li, #goal-sheet li + li { margin-top: 0.125rem; }
+@media (orientation: landscape) and (max-width: 1100px) and (min-height: 501px) { #hud .boss .goal-card svg { max-width: 9rem; margin-bottom: 0.125rem; } }
+@media (orientation: portrait), (orientation: landscape) and (min-width: 1101px) and (max-height: 760px) { #hud .boss .goal-card svg { display: none; } }
 /* A short landscape window (a phone held sideways) has no room above the board's top-left edge: the plate
    keeps to the band left of the board, like the column, with a smaller turn line (#234). */
 @media (orientation: landscape) and (max-height: 500px) {
@@ -887,6 +896,14 @@ body[data-reading] #log { visibility: visible; }
 body[data-biome]::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: var(--biome); opacity: 0.2; }
 body[data-biome] #run-map { border-color: var(--biome); background: color-mix(in srgb, var(--biome) 10%, var(--panel)); }
 #run-map button[data-exit] { border-left: 6px solid var(--biome); text-align: left; flex: 1 1 100%; }
+/* The start screen (#1524): two sentences on what a run is, the choices Start takes, Start and More on one row (44 px targets), and the details of More
+   in one column under the flask, which scroll with the plate. */
+#run-map .run-intro { margin: 0; text-align: center; }
+#run-map .run-picks { margin: 0; text-align: center; color: var(--muted); }
+#run-map .run-start { display: flex; gap: 0.5rem; justify-content: center; width: 100%; flex: none; }
+#run-map .run-start button { min-height: 2.75rem; min-width: 2.75rem; }
+#run-map #run-start { flex: 1 1 auto; font-weight: 600; color: var(--bg); background: var(--accent); border-color: var(--accent); }
+#run-map .run-more { display: flex; flex-direction: column; gap: 0.5rem; align-items: center; width: 100%; flex: none; }
 /* The ascension levels (#1465): 0 to 10 in one row of small buttons that wraps on a narrow screen. */
 #run-map .run-ascension { display: flex; flex-wrap: wrap; gap: 0.25rem; justify-content: center; width: 100%; flex: none; }
 /* The score of a run over, the daily run, the history and the compendium (#1466). */
@@ -1215,8 +1232,8 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 .hub-label[data-mark='locked'] small { color: #ff8787; }
 .hub-label[data-mark='beaten'] small { color: #ffd43b; }
 .hub-label[data-here] { box-shadow: 0 0 0 2px #ffb000; }
-/* The next goal of a new player (#1521): The Echo's door is the one solid amber plate, and the rail row of its deck is ringed in amber, the glow breathing (reduced
-   motion zeroes the animation: the ring stays), and the row says "next goal" in words under the boss. Shown until a boss is beaten. */
+/* The next goal (#1521, #1524): the room it points to (The Echo's door, then the Rogue-lite room, then the next boss's door) is the one solid amber plate, and the rail
+   row of its deck is ringed in amber, the glow breathing (reduced motion zeroes the animation: the ring stays). The line of the rail says it in words, also on a phone. */
 .hub-label[data-goal] { --k: #1a1300; color: #1a1300; background: #ffb000; box-shadow: 0 0 0 3px #ffb000, 0 0 14px 5px rgba(255, 176, 0, 0.65); animation: goal-glow 1.2s ease-in-out infinite alternate; }
 @keyframes goal-glow { to { box-shadow: 0 0 0 3px #ffb000, 0 0 5px 1px rgba(255, 176, 0, 0.3); } }
 .hub-label.you { --k: #ffb000; color: var(--k); border-color: transparent; font: 600 0.625rem/1.2 var(--display); letter-spacing: 0.12em; text-transform: uppercase; }
@@ -1240,6 +1257,7 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 #hub-rail li[aria-current] { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
 #hub-rail li[data-goal] { border-color: #ffb000; background-color: rgba(255, 176, 0, 0.16); box-shadow: inset 3px 0 #ffb000; }
 #hub-rail li[data-goal] small { color: #ffb000; font-weight: 600; }
+#hub-rail p.goal { margin: var(--space) 0 0; padding: 4px var(--space); color: #ffb000; font-weight: 600; border: 1px solid #ffb000; border-radius: 4px; background-color: rgba(255, 176, 0, 0.16); }
 #hub-rail li[aria-current]::after { content: '\25CF'; color: var(--accent); }
 #hub-pips { top: 16px; right: 72px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
 #hub-pips .pip { width: 16px; height: 16px; box-sizing: border-box; border: 2px solid var(--edge); border-radius: 50%; }
@@ -1251,7 +1269,8 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 @media (orientation: portrait) {
   #hub-pips { top: 135px; right: 16px; padding: 4px 8px; }
   #hub-rail { top: 168px; left: 16px; right: 16px; width: auto; transform: none; padding: 4px; }
-  #hub-rail h2, #hub-rail .n, #hub-rail small { display: none; }
+  #hub-rail h2, #hub-rail .n, #hub-rail small, #hub-rail .goal .lead { display: none; }
+  #hub-rail p.goal { margin-top: 2px; padding: 1px 6px; font-size: 0.75rem; line-height: 1.2; }
   #hub-rail ul { flex-direction: row; }
   #hub-rail li { flex: 1 1 0; min-width: 0; grid-template-columns: 1fr; justify-items: center; padding: 4px 2px; }
   #hub-rail b { font-size: 0.75rem; }

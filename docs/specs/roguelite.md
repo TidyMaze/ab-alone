@@ -1021,3 +1021,30 @@ The special marbles, relics, affinities and tactics a run built over its act cou
   `save_run` carries the same.
 - **Turn it against the boss**: the build is the player's edge in the fight, and the boss gets none of it, but a converted special
   marble (The Chaplain) is the boss's, and the player's Heavies and Anchors push and block the boss's marbles as they do the bot's.
+
+## 29. The start screen (#1524)
+
+The screen before the first pick says what a run is and has one way to begin; the choices are one tap away. From the top: the run line,
+**what a run is** in two sentences (`RUN_INTRO`: "A run is a climb through 3 acts of fights with the army you keep: marbles lost stay
+lost. Beat the act 3 boss to win; lose a fight, or fall below 4 marbles, and the run is over."), the choices Start takes (`Commander: The
+Captain`, `Ascension 2` when picked), then **Start** and **More** on one row, 44 px high, then the flask, then the map.
+
+- **Start** takes the first fight of the map (`choices(map, run)[0]`, as a pick of that node: the pick sound, the save, the placement
+  or the fight), with the commander and the level as they stand. A new run starts with the Captain (`beginRun`), so a first-time player's
+  Start needs no choice; a node of the map is still picked by itself.
+- **More** (`data-more`, `aria-expanded`, then Less) opens one column under the flask: the special marbles of the rewards with what unlocks
+  the others (section 8), the commander buttons and the picked one's line (section 17), the ascension row 0 to 10 and its rule
+  (section 20), the runes still to find (section 27), the blueprints to bank (section 15), and the daily run, run history and compendium
+  (section 21). Nothing was cut: every button and rule of those sections is there, in the same order. Opening More scrolls the plate to
+  its first line, and the plate scrolls to the end of it, the ascension row included (it was cut off at the bottom of a 540 px window
+  and 844 px phone before, under a long list).
+- **Open or shut.** More is shut for every new run (`runMore` in `main.ts`, not saved), stays open through a commander or a level
+  picked, the history, the compendium and their Back, and a reload shuts it. What the player chose is saved with the run as before
+  (section 3), so the line above Start reads it back and Start takes it. `mapHtml(map, run, book, bosses, more)` draws it open by
+  default, the page passes its state.
+- **Held in view.** Start and More sit under two or three lines of text, in the first screen of the plate on a 960x540 window and a phone
+  held upright; the flask and the map follow. `client/e2e/roguelite-start.spec.ts` checks both, and that every control of More can be
+  scrolled into the plate.
+- **Tests.** The specs that click a control of More open it first through `openMore` (`client/e2e/runstart.ts`, one click).
+- **Turn it against the boss**: no new rule: the screen only orders what the player picks; the commanders and the ascension levels keep
+  their rules (sections 17 and 20).

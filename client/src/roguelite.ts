@@ -1549,12 +1549,26 @@ export interface BossRoster {
 /** The tip line of a boss node: its name and whether the fight carries the army's special marbles, relics and tactics (docs/specs/roguelite.md section 28). */
 const bossTip = (bosses: BossRoster, id: string): string => `Boss: ${bosses.name(id)!} · ${bosses.builds(id) ? 'takes your build' : 'fights without your build'}`;
 
+/** What a run is and how it is won and lost, the one thing the start screen says in words (#1524, docs/specs/roguelite.md section 29). */
+export const RUN_INTRO = 'A run is a climb through 3 acts of fights with the army you keep: marbles lost stay lost. Beat the act 3 boss to win; lose a fight, or fall below 4 marbles, and the run is over.';
+
+/** The top of the start screen: what a run is, the choices Start takes (the commander and the level when picked), and Start with More, which opens the
+ * details (`more`): the unlocks, commanders, ascension, runes, blueprints and the book. */
+function introHtml(run: Run, more: boolean): string {
+  const picks = [COMMANDERS[run.commander] ? `Commander: ${COMMANDERS[run.commander]!.name}` : '', run.ascension ? `Ascension ${run.ascension}` : ''].filter(Boolean).join(' · ');
+  return (
+    `<p class="run-intro">${RUN_INTRO}</p>${picks && `<p class="run-picks">${picks}</p>`}` +
+    `<div class="run-start"><button type="button" id="run-start">Start</button><button type="button" data-more="1" aria-expanded="${more}">${more ? 'Less' : 'More'}</button></div>`
+  );
+}
+
 /** The map screen: the run line, the unlocks and commanders before the first pick, a legend, the nodes act by act from the
  * top under the header of their act (half a row), each placed on its row with the icon of its kind, the links between them
  * (the path taken marked, and the links to the nodes to pick next), the nodes to pick enabled; once the run is over, its
  * score, summary and New run. The fourth act (#1467) is drawn once the run holds the three keys; an elite that holds a key is marked. `book` is what the start screen holds besides (#1466): the daily run, the history and the
- * compendium. */
-export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster): string {
+ * compendium. Before the first pick the screen says what a run is, with Start and More (#1524); `more` shows the details More holds (open by default, the page
+ * passes false until the player opens it). */
+export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster, more = true): string {
   const head = `<p class="run-line">${runLine(map, run)}</p>`;
   if (run.end) return `${head}${scoreLine(map, run)}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
@@ -1599,7 +1613,8 @@ export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
   const told = run.told ? `<p class="run-help">${run.told}</p>` : '';
   const moves = movesLine(map, run);
-  return `${head}${told}${keysHtml(run)}${runesHtml(run)}${flaskHtml(run)}${run.path.length ? '' : startHtml(run) + book}${moves && `<p class="run-help run-moves">${moves}</p>`}${legendHtml(run)}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
+  const starting = !run.path.length;
+  return `${head}${told}${starting ? introHtml(run, more) : ''}${keysHtml(run)}${runesHtml(run)}${flaskHtml(run)}${starting && more ? `<div class="run-more">${startHtml(run)}${book}</div>` : ''}${moves && `<p class="run-help run-moves">${moves}</p>`}${legendHtml(run)}<div class="run-graph" style="--slots:${total}">${svg}${heads.join('')}${nodes.join('')}</div>`;
 }
 
 /** The most scrap a saved run may hold. */

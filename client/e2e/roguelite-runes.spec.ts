@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { ELITES, RUNES } from '../src/roguelite';
 import { openModes } from './modes';
 import { shot } from './shot';
+import { openMore } from './runstart';
 
 // The runes of the rogue-lite run (#1476, docs/specs/roguelite.md section 27), loaded through the test hook. Seed 3: act 1 has the
 // first row 0 and 1, the elites 2 and 6, its boss 9 is reached by 0, 2 and 6.
@@ -19,6 +20,7 @@ const freshDraw = async (page: Page) => {
 test('a player who owns the runes sees a secret room and a shortcut in each act, and can walk into the room, #1476', async ({ page }) => {
   const panel = page.locator('#run-map');
   await load(page, { runes: 7 });
+  await openMore(page);
   await expect(panel.locator('button[data-node-kind="secret"]')).toHaveCount(3); // one per act
   await expect(panel.locator('line.shortcut')).toHaveCount(3);
   await expect(panel.locator('.run-runes')).toContainText('Rune of Stone (a secret room in every act) · ');
@@ -38,6 +40,7 @@ test('a player who owns the runes sees a secret room and a shortcut in each act,
 test('a player without runes has the plain map and is told which runes there are to find, #1476', async ({ page }) => {
   const panel = page.locator('#run-map');
   await load(page, { path: [] });
+  await openMore(page);
   await expect(panel.locator('button[data-node-kind="secret"]')).toHaveCount(0);
   await expect(panel.locator('line.shortcut')).toHaveCount(0);
   await expect(panel.locator('.run-runes')).toHaveCount(0);
@@ -73,6 +76,7 @@ test('an elite of an archetype beaten for the first time finds its rune: told, k
   await page.waitForFunction(() => typeof (window as any).__run === 'function');
   await openModes(page);
   await page.getByRole('button', { name: 'Rogue-lite run' }).click();
+  await openMore(page);
   await expect(panel.locator('.run-runes')).toContainText(RUNES[k]!.name);
   await expect(panel.getByText('Runes to find')).not.toContainText(RUNES[k]!.name);
 });

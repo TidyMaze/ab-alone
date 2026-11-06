@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { openModes } from './modes';
 import { shot } from './shot';
+import { openMore } from './runstart';
 
 // The ascension levels of the rogue-lite run (#1465, docs/specs/roguelite.md section 19) in the browser: the start screen picks a
 // level unlocked by an earlier win, the pick is on the run line and in the fight's HUD, and a run won unlocks the next level.
@@ -15,6 +16,7 @@ test('the rogue-lite run: the start screen picks an ascension level, a run won u
   });
   await openModes(page);
   await page.getByRole('button', { name: 'Rogue-lite run' }).click();
+  await openMore(page);
   await expect(map.locator('button[data-ascension]:enabled')).toHaveCount(5); // levels 0 to 4
   await expect(map.locator('button[data-ascension="5"]')).toBeDisabled();
   await map.locator('button[data-ascension="3"]').click();

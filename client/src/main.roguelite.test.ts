@@ -719,6 +719,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
     byId('run-new').click();
     expect(document.body.dataset.run).toBe('map');
+    openMore();
     expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
   });
 });
@@ -1032,10 +1033,12 @@ describe('main.ts, the Collector between acts (#1470)', () => {
     const game = await boot('?bot=off');
     game.openModes();
     byId('roguelite').click();
+    openMore();
     expect(map().textContent).toContain('Blueprints to bank: 14');
     localStorage.setItem(KEY, '[0,1]'); // two banked in earlier runs
     game.openModes();
     byId('roguelite').click();
+    openMore();
     expect(map().textContent).toContain('Blueprints to bank: 12');
   });
 });
@@ -1366,6 +1369,7 @@ describe('main.ts, the runes (#1476)', () => {
 
   it('a run without runes plays the map of its seed and says which runes there are to find', async () => {
     await startRun('?bot=off');
+    openMore();
     expect(secrets()).toHaveLength(0);
     expect(helps().join()).toContain('Runes to find: Rune of Stone (beat The Wall: a secret room in every act)');
     expect(map().querySelectorAll('line.shortcut')).toHaveLength(0);
@@ -1380,6 +1384,7 @@ describe('main.ts, the runes (#1476)', () => {
     expect(secrets()).toHaveLength(3);
     expect(secrets().every((b) => b.disabled)).toBe(true); // not on the first row
     expect(map().querySelector('.run-runes')!.textContent).toContain('Rune of Stone (a secret room in every act) · Rune of Spark');
+    openMore();
     expect(helps().join()).not.toContain('Runes to find');
     expect(map().querySelectorAll('line.shortcut')).toHaveLength(3);
     await game.settle();

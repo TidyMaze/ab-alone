@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { openModes } from './modes';
 import { shot } from './shot';
+import { openMore } from './runstart';
 
 // Unlocks between runs and the run summary of the rogue-lite run (#801, docs/specs/roguelite.md section 8) in the
 // browser. The progress (an act won in an earlier run) is set in localStorage and the run over loaded through the test
@@ -12,6 +13,7 @@ test('the rogue-lite run: the start shows the unlocks, a run over its summary, #
   await page.evaluate(() => localStorage.setItem('ab-alone.roguelite', '1'));
   await openModes(page);
   await page.getByRole('button', { name: 'Rogue-lite run' }).click();
+  await openMore(page);
   await expect(map.locator('.run-help').first()).toHaveText('Special marbles in rewards: Heavy, Anchor, Shield · Spark after 2 acts won in a run · Magnet after a run won · Bomb after a run won · Medic after 2 acts won in a run');
   await map.getByRole('button', { name: /^The Warden/ }).click();
   await expect(map.locator('.run-line')).toHaveText('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');

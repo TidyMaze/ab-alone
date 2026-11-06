@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { shot } from './shot';
+import { openMore } from './runstart';
 
 // The rogue-lite Collector (#1470, docs/specs/roguelite.md section 15), loaded through the test hook: the blueprint an elite
 // or an act boss dropped named on its reward screen, the Collector's room after the act 1 boss, a blueprint banked for good
@@ -37,5 +38,6 @@ test('the Collector: a drop on the reward screen, the room after the act boss, a
   await page.reload();
   await page.waitForFunction(() => typeof (window as any).__run === 'function');
   await page.evaluate(() => (document.getElementById('roguelite') as HTMLButtonElement).click());
+  await openMore(page);
   await expect(panel).toContainText('Blueprints to bank: 11');
 });
