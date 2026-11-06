@@ -354,8 +354,9 @@ the same on a lair fight.
 
 The Open world has a goal: one landmark lair per boss of the roster (15 today, the length of `boss_ids()`), each a normal boss fight.
 
-- **Placement** is seeded world generation in Rust (`world::lairs(seed, count)`, bridge `world_lairs(seed)` passes the roster size, `q, r` pairs, lair 0 first).
-  Lair `k` is drawn in the sextant `k % 6` of the hexagon (#1442, the biome of section 2), in the `k / 6`-th of its share of
+- **Placement** is seeded world generation in Rust (`world::lairs(seed, count)` finds the cells; the bridge's `world_lairs(seed)` gives the cells of
+  `world::towers(seed)`, `q, r` pairs, lair 0 first). Since #1532 the cell a boss stands on is its tier's, section 15: lair `k` is still boss `k`, and the
+  cells are the same set. The rest of this paragraph is how `lairs` draws a cell, whose number is the draw's, not the boss's. Cell `k` is drawn in the sextant `k % 6` of the hexagon (#1442, the biome of section 2), in the `k / 6`-th of its share of
   that sextant's lairs (the middle 60 % of it), 160 to 420 ground units out, and kept when its cell and its six neighbours are open
   ground of that sextant's biome on the world and it is at least 150 cells from the spawn (`LAIR_MIN`): so every biome holds two
   lairs or more (three in the meadow, the forest and the tundra for the 15 bosses), on land, an island in the archipelago. Before
@@ -367,7 +368,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
   while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).
   Until the model is loaded, the plain gold or green pillar is drawn.
-- **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`),
+- **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`), the number of the lair, not of its place on the map,
   the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from).
 - **Win.** The medal is recorded in `ab-alone.medals` as for any boss win, and the lair is added to `lairs` of the world's save.
   "Back to the Open world" resumes the world on the entrance with the lair shown beaten.
@@ -415,7 +416,8 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   cell beside it is drawn in a pale cyan line (`COLOURS.worldEdge`), 3:1 over the void and over `back`, so the hexagon's border shows
   wherever the hero's sight (section 9) has reached it. The map (section 9) draws it the same way.
 - **Lairs.** A lair in the window is its tower icon. A lair out of the window gets an arrow on the map's edge pointing to it only
-  for the 3 nearest unbeaten ones; the others have none.
+  for the 3 nearest unbeaten ones of the ring to beat (section 15); the others have none. A tower of a farther ring is drawn, on the minimap and
+  the map, only once its cell is discovered (section 9).
 - **Cost.** `openworldminimap.ts` draws from plain data (`drawMinimap`) and is redrawn by `mark`: when a world opens and on a step, a push, a
   broken obstacle or a camera turn, and by `frame` only while the drawn yaw changes, never at rest.
 
@@ -546,8 +548,8 @@ plan as the game.
 | Hub, bot, hot-seat, Medal room, terminals, Daily | **Spawn town**: the clearing of radius 3 round `(0, 0)`, the crash site | Walk into the clearing (the hero starts in it) | Walk out of it | Place, map icon and entrance built (#1593): rolling onto the town opens the Hub scene, the front door. Moving its stations into the town is planned |
 | Training yard (Trainer, Stalker), a bot table, a hot-seat table, a notice board | **The four other towns**, one per biome but the meadow and the archipelago (forest, tundra, desert, badlands), 40 to 120 ground units out | Walk in | Walk out | Place, map icon and entrance built (#1593): every town opens the same Hub for now. Their own stations are planned, five towns sharing out the Hub's stations, one per deck |
 | Online, Ranked, Leaderboard, Royale, co-op, boss duel | **Arena town**: one of the four other towns, chosen when it is built. An invite link `#room=` still opens the table at once | Walk in | Walk out | Planned (the town exists on the map, the table does not) |
-| The 15 bosses | **Towers**: the boss lairs of section 7, lair `k` in the sextant `k % 6`, 160 to 420 ground units out | Roll onto the lair from a neighbour | Win or lose, "Back to the Open world": the hero returns to the entrance cell | Built (section 7). The five story bosses as the gates of the five decks is planned |
-| Rogue-lite run | **Dungeon gates**: one in each biome but the meadow (forest, tundra, desert, badlands, archipelago), 160 to 420 ground units out. An act is one dungeon, in matching terrain | Roll onto the gate from a neighbour | Leave the run: the hero returns to the entrance cell | Gate, map icon and entrance built (#1593): rolling onto a gate starts the run. The gate's biome as the act's is planned |
+| The 15 bosses | **Towers**: the boss lairs of section 7, 160 to 420 ground units out, the easiest boss nearest (section 15) | Roll onto the lair from a neighbour | Win or lose, "Back to the Open world": the hero returns to the entrance cell | Built (section 7). The five story bosses as the gates of the five decks is planned |
+| Rogue-lite run | **Dungeon gates**: one in each biome but the meadow (forest, tundra, desert, badlands, archipelago), 160 to 420 ground units out, each with a dungeon tier from its ring (section 15). An act is one dungeon, in matching terrain | Roll onto the gate from a neighbour | Leave the run: the hero returns to the entrance cell | Gate, map icon and entrance built (#1593): rolling onto a gate starts the run. The gate's biome as the act's is planned |
 | Teleporters | Pads in the clearing and in the open ground, one a square of 8 x 8 chunks (section 10) | Roll onto a pad, Teleport button | Pick another pad | Built. Pads inside towns and gate clearings are planned |
 | Console | Leaves the player's UI | n/a | n/a | Planned |
 | Boss fight menu | Fast travel to the towers already found | Menu entry | n/a | Planned |
@@ -603,7 +605,7 @@ plan as the game.
 The panel (`#openworld-hud`) opens on what to do, not on the keys.
 
 - **Goal.** `#openworld-goal`: "Goal: beat the 15 towers of Hollow. One medal each." (a tower is a lair for the player). `#openworld-bearing` under
-  it: "Nearest tower: 208 cells, to the upper left." The nearest tower not beaten, by hex distance, and the way on the screen in eight words
+  it: "Nearest tower: 208 cells, to the upper left." The nearest tower of the ring to beat (section 15), by hex distance, and the way on the screen in eight words
   (`WAYS` of `openworldgoal.ts`), from the same turn of the ground as the minimap's arrows (`screenOffset`), so it follows the camera. Both are
   written when the minimap is drawn (a step, a tower beaten, a camera turn) and only when they change. Once every tower is beaten the goal reads "Goal done: all 15 towers are beaten." and the
   bearing says what is left: the lore logs not found, else "Left: the dungeon gates." A world with no tower shows neither. Tally's flat register, no
@@ -612,9 +614,55 @@ The panel (`#openworld-hud`) opens on what to do, not on the keys.
 - **Controls.** The keys, taps and pad buttons are behind `#openworld-controls`, a `<details>` closed on arrival, with the steering line
   (`#openworld-mode`) inside. A tap on its summary (44 px) or H opens and closes it; H on a folded plate shows the plate with the controls open. Nothing else
   opens or closes it: a player who opened it and closed it finds it closed in the next world.
-- **Nearest tower.** The button `#openworld-dungeon` (its id is kept) walks to the nearest tower not beaten (#1291). It was "Dungeon", which
+- **Nearest tower.** The button `#openworld-dungeon` (its id is kept) walks to the nearest tower of the ring to beat (#1291, #1532). It was "Dungeon", which
   now names the gates of section 13.
 - **Claim.** The first-visit line stays, once per player, with its stage rule (`Claim: unworked.` before stage 5, "Claim 0412: unworked." from it), and
   is followed by "A claim is a case on Tally's ledger. Unworked means no tower is beaten."
 - **Phone.** On a window 500 px high or under the panel is a column of 17 rem at the left, so the hero in the middle is clear of it, and its own
   height is bounded (`max-height`, it scrolls) so the open controls never leave the top of the screen.
+
+## 15. Rings: the nearest tower is the easiest (#1532)
+
+The world leads the player outward. The cells of the towers do not move (`world::lairs`, section 7); what changes is which boss stands on which
+cell, and what the map shows.
+
+- **Who stands where.** `world::towers(seed)` sorts the 15 lair cells by hex distance from the spawn (a tie goes to the lower draw) and gives them
+  to the bosses in `TOWER_ORDER`, the easiest first: the boss `TOWER_ORDER[i]` stands on the `i`-th nearest cell. A pure function of the seed. The
+  bridge's `world_lairs` gives this list, so lair `k` of the client, the save, the map's letters and colours, `onLair`, the MCP's `lairs` and the
+  fight a roll starts are all still boss `k` of the roster: nothing was renumbered. Only the cell of a boss moved (a boss's biome is no longer
+  the sextant `k % 6`; the set of cells, and so the biomes of the towers, is the same).
+- **Saves.** `lairs` of the save is the list of the numbers beaten, boss numbers, so every record from 1 to 6 loads and means the same bosses: a
+  medal belongs to a boss. No record, no migration, `WORLD_VERSION` unchanged. A world saved before stands the hero on its saved cell, and the
+  boss that stood there then may be another one now.
+- **Rings.** A ring is three towers: the nearest three are ring 1, the next three ring 2, up to ring 5. The ring of a boss is its place in
+  `TOWER_ORDER` over 3 (`world::tower_ring`), so it is the same on every seed, and the distance follows from the sort. Over the seeds 1 to 300 the
+  distance of the towers from the spawn, in cells:
+
+| Ring (dungeon tier) | Towers (nearest first) | Distance of its towers, median by place (min to max) | Bosses and their measured wins /20 at 10x |
+|---|---|---|---|
+| 1 | 1 to 3 | 187, 204, 222 (160 to 306) | The Echo 16 (judgement), The Alien 20, The Pulsar 18 |
+| 2 | 4 to 6 | 240, 259, 279 (188 to 372) | The Assembly Line 18, The Dual Room 18, The Stalker 9 of 10 (judgement) |
+| 3 | 7 to 9 | 293, 314, 331 (199 to 414) | The Chaplain 17, The Overseer 17, The Unstable Core 17 |
+| 4 | 10 to 12 | 348, 363, 384 (255 to 435) | The Swarm 17, The Rail Yard 16, The Ballast Mind 15 |
+| 5 | 13 to 15 | 401, 416, 434 (319 to 447) | The Magnetizer 15, The Hull 12, The Choir 8 |
+
+- **Tiers.** The boss tier is the ring. The order is the measured ladder of boss-balance.md: the pro-level player (10 times the boss budget) wins
+  more often against an easier boss, so the order is the wins of the latest row of each boss, most first, a tie by roster order: The Alien 20
+  (`alien_sim`, outside the gate by decision #667), The Pulsar 18 (#1231), The Assembly Line 18 (#1228), The Dual Room 18 (#992), The Chaplain 17
+  (#1112), The Overseer 17 (#1241), The Unstable Core 17 (#915), The Swarm 17 (#1266), The Rail Yard 16 (#1232), The Ballast Mind 15 (#1209),
+  The Magnetizer 15 (#1237), The Hull 12 (#823), The Choir 8 (#825). Two bosses are a judgement, not a measure: **The Echo** is the first boss of the
+  path (`nextGoal`, the Hub's lifts) and 16 of 20 puts it among the middle ones, so it is the nearest tower by decision (#1532); **The Stalker** was
+  measured with a fogged pro player on 10 seeds (#1120, 9 of 10), counted as 18 of 20. The Hub's order of lifts and the menu lock do not change. No boss changes.
+- **Gates.** A dungeon gate has the ring of the tower it passes: the number of towers nearer to the spawn than it, over 3, plus 1, up to 5
+  (`world::gate_ring`). That is its dungeon tier, the number the table gives its place. Nothing else changes for a gate: its run is the normal run.
+  The ring is published on the page (`body[data-openworld-gate-rings]`, the gates in order, and `data-openworld-rings`, the ring of each tower by number); the bridge's
+  `world_rings(seed)` gives the 15 towers' rings then one per place of `world_places` (`0` for a town).
+- **The ring to beat.** The nearest ring that holds a tower not beaten. The towers of it are guided: the minimap's arrows, the bearing line and the Nearest
+  tower button (section 14) point at them only, the nearest to the hero first. A tower of a farther ring shows again, as an icon on the map and the
+  minimap, only once its cell is discovered (section 9): a world not walked has a map that holds the tower to find, not the whole roster. Every
+  tower stays enterable: a hero who walks to a far tower fights its boss. The Nearest tower button sends the towers of a farther ring to the bridge as
+  beaten, which it tries last: with a tower of the ring to beat it can reach, it goes there. Beaten towers are always drawn. Once a ring is beaten, the
+  next one is the ring to beat.
+- **Tests.** Rust: on the seeds 1 to 2000 and 24 random 32-bit seeds the towers stand on the lairs' cells, the distance never falls along
+  `TOWER_ORDER`, and The Echo is the nearest tower; the order is the roster once; the rings and the gate rule. The bridge: the order names the
+  bosses by id, the lairs are the towers, the rings. Client: the map, the minimap, the bearing, the button and an older save.

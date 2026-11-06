@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_logs, world_path, world_places, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_logs, world_path, world_places, world_rings, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -6562,6 +6562,7 @@ const openWorld = new OpenWorldMode(
     }
   },
   () => storyStage(store), // the clamp of Tally's lines is open from stage 7 (#1546)
+  (seed) => Uint8Array.from(world_rings(seed)), // the ring of each tower and the dungeon tier of each gate (#1532)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;

@@ -27,8 +27,9 @@ export interface MinimapData {
   hero: Axial;
   troop: readonly Axial[];
   enemies: readonly Axial[];
-  /** The boss lairs, in or out of the window, whether each is beaten and the id of its boss (#1438). */
-  lairs: readonly { cell: Axial; beaten: boolean; boss?: string }[];
+  /** The boss lairs, in or out of the window, whether each is beaten and the id of its boss (#1438). Only a guided one (default) gets an arrow
+   * (#1532): the towers of a farther ring than the one to beat have none. */
+  lairs: readonly { cell: Axial; beaten: boolean; boss?: string; guided?: boolean }[];
   /** The teleporters to draw (#1412): the discovered ones. */
   teleporters: readonly Axial[];
   /** The lore logs to draw (#1589): the discovered ones, and whether each is found. */
@@ -207,7 +208,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
     const { x, y } = put(cell);
     (kind === 'town' ? townIcon : dungeonIcon)(ctx, x, y, iconSize(unit, round)); // a house, a gate (#1514)
   }
-  const out = data.lairs.filter(({ cell, beaten }) => !beaten && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
+  const out = data.lairs.filter(({ cell, beaten, guided }) => !beaten && guided !== false && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
   const arrows = new Set(out.slice(0, ARROWS).map((lair) => lair.cell));
   for (const { cell, beaten, boss } of data.lairs) {
     const colour = beaten ? COLOURS.lairBeaten : COLOURS.lair;

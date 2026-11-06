@@ -111,8 +111,11 @@ export class OpenWorldMode {
   private teleporters: Axial[] = [];
   /** The lore logs of the world entered (#1589), by number, and the numbers of the ones found. */
   private logs: Axial[] = [];
-  /** The towns and dungeon gates of the world entered (#1514). */
+  /** The towns and dungeon gates of the world entered (#1514), with the dungeon tier of a gate (#1532, 0 for a town). */
   private places: { cell: Axial; kind: 'town' | 'dungeon' }[] = [];
+  private placeRings: number[] = [];
+  /** The ring of each tower of the world entered, by number (#1532). */
+  private rings: number[] = [];
   private found: number[] = [];
   private dirty = false;
   /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
@@ -183,6 +186,9 @@ export class OpenWorldMode {
     private readonly onPlace: (seed: number, kind: 'town' | 'dungeon', index: number) => void = () => {},
     /** The stage of the story (#1546): the clamp of Tally's lines is open from stage 7. */
     private readonly stage: () => number = () => 1,
+    /** The rings of a seed's world (the bridge's `world_rings`, #1532): the ring of each tower by number, then one per place (0 for a town, the
+     * gate's dungeon tier). None puts every tower in the first ring. */
+    private readonly ringsOf: (seed: number) => Uint8Array = () => new Uint8Array(),
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -218,6 +224,9 @@ export class OpenWorldMode {
     this.teleporters = pairs(this.teleportersOf(seed));
     this.logs = pairs(this.logsOf(seed));
     this.places = placesIn(this.placesOf(seed));
+    const rings = Array.from(this.ringsOf(seed));
+    this.rings = rings.slice(0, this.lairs.length);
+    this.placeRings = this.places.map((_, i) => rings[this.lairs.length + i] ?? 0);
     this.found = saved ? [...saved.logs] : [];
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     this.counted = 0;
@@ -338,6 +347,8 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldYaw;
     delete document.body.dataset.openworldBroken;
     delete document.body.dataset.openworldLairs;
+    delete document.body.dataset.openworldRings;
+    delete document.body.dataset.openworldGateRings;
     delete document.body.dataset.openworldPlaces;
     delete document.body.dataset.openworldLairsBeaten;
     delete document.body.dataset.openworldLairsHeard;
@@ -393,13 +404,30 @@ export class OpenWorldMode {
     return line && `${line} ${CLAIM_NOTE}`;
   }
 
+  /** The ring of tower `lair` (#1532): the first when the world has no rings. */
+  private ringOf(lair: number): number {
+    return this.rings[lair] ?? 1;
+  }
+
+  /** The ring to beat (#1532): the nearest ring that still holds a tower not beaten. */
+  private ringToBeat(): number {
+    return Math.min(...this.lairs.flatMap((_, i) => (this.beaten.includes(i) ? [] : [this.ringOf(i)])));
+  }
+
+  /** The towers guidance is on (#1532): the ones not beaten in the ring to beat, which the arrows, the bearing and the Nearest tower button point at. */
+  private guided(): boolean[] {
+    const ring = this.ringToBeat();
+    return this.lairs.map((_, i) => !this.beaten.includes(i) && this.ringOf(i) === ring);
+  }
+
   /** The objective and the bearing in the HUD (#1530), written when they change: called with the minimap, so on a step, a beaten tower and a
    * camera turn. */
   private showGoal(): void {
+    const guided = this.guided();
     const { goal, bearing } = goalLines({
       hero: this.hero!.at,
       yaw: this.view!.drawnYaw,
-      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
+      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), guided: guided[i] })),
       logsLeft: this.logs.length - this.found.length,
     });
     for (const [id, line] of [['openworld-goal', goal], ['openworld-bearing', bearing]] as const) {
@@ -607,7 +635,9 @@ export class OpenWorldMode {
   dungeon(): boolean {
     const hero = this.hero!;
     const blocked = Int32Array.from([...this.fight.enemiesAround(this.world!, hero.at, PATH_REACH).flat(), ...this.landmarks()]);
-    const cells = this.dungeonPath(this.seed, hero.at, Int32Array.from(this.beaten), blocked, flat(this.world!.broken));
+    const guided = this.guided();
+    const later = this.lairs.flatMap((_, i) => (this.beaten.includes(i) || guided[i] ? [] : [i])); // the towers of a farther ring: tried last, as the beaten
+    const cells = this.dungeonPath(this.seed, hero.at, Int32Array.from([...this.beaten, ...later].sort((a, b) => a - b)), blocked, flat(this.world!.broken));
     const note = document.getElementById('openworld-dungeon-note');
     if (note) note.textContent = cells.length > 0 ? '' : 'No tower in reach: walk on and try again.';
     if (cells.length === 0) return false;
@@ -710,12 +740,15 @@ export class OpenWorldMode {
   private mapData(cells: MinimapCell[]): MinimapData {
     const { world, hero } = this;
     const bosses = this.bossIds();
+    const guided = this.guided();
     return {
       cells,
       hero: hero!.at,
       troop: hero!.troop,
       enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
-      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), boss: bosses[i % bosses.length] })),
+      lairs: this.lairs.flatMap((cell, i) =>
+        guided[i] || this.beaten.includes(i) || this.discovered.has(cell[0], cell[1]) ? [{ cell, beaten: this.beaten.includes(i), boss: bosses[i % bosses.length], guided: guided[i] }] : [], // a farther ring's tower shows once its cell is discovered (#1532)
+      ),
       teleporters: this.discoveredTeleporters(),
       places: this.places,
       logs: this.logs.flatMap((cell, i) => (this.discovered.has(cell[0], cell[1]) ? [{ cell, found: this.found.includes(i) }] : [])),
@@ -1058,6 +1091,8 @@ export class OpenWorldMode {
     document.body.dataset.openworldBroken = String(this.world!.broken.length); // the obstacles broken (#1147)
     document.body.dataset.openworldLairs = this.lairs.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldPlaces = this.places.map(({ kind, cell }) => `${kind}:${cell.join(',')}`).join(' '); // #1514
+    document.body.dataset.openworldRings = this.rings.join(' '); // #1532
+    document.body.dataset.openworldGateRings = this.placeRings.filter((_, i) => this.places[i]!.kind === 'dungeon').join(' ');
     document.body.dataset.openworldLairsBeaten = this.beaten.join(' ');
     document.body.dataset.openworldLairsHeard = this.heard.join(' '); // reported by others, not counted
     document.body.dataset.openworldTeleporters = this.discoveredTeleporters().map((c) => c.join(',')).join(' '); // #1412

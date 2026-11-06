@@ -112,7 +112,7 @@ mixed five climate biomes everywhere (#984), so every direction looked alike.
   `LOOK[ground] x BIOME_TINT[biome]` (`setColorAt`), so no new mesh. The map paints a low grass cell in the same ground.
 - **Chunk bytes**: 3 per cell, `height, terrain, biome` (the biome code is the order of the `Biome` enum: `0` meadow to
   `5` archipelago, `u8`). Enemies stand on the open land of every biome, never on water.
-- **Lairs and teleporters** (`openworld.md` sections 7 and 10): lair `k` is drawn in the sextant `k % 6` and kept only on the
+- **Lairs and teleporters** (`openworld.md` sections 7 and 10): lair cell `k` (the draw's number; the boss on it is by tier since #1532, section 15) is drawn in the sextant `k % 6` and kept only on the
   open ground of its biome, so each biome holds two lairs or more (15 bosses: three in the meadow, the forest and the tundra, two
   in the others). The teleporters keep their squares; an archipelago square with no island that fits has none (seed 7 holds 34,
   36 before, and seed 1305 36, 37 before; at least four in every biome).

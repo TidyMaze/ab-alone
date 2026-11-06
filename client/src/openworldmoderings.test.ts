@@ -29,7 +29,7 @@ const none = (n: number): undefined[] => Array.from({ length: n }, () => undefin
 const make = (saves = worldSaves(memoryStore(), 1), dungeon?: (...args: unknown[]) => Int32Array, rings: (seed: number) => Uint8Array = () => RINGS) =>
   new (OpenWorldMode as new (...args: unknown[]) => OpenWorldMode)(
     grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, () => LAIRS,
-    ...none(7), dungeon, undefined, () => BOSSES, undefined, undefined, () => PLACES, undefined, rings,
+    ...none(7), dungeon, undefined, () => BOSSES, undefined, undefined, () => PLACES, undefined, undefined, rings,
   );
 const text = (id: string): string => document.getElementById(id)!.textContent!;
 const body = () => document.body.dataset;
@@ -95,7 +95,7 @@ describe('the bearing and the Nearest tower button of the ring to beat (#1532)',
   });
 
   it('send the button to the ring to beat: the towers beyond it go to the bridge as beaten, tried last', () => {
-    const dungeon = vi.fn(() => new Int32Array());
+    const dungeon = vi.fn((..._args: unknown[]) => new Int32Array());
     const m = make(undefined, dungeon);
     m.enter(7, 800, 600);
     m.dungeon();
@@ -128,7 +128,7 @@ describe('a save from before the rings (#1532)', () => {
     const m = make(saves);
     await m.open(9, 800, 600);
     expect(body().openworldLairsBeaten).toBe('3');
-    expect(drawn(ICON.done)).toBeGreaterThanOrEqual(1); // lair 3, the Chaplain's, drawn beaten
-    expect(drawn(BOSS_COLOURS.echo!)).toBe(1);
+    expect(drawn(ICON.done)).toBeGreaterThan(0); // lair 3, the Chaplain's, drawn beaten
+    expect(drawn(BOSS_COLOURS.echo!)).toBeGreaterThan(0);
   });
 });

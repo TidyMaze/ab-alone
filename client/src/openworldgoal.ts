@@ -24,7 +24,8 @@ const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 
 export interface GoalState {
   hero: Axial;
   yaw: number;
-  lairs: readonly { cell: Axial; beaten: boolean }[];
+  /** `guided` false (#1532): a tower of a farther ring than the one to beat, which the bearing does not point at. */
+  lairs: readonly { cell: Axial; beaten: boolean; guided?: boolean }[];
   /** The lore logs not found yet. */
   logsLeft: number;
 }
@@ -34,7 +35,7 @@ export interface GoalState {
 export function goalLines({ hero, yaw, lairs, logsLeft }: GoalState): { goal: string; bearing: string } {
   if (lairs.length === 0) return { goal: '', bearing: '' };
   const near = lairs
-    .filter(({ beaten }) => !beaten)
+    .filter(({ beaten, guided }) => !beaten && guided !== false)
     .map(({ cell }) => bearingOf(hero, cell, yaw))
     .sort((a, b) => a.cells - b.cells)[0];
   if (!near) return { goal: `Goal done: all ${lairs.length} towers are beaten.`, bearing: logsLeft > 0 ? `Left: ${plural(logsLeft, 'lore log')} to find.` : 'Left: the dungeon gates.' };
