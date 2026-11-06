@@ -202,7 +202,7 @@ test('a hint asked for an older position is never drawn on the new one, #192', a
 test('against the bot, Hint is disabled while the bot thinks, then shows the hint of the next position, #192', async ({
   page,
 }) => {
-  // The bot worker is held until __releaseBot: main.ts makes it first, then the analysis worker, which passes.
+  // The bot worker is held until __releaseBot: each worker is made at its first request (#1579), the bar's analysis worker first, then the bot's.
   await page.addInitScript(() => {
     const held: (() => void)[] = [];
     let made = 0;
@@ -216,7 +216,7 @@ test('against the bot, Hint is disabled while the bot thinks, then shows the hin
       bot: boolean;
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options);
-        this.bot = !String(url).startsWith('blob:') && made++ === 0; // not a KTX2Loader transcoder worker (#700)
+        this.bot = !String(url).startsWith('blob:') && made++ === 1; // not a KTX2Loader transcoder worker (#700)
       }
       postMessage(msg: unknown): void {
         const sent = structuredClone(msg);
