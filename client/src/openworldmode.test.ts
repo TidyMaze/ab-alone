@@ -6,6 +6,7 @@ import type { Axial } from './board';
 import { CHUNK, World } from './openworld';
 import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_STEP, twistOf } from './openworldmode';
 import { FightState } from './openworldfight';
+import { HIT_HOLD_MS } from './openworldhit';
 import { BOSS_COLOURS, ICON } from './openworldlairicon';
 import { COLOURS, terrainColour } from './openworldminimap';
 import { SIGHT } from './openworlddiscovered';
@@ -598,6 +599,16 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     play.mockClear();
     tap(pushing(true), 'ArrowRight');
     expect(play).not.toHaveBeenCalled();
+  });
+
+  it('plays the push with the hold on its contact frame, stretched by the slow factor (#1561)', () => {
+    const play = vi.spyOn(OpenWorldView.prototype, 'playPush');
+    tap(pushing(), 'ArrowRight');
+    expect(play.mock.calls[0]![3]).toBe(HIT_HOLD_MS);
+    (window as { __openworldSlow?: number }).__openworldSlow = 2;
+    play.mockClear();
+    tap(pushing(), 'ArrowRight');
+    expect(play.mock.calls[0]![3]).toBe(2 * HIT_HOLD_MS);
   });
 
   it('punches the camera when the push lands, and shakes it only if an enemy is ejected (#1103)', () => {

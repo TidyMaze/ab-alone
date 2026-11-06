@@ -1515,6 +1515,48 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     expect(inCell(placeOf(view, 'troop', 2), [-2, 0])).toBe(true); // the marble out of the line does not move
   });
 
+  it('holds every marble still for the hold on the contact frame: the lunge and the slide stop, then go on late by the hold, and the push ends that much later (#1561)', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0, 1, 50);
+    view.tick(160); // the contact: 40 % of the lunge
+    const at = placeOf(view, 'hero').x;
+    view.tick(190);
+    expect(placeOf(view, 'hero').x).toBe(at);
+    expect(inCell(placeOf(view, 'enemies'), [2, 0])).toBe(true); // the enemy has not started to slide
+    view.tick(210);
+    expect(placeOf(view, 'hero').x).toBe(at);
+    view.tick(260);
+    expect(placeOf(view, 'hero').x).toBeGreaterThan(at);
+    expect(view.tick(430)).toBe(true); // 400 ms of lunge are not enough any more
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(false);
+    view.tick(450);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'enemies'), [3, 0])).toBe(true);
+    expect(view.tick(451)).toBe(false);
+  });
+
+  it('a snap during the hold ends the push on its final cells at once, the hold delays nothing (#1561)', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0, 1, 50);
+    view.tick(180);
+    view.snap();
+    expect(view.animating).toBe(false);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'enemies'), [3, 0])).toBe(true);
+  });
+
+  it('bursts four sparks at the contact cell when the push moves an enemy, born at the contact, and none when no enemy moves (#1561)', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0, 1, 50);
+    view.sparkle(170, false, true); // the low tier has no ambient particle, the burst stays: born at the contact, 160 ms
+    expect(view.sparkCount).toBe(4);
+    const alone: Played = { ...pushOf(), foes: [], push: { ...pushOf().push, enemies: [] } };
+    const none = settled(alone);
+    none.playPush(alone, 0, 1, 50);
+    none.sparkle(170, false, true);
+    expect(none.sparkCount).toBe(0);
+  });
+
   it('overshoots the new cell by a tenth of a cell at the end of the lunge, then settles back on it', () => {
     const view = settled(pushOf());
     view.playPush(pushOf(), 0);

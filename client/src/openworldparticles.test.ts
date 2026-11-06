@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AMBIENT, capFor, FADE, PUFF, ParticlePool, SHARDS, SPLASH, type Look } from './openworldparticles';
+import { AMBIENT, capFor, BURST, FADE, PUFF, ParticlePool, SHARDS, SPLASH, type Look } from './openworldparticles';
 
 const hero = { x: 0, y: 1, z: 0 };
 /** A look that spends the warm start and spawns nothing. */
@@ -114,6 +114,18 @@ describe('ParticlePool', () => {
     pool.step(0, hero, AMBIENT.tundra);
     pool.step(600000, hero, AMBIENT.tundra);
     expect(pool.alive(600000)).toBeLessThanOrEqual(3);
+  });
+
+  it('bursts a few sparks at the contact of a push, never more than the burst holds alive, from the slots of the pool (#1561)', () => {
+    const pool = new ParticlePool(64);
+    pool.burst(2, 1, 3, 100);
+    expect(pool.alive(100)).toBe(BURST.count);
+    expect(BURST.count).toBeLessThanOrEqual(4);
+    pool.burst(2, 1, 3, 150); // a second hit while the first still lives adds none
+    expect(pool.alive(150)).toBe(BURST.count);
+    expect(pool.alive(100 + BURST.look.life + 1)).toBe(0);
+    pool.burst(2, 1, 3, 1000); // once they are gone, the next hit bursts again
+    expect(pool.alive(1000)).toBe(BURST.count);
   });
 
   it('puffs a few dust particles outward from a point that are gone in under half a second', () => {
