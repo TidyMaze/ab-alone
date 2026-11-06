@@ -298,6 +298,7 @@ import {
 import { nextPalette, paletteById, themeColors, type Palette } from './palettes';
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
+import { sceneOf } from './scenes';
 import { AFTER_EJECTION, BUSES, Sfx, TellWatch, type Bus, type CueEvent, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
@@ -5273,6 +5274,8 @@ hookHost.__audio = () => sfx.state;
 hookHost.__gain = (bus: Bus) => sfx.gain(bus);
 // The tension level and the gain of each drone layer (#439).
 hookHost.__tension = () => ({ level: sfx.tension, layers: sfx.layers });
+// The scene of the music and what plays of it (#1571).
+hookHost.__scene = () => sfx.scene;
 // The sound twins of the boss tells played so far (#358).
 hookHost.__tellCues = () => tellCues;
 // The cues of the cue table played so far (#1570).
@@ -7353,6 +7356,9 @@ function unveil(): void {
 }
 renderer.setAnimationLoop((now) => {
   pollPad(now); // the gamepad, read once per frame (#1252)
+  const heroBiome = openWorld.active ? openWorld.biome : null;
+  const music = sceneOf({ hub: hub !== null, royale: royale !== null, run: run ? (run.state.fighting ? 'fight' : 'map') : null, boss: fight?.id ?? null, world: heroBiome ? { biome: heroBiome, phase: openWorld.phase } : null });
+  sfx.setScene(music, music.startsWith('boss:') && engine instanceof Encounter ? engine.phase() : 0); // the music follows where the player is (#1571)
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {

@@ -523,6 +523,10 @@ export class OpenWorldView {
   private readonly hero: THREE.Mesh;
   /** The cell the hero is on, the centre of the pick. */
   private heroCell: Axial = [0, 0];
+  /** The biome of the cell the hero is on: the music follows it (#1571). */
+  get heroBiome(): Biome {
+    return this.world.tile(this.heroCell[0], this.heroCell[1])!.biome;
+  }
   /** The point the camera looks at: it follows the hero's drawn place, its x, its height (the hero's column top, #988) and its z, each
    * a spring (`follow`, #1333). A show with no glide puts it on the hero at once, the height only at the first one (`placed`): the
    * camera does not glide in from the origin. */

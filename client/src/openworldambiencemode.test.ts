@@ -106,4 +106,15 @@ describe('the water and the trees of seed 1 move, reduced motion and the low tie
     m.frame(vi.fn(), 1016);
     expect(body().openworldMotion).toBe('');
   });
+
+  it('names the biome under the hero for the music, none before the world is drawn, #1571', () => {
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    const m = mode();
+    expect(m.biome).toBeNull();
+    m.enter(1, 480, 270);
+    for (const biome of ['forest', 'tundra', 'desert', 'meadow'] as const) {
+      stand(m, CELL[biome], 1000);
+      expect(m.biome).toBe(biome);
+    }
+  });
 });

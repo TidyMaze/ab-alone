@@ -164,7 +164,7 @@ describe('Sfx.setScene, the room tone and the song (#1571)', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
     sfx.setScene('boss:echo');
-    expect(targets(gate(ctx, 0))).toEqual([1]);
+    expect(targets(gate(ctx, 0))).toEqual([]); // already open: no change
     expect(targets(gate(ctx, 2))).toEqual([0]);
     expect(sfx.scene).toMatchObject({ room: true, track: false });
   });

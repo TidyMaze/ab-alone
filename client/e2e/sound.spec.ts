@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ICONS } from '../src/icons';
 import { knockPitch } from '../src/sound';
+import { openModes } from './modes';
 
 // The ejection sound (world.md section 7): the page says which sound an ejection played in
 // data-sound, and window.__audio() gives the state of the audio context ('none' before one exists).
@@ -188,6 +189,23 @@ test('the tension level rises when a marble is pushed to the rim, and the drones
   await click([-1, -2], [-1, -1], [-2, -2]);
   await expect.poll(async () => (await tension(page)).level).toBeGreaterThan(0);
   await expect.poll(async () => (await tension(page)).layers[0]).toBeGreaterThan(0.9); // crossfaded in within about a second
+});
+
+// #1571: the music follows the scene. Nobody can listen in a browser driven by Playwright, so the page says which scene it plays
+// (window.__scene): none of its layers is built while the Music slider is at 0 (the automation default), a boss fight has its pulse.
+test('the music names the scene, and builds its layers only once the Music slider is up', async ({ page }) => {
+  await open(page);
+  const scene = () => page.evaluate(() => (window as any).__scene());
+  expect(await scene()).toMatchObject({ id: 'bot', layers: 0 });
+  const music = await slider(page, 'Music');
+  await music.focus();
+  await page.keyboard.press('ArrowRight'); // a key is a gesture: it starts the audio
+  await expect.poll(async () => (await scene()).layers).toBe(1);
+  await page.keyboard.press('Escape');
+  await openModes(page);
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
+  await expect.poll(async () => scene()).toMatchObject({ id: 'boss:echo', layers: 1, pulse: 0.5, track: false });
 });
 
 // Bug #146 pattern: a click right after load hits a disabled button or toggles.

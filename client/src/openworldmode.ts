@@ -4,7 +4,7 @@
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
 import { phaseOf, type Phase, wrapTime } from './daynight';
-import { chunkOf, Hero, neighbours, same, type Tile, WALKABLE, World } from './openworld';
+import { type Biome, chunkOf, Hero, neighbours, same, type Tile, WALKABLE, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
@@ -281,6 +281,11 @@ export class OpenWorldMode {
       this.dirty = true;
       this.mark(String(seed)); // the detailed props drawn now are published too (#989)
     });
+  }
+
+  /** The biome of the hero's cell, null before the world is drawn (#1571). */
+  get biome(): Biome | null {
+    return this.view?.heroBiome ?? null;
   }
 
   /** The time of day, and its phase: `day`, `dusk` or `night` (#1496). */

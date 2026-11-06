@@ -7,6 +7,7 @@
 // lost player marble or a dry clack for an enemy one. The boss tells have their sound twins too (#358).
 
 import { EJECT_MS, PUSH_MS } from './eject';
+import { pulseRate, sceneMix, SMALL_SPEAKER_HZ, type SceneId, type SceneLayer } from './scenes';
 import type { Tension } from './tension';
 
 /** The last note of an ejection: who lost a marble. */
@@ -266,6 +267,9 @@ export const SILENT = 0.0001;
 const SLIDER_TAU = 0.007;
 /** The tension layers crossfade over about a second (three time constants). */
 export const CROSSFADE_TAU = 0.3;
+/** A scene that leaves fades out over the same second, and its sources stop after five time constants, at under 1 % (under
+ * -40 dB) of what they played: nothing is cut while it can be heard. */
+export const SCENE_RELEASE = 5 * CROSSFADE_TAU;
 /** The buses an audio log ducks (tech.md section 5.4), each through its own duck node into the master. */
 export const DUCKED: readonly Bus[] = ['music', 'ambience'];
 /** How far a log ducks them, in dB. */
@@ -317,8 +321,7 @@ export const TENSION: readonly (readonly HumTone[])[] = [
     { freq: 311.2, gain: 0.008 },
   ],
 ];
-/** The small-speaker simulation (#1572): a laptop or phone speaker reproduces almost nothing below about this. */
-export const SMALL_SPEAKER_HZ = 150;
+export { SMALL_SPEAKER_HZ };
 /** The level in dBFS (RMS, master included, buses at 100 %) left of `tones` on a small speaker: each sine goes through
  * a second-order Butterworth high-pass at `SMALL_SPEAKER_HZ`, the tones add as power. Calculated, not rendered. */
 export const smallSpeakerDb = (tones: readonly HumTone[]): number => {
@@ -350,6 +353,18 @@ interface Graph {
   layers: GainNode[];
   ducks: GainNode[];
   noise: AudioBuffer;
+  room: GainNode; // the gate of the reactor room tones, open in the ship and closed outdoors (#1571)
+  song: GainNode; // the gate of the music track
+  open: { room: boolean; track: boolean }; // what the gates let through
+}
+
+/** The layers of a scene that are playing: the fade gains into their buses, the sources to stop, the slow oscillators of a pulse. */
+interface Live {
+  id: SceneId;
+  key: string; // which layers of the scene are built: a bus at 0 builds none of its
+  fades: GainNode[];
+  sources: AudioScheduledSourceNode[];
+  lfos: OscillatorNode[];
 }
 
 /** The sound player. The audio context is made on the first user gesture (browsers block audio before one), only
@@ -358,6 +373,8 @@ export class Sfx {
   private graph: Graph | null = null;
   private level: Tension = 0;
   private ducked = false;
+  private want: { id: SceneId; phase: number } | null = null; // the scene the page asked for (#1571)
+  private live: Live | null = null; // what plays of it
   private log: AudioScheduledSourceNode[] = []; // the sources of the audio log playing
 
   constructor(
@@ -412,8 +429,12 @@ export class Sfx {
         buses[bus].connect(duck);
         return duck;
       });
+      const open = this.want ? sceneMix(this.want.id) : { room: true, track: true }; // the room tone never plays outdoors, not even at the start
+      const room = gate(ctx, buses[ROUTE.hum], open.room);
+      const song = gate(ctx, buses[ROUTE.tension], open.track);
+      const opened = { room: open.room, track: open.track };
       startTones(ctx, HUM, buses[ROUTE.hum]);
-      startTracks(ctx, AMBIENCE_TRACKS, buses[ROUTE.hum]);
+      startTracks(ctx, AMBIENCE_TRACKS, room);
       const layers = TENSION.map((tones, i) => {
         const layer = ctx.createGain();
         layer.gain.value = layerGains(this.level)[i]!;
@@ -421,8 +442,9 @@ export class Sfx {
         startTones(ctx, tones, layer);
         return layer;
       });
-      startTracks(ctx, [MUSIC_TRACK], buses[ROUTE.tension]);
-      this.graph = { ctx, buses, layers, ducks, noise: whiteNoise(ctx) };
+      startTracks(ctx, [MUSIC_TRACK], song);
+      this.graph = { ctx, buses, layers, ducks, noise: whiteNoise(ctx), room, song, open: opened };
+      this.applyScene();
     }
     if (this.graph.ctx.state === 'suspended') this.graph.ctx.resume().catch(() => undefined);
   }
@@ -440,6 +462,106 @@ export class Sfx {
     this.mix[bus] = percent;
     this.graph?.buses[bus].gain.setTargetAtTime(busGain(percent), this.graph.ctx.currentTime, SLIDER_TAU);
     this.unlock();
+    this.applyScene(); // a bus that rises from 0 starts its layers, one that falls to 0 drops them
+  }
+
+  /** The scene the music plays (world.md section 7, Music; #1571), `phase` the boss phase that moves its pulse. Cheap to call
+   * every frame: nothing happens while the scene and the phase stay. A new scene crossfades over about a second. */
+  setScene(id: SceneId, phase = 0): void {
+    if (this.want?.id === id && this.want.phase === phase) return;
+    this.want = { id, phase };
+    this.applyScene();
+  }
+
+  /** The scene asked for, and what plays of it: the layers started, the pulse rate in Hz (0 without one), and whether the room
+   * tone and the song are let through. */
+  get scene(): { id: SceneId | null; phase: number; layers: number; pulse: number; room: boolean; track: boolean } {
+    const { id = null, phase = 0 } = this.want ?? {};
+    const { room, track } = id ? sceneMix(id) : { room: true, track: true };
+    return { id, phase, layers: this.live?.fades.length ?? 0, pulse: this.live?.lfos.length ? pulseRate(phase) : 0, room, track };
+  }
+
+  /** Brings the layers that play in line with the scene asked for and the sliders: the gates of the files, the pulse rate, or, when
+   * the scene or the layers to build changed, a crossfade to the new ones. A bus at 0 builds nothing: no cost when muted. */
+  private applyScene(): void {
+    const { graph, want } = this;
+    if (!graph || !want) return;
+    const { ctx } = graph;
+    const now = ctx.currentTime;
+    const mix = sceneMix(want.id);
+    for (const [door, key] of [[graph.room, 'room'], [graph.song, 'track']] as const) {
+      if (graph.open[key] === mix[key]) continue;
+      graph.open[key] = mix[key];
+      door.gain.setTargetAtTime(mix[key] ? 1 : 0, now, CROSSFADE_TAU);
+    }
+    const layers = mix.layers.filter((layer) => this.mix[layer.bus] > 0);
+    const key = layers.map((layer) => mix.layers.indexOf(layer)).join();
+    const old = this.live;
+    if (old?.id === want.id && old.key === key) {
+      for (const lfo of old.lfos) lfo.frequency.setTargetAtTime(pulseRate(want.phase), now, CROSSFADE_TAU);
+      return;
+    }
+    if (old) {
+      for (const fade of old.fades) fade.gain.setTargetAtTime(0, now, CROSSFADE_TAU);
+      for (const source of old.sources) source.stop(now + SCENE_RELEASE);
+    }
+    const live: Live = { id: want.id, key, fades: [], sources: [], lfos: [] };
+    for (const layer of layers) {
+      const fade = ctx.createGain();
+      fade.gain.value = 0; // silent when it starts, then up: a start at full level would click
+      fade.gain.setTargetAtTime(1, now, CROSSFADE_TAU);
+      fade.connect(graph.buses[layer.bus]);
+      live.fades.push(fade);
+      this.startLayer(graph, layer, fade, live, pulseRate(want.phase));
+    }
+    this.live = layers.length ? live : null;
+  }
+
+  private startLayer({ ctx, noise }: Graph, layer: SceneLayer, out: AudioNode, live: Live, rate: number): void {
+    const now = ctx.currentTime;
+    if (layer.kind === 'wind') {
+      const buffer = ctx.createBufferSource();
+      buffer.buffer = noise;
+      buffer.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = layer.freq;
+      filter.Q.value = layer.q;
+      const level = ctx.createGain();
+      level.gain.value = layer.gain;
+      buffer.connect(filter).connect(level).connect(out);
+      buffer.start(now);
+      live.sources.push(buffer);
+      return;
+    }
+    // A pulse breathes: its tones go through a gain at 0.5 that a sine of the pulse rate moves by 0.5 either way, silent to full.
+    const breath = layer.kind === 'pulse' ? ctx.createGain() : null;
+    if (breath) {
+      breath.gain.value = 0.5;
+      breath.connect(out);
+    }
+    const into = breath ?? out;
+    for (const { freq, gain } of layer.tones) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const level = ctx.createGain();
+      level.gain.value = gain;
+      osc.connect(level).connect(into);
+      osc.start(now);
+      live.sources.push(osc);
+    }
+    if (breath) {
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = rate;
+      const depth = ctx.createGain();
+      depth.gain.value = 0.5;
+      lfo.connect(depth).connect(breath.gain);
+      lfo.start(now);
+      live.lfos.push(lfo);
+      live.sources.push(lfo);
+    }
   }
 
   /** Crossfades the tension layers to `level` over about a second. */
@@ -577,6 +699,14 @@ function startTones(ctx: AudioContext, tones: readonly HumTone[], out: AudioNode
     osc.connect(level).connect(out);
     osc.start(ctx.currentTime);
   }
+}
+
+/** A gate between audio files and their bus, open (1) or closed (0). */
+function gate(ctx: AudioContext, out: AudioNode, open: boolean): GainNode {
+  const door = ctx.createGain();
+  door.gain.value = open ? 1 : 0;
+  door.connect(out);
+  return door;
 }
 
 /** Looped audio tracks, started once with the context, each routed into `out`. */

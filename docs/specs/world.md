@@ -274,10 +274,71 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   level 1, level 2 at most -30 (music bus, an undertone, not a feature). Today: hum -45.5, level 1
   -41.8, level 2 -38.1 dBFS (before: -48.0, -52.4, -46.6). This is calculated, not heard: an owner
   should listen on a laptop and a phone.
+- **Scenes (#1571).** The music follows where the player is, one scene at a time, named by the loop of the page every frame
+  (`sceneOf`, `scenes.ts`): the Hub; a game of the board against the bot, in hot seat, online or in the trainer (`bot`); the
+  royale; the rogue-lite map (every screen of a run but its fight) and its fight; a boss fight (`boss:<id>`); the Open world
+  by the biome under the hero and the hour of the day (`world:<biome>:<day|dusk|night>`, 6 biomes by 3 hours). Each scene is a
+  set of layers synthesized in code, no melody and no new audio file: a `drone` of steady sines (an open fifth for the Hub, a
+  fifth lower for the bot, a beating minor second for the royale, a major triad for the map, a minor third for the fight), a
+  `pulse` for a boss, `wind` outdoors (noise through a band, on the ambience bus). In the Open world each biome has its own root
+  (meadow A, forest G, tundra F, desert D, badlands C, archipelago B) and the hour moves it: a fifth above the root by day, a
+  fourth at dusk, a minor third and the root an octave down at night, with the wind lower and softer as it gets dark and each
+  biome blowing its own way, so night does not sound as day. The reactor room tones and the song of the audio files play
+  where the table says: both in the ship, the room tone alone in a boss fight (its pulse is its music), neither outdoors, where
+  the Open world no longer plays the ship's room tone. The files fade in and out with the layers, and nothing new depends on
+  them (#1573 may replace them).
+  The scene changes by a crossfade of about a second: the new layers start silent and rise, the old ones fall, and their
+  sources stop 1.5 s later (`SCENE_RELEASE`), when under -40 dB of what they played, so there is no click. The same scene again
+  does nothing. A bus at 0 builds none of its layers and a slider that rises from 0 starts them; with every slider at 0 there is
+  no audio context, and no context before the first gesture, as everywhere in this section.
+  **The boss pulse.** The same slow pulse for every boss: the tones of the boss breathe, silent to full, at 0.5 Hz in the first
+  phase (30 beats a minute), 1.4 times faster each phase after (0.7, 0.98, 1.37 Hz), which stops at the fourth. The pitch is the
+  boss's own, a semitone a boss of the list from 49.0 Hz (The Echo) to 110.0 Hz (The Swarm), with its 3rd and 4th harmonics for
+  a small speaker. It follows the phase without a restart. It mixes under the rest: at its peak it is between -48 and -40 dBFS on
+  a small speaker (`PULSE_FLOOR_DB`, `PULSE_CEILING_DB`), at least 4 dB under the floor of the quietest cue (-36), so a cue
+  always comes through it, and under tension level 1 (about -42) and level 2: the tension layers and the pulse add, nothing ducks
+  for another. The pulse of The Choir (55 Hz) falls on the root of the hum, The Chaplain's (58.3 Hz) on the unease layer: they
+  beat or reinforce, which is the tension the fight asks for. An audio log ducks the music bus, pulse included.
+  **Levels.** Every drone of a scene between -48 and -38 dBFS on a small speaker (`SCENE_FLOOR_DB`, `SCENE_CEILING_DB`,
+  `smallSpeakerDb`), a tone above 150 Hz in each (the harmonic of the low ones at 0.6 of their level), today from -45.7 to
+  -41.9; the pulses -46.0 to -42.2 at their peak; the wind, noise, cannot be added to that: its level is bounded by white noise
+  at its gain, which a band only lowers, at most -40 dBFS (`WIND_CEILING_DB`), today -43.2 by day, -45.1 at night. `scenes.test.ts`
+  asserts all of it. This is calculated, not heard: an owner should listen on a laptop and a phone. `scenetable.test.ts` reads
+  this table: a scene needs its row, a row its scene, and the room tone and song columns are those of the code.
+
+  | Scene | Layers | Room tone | Song | Status |
+  |---|---|---|---|---|
+  | `hub` | drone | yes | yes | played |
+  | `bot` | drone | yes | yes | played |
+  | `royale` | drone | yes | yes | played |
+  | `run-map` | drone | yes | yes | played |
+  | `run-fight` | drone | yes | yes | played |
+  | `boss:echo` | pulse | yes | no | played |
+  | `boss:hull` | pulse | yes | no | played |
+  | `boss:choir` | pulse | yes | no | played |
+  | `boss:chaplain` | pulse | yes | no | played |
+  | `boss:ballast` | pulse | yes | no | played |
+  | `boss:alien` | pulse | yes | no | played |
+  | `boss:railyard` | pulse | yes | no | played |
+  | `boss:magnetizer` | pulse | yes | no | played |
+  | `boss:pulsar` | pulse | yes | no | played |
+  | `boss:overseer` | pulse | yes | no | played |
+  | `boss:assembly` | pulse | yes | no | played |
+  | `boss:core` | pulse | yes | no | played |
+  | `boss:dual` | pulse | yes | no | played |
+  | `boss:stalker` | pulse | yes | no | played |
+  | `boss:swarm` | pulse | yes | no | played |
+  | `world:meadow` | drone, wind | no | no | played |
+  | `world:forest` | drone, wind | no | no | played |
+  | `world:tundra` | drone, wind | no | no | played |
+  | `world:desert` | drone, wind | no | no | played |
+  | `world:badlands` | drone, wind | no | no | played |
+  | `world:archipelago` | drone, wind | no | no | played |
+
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
 - **Mix.** Four sliders: music, ambience, effects, voice (#438), each the gain of its bus into one
   master gain, 0 to 100 %, at 100 % by default and saved locally. The hum is ambience, the
-  tension drones music, the knock, the ejection, the tells, the pick of a rogue-lite map node (#1468) and the cues (#1570) effects, the audio logs voice (#516).
+  tension drones and the layers of a scene (a wind excepted, which is ambience) music, the knock, the ejection, the tells, the pick of a rogue-lite map node (#1468) and the cues (#1570) effects, the audio logs voice (#516).
   A Sound off saved by the old toggle sets every slider to 0. With every slider at 0 no audio
   context is made. The game is fully playable on mute: every audio cue has a visual twin (the
   ejection animation for the ejection sound, the tells on the board for their sounds, the transcript for an

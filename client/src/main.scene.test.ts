@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import { LEGACY_UNLOCKED } from './collector';
 import { pulseRate } from './scenes';
@@ -24,6 +23,7 @@ const scene = (game: Game): Scene => (game.frame(), game.hook<Scene>('__scene'))
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
 };
+const LOUD = { 'ab-alone.volume.music': '100' }; // under automation the music starts at 0 (readMix), as e2e pages would play it out loud
 const CELL = { forest: [29, -59], desert: [-60, 30], meadow: [40, -20] } as const; // one a sextant of seed 1 (openworldambiencemode.test.ts)
 
 function start(game: Game, name: string): void {
@@ -34,20 +34,20 @@ function start(game: Game, name: string): void {
 
 describe('the scene of the music, per mode (#1571)', () => {
   it('names the hub on a fresh page, and starts its layers at the first gesture, not before', async () => {
-    const game = await boot('', { audio: true });
+    const game = await boot('', { audio: true, storage: LOUD });
     expect(scene(game)).toMatchObject({ id: 'hub', layers: 0 }); // no context before a gesture
     gesture();
     expect(scene(game)).toMatchObject({ id: 'hub', layers: 1, room: true, track: true });
   });
 
   it('names the bot scene on a game of the board', async () => {
-    const game = await boot('?bot=off', { audio: true });
+    const game = await boot('?bot=off', { audio: true, storage: LOUD });
     gesture();
     expect(scene(game)).toMatchObject({ id: 'bot', layers: 1 });
   });
 
   it('names the boss, its own pulse, and speeds the pulse up when the phase moves', async () => {
-    const game = await boot('?bot=off', { reducedMotion: true, audio: true });
+    const game = await boot('?bot=off', { reducedMotion: true, audio: true, storage: LOUD });
     gesture();
     const wasm = await import('abalone-wasm');
     let phase = 0;
@@ -59,7 +59,7 @@ describe('the scene of the music, per mode (#1571)', () => {
   });
 
   it('names the royale, and the map then the fight of a rogue-lite run', async () => {
-    const game = await boot('?bot=off', { audio: true });
+    const game = await boot('?bot=off', { audio: true, storage: LOUD });
     gesture();
     game.openModes();
     byId('battle-royale').click();
@@ -73,7 +73,7 @@ describe('the scene of the music, per mode (#1571)', () => {
 
   it('plays no layer with the music and the ambience sliders at 0', async () => {
     const storage = { 'ab-alone.volume.music': '0', 'ab-alone.volume.ambience': '0' };
-    const game = await boot('?bot=off', { audio: true, storage, indexedDB: new IDBFactory() });
+    const game = await boot('?bot=off', { audio: true, storage });
     gesture();
     start(game, 'The Echo');
     expect(scene(game)).toMatchObject({ id: 'boss:echo', layers: 0 });
@@ -84,7 +84,7 @@ describe('the scene of the music in the Open world, by biome and hour (#1571)', 
   type Hooks = { __openworldFixture: (f: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][] }) => void; __openworldTime: (ms: number) => void };
   const hooks = (): Hooks => window as unknown as Hooks;
   async function enter(): Promise<Game> {
-    const game = await boot('?bot=off&openworld=1', { audio: true });
+    const game = await boot('?bot=off&openworld=1', { audio: true, storage: LOUD });
     gesture();
     game.openModes();
     byId('openworld').click();

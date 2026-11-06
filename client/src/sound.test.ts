@@ -575,6 +575,8 @@ const bus = (ctx: FakeContext, b: Bus): FakeGain => ctx.gains[1 + BUSES.indexOf(
 const duck = (ctx: FakeContext, b: Bus): FakeGain => next(bus(ctx, b)) as FakeGain;
 /** The steady sources started with the context: the hum, then the tension drones. */
 const STEADY = HUM.length + TENSION.flat().length;
+/** The gain of each tension layer into the music bus: not the gate of the song (#1571), which goes there too. */
+const tensionLayers = (ctx: FakeContext): FakeGain[] => ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension) && !ctx.tracks.some((t) => t.outputs[0] === g));
 /** The node after `node` on the way out, through its only output. */
 const next = (node: FakeNode): FakeNode => {
   expect(node.outputs).toHaveLength(1);
@@ -636,21 +638,21 @@ describe('Sfx.unlock, on a user gesture', () => {
       expect(node.media.loop).toBe(true);
       expect(node.media.volume).toBe(track.gain);
       expect(node.media.played).toBe(1);
-      expect(next(node)).toBe(bus(ctx, ROUTE.hum));
+      expect(next(next(node))).toBe(bus(ctx, ROUTE.hum)); // through the gate of the room tone (#1571)
     });
     const musicNode = ctx.tracks.at(-1)!;
     expect(musicNode.media.src).toBe(MUSIC_TRACK.url);
     expect(musicNode.media.loop).toBe(true);
     expect(musicNode.media.volume).toBe(MUSIC_TRACK.gain);
     expect(musicNode.media.played).toBe(1);
-    expect(next(musicNode)).toBe(bus(ctx, ROUTE.tension));
+    expect(next(next(musicNode))).toBe(bus(ctx, ROUTE.tension)); // through the gate of the song (#1571)
   });
 
   it('starts the tension drones with the context, each layer through its own gain into the music bus, silent while calm', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
     expect(ctx.sources).toHaveLength(STEADY);
-    const layers = ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension));
+    const layers = tensionLayers(ctx);
     expect(layers).toHaveLength(TENSION.length);
     let s = HUM.length;
     TENSION.forEach((tones, i) => {
@@ -867,7 +869,7 @@ describe('Sfx.setTension, the drone layers crossfade on the tension level (#439)
   it('crossfades each layer to its gain at the new level over about a second', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
-    const layers = ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension));
+    const layers = tensionLayers(ctx);
     sfx.setTension(1);
     expect(sfx.tension).toBe(1);
     expect(layers.map((l) => l.gain.events)).toEqual([[['target', 1, 5]], [['target', 0, 5]]]);
@@ -888,7 +890,7 @@ describe('Sfx.setTension, the drone layers crossfade on the tension level (#439)
     expect(sfx.layers).toEqual([0, 0]); // no context yet: silent
     sfx.unlock();
     expect(sfx.layers).toEqual([1, 1]);
-    expect(ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension)).map((l) => l.gain.events)).toEqual([[], []]);
+    expect(tensionLayers(ctx).map((l) => l.gain.events)).toEqual([[], []]);
   });
 
   it('starts calm', () => {
