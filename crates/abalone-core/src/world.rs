@@ -2261,6 +2261,36 @@ mod tests {
         );
     }
 
+    /// Seeds whose logs had no fit in their wedge and ring (#1595): the search of `logs` never ended on them.
+    const LOG_HANG_SEEDS: [u64; 8] = [
+        2381,
+        3074,
+        3486,
+        7825,
+        8664,
+        10972,
+        205_585_469,
+        1_437_627_643,
+    ];
+
+    #[test]
+    fn the_seeds_whose_log_search_never_ended_get_their_logs_and_the_search_returns() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        for seed in LOG_HANG_SEEDS {
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send((seed, logs(seed, &log_avoid(seed))));
+            });
+        }
+        drop(tx);
+        for _ in LOG_HANG_SEEDS {
+            let (seed, found) = rx
+                .recv_timeout(std::time::Duration::from_secs(30))
+                .expect("logs never end");
+            assert_eq!(found.len(), LOGS, "seed {seed}");
+        }
+    }
+
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
     fn walks(from: (i32, i32), path: &[(i32, i32)], avoid: &[(i32, i32)]) -> bool {
         let mut at = from;
