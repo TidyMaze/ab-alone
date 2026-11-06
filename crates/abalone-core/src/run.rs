@@ -468,6 +468,15 @@ pub fn run_map(seed: u64) -> Vec<Node> {
 /// The map of the run `seed` of a player who owns the runes `runes` (`RUNE_*`, section 27): the map of `run_map` with the hidden
 /// branches the runes open. The secret rooms come after every other node, so a node keeps its index.
 pub fn run_map_with(seed: u64, runes: u8) -> Vec<Node> {
+    run_map_v(seed, runes, 0)
+}
+
+/// The version of the map a new run is dealt (`run_map_v`): 0 is the map of the runs saved before #1543, 1 the paced map.
+pub const MAP_VERSION: u8 = 1;
+
+/// `run_map_with` at the generation `version` of the map: the version a run was dealt is saved with it, so a run in progress keeps its nodes.
+pub fn run_map_v(seed: u64, runes: u8, version: u8) -> Vec<Node> {
+    let _ = version;
     let mut state = seed;
     let mut map = Vec::new();
     for act in 0..ACTS {
@@ -800,6 +809,19 @@ pub fn foe_plan(seed: u64, index: usize, less: u8, biome: Biome) -> FoePlan {
 /// docs/specs/roguelite.md section 20): a fight's are other kinds of its act's pool while the pool
 /// lasts, an elite's more of its own style. At most one to a marble; `more` 0 is `foe_plan`.
 pub fn foe_plan_with(seed: u64, index: usize, less: u8, biome: Biome, more: u8) -> FoePlan {
+    foe_plan_v(seed, index, less, biome, more, 0)
+}
+
+/// `foe_plan_with` on the map of the generation `version` (`run_map_v`).
+pub fn foe_plan_v(
+    seed: u64,
+    index: usize,
+    less: u8,
+    biome: Biome,
+    more: u8,
+    version: u8,
+) -> FoePlan {
+    let _ = version;
     let map = run_map(seed);
     let Some(node) = map.get(index).filter(|n| {
         matches!(
@@ -1004,6 +1026,150 @@ mod tests {
             }
         }
         assert_eq!(digest, 4066793024634845041);
+    }
+
+    /// The nodes of 50 seeds of the map of a run saved before the pacing (version 0): kind, formation and archetype.
+    fn kinds_digest(version: u8) -> u64 {
+        let mut digest = 0u64;
+        for seed in 0..50 {
+            for n in run_map_v(seed, 0, version) {
+                digest = mix(digest
+                    ^ (n.kind as u64
+                        | (n.formation as u64) << 8
+                        | (n.elite.map_or(0, |e| e as u64)) << 16));
+            }
+        }
+        digest
+    }
+
+    #[test]
+    fn a_map_saved_before_the_pacing_keeps_its_nodes() {
+        // Computed on main before #1543: the map of version 0 is frozen, so a run in progress does not change under the player.
+        assert_eq!(kinds_digest(0), 15599315090305818837);
+        assert_eq!(run_map_v(9, RUNE_ROOM, 0), run_map_with(9, RUNE_ROOM));
+        assert_ne!(kinds_digest(MAP_VERSION), kinds_digest(0));
+    }
+
+    const PACED_SEEDS: u64 = 2000;
+
+    #[test]
+    fn a_paced_map_has_a_rest_or_shop_after_every_node_of_the_row_before_the_last() {
+        for seed in 0..PACED_SEEDS {
+            let map = run_map_v(seed, 0, MAP_VERSION);
+            for act in 0..ACTS {
+                let last = row(&map, act, FIGHT_ROWS - 1);
+                for node in row(&map, act, FIGHT_ROWS - 2) {
+                    assert!(
+                        node.links
+                            .iter()
+                            .any(|&c| matches!(last[c].kind, NodeKind::Rest | NodeKind::Shop)),
+                        "seed {seed} act {act} col {}",
+                        node.col
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_paced_map_has_at_most_one_elite_a_row() {
+        for seed in 0..PACED_SEEDS {
+            let map = run_map_v(seed, 0, MAP_VERSION);
+            for act in 0..ACTS {
+                for r in 0..=FIGHT_ROWS {
+                    let elites = row(&map, act, r)
+                        .iter()
+                        .filter(|n| n.kind == NodeKind::Elite)
+                        .count();
+                    assert!(elites <= 1, "seed {seed} act {act} row {r}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_paced_act_has_a_fork_where_a_pick_closes_a_branch() {
+        // Two neighbours of a row whose links share no node: taking one leaves the other's way behind.
+        for seed in 0..PACED_SEEDS {
+            let map = run_map_v(seed, 0, MAP_VERSION);
+            for act in 0..ACTS {
+                let forks = (0..FIGHT_ROWS - 1).any(|r| {
+                    row(&map, act, r)
+                        .windows(2)
+                        .any(|w| w[0].links.last() < w[1].links.first())
+                });
+                assert!(forks, "seed {seed} act {act}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_paced_map_keeps_the_shape_the_runes_and_the_kinds_of_the_other_version() {
+        let mut seen = Vec::new();
+        for seed in 0..PACED_SEEDS {
+            let (old, new) = (run_map_v(seed, 0, 0), run_map_v(seed, 0, MAP_VERSION));
+            assert_eq!(old.len(), new.len());
+            assert!(old
+                .iter()
+                .zip(&new)
+                .all(|(a, b)| (a.act, a.row, a.col) == (b.act, b.row, b.col)));
+            for n in new
+                .iter()
+                .filter(|n| n.act < ACTS && n.row > 0 && n.row < FIGHT_ROWS)
+            {
+                if !seen.contains(&n.kind) {
+                    seen.push(n.kind);
+                }
+            }
+            for r in 0..FIGHT_ROWS {
+                for act in 0..ACTS {
+                    let (rows, next) = (row(&new, act, r), row(&new, act, r + 1).len());
+                    let mut reached = vec![false; next];
+                    let mut last = 0;
+                    for node in rows {
+                        assert!(node.links.windows(2).all(|w| w[0] < w[1]));
+                        assert!(node.links[0] >= last, "crossing, seed {seed}");
+                        last = *node.links.last().unwrap();
+                        node.links.iter().for_each(|&c| reached[c] = true);
+                    }
+                    assert!(reached.iter().all(|&r| r), "seed {seed}");
+                }
+            }
+        }
+        seen.sort_by_key(|k| *k as u8);
+        use NodeKind::*;
+        assert_eq!(seen, [Fight, Elite, Rest, Treasure, Shop, Unknown]);
+        let rooms = run_map_v(5, RUNE_ROOM, MAP_VERSION);
+        assert_eq!(
+            rooms.iter().filter(|n| n.kind == NodeKind::Secret).count(),
+            ACTS
+        );
+    }
+
+    #[test]
+    fn the_foes_of_a_node_follow_the_map_of_its_version() {
+        let mut changed = 0;
+        for seed in 0..200 {
+            let (old, new) = (run_map_v(seed, 0, 0), run_map_v(seed, 0, MAP_VERSION));
+            for (i, (a, b)) in old.iter().zip(&new).enumerate() {
+                let plan = foe_plan_v(seed, i, 0, Biome::Meadow, 0, MAP_VERSION);
+                assert_eq!(plan, foe_plan_v(seed, i, 0, Biome::Meadow, 0, MAP_VERSION));
+                if a.kind != b.kind && matches!(b.kind, NodeKind::Fight | NodeKind::Elite) {
+                    changed += 1;
+                    assert_eq!(plan.formation, b.formation, "seed {seed} node {i}");
+                    assert_ne!(
+                        plan,
+                        foe_plan_v(seed, i, 0, Biome::Meadow, 0, 0),
+                        "seed {seed} node {i}"
+                    );
+                }
+                assert_eq!(
+                    foe_plan_v(seed, i, 0, Biome::Meadow, 0, 0),
+                    foe_plan_with(seed, i, 0, Biome::Meadow, 0)
+                );
+            }
+        }
+        assert!(changed > 0);
     }
 
     #[test]
