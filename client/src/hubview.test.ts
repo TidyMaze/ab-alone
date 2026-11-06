@@ -5,7 +5,7 @@ import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, roomsOf, type Spot } from './hub';
 import { SECRETS } from './story';
 import { BOSS_IDS } from './tally';
-import { arrowCell, bossLockLine, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
+import { arrowCell, bossLockLine, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextBossTitle, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -268,6 +268,15 @@ describe('the room labels (#1249)', () => {
     const html = labelsHtml({ deck: 'cargo', cell: [2, 0] }, ['echo', 'hull']);
     expect(html).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-mark="beaten" data-here>');
     expect(html).not.toContain('hub-label you');
+  });
+});
+
+describe('the next boss of the notice board (#1528)', () => {
+  it('is the first boss not beaten in deck order, and none once all five are down', () => {
+    expect(nextBossTitle([])).toBe('The Echo');
+    expect(nextBossTitle(['echo'])).toBe('The Hull');
+    expect(nextBossTitle(['echo', 'choir'])).toBe('The Hull'); // a boss out of order does not skip the deck before it
+    expect(nextBossTitle(['echo', 'hull', 'choir', 'chaplain', 'ballast'])).toBeNull();
   });
 });
 

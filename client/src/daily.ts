@@ -53,11 +53,72 @@ export function readAttempts(store: Store, day: string): number {
   return saved && saved[1] === day ? Number(saved[2]) : 0;
 }
 
-/** Counts one more attempt on `day` and returns it. Only the current day is kept. */
+/** Counts one more attempt on `day` and returns it. Only the current day is kept. The day is then a day played (`dailyRecord`). */
 export function countAttempt(store: Store, day: string): number {
   const attempt = readAttempts(store, day) + 1;
   write(store, KEY, `${day} ${attempt}`);
+  keepDay(store, day, { result: 'started', turns: 0 });
   return attempt;
+}
+
+// The days the daily was played (#1528, docs/specs/ui.md section 4.5): what the notice board of the Hub says of today's daily and counts for the
+// local streak, in one key through the same store, no server. A day is `started` once the daily begins, then `won` or `lost` with the player turns
+// of the fight; a win is kept over a loss, and a faster win over a slower one. An older profile has no such key: it loads as no day, and the
+// attempts it already saved for a day count as that day started.
+export interface DayRecord {
+  result: 'started' | 'won' | 'lost';
+  turns: number;
+}
+
+const DAYS_KEY = 'ab-alone.daily-days';
+const KEPT_DAYS = 60;
+const RANK = { started: 0, lost: 1, won: 2 };
+
+function loadDays(store: Store): Record<string, DayRecord> {
+  const days: Record<string, DayRecord> = {};
+  try {
+    const saved: unknown = JSON.parse(read(store, DAYS_KEY) ?? '{}');
+    if (saved === null || typeof saved !== 'object' || Array.isArray(saved)) return days;
+    for (const [day, text] of Object.entries(saved)) {
+      const match = /^(started|(won|lost) ([1-9]\d*))$/.exec(String(text));
+      if (/^\d{4}-\d\d-\d\d$/.test(day) && match) days[day] = match[2] ? { result: match[2] as 'won' | 'lost', turns: Number(match[3]) } : { result: 'started', turns: 0 };
+    }
+  } catch {
+    // Not JSON: no day.
+  }
+  return days;
+}
+
+function keepDay(store: Store, day: string, record: DayRecord): void {
+  const days = loadDays(store);
+  const old = days[day];
+  const better = !old || RANK[record.result] > RANK[old.result] || (record.result === 'won' && old.result === 'won' && record.turns < old.turns);
+  if (!better) return;
+  days[day] = record;
+  const kept = Object.keys(days).sort().slice(-KEPT_DAYS);
+  write(store, DAYS_KEY, JSON.stringify(Object.fromEntries(kept.map((d) => [d, days[d]!.result === 'started' ? 'started' : `${days[d]!.result} ${days[d]!.turns}`]))));
+}
+
+/** The record of `day`, null when the daily was not played that day. */
+export function dailyRecord(store: Store, day: string): DayRecord | null {
+  return loadDays(store)[day] ?? (readAttempts(store, day) > 0 ? { result: 'started', turns: 0 } : null);
+}
+
+/** Records how a fight of the daily of `day` ended, in the player's `turns`. The same result again changes nothing. */
+export const recordDailyResult = (store: Store, day: string, won: boolean, turns: number): void =>
+  keepDay(store, day, { result: won ? 'won' : 'lost', turns });
+
+const dayBefore = (day: string): string => utcDay(Date.parse(`${day}T00:00:00Z`) - 24 * 3600 * 1000);
+
+/** The consecutive UTC days with a daily played, ending today, or yesterday while today is not played yet: a missed day leaves none. */
+export function dailyStreak(store: Store, today: string): number {
+  let day = dailyRecord(store, today) ? today : dayBefore(today);
+  let streak = 0;
+  while (dailyRecord(store, day)) {
+    streak++;
+    day = dayBefore(day);
+  }
+  return streak;
 }
 
 /** The site the result card links to: the daily challenge button is on its page. */

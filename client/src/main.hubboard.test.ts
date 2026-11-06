@@ -58,7 +58,8 @@ describe('the notice board', () => {
   });
 
   it('is shown to a player who rolled before, with no beaten boss', async () => {
-    await boot('?firstrun', { storage: { 'ab-alone.hubcoach': 'done', 'ab-alone.firstrun': 'done' } });
+    await boot('/', { webdriver: false, storage: { 'ab-alone.hubcoach': 'done', 'ab-alone.firstrun': 'done' } });
+    expect(document.body.dataset.hub).toBe('mess 0,0');
     expect(byId('hub-board').hidden).toBe(false);
   });
 });

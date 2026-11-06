@@ -173,12 +173,14 @@ export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], med
   return { name, state, short, mark: '' };
 }
 
-/** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked, and the room of the next `goal` is marked when it is on this deck: the deck's own boss door (not the Dual Room's) or the Rogue-lite room. */
+/** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked, and the room of the next `goal` is marked when it is on this deck: the deck's own boss door (not the Dual Room's) or the Rogue-lite room. Then every other plate is quiet, but the one under the marble (#1526). */
 export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}, goal: Goal | null = null): string {
   const goalRoom = (door: Door): boolean => deck === goal?.deck && (goal.room === 'run' ? door.kind === 'run' : door.kind === 'boss' && door.boss === bossOf(deck));
+  const goalOnDeck = roomsOf(deck).some(({ door }) => goalRoom(door)); // the goal room is the loud plate, the others are quiet (#1526)
   const plates = roomsOf(deck).map(({ cell: [q, r], door }) => {
     const { name, state, short, mark } = roomLabel(deck, door, beaten, medals);
-    const attrs = `${mark ? ` data-mark="${mark}"` : ''}${goalRoom(door) ? ' data-goal' : ''}${q === mq && r === mr ? ' data-here' : ''}`;
+    const here = q === mq && r === mr;
+    const attrs = `${mark ? ` data-mark="${mark}"` : ''}${goalRoom(door) ? ' data-goal' : ''}${here ? ' data-here' : ''}${goalOnDeck && !goalRoom(door) && !here ? ' data-quiet' : ''}`;
     return `<div class="hub-label" data-cell="${q},${r}" data-kind="${door.kind}"${attrs}><b>${name}</b><small>${state}</small><span class="short">${short}</span></div>`;
   });
   if (!roomAt(deck, [mq, mr])) plates.push(`<div class="hub-label you" data-cell="${mq},${mr}">You</div>`);
@@ -215,6 +217,12 @@ export function nextGoal(beaten: readonly string[], ran: boolean): Goal {
   if (!ran) return goalOf('run', RUN_DECK);
   const deck = DECK_NAMES.find((d) => !beaten.includes(bossOf(d)));
   return deck ? goalOf('boss', deck) : { text: 'All bosses beaten. Try the Daily or a run.', deck: null, room: null };
+}
+
+/** The first boss not beaten, in deck order: its name, null when none is left. Its lift is open, as the rail says (the notice board, #1528). */
+export function nextBossTitle(beaten: readonly string[]): string | null {
+  const deck = DECK_NAMES.find((d) => !beaten.includes(bossOf(d)));
+  return deck ? bossTitle(bossOf(deck)) : null;
 }
 
 /** The lift-shaft rail: the five decks from the Bridge down, each with its state, and where the marble is; under them the line of the next `goal`, and its deck's row ringed. */

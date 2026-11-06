@@ -1232,11 +1232,11 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 
 /* The Hub's deck plan (#1249, docs/specs/ui.md section 4.5): a label plate over each room, always shown, the lift-shaft rail
    and the boss pips. The plates sit on the 3D deck, dark in both themes, so they keep fixed dark colours, each room kind in its
-   prop's colour (hubart.ts). A phone shows the short label alone. Hidden while the terminal reader or the Open world has the screen. */
+   three colours (a mode, a boss, a locked lift). A phone shows the short label alone. Hidden while the terminal reader or the Open world has the screen. */
 #hub-plan[hidden], body[data-reading] #hub-plan, body[data-openworld] #hub-plan { display: none; }
 #hub-labels { position: fixed; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
 .hub-label {
-  --k: #e9ecef;
+  --k: #7fd6e8;
   position: absolute; transform: translate(-50%, -25%); padding: 2px 8px; white-space: nowrap; text-align: center;
   color: #c9d1d6; background: rgba(14, 18, 20, 0.86); border: 1px solid var(--k); border-radius: 3px;
   font: 0.6875rem/1.25 var(--ui);
@@ -1248,24 +1248,13 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 .hub-label small { display: block; font-size: inherit; }
 .hub-label .short { display: none; }
 .hub-label[data-kind='boss'] { --k: #ff6b6b; }
-.hub-label[data-kind='bot'] { --k: #3bc9db; }
-.hub-label[data-kind='hotseat'] { --k: #fab005; }
-.hub-label[data-kind='online'] { --k: #51cf66; }
-.hub-label[data-kind='royale'] { --k: #fd7e14; }
-.hub-label[data-kind='terminal'] { --k: #20c997; }
-.hub-label[data-kind='medals'] { --k: #ffd43b; }
-.hub-label[data-kind='daily'] { --k: #4dabf7; }
-.hub-label[data-kind='run'] { --k: #da77f2; }
-.hub-label[data-kind='together'] { --k: #f783ac; }
-.hub-label[data-kind='ranked'] { --k: #a9e34b; }
-.hub-label[data-kind='world'] { --k: #748ffc; }
-.hub-label[data-kind='trainer'] { --k: #d8a47f; }
-.hub-label[data-mark='locked'] { border-style: dashed; }
-/* The neon look (#1424): red is for danger only, so the boss doors and the together room wear violet and cyan. */
+.hub-label[data-mark='locked'] { --k: #9aa3a8; border-style: dashed; }
+/* The neon look (#1424): red is for danger only, so the boss doors wear violet. */
 body[data-look='neon'] .hub-label[data-kind='boss'] { --k: #b79cff; }
-body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
-.hub-label[data-mark='locked'] small { color: #ff8787; }
-.hub-label[data-mark='beaten'] small { color: #ffd43b; }
+.hub-label[data-mark='locked'] small { color: #9aa3a8; }
+/* One focal point (#1526): the plates wear the theme's three colours (a mode its accent, a boss red or violet, a locked lift grey and dashed), and while the next goal's
+   plate is on the deck every other plate is quiet. */
+.hub-label[data-quiet] { opacity: 0.78; }
 .hub-label[data-here] { box-shadow: 0 0 0 2px #ffb000; }
 /* The next goal (#1521, #1524): the room it points to (The Echo's door, then the Rogue-lite room, then the next boss's door) is the one solid amber plate, and the rail
    row of its deck is ringed in amber, the glow breathing (reduced motion zeroes the animation: the ring stays). The line of the rail says it in words, also on a phone. */
@@ -1299,6 +1288,19 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
 #hub-pips .pip[data-state='beaten'] { background: var(--hazard); border-color: var(--hazard); }
 #hub-pips .pip[data-state='open'] { border-color: var(--danger); }
 #hub-pips .pip[data-state='locked'] { border-style: dotted; }
+/* The notice board (#1528): a card at the left edge, mirroring the rail, with today's daily, the next boss, the medals missing and the streak. Held upright, or on
+   a short window, it keeps the daily and the streak on one plate where the coach line lives, above the dock, so it covers no station. It waits while the coach
+   line or the first-entry confirm is up. */
+#hub-board {
+  position: fixed; z-index: 1; box-sizing: border-box; left: 16px; top: 50%; transform: translateY(-50%); width: 15rem; padding: var(--space);
+  color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-left: 3px solid var(--plate-accent); border-radius: var(--r-card);
+  font: 0.8125rem/1.3 var(--ui); pointer-events: none;
+}
+#hub-board[hidden], #hub-confirm:not([hidden]) ~ #hub-board { display: none; }
+#hub-board h2 { margin: 0 0 var(--space); font: 600 0.75rem/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+#hub-board ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+#hub-board .daily { font-weight: 600; }
+#hub-board .streak { color: var(--accent); }
 /* Held upright the deck is centred (camera.ts framing): the pips and the rail, a row of the five decks, take the band above it, right under
    the plate and the cog (8 px below their bottom edge, #1388), and the plates show their short label. */
 @media (orientation: portrait) {
@@ -1310,7 +1312,11 @@ body[data-look='neon'] .hub-label[data-kind='together'] { --k: #8fe3ff; }
   #hub-rail li { flex: 1 1 0; min-width: 0; grid-template-columns: 1fr; justify-items: center; padding: 4px 2px; }
   #hub-rail b { font-size: 0.75rem; }
   #hub-rail li::after { grid-column: 1; grid-row: 2; content: '\2022'; color: var(--muted); }
+  #hub-board { top: auto; bottom: calc(9.5rem + env(safe-area-inset-bottom)); left: 16px; right: 16px; width: auto; transform: none; padding: 4px 8px; }
+  #hub-board ul { flex-direction: row; flex-wrap: wrap; gap: 0 12px; }
 }
+@media (orientation: portrait), (max-width: 600px), (max-height: 500px) { #hub-board :is(h2, .next, .medals) { display: none; } }
+@media (orientation: landscape) and (max-height: 500px) { #hub-board { width: 9rem; } }
 /* Held sideways the dock is a column at the right edge (#1032): the rail sits left of it, and on a short window it is the deck names alone. */
 @media (orientation: landscape) and (max-height: 660px) { #hub-rail { right: 68px; } }
 @media (orientation: landscape) and (max-height: 500px) {

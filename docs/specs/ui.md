@@ -474,11 +474,25 @@ hidden in the hub and in a battle royale.
 The hub (game-design.md section 3.5) reads at a glance, with no hover:
 
 - **Label plates.** A plate over each room, always shown, placed on the window just south of its cell and moved with
-  the camera: the room's name in its prop colour and a short state (`2 players`, the boss's name, a lift's `open` or
+  the camera: the room's name in one of three colours (#1526: a mode in the accent, a boss in red or, in the neon look, violet, a locked lift in grey with a dashed edge) and a short state (`2 players`, the boss's name, a lift's `open` or
   `locked`), and once a boss is beaten its medal (`Medal: 22 turns`). A narrow or short window (600 px wide or 500 px
   high and under) shows the short label alone (`Bot`, `Hull`, `▲ Locked`): a boss's name drops its "The". The marble's floor cell wears `YOU`; on a room, that room's plate is ringed in amber. The plates
   sit on the 3D deck, dark in both themes, so they keep fixed dark colours. The HUD plate still names the room under the
   marble and the hovered target (#628).
+- **One loud station (#1526).** While the plate of the next goal (section 4.7, `nextGoal`) is on the deck, it is the one solid amber plate and every
+  other plate is quiet (`data-quiet`, 78 % opacity), but the one under the marble, which keeps its ring. When the goal is on another deck no plate
+  is quiet, and the rail's ringed row points the way. The colours of the plates come down from a colour per mode to the three above. Not done under
+  this issue: the pylons and the staircase of the plinth, and the number of stations per town, which stay with the art direction (#1424).
+- **Notice board (#1528).** A card at the left edge, the rail's twin (`#hub-board`, `hubboard.ts`), titled "Notice board", in Tally's flat register (a
+  fact, no remark, no secret word of world.md section 12.2: `hubboard.test.ts` checks every state against `SECRETS`): "Daily: The Hull. Not played."
+  (or "Won in 12 turns.", "Lost in 9 turns.", "Started, not finished."), "Next boss: The Hull." (the first boss not beaten, in deck order, "none left"
+  after the five), "Medals missing: 15." (the roster's bosses with no medal, "none" at zero) and "Streak: 3 days." The streak is the consecutive UTC days
+  (`utcDay`) with a daily started, today included, or yesterday back while today is not played; a missed day leaves no line at all, with no word on it.
+  It is saved by the Daily's own store (`daily.ts`, `ab-alone.daily-days`, a JSON object day -> `started`, `won 12` or `lost 9`, the last 60 days):
+  the day is marked when the daily starts and its result when the end card shows, a win kept over a loss and a faster win over a slower one. A profile
+  from before has no such key: it loads as no day, and the attempts it saved for a day count as that day started. No server. Held upright, or on a
+  window 600 px wide or 500 px high and under, the card keeps the daily and the streak on one plate above the dock, where the coach line lives, so it
+  covers no station (`hub-board.spec.ts`, 960x540 and 390x844). It waits while the coach line of section 4.7 teaches, and while the first-entry confirm is up.
 - **Lift-shaft rail.** The five decks from the Bridge down, each beaten (its boss beaten, from the boss menu too), open
   (its lift is open) or locked, and where the marble is. A window: a panel at the right edge, mid-height, left of the dock
   held sideways, the deck names alone on a short window. Held upright: a row of the five decks above the deck, under the

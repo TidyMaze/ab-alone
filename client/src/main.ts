@@ -169,7 +169,7 @@ import { ballastText, firedText, parseFired, type Fired } from './ballast';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
-import { countAttempt, dailyCard, dailyFor, dailyLine, dailySeed, dailyTitle, utcDay, type Daily } from './daily';
+import { countAttempt, dailyCard, dailyFor, dailyLine, dailySeed, dailyTitle, recordDailyResult, utcDay, type Daily } from './daily';
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
 import { hookHost, netHook } from './hooks';
@@ -315,6 +315,7 @@ import { HUB_CELLS, hubPath, roomAt, step, type Door, type Spot as HubSpot } fro
 import { entryConfirmDue, entryName, HUB_COACH, hubCoachDue, hubHelpOn, markEntered, markHubCoachDone, needsConfirm } from './hubcoach';
 import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
+import { noticeBoard } from './hubboard';
 import { bossLockLine, labelsHtml, nextGoal, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
@@ -762,6 +763,7 @@ function applyView(): void {
 // The hub's deck plan (#1249): the label plates over the rooms, the lift-shaft rail and the boss pips, shown in the hub only.
 const hubPlan = document.getElementById('hub-plan')!;
 const hubLabels = document.getElementById('hub-labels')!;
+const hubBoard = document.getElementById('hub-board')!;
 /** Puts the plates back on their cells: the camera moved, or they were drawn again. */
 function placeHubLabels(): void {
   hub?.placeLabels(hubLabels, (q, r) => sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight));
@@ -4144,6 +4146,9 @@ function refresh(): void {
     hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store), goal); // a beaten boss's door shows its medal (#1249)
     document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten, goal);
     document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten, loadMedals(store));
+    const day = utcDay(Date.now());
+    hubBoard.hidden = !hubCoach.hidden; // the notice board waits while the coach line teaches (#1528)
+    hubBoard.innerHTML = noticeBoard(store, day, boss_name(dailyFor(day, boss_ids()).id)!, beaten, loadMedals(store));
     placeHubLabels();
     hud();
     return;
@@ -5903,6 +5908,7 @@ function showResultCard(): void {
           attempt: fight.daily.attempt,
         })
       : '';
+  if (text !== '') recordDailyResult(store, fight!.daily!.day, (engine as Encounter).result() === 1, playerTurns(history.length)); // the day's result, for the notice board (#1528)
   const shown = text !== '' && text !== closedCard; // a card the player closed stays closed until its text changes
   if (shown && resultCard.hidden) cardOpener = document.activeElement as HTMLElement | null;
   resultCard.hidden = !shown;
