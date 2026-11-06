@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { openAdvanced } from './settings';
 
 // #839: the HUD buttons look alike. Copy is styled as Reset view, and the button that opens a private game
 // shows its name, in a button as tall as the other items of the mode menu.
@@ -25,6 +26,7 @@ test('Free camera is a settings item, not a HUD button, lit while it is on, #938
   await expect(page.locator('#free-cam')).toHaveCount(0);
   await expect(page.locator('#dock > #reset-view')).toHaveCount(1); // Reset view alone, in the thumb dock (#1032)
   await page.locator('#settings').click();
+  await openAdvanced(page); // a developer view, under Advanced (#1566)
   const item = page.getByRole('button', { name: 'Free camera' });
   await expect(item).toHaveAttribute('aria-pressed', 'false');
   await item.click();

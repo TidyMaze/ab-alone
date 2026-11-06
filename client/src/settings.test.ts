@@ -17,14 +17,14 @@ describe('settingsList', () => {
       { id: 'transcript', label: 'Transcript', icon: 'transcript', on: true },
       { id: 'theme', label: 'Theme: System', icon: 'theme', on: true },
       { id: 'palette', label: 'Palette: Default', icon: 'palette' },
-      { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
-      { id: 'glass-skin', label: glassSkinById('smoked').name, icon: 'skin' },
+      { id: 'shell-skin', label: `Shell: ${skinById('scarab').name}`, icon: 'skin' },
+      { id: 'glass-skin', label: `Glass: ${glassSkinById('smoked').name}`, icon: 'skin' },
       { id: 'render-mode', label: 'Render: Normal', icon: 'render' },
       { id: 'free-cam', label: 'Free camera', icon: 'camera', on: false },
       { id: 'steering', label: 'Steering', icon: 'steer', on: true },
       { id: 'guide', label: 'Guide', icon: 'guide' }, // the first-launch guide again (#1293)
       { id: 'export-game', label: 'Export game', icon: 'export' },
-      { id: 'difficulty', label: '100%', icon: 'scale' },
+      { id: 'difficulty', label: 'Difficulty: 100%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
     expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan', false, 'hard', 'clay', true, false)).toEqual([
@@ -35,14 +35,14 @@ describe('settingsList', () => {
       { id: 'transcript', label: 'Transcript', icon: 'transcript', on: false },
       { id: 'theme', label: 'Theme: Light', icon: 'theme', on: false },
       { id: 'palette', label: 'Palette: Protan', icon: 'palette' },
-      { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
-      { id: 'glass-skin', label: glassSkinById('frost').name, icon: 'skin' },
+      { id: 'shell-skin', label: `Shell: ${skinById('scarab').name}`, icon: 'skin' },
+      { id: 'glass-skin', label: `Glass: ${glassSkinById('frost').name}`, icon: 'skin' },
       { id: 'render-mode', label: 'Render: Clay', icon: 'render' },
       { id: 'free-cam', label: 'Free camera', icon: 'camera', on: true },
       { id: 'steering', label: 'Steering', icon: 'steer', on: false },
       { id: 'guide', label: 'Guide', icon: 'guide' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
-      { id: 'difficulty', label: '200%', icon: 'scale' },
+      { id: 'difficulty', label: 'Difficulty: 200%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
   });

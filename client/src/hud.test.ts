@@ -58,25 +58,22 @@ describe('palette tokens', () => {
   });
 });
 
-describe('settings menu held upright or in a narrow or short window, #414', () => {
-  it('shows each item as its icon only, a 44 px square', () => {
-    const icons = css.match(/@media \(orientation: portrait\), \(max-width: 1100px\), \(max-height: 500px\) \{[^]*?\n\}/)![0];
-    expect(icons).toContain('#settings-menu button span { display: none; }');
-    expect(icons).toMatch(/#settings-menu button \{[^}]*min-width: 2\.75rem; min-height: 2\.75rem;[^}]*\}/);
+describe('settings menu in five groups, #1566 (replaces the icon-only items of #414 and the rows of 3 of #483)', () => {
+  it('shows the label of every item at every window size: no rule hides the label or squares the item', () => {
+    expect(css).not.toContain('#settings-menu button span { display: none; }');
+    expect(css).not.toMatch(/orientation: portrait\), \(max-width: 1100px\), \(max-height: 500px\) \{/);
+    expect(css).not.toContain('grid-template-columns: repeat(3, 2.75rem)');
+    expect(css).not.toContain('.skin-pair');
   });
 
-  it('lays the icons out in rows of 3 under the cog when the window is wider than tall', () => {
-    const rows = css.match(/@media \(orientation: landscape\) and \(max-width: 1100px\), \(orientation: landscape\) and \(max-height: 500px\) \{[^]*?\n\}/)![0];
-    expect(rows).toMatch(/#settings-menu \{[^}]*display: grid; grid-template-columns: repeat\(3, 2\.75rem\);/);
-    expect(rows).toContain('#settings-menu .setting-group { grid-column: span 2; }'); // Clear board and FPS side by side (#426)
+  it('keeps every item and every heading a 44 px target, whatever the window', () => {
+    expect(css).toMatch(/#settings-menu button \{[^}]*min-height: 2\.75rem;[^}]*\}/);
+    expect(css).toMatch(/#settings-menu summary\.setting-heading \{[^}]*min-height: 2\.75rem;[^}]*\}/);
   });
-});
 
-describe('settings menu in a window wider than tall, #483', () => {
-  // e2e/phone-layout.spec.ts, a desktop window: the menu grew to its skin pairs' names and covered cell 4,0.
-  it('keeps the width of its other rows: a skin pair adds none and wraps its buttons when their names do not fit', () => {
-    const landscape = css.match(/@media \(orientation: landscape\) \{[^]*?\n\}/)![0];
-    expect(landscape).toContain('.skin-pair { contain: inline-size; flex-wrap: wrap; }');
+  it('scrolls a menu taller than the window inside itself, with the headings in a column of rows', () => {
+    expect(css).toMatch(/#settings-menu \{[^}]*max-height: [^;]+;[^}]*overflow-y: auto;/);
+    expect(css).toMatch(/\.setting-section, \.setting-section::details-content \{[^}]*flex-direction: column;/);
   });
 });
 

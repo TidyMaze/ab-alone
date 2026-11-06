@@ -21,13 +21,12 @@ async function ready(): Promise<Game> {
 }
 
 describe('main.ts, the log archive (#513)', () => {
-  it('is a short word beside Import game in the settings menu, named Log archive as a tooltip', async () => {
+  it('is a row of the Sound group of the settings menu, named Log archive as a tooltip', async () => {
     await ready();
     const row = byId('setting-log-archive');
     expect([row.textContent, row.title]).toEqual(['Logs', 'Log archive']);
     expect(row.hasAttribute('aria-pressed')).toBe(false); // an action, not a toggle
-    expect(row.parentElement!.className).toBe('setting-group'); // no row of its own, as FPS beside Clear board
-    expect(row.parentElement!.firstElementChild).toBe(byId('setting-import-game'));
+    expect(row.closest('.setting-section')!.querySelector('.setting-heading')!.textContent).toBe('Sound'); // for the player, not Advanced (#1566)
   });
 
   it('says so when nothing was read yet, and the menu opens on its items again once closed', async () => {

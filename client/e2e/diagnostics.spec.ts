@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { inviteLink, openModes } from './modes';
+import { openAdvanced } from './settings';
 
 // Copy diagnostics (#220): the last events, the counters and the game, in the clipboard or selected in a text box.
 const cell = async (page: Page, q: number, r: number) => {
@@ -27,6 +28,7 @@ test('Copy diagnostics puts the move, the bot search and the build in the clipbo
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2); // the bot answered
 
   await page.locator('#settings').click(); // the clipboard is the last row of the settings list (#1032)
+  await openAdvanced(page); // under Advanced (#1566)
   await page.locator('#copy-diagnostics').click();
   await expect(page.locator('#hud')).toContainText('diagnostics copied');
   const d = await clipboard(page);
@@ -54,6 +56,7 @@ test('when the clipboard is refused, the diagnostics are selected in a text box 
   await expect(page.locator('#hud')).toContainText('White to move');
 
   await page.locator('#settings').click(); // the clipboard is the last row of the settings list (#1032)
+  await openAdvanced(page); // under Advanced (#1566)
   await page.locator('#copy-diagnostics').click();
   const box = page.locator('#diagnostics');
   await expect(box).toBeVisible();
@@ -105,6 +108,7 @@ test('an online game exports its connection counters, its refused moves and its 
   await expect(a.locator('#hud')).toContainText('refused move: malformed');
 
   await a.locator('#settings').click(); // the clipboard is the last row of the settings list (#1032)
+  await openAdvanced(a); // under Advanced (#1566)
   await a.locator('#copy-diagnostics').click();
   await expect(a.locator('#hud')).toContainText('diagnostics copied');
   const text = await a.evaluate(() => navigator.clipboard.readText());

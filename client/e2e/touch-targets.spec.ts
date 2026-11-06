@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openAdvanced } from './settings';
 
 // Bug #922: on a touch screen (a coarse pointer) every button of the column is a touch target of at least 44 px, the
 // toolbar rows are even, the light sliders are 32 px high in their 44 px rows, and the gap between two buttons is 8 px.
@@ -60,6 +61,7 @@ for (const { name, viewport } of sizes) {
       await expect(page.locator('#settings')).toBeEnabled();
       await page.locator('#settings').click();
       await expect(page.locator('#settings-menu')).toBeVisible();
+      await openAdvanced(page); // Copy diagnostics is the last row of the Advanced group, shut until a press (#1566)
       const items = await boxesOf(page, '#settings-menu button');
       const small = items.filter((b) => b.w < 43.9 || b.h < 43.9).map((b) => `${b.name} ${b.w}x${b.h}`);
       expect(small, 'the menu items under 44 px').toEqual([]);
@@ -78,7 +80,7 @@ for (const { name, viewport } of sizes) {
       const [menu] = await boxesOf(page, '#settings-menu');
       const [clip] = await boxesOf(page, '#copy-diagnostics');
       expect(clip.h, 'Copy diagnostics row').toBeGreaterThanOrEqual(43.9);
-      expect(await page.evaluate(() => document.getElementById('settings-menu')!.lastElementChild!.id), 'the last row').toBe('copy-diagnostics');
+      expect(await page.evaluate(() => document.querySelector('#settings-menu > details:last-of-type')!.lastElementChild!.id), 'the last row').toBe('copy-diagnostics');
       // Reached by scrolling the menu, the Reset lights row is whole, inside the menu and on the screen.
       await page.locator('#level-reset').scrollIntoViewIfNeeded();
       const [after] = await boxesOf(page, '#level-reset');

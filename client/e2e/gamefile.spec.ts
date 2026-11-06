@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { openAdvanced } from './settings';
 
 // A local game exported as a JSON file and imported back, replayed through the engine (#219,
 // docs/specs/tech.md section 8). The file is the save format of the resume task (#218).
@@ -77,6 +78,7 @@ const snapshot = async (page: Page) => ({
 async function menuItem(page: Page, name: string) {
   const cog = page.getByRole('button', { name: 'Settings' });
   if ((await cog.getAttribute('aria-expanded')) !== 'true') await cog.click();
+  if (/ game$/.test(name)) await openAdvanced(page); // under Advanced, shut until a press (#1566)
   return page.locator('#settings-menu').getByRole('button', { name });
 }
 

@@ -125,8 +125,8 @@ describe('the thumb dock', () => {
     game.openSettings();
     const menu = byId('settings-menu');
     const copy = byId('copy-diagnostics');
-    expect(copy.parentElement).toBe(menu);
-    expect(menu.lastElementChild).toBe(copy);
+    expect(copy.parentElement).toBe(menu.querySelector('details.setting-section')); // the Advanced group, the last of the menu (#1566)
+    expect(menu.querySelector('details:last-of-type')!.lastElementChild).toBe(copy);
     expect(copy.getAttribute('aria-label')).toBe('Copy diagnostics');
     expect(copy.querySelector('span')!.textContent).toBe('Copy diagnostics');
   });

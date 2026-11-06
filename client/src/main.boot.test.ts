@@ -640,30 +640,42 @@ describe('the Theme row: theme, UI scale and safe mode', () => {
 });
 
 describe('the settings toggles', () => {
+  it('are in five groups under visible headings, every item with a visible label, Advanced collapsed (#1566)', async () => {
+    await boot('?bot=off');
+    const menu = byId('settings-menu');
+    const sections = [...menu.querySelectorAll(':scope > .setting-section')];
+    expect(sections.map((s) => s.querySelector('.setting-heading')!.textContent)).toEqual(['Sound', 'Display', 'Accessibility', 'Controls', 'Advanced']);
+    expect((menu.querySelector('details.setting-section') as HTMLDetailsElement).open).toBe(false);
+    const group = (id: string): string => byId(id).closest('.setting-section')!.querySelector('.setting-heading')!.textContent!;
+    expect([group('setting-steering'), group('setting-guide'), group('setting-difficulty'), group('difficulty-note')]).toEqual(['Controls', 'Controls', 'Controls', 'Controls']);
+    expect([group('setting-reduced-motion'), group('setting-flat-hud'), group('setting-clear-board'), group('setting-fps')]).toEqual(['Accessibility', 'Accessibility', 'Display', 'Advanced']);
+    for (const button of menu.querySelectorAll('button')) expect(button.textContent!.trim(), button.id).not.toBe(''); // a name to read, not an icon alone
+  });
+
   it('lists every item with its icon, its name for screen readers and as a tooltip', async () => {
     await boot('?bot=off');
     const ids = [...byId('settings-menu').querySelectorAll('button')].map((b) => b.id);
     expect(ids).toEqual([
-      'setting-clear-board',
-      'setting-fps',
-      'setting-reduced-motion',
-      'setting-flat-hud',
-      'setting-sound',
+      'setting-sound', // Sound (#1566)
       'setting-transcript',
-      'setting-theme',
-      'setting-palette',
-      'setting-shell-skin',
-      'setting-glass-skin',
-      'setting-render-mode',
-      'setting-free-cam',
-      'setting-steering',
-      'setting-guide',
-      'setting-export-game',
-      'setting-difficulty',
-      'setting-import-game',
       'setting-log-archive',
       'setting-ledger', // #1585
-      'level-reset', // beside the light sliders, which are no buttons (#899)
+      'setting-theme', // Display
+      'setting-shell-skin',
+      'setting-glass-skin',
+      'setting-clear-board',
+      'level-reset', // after the light sliders, which are no buttons (#899)
+      'setting-reduced-motion', // Accessibility
+      'setting-flat-hud',
+      'setting-palette',
+      'setting-difficulty', // Controls
+      'setting-steering',
+      'setting-guide',
+      'setting-fps', // Advanced
+      'setting-render-mode',
+      'setting-free-cam',
+      'setting-export-game',
+      'setting-import-game',
       'copy-diagnostics', // the last row (#1032)
     ]);
     const sound = row('sound');
@@ -735,18 +747,18 @@ describe('the settings toggles', () => {
       await game.settle(); // the skin's maps load after the press
       return materials((await drawn(game)).scene).some((m) => m.isMeshStandardMaterial && m.map?.name === `skin-${asset}-albedo.ktx2`);
     };
-    expect(row('shell-skin').textContent).toBe('Leather');
+    expect(row('shell-skin').textContent).toBe('Shell: Leather');
     expect(await skinned('Porcelain003')).toBe(false);
     row('shell-skin').click();
-    expect(row('shell-skin').textContent).toBe('Black porcelain');
+    expect(row('shell-skin').textContent).toBe('Shell: Black porcelain');
     expect(localStorage.getItem('ab-alone.shell-skin')).toBe('obsidian');
     expect(await skinned('Porcelain003')).toBe(true);
   });
 
   it('starts on the saved skins, and loads their maps rather than the default ones', async () => {
     const game = await bootWith({ 'ab-alone.shell-skin': 'slag', 'ab-alone.glass-skin': 'pearl' });
-    expect(row('shell-skin').textContent).toBe('Lava');
-    expect(row('glass-skin').textContent).toBe('Porcelain');
+    expect(row('shell-skin').textContent).toBe('Shell: Lava');
+    expect(row('glass-skin').textContent).toBe('Glass: Porcelain');
     await game.settle();
     const maps = materials((await drawn(game)).scene).map((m) => m.map?.name);
     expect(maps).toContain('skin-Lava002-albedo.ktx2');
@@ -755,27 +767,27 @@ describe('the settings toggles', () => {
     expect(game.hook('__shellPulse')).toBe(0); // only the default shell glows with the heat
   });
 
-  it("puts the next pale skin on the player's glass, beside the shell skin, and saves it", async () => {
+  it("puts the next pale skin on the player's glass, in the group of the shell skin, and saves it", async () => {
     const game = await boot('?bot=off');
     expect(row('glass-skin').parentElement).toBe(row('shell-skin').parentElement);
-    expect(row('glass-skin').parentElement!.className).toBe('setting-group skin-pair');
+    expect(row('glass-skin').parentElement!.querySelector('.setting-heading')!.textContent).toBe('Display');
     const skinned = async (asset: string): Promise<boolean> => {
       await game.settle(); // the skin's maps load after the press
       return materials((await drawn(game)).scene).some(
         (m) => (m as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial && m.map?.name === `skin-${asset}-albedo.ktx2`,
       );
     };
-    expect(row('glass-skin').textContent).toBe('Marble');
+    expect(row('glass-skin').textContent).toBe('Glass: Marble');
     expect(await skinned('GlazedTerracotta003')).toBe(false);
     row('glass-skin').click();
-    expect(row('glass-skin').textContent).toBe('Terracotta');
+    expect(row('glass-skin').textContent).toBe('Glass: Terracotta');
     expect(localStorage.getItem('ab-alone.glass-skin')).toBe('frost');
     expect(await skinned('GlazedTerracotta003')).toBe(true);
   });
 
-  it('switches to the next colorblind palette, beside the theme, and saves it', async () => {
+  it('switches to the next colorblind palette, an Accessibility item, and saves it', async () => {
     const game = await boot('?bot=off');
-    expect(row('palette').parentElement).toBe(row('theme').parentElement);
+    expect(row('palette').closest('.setting-section')!.querySelector('.setting-heading')!.textContent).toBe('Accessibility'); // the colour-blind palettes (#1566)
     expect(row('palette').textContent).toBe('Palette: Default');
     expect(root.dataset.palette).toBe('default');
     const accent = style('--accent');
@@ -822,15 +834,15 @@ describe('the settings toggles', () => {
 
   it('cycles difficulty and saves it to localStorage', async () => {
     await boot('?bot=off');
-    expect(row('difficulty').textContent).toBe('100%');
+    expect(row('difficulty').textContent).toBe('Difficulty: 100%');
     row('difficulty').click();
-    expect(row('difficulty').textContent).toBe('200%');
+    expect(row('difficulty').textContent).toBe('Difficulty: 200%');
     expect(localStorage.getItem('ab-alone.difficulty')).toBe('hard');
     row('difficulty').click();
-    expect(row('difficulty').textContent).toBe('50%');
+    expect(row('difficulty').textContent).toBe('Difficulty: 50%');
     expect(localStorage.getItem('ab-alone.difficulty')).toBe('easy');
     row('difficulty').click();
-    expect(row('difficulty').textContent).toBe('100%');
+    expect(row('difficulty').textContent).toBe('Difficulty: 100%');
     expect(localStorage.getItem('ab-alone.difficulty')).toBe('normal');
   });
 
@@ -848,7 +860,7 @@ describe('the settings toggles', () => {
 
   it('starts on the saved difficulty', async () => {
     await bootWith({ 'ab-alone.difficulty': 'hard' });
-    expect(row('difficulty').textContent).toBe('200%');
+    expect(row('difficulty').textContent).toBe('Difficulty: 200%');
   });
 
   it('keeps working, unsaved, when the storage is blocked', async () => {
@@ -922,13 +934,13 @@ describe('the volume sliders (#438)', () => {
 });
 
 describe('the light sliders', () => {
-  it('are the last rows of the menu, with its items', async () => {
+  it('are rows of the Display group, then the reset button, and Copy diagnostics is the last row of the menu', async () => {
     await boot('?bot=off');
     const menu = byId('settings-menu');
     expect([...menu.querySelectorAll('.setting-lights')].map((s) => s.textContent)).toEqual(['Bloom', 'Lamps', 'Lights']);
     expect(byId('level-reset').previousElementSibling).toBe(byId('level-lights').parentElement); // then the reset button
-    expect(menu.lastElementChild).toBe(byId('copy-diagnostics')); // the clipboard is the last row (#1032)
-    expect(menu.lastElementChild!.previousElementSibling!.previousElementSibling).toBe(byId('level-reset')); // then the log archive page
+    expect(byId('level-reset').closest('.setting-section')!.querySelector('.setting-heading')!.textContent).toBe('Display');
+    expect(menu.querySelector('details:last-of-type')!.lastElementChild).toBe(byId('copy-diagnostics')); // the clipboard is the last row (#1032)
   });
 
   it('go back to their defaults with the reset button, saved and applied at once (#899)', async () => {
@@ -980,8 +992,8 @@ describe('the FPS readout (#426)', () => {
   it('is off by default: the box stays hidden and empty', async () => {
     const game = await boot('?bot=off');
     expect(row('fps').getAttribute('aria-pressed')).toBe('false');
-    expect(row('fps').parentElement!.className).toBe('setting-group'); // beside Clear board
-    expect(row('fps').parentElement!.firstElementChild).toBe(row('clear-board'));
+    expect(row('fps').parentElement!.querySelector('.setting-heading')!.textContent).toBe('Advanced'); // a developer tool (#1566)
+    expect(row('fps').parentElement!.children[1]).toBe(row('fps'));
     game.frame(20);
     expect(byId('fps').hidden).toBe(true);
     expect(byId('fps').textContent).toBe('');

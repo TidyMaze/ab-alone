@@ -9,6 +9,7 @@ import { logOf } from '../src/audiologs';
 import { dailyFor, dailyTitle, utcDay } from '../src/daily';
 import { BOSS_IDS } from '../src/tally';
 import { shot } from './shot';
+import { openAdvanced } from './settings';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -111,23 +112,21 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
       .map((el) => el.textContent || el.getAttribute('aria-label')),
   );
   expect(small, `${state}, settings menu open, under 44 px`).toEqual([]);
-  // Held upright, or in a narrow or short window, the items show their icon only (#414); each keeps its name, for screen
-  // readers and as a tooltip. The FPS switch (#426) is a short word, not an icon item.
-  const items = await page.evaluate(() => {
-    const upright = matchMedia('(orientation: portrait), (max-width: 1100px), (max-height: 500px)').matches;
-    return [...document.querySelectorAll('#settings-menu button')]
+  // Every item shows its label at every window size (#1566, it was its icon only held upright or in a small window, #414); each
+  // keeps its name too, for screen readers and as a tooltip.
+  const items = await page.evaluate(() =>
+    [...document.querySelectorAll('#settings-menu button')]
       .filter((el) => el.getClientRects().length > 0 && el.querySelector('svg'))
       .map((el) => ({
         name: el.getAttribute('aria-label'),
         title: el.getAttribute('title'),
         labelShown: el.querySelector('span')!.getClientRects().length > 0,
-        upright,
-      }));
-  });
+      })),
+  );
   for (const item of items) {
     expect(item.name, `${state}, a settings item has a name`).toBeTruthy();
     expect(item.title, `${state}, ${item.name} has its name as a tooltip`).toBe(item.name);
-    expect(item.labelShown, `${state}, ${item.name} shows its label ${item.upright ? 'held upright or in a small window' : 'in a roomy window'}`).toBe(!item.upright);
+    expect(item.labelShown, `${state}, ${item.name} shows its label`).toBe(true);
   }
   await tapCog(page);
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden();
@@ -140,7 +139,9 @@ const checkVolumes = async (page: Page, state: string) => {
   await page.getByRole('button', { name: 'Sound' }).click();
   await expect(page.getByRole('slider', { name: 'Music' })).toBeVisible();
   await frame(page);
-  expect(await problems(page), `${state}, volume sliders open`).toEqual([]);
+  // The page hangs under the cog like the menu (#1566): it may lie over cells, as the open menu does above, and over nothing else.
+  const open = (await problems(page)).filter((p) => !/ covers cell |^a tap on cell /.test(p));
+  expect(open, `${state}, volume sliders open`).toEqual([]);
   const small = await page.evaluate(() =>
     [...document.querySelectorAll('#settings-menu .setting-volume')]
       .filter((el) => navigator.maxTouchPoints > 0 && el.getBoundingClientRect().height < 44)
@@ -476,6 +477,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
+    await openAdvanced(page); // the developer tools are shut under Advanced (#1566)
     await expect(page.locator('#settings-menu button')).toHaveCount(21); // Ledger shares Import with Logs (#1585), Guide shares Steering (#1293), Steering (#1137), Copy diagnostics (#1032, the last row), Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {

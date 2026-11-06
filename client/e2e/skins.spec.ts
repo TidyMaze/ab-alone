@@ -8,15 +8,15 @@ test('the shell setting steps through the skins, redraws the marbles and survive
   const cog = page.getByRole('button', { name: 'Settings' });
   await expect(cog).toBeEnabled();
   await cog.click();
-  await page.getByRole('button', { name: 'Leather', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Black porcelain' })).toBeVisible();
+  await page.getByRole('button', { name: 'Shell: Leather', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Shell: Black porcelain' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('ab-alone.shell-skin'))).toBe('obsidian');
-  await page.getByRole('button', { name: 'Black porcelain' }).click();
-  await expect(page.getByRole('button', { name: 'Lava', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Shell: Black porcelain' }).click();
+  await expect(page.getByRole('button', { name: 'Shell: Lava', exact: true })).toBeVisible();
   await page.reload();
   await page.locator('canvas').waitFor();
   await cog.click();
-  await expect(page.getByRole('button', { name: 'Lava', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Shell: Lava', exact: true })).toBeVisible();
 });
 
 // Issue #377: the glass item beside the shell skin steps through the ten white glass skins, Marble first, stored
@@ -27,11 +27,11 @@ test('the glass setting steps through the white glass skins and survives a reloa
   const cog = page.getByRole('button', { name: 'Settings' });
   await expect(cog).toBeEnabled();
   await cog.click();
-  await page.getByRole('button', { name: 'Marble', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Terracotta' })).toBeVisible();
+  await page.getByRole('button', { name: 'Glass: Marble', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Glass: Terracotta' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('ab-alone.glass-skin'))).toBe('frost');
   await page.reload();
   await page.locator('canvas').waitFor();
   await cog.click();
-  await expect(page.getByRole('button', { name: 'Terracotta' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Glass: Terracotta' })).toBeVisible();
 });

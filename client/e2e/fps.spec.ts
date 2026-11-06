@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openAdvanced } from './settings';
 
 // The FPS readout (#426): off by default, switched on in the settings menu, kept across a reload, its last value in
 // Copy diagnostics.
@@ -11,6 +12,7 @@ test('the FPS readout is off by default, shows a rate once switched on, and surv
   await expect(readout).toBeHidden();
 
   await page.getByRole('button', { name: 'Settings' }).click();
+  await openAdvanced(page); // a developer tool (#1566)
   const fps = page.getByRole('button', { name: 'FPS' });
   await expect(fps).toHaveAttribute('aria-pressed', 'false');
   await fps.click();
@@ -22,6 +24,7 @@ test('the FPS readout is off by default, shows a rate once switched on, and surv
   await page.locator('canvas').waitFor();
   await expect(readout).toBeVisible();
   await page.getByRole('button', { name: 'Settings' }).click(); // the clipboard is the last row of the settings list (#1032)
+  await openAdvanced(page);
   await page.getByRole('button', { name: 'Copy diagnostics' }).click();
   const diagnostics = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(diagnostics.environment.fps).toBeGreaterThan(0);

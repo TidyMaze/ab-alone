@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openAdvanced } from './settings';
 
 // Issue #297: New game shows an icon. It keeps its old text as its accessible name and tooltip, so getByRole still finds
 // it, and on a touch screen it is a target of at least 44 px. Copy diagnostics is a row of the settings list since #1032
@@ -20,6 +21,7 @@ test('Copy diagnostics is a settings row with its icon and its label, #1032', as
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await page.getByRole('button', { name: 'Settings' }).click();
+  await openAdvanced(page); // a developer tool, under Advanced (#1566)
   const copy = page.getByRole('button', { name: 'Copy diagnostics', exact: true });
   await expect(copy).toHaveAttribute('title', 'Copy diagnostics');
   await expect(copy.locator('svg')).toHaveCount(1);

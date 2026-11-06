@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { inviteLink, openModes } from './modes';
 import { shot } from './shot';
+import { openAdvanced } from './settings';
 
 // #521: the Hub entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
 // marble, which rolls one cell at a time by a click on a neighbour or an arrow key. body[data-hub] names its deck and
@@ -140,6 +141,7 @@ test('Export game and Import game are off in the hub and back once a new game le
   await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
   await cog.click();
   await expect(menu.getByRole('button', { name: 'Clear board' })).toBeVisible();
+  await openAdvanced(page); // shut at first (#1566): the buttons are hidden by the hub, not by the group
   await expect(menu.getByRole('button', { name: 'Export game' })).toBeHidden();
   await expect(menu.getByRole('button', { name: 'Import game' })).toBeHidden();
   await shot(page, { path: testInfo.outputPath('hub-settings.png') });
@@ -147,6 +149,7 @@ test('Export game and Import game are off in the hub and back once a new game le
   await page.locator('#new-game').click(); // no move played: one press starts over
   await expect(page.locator('body')).not.toHaveAttribute('data-hub');
   await cog.click();
+  await openAdvanced(page);
   await expect(menu.getByRole('button', { name: 'Export game' })).toBeVisible();
   await expect(menu.getByRole('button', { name: 'Import game' })).toBeVisible();
 });

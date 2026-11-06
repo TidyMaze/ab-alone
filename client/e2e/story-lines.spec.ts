@@ -64,9 +64,9 @@ for (const { name, viewport, touch } of sizes) {
       await page.goto('./?bot=off');
       await page.locator('canvas').waitFor();
       await openLedger(page, async () => {
-        // The item of Import game holds one more button, Ledger, beside Logs: the three stay inside the menu and the window, none cut.
-        const buttons = page.locator('#settings-menu .setting-group:has(#setting-ledger) button');
-        expect(await buttons.count()).toBe(3);
+        // Logs and Ledger are rows of the Sound group (#1566): the four of the group stay inside the menu and the window, none cut.
+        const buttons = page.locator('#settings-menu .setting-section:has(#setting-ledger) button');
+        expect(await buttons.count()).toBe(4);
         const frame = (await page.locator('#settings-menu').boundingBox())!;
         for (let i = 0; i < (await buttons.count()); i++) {
           const box = (await buttons.nth(i).boundingBox())!;
