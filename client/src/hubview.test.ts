@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CELLS, VANISHED, type Axial } from './board';
 import { DECK_NAMES } from './deck';
 import { frameShape } from './frame';
-import { HUB_CELLS, neighbours, type Spot } from './hub';
+import { HUB_CELLS, neighbours, roomsOf, type Spot } from './hub';
 import { SECRETS } from './story';
 import { BOSS_IDS } from './tally';
 import { arrowCell, bossLockLine, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
@@ -373,6 +373,24 @@ describe('the next goal (#1521, #1524)', () => {
     const html = railHtml('mess', []);
     expect(html).not.toContain('class="goal"');
     expect(html).not.toContain('data-goal');
+  });
+
+  it('quiets every other plate of the deck while the goal room is on it, the room under the marble and the YOU plate aside, and none when the goal is elsewhere (#1526)', () => {
+    const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, nextGoal([], false));
+    expect(html.match(/data-quiet/g)).toHaveLength(11); // the twelve plates of the Mess but the Echo's door
+    expect(html).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-goal>');
+    expect(html).toContain('<div class="hub-label" data-cell="1,-2" data-kind="lift" data-mark="locked" data-quiet>');
+    expect(html).not.toMatch(/hub-label you[^>]*data-quiet/);
+    const bot = roomsOf('mess').find(({ door }) => door.kind === 'bot')!.cell;
+    const here = labelsHtml({ deck: 'mess', cell: bot }, [], {}, nextGoal([], false));
+    expect(here.match(/data-quiet/g)).toHaveLength(10); // the room under the marble wears its own ring, not the quiet weight
+    expect(here).toMatch(/data-kind="bot" data-here>/);
+    for (const html of [
+      labelsHtml({ deck: 'cargo', cell: [0, 0] }, [], {}, nextGoal([], false)), // the goal is on another deck: no plate is louder
+      labelsHtml({ deck: 'mess', cell: [0, 0] }, []),
+      labelsHtml({ deck: 'mess', cell: [0, 0] }, BOSSES, {}, nextGoal(BOSSES, true)),
+    ])
+      expect(html).not.toContain('data-quiet');
   });
 
   it('marks the plate of the goal room alone: the boss door of the goal deck, or the Rogue-lite room, and no other', () => {

@@ -5,10 +5,13 @@ import {
   dailyCard,
   dailyFor,
   dailyLine,
+  dailyRecord,
   dailySeed,
   dailyTitle,
+  dailyStreak,
   hash32,
   readAttempts,
+  recordDailyResult,
   utcDay,
 } from './daily';
 
@@ -158,5 +161,88 @@ describe('result card', () => {
   });
   it('is empty while the fight is on: no card before the end', () => {
     expect(dailyCard({ ...fight, result: 0 })).toBe('');
+  });
+});
+
+// The days the daily was played (#1528): the notice board's status of today and the local streak, no server.
+describe('the days played', () => {
+  const KEY = 'ab-alone.daily-days';
+  it('has no record of a day before the daily is started, and starting it makes the day played, with no result', () => {
+    const s = memoryStorage();
+    expect(dailyRecord(s, '2026-10-24')).toBeNull();
+    countAttempt(s, '2026-10-24');
+    expect(dailyRecord(s, '2026-10-24')).toEqual({ result: 'started', turns: 0 });
+    expect(JSON.parse(s.data.get(KEY)!)).toEqual({ '2026-10-24': 'started' });
+  });
+  it('keeps the result of a fight with its player turns: a win beats a loss beats a start, a faster win beats a slower one', () => {
+    const s = memoryStorage();
+    countAttempt(s, '2026-10-24');
+    recordDailyResult(s, '2026-10-24', false, 9);
+    expect(dailyRecord(s, '2026-10-24')).toEqual({ result: 'lost', turns: 9 });
+    recordDailyResult(s, '2026-10-24', false, 5); // the same result again keeps the first
+    expect(dailyRecord(s, '2026-10-24')).toEqual({ result: 'lost', turns: 9 });
+    recordDailyResult(s, '2026-10-24', true, 14);
+    expect(dailyRecord(s, '2026-10-24')).toEqual({ result: 'won', turns: 14 });
+    recordDailyResult(s, '2026-10-24', true, 20);
+    recordDailyResult(s, '2026-10-24', false, 3);
+    countAttempt(s, '2026-10-24'); // a retry does not take the win back
+    expect(dailyRecord(s, '2026-10-24')).toEqual({ result: 'won', turns: 14 });
+    recordDailyResult(s, '2026-10-24', true, 11);
+    expect(dailyRecord(s, '2026-10-24')).toEqual({ result: 'won', turns: 11 });
+  });
+  it('is the same after a reload, and an older profile with no such key loads: its attempts of the stored day count as a start', () => {
+    const older = memoryStorage({ 'ab-alone.daily': '2026-10-24 2' });
+    expect(dailyRecord(older, '2026-10-24')).toEqual({ result: 'started', turns: 0 });
+    expect(dailyRecord(older, '2026-10-23')).toBeNull();
+    expect(dailyStreak(older, '2026-10-24')).toBe(1);
+    expect(dailyStreak(memoryStorage(), '2026-10-24')).toBe(0);
+    recordDailyResult(older, '2026-10-24', true, 12);
+    expect(dailyRecord(older, '2026-10-24')).toEqual({ result: 'won', turns: 12 });
+  });
+  it('drops what is no record: a corrupt save, a bad day, a bad result', () => {
+    for (const bad of ['not json', 'null', '[1]', '"won 3"']) expect(dailyStreak(memoryStorage({ [KEY]: bad }), '2026-10-24')).toBe(0);
+    const s = memoryStorage({ [KEY]: JSON.stringify({ '2026-10-24': 'won 3', yesterday: 'won 3', '2026-10-23': 'draw 3', '2026-10-22': 'won 0', '2026-10-21': 7 }) });
+    expect(dailyRecord(s, '2026-10-24')).toEqual({ result: 'won', turns: 3 });
+    expect(dailyStreak(s, '2026-10-24')).toBe(1);
+  });
+  it('keeps the last 60 days only', () => {
+    const s = memoryStorage();
+    for (let i = 0; i < 70; i++) countAttempt(s, utcDay(MIDNIGHT + i * DAY_MS));
+    expect(Object.keys(JSON.parse(s.data.get(KEY)!))).toHaveLength(60);
+    expect(dailyRecord(s, utcDay(MIDNIGHT))).toBeNull();
+    expect(dailyRecord(s, utcDay(MIDNIGHT + 69 * DAY_MS))).not.toBeNull();
+  });
+  it('never throws when storage throws or is missing', () => {
+    expect(dailyRecord(throwing, '2026-10-24')).toBeNull();
+    expect(dailyStreak(null, '2026-10-24')).toBe(0);
+    expect(() => recordDailyResult(throwing, '2026-10-24', true, 3)).not.toThrow();
+  });
+});
+
+describe('the daily streak', () => {
+  const play = (s: ReturnType<typeof memoryStorage>, from: string, days: number): void => {
+    for (let i = 0; i < days; i++) countAttempt(s, utcDay(Date.parse(from) + i * DAY_MS));
+  };
+  it('counts the consecutive UTC days with a daily played, today included', () => {
+    const s = memoryStorage();
+    play(s, '2026-10-22', 3); // 22, 23, 24
+    expect(dailyStreak(s, '2026-10-24')).toBe(3);
+  });
+  it('holds until today is played: yesterday and the days before still count', () => {
+    const s = memoryStorage();
+    play(s, '2026-10-22', 2); // 22, 23
+    expect(dailyStreak(s, '2026-10-24')).toBe(2);
+  });
+  it('is none once a whole day was missed, and counts only the days since the gap', () => {
+    const s = memoryStorage();
+    play(s, '2026-10-20', 2); // 20, 21, then a gap
+    expect(dailyStreak(s, '2026-10-24')).toBe(0);
+    play(s, '2026-10-23', 2); // 23, 24
+    expect(dailyStreak(s, '2026-10-24')).toBe(2);
+  });
+  it('crosses the end of a month and of a year', () => {
+    const s = memoryStorage();
+    play(s, '2026-12-30', 4); // 30, 31, Jan 1, Jan 2
+    expect(dailyStreak(s, '2027-01-02')).toBe(4);
   });
 });

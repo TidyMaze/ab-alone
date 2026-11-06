@@ -536,6 +536,17 @@ describe('main.ts daily challenge', () => {
     expect(card.hidden).toBe(true);
   });
 
+  it('records the day the daily was started and its result in player turns, for the notice board (#1528)', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(DAY);
+    const game = await boot('?bot=off', { reducedMotion: true });
+    byId('daily').click();
+    expect(JSON.parse(localStorage.getItem('ab-alone.daily-days')!)).toEqual({ '2027-03-30': 'started' });
+    loseByRepetition(game); // 7 plies: 4 player turns
+    expect(JSON.parse(localStorage.getItem('ab-alone.daily-days')!)).toEqual({ '2027-03-30': 'lost 4' });
+    game.hud(); // a HUD refresh writes it again as it was
+    expect(JSON.parse(localStorage.getItem('ab-alone.daily-days')!)).toEqual({ '2027-03-30': 'lost 4' });
+  });
+
   it('a press on the window (no node) closes the daily result card, and throws nothing (CI, #1032)', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(DAY);
     const game = await boot('?bot=off', { reducedMotion: true });
