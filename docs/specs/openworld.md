@@ -676,8 +676,8 @@ section 10.
 
 - **Points of interest.** The non-boss points of interest are the 12 lore logs (section 12) and the 5 dungeon gates (section 13), 17 in a world of
   603 457 cells, one for 35 500 cells (the 15 towers are one for 40 200). Each biome holds two or three: the logs are two a biome (one in the near ring,
-  30 to 140 ground units out, one in the far ring), and the gates one in each biome but the meadow, so the meadow holds 2 and every other biome 3. A hero who
-  leaves the spawn in any direction meets one within 165 cells, before the nearest tower (at 160 cells or more, section 15). No new kind of place (no
+  30 to 140 ground units out, one in the far ring), and the gates one in each biome but the meadow, so the meadow holds 2 and every other biome 3. Every biome
+  has one within 165 cells of the spawn, about as near as the nearest tower (at 160 cells or more, section 15). No new kind of place (no
   cache, no camp). The density is a function of the seed alone and is tested over the seeds 1 to 300 (`world::tests`, the count, the biome and the
   distance).
 - **Pads.** A tower the hero beats by walking onto it in the Open world (section 7) leaves a teleporter pad on an open cell next to it. The pad joins

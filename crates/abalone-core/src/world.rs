@@ -679,7 +679,7 @@ pub fn gate_ring(towers: &[(i32, i32)], cell: (i32, i32)) -> u8 {
     (nearer.min(TOWER_ORDER.len() - 1) / RING_SIZE) as u8 + 1
 }
 
-/// The pad a tower beaten through the world leaves (docs/specs/openworld.md section 15): a teleporter on the first of the tower's six
+/// The pad a tower beaten through the world leaves (docs/specs/openworld.md section 16): a teleporter on the first of the tower's six
 /// neighbours, in the order of `STEPS`, that is open ground and holds no generated enemy, so the hero can come back to that part of the
 /// world. A tower's neighbours are all open ground of its biome (`lair_try`), so the search ends in six looks; if every one held an enemy
 /// the first would take it. From the seed alone: it reads the terrain and the enemies, never changes them, so `WORLD_VERSION` does not move.
@@ -2744,11 +2744,11 @@ mod tests {
         for seed in 1..=300 {
             let found = points_of_interest(seed);
             assert_eq!(found.len(), LOGS + DUNGEONS, "seed {seed}");
-            for wedge in 0..6 {
+            for (wedge, biome) in SEXTANTS.into_iter().enumerate() {
                 let here: Vec<(i32, i32)> = found
                     .iter()
                     .copied()
-                    .filter(|&(q, r)| cell(seed, q, r).unwrap().biome == SEXTANTS[wedge])
+                    .filter(|&(q, r)| cell(seed, q, r).unwrap().biome == biome)
                     .collect();
                 let want = if wedge == 0 { 2 } else { 3 };
                 assert_eq!(here.len(), want, "seed {seed}: biome {wedge}");
