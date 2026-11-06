@@ -1,12 +1,12 @@
-//! The rogue-lite run simulator (#1537, docs/specs/roguelite.md section 29): `cargo run --release --example run_sim`.
+//! The rogue-lite run simulator (#1537, docs/specs/roguelite.md section 30): `cargo run --release --example run_sim`.
 //! A bot plays whole runs on the engine's map and exits against the engine's act bosses, and prints a markdown table:
 //! how many runs of each commander and ascension level clear each act. What the bot does, and what is left out, is
 //! stated in the spec.
 //!
-//! Environment (every one optional): `RUN_SIM_RUNS` runs per commander and level (seeds 0 to N - 1, the same for
+//! Environment (every one optional): `RUN_SIM_RUNS=40` runs per commander and level (seeds 0 to N - 1, the same for
 //! every cell), `RUN_SIM_LEVELS=0,5,10` the ascension levels, `RUN_SIM_THREADS` the runs played at once,
-//! `RUN_SIM_BOSS_X` the player's search in a boss fight as a multiple of the boss's own budget (the ladder's 10 is
-//! the pro level), `RUN_SIM_PERCENTS=50,100,200` the strength of the act bosses to try in place of `ACT_PERCENT`,
+//! `RUN_SIM_BOSS_X=3` the player's search in a boss fight as a multiple of the boss's own budget (the ladder's 10 is
+//! the pro level, too slow to play a table), `RUN_SIM_PERCENTS=50,120,200` the strength of the act bosses to try in place of `ACT_PERCENT`,
 //! `RUN_SIM_JSONL=<file>` one JSON line per run, `RUN_SIM_POOL=1` to play every act's boss for every seed, whatever the
 //! run before it did, and print how many it won per act (the tuning sample). Arguments are the commanders to play, by index (0 to 3), none
 //! for all four. The progress goes to stderr.
@@ -21,8 +21,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 /// The act bosses' strength by act, as the page's `ACT_PERCENT` (client/src/roguelite.ts, a test keeps the two
 /// equal); the fourth act is not played.
-const ACT_PERCENT: [u32; 3] = [50, 100, 200];
-/// What a fight node and an elite cost the army, in marbles (not measured, section 29): the bot wins them.
+const ACT_PERCENT: [u32; 3] = [50, 120, 200];
+/// What a fight node and an elite cost the army, in marbles (not measured, section 30): the bot wins them.
 const FIGHT_LOSS: u8 = 1;
 const ELITE_LOSS: u8 = 2;
 
@@ -113,7 +113,7 @@ fn choices(map: &[Node], at: Option<usize>) -> Vec<usize> {
 }
 
 /// One run of `seed` of the commander `c` at ascension `level`. The player's choices are in
-/// docs/specs/roguelite.md section 29.
+/// docs/specs/roguelite.md section 30.
 fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
     let relic = COMMANDERS[c].1;
     let map = run_map(seed);
@@ -266,10 +266,10 @@ fn main() {
         boss_x: std::env::var("RUN_SIM_BOSS_X")
             .ok()
             .and_then(|x| x.parse().ok())
-            .unwrap_or(10.0),
+            .unwrap_or(3.0),
         bosses: Mutex::default(),
     };
-    let runs = u64::from(setting("RUN_SIM_RUNS", 20));
+    let runs = u64::from(setting("RUN_SIM_RUNS", 40));
     let levels = list("RUN_SIM_LEVELS", "0,5,10");
     let only: Vec<usize> = std::env::args()
         .skip(1)

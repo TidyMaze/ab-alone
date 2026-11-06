@@ -838,7 +838,7 @@ describe('roguelite', () => {
     const boss = actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ids)!;
     expect(ids).toContain(boss.id);
     expect(boss.percent).toBe(ACT_PERCENT[0]);
-    expect(ACT_PERCENT).toEqual([50, 120, 200, 300]); // #1537: act 2 raised from 100 (docs/specs/roguelite.md section 29)
+    expect(ACT_PERCENT).toEqual([50, 120, 200, 300]); // #1537: act 2 raised from 100 (docs/specs/roguelite.md section 30)
     expect(actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ids)).toEqual(boss); // the same run: the same boss and seed
     const second = actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0, 2, 3), 5), ids)!;
     expect(second.percent).toBe(ACT_PERCENT[1]);

@@ -185,8 +185,8 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   act, played as from the boss menu (`Encounter`, its deck, view and rules, its own layout: the army
   count stays off its board; the army's special marbles, relics and tactics come into the fights of the
   bosses that take them, section 28) at its act's strength: the boss's search budget
-  at 50 %, 100 % and 200 % (the difficulty setting's easy, normal and hard) for acts 1, 2 and 3,
-  whatever the setting. Its seed comes from the run seed and the node. Lost (a draw too), the run is
+  at 50 %, 120 % and 200 % (`ACT_PERCENT`; the difficulty setting's easy, normal and hard are 50, 100 and 200 %) for acts 1, 2 and 3,
+  whatever the setting; the act 2 figure is the run simulator's (#1537, section 30). Its seed comes from the run seed and the node. Lost (a draw too), the run is
   lost; won, the army loses the marbles the boss ejected and the run goes on (the reward screen), or
   is won after act 3. A boss fight is saved and resumed like the others; one saved before #800 (an
   army fight on the boss node then) does not replay on the boss's board and starts over. The deal
@@ -245,7 +245,7 @@ relic at most once, in the order taken, and starts with none: only variety carri
   | 6 | Lucky coin | rewards offer 4 choices | the reward screen |
   | 7 | Bargain | an event trade costs 1 marble less | an event |
   | 8 | Saboteur | the bot has 1 marble fewer in fights and elites (9 and 13) | a fight's board |
-  | 9 | Dampener | act bosses play at 75 % of their act's strength (38, 75 and 150 %) | an act boss |
+  | 9 | Dampener | act bosses play at 75 % of their act's strength (38, 90 and 150 %) | an act boss |
   | 10 | War chest | an act boss beaten gives 2 marbles back (up to 14) | the end of a boss |
   | 11 | Quartermaster | a fight holds 4 of each special marble type | the placement |
 
@@ -782,7 +782,7 @@ Slay the Spire's boss relics and its three keys: the end of a won run holds one 
   marbles, as any elite of an act past the third, searching an elite's positions) then a **final boss**. Without the three keys
   those two nodes are not on the map and not reachable. Act 4 is played in the Meadow (no hole, no signature marble); beating its
   boss wins the run, and a loss ends it as anywhere.
-- **The final boss** is The Ballast Mind (`FINAL_BOSS`, "ballast"), at 300 % of its search budget (acts 1 to 3 play at 50, 100 and 200 %;
+- **The final boss** is The Ballast Mind (`FINAL_BOSS`, "ballast"), at 300 % of its search budget (acts 1 to 3 play at 50, 120 and 200 %;
   the War banner, the Boss breaker and the Dampener scale it as any act boss), with its seed from the run seed and the node. Why
   it: it borrows an effect of five other bosses (the Hull's crack, the Pulsar's pulse, the Magnetizer's polarity, the Chaplain's
   conversion, the Swarm's wave), so it is the one boss that "holds all the others", and its fight is a fair race to 12 ejections
@@ -1048,3 +1048,97 @@ Captain`, `Ascension 2` when picked), then **Start** and **More** on one row, 44
 - **Tests.** The specs that click a control of More open it first through `openMore` (`client/e2e/runstart.ts`, one click).
 - **Turn it against the boss**: no new rule: the screen only orders what the player picks; the commanders and the ascension levels keep
   their rules (sections 17 and 20).
+
+## 30. The difficulty curve, measured (#1537)
+
+The run was stacked (ten ascension levels, relics, runes) without knowing how often a player gets through it. `run_sim`
+(`crates/abalone-core/examples/run_sim.rs`) plays seeded runs with a bot and counts the acts cleared. These are **bot
+numbers, not human ones**: a person who reads the tells, takes the elites and builds a deck does better or worse in ways the bot
+cannot say. The table is a measure of the curve (act against act, boss against boss) and of what the constants do to it.
+
+- **Command**: `RUN_SIM_THREADS=8 nice -n 15 cargo run --release --example run_sim` (the defaults are the table's: 40 seeds, 0 to 39, the
+  same for every row; levels 0, 5 and 10; the four commanders; the bot searches 3 times the boss's budget). It is deterministic: the same
+  command gives the same table on any machine, after about 20 minutes on 8 threads. `RUN_SIM_RUNS`, `RUN_SIM_LEVELS`,
+  `RUN_SIM_BOSS_X` and a list of commanders (`... run_sim 0 1`) change the sample, `RUN_SIM_PERCENTS=50,120,200` tries other
+  strengths, and `RUN_SIM_POOL=1` plays the boss of every act for every seed, whatever the runs before did (the tuning sample).
+- **The map and the route**: the engine's (`run::run_map`, a run seed per row of the table). The bot takes a rest when the army is
+  under its ceiling (14, 12 from level 2), else a fight or the boss, else a node with nothing to play (an event, a "?", a
+  treasure, a shop, a secret room: left at once), an elite last. At the end of an act it takes the first exit offered
+  (`run::exits`), so acts 2 and 3 are the biome's boss (section 18); act 1 deals one of the 15 bosses of the roster from the seed
+  (the engine's splitmix64, not the page's hash: the same spread, not the same boss for a seed).
+- **The act boss fight is the engine's**: `play_act_boss` (the ladder's bot of `boss-balance.md`, which plays two random first moves, never
+  repeats a position and reads the tells and hooks) at the boss's own node budget times **3** against the boss at `ACT_PERCENT` of its
+  budget (50, 120 and 200 %; a quarter more from level 7). A draw or 300 plies is a loss. The army loses the marbles the boss
+  ejected; the run is over below 4 marbles. The ladder's pro level is 10 times: a 10 times player costs about 100 CPU
+  seconds a fight, which no table of 480 runs can afford, and 3 times already finds the same walls (below). The fights are shared:
+  one boss fight is played once per boss, seed and strength, whichever commander and level reach it.
+- **What a fight, an elite and a reward are** (not played, a choice, see "Left out"): a fight node is won and costs the army 1 marble, an elite
+  is won and costs 2 and gives the 2 marbles back of section 7; a won fight, elite or boss gives a marble back while the army is under 14. The Warden's
+  Hull plating takes one marble off each loss.
+- **The levels**: level 2 (rests to 12), 6 (12 marbles to start) and 7 (bosses a quarter stronger) are played. The other levels are
+  handicaps of the fights, the elites, the shops, the scrap and the offers: nothing in the bot plays them. A level 5 row is therefore
+  the level 0 row with the short rests, and a level 10 row adds the thin ranks and the hardened bosses. Only levels 0, 5 and 10 are
+  measured (the issue asks for every commander and level; this is the sample that stays cheap).
+- **Left out** (the page keeps these, and porting them to the engine would be large): the fights and the elites (the bot cannot win
+  them, see below), every relic but the Warden's Hull plating, the special marbles (so the Saboteur's Sparks and the Juggernaut's
+  Heavies are not played, and the build is not brought to the 12 bosses that take it, section 28), the runes, events, shops, scrap,
+  tactics, flasks, affinities, the cursed chest, the bonus room, the Collector, the keys and the fourth act. The four commanders
+  differ in the simulation only by the Warden's relic, so the rows of a level are the same table up to the marbles: that is what the
+  simulation says of them, not a finding about the game.
+- **Why the fights are not played**: the army fights were tried first (`auto_move`, the bot of Auto-play, against the bot of the page).
+  On the first fight of seeds 0 to 7 (14 marbles against 8) it wins 4 of 8 at 2000 nodes against a bot of 100, 3 of 8 against a bot
+  of 250, 0 of 8 at 4000 against 250 and 0 of 6 at 1000 against 500; the rest are draws (100 plies without an ejection, a threefold repetition, often at 4 or 5 of
+  6 ejections), and a draw is a loss. At about 24 ms per 1000 nodes the page's own 20000-node bot costs 0.5 s a ply, so a run of 7
+  fights is minutes. The follow-up is #1598.
+
+### The targets and the table
+
+Targets at ascension 0 (the issue's), bot numbers: **act 1 about 85 %** of the runs and **the whole run 15 to 25 %**. A curve that
+falls act by act between the two is implied (act 2 about 60 % and act 3 about 40 % of the runs that reach them would give 20 %). Each
+cell below is the runs that cleared the act out of those that reached it, and its share of all the runs.
+
+| commander | level | runs | act 1 | act 2 | act 3 = the run |
+|---|---|---|---|---|---|
+| The Captain | 0 | 40 | 32/40 (80 %), 80 % of runs | 15/32 (47 %), 38 % of runs | 8/15 (53 %), 20 % of runs |
+| The Captain | 5 | 40 | 32/40 (80 %), 80 % of runs | 15/32 (47 %), 38 % of runs | 8/15 (53 %), 20 % of runs |
+| The Captain | 10 | 40 | 31/40 (78 %), 78 % of runs | 17/31 (55 %), 42 % of runs | 11/17 (65 %), 28 % of runs |
+| The Warden | 0 | 40 | 32/40 (80 %), 80 % of runs | 17/32 (53 %), 42 % of runs | 9/17 (53 %), 22 % of runs |
+| The Warden | 5 | 40 | 32/40 (80 %), 80 % of runs | 17/32 (53 %), 42 % of runs | 9/17 (53 %), 22 % of runs |
+| The Warden | 10 | 40 | 31/40 (78 %), 78 % of runs | 18/31 (58 %), 45 % of runs | 11/18 (61 %), 28 % of runs |
+| The Saboteur | 0 | 40 | 32/40 (80 %), 80 % of runs | 15/32 (47 %), 38 % of runs | 8/15 (53 %), 20 % of runs |
+| The Saboteur | 5 | 40 | 32/40 (80 %), 80 % of runs | 15/32 (47 %), 38 % of runs | 8/15 (53 %), 20 % of runs |
+| The Saboteur | 10 | 40 | 31/40 (78 %), 78 % of runs | 17/31 (55 %), 42 % of runs | 11/17 (65 %), 28 % of runs |
+| The Juggernaut | 0 | 40 | 32/40 (80 %), 80 % of runs | 15/32 (47 %), 38 % of runs | 8/15 (53 %), 20 % of runs |
+| The Juggernaut | 5 | 40 | 32/40 (80 %), 80 % of runs | 15/32 (47 %), 38 % of runs | 8/15 (53 %), 20 % of runs |
+| The Juggernaut | 10 | 40 | 31/40 (78 %), 78 % of runs | 17/31 (55 %), 42 % of runs | 11/17 (65 %), 28 % of runs |
+
+Error: 40 runs, so a cell at 50 % is known to about 8 points (one standard error), one at 20 % to 6 points, and the cells below
+act 1 count fewer runs. The commanders and the levels 0 and 5 play the same boss fights, so what differs between their rows is only the army's marbles.
+
+**Reading it.** At level 0 the whole run is cleared by **20 %** of the runs (8 of 40), inside the 15 to 25 % target, with act 1 at **80 %**, short of
+85 %. Act 3 is **not harder** than act 2 (53 % against 47 % of the runs that reach them, each known to about 10 points), which is not the
+falling curve the targets describe. The Captain, Saboteur and Juggernaut rows are the same runs and level 5 is level 0 (their relics and the other
+handicaps are not played, "Left out"); the Warden's Hull plating saves a marble now and then (1 more run won of 40). Level 10
+clears **more** runs (28 %) than level 0 (20 %), a difference inside the error: a quarter more budget and 2 marbles fewer do not lower
+what the bot clears, so ascension 7 and 10 do not show in this measure. The act bosses are won or lost on their rules, not on a
+quarter of budget (below).
+
+### What was tuned
+
+`ACT_PERCENT` was [50, 100, 200, 300] and is [50, 120, 200, 300]. The sample that decided it is the boss of every act for 32 seeds
+(`RUN_SIM_POOL=1`, 3 times the budget, the same seeds at every strength), bosses won out of 32:
+
+- act 1 at 30, 40, 50 and 70 %: 26, 27, 27 and 25;
+- act 2 at 80, 100, 120 and 150 %: 23, 26, 20 and 20;
+- act 3 at 160, 200, 240 and 300 %: 20, 18, 19 and 19.
+
+Act 1 does not move with its strength, so its 50 % stays. Act 2 falls between 100 and 120 % and not after, so 120 % is the smallest rise
+that takes it (two earlier samples of runs at 100 % cleared act 2 in 40 of 58 and the whole run in 19 of 72, 26 %; the table's level 0 at
+120 % is 15 of 32 and 8 of 40). Act 3 does not move from 160 to 300 %, so 200 % stays, and the fourth act's 300 % is not measured.
+
+**Not reached by numbers alone.** The pool of act 1 is flat at about 82 % because of the bosses the bot loses at any strength: The
+Hull beats it 2 or 3 times in 32 from 30 to 70 %, The Choir, The Chaplain and The Echo once or twice. In act 3 The Hull beats it 7 or 8 times in
+32 at every strength from 160 to 300 % (it is in the pool whenever the Tundra is an exit), The Pulsar and The Ballast Mind some more. A flat
+multiplier cannot tune a boss that is won or lost on its rules, which is what the issue saw in the ladder. So act 1 stays below 85 %, and
+act 3 as easy as act 2, whatever `ACT_PERCENT` is set to between 30 and 300 %. Only the whole run, which is the product, was brought into its
+band. The follow-up is #1599.

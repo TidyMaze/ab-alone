@@ -646,8 +646,9 @@ export function fightBudget(map: MapNode[], run: Run, nodes: number): number {
   return kind === 'fight' || kind === 'elite' ? Math.round(budget * factor) : budget;
 }
 
-/** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, normal, hard. */
-export const ACT_PERCENT = [50, 100, 200, 300];
+/** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, then 120 % (#1537), then hard, then
+ * 300 % for the fourth act's. The run simulator (crates/abalone-core/examples/run_sim.rs) keeps a copy of the first three. */
+export const ACT_PERCENT = [50, 120, 200, 300];
 
 /** The roster boss that ends act `act` of the run (#800), one of `ids` (the bridge's boss_ids): the run seed deals them, a new one
  * each act. The boss of an act in a biome is the biome's (#1472), when the roster has it; the fourth act's is FINAL_BOSS (#1467). */
