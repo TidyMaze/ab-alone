@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CELLS, VANISHED, type Axial } from './board';
+import { DECK_NAMES } from './deck';
 import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, type Spot } from './hub';
-import { arrowCell, bossTitle, bumpLine, goalDeck, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
+import { SECRETS } from './story';
+import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -299,27 +301,70 @@ describe('the boss pips (#1249)', () => {
   });
 });
 
-describe('the next goal of a new player (#1521)', () => {
-  it('is the first deck while no boss is beaten, none once one is', () => {
-    expect(goalDeck([])).toBe('mess');
-    expect(goalDeck(['echo'])).toBeNull();
+describe('the next goal (#1521, #1524)', () => {
+  const BOSSES = ['echo', 'hull', 'choir', 'chaplain', 'ballast'];
+
+  it('walks the path: The Echo, a first rogue-lite run, then the boss of each next deck in order', () => {
+    expect(nextGoal([], false)).toEqual({ text: 'Beat The Echo on the Mess deck.', deck: 'mess', room: 'boss' });
+    expect(nextGoal([], true).room).toBe('boss'); // a run before The Echo does not skip it
+    expect(nextGoal(['echo'], false)).toEqual({ text: 'Start a rogue-lite run on the Cargo deck.', deck: 'cargo', room: 'run' });
+    expect(nextGoal(['echo'], true)).toEqual({ text: 'Beat The Hull on the Cargo deck.', deck: 'cargo', room: 'boss' });
+    expect(nextGoal(['echo', 'hull'], true)).toEqual({ text: 'Beat The Choir on the Furnace deck.', deck: 'furnace', room: 'boss' });
+    expect(nextGoal(BOSSES.slice(0, 4), true)).toEqual({ text: 'Beat The Ballast Mind on the Bridge deck.', deck: 'bridge', room: 'boss' });
   });
 
-  it('marks the rail row of the goal deck, and says so in words under The Echo', () => {
-    const html = railHtml('mess', [], 'mess');
-    expect(html).toContain(
-      '<li data-deck="mess" data-state="open" data-goal aria-current="location"><span class="n">01</span><b>Mess</b><small>The Echo waits · next goal · you are here</small></li>',
-    );
-    expect(railHtml('cargo', [], 'mess')).toContain('<small>The Echo waits · next goal</small></li>'); // the marble is on another deck
-    expect(railHtml('mess', [])).not.toContain('data-goal'); // no goal asked: the rail as before
-    expect(railHtml('mess', ['echo'], null)).not.toContain('next goal');
+  it('names the first boss not beaten, whatever order the bosses fell in, and the run goal comes before it', () => {
+    expect(nextGoal(['hull', 'choir'], true).deck).toBe('mess');
+    expect(nextGoal(['echo', 'choir'], true).deck).toBe('cargo');
+    expect(nextGoal(['echo', 'hull'], false).room).toBe('run');
   });
 
-  it('marks the boss door plate of the goal deck alone, and no plate of another deck', () => {
-    const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, 'mess');
+  it('says what is left to do when all five bosses are beaten, on no deck', () => {
+    expect(nextGoal(BOSSES, true)).toEqual({ text: 'All five bosses are beaten. Play on in the Daily or a rogue-lite run.', deck: null, room: null });
+  });
+
+  it('never spoils: no secret word, and no boss of a deck above the goal named', () => {
+    const states = BOSSES.flatMap((_, n) => [false, true].map((ran) => nextGoal(BOSSES.slice(0, n), ran)));
+    for (const [i, { text, deck }] of states.entries()) {
+      for (const { word } of SECRETS) expect(text, `state ${i}`).not.toMatch(word);
+      const above = deck === null ? [] : BOSSES.slice(DECK_NAMES.indexOf(deck) + 1);
+      for (const boss of above) expect(text, `state ${i}`).not.toContain(bossTitle(boss));
+    }
+  });
+
+  it('keeps the run as the goal after all five bosses while none was started', () => {
+    expect(nextGoal(BOSSES, false).deck).toBe('cargo'); // the run is still the goal until it is started
+  });
+
+  it('puts the goal in a line of the rail, under the five decks, and rings the row of its deck', () => {
+    const html = railHtml('mess', [], nextGoal([], false));
+    expect(html).toContain('<p class="goal">Next goal: Beat The Echo on the Mess deck.</p>');
+    expect(html).toContain('<li data-deck="mess" data-state="open" data-goal aria-current="location"><span class="n">01</span><b>Mess</b><small>The Echo waits · you are here</small></li>');
     expect(html.match(/data-goal/g)).toHaveLength(1);
-    expect(html).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-goal>');
-    expect(labelsHtml({ deck: 'cargo', cell: [0, 0] }, [], {}, 'mess')).not.toContain('data-goal');
+    expect(html.indexOf('</ul>')).toBeLessThan(html.indexOf('class="goal"'));
+    expect(railHtml('cargo', ['echo'], nextGoal(['echo'], false))).toContain('<li data-deck="cargo" data-state="open" data-goal aria-current="location">');
+    const done = railHtml('mess', BOSSES, nextGoal(BOSSES, true));
+    expect(done).toContain('<p class="goal">Next goal: All five bosses are beaten. Play on in the Daily or a rogue-lite run.</p>');
+    expect(done).not.toContain('<li data-deck="mess" data-state="beaten" data-goal');
+    expect(done).not.toContain('data-goal'); // no row to ring
+  });
+
+  it('says no goal when none is asked: the rail as before', () => {
+    const html = railHtml('mess', []);
+    expect(html).not.toContain('class="goal"');
+    expect(html).not.toContain('data-goal');
+  });
+
+  it('marks the plate of the goal room alone: the boss door of the goal deck, or the Rogue-lite room, and no other', () => {
+    const boss = labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, nextGoal([], false));
+    expect(boss.match(/data-goal/g)).toHaveLength(1);
+    expect(boss).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-goal>');
+    const run = labelsHtml({ deck: 'cargo', cell: [0, 0] }, ['echo'], {}, nextGoal(['echo'], false));
+    expect(run.match(/data-goal/g)).toHaveLength(1);
+    expect(run).toMatch(/data-kind="run" data-goal>/);
+    expect(run).not.toMatch(/data-kind="boss"[^>]*data-goal/);
+    expect(labelsHtml({ deck: 'cargo', cell: [0, 0] }, [], {}, nextGoal([], false))).not.toContain('data-goal'); // another deck
     expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, [])).not.toContain('data-goal');
+    expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, BOSSES, {}, nextGoal(BOSSES, true))).not.toContain('data-goal');
   });
 });

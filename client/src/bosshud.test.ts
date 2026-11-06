@@ -58,6 +58,15 @@ describe('bossHtml', () => {
   });
 });
 
+describe('the goal card (#1524)', () => {
+  it('takes the place of the goal line when a boss has a card, before the first move', () => {
+    const html = bossHtml({ ...base, goal: 'Eject 6 of its marbles to win.', card: '<ol class="goal-steps"><li>One</li></ol>' });
+    expect(html).toContain('<div class="goal goal-card"><ol class="goal-steps"><li>One</li></ol></div>');
+    expect(html).not.toContain('Goal: ');
+    expect(bossHtml({ ...base, card: '' })).not.toContain('class="goal');
+  });
+});
+
 describe('goalShown', () => {
   // #1032 owner rule: the goal is shown once. The HUD line is shown before the first move only, and never while the
   // Goal sheet is open (the sheet holds it then).

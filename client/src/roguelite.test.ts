@@ -2630,3 +2630,61 @@ describe('roguelite scrolls of power (#1471)', () => {
     expect(bar.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Affinities');
   });
 });
+
+// The start screen (#1524, docs/specs/roguelite.md section 29): what a run is and how it ends, one Start button, and the rest behind More.
+describe('the start screen (#1524)', () => {
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const book = '<div class="run-book"><button type="button" data-daily="1">Daily run</button></div>';
+  const screen = (run: Run, more: boolean): Document => parse(mapHtml(MAP, run, book, undefined, more));
+  const start = (): Run => chooseCommander(newRun(1, 1, LEGACY_UNLOCKED, 3), 0);
+  const DETAILS = ['button[data-commander]', 'button[data-ascension]', '.run-book', '.run-ascension', '.run-commanders'];
+
+  it('says in two sentences what a run is and how it is won and lost, above one Start button and a More button', () => {
+    const doc = screen(start(), false);
+    expect(doc.querySelector('.run-intro')!.textContent).toBe(
+      'A run is a climb through 3 acts of fights with the army you keep: marbles lost stay lost. Beat the act 3 boss to win; lose a fight, or fall below 4 marbles, and the run is over.',
+    );
+    expect(doc.querySelectorAll('#run-start')).toHaveLength(1);
+    expect(doc.querySelector('#run-start')!.textContent).toBe('Start');
+    const more = doc.querySelector<HTMLButtonElement>('button[data-more]')!;
+    expect([more.textContent, more.getAttribute('aria-expanded')]).toEqual(['More', 'false']);
+    const html = mapHtml(MAP, start(), book, undefined, false);
+    expect(html.indexOf('run-intro')).toBeLessThan(html.indexOf('id="run-start"'));
+    expect(html.indexOf('id="run-start"')).toBeLessThan(html.indexOf('data-flask'));
+    expect(html.indexOf('data-flask')).toBeLessThan(html.indexOf('run-graph'));
+  });
+
+  it('keeps the commander, ascension, runes, blueprints, unlocks and the book behind More, and the flask and the map out', () => {
+    const doc = screen(start(), false);
+    for (const detail of DETAILS) expect(doc.querySelector(detail), detail).toBeNull();
+    for (const text of ['Special marbles in rewards', 'Runes to find', 'Blueprints to bank', 'Starts with']) expect(doc.body.textContent).not.toContain(text);
+    expect(doc.querySelector('button[data-flask]')).not.toBeNull();
+    expect(doc.querySelectorAll('button[data-node]').length).toBeGreaterThan(5);
+    expect(doc.querySelector('.run-picks')!.textContent).toBe('Commander: The Captain'); // the choices the Start takes
+  });
+
+  it('shows all of it once More is open, and the button says so', () => {
+    const doc = screen(start(), true);
+    const more = doc.querySelector<HTMLButtonElement>('button[data-more]')!;
+    expect([more.textContent, more.getAttribute('aria-expanded')]).toEqual(['Less', 'true']);
+    for (const detail of DETAILS) expect(doc.querySelector(detail), detail).not.toBeNull();
+    expect(doc.querySelectorAll('button[data-ascension]')).toHaveLength(MAX_ASCENSION + 1);
+    for (const text of ['Special marbles in rewards', 'Runes to find', 'Blueprints to bank', 'Starts with']) expect(doc.body.textContent).toContain(text);
+    expect(doc.querySelector('.run-more')!.contains(doc.querySelector('.run-book'))).toBe(true);
+    expect(doc.querySelector('.run-more')!.contains(doc.querySelector('button[data-flask]'))).toBe(false);
+    expect(doc.querySelector('#run-start')).not.toBeNull(); // Start stays in reach
+  });
+
+  it('names the choices a run has already, the level too, and nothing for a daily run, which has no commander', () => {
+    expect(screen(chooseAscension(chooseCommander(newRun(1, 1, LEGACY_UNLOCKED, 3), 1), 2), false).querySelector('.run-picks')!.textContent).toBe('Commander: The Warden · Ascension 2');
+    expect(screen(newRun(1, 0, LEGACY_UNLOCKED), false).querySelector('.run-picks')).toBeNull();
+    expect(screen(dailyRun('2026-11-06', 5), false).querySelector('.run-picks')).toBeNull();
+  });
+
+  it('is the start only: a run on, or over, has no intro, no Start and no More', () => {
+    for (const run of [at(start(), 0), { ...start(), end: 'lost' as const }]) {
+      const doc = screen(run, false);
+      for (const selector of ['.run-intro', '#run-start', 'button[data-more]', '.run-more']) expect(doc.querySelector(selector), selector).toBeNull();
+    }
+  });
+});

@@ -146,7 +146,8 @@ describe('the scripted fight', () => {
     expect(document.body.dataset.hub).toBe('mess 0,0');
     const goal = document.querySelector('#hub-rail li[data-goal]')!;
     expect(goal.getAttribute('data-deck')).toBe('mess');
-    expect(goal.textContent).toContain('The Echo waits · next goal');
+    expect(goal.textContent).toContain('The Echo waits');
+    expect(document.querySelector('#hub-rail p.goal')!.textContent).toBe('Next goal: Beat The Echo on the Mess deck.');
     expect(document.querySelectorAll('#hub-labels .hub-label[data-goal]')).toHaveLength(1);
     expect(document.querySelector('#hub-labels [data-goal]')!.getAttribute('data-kind')).toBe('boss');
   });
@@ -185,8 +186,14 @@ describe('the scripted fight', () => {
     expect(game.hook<number[] | null>('__hint')).toBeNull(); // the shown push was for the other position
   });
 
-  it('shows no hub goal to a player who beat a boss', async () => {
-    await boot('/', { storage: { 'ab-alone.progress': JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0], beaten: ['echo'] }) } });
-    expect(document.querySelector('[data-goal]')).toBeNull();
+  it('shows the next goal of the path to a player who beat a boss: a first run, then the next deck\'s boss (#1524)', async () => {
+    const progress = JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0], beaten: ['echo'] });
+    await boot('/', { storage: { 'ab-alone.progress': progress } });
+    expect(document.querySelector('#hub-rail p.goal')!.textContent).toBe('Next goal: Start a rogue-lite run on the Cargo deck.');
+    expect(document.querySelector('#hub-rail li[data-goal]')!.getAttribute('data-deck')).toBe('cargo');
+    expect(document.querySelector('#hub-labels [data-goal]')!.getAttribute('data-kind')).toBe('run');
+    await boot('/', { storage: { 'ab-alone.progress': progress, 'ab-alone.roguelite': '1' } }); // a run was played
+    expect(document.querySelector('#hub-rail p.goal')!.textContent).toBe('Next goal: Beat The Hull on the Cargo deck.');
+    expect(document.querySelector('#hub-labels [data-goal]')!.getAttribute('data-kind')).toBe('boss');
   });
 });

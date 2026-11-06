@@ -2,6 +2,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import * as THREE from 'three';
 import type { Axial } from './board';
+import { ECHO_STEPS } from './goalcard';
 import { dailyFor, dailyTitle, utcDay } from './daily';
 import { CONVERTED_AT, EXPLODED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
@@ -136,9 +137,10 @@ describe('main.ts boss fights', () => {
     expect(byId('boss-bar').querySelector('.name')!.textContent).toBe('The Echo'); // #1038: the boss bar names the boss, the plate does not
     expect([...boss.querySelectorAll('.notch')].map((n) => n.textContent)).toEqual(['P1', 'P2']);
     expect(boss.querySelector('.notch.active')!.textContent).toBe('P1');
-    expect(boss.querySelector('.goal')!.textContent).toBe(
-      'Goal: Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.',
-    );
+    // The goal card of #1524: two short steps and a picture, in place of the one long line.
+    expect([...boss.querySelectorAll('.goal.goal-card ol.goal-steps li')].map((li) => li.textContent)).toEqual([...ECHO_STEPS]);
+    expect(boss.querySelector('.goal.goal-card svg')).not.toBeNull();
+    expect(boss.textContent).not.toContain('Goal: ');
     expect(boss.querySelector('.result')).toBeNull();
     expect(boss.querySelector('.tell')).toBeNull(); // The Echo draws no tell on the board
     expect(game.turn()).toBe('White to move'); // the player wears the glass, White
@@ -203,7 +205,8 @@ describe('main.ts boss fights', () => {
     goal.click();
     expect(goal.getAttribute('aria-expanded')).toBe('true');
     expect(byId('goal-sheet').hidden).toBe(false);
-    expect(byId('goal-sheet').textContent).toMatch(/^Every move is mirrored/);
+    expect([...byId('goal-sheet').querySelectorAll('ol.goal-steps li')].map((li) => li.textContent)).toEqual([...ECHO_STEPS]); // the card, with its picture (#1524)
+    expect(byId('goal-sheet').querySelector('svg')).not.toBeNull();
     expect(hudShows()).toBe(false); // the sheet holds the goal, the HUD does not repeat it
     goal.click();
     expect(goal.getAttribute('aria-expanded')).toBe('false');
@@ -214,6 +217,9 @@ describe('main.ts boss fights', () => {
     play(game, forward(game));
     expect(byId('goal-sheet').hidden).toBe(true);
     expect(hudShows()).toBe(false);
+    goal.click(); // a boss with no card keeps the line of its goal, as text (#1524)
+    expect(byId('goal-sheet').querySelector('.goal-steps')).toBeNull();
+    expect(byId('goal-sheet').textContent).toMatch(/^One cell cracks/);
   });
 
   it('Retry restarts the same boss with the same seed', async () => {

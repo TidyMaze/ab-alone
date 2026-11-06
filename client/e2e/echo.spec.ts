@@ -41,3 +41,55 @@ test('The Echo offers a free move: its marble ringed, a diamond on the selected 
   await expect(body).toHaveAttribute('data-echo-free', '0');
   await expect(tell).toHaveCount(0);
 });
+
+// The goal card (#1524, docs/specs/ui.md section 4.8): two short steps and a picture of marbles, in the HUD before the first move and in the Goal
+// sheet after it, in place of the one long line. The card is inside the window and never covers the boss bar.
+for (const [name, viewport, touch] of [
+  ['a desktop window, 960x540', { width: 960, height: 540 }, false],
+  ['a phone held upright, 390x844', { width: 390, height: 844 }, true],
+] as const) {
+  test.describe(`the goal card, ${name}`, () => {
+    test.use({ viewport, isMobile: touch, hasTouch: touch });
+
+    test('shows two steps and a picture in the HUD, then in the Goal sheet after the first move', async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('./?bot=off');
+      await page.locator('canvas').waitFor();
+      await openModes(page);
+      await page.getByRole('button', { name: 'Boss fight' }).click();
+      await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
+      await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
+      const card = page.locator('#hud .boss .goal-card');
+      await expect(card.locator('ol.goal-steps li')).toHaveText([
+        'Push 6 Black marbles off the edge to win. Lose 6, or draw, and you lose.',
+        'Moves are mirrored for free, both ways. Take the ringed mirror of its move, then play your own.',
+      ]);
+      await expect(page.locator('#hud')).not.toContainText('Every move is mirrored for free for the other side');
+      const { width, height } = page.viewportSize()!;
+      const inside = async (selector: string) => {
+        const box = (await page.locator(selector).boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        expect(box.y + box.height).toBeLessThanOrEqual(height);
+        return box;
+      };
+      const picture = await inside('#hud .boss .goal-card svg');
+      expect(picture.width).toBeGreaterThan(60);
+      expect(picture.height).toBeGreaterThan(25);
+      await inside('#hud');
+      const plate = (await page.locator('#hud').boundingBox())!;
+      const bar = (await page.locator('#boss-bar').boundingBox())!;
+      expect(plate.x + plate.width <= bar.x || bar.x + bar.width <= plate.x || plate.y + plate.height <= bar.y, 'the plate covers the boss bar').toBe(true);
+      await shot(page, { path: `test-results/echo-card-hud-${touch ? 'phone' : 'desktop'}.png` });
+
+      for (const [q, r] of [[0, 2], [0, 1], [0, -1], [1, -1]] as const) await click(page, q, r);
+      await expect(page.locator('body')).toHaveAttribute('data-echo-free', '1');
+      await expect(page.locator('#hud .boss .goal-card')).toHaveCount(0); // the goal is shown once: now in the sheet
+      await page.locator('#boss-goal').click();
+      await expect(page.locator('#goal-sheet ol.goal-steps li')).toHaveCount(2);
+      await inside('#goal-sheet svg');
+      await shot(page, { path: `test-results/echo-card-sheet-${touch ? 'phone' : 'desktop'}.png` });
+    });
+  });
+}

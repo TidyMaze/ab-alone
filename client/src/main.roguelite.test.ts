@@ -18,6 +18,11 @@ const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.ge
 const map = (): HTMLElement => byId('run-map');
 const line = (): string => map().querySelector('.run-line')!.textContent!;
 const open = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-node]')].filter((b) => !b.disabled);
+/** Opens More on the start screen, where the commanders, the ascension levels and the book are (#1524), unless it is open. */
+const openMore = (): void => {
+  const more = map().querySelector<HTMLButtonElement>('button[data-more]')!;
+  if (more.getAttribute('aria-expanded') !== 'true') more.click();
+};
 async function startRun(url: string, indexedDB = new IDBFactory()): Promise<Game> {
   const game = await boot(url, { indexedDB });
   game.openModes();
@@ -672,6 +677,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     localStorage.setItem('ab-alone.roguelite', '1'); // an act won in an earlier run
     game.openModes();
     byId('roguelite').click();
+    openMore();
     expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
     expect(armies().map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false']); // the Captain, with his Gyroscope
     expect(bar()).toEqual([expect.stringContaining('Gyroscope')]);
@@ -1165,6 +1171,7 @@ describe('main.ts, the ascension levels of a run (#1465)', () => {
     localStorage.setItem('ab-alone.roguelite.ascension', '7'); // levels 1 to 7 unlocked
     game.openModes();
     byId('roguelite').click();
+    openMore();
     expect(levels().map((b) => b.disabled)).toEqual([false, false, false, false, false, false, false, false, true, true, true]);
     expect(levels()[0]!.getAttribute('aria-pressed')).toBe('true');
     levels()[6]!.click(); // level 6 starts with 12 marbles
@@ -1223,6 +1230,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
 
   it('the start screen offers the daily run, the run history and the compendium; the first pick takes them away', async () => {
     const game = await startRun('?bot=off');
+    openMore();
     expect(dailyButton().textContent).toBe(`Daily run ${today()}`);
     expect(dailyButton().disabled).toBe(false);
     expect(bookButton('history').textContent).toBe('Run history');
@@ -1236,8 +1244,10 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     const { dailySeed } = await import('./daily');
     const indexedDB = new IDBFactory();
     const game = await startRun('?bot=off', indexedDB);
+    openMore();
     dailyButton().click();
     expect(line()).toBe(`Daily run ${today()} · army 14 marbles · pick a fight`);
+    openMore(); // a new run starts with More shut
     expect(map().querySelectorAll('button[data-commander]')).toHaveLength(4);
     expect([...map().querySelectorAll<HTMLButtonElement>('button[data-commander]')].every((b) => !b.disabled)).toBe(true); // everything unlocked, for everyone
     expect(dailyButton().textContent).toBe(`Daily run ${today()} · tried today, back tomorrow`); // one try a day
@@ -1259,6 +1269,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     expect(map().querySelector('.run-score')!.textContent).toBe('Score: 180 (acts 1 × 100, elites 2 × 25, marbles 3 × 10)');
     expect(JSON.parse(localStorage.getItem('ab-alone.roguelite.daily')!)).toEqual({ day: today(), score: 180 });
     byId('run-new').click();
+    openMore();
     expect(dailyButton().textContent).toBe(`Daily run ${today()} · score 180, back tomorrow`);
     expect(dailyButton().disabled).toBe(true);
     bookButton('history').click();
@@ -1276,6 +1287,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     await game.hook('__run', lostRun()); // shown again: not twice
     await game.hook('__run', lostRun({ seed: 4, path: [0], army: 3 }));
     byId('run-new').click();
+    openMore();
     bookButton('history').click();
     expect([...map().querySelectorAll('li')].map((li) => li.textContent)).toEqual(['No commander · lost · score 30', 'No commander · lost · score 180']);
   });
@@ -1285,6 +1297,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     await game.hook('__run', { ...plainRun(3, 0), relics: [Relic.Jammer], path: [0] });
     game.openModes();
     byId('roguelite').click();
+    openMore();
     bookButton('compendium').click();
     expect(map().querySelector('.run-line')!.textContent).toMatch(/^Compendium · 2 of \d+ seen$/);
     const seen = [...map().querySelectorAll('li.seen')].map((li) => li.textContent);
@@ -1499,5 +1512,60 @@ describe('main.ts, an act boss fight carries the army build (#1494)', () => {
     }
     await game.settle();
     expect(document.body.dataset.run).toBe('lost');
+  });
+});
+
+// The start screen (#1524, docs/specs/roguelite.md section 29): a Start button takes the first fight, and More holds the choices.
+describe('main.ts, the start screen of a run (#1524)', () => {
+  it('Start takes the first fight of the map with the choices as they stand, the map stays one pick away', async () => {
+    const game = await startRun('?nodes=50&bot=off');
+    expect(byId('run-start').textContent).toBe('Start');
+    expect(map().querySelector('.run-picks')!.textContent).toBe('Commander: The Captain');
+    byId('run-start').click();
+    expect(map().hidden).toBe(true);
+    expect(document.body.dataset.run).toBe('fight');
+    expect(game.hud()).toContain('Rogue-lite run · act 1 fight');
+    expect(game.hud()).toContain('army 14 marbles');
+  });
+
+  it('More opens the choices and keeps them open through a pick, the book and its Back; Less folds them; a new run starts shut', async () => {
+    const game = await startRun('?bot=off');
+    const moreButton = (): HTMLButtonElement => map().querySelector<HTMLButtonElement>('button[data-more]')!;
+    expect(moreButton().getAttribute('aria-expanded')).toBe('false');
+    expect(map().querySelector('button[data-commander]')).toBeNull();
+    moreButton().click();
+    expect(moreButton().getAttribute('aria-expanded')).toBe('true');
+    expect(map().querySelectorAll('button[data-commander]')).toHaveLength(4);
+    map().querySelector<HTMLButtonElement>('button[data-commander="0"]')!.click();
+    expect(moreButton().getAttribute('aria-expanded')).toBe('true'); // a pick of a commander does not fold it
+    map().querySelector<HTMLButtonElement>('button[data-book="history"]')!.click();
+    map().querySelector<HTMLButtonElement>('button[data-book="map"]')!.click();
+    expect(moreButton().getAttribute('aria-expanded')).toBe('true');
+    moreButton().click();
+    expect(map().querySelector('button[data-commander]')).toBeNull();
+    moreButton().click();
+    await game.hook('__run', { ...plainRun(3, 0), army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
+    byId('run-new').click();
+    expect(moreButton().getAttribute('aria-expanded')).toBe('false');
+    await game.settle();
+  });
+
+  it('keeps a saved start as it was: the commander and level picked, and Start takes them', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?nodes=50&bot=off', { indexedDB });
+    localStorage.setItem('ab-alone.roguelite', '1');
+    localStorage.setItem('ab-alone.roguelite.ascension', '2');
+    game.openModes();
+    byId('roguelite').click();
+    openMore();
+    map().querySelector<HTMLButtonElement>('button[data-commander="1"]')!.click();
+    map().querySelector<HTMLButtonElement>('button[data-ascension="2"]')!.click();
+    await game.settle();
+    await boot('?nodes=50&bot=off', { indexedDB });
+    expect(map().querySelector('.run-picks')!.textContent).toBe('Commander: The Warden · Ascension 2');
+    expect(map().querySelector('button[data-commander]')).toBeNull(); // More is shut after a reload
+    byId('run-start').click();
+    expect(document.body.dataset.run).toBe('place'); // the Warden's Anchors wait for their cells
+    expect(game.hud()).toContain('ascension 2');
   });
 });

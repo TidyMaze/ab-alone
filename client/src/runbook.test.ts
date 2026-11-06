@@ -8,6 +8,7 @@ import {
   finished,
   historyHtml,
   MAX_HISTORY,
+  ranRun,
   readDaily,
   readHistory,
   readSeen,
@@ -210,5 +211,19 @@ describe('the compendium', () => {
   it('draws nothing but silhouettes when nothing is seen', () => {
     const doc = parse(compendiumHtml({ relics: [], specials: [], tactics: [], events: [] }));
     expect(doc.querySelectorAll('li.seen')).toHaveLength(0);
+  });
+});
+
+describe('ranRun (#1524)', () => {
+  it('is false for a profile that never started a run, true once the compendium, the history or the acts won say it did', () => {
+    const store = memoryStorage();
+    expect(ranRun(store)).toBe(false);
+    expect(ranRun(throwing)).toBe(false);
+    recordSeen(store, fresh({ relics: [0] })); // the commander's relic is held from the first screen
+    expect(ranRun(store)).toBe(true);
+    const lost = memoryStorage();
+    recordFinished(lost, entry());
+    expect(ranRun(lost)).toBe(true);
+    expect(ranRun({ getItem: (k: string) => (k === 'ab-alone.roguelite' ? '2' : null), setItem: () => undefined })).toBe(true); // acts won in an older build
   });
 });
