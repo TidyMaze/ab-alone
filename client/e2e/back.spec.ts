@@ -71,9 +71,10 @@ test('Back from the Hub keeps the table game that was saved: its moves stay on t
   const plies = () => page.evaluate(() => (window as any).__plies() as number);
   await click(0, 2);
   await click(0, 1); // Black
+  await expect.poll(plies).toBe(1);
   await click(0, -2);
   await click(0, -1); // White
-  expect(await plies()).toBe(2);
+  await expect.poll(plies).toBe(2);
   const saved = () =>
     page.evaluate(
       () =>

@@ -639,8 +639,12 @@ game (`client/src/backnav.ts`, wired in `main.ts`).
   address never changes. Switching from one mode to another adds nothing.
 - **Back runs the existing way out.** The entry is popped and the page does what the screen's own control does: Back to the hub or
   Back to the Open world when the screen shows it (a won lair, a table from a hub door, a town's Hub or run), Flee in a wild fight,
-  else Hub in the mode menu (Battle royale, the rogue-lite run, Daily, Trainer, a fight in progress, the Open world), and New game
-  from the Hub. The entry is pushed again for the Hub, so a second Back reaches the table, and a third leaves the page.
+  else Hub in the mode menu (Battle royale, the rogue-lite run, Daily, Trainer, a fight in progress, the Open world), and from the Hub
+  the table. The entry is pushed again for the Hub, so a second Back reaches the table, and a third leaves the page.
+- **Back never destroys a game.** The table Back returns to is the saved local game, loaded as the boot resumes it (every move
+  saves it, so the game left is the game that comes back, a Stalker fight under its fog included), with its mode and the bot
+  answering if it was the side to move. A fresh table starts only when nothing is saved, which is a game with no move played; New game's
+  save clearing (and its two-press confirmation) is not involved. Back does not drop a saved game for a mode played meanwhile.
 - **No stale entry.** The mode's own button leaves the entry where it is. When Back pops it with the base screen already shown, the
   page goes on back at once: one press leaves, never two, and the mode is never entered again.
 - **No confirmation.** A fight in progress is not asked about; Back leaves it as the Hub entry of the mode menu does. A

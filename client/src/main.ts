@@ -7255,11 +7255,31 @@ function watchBack(): void {
   window.history.pushState({ ab: 1 }, '', location.href);
   holdsEntry = true;
 }
+/** Back from the Hub: the saved local game comes back, as the boot resumes it; a new table only when nothing is saved. Nothing is cleared. */
+async function backToTable(): Promise<void> {
+  const saved = await loadLocal();
+  if (!saved) return newGame();
+  if (saved.boss) return startBoss(saved.boss.id, saved.boss.seed, undefined, saved);
+  leaveHub();
+  applyDeck(deckOf('local'));
+  worker = saved.bot ? botWorker : null;
+  engine = saved.engine;
+  history.length = 0;
+  history.push(...saved.moves);
+  replaying = null;
+  selected = [];
+  thinking = false;
+  view = resetView(4);
+  applyView();
+  refresh();
+  analyse();
+  void botTurn(); // a game saved while the bot was thinking
+}
 const WAYS: Record<Exclude<Way, 'stay'>, () => void> = {
   back: () => backButton.click(),
   place: () => placeBack.click(),
   hub: () => shipButton.click(),
-  table: newGame,
+  table: () => void backToTable(),
   leave: () => window.history.back(), // the base screen: the browser goes on back
 };
 let seenHash = location.hash;

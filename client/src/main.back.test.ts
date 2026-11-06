@@ -112,6 +112,29 @@ describe('main.ts, browser Back (#1564)', () => {
     expect(game.hud()).toContain('White to move');
   });
 
+  it('Back from the Hub brings a saved Stalker fight back under its fog, and a saved game against the bot with its bot', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?nodes=50', { indexedDB });
+    game.openModes();
+    byId('boss-fight').click();
+    [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Stalker')!.click();
+    await playMove(game);
+    game.frame();
+    await pressBack(game); // the Hub
+    await pressBack(game); // the saved fight
+    await game.settle();
+    expect(hubOn()).toBe(false);
+    expect(game.hook<{ visible: Axial[] } | null>('__stalker')!.visible.length).toBeGreaterThan(0);
+    expect(game.hook('__plies')).toBeGreaterThan(0);
+    const bot = await boot('?nodes=50', { indexedDB: new IDBFactory() });
+    await playMove(bot);
+    await pick(bot, 'ship');
+    await pressBack(bot);
+    await bot.settle();
+    expect(hubOn()).toBe(false);
+    expect(bot.hook<number>('__plies')).toBeGreaterThan(0);
+  });
+
   it('a mode left by its own button to the Hub keeps its entry, and Back then goes to the table', async () => {
     const game = await boot('?bot=off');
     await bossPick(game);
