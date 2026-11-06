@@ -38,6 +38,7 @@ export function worldRules(): WorldRules {
     world_enemies: wasm.world_enemies,
     world_lairs: wasm.world_lairs,
     world_teleporters: wasm.world_teleporters,
+    world_pads: wasm.world_pads,
     world_path: wasm.world_path,
     world_enter: wasm.world_enter,
     world_flock: wasm.world_flock,

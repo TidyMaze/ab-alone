@@ -21,6 +21,8 @@ export interface WorldRules {
   world_lairs(seed: number): Int32Array;
   /** `q, r` pairs of the teleporters, the spawn's first (#1412). */
   world_teleporters(seed: number): Int32Array;
+  /** `q, r` pairs of the pad beside each tower, in the order of `world_lairs` (#1531): the teleporter a tower beaten through the world leaves. */
+  world_pads(seed: number): Int32Array;
   /** The walk from a cell to a cell: `q, r` pairs, the start left out, empty when there is none. */
   world_path(seed: number, fromQ: number, fromR: number, toQ: number, toR: number, blocked: Int32Array, broken: Int32Array): Int32Array;
   /** What the step from `(q, r)` to `(tq, tr)` does: 0 refused, 1 rolls, 2 breaks. `terrain` is the code of the cell, -1 off the world. */
@@ -206,7 +208,9 @@ export class OpenWorld {
   private readonly chunks = new Map<string, Uint8Array>();
   private readonly groups = new Map<string, Cell[]>();
   private lairCells: Cell[] = [];
-  private teleporterCells: Cell[] = [];
+  /** The teleporters the seed places, and the pad beside each tower by number (#1531): the network is the first plus the pads of the lairs beaten. */
+  private seedTeleporters: Cell[] = [];
+  private padCells: Cell[] = [];
   /** The lair the hero last stepped onto, its boss and the session's game then: a fight of that boss won since beats the lair. */
   private entered: { lair: number; boss: string; before: string | null } | null = null;
 
@@ -236,7 +240,8 @@ export class OpenWorld {
     }
     this.play.discovered.reveal(this.play.hero); // a save from before the discovery: the cells round the hero, as the client
     this.lairCells = pairs(this.rules.world_lairs(this.play.seed));
-    this.teleporterCells = pairs(this.rules.world_teleporters(this.play.seed));
+    this.seedTeleporters = pairs(this.rules.world_teleporters(this.play.seed));
+    this.padCells = pairs(this.rules.world_pads(this.play.seed));
     return ok(this.view(RADIUS));
   }
 
@@ -300,12 +305,18 @@ export class OpenWorld {
     if (!play) return this.none();
     this.back();
     const free = ([q, r]: Readonly<Cell>): boolean => OPEN.includes(this.terrain(q, r)!) && !this.occupied([q, r]) && !this.lairCells.some((l) => same(l, [q, r]));
-    const moved = teleport(this.teleporterCells, (cq, cr) => play.discovered.has(cq, cr), play.hero, [q, r], play.troop.length, free);
+    const moved = teleport(this.network(), (cq, cr) => play.discovered.has(cq, cr), play.hero, [q, r], play.troop.length, free);
     if ('refused' in moved) return fail('blocked', moved.refused);
     play.hero = [...moved.hero];
     play.troop = moved.troop.map(([q, r]): Cell => [q, r]);
     play.discovered.reveal(play.hero);
     return ok(this.view(RADIUS));
+  }
+
+  /** The teleporters of the world, as the client's mode has them: the seed's, then the pad of each lair beaten through the world (#1531). */
+  private network(): Cell[] {
+    const pads = this.play!.lairs.flatMap((lair) => (this.padCells[lair] ? [this.padCells[lair]!] : []));
+    return [...this.seedTeleporters, ...pads];
   }
 
   /** The boss of lair `k`: boss `k` of the roster, round it, as the client's (client/src/main.ts). */
@@ -443,7 +454,7 @@ export class OpenWorld {
       discovered: discovered.count,
       enemies: enemies.map(text),
       lairs: this.lairCells.map((cell, k) => ({ boss: this.bossOf(k), cell: text(cell), distance: hex(hero, cell), beaten: lairs.includes(k) })),
-      teleporters: this.teleporterCells.filter(([q, r]) => discovered.has(q, r)).map((cell) => ({ cell: text(cell), distance: hex(hero, cell) })),
+      teleporters: this.network().filter(([q, r]) => discovered.has(q, r)).map((cell) => ({ cell: text(cell), distance: hex(hero, cell) })),
       // The client's ending (`OpenWorldMode.showTally`): every lair beaten, counted as the client counts them.
       ...(this.lairCells.length > 0 && lairs.length >= this.lairCells.length ? { ending: endingLine(CREW) } : {}),
       window: { radius: size, rows },
