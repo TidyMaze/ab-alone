@@ -69,6 +69,19 @@ describe('main.ts, browser Back (#1564)', () => {
     expect(game.hud()).toContain('Hub');
   });
 
+  it('Back from the table of a page that began on the Hub goes to the Hub: the plain table has no exit', async () => {
+    const game = await boot('/'); // no query: a new player lands on the Hub, the base screen
+    await game.settle();
+    expect(hubOn()).toBe(true);
+    byId('new-game').click();
+    await game.settle();
+    game.frame();
+    expect(hubOn()).toBe(false);
+    expect(byId('exit').hidden).toBe(true);
+    await pressBack(game);
+    expect(hubOn()).toBe(true);
+  });
+
   it('Back from the Hub goes to the table, and a Back on the table leaves the page', async () => {
     const game = await boot('?bot=off');
     await pick(game, 'ship');

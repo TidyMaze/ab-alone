@@ -89,6 +89,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     expect(byId('exit').hidden).toBe(false);
     byId('exit').click();
     await settle();
+    expect(game.hook<number>('__plies')).toBe(0); // the table beneath the world is the saved game again, not the lost fight's board (#1517)
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(data().openworldLairsBeaten).toBe('');
     expect(byId('openworld-medals').textContent).toBe(`Medals 0 / ${(await import('abalone-wasm')).boss_ids().length}`);

@@ -31,10 +31,10 @@ describe('backWay: what Back does on the screen it left', () => {
   it('takes the Hub to the table', () => {
     expect(way('hub', 'table')).toBe('table');
   });
-  it('goes where the exit of the dock goes (#1517): the Hub, or the Open world', () => {
-    expect(way('mode', 'table', 'hub')).toBe('hub');
-    expect(way('mode', 'table', 'world')).toBe('world');
-    expect(way('hub', 'table', 'world')).toBe('world');
+  it('takes the exit of the dock when the screen has one (#1517): it leads to the Hub or the Open world', () => {
+    expect(way('mode', 'table', 'hub')).toBe('exit');
+    expect(way('mode', 'table', 'world')).toBe('exit');
+    expect(way('hub', 'table', 'world')).toBe('exit');
   });
   it('lets the page go when the base screen is shown: the entry was left behind by the mode\'s own button', () => {
     expect(way('table', 'table')).toBe('leave');

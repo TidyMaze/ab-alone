@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes, lowTierOnCi } from './modes';
+import { loseByRepetition } from './fight-end';
 import { shot } from './shot';
 
 lowTierOnCi();
@@ -15,6 +16,18 @@ const pick = async (page: Page, id: string): Promise<void> => {
   await page.locator(id).click();
 };
 const hubShown = (page: Page) => expect(body(page)).toHaveAttribute('data-hub', /.+/);
+/** The marble of the Hub stands beside the hot-seat table, so the table is one roll away. */
+const besideTheTable = (page: Page) => page.addInitScript(() => localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell: [-1, 0], beaten: [] })));
+/** From the Hub, rolls onto the hot-seat table: a game with the exit, New game, Hint and the rest in the dock. */
+const rollOntoTable = async (page: Page): Promise<void> => {
+  await page.evaluate(() => (window as any).__click(-1, -1));
+  await expect(body(page)).not.toHaveAttribute('data-hub', /.*/);
+};
+const hubTable = async (page: Page): Promise<void> => {
+  await pick(page, '#ship');
+  await hubShown(page);
+  await rollOntoTable(page);
+};
 
 /** The first slot is the exit, named `label`. */
 async function exitIs(page: Page, label: string): Promise<void> {
@@ -28,6 +41,30 @@ async function cellOf(page: Page, kind: 'tower' | 'town' | 'dungeon'): Promise<[
   const listed = (await body(page).getAttribute(attr))!.split(' ');
   const cell = kind === 'tower' ? listed[0]! : listed.find((p) => p.startsWith(`${kind}:`))!.slice(kind.length + 1);
   return cell.split(',').map(Number) as [number, number];
+}
+
+/** The dock holds the exit first, and nothing in it clips, shrinks under 44 px or leaves the dock or the window. Gives the buttons shown. */
+async function dockFits(page: Page): Promise<string[]> {
+  await exitIs(page, 'Hub');
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  const dock = await page.evaluate(() => {
+    const frame = document.getElementById('dock')!.getBoundingClientRect();
+    const buttons = [...document.querySelectorAll<HTMLElement>('#dock > button')].filter((b) => b.getClientRects().length > 0);
+    return {
+      inWindow: frame.left >= 0 && frame.top >= 0 && frame.right <= innerWidth && frame.bottom <= innerHeight,
+      order: buttons.map((b) => b.id),
+      small: buttons.filter((b) => b.getBoundingClientRect().width < 43.5 || b.getBoundingClientRect().height < 43.5).map((b) => b.id),
+      clipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.id),
+      outside: buttons.filter((b) => { const r = b.getBoundingClientRect(); return r.right > frame.right + 0.5 || r.left < frame.left - 0.5 || r.bottom > frame.bottom + 0.5 || r.top < frame.top - 0.5; }).map((b) => b.id),
+    };
+  });
+  expect(dock.order[0]).toBe('exit');
+  expect(dock.order).toContain('modes');
+  expect(dock.inWindow, `dock in window: ${dock.order}`).toBe(true);
+  expect(dock.small, `${dock.order}`).toEqual([]);
+  expect(dock.clipped, `${dock.order}`).toEqual([]);
+  expect(dock.outside, `${dock.order}`).toEqual([]);
+  return dock.order;
 }
 
 // The modes of the mode menu, from the plain table: each one's first slot is Hub, and a press lands on the Hub.
@@ -63,31 +100,43 @@ for (const [name, enter, shown] of MENU_MODES) {
 }
 
 test('a table of a Hub door is left by the first slot, and the Hub puts the marble back on the door, #1517', async ({ page }) => {
+  await besideTheTable(page);
   await page.goto('./?bot=off&net=hook');
   await pick(page, '#ship');
   await hubShown(page);
   await expect(firstSlot(page)).toHaveAttribute('id', 'new-game');
-  await page.evaluate(() => (window as any).__click(-1, -1)); // the hot-seat table, west of the spawn
-  await expect(body(page)).not.toHaveAttribute('data-hub', /.*/);
+  await rollOntoTable(page);
   await exitIs(page, 'Hub');
   await firstSlot(page).click();
-  await hubShown(page);
+  await expect(body(page)).toHaveAttribute('data-hub', 'mess -1,-1'); // the marble on the door
 });
 
-for (const [kind, shown] of [['town', 'data-hub'], ['dungeon', 'data-run'], ['tower', 'data-boss']] as const) {
-  test(`a ${kind} of the world is left by the first slot, labelled World, and the hero is on the entrance cell, #1517`, async ({ page }) => {
-    await page.goto('./?bot=off&openworld=7');
-    await expect(body(page)).toHaveAttribute('data-openworld-at', '0,0');
-    await exitIs(page, 'Hub'); // the world's own exit is in the same slot
-    const [q, r] = await cellOf(page, kind);
-    await page.evaluate(([q, r]) => (window as unknown as Hooks).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] }), [q!, r!]);
-    await page.keyboard.press('ArrowRight');
-    await expect(body(page)).not.toHaveAttribute('data-openworld', /.*/);
-    await expect(body(page)).toHaveAttribute(shown, /.+/);
-    await exitIs(page, 'World');
-    await firstSlot(page).click();
-    await expect(body(page)).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
-    await exitIs(page, 'Hub');
+const sizes = [
+  { name: 'phone', viewport: { width: 390, height: 844 }, touch: true },
+  { name: 'CI page', viewport: { width: 960, height: 540 }, touch: false },
+];
+for (const { name, viewport, touch } of sizes) {
+  test.describe(name, () => {
+    test.use({ viewport, isMobile: touch, hasTouch: touch });
+
+    for (const [kind, shown] of [['town', 'data-hub'], ['dungeon', 'data-run'], ['tower', 'data-boss']] as const) {
+      test(`a ${kind} of the world is left by the first slot, labelled World, and the hero is on the entrance cell, #1517`, async ({ page }) => {
+        await page.goto('./?bot=off&openworld=7');
+        await expect(body(page)).toHaveAttribute('data-openworld-at', '0,0');
+        await exitIs(page, 'Hub'); // the world's own exit is in the same slot
+        const [q, r] = await cellOf(page, kind);
+        await page.evaluate(([q, r]) => (window as unknown as Hooks).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] }), [q!, r!]);
+        await page.keyboard.press('ArrowRight');
+        await expect(body(page)).not.toHaveAttribute('data-openworld', /.*/);
+        await expect(body(page)).toHaveAttribute(shown, /.+/);
+        await exitIs(page, 'World');
+        await page.mouse.click(5, 5); // a press skips the transition of the place to its end (#1519)
+        await shot(page, { path: `test-results/door-${kind}-${viewport.width}.png` });
+        await firstSlot(page).click();
+        await expect(body(page)).toHaveAttribute('data-openworld-at', `${q! - 1},${r}`);
+        await exitIs(page, 'Hub');
+      });
+    }
   });
 }
 
@@ -110,32 +159,29 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 960, height: 540 }
     test.use({ viewport, isMobile: viewport.width < 600, hasTouch: viewport.width < 600 });
 
     const sideways = viewport.height < 400; // a phone held sideways: its column scrolls under 390 px, only the world is measured
-    for (const [name, enter] of (sideways ? [] : [MENU_MODES[4]!, MENU_MODES[3]!, MENU_MODES[2]!, MENU_MODES[0]!, MENU_MODES[5]!]) as typeof MENU_MODES) {
-      test(`the dock with the exit in ${name} fits the window, clipped by nothing, #1517`, async ({ page }) => {
+    const states: [(typeof MENU_MODES)[number], boolean][] = sideways ? [] : [[MENU_MODES[4]!, false], [MENU_MODES[4]!, true], [MENU_MODES[3]!, false], [MENU_MODES[2]!, false], [MENU_MODES[0]!, false], [['Hub door table', hubTable, hubTable], false]];
+    for (const [[name, enter], lose] of states) {
+      test(`the dock with the exit in ${name}${lose ? ' after a defeat' : ''} fits the window, clipped by nothing, #1517`, async ({ page }) => {
+        await besideTheTable(page);
         await page.goto('./?bot=off&net=hook');
         await enter(page);
-        await exitIs(page, 'Hub');
-        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-        const dock = await page.evaluate(() => {
-          const frame = document.getElementById('dock')!.getBoundingClientRect();
-          const buttons = [...document.querySelectorAll<HTMLElement>('#dock > button')].filter((b) => b.getClientRects().length > 0);
-          return {
-            inWindow: frame.left >= 0 && frame.top >= 0 && frame.right <= innerWidth && frame.bottom <= innerHeight,
-            order: buttons.map((b) => b.id),
-            small: buttons.filter((b) => b.getBoundingClientRect().width < 43.5 || b.getBoundingClientRect().height < 43.5).map((b) => b.id),
-            clipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.id),
-            outside: buttons.filter((b) => { const r = b.getBoundingClientRect(); return r.right > frame.right + 0.5 || r.left < frame.left - 0.5 || r.bottom > frame.bottom + 0.5; }).map((b) => b.id),
-          };
-        });
-        expect(dock.order[0]).toBe('exit');
-        expect(dock.order).toContain('modes');
-        expect(dock.inWindow, `dock in window: ${dock.order}`).toBe(true);
-        expect(dock.small).toEqual([]);
-        expect(dock.clipped).toEqual([]);
-        expect(dock.outside).toEqual([]);
-        await shot(page, { path: `test-results/door-dock-${name.replaceAll(' ', '-')}-${viewport.width}.png` });
+        if (lose) await loseByRepetition(page); // the first boss of the list is The Echo: Retry, Goal and the rest join the exit
+        await dockFits(page);
+        await shot(page, { path: `test-results/door-dock-${name.replaceAll(' ', '-')}${lose ? '-lost' : ''}-${viewport.width}.png` });
       });
     }
+
+    // The column of a phone held sideways scrolls from six buttons on (thumb-dock.md section 2): the seventh is measured where it fits.
+    if (!sideways) test('the dock with the exit holds the seventh button, Auto-play, at the table of the bot, #1517', async ({ page }) => {
+      await besideTheTable(page);
+      await page.goto('./?net=hook'); // the bot plays: Auto-play joins
+      await pick(page, '#ship');
+      await hubShown(page);
+      await page.evaluate(() => (window as any).__click(-2, 0)); // the bot's table
+      await expect(body(page)).not.toHaveAttribute('data-hub', /.*/);
+      expect(await dockFits(page)).toContain('auto-play');
+      await shot(page, { path: `test-results/door-dock-bot-table-${viewport.width}.png` });
+    });
 
     test('the dock in the world is the exit alone, clear of the stick, the plate and the map button, #1517', async ({ page }) => {
       await page.goto('./?bot=off&openworld=7');

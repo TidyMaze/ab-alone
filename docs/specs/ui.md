@@ -91,7 +91,7 @@ leaves the screen but not the page, so a screen reader still hears the turn and 
 HUD buttons, in groups (#839). The column holds the buttons grouped by what they do, in this order, each group a row
 that wraps, so its buttons share a row when they fit and a group with no visible button takes no room: (1) the
 settings cog; (2) the view, Reset view (Free Cam is the Free camera item of the settings menu, #938); (3) the game, New game, Rematch, Goal, Retry,
-Hold, Start, Invite and Back to the hub (the controls of the running mode, only the ones the mode shows); the daily
+Hold, Start and Invite, led by the exit (Hub or World, section 4.10) (the controls of the running mode, only the ones the mode shows); the daily
 result card when a daily fight ends; (4) the tools, Hint, Replay and Auto-play; (5) Game modes, last of the column, its
 menu under it; (6) the invite link of an open room: its caption, then the link with its Copy button. Held upright the
 groups give their buttons to the rows of the column, in the same order. Every button of a group has the one button
@@ -140,7 +140,7 @@ button. Held upright, the menu starts a new row under the buttons, its items sid
 of its own under Boss fight or Fight together that scrolls sideways, so a new boss adds no row over the board (room for
 12 bosses and more on a phone 360 px wide, #666). In a desktop window (wider than tall, over 1100 px wide, a mouse) the items of the mode menu sit side by side when they fit, and an open boss list takes a row of its own as wide as the column with two bosses a row, each row compact, so 12 bosses and more with Daily challenge fit a 1280x720 or 1280x800 window without a scroll (#653, #699). One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
 and once a mode starts (a boss picked, Daily challenge, Play online, Hub, Battle royale). On a phone each item is at
-least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the hub, Hold, the invite link)
+least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, the exit, Hold, the invite link)
 stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Hub (Mess deck, #602), after the first run of a fresh profile (section 4.7). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
 
 The boss list follows the Hub's lifts (#1527): a boss above the player's progress is locked, dimmed with `Beat The Hull first` under its
@@ -651,10 +651,9 @@ game (`client/src/backnav.ts`, wired in `main.ts`).
 - **One entry.** The page notes the screen it started on (the table, or the Hub for a new player). While another screen is shown
   (a mode, the Hub, a table played from the Hub), it holds one history entry of its own, pushed once a frame when it has none. The
   address never changes. Switching from one mode to another adds nothing.
-- **Back runs the existing way out.** The entry is popped and the page does what the screen's own control does: Back to the hub or
-  Back to the Open world when the screen shows it (a won lair, a table from a hub door, a town's Hub or run), Flee in a wild fight,
-  else Hub in the mode menu (Battle royale, the rogue-lite run, Daily, Trainer, a fight in progress, the Open world), and from the Hub
-  the table. The entry is pushed again for the Hub, so a second Back reaches the table, and a third leaves the page.
+- **Back runs the existing way out.** The entry is popped and the page presses the exit of the dock (section 4.10) when the screen
+  has one, so Back lands where the control leads: the Hub, or the Open world for a lair, a wild fight (Flee), a town's Hub or run. A
+  screen with none goes to the Hub (the Hub of the mode menu), and from the Hub the table. `exitOf` (`exitslot.ts`) answers both. The entry is pushed again for the Hub, so a second Back reaches the table, and a third leaves the page.
 - **Back never destroys a game.** The table Back returns to is the saved local game, loaded as the boot resumes it (every move
   saves it, so the game left is the game that comes back, a Stalker fight under its fog included), with its mode and the bot
   answering if it was the side to move. A fresh table starts only when nothing is saved, which is a game with no move played; New game's
@@ -668,6 +667,42 @@ game (`client/src/backnav.ts`, wired in `main.ts`).
   does nothing else; leaving a room is the mode menu's Hub, as before. A `popstate` that comes with a change of the address hash
   (Chrome fires one when the link is written) is that entry's, never a Back from ours.
 - **Guard.** `client/src/main.back.test.ts` and `client/e2e/back.spec.ts` press Back from every mode of the README table and the Hub.
+
+### 4.10 One door grammar (#1517, Decision #1513)
+
+A mode is entered by a door and left by one control: the exit `#exit`, the **first slot of the dock** in every mode, the Open world on
+a phone and on a desktop included (the dock shows the exit alone there, bottom right, clear of the stick, the plate and the map button; the
+separate Hub button is gone). Its label names where it leads: **World** when the player came from the world, otherwise **Hub**; it returns the
+hero to the entrance used. It replaces the Hub button of the Open world, "Back to the hub" and "Back to the Open world" (once in the Lobby
+sheet). Esc keeps its shortcut of the world (it leaves the world to the page beneath, which the exit does not change); Browser Back
+(section 4.9) presses the exit, so both land in one place. The plain table and the Hub, the home of the game, have none: their first
+slot stays New game. A wild fight keeps Flee (F) in the first slot until it is over, as Flee leads to the same place, then World.
+
+| Screen | Enter | Exit, first slot | State |
+|---|---|---|---|
+| Plain table | Boot, New game | none: New game | Built |
+| Hub (the deck) | Boot of a new player; Hub of Modes | none: the home. Back goes to the table | Built |
+| A table, a boss, the Daily, the Rogue-lite run, the Trainer or the Open world of a Hub door | Roll onto the door | Hub, the marble on the door's cell | Built |
+| Battle royale, Rogue-lite run, Daily, Trainer, Boss fight, Open world of Modes | The Modes sheet | Hub | Built |
+| Open world | Modes, a Hub door, `#openworld` | Hub (the world saved) | Built |
+| Town (the Hub scene) | Roll onto a town | World, hero on the entrance | Built (its own stations: planned) |
+| Dungeon gate (the run) | Roll onto a gate | World, hero on the entrance | Built |
+| Tower (a lair fight) | Roll onto a lair | World, hero on the entrance, at any time | Built |
+| Wild fight | A marble touches the hero | Flee, then World | Built |
+| Online room (Play online, Fight together, Boss duel, Ranked, an invite link) | Modes, `#room=` | none: its Lobby sheet and the Hub of Modes | Waiting for the arena town |
+| Arena town, the other towns' stations, Quick game button, Console, Boss fight fast travel | | | Waiting (openworld.md section 13) |
+
+**The Modes menu does not shrink in this slice.** The arena town and the other tables are not built, so Play online, Fight together, Boss
+duel, Battle royale, Ranked, Leaderboard, Boss fight, Daily, Trainer and Rogue-lite run have no place in the world to move to: they stay
+in the menu until their rows above are built. The rows of the table that wait are the online room, the arena and the other towns, the
+Quick game button, the Console and the fast travel.
+
+The dock keeps New game, View, Hint, Replay and Modes clear of the exit: held upright, the gaps shrink from 8 px to what a 360 px
+window leaves, so seven buttons (the exit with Auto-play at a bot's table) fit; the buttons stay 44 px. Held sideways the column scrolls from six
+buttons on, as before (thumb-dock.md section 2).
+
+- **Tests.** `exitslot.test.ts` (where it leads), `main.back.test.ts` (Back lands there), `client/e2e/door-grammar.spec.ts` (every mode entered and left by the same first slot, the dock
+  at 390x844, 960x540 and 844x390).
 
 ## 5. Board framing
 

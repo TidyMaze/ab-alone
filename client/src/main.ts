@@ -36,6 +36,7 @@ import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
 import { backWay, needsEntry, type Screen, type Way } from './backnav';
+import { EXIT_LABEL, EXIT_NAME, exitOf, type Exit } from './exitslot';
 import { bossHtml, goalShown } from './bosshud';
 import { goalCardHtml } from './goalcard';
 import { drawBossBar } from './bossbar';
@@ -2740,9 +2741,30 @@ function syncBoardLook(): void {
   if (phase) document.body.dataset.fightBoard = phase;
   else delete document.body.dataset.fightBoard;
 }
-const backButton = document.getElementById('ship-back') as HTMLButtonElement;
+const exitButton = document.getElementById('exit') as HTMLButtonElement; // the dock's first slot in every mode: Hub or World, by where it leads (#1517)
 const wildFlee = document.getElementById('wild-flee') as HTMLButtonElement; // Flee, for the whole wild fight (#1511)
-const placeBack = document.getElementById('place-back') as HTMLButtonElement; // Back to the Open world, from the Hub or the run of a place (#1593)
+let exitReady = false; // the page is built: what the exit reads (the online room, the Open world) exists
+/** Where the exit of the screen shown leads (exitslot.ts); Browser Back goes to the same place. */
+function exitNow(): Exit {
+  return exitOf({
+    online: online !== null && roomOf === null, // a table of a Hub door keeps its way back to the Hub, online or not (#522)
+    world: openWorld.active,
+    wild: wildFrom !== null,
+    lair: lairFrom !== null,
+    place: placeFrom !== null && (hub !== null || run !== null),
+    mode: run !== null || trainer !== null || fight !== null || royale !== null || roomOf !== null,
+  });
+}
+/** Draws the exit from the screen shown: its label names where it leads. A wild fight keeps Flee in the first slot (it leads to the same place). */
+function syncExit(): void {
+  if (!exitReady) return;
+  const to = exitNow();
+  exitButton.hidden = !to || !wildFlee.hidden;
+  if (!to || exitButton.dataset.label === EXIT_LABEL[to]) return;
+  exitButton.dataset.label = EXIT_LABEL[to];
+  exitButton.textContent = EXIT_NAME[to];
+  exitButton.setAttribute('aria-label', EXIT_NAME[to]);
+}
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
 // (the rules e2e tests drive both sides by hand).
@@ -3750,10 +3772,8 @@ function showLore(lore: { id: string; title: string; body: string; stage: number
 }
 function drawHud(extra = ''): void {
   syncReplay();
-  backButton.hidden = !(roomOf || lairFrom || wildFrom) || engine.status() === 0; // once the game a hub room, a lair or a wild marble started is over (#522, #1170, #1511)
-  backButton.textContent = lairFrom || wildFrom ? 'Back to the Open world' : 'Back to the hub';
   wildFlee.hidden = !wildFrom || engine.status() !== 0; // Flee for the whole fight, not once it is over (#1511)
-  syncPlaceBack();
+  syncExit();
   if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
   if (hub || royale) showLore(undefined);
   if (hub) {
@@ -3874,7 +3894,7 @@ function drawHud(extra = ''): void {
         .join(' · ')
     : '';
   if (boss) {
-    if (boss.result() === 1) recordWin(store, fight!.id); // a boss win opens the lift onto the next deck (#520)
+    if (boss.result() === 1 && fight) recordWin(store, fight.id); // a boss win opens the lift onto the next deck (#520); a fight left by the exit of the dock is recorded already (#1517)
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
       bossHtml({
@@ -5701,9 +5721,6 @@ shipButton.addEventListener('click', () => {
   enterHub(loadProgress(store).at);
 });
 shipButton.disabled = false; // listener ready (#146)
-// The Open world's own Hub button (#1373): its dock is hidden and a phone has no Esc. Same path as the dock's Hub, which leaves
-// the world (saved, as Esc does) for the hub.
-document.getElementById('openworld-ship')!.addEventListener('click', () => shipButton.click());
 function enterHub(at: HubSpot): void {
   const from = placeFrom; // the Hub of a town keeps its way back to the world (#1593)
   leaveMode();
@@ -5802,6 +5819,7 @@ function enterRoom(at: HubSpot): void {
   else return enterModeRoom(door);
   roomOf = at;
   placeFrom = from;
+  syncExit(); // the table is started: its exit leads to the Hub (#1517)
 }
 // The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the hub: Hub in the mode
 // menu takes the player back from a run, the Trainer and the Open world, and Fight together opens the mode menu on its
@@ -5821,26 +5839,16 @@ function startLocal(bot: boolean): void {
   worker = bot ? botWorker : null;
   newGame();
 }
-/** Shows Back to the Open world while the Hub or the run of a town or a gate is on (#1593). */
-function syncPlaceBack(): void {
-  placeBack.hidden = !(placeFrom && (hub || run));
-}
-placeBack.addEventListener('click', () => {
-  const { seed, kind } = placeFrom!;
-  leaveMode(); // the Hub or the run is left
-  syncPlaceBack();
-  void openWorld.open(seed, innerWidth, innerHeight, true, kind); // the world as the place left it: the hero on the entrance (#1593)
-});
-backButton.addEventListener('click', () => {
+/** The exit of the dock (#1517): to the Open world, the hero on the entrance cell the mode was entered from (a lair, a wild marble, a town, a gate),
+ * or to the Hub, the saved world left as Esc leaves it. The Hub of a table's door keeps the door's cell. */
+exitButton.addEventListener('click', () => {
+  const to = exitNow();
+  if (to === 'hub') return roomOf ? enterHub(roomOf) : shipButton.click();
   if (wildFrom) return returnFromWild();
-  if (lairFrom) {
-    const { seed } = lairFrom;
-    lairFrom = null;
-    syncBoardLook();
-    void openWorld.open(seed, innerWidth, innerHeight, true, 'tower'); // the world as the lair left it: the hero on the entrance (#1170)
-    return;
-  }
-  enterHub(roomOf!);
+  const fromLair = lairFrom !== null;
+  const { seed, kind } = lairFrom ? { seed: lairFrom.seed, kind: 'tower' as const } : placeFrom!;
+  leaveMode(); // the fight, the Hub or the run is left
+  void openWorld.open(seed, innerWidth, innerHeight, true, kind).then(() => (fromLair ? restoreLocal() : undefined)); // the world as the place left it: the hero on the entrance (#1170, #1593); the table beneath is the saved game, not the fight's board
 });
 // One mode at a time (#1275, docs/specs/ui.md): every mode's start leaves the mode on first, the hub by its controller's
 // exit(), each other mode by its leave, then clears what no mode owns (modeswitch.ts). Nothing of a mode stays in the next.
@@ -6710,7 +6718,7 @@ const openWorld = new OpenWorldMode(
     // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
     (kind === 'town' ? shipButton : runButton).click();
     placeFrom = { seed, kind };
-    syncPlaceBack();
+    syncExit();
     if (kind === 'town') {
       storyEvent({ on: 'town' }); // the first town visited is stage 3 (#1586), before the line of this town is chosen
       hub!.bumped = townLine(index, storyStage(store)); // Tally's ledger line of this town on the plate, once its stage is reached (#1516)
@@ -6799,7 +6807,7 @@ async function publicWorldOnline(): Promise<boolean> {
 /** Opens the world of `seed`, online first when it is the public one and the page may (the opt-in is asked before anything is contacted). */
 async function enterWorld(seed: number, resume = true): Promise<void> {
   placeFrom = null; // the world is the player's place again (#1593)
-  syncPlaceBack();
+  syncExit();
   worldOnline = seed === PUBLIC_SEED && (await publicWorldOnline());
   return openWorld.open(seed, innerWidth, innerHeight, resume);
 }
@@ -7039,7 +7047,7 @@ function royaleHud(game: Royale): void {
   }
   holdButton.disabled = end !== null || !canOrder();
   royaleInviteButton.hidden = royaleNet !== null;
-  backButton.hidden = !(roomOf || lairFrom) || end === null;
+  syncExit();
 }
 // A press on one of the player's marbles selects it, a press on a target locks that move as the order and plays the
 // round (#611). Once the game is over a press does nothing.
@@ -7224,10 +7232,10 @@ hookHost.__arenaAt = (q: number, r: number) => {
 // Used by the browser checks to count each seat's glyphs drawn on the arena, in seat order (#558).
 hookHost.__seatGlyphs = () =>
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
-// The lobby sheet (#1044, docs/specs/thumb-dock.md section 1): Start, Invite, Back to the hub and the invite link sit above
+// The lobby sheet (#1044, docs/specs/thumb-dock.md section 1): Start, Invite and the invite link sit above
 // the dock. The Lobby control toggles it, and carries an accent while a lobby waits. It shows only with a control to show,
 // and one sheet at a time: Esc and a tap outside close it, and the focus goes back to Lobby.
-const lobbyControls = (): HTMLElement[] => [startButton, royaleInviteButton, backButton, inviteBox, inviteCopy];
+const lobbyControls = (): HTMLElement[] => [startButton, royaleInviteButton, inviteBox, inviteCopy];
 /** A lobby waits: the creator's Start shows, or the invite link shows while the other seat is waiting. */
 const inviteWaiting = (): boolean => !inviteBox.hidden && document.body.dataset.opponent === 'waiting';
 const lobbyWaiting = (): boolean => !startButton.hidden || (!inviteBox.hidden && document.body.dataset.opponent === 'waiting');
@@ -7293,6 +7301,9 @@ else analyse(); // the start position
 // hold one history entry, and Back runs the way out the screen has already: its Back button where it shows one (Flee in a wild fight), else
 // the Hub, or New game from the Hub. No confirmation is asked, a fight in progress included.
 const baseScreen: Screen = screenNow();
+exitReady = true;
+syncExit();
+new MutationObserver(syncExit).observe(document.body, { attributes: true }); // the Open world entered or left sets or clears body[data-openworld] (#1517)
 let holdsEntry = (window.history.state as { ab?: number } | null)?.ab === 1; // a reload keeps the entry it was made on
 function screenNow(): Screen {
   if (online) return 'room';
@@ -7325,8 +7336,7 @@ async function backToTable(): Promise<void> {
   void botTurn(); // a game saved while the bot was thinking
 }
 const WAYS: Record<Exclude<Way, 'stay'>, () => void> = {
-  back: () => backButton.click(),
-  place: () => placeBack.click(),
+  exit: () => exitButton.click(), // the Hub or the Open world, as the control leads
   hub: () => shipButton.click(),
   table: () => void backToTable(),
   leave: () => window.history.back(), // the base screen: the browser goes on back
@@ -7337,7 +7347,7 @@ addEventListener('popstate', (e) => {
   seenHash = location.hash;
   if (moved) return;
   holdsEntry = (e.state as { ab?: number } | null)?.ab === 1;
-  const way = backWay(screenNow(), baseScreen, { back: !backButton.hidden || wildFrom !== null, place: !placeBack.hidden }, holdsEntry);
+  const way = backWay(screenNow(), baseScreen, exitNow(), holdsEntry);
   if (way !== 'stay') WAYS[way]();
 });
 

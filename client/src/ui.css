@@ -177,11 +177,11 @@ body[data-pad] .tap-hint { display: none; }
 #mode-menu[hidden] { display: none; }
 #modes[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 600px), (pointer: coarse) { #mode-menu button { min-height: 2.75rem; } }
-#update, #reset-view, #invite-copy, #hint, #replay, #auto-play, #new-game, #modes, #play-online, #fight-together, #boss-duel, #ranked, #rematch, #boss-fight, #daily, #roguelite, #trainer, #trainer-next, #openworld, #ship, #boss-retry, #wild-flee, #place-back, #ship-back, #boss-goal, #leaderboard, #console-entry, #boss-list button, #coop-list button, #copy-diagnostics {
+#update, #reset-view, #invite-copy, #hint, #replay, #auto-play, #new-game, #modes, #play-online, #fight-together, #boss-duel, #ranked, #rematch, #boss-fight, #daily, #roguelite, #trainer, #trainer-next, #openworld, #ship, #boss-retry, #wild-flee, #exit, #boss-goal, #leaderboard, #console-entry, #boss-list button, #coop-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #reset-view:focus-visible, #invite-copy:focus-visible, #hint:focus-visible, #replay:focus-visible, #replay-bar button:focus-visible, #auto-play:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #boss-duel:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #roguelite:focus-visible, #trainer:focus-visible, #trainer-next:focus-visible, #openworld:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #wild-flee:focus-visible, #place-back:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #leaderboard:focus-visible, #console-entry:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#update:focus-visible, #reset-view:focus-visible, #invite-copy:focus-visible, #hint:focus-visible, #replay:focus-visible, #replay-bar button:focus-visible, #auto-play:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #boss-duel:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #roguelite:focus-visible, #trainer:focus-visible, #trainer-next:focus-visible, #openworld:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #wild-flee:focus-visible, #exit:focus-visible, #boss-goal:focus-visible, #leaderboard:focus-visible, #console-entry:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #boss-list, #coop-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
 #boss-list [aria-disabled='true'] { opacity: 0.75; cursor: not-allowed; }
 #boss-list .lock { display: block; font-size: 0.75em; font-weight: 700; line-height: 1.1; }
@@ -196,7 +196,7 @@ body[data-pad] .tap-hint { display: none; }
   #boss-list, #coop-list { display: grid; grid-template-columns: 1fr 1fr; flex: 1 0 100%; }
   #boss-list button, #coop-list button { padding-block: 0.125rem; }
 }
-#boss-list[hidden], #coop-list[hidden], #boss-retry[hidden], #wild-flee[hidden], #place-back[hidden], #ship-back[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #replay[hidden], #auto-play[hidden], #auto-reason[hidden], #new-game[hidden] { display: none; }
+#boss-list[hidden], #coop-list[hidden], #boss-retry[hidden], #wild-flee[hidden], #exit[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #replay[hidden], #auto-play[hidden], #auto-reason[hidden], #new-game[hidden] { display: none; }
 /* Goal (#248): open, it is lit like Hint; a phone-sized touch target on a small or touch screen. */
 #boss-goal[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 #boss-goal:disabled { cursor: default; }
@@ -939,15 +939,10 @@ body[data-openworld] #openworld-hud { display: block; }
 body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #openworld-chip:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
 #openworld-chip:active { border-color: var(--plate-accent); }
-/* The Hub button (#1373): the dock is hidden in the Open world and a phone has no Esc, so a touch screen gets a 44 px way out at the
-   bottom right, away from the stick (left half) and the HUD plate (bottom left), above the peers arrows (z-index 2 over their 1). */
 /* The minimap (#1410): top right, under the settings cog (16px from the top, 2.75rem high), over nothing else; the settings menu opens above it. The mode adds the canvas when a world opens and removes it when it is left. */
 #openworld-minimap { position: fixed; z-index: 0; top: calc(16px + 2.75rem + 0.5rem); right: 16px; width: 9rem; height: 9rem; pointer-events: none; zoom: var(--ui-scale); }
-#openworld-ship { display: none; position: fixed; right: 1rem; bottom: 1rem; z-index: 2; min-width: var(--target); min-height: var(--target); place-items: center; padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; zoom: var(--ui-scale); }
-@media (pointer: coarse) { body[data-openworld] #openworld-ship { display: grid; } }
-/* Held upright the plate spans the width: it stands above the button, not under it. */
-@media (pointer: coarse) and (orientation: portrait) { #openworld-hud { bottom: calc(1.5rem + var(--target)); } }
-#openworld-ship:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
+/* Held upright the plate spans the width: it stands above the dock's exit (62 px high, 16 px up), not under it (#1517). */
+@media (orientation: portrait) { #openworld-hud { bottom: 5.5rem; } }
 /* The map (#1411, openworldmap.ts): full screen over the world, its HUD and the minimap. The box takes the drag, the wheel and the pinch;
    its canvas ignores the pointer, as the touch stick takes a press on a canvas. It covers #chrome (z-index 1); the Map button under the
    minimap is out of #chrome, over the map, to close it. */
@@ -968,7 +963,6 @@ body[data-openworld] #openworld-log:not([hidden]) { display: block; animation: s
 #openworld-log p { margin: 0; font: 0.875rem/1.4 var(--ui); }
 #openworld-map-note { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); margin: 0; padding: 0.5rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1.3 var(--display); text-align: center; pointer-events: none; zoom: var(--ui-scale); }
 #openworld-map-note[hidden] { display: none; }
-#openworld-ship:active { border-color: var(--plate-accent); }
 /* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
 #openworld-hud p { margin: 0 0 0.5rem; }
 #openworld-hud code { font-size: 0.8125rem; }
@@ -1044,7 +1038,7 @@ body[data-openworld]::before { display: none; }
 #dock #new-game.confirm::after { content: 'Confirm'; }
 #dock > button:disabled { cursor: default; color: var(--muted); }
 #dock > button[aria-pressed='true'], #dock > button[aria-expanded='true'] { background: var(--active-fill); color: var(--active-ink); }
-#dock #rematch, #dock #boss-retry, #dock #wild-flee, #dock #place-back { box-shadow: inset 0 0 0 2px var(--accent); }
+#dock #rematch, #dock #boss-retry, #dock #wild-flee, #dock #exit { box-shadow: inset 0 0 0 2px var(--accent); }
 #dock > button:focus-visible, #dock-replay button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* The dock's icons (#1136): 24 px, 1.75 px rounded strokes, masks that take the button's colour. */
 #dock #new-game { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E"); }
@@ -1053,7 +1047,7 @@ body[data-openworld]::before { display: none; }
 #dock #replay { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12a8 8 0 1 0 3-6.2M4 4v4h4'/%3E%3C/svg%3E"); }
 #dock #modes { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'/%3E%3C/svg%3E"); }
 #dock #auto-play { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3C/svg%3E"); }
-#dock #wild-flee, #dock #place-back { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 5H5v14h5M14 8l4 4-4 4M18 12H9'/%3E%3C/svg%3E"); }
+#dock #wild-flee, #dock #exit { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 5H5v14h5M14 8l4 4-4 4M18 12H9'/%3E%3C/svg%3E"); }
 #dock #boss-retry { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12a8 8 0 1 0 3-6.2M4 4v4h4'/%3E%3C/svg%3E"); }
 #dock #rematch { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3l4 4-4 4M3 11V9a2 2 0 0 1 2-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 0 1-2 2H3'/%3E%3C/svg%3E"); }
 #dock #boss-goal { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 21V4M6 5h12l-3 4 3 4H6'/%3E%3C/svg%3E"); }
@@ -1175,8 +1169,12 @@ body:has(#dock-wrap :is(#mode-menu, #daily-card, #lobby-sheet):not([hidden])) #s
   #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: var(--target); }
 }
 #settings-menu button[aria-pressed='true'], #dock-wrap #mode-menu button[aria-expanded='true'] { background: var(--active-fill); border-color: var(--active-fill); color: var(--active-ink); }
-/* The dock is not on the Open world's screen: its HUD and joystick are (#962, #1025). */
-body[data-openworld] #dock-wrap { display: none !important; }
+/* The exit takes a slot (#1517): held upright, a seventh button (Auto-play at a bot's table) still fits a 360 px window, the gaps shrinking from 8 px to what is left. */
+@media (orientation: portrait) { #dock:has(> #exit:not([hidden])) { gap: clamp(0px, calc((100vw - 350px) / 6), 8px); padding: 4px; } }
+/* The Open world's screen has the dock's first slot alone (#1517): the exit, at the bottom right whatever the window, away from the stick (left half)
+   and the HUD plate (bottom left), above the peers arrows (z-index 2 over their 1). Its HUD and joystick are the rest (#962, #1025). */
+body[data-openworld] #dock-wrap { left: auto; right: 16px; top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); transform: none; width: max-content; }
+body[data-openworld] #dock-wrap > :not(#dock), body[data-openworld] #dock > :not(#exit) { display: none !important; }
 /* Bug #1051: with the dock hidden the column is alone in the top bar and would sit at its left edge, so the cog and its menu open off
    the screen. The column goes back to the right, where it is in a normal game. Landscape only: held upright the column is a row
    that stretches, and an auto margin would shrink it. */

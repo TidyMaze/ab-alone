@@ -18,7 +18,7 @@ import { shot } from './shot';
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
-  await page.getByRole('button', { name: 'Hub' }).click();
+  await page.getByRole('button', { name: 'Hub', exact: true }).click(); // the mode menu's, not the exit's "Back to the hub" (#1517)
 }
 
 /** Opens `url`, then Ship with the marble saved on `cell` of the Mess. */

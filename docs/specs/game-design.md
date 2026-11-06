@@ -144,7 +144,7 @@ See section 6.
 | Rooms | Cells with a prop and a label plate, at least 6 per deck. Rolling onto a room enters it; standing on it again (Hub, Back to the hub) does not |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
 | Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line: "Lift to Cargo: locked. This deck's boss is still on the books." |
-| Return | When the game a room started ends, "Back to the hub" puts the marble back on that room's cell. From an online table it leaves the room first |
+| Return | When the game a room started ends, the exit of the dock (Hub, ui.md section 4.10) puts the marble back on that room's cell, at any time. From an online table it leaves the room first |
 | Save | Local storage (`client/src/progress.ts`, key `ab-alone.progress`): deck, cell and bosses beaten as versioned JSON. A save that does not read back (corrupt, another version) starts over on the centre cell of the Mess. Every boss win counts, the boss menu and the daily included. Later a signed export/import file (accounts are out of scope) |
 
 Each room is a small 3D prop on its cell (`hubart.ts`), ringed in its kind's colour, with a label plate always shown over

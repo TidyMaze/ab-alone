@@ -193,11 +193,10 @@ describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
     byId('exit').click();
     await game.settle();
     expect(document.body.dataset.openworld).toBe('7');
-    // Nothing of the lost fight shows over the world. The e2e spec read computed styles; here the page holds what those styles
-    // follow: body[data-over] stays 'loss' on the world, body[data-openworld] is set, and ui.css hides the fight's controls,
-    // resets the canvas filter and drops the end light under body[data-openworld], after the rules of body[data-over] so that
-    // they win (the stylesheet is not applied in jsdom).
-    expect(document.body.dataset.over).toBe('loss');
+    // Nothing of the lost fight shows over the world. The exit of the dock leaves the fight (#1517), so body[data-over] is gone with it; and
+    // should it ever stay, ui.css hides the fight's controls, resets the canvas filter and drops the end light under body[data-openworld],
+    // after the rules of body[data-over] so that they win (the e2e spec read computed styles; the stylesheet is not applied in jsdom).
+    expect(document.body.dataset.over).toBeUndefined();
     expect(byId('hud').closest('#hud-dock'), 'the plate of the fight sits in the dock the world hides').not.toBeNull();
     expect(css).toMatch(/body\[data-openworld\] :is\([^)]*#boss-bar[^)]*\) \{ display: none !important; \}/);
     expect(css).toMatch(/body\[data-openworld\] :is\([^)]*#auto-reason[^)]*\) \{ display: none !important; \}/);
