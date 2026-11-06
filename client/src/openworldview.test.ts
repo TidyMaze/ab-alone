@@ -1229,6 +1229,21 @@ const objectsOf = (view: OpenWorldView) => {
 };
 
 describe('the Open world view frees its GPU objects (#981)', () => {
+  it('disposes its lights, which free the sun\'s shadow map and the renderer\'s node of each, so a world left leaves no texture behind (#1520)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const lights: THREE.Light[] = [];
+    view.scene.traverse((object) => (object as THREE.Light).isLight && lights.push(object as THREE.Light));
+    expect(lights.length).toBeGreaterThan(0);
+    const freed = lights.map((light) => {
+      const seen = vi.fn();
+      light.addEventListener('dispose', seen);
+      return seen;
+    });
+    view.dispose();
+    freed.forEach((seen) => expect(seen).toHaveBeenCalledOnce());
+  });
+
   it('disposes every geometry and material of its scene once, the models it was given included', () => {
     const view = new OpenWorldView(new World(bytes));
     view.useModels({ low: { tree: new THREE.BoxGeometry() }, high: { tree: new THREE.BoxGeometry() } });

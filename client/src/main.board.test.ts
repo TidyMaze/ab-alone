@@ -389,6 +389,21 @@ describe('main.ts board and HUD', () => {
     ]);
   });
 
+  it('frees the renderer record of the tally marks a redraw replaces, so a fight leaves none behind (#1520)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    const { tallies } = parts(scene());
+    const old = tallies.flatMap((group) => [...group.children]);
+    expect(old.length).toBeGreaterThan(0);
+    const freed = old.map((mesh) => {
+      const seen = vi.fn();
+      mesh.addEventListener('dispose', seen);
+      return seen;
+    });
+    startBoss(game, 'choir'); // a new fight draws the tally again
+    freed.forEach((seen) => expect(seen).toHaveBeenCalledOnce());
+  });
+
   it('draws no phase notch outside a boss fight, and the phase notches and threshold glyph in one', async () => {
     const game = await boot('?bot=off');
     expect(game.hook('__notches')).toEqual({ lit: 0, dark: 0, glyph: false });

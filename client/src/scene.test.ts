@@ -346,6 +346,20 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.notches.children.length).toBeGreaterThanOrEqual(3);
   });
 
+  it('frees the renderer record of the notches a redraw replaces (#1520)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const row: NotchRow = { notches: [{ x: 0, z: 3, lit: true }], glyph: { x: 0.4, z: 3 } };
+    sr.drawNotches(row);
+    const freed = sr.notches.children.map((mesh) => {
+      const seen = vi.fn();
+      mesh.addEventListener('dispose', seen);
+      return seen;
+    });
+    sr.drawNotches(null);
+    expect(freed.length).toBeGreaterThan(0);
+    freed.forEach((seen) => expect(seen).toHaveBeenCalledOnce());
+  });
+
   it('constructs with defaults when options are omitted', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
