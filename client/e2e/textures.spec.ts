@@ -7,8 +7,8 @@ test('textures are requested and the board still renders', async ({ page }) => {
     const file = r.url().split('/').pop()!;
     // KTX2Loader's transcoder comes from the app, not a CDN: node_modules in dev, a hashed asset in the build (#700).
     if (file.startsWith('basis_transcoder')) transcoder.push(`${r.status()} ${new URL(r.url()).origin} ${file.replace(/-[\w-]+\./, '.')}`);
-    // The build's own files (page, bot worker, engine) and the fonts (#1436: CI has the real ones) are not textures; any other file under /assets/ is.
-    else if (r.url().includes('/assets/') && !/^(index|bot\.worker|abalone_wasm_bg|[a-z-]+-latin-\d+-normal)-[\w-]+\.(js|css|wasm|woff2)$/.test(file)) loaded.push(`${r.status()} ${file}`);
+    // The build's own code (the page, its chunks, the bot worker, the engine) and the fonts (#1436: CI has the real ones) are not textures; any other file under /assets/ is.
+    else if (r.url().includes('/assets/') && !/\.(js|css|wasm|woff2)$/.test(file)) loaded.push(`${r.status()} ${file}`);
   });
   await page.goto('./?bot=on&quality=high'); // the runner takes the low tier, which asks for fewer maps: pin the tier the list describes
   await page.locator('canvas').waitFor();
