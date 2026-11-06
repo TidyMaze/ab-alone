@@ -114,7 +114,11 @@ Rust (`crates/abalone-core/src/worldwander.rs`, `offset`), integers only, so eve
   same as where a group is placed), off the world, or out of its chunk. When a cell of the way is such for any marble of the chunk's
   group, the length is cut short of it. The terrain read is the generated one, never the cells the hero broke, which peers do not share.
   The walk reads the chunk's generated marbles, the ones a push moved away included, so it never depends on what a troop did.
-  A wanderer can pass over a marble the troop shoved or a troop marble: they overlap for a moment (accepted).
+- **The troop and the shoved marbles hold their cell** (#1590): the page tells the fight the troop's cells (`FightState.setHeld`) before
+  every tick, and a group whose next cell is a troop marble or a marble the troop shoved (`added`) waits where it stood
+  the tick before (the last cell of the outing that is clear), so a wandering marble never shares a cell with one. This is this peer's
+  drawing alone: the walk (`worldwander::offset`) stays a pure function of the seed, the chunk and the clock, and the wire names a marble
+  by its start cell, so no peer needs the troop of another.
 - **A marble moved by a push stops wandering.** It stands where it was pushed to, in `added` (section 4), and keeps no start cell. The
   overlay keeps a generated marble by the cell it starts on (`removed`), so the save format is unchanged, and a marble pushed
   onto the start cell of another one is not that one again.

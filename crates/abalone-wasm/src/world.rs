@@ -340,6 +340,9 @@ pub struct WorldFight {
     clock: (u64, u32),
     /// The offset each chunk's group has at the clock, worked out once per chunk and tick.
     offsets: RefCell<HashMap<(i32, i32), (i32, i32)>>,
+    /// The cells the troop stands on (#1590): a group never takes a step onto one, nor onto a shoved marble, it waits a tick. This peer's
+    /// drawing alone, the walk itself stays a function of the seed, the chunk and the clock.
+    held: Vec<(i32, i32)>,
 }
 
 #[wasm_bindgen]
@@ -376,6 +379,13 @@ impl WorldFight {
             self.clock = (u64::from(seed), tick);
             self.offsets.borrow_mut().clear();
         }
+    }
+
+    /// Sets the cells of the troop (`q, r` pairs) that the wandering groups never walk onto (#1590): a group whose next cell is one of
+    /// them, or a shoved marble's, stays where it was the tick before.
+    pub fn set_held(&mut self, cells: Vec<i32>) {
+        self.held = cells_of_flat(&cells);
+        self.offsets.borrow_mut().clear();
     }
 
     /// The length of a tick of the clock in ms (`worldwander::TICK_MS`): the marbles take one step per tick.
@@ -501,6 +511,7 @@ impl WorldFight {
             overlay,
             clock: (0, 0),
             offsets: RefCell::new(HashMap::new()),
+            held: Vec::new(),
         }
     }
 
@@ -514,7 +525,29 @@ impl WorldFight {
             .offsets
             .borrow_mut()
             .entry(chunk)
-            .or_insert_with(|| worldwander::offset(seed, chunk, generated, tick))
+            .or_insert_with(|| self.settled(seed, chunk, generated, tick))
+    }
+
+    /// The offset the walk gives at `tick`, or the last one of the outing that leaves every marble clear of the troop and of the shoved
+    /// marbles (#1590): the outing starts at home, the way back is the way out, so the group waits where it was.
+    fn settled(
+        &self,
+        seed: u64,
+        chunk: (i32, i32),
+        generated: &[(i32, i32)],
+        tick: u32,
+    ) -> (i32, i32) {
+        let alive: Vec<(i32, i32)> = generated
+            .iter()
+            .copied()
+            .filter(|cell| !self.overlay.removed().contains(cell))
+            .collect();
+        let held = |at: &(i32, i32)| self.held.contains(at) || self.overlay.added().contains(at);
+        (tick - tick % worldwander::EPOCH..=tick)
+            .rev()
+            .map(|t| worldwander::offset(seed, chunk, generated, t))
+            .find(|&(dq, dr)| !alive.iter().any(|&(q, r)| held(&(q + dq, r + dr))))
+            .unwrap_or((0, 0))
     }
 
     /// The chunks of a flat list with the offset their group has now.
@@ -1054,7 +1087,15 @@ mod tests {
         assert!(stands(&fight, next), "released, the group takes the step");
         let mut shoved = WorldFight::restore(vec![], vec![next.0, next.1], 0);
         shoved.set_clock(3, tick);
-        assert!(!stands(&shoved, next), "a shoved marble holds the cell");
+        let mut waiting: Vec<i32> = flat
+            .chunks(2)
+            .flat_map(|c| [c[0] + before.0, c[1] + before.1])
+            .collect();
+        waiting.extend([next.0, next.1]);
+        let mut seen = shoved.chunk_enemies(flat.clone(), cx, cy);
+        seen.sort_unstable();
+        waiting.sort_unstable();
+        assert_eq!(seen, waiting, "a shoved marble holds the cell alone");
         let mut gone = WorldFight::restore(flat.clone(), vec![], 0);
         gone.set_held(vec![next.0, next.1]);
         gone.set_clock(3, tick);

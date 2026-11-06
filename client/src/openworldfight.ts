@@ -77,6 +77,12 @@ export class FightState {
     this.fight.set_clock(seed, tick >>> 0);
   }
 
+  /** Sets the cells of the troop the wandering groups never walk onto (#1590): a group whose next cell is one of them, or a shoved marble's,
+   * waits a tick. This peer's drawing alone: the walk itself stays a function of the seed, the chunk and the clock. */
+  setHeld(cells: readonly Axial[]): void {
+    this.fight.set_held(flat(cells));
+  }
+
   /** Forgets every push: the generated enemies are all back, none beaten. */
   reset(): void {
     this.fight.reset();

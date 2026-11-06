@@ -1074,6 +1074,7 @@ export class OpenWorldMode {
     if (snap) this.view?.snap();
     if (tick === this.ticked || !this.view || this.view.animating) return;
     this.ticked = tick;
+    this.fight.setHeld(this.hero!.troop);
     this.fight.setClock(this.seed, tick);
     this.view.wander(now, this.reduced(), slowBy());
     this.dirty = true;
