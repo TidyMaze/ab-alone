@@ -129,6 +129,8 @@ export interface Run {
   exits: boolean;
   exit: boolean;
   biomes: number[];
+  /** The biome of act 1 (#1597): a dungeon gate's ground, the Meadow (0) for a run from the menu, the Hub or the Daily and for a run saved before. */
+  first: number;
   flawless: number;
   daily: string;
   keys: number[];
@@ -399,6 +401,7 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   exits: true,
   exit: false,
   biomes: [],
+  first: 0,
   flawless: 0,
   daily: '',
   keys: [],
@@ -596,16 +599,16 @@ function lastNode(map: MapNode[], run: Run): MapNode | undefined {
   return map[node] && { ...map[node]!, kind: kindOf(map, run, node) };
 }
 
-/** The biome of act `act` (0 for the first) of the run (#1472): the Meadow in act 1, the exit picked before it later, and the
- * Meadow throughout for a run saved before the exits. */
-export const biomeOf = (run: Run, act: number): number => (run.exits && act > 0 ? (run.biomes[act - 1] ?? 0) : 0);
+/** The biome of act `act` (0 for the first) of the run (#1472): `first` in act 1 (the Meadow unless the run began on a gate, #1597), the exit
+ * picked before it later, and the Meadow throughout for a run saved before the exits. */
+export const biomeOf = (run: Run, act: number): number => (run.exits ? (act > 0 ? (run.biomes[act - 1] ?? 0) : run.first) : 0);
 
-/** The biome the run is in: its last node's act, or the next act's once that node is a boss beaten and the exit picked; the
- * Meadow once the run is over. */
+/** The biome the run is in: its last node's act, or the next act's once that node is a boss beaten and the exit picked, act 1's before
+ * the first pick; the Meadow once the run is over. */
 export function currentBiome(map: MapNode[], run: Run): number {
   const node = lastNode(map, run);
-  if (!node || run.end) return 0;
-  return biomeOf(run, node.act + Number(node.kind === 'boss' && !run.fighting && !run.exit));
+  if (run.end) return 0;
+  return biomeOf(run, node ? node.act + Number(node.kind === 'boss' && !run.fighting && !run.exit) : 0); // before the first pick: act 1's, a gate's biome (#1597)
 }
 
 /** The biomes of the two exits that wait at the end of an act, from `exitsOf(act, from)` (`run_exits`) for the act after the last
@@ -1263,7 +1266,7 @@ function summaryHtml(map: MapNode[], run: Run): string {
   const unlocks = [...earned(map, run), ...run.banked.map(blueprintName)];
   return [
     `Path: ${acts.join(' · ')}`,
-    ...(run.biomes.length ? [`Biomes: ${['Meadow', ...run.biomes.slice(0, new Set(run.path.map((n) => map[n]!.act)).size - 1).map((b) => BIOMES[b]!.name)].join(', ')}`] : []),
+    ...(run.biomes.length ? [`Biomes: ${[BIOMES[biomeOf(run, 0)]!.name, ...run.biomes.slice(0, new Set(run.path.map((n) => map[n]!.act)).size - 1).map((b) => BIOMES[b]!.name)].join(', ')}`] : []),
     `Fights: ${fights - lost} won, ${lost} lost`,
     `Army at the end: ${owned(run.army, run.specials)}`,
     ...(run.ascension ? [`Ascension: ${run.ascension}`] : []),
@@ -1711,10 +1714,10 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * saved before the unlocks (#801) everything unlocked, one saved before the relics (#1457) none, one saved before the
  * upgrades (#1458) no upgraded special marble and no rest site waiting, one saved before the shop (#1459) no scrap and no
  * shop waiting, one saved before the Magnet, Shield, Bomb and Medic (#1461) none of them, one saved before the varied enemies (#1462)
- * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room, one saved before the runes (#1476) none, one saved before the pacing of the map (#1543) the map of version 0. */
+ * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the gate runs (#1597) the Meadow first, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room, one saved before the runes (#1476) none, one saved before the pacing of the map (#1543) the map of version 0. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, runes = 0, found = 0, spent = [], bonus = false, map = 0 } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], first = 0, flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, runes = 0, found = 0, spent = [], bonus = false, map = 0 } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1760,7 +1763,8 @@ function decodeRun(raw: unknown): Run | null {
     typeof exit === 'boolean' &&
     Array.isArray(biomes) &&
     biomes.length < ALL_ACTS &&
-    biomes.every((b, i) => isInt(b, BIOMES.length - 1) && b > 0 && biomes.indexOf(b) === i) &&
+    biomes.every((b, i) => isInt(b, BIOMES.length - 1) && b > 0 && b !== first && biomes.indexOf(b) === i) &&
+    isInt(first, BIOMES.length - 1) &&
     isInt(flawless, MAX_FLAWLESS) &&
     typeof daily === 'string' &&
     (daily === '' || DAY.test(daily)) &&
@@ -1779,7 +1783,7 @@ function decodeRun(raw: unknown): Run | null {
     (spent.length === 0 || (spent.length === MOVE_BUDGET.length && spent.every((n) => isInt(n, MAX_SPENT)))) &&
     typeof bonus === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, flawless, daily, keys, curse, flasks, affinities, scroll, runes, found, spent: [...spent], bonus, map }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, first, flawless, daily, keys, curse, flasks, affinities, scroll, runes, found, spent: [...spent], bonus, map }
     : null;
 }
 

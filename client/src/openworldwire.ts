@@ -4,6 +4,7 @@
 import { boss_ids, boss_name, world_can_break, world_chunk, world_dungeon, world_enemies, world_is_enemy, world_lairs, world_logs, world_pads, world_path, world_places, world_rings, world_teleporters, world_version } from 'abalone-wasm';
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
+import type { Biome } from './openworld';
 import type { WorldCue } from './cues';
 import { hasMedal } from './medals';
 import { markRead } from './lorestore';
@@ -42,7 +43,7 @@ export interface OpenWorldDeps {
   /** A lair starts the boss fight on the board of the hour (#1170). */
   startLair: (seed: number, lair: number, phase: Phase) => void;
   /** A town opens the Hub and a gate the rogue-lite run (#1593). */
-  onPlace: (seed: number, kind: 'town' | 'dungeon', index: number) => void;
+  onPlace: (seed: number, kind: 'town' | 'dungeon', index: number, biome: Biome) => void;
   /** Whether the page took the public world online. */
   online: () => boolean;
   /** The boss lairs of a world as cells (#1305). */

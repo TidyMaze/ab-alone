@@ -672,9 +672,12 @@ the last) two exits lead to two different biomes for the next. The biomes are th
 openworld-terrain.md), the Meadow first. Only variety carries between runs (Decision #934): a biome changes what an act looks
 like and asks, never what a run keeps.
 
-- **Act 1 is the Meadow**, the default: no hazard, no signature, the boss dealt as before. It is never an exit.
+- **Act 1 is the Meadow**, the default: no hazard, no signature, the boss dealt as before. It is never an exit. A run started from a
+  dungeon gate of the Open world (#1597) begins in the biome of the gate's ground instead (`Run.first`, `biomeOf(run, 0)`): act 1 has
+  that biome's look, holes, foes and act boss, and no exit ever offers it again. A run of the mode menu, the Hub or the Daily, and a
+  run saved before (no `first`, read as the Meadow), are unchanged.
 - **Exits**: `run::exits(seed, act, from)` (`run_exits` on the bridge) returns two different biomes for act `act` (1 or 2), never
-  the Meadow nor the biome `from` the run leaves, drawn from the run seed and the act (a pure function, so a run replays).
+  the Meadow, the biome `from` the run leaves nor the biome `first` it began in (`run_exits`' last argument), drawn from the run seed and the act (a pure function, so a run replays).
 - **Hazard**: every fight and elite of the act opens the biome's **holes** on the board, cells removed with `Board::void`, the
   rule The Hull and The Ballast Mind already play with (their cracked cells and pillars): no marble walks onto a hole (a move
   there is refused), a marble pushed onto one goes off the board, an ejection for the other side. Each pattern is symmetric

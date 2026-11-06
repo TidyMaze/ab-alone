@@ -104,8 +104,8 @@
 //! - The bot's army of a fight (`run_foes(seed, node, less, biome, more, version)`, `more` optional special marbles for the ascension levels, section 20, `version` the map's generation as `run_map`'s): `[count, formation, biome, ...]` then a record `[q, r, kind]` per
 //!   special marble it holds; `Engine::with_foes(army, plan)` stands it, the biome's holes opened (sections 14 and 18). `biome` is
 //!   the Open world's code below (`0` meadow, the act 1 default, which opens none).
-//! - The exits at the end of an act (`run_exits(seed, act, from, runes)`): the codes of the two biomes the exits lead to for act `act`
-//!   (1 or 2) of a run that left the biome `from`, never the meadow nor `from` (section 18), and a third with the rune of the exit (section 27).
+//! - The exits at the end of an act (`run_exits(seed, act, from, runes, first)`): the codes of the two biomes the exits lead to for act `act`
+//!   (1 or 2) of a run that left the biome `from`, never the meadow, `from` nor `first`, the biome the run began in (section 18), and a third with the rune of the exit (section 27).
 //! - Open world chunk (`world_chunk(seed, cx, cy)`): 3 bytes `[height, terrain, biome]` per cell of the
 //!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. The world is a hexagon (`WORLD_RADIUS`): in a
 //!   chunk its edge crosses, a cell past the edge is `[0, 255, 0]`, `255` off the world. `height` `0` to `7`;

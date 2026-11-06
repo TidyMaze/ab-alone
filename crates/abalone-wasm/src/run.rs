@@ -68,14 +68,21 @@ pub fn run_foes(
 
 /// The codes of the two biomes the exits lead to for act `act` (1 or 2, `0` for the Meadow when out of range) of the run
 /// `seed` that left the biome of code `from` (docs/specs/roguelite.md section 18), and a third one with the rune of the exit in
-/// `runes` (section 27).
+/// `runes` (section 27). A run that began in the biome `first` (a dungeon gate's, section 18) is never offered it either.
 #[wasm_bindgen]
-pub fn run_exits(seed: u32, act: u8, from: u8, runes: Option<u8>) -> Vec<u8> {
+pub fn run_exits(seed: u32, act: u8, from: u8, runes: Option<u8>, first: Option<u8>) -> Vec<u8> {
     let from = Biome::from_code(from).unwrap_or(Biome::Meadow);
-    run::exits_with(u64::from(seed), usize::from(act), from, runes.unwrap_or(0))
-        .into_iter()
-        .map(|b| b as u8)
-        .collect()
+    let first = Biome::from_code(first.unwrap_or(0)).unwrap_or(Biome::Meadow);
+    run::exits_after(
+        u64::from(seed),
+        usize::from(act),
+        from,
+        first,
+        runes.unwrap_or(0),
+    )
+    .into_iter()
+    .map(|b| b as u8)
+    .collect()
 }
 
 #[cfg(test)]
@@ -173,10 +180,17 @@ mod tests {
     fn run_exits_flattens_the_core_exits() {
         let core = run::exits(7, 2, Biome::Tundra).map(|b| b as u8);
         assert_eq!(run_exits(7, 2, 2, None, None), core);
-        assert_eq!(run_exits(7, 2, 99, None, None), run_exits(7, 2, 0, None, None));
+        assert_eq!(
+            run_exits(7, 2, 99, None, None),
+            run_exits(7, 2, 0, None, None)
+        );
         assert_eq!(run_exits(7, 2, 2, Some(RUNE_ROOM), None), core);
         let after = run_exits(7, 2, 3, None, Some(Biome::Forest as u8));
         assert!(!after.contains(&(Biome::Forest as u8)) && !after.contains(&3));
+        assert_eq!(
+            run_exits(7, 2, 3, None, Some(99)),
+            run_exits(7, 2, 3, None, None)
+        );
     }
 
     #[test]

@@ -552,7 +552,7 @@ plan as the game.
 | Training yard (Trainer, Stalker), a bot table, a hot-seat table, a notice board | **The four other towns**, one per biome but the meadow and the archipelago (forest, tundra, desert, badlands), 40 to 120 ground units out | Walk in | Walk out | Place, map icon and entrance built (#1593): every town opens the same Hub for now. Their own stations are planned, five towns sharing out the Hub's stations, one per deck |
 | Online, Ranked, Leaderboard, Royale, co-op, boss duel | **Arena town**: one of the four other towns, chosen when it is built. An invite link `#room=` still opens the table at once | Walk in | Walk out | Planned (the town exists on the map, the table does not) |
 | The 15 bosses | **Towers**: the boss lairs of section 7, 160 to 420 ground units out, the easiest boss nearest (section 15) | Roll onto the lair from a neighbour | Win or lose, "Back to the Open world": the hero returns to the entrance cell | Built (section 7). The five story bosses as the gates of the five decks is planned |
-| Rogue-lite run | **Dungeon gates**: one in each biome but the meadow (forest, tundra, desert, badlands, archipelago), 160 to 420 ground units out, each with a dungeon tier from its ring (section 15). An act is one dungeon, in matching terrain | Roll onto the gate from a neighbour | Leave the run: the hero returns to the entrance cell | Gate, map icon and entrance built (#1593): rolling onto a gate starts the run. The gate's biome as the act's is planned |
+| Rogue-lite run | **Dungeon gates**: one in each biome but the meadow (forest, tundra, desert, badlands, archipelago), 160 to 420 ground units out, each with a dungeon tier from its ring (section 15). An act is one dungeon, in matching terrain | Roll onto the gate from a neighbour | Leave the run: the hero returns to the entrance cell | Gate, map icon and entrance built (#1593): rolling onto a gate starts the run, in the biome of the gate's ground (#1597) |
 | Teleporters | Pads in the clearing and in the open ground, one a square of 8 x 8 chunks (section 10) | Roll onto a pad, Teleport button | Pick another pad | Built. Pads inside towns and gate clearings are planned |
 | Console | Leaves the player's UI | n/a | n/a | Planned |
 | Boss fight menu | Fast travel to the towers already found | Menu entry | n/a | Planned |
@@ -586,8 +586,9 @@ plan as the game.
 - **Enter** (#1593). Rolling onto a town or a gate from a neighbour is the lair's path of section 7 (`roll`, `enterPlace` of
   `openworldmode.ts`): the world is saved with the hero on the entrance, the cell it came from, and left, and the page starts the place. A
   town opens the Hub scene, the Hub of the mode menu (every town the same one for now, the stations are the Hub's), a gate starts a new
-  rogue-lite run at its start screen, as Rogue-lite run of the mode menu does. The gate's biome as the first act's is not done: a
-  run's first act is the Meadow (`biomeOf`), the exits never offer the Meadow and a saved run's biomes never hold it, so a first act elsewhere changes the run's data, its save and its exits: a follow-up. The
+  rogue-lite run at its start screen, as Rogue-lite run of the mode menu does. A gate's run begins in the biome of the ground
+  the gate stands in (#1597): `enterPlace` reads the biome of the gate's cell and hands it to the page, which starts the run with it as `first`
+  (roguelite.md section 18). The
   spawn clearing's town on `(0, 0)` is the cell the hero starts on, so it opens only when the hero rolls back onto it. A walk to a far
   cell, the Dungeon button and the troop's arrival on a teleporter go round the places as they go round the lairs, and a held arrow into
   a place enters it. The MCP server (`mcp/src/world.ts`) does not know the places: an agent steps over their cells as over ground.

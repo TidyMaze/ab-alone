@@ -198,7 +198,7 @@ export class OpenWorldMode {
     /** The towns and dungeon gates of a seed's world: `kind, q, r` triples (the bridge's `world_places`, #1514). */
     private readonly placesOf: (seed: number) => Int32Array = () => new Int32Array(),
     /** What starts a town or a dungeon gate rolled onto (#1593), given the seed of the world and the kind. */
-    private readonly onPlace: (seed: number, kind: 'town' | 'dungeon', index: number) => void = () => {},
+    private readonly onPlace: (seed: number, kind: 'town' | 'dungeon', index: number, biome: Biome) => void = () => {},
     /** The stage of the story (#1546): the clamp of Tally's lines is open from stage 7. */
     private readonly stage: () => number = () => 1,
     /** The rings of a seed's world (the bridge's `world_rings`, #1532): the ring of each tower by number, then one per place (0 for a town, the
@@ -999,14 +999,15 @@ export class OpenWorldMode {
   }
 
   /** The hero rolls onto a town or a dungeon gate (#1593): the world is saved with the hero on the entrance, as for a lair, and left; the page
-   * opens the Hub or starts the run. It is told the place's index among those of its kind (#1516), the spawn town 0. */
+   * opens the Hub or starts the run. It is told the place's index among those of its kind (#1516), the spawn town 0, and the biome of its ground (#1597). */
   private enterPlace(place: { cell: Axial; kind: 'town' | 'dungeon' }): void {
     const seed = this.seed;
     const index = this.places.filter(({ kind }) => kind === place.kind).indexOf(place); // the place among those of its kind: the spawn town is 0 (#1516)
+    const biome = this.world!.tile(place.cell[0], place.cell[1])!.biome; // the ground the gate stands in: its run begins in that biome (#1597)
     this.transition.enter(place.kind, placeTitle(place.kind, '')); // over the Hub or the run that starts at once (#1519)
     this.persist();
     this.leave();
-    this.onPlace(seed, place.kind, index);
+    this.onPlace(seed, place.kind, index, biome);
   }
 
   /** A blocked step leans the hero toward the cell it cannot take, and back: nothing under reduced motion (#1040). */

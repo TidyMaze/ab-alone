@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
-import { world_chunk } from 'abalone-wasm';
 import { CHUNK } from './openworld';
 import { BIOMES } from './roguelite';
 import { TOWN_LINES } from './tally';
@@ -170,7 +169,8 @@ describe('a dungeon gate of the Open world (#1593)', () => {
     game.openModes();
     byId('openworld').click();
     await settle();
-    const gates = data().openworldPlaces!.split(' ').filter((p) => p.startsWith('dungeon:')).map((p) => p.slice(8).split(',').map(Number) as Axial);
+    const gates = data().openworldPlaces!.split(' ').filter((p) => p.startsWith('dungeon:')).map((p) => p.slice(8).split(',').map(Number) as unknown as Axial);
+    const { world_chunk } = await import('abalone-wasm');
     const biomeAt = ([q, r]: Axial): number => {
       const [cx, cy] = [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
       return world_chunk(7, cx, cy)[((r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)) * 3 + 2]!;

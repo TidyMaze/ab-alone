@@ -330,6 +330,7 @@ import {
   chooseAscension,
   actsWon,
   BIOMES,
+  biomeOf,
   buy,
   chooseCommander,
   chooseExit,
@@ -2752,7 +2753,7 @@ const resumed = await loadLocal();
 // The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
 const foesFor = (map: MapNode[], state: Run): number | number[] => foePlan(map, state, (node, less, biome, more) => run_foes(state.seed, node, less, biome, more, state.map));
 // The exits at the end of an act (#1472) and the roster names of their bosses.
-const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from, state.runes);
+const exitsFor = (state: Run) => (act: number, from: number): Uint8Array => run_exits(state.seed, act, from, state.runes, biomeOf(state, 0)); // never the biome the run began in again (#1597)
 const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesFor(map, state), undefined, relicMask(state));
 // The fight of the run's last node: the act's roster boss (#800) with the army's build, or the bot against the army.
 const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
@@ -6330,10 +6331,13 @@ const playOnlineButton = document.getElementById('play-online') as HTMLButtonEle
 const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
 let runMore = false; // More is open on the start screen (#1524): shut for each new run, kept while a commander or a level is picked and through the book
+let gateBiome = 0; // the biome of the ground of the gate the next run starts from (#1597): the Meadow for a run of the mode menu or the Hub
 function beginRun(): void {
+  const first = gateBiome;
+  gateBiome = 0;
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
   const runes = readRunes(store); // the runes found in earlier runs open hidden branches on this map (#1476)
-  startRun(chooseCommander(newRun(seed, readBest(store), readUnlocked(store), readAscension(store), runes, MAP_VERSION), 0), parseMap(run_map(seed, runes, MAP_VERSION))); // the Captain until another is picked (#1464)
+  startRun(chooseCommander({ ...newRun(seed, readBest(store), readUnlocked(store), readAscension(store), runes, MAP_VERSION), first }, 0), parseMap(run_map(seed, runes, MAP_VERSION))); // the Captain until another is picked (#1464)
 }
 // The daily run (#1466): the seed of the day for everyone, one try a day (its button is shut once tried), its score kept when it ends.
 function beginDailyRun(): void {
@@ -6708,8 +6712,9 @@ const openWorld = new OpenWorldHandle(async () =>
       const ids = boss_ids();
       startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair, phase }); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496)
     },
-    onPlace: (seed, kind, index) => {
+    onPlace: (seed, kind, index, biome) => {
       // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
+      gateBiome = kind === 'dungeon' ? BIOMES.findIndex(({ id }) => id === biome) : 0; // the run begins in the gate's biome (#1597)
       (kind === 'town' ? shipButton : runButton).click();
       placeFrom = { seed, kind };
       syncExit();

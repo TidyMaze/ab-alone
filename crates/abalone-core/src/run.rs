@@ -349,13 +349,14 @@ impl Biome {
     }
 }
 
-/// The biomes the exits at the end of act `act - 1` could lead to for act `act` of the run `seed` that left the biome `from`,
-/// in the order they are offered: never the Meadow nor `from`, drawn from the seed and the act. The third is the secret exit.
-fn exit_pool(seed: u64, act: usize, from: Biome) -> Vec<Biome> {
+/// The biomes the exits at the end of act `act - 1` could lead to for act `act` of the run `seed` that left the biome `from`
+/// and began in `first`, in the order they are offered: never the Meadow, `from` nor `first`, drawn from the seed and the act.
+/// The third is the secret exit.
+fn exit_pool(seed: u64, act: usize, from: Biome, first: Biome) -> Vec<Biome> {
     let mut pool: Vec<Biome> = Biome::ALL[1..]
         .iter()
         .copied()
-        .filter(|&b| b != from)
+        .filter(|&b| b != from && b != first)
         .collect();
     let mut state = mix(seed ^ mix(act as u64 | 4 << 32));
     for i in 0..3 {
@@ -368,13 +369,18 @@ fn exit_pool(seed: u64, act: usize, from: Biome) -> Vec<Biome> {
 /// The two biomes the exits at the end of act `act - 1` lead to, for act `act` (1 or 2) of the run `seed` that
 /// left the biome `from`: two different ones, never the Meadow nor `from`, drawn from the seed and the act.
 pub fn exits(seed: u64, act: usize, from: Biome) -> [Biome; 2] {
-    let pool = exit_pool(seed, act, from);
+    let pool = exit_pool(seed, act, from, Biome::Meadow);
     [pool[0], pool[1]]
 }
 
 /// The exits of `exits` and, with the rune of the exit (`RUNE_EXIT`, section 27), a third one: another biome of the same draw.
 pub fn exits_with(seed: u64, act: usize, from: Biome, runes: u8) -> Vec<Biome> {
-    let mut pool = exit_pool(seed, act, from);
+    exits_after(seed, act, from, Biome::Meadow, runes)
+}
+
+/// The exits of a run that began in `first` (a dungeon gate's biome, #1597): `exits_with` and never `first` either. With the Meadow it is `exits_with`.
+pub fn exits_after(seed: u64, act: usize, from: Biome, first: Biome, runes: u8) -> Vec<Biome> {
+    let mut pool = exit_pool(seed, act, from, first);
     pool.truncate(2 + usize::from(runes & RUNE_EXIT != 0));
     pool
 }
