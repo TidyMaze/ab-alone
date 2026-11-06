@@ -202,7 +202,7 @@ describe("Tally's ending and ledger lines (#1175, #1315)", () => {
 
   it("shows Tally's ending line once every lair is beaten, and nothing while one is left, #1175", async () => {
     localStorage.setItem('ab-alone.tally0412', 'seen'); // the claim line is spent
-    await boot('?bot=off&openworld=7');
+    await boot('?bot=off&openworld=7', { storage: { 'ab-alone.story': JSON.stringify({ moments: [2, 3, 4, 5, 6, 7], wins: 0 }) } }); // the clamp opens at stage 7 (#1546)
     await settle();
     expect(data().openworldAt).toBe('0,0');
     const count = data().openworldLairs!.split(' ').length;
@@ -210,6 +210,27 @@ describe("Tally's ending and ledger lines (#1175, #1315)", () => {
     expect(byId('openworld-tally').textContent).toBe('');
     fixture(Array.from({ length: count }, (_, i) => i));
     expect(byId('openworld-tally').textContent).toBe('Variance noted. Clamp: open. Crew attached: 6.');
+  });
+
+  it('says the clamp is locked while the story is short of stage 7, #1546', async () => {
+    localStorage.setItem('ab-alone.tally0412', 'seen');
+    await boot('?bot=off&openworld=7');
+    await settle();
+    fixture(Array.from({ length: data().openworldLairs!.split(' ').length }, (_, i) => i));
+    expect(byId('openworld-tally').textContent).toBe('Variance noted. Clamp: locked. Crew attached: 6.');
+  });
+
+  it('opens the clamp in the ledger line from stage 7, #1546', async () => {
+    const game = await boot('?bot=off&openworld=7', { storage: { 'ab-alone.story': JSON.stringify({ moments: [2, 3, 4, 5, 6, 7], wins: 0 }) } });
+    await settle();
+    const count = data().openworldLairs!.split(' ').length;
+    fixture([0, 1, 2]);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await settle();
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(byId('openworld-tally').textContent).toBe(`Seats on file: 3 of ${count}. Clamp: open.`);
   });
 
   it('the ledger line counts the seats on file after the world is left and opened again, #1315', async () => {

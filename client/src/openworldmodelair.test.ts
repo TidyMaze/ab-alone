@@ -18,12 +18,13 @@ function grass(_seed: number, cx: number, cy: number): Uint8Array {
   return out;
 }
 const LAIRS = Int32Array.of(3, 0, -4, 2);
-const setup = (beaten: number[] = []) => {
+const NONE = Array<undefined>(13).fill(undefined) as [undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined]; // the parameters between onLair and the stage
+const setup = (beaten: number[] = [], stage: () => number = () => 1) => {
   const store = memoryStore();
   const saves = worldSaves(store, 1);
   const lairsOf = vi.fn(() => LAIRS);
   const onLair = vi.fn();
-  const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, lairsOf, onLair);
+  const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, lairsOf, onLair, ...NONE, stage);
   return { m, saves, lairsOf, onLair, beaten };
 };
 const body = () => document.body.dataset;
@@ -171,7 +172,7 @@ describe('the ending line of the Open world (#1175)', () => {
 
   it('shows the ending line instead of the claim line once a world opens with every lair beaten, and the claim line before', async () => {
     const out = hud();
-    const { m, saves } = setup();
+    const { m, saves } = setup([], () => 7);
     await saves.put(7, [0, 0], [], await fightOf(), 0, [], [0]);
     await m.open(7, 800, 600);
     expect(out.textContent).toBe('Seats on file: 1 of 2. Slag-glass remembers heat.'); // one lair of two: not over, the ledger line (#1315)
@@ -185,11 +186,30 @@ describe('the ending line of the Open world (#1175)', () => {
   it('does not use up the claim line when the world is over', async () => {
     const out = hud();
     const tally = vi.fn(() => 'Claim 0412: unworked.');
-    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally);
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally, ...NONE.slice(0, 10), () => 7);
     m.enter(7, 800, 600, null);
     m.fixture({ hero: [0, 0], troop: [], enemies: [], beaten: [0, 1] });
     expect(tally).toHaveBeenCalledTimes(1);
     expect(out.textContent).toBe(ENDING);
+    out.remove();
+  });
+
+  // #1546: the clamp opens with the epilogue, at stage 7: before it the line agrees and says locked, and the ledger line gives way to the open clamp.
+  it('says the clamp is locked before stage 7 and open from it, in the ending line and the ledger line', async () => {
+    const out = hud();
+    let stage = 6;
+    const { m, saves } = setup([], () => stage);
+    await saves.put(7, [0, 0], [], await fightOf(), 0, [], [1, 0]);
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe('Variance noted. Clamp: locked. Crew attached: 6.');
+    m.leave();
+    stage = 7;
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe(ENDING);
+    m.leave();
+    await saves.put(7, [0, 0], [], await fightOf(), 0, [], [0]);
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe('Seats on file: 1 of 2. Clamp: open.');
     out.remove();
   });
 
@@ -203,7 +223,7 @@ describe('the ending line of the Open world (#1175)', () => {
 
   it('the fixture sets the beaten lairs, draws them and saves them; without them it keeps the lairs as they were', async () => {
     const out = hud();
-    const { m, saves } = setup();
+    const { m, saves } = setup([], () => 7);
     m.enter(7, 800, 600);
     m.fixture({ hero: [0, 0], troop: [], enemies: [] });
     expect(body().openworldLairsBeaten).toBe('');

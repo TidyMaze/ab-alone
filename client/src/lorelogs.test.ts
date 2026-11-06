@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AUDIO_LOGS } from './audiologs';
 import { LORE } from './lore';
 import { deckOf, DECK_NAMES } from './deck';
+import { CLAMP_OPEN, EPILOGUE } from './epilogue';
 import { audioDeckOf, BOSS_BLURBS, BOSS_LORE, bossBlurb, bossLore, entryOf, STORY, WORLD_LOGS, type StoryEntry } from './lorelogs';
 import { SECRETS } from './story';
 import { BOSS_IDS } from './tally';
@@ -164,12 +165,23 @@ describe('the lookups of the reader and the win screen', () => {
     expect(bossLore('nobody')).toBeUndefined();
   });
 
-  it('list the 27 entries of the story, the bosses then the logs, and find any entry of the reader by its id', () => {
-    expect(STORY).toEqual([...BOSS_LORE, ...WORLD_LOGS]);
+  it('list the 28 entries of the story, the bosses, the logs then the epilogue, and find any entry of the reader by its id', () => {
+    expect(STORY).toEqual([...BOSS_LORE, ...WORLD_LOGS, { id: EPILOGUE.id, title: EPILOGUE.title, body: EPILOGUE.body, stage: 7 }]);
     expect(entryOf('mess-house-rule')!.title).toBe("Captain's order, pinned above table four");
     expect(entryOf('boss-hull')).toBe(BOSS_LORE[1]);
     expect(entryOf('log-meadow-near')).toBe(WORLD_LOGS[0]);
     expect(entryOf('nobody-here')).toBeUndefined();
+  });
+
+  // #1546: from stage 7 the bridge console reads the clamp open; every other entry reads the same at every stage.
+  it('give the bridge console its open-clamp text from stage 7 and the locked one before, the other entries the same at every stage', () => {
+    const locked = entryOf('bridge-clamp')!;
+    expect(locked.body).toMatch(/^Docking clamp: locked\./);
+    for (const stage of [1, 5, 6]) expect(entryOf('bridge-clamp', stage)).toBe(locked);
+    expect(entryOf('bridge-clamp', 7)).toEqual({ id: 'bridge-clamp', title: CLAMP_OPEN.title, body: CLAMP_OPEN.body });
+    expect(entryOf('mess-house-rule', 7)).toBe(entryOf('mess-house-rule'));
+    expect(entryOf('story-epilogue')!.title).toBe(EPILOGUE.title);
+    expect(audioDeckOf('story-epilogue')).toBeNull();
   });
 
   it('give the audio log of an entry: the deck of a terminal or of a boss, none for a log of the world', () => {

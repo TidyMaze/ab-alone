@@ -56,8 +56,29 @@ describe('the Tally line of each boss (#1544)', () => {
     }
   });
 
-  it('holds no secret word at any stage', () => {
+  it('holds no secret word at stage 1, the stage a boss menu meets it at for good', () => {
     for (const line of lines) for (const { word } of SECRETS) expect(line).not.toMatch(word);
+  });
+});
+
+// #1588: the Ballast Mind says its limit as its fight starts, which is stage 6 of the story. Below it the fight keeps its old line, so the
+// secret never reaches a player who started the fight too early (the stage is the longest unbroken run, story.ts).
+describe("the Ballast Mind's line by stage (#1588)", () => {
+  const OLD = 'The ledger plays itself. Twelve out to balance.';
+  const LIMIT = 'I cannot push. Rule four. You can. Count carefully.';
+
+  it('says its limit from stage 6, exactly as the issue writes it, and the old line below', () => {
+    for (const stage of [1, 2, 3, 4, 5]) expect(tallyLine({ mode: 'boss', boss: 'ballast', stage })).toBe(OLD);
+    for (const stage of [6, 7]) expect(tallyLine({ mode: 'boss', boss: 'ballast', stage })).toBe(LIMIT);
+    expect(tallyLine({ mode: 'boss', boss: 'ballast' })).toBe(OLD);
+  });
+
+  it('serves no secret word at a stage that may not speak of it, for any boss', () => {
+    for (let stage = 1; stage <= 7; stage++) for (const id of BOSS_IDS) for (const { word, from } of SECRETS) if (stage < from) expect(tallyLine({ mode: 'boss', boss: id, stage }), `${id} ${stage}`).not.toMatch(word);
+  });
+
+  it('keeps every other boss line the same at every stage', () => {
+    for (const id of BOSS_IDS.filter((b) => b !== 'ballast')) for (let stage = 2; stage <= 7; stage++) expect(tallyLine({ mode: 'boss', boss: id, stage })).toBe(tallyLine({ mode: 'boss', boss: id }));
   });
 });
 
@@ -114,11 +135,23 @@ describe('endingLine (#1175)', () => {
   it('names the open clamp and the crew attached, in one line', () => {
     expect(endingLine(6)).toBe('Variance noted. Clamp: open. Crew attached: 6.');
   });
+
+  // #1546: the clamp opens with the epilogue, at stage 7: the line agrees with it. The server, which keeps no story, passes no stage.
+  it('says the clamp is open from stage 7 only, and locked before it', () => {
+    expect(endingLine(6, 7)).toBe('Variance noted. Clamp: open. Crew attached: 6.');
+    for (const stage of [1, 5, 6]) expect(endingLine(6, stage)).toBe('Variance noted. Clamp: locked. Crew attached: 6.');
+  });
 });
 
 describe('ledgerLine (#1315)', () => {
   it('counts the seats on file out of the lairs, with one line of lore', () => {
     expect(ledgerLine(3, 15)).toBe('Seats on file: 3 of 15. Slag-glass remembers heat.');
+  });
+
+  // #1546: the lore sentence gives way to the clamp once it is open.
+  it('says the clamp is open from stage 7 in place of the lore line', () => {
+    expect(ledgerLine(3, 15, 7)).toBe('Seats on file: 3 of 15. Clamp: open.');
+    for (const stage of [1, 6]) expect(ledgerLine(3, 15, stage)).toBe(ledgerLine(3, 15));
   });
 
   it('stays one short line, no newline', () => {
