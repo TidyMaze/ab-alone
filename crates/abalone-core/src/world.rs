@@ -640,6 +640,27 @@ pub fn lairs(seed: u64, count: usize) -> Vec<(i32, i32)> {
         .collect()
 }
 
+/// The roster's bosses, by their number in `boss_ids()`, from the easiest tower to the hardest (docs/specs/openworld.md section 15).
+pub const TOWER_ORDER: [usize; 15] = [0, 5, 8, 10, 12, 13, 3, 9, 11, 14, 6, 4, 7, 1, 2];
+/// The towers of one ring, and so of one tier.
+pub const RING_SIZE: usize = 3;
+
+/// The cell of the tower of each boss of the roster, boss 0 first (docs/specs/openworld.md section 15): the cells of `lairs` do not
+/// move, the boss of `TOWER_ORDER[i]` stands on the `i`-th nearest to the spawn.
+pub fn towers(_seed: u64) -> Vec<(i32, i32)> {
+    Vec::new()
+}
+
+/// The ring, and so the tier, of the tower of the boss `boss`: 1 for the nearest `RING_SIZE` towers, up to 5.
+pub fn tower_ring(_boss: usize) -> u8 {
+    0
+}
+
+/// The ring, and so the dungeon tier, of a gate on `cell`: the ring of the tower that comes next as the cells go out from the spawn.
+pub fn gate_ring(_towers: &[(i32, i32)], _cell: (i32, i32)) -> u8 {
+    0
+}
+
 /// A lair is drawn in its share of the sextant for its first `LAIR_SLOT_TRIES` tries (the most any seed of 1 to 2000 but 711 needs is
 /// 5 666), then in the whole sextant (#1594: the third of seed 711's tundra that lair 14 is drawn in holds no open ground). So the
 /// lairs of a seed that found them in the share do not move. The search ends after `LAIR_TRIES` tries.
@@ -2496,5 +2517,112 @@ mod tests {
             .flat_map(|k| STEPS.map(|(a, b)| (lairs[k].0 + a, lairs[k].1 + b)))
             .collect();
         assert!(dungeon_walk(9, (0, 0), &lairs, &[], &[], &others).is_none());
+    }
+    /// 24 random 32-bit seeds, fixed so a failure repeats.
+    fn random_seeds() -> Vec<u64> {
+        let mut x: u64 = 0x2545_F491_4F6C_DD1D;
+        (0..24)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                x >> 32
+            })
+            .collect()
+    }
+
+    fn check_towers(seed: u64, found: &[(i32, i32)]) {
+        let mut cells = lairs(seed, TOWER_ORDER.len());
+        let mut moved = found.to_vec();
+        cells.sort();
+        moved.sort();
+        assert_eq!(
+            moved, cells,
+            "seed {seed}: the towers stand on the lairs' cells"
+        );
+        let along: Vec<i32> = TOWER_ORDER
+            .iter()
+            .map(|&boss| hex_distance((0, 0), found[boss]))
+            .collect();
+        assert!(
+            along.windows(2).all(|w| w[0] <= w[1]),
+            "seed {seed}: the nearer the easier, {along:?}"
+        );
+        let echo = found[0];
+        assert!(
+            found
+                .iter()
+                .all(|&c| hex_distance((0, 0), echo) <= hex_distance((0, 0), c)),
+            "seed {seed}: the Echo is the nearest tower"
+        );
+    }
+
+    #[test]
+    fn the_tower_order_is_the_whole_roster_once_with_the_echo_first() {
+        let mut sorted = TOWER_ORDER;
+        sorted.sort_unstable();
+        assert_eq!(sorted.to_vec(), (0..15).collect::<Vec<_>>());
+        assert_eq!(TOWER_ORDER[0], 0);
+    }
+
+    #[test]
+    fn every_seed_from_1_to_2000_puts_the_easiest_tower_nearest_and_the_echo_first() {
+        sweep(
+            "towers never end",
+            |seed| towers(seed),
+            |seed, found| {
+                assert_eq!(found.len(), 15, "seed {seed}");
+                check_towers(seed, &found);
+            },
+        );
+    }
+
+    #[test]
+    fn random_seeds_put_the_easiest_tower_nearest_and_the_echo_first() {
+        for seed in random_seeds() {
+            check_towers(seed, &towers(seed));
+        }
+    }
+
+    #[test]
+    fn a_tower_stands_where_the_tier_order_says_and_not_in_its_old_sextant() {
+        // Seed 7: the nearest lair is not lair 0, yet boss 0 stands on it, and a lair's cell never moves.
+        let cells = lairs(7, 15);
+        let nearest = (0..15)
+            .min_by_key(|&k| (hex_distance((0, 0), cells[k]), k))
+            .unwrap();
+        assert_ne!(nearest, 0);
+        assert_eq!(towers(7)[0], cells[nearest]);
+        assert_eq!(towers(7), towers(7));
+    }
+
+    #[test]
+    fn the_rings_hold_three_towers_each_in_five_tiers() {
+        let rings: Vec<u8> = TOWER_ORDER.iter().map(|&boss| tower_ring(boss)).collect();
+        assert_eq!(rings, [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5]);
+        assert_eq!(tower_ring(0), 1);
+        assert_eq!(tower_ring(2), 5);
+    }
+
+    #[test]
+    fn a_gate_has_the_ring_of_the_towers_nearer_than_it() {
+        let found = towers(7);
+        let mut sorted: Vec<i32> = found.iter().map(|&c| hex_distance((0, 0), c)).collect();
+        sorted.sort_unstable();
+        let at = |d: i32| (d, 0);
+        assert_eq!(gate_ring(&found, at(10)), 1, "inside the nearest tower");
+        assert_eq!(
+            gate_ring(&found, at(sorted[2] + 1)),
+            1,
+            "three towers nearer"
+        );
+        assert_eq!(gate_ring(&found, at(sorted[3] + 1)), 2);
+        assert_eq!(gate_ring(&found, at(sorted[7] + 1)), 3);
+        assert_eq!(
+            gate_ring(&found, at(sorted[14] + 1)),
+            5,
+            "past the last tower"
+        );
+        assert_eq!(gate_ring(&found, at(1000)), 5);
     }
 }
