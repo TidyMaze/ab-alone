@@ -50,9 +50,15 @@ One switch, already in the code: `motionReduced(system, saved)` (the Reduced mot
 
 ## 4. Acceptance of the other stories
 
-**2. Board move and last move.** A pushed chain slides on `--motion-base` with a tiny squash on arrival (`--motion-fast`); the last move pulses once on its origin and target cells. The next input is accepted at once; replay and online play are unaffected. Reduced: marbles jump to the cell and the last move shows a steady outline.
+**2. Board move and last move.** A pushed chain slides on `--motion-base` with a tiny squash on arrival (`--motion-fast`); the last move pulses once on its origin and target cells. The next input is accepted at once; replay and online play are unaffected. Reduced: marbles jump to the cell and the last move shows a steady outline. The numbers (#1560, `slide.ts`):
 
-**3. Ejection and end.** An ejected marble arcs off the edge and fades in `--motion-celebrate`; a win or loss beat in the HUD plate (`body[data-over]`) runs at most 1.2 s and any input skips it. Reduced: the marble is removed at once and the result banner shows without the beat.
+- **Stagger.** The moved group leaves at once; a marble it pushes leaves 20 ms (`STAGGER_MS`) a place later along the line, at most 2 places (40 ms), and its slide is shortened by the same time, so every marble arrives at 200 ms as before. 20 ms is about what the pusher's ease out takes to close the 0.28 cell gap between two marbles (spacing 1, diameter 0.72), so the chain passes the force on. The move takes 200 ms in all, and the next input is accepted at 200 ms, as before.
+- **Squash.** From the arrival, 120 ms (`SQUASH_MS`, `--motion-fast`): a damped dip and rebound, `y = 1 - 0.15 (1 - t) sin 2 pi t` for `t` from 0 to 1 (flattest at about 0.89 at a quarter, then 1.04 at three quarters), width `1 / sqrt(y)` so the volume stays, about the marble's contact point so it never leaves the board. It only changes how the marble is drawn: it holds nothing back, and a click or the bot's reply plays at 200 ms as before.
+- **Camera kick of an ejection.** 240 ms (`KICK_MS`, twice `--motion-fast`), only when a marble leaves the board (a plain move has none): a zoom in of 2 % in the first 60 ms then back, and a shake of at most 4 px (3 waves across, 4 up and down, dying away). It is a zoom and a shift of the drawn picture only: the camera is the resting one again once drawn, and a hover picks the cell under the pointer on the picture as drawn (`unkick`). A press or a key ends it at once, like the ejection effect, so a click always picks on the resting board.
+- Reduced: no stagger, no squash, no kick.
+- Not measured: how it feels. An owner should play a few pushes and say if 0.15, 2 %, 4 px or 20 ms want to change; they are the constants at the top of `slide.ts` and `kick.ts`.
+
+**3. Ejection and end.** An ejected marble arcs off the edge and fades in `--motion-celebrate`, and the camera kicks for 240 ms (story 2); a win or loss beat in the HUD plate (`body[data-over]`) runs at most 1.2 s and any input skips it. Reduced: the marble is removed at once and the result banner shows without the beat.
 
 **4. Menus and buttons.** Settings, Game modes and the dock sheets open with a slide and fade on `--motion-base` and close on `--motion-base` with `--ease-in`; buttons ease their pressed and focus states on `--motion-instant`. No layout shift, hit area live from the first frame. Reduced: panels appear and vanish at once; the focus ring stays.
 

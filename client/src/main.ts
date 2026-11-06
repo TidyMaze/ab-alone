@@ -187,7 +187,8 @@ import { OnlineSession } from './session';
 import { coopStatus, duelStatus, onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
-import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
+import { KICK_MS, REST, kickAt, unkick, type Kick } from './kick';
+import { MARBLE_RADIUS, SLIDE_MS, SQUASH_MS, slideAt, slideTracks, squashAt, type SlideTrack } from './slide';
 import { fuseDigit, fuseNote, parseFuses, pullTrack, specialCues, type Pull } from './specialcues';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml, passNote } from './hud';
@@ -2936,21 +2937,32 @@ async function botTurn(): Promise<void> {
 }
 
 // Moved marbles slide to their new cell. A click or a bot reply during a slide waits for its end.
-let slide: { game: Engine | Encounter; tracks: SlideTrack[]; start: number } | null = null;
+// The marbles settle with a squash (#1560) for SQUASH_MS after the slide, which holds nothing back: `landed` is set when the slide ends.
+let slide: { game: Engine | Encounter; tracks: SlideTrack[]; start: number; landed?: boolean } | null = null;
 const afterSlide: (() => void)[] = [];
 // The slide of a replaced game (an import, New game, Retry, a new fight, going online) holds nothing back: what
 // would wait for it would be dropped with it at the next frame (#371).
-const sliding = (): boolean => slide?.game === engine;
+const sliding = (): boolean => slide?.game === engine && !slide.landed;
 function whenSettled(fn: () => void): void {
   if (sliding()) afterSlide.push(fn);
   else fn();
 }
 
+/** Draws the marble flattened (#1560): about the board plane, its contact point staying on the board, whatever its roll. */
+const squashed = new THREE.Matrix4();
+function squashMarble(marble: THREE.Object3D, { y, xz }: { y: number; xz: number }): void {
+  marble.matrixAutoUpdate = y === 1;
+  if (y === 1) return;
+  marble.matrix.makeScale(xz, y, xz).setPosition(marble.position.x, marble.position.y - MARBLE_RADIUS * (1 - y), marble.position.z).multiply(squashed.makeRotationFromQuaternion(marble.quaternion));
+  marble.matrixWorldNeedsUpdate = true;
+}
+
 function animateSlides(now: number): void {
-  if (!slide) return;
-  const stale = slide.game !== engine; // Retry, a new fight or going online ends the slide
-  const elapsed = now - slide.start;
-  for (const track of stale ? [] : slide.tracks) {
+  const current = slide;
+  if (!current) return;
+  const stale = current.game !== engine; // Retry, a new fight or going online ends the slide
+  const elapsed = now - current.start;
+  for (const track of stale ? [] : current.tracks) {
     const p = slideAt(track, elapsed);
     const i = cellIndex(track.cell[0], track.cell[1]);
     const on = marbleAt.get(i) ?? [];
@@ -2958,13 +2970,19 @@ function animateSlides(now: number): void {
       obj.position.x = p.x;
       obj.position.z = p.z;
     }
-    if (on[0]) turnMarble(on[0], rolledTurn(track, elapsed, turnAt(i)));
+    if (on[0]) {
+      turnMarble(on[0], rolledTurn(track, elapsed, turnAt(i)));
+      squashMarble(on[0], squashAt(track, elapsed));
+    }
   }
   if (!stale && elapsed < SLIDE_MS) return;
-  slide = null;
-  delete document.body.dataset.sliding;
-  if (stale) afterSlide.length = 0; // what waited belongs to the old game
-  for (const fn of afterSlide.splice(0)) whenSettled(fn);
+  if (!current.landed) {
+    current.landed = true; // the slide is over for the input: the squash that follows holds nothing back
+    delete document.body.dataset.sliding;
+    if (stale) afterSlide.length = 0; // what waited belongs to the old game
+    for (const fn of afterSlide.splice(0)) whenSettled(fn);
+  }
+  if (slide === current && (stale || elapsed >= SLIDE_MS + SQUASH_MS)) slide = null; // not one a waiting move just began
 }
 
 // Marbles leaving the board: pushed one cell out over the rim, they fall, tumble, stretch and fade
@@ -3185,6 +3203,24 @@ function eject(ejection: NonNullable<ReturnType<typeof findEjection>>, dir: numb
   turnMarble(mesh, inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
   startEjection(mesh, track, scene);
   if (!reduced) startBlood(track);
+  if (!reduced) {
+    kick = { start: performance.now() }; // the camera punches and shakes (#1560)
+    body.dataset.kick = 'on'; // read by the e2e tests
+  }
+}
+
+// The camera kick of an ejection (#1560, kick.ts): `drawnKick` is the one the last frame was drawn with, the picture the pointer sees.
+let kick: { start: number } | null = null;
+let drawnKick: Kick = REST;
+function driveKick(now: number): Kick {
+  if (!kick) return REST;
+  const elapsed = now - kick.start;
+  if (elapsed >= KICK_MS) endKick();
+  return kickAt(elapsed, reducedMotion());
+}
+function endKick(): void {
+  kick = null;
+  delete document.body.dataset.kick;
 }
 
 /** Slides the Echo's bonus move `bonus` of `game` from the board `from` to `to` (#958), as a move slides; an ejected
@@ -3595,6 +3631,7 @@ function animateEjections(now: number): void {
 function skipEjections(): void {
   for (const e of ejecting) e.skipped = true;
   for (const b of bleeding) b.skipped = true;
+  endKick(); // a press picks on the resting picture, which the next frame draws
   for (const p of passing) p.skipped = true;
   for (const s of slams) s.skipped = true;
   if (shock) shock.skipped = true;
@@ -4732,10 +4769,8 @@ function click(q: number, r: number): void {
 const raycaster = new THREE.Raycaster();
 raycaster.layers.enable(CELL_LAYER); // the cell discs, drawn by their instances (#885), are what a click hits
 function aim(e: PointerEvent | MouseEvent): void {
-  raycaster.setFromCamera(
-    new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1),
-    camera,
-  );
+  const at = unkick(kick ? drawnKick : REST, e.clientX, e.clientY, innerWidth, innerHeight); // the picture is kicked while an ejection plays (#1560)
+  raycaster.setFromCamera(new THREE.Vector2((at.x / innerWidth) * 2 - 1, -(at.y / innerHeight) * 2 + 1), camera);
 }
 function cellAt(e: PointerEvent | MouseEvent): Axial | null {
   aim(e);
@@ -5227,6 +5262,8 @@ hookHost.__lastMoveRing = () => ({ opacity: lastMoveMaterial.opacity, scale: las
 // Used by the browser checks to read the target cells and the direction of their arrow (#390).
 hookHost.__targets = () => targets;
 hookHost.__marbles = () => marbles;
+// Used by the browser checks to see the kick the last frame was drawn with (#1560).
+hookHost.__kick = () => drawnKick;
 
 // Used by the browser checks to pick a legal move (the boss tests play forward), and to find one that
 // exposes a marble to The Chaplain.
@@ -7241,7 +7278,7 @@ function animateParticles(now: number): void {
 }
 // An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
 function moving(): boolean {
-  const effects = [slide, reveal, shock, blast, sweep, blinking, ghostFading(), unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop, evac && !evac.done];
+  const effects = [slide, kick, drawnKick !== REST, reveal, shock, blast, sweep, blinking, ghostFading(), unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop, evac && !evac.done];
   const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
   return (
     effects.some(Boolean) ||
@@ -7292,6 +7329,7 @@ renderer.setAnimationLoop((now) => {
   driveAccents(roomAccents, accentOn(tier, software), now, reducedMotion());
   driveSkyGlow(sceneRenderer.scene, accentOn(tier, software));
   animateSlides(now);
+  const pose = driveKick(now);
   fadeGlyphs(now);
   fadeGhosts(now);
   animateReveal(now);
@@ -7337,7 +7375,8 @@ renderer.setAnimationLoop((now) => {
   for (const sync of syncMarbles) sync();
   for (const sync of syncPedestals) sync();
   renderer.info.reset();
-  sceneRenderer.render();
+  sceneRenderer.render(pose, innerWidth, innerHeight);
+  drawnKick = pose;
   if (sceneRenderer.terraceOn) unveil();
   draws++;
   drawAsked = false;

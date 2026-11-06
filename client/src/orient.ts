@@ -2,7 +2,7 @@
 // each marble starts turned its own way (#346) and rolls as it slides (#345), each cell disc is turned (#347).
 // Pure maths; main.ts sets the meshes.
 import { DIRECTIONS, cellIndex } from './board';
-import { rollAt, type SlideTrack } from './slide';
+import { rollAt, slideEndMs, type SlideTrack } from './slide';
 
 /** A rotation as a unit quaternion, x, y, z, w (the order THREE.Quaternion.fromArray reads). */
 export type Quat = [number, number, number, number];
@@ -47,7 +47,7 @@ const about = ([x, y, z]: [number, number, number], angle: number): Quat => {
 /** The turn of a sliding marble `elapsedMs` after the move, from `end`, its turn once at rest on its new cell. */
 export function rolledTurn(track: SlideTrack, elapsedMs: number, end: Quat): Quat {
   const { axis, angle } = rollAt(track, elapsedMs);
-  return mul(about(axis, angle - rollAt(track, track.durationMs).angle), end);
+  return mul(about(axis, angle - rollAt(track, slideEndMs(track)).angle), end);
 }
 
 /** The turns after a move in direction `dir`: each sliding marble takes its own turn to its new cell, rolled one cell.
@@ -57,7 +57,7 @@ export function carryTurns(turns: ReadonlyMap<number, Quat>, seed: number, track
   const next = new Map(turns);
   for (const track of tracks) {
     const [q, r] = track.cell;
-    const { axis, angle } = rollAt(track, track.durationMs);
+    const { axis, angle } = rollAt(track, slideEndMs(track));
     next.set(cellIndex(q, r), mul(about(axis, angle), turnOf(turns, seed, cellIndex(q - dq, r - dr))));
   }
   return next;

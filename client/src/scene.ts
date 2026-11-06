@@ -3,6 +3,7 @@ import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import { max, pass, renderOutput, saturation, vec4 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
+import { REST, type Kick } from './kick';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
 import { DECKS, LIGHT } from './light';
 import { TONAL, flat as flatTone } from './look';
@@ -592,17 +593,30 @@ export class SceneRenderer {
     };
   }
 
-  render(): void {
-    // The terrace lights nothing from within: no bloom, only the graded and smoothed picture (#1314).
-    const pipeline = this.terraceOn ? this.flatPipeline : this.pipeline;
-    if (pipeline) {
-      try {
-        pipeline.render();
-        return;
-      } catch {
-        // Fall back to renderer if pipeline fails in mock or test environment
+  /** Draws the scene. `kick` (kick.ts, #1560) zooms and shifts this one picture: the camera is the resting one again once drawn. */
+  render(kick: Kick = REST, width = 1, height = 1): void {
+    const camera = this.camera;
+    if (kick !== REST) {
+      camera.zoom = kick.zoom;
+      camera.setViewOffset(width, height, -kick.x, -kick.y, width, height);
+    }
+    try {
+      // The terrace lights nothing from within: no bloom, only the graded and smoothed picture (#1314).
+      const pipeline = this.terraceOn ? this.flatPipeline : this.pipeline;
+      if (pipeline) {
+        try {
+          pipeline.render();
+          return;
+        } catch {
+          // Fall back to renderer if pipeline fails in mock or test environment
+        }
+      }
+      this.renderer.render(this.scene, camera);
+    } finally {
+      if (kick !== REST) {
+        camera.zoom = 1;
+        camera.clearViewOffset();
       }
     }
-    this.renderer.render(this.scene, this.camera);
   }
 }

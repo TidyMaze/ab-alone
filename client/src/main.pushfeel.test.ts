@@ -40,6 +40,17 @@ function height(marble: THREE.Mesh): number {
   const e = marble.matrix.elements;
   return Math.hypot(e[1]!, e[5]!, e[9]!);
 }
+/** Its width across the board, the row that gives x. */
+function width(marble: THREE.Mesh): number {
+  const e = marble.matrix.elements;
+  return Math.hypot(e[0]!, e[4]!, e[8]!);
+}
+
+/** Moves the clock `ms` on and asks for a draw: under automation the page draws a frame only when asked, and 100 ms after the last (quality.ts drawDue). */
+function drawIn(game: Game, ms: number): void {
+  game.hook('__drawNext');
+  game.frame(ms);
+}
 
 describe('the arrival squash', () => {
   it('squashes a marble when it arrives, then it rebounds and rests, while the slide is over for input', async () => {
@@ -53,7 +64,7 @@ describe('the arrival squash', () => {
     const squashed = pushed();
     expect(height(squashed)).toBeLessThan(0.95);
     expect(squashed.matrixAutoUpdate).toBe(false);
-    expect(squashed.matrix.elements[0]).toBeGreaterThan(1); // and wider
+    expect(width(squashed)).toBeGreaterThan(1); // and wider
     // It stays on the board: the contact point under it does not rise.
     expect(squashed.position.y).toBe(0.36);
     expect(squashed.matrix.elements[13]).toBeCloseTo(0.36 - 0.36 * (1 - height(squashed)), 9);
@@ -113,7 +124,7 @@ describe('the camera kick of an ejection', () => {
     expect(data().kick).toBe('on');
     view.mockClear();
     clear.mockClear();
-    game.frame(60);
+    drawIn(game, 100);
     expect(kickOf(game)).not.toEqual(REST);
     expect(kickOf(game).zoom).toBeGreaterThan(1);
     expect(Math.abs(kickOf(game).x) + Math.abs(kickOf(game).y)).toBeGreaterThan(0);
@@ -122,12 +133,12 @@ describe('the camera kick of an ejection', () => {
     expect([w, h, fw, fh]).toEqual([innerWidth, innerHeight, innerWidth, innerHeight]);
     expect([x, y]).toEqual([-kickOf(game).x, -kickOf(game).y]); // the picture moves by the kick
     expect(clear).toHaveBeenCalledTimes(1); // ... and the camera is the resting one again once drawn
-    game.frame(KICK_MS - 60);
+    game.frame(KICK_MS);
     expect(data().kick).toBeUndefined();
-    game.frame(16);
+    drawIn(game, 100);
     expect(kickOf(game)).toEqual(REST);
     view.mockClear();
-    game.frame(16);
+    drawIn(game, 100);
     expect(view).not.toHaveBeenCalled(); // nothing is drawn offset any more
   });
 
@@ -155,12 +166,12 @@ describe('the camera kick of an ejection', () => {
   it('ends at once on a press, and the picture is drawn at rest once more', async () => {
     const game = await boot('?bot=off');
     pushOffBoard(game);
-    game.frame(60);
+    drawIn(game, 100);
     expect(kickOf(game)).not.toEqual(REST);
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     expect(data().kick).toBeUndefined();
     const draws = game.draws();
-    game.frame(16);
+    drawIn(game, 100);
     expect(game.draws()).toBeGreaterThan(draws); // the frame that shows the board at rest
     expect(kickOf(game)).toEqual(REST);
   });
@@ -168,7 +179,7 @@ describe('the camera kick of an ejection', () => {
   it('picks the cell under the pointer on the picture as drawn: a hover mid-kick is unshaken first', async () => {
     const game = await boot('?bot=off');
     pushOffBoard(game);
-    game.frame(60);
+    drawIn(game, 100);
     const kick = kickOf(game);
     expect(kick).not.toEqual(REST);
     const aimed = vi.spyOn(THREE.Raycaster.prototype, 'setFromCamera');
@@ -185,7 +196,7 @@ describe('the camera kick of an ejection', () => {
   it('keeps the click on the cell clicked: a press ends the kick before it picks', async () => {
     const game = await boot('?bot=off');
     pushOffBoard(game);
-    game.frame(60);
+    drawIn(game, 100);
     const aimed = vi.spyOn(THREE.Raycaster.prototype, 'setFromCamera');
     const canvas = document.querySelector('canvas')!;
     canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: 300, clientY: 200, pointerId: 1, bubbles: true }));
