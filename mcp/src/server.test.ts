@@ -76,7 +76,7 @@ describe('the Open world tools', () => {
     await call('new_world', { seed: 3 });
     await call('world_step', { direction: 'E' });
     const save = JSON.parse((await call('save_world')).text);
-    expect(save).toMatchObject({ record: 6, seed: 3, hero: [1, 0], lairs: [], logs: [] });
+    expect(save).toMatchObject({ record: 7, seed: 3, hero: [1, 0], lairs: [], logs: [], recruits: 0 });
     await call('new_world', { seed: 0 });
     // The cells discovered come back too (#1411): the spawn's disc and the 21 cells the step uncovered.
     expect(JSON.parse((await call('new_world', { save })).text)).toMatchObject({ seed: 3, hero: '(1,0)', discovered: 352 });
@@ -104,6 +104,22 @@ describe('the Open world tools', () => {
       expect(JSON.parse(loaded.text).troop).toHaveLength(n);
     }
     expect((await call('new_world', { save: { ...save, troop: troop(16) } })).isError).toBe(true);
+    const { recruits: _recruits, ...before } = save; // a save from before the recruits: the troop holds 15 at most
+    expect(JSON.parse((await call('new_world', { save: { ...before, troop: troop(15) } })).text).recruits).toBe(0);
+    expect((await call('new_world', { save: { ...before, troop: troop(16) } })).isError).toBe(true);
+  });
+
+  test('the recruits of a save of the client come back (#1531): the troop holds 15 and them, and the cap is 5', async () => {
+    await connect();
+    const save = JSON.parse((await call('new_world', { seed: 3 }), await call('save_world')).text);
+    const troop = (n: number) => Array.from({ length: n }, (_, i) => [(i % 5) + 1, Math.floor(i / 5)]);
+    const loaded = await call('new_world', { save: { ...save, troop: troop(18), recruits: 3 } });
+    expect(JSON.parse(loaded.text)).toMatchObject({ recruits: 3 });
+    expect(JSON.parse(loaded.text).troop).toHaveLength(18);
+    expect(JSON.parse((await call('save_world')).text)).toMatchObject({ recruits: 3 });
+    expect((await call('new_world', { save: { ...save, troop: troop(19), recruits: 3 } })).isError).toBe(true);
+    expect((await call('new_world', { save: { ...save, troop: troop(16), recruits: 6 } })).isError).toBe(true);
+    expect((await call('new_world', { save: { ...save, recruits: -1 } })).isError).toBe(true);
   });
 
   test("the fight of a lair is the session's game: won after the step onto the lair, it beats the lair", async () => {

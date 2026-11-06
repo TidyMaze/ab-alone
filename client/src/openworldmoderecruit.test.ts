@@ -5,7 +5,7 @@ import { world_chunk } from 'abalone-wasm';
 import type { Axial } from './board';
 import { CHUNK } from './openworld';
 import { FightState } from './openworldfight';
-import { OpenWorldMode } from './openworldmode';
+import { DEFAULT_YAW, OpenWorldMode } from './openworldmode';
 import { RECRUIT_MAX } from './openworldrecruit';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
@@ -13,12 +13,13 @@ import { stopLeftIntervalsAfterEach } from './test/intervals';
 stopLeftIntervalsAfterEach();
 
 // A marble a push ejects joins the troop (#1531, docs/specs/openworld.md section 16). Seed 1: the hero on (11, -29) steps left to (11, -30), the foe
-// on (12, -30) has water on (13, -30) behind it, and the lone hero shoves it in (#1504). The sea has water everywhere.
+// on (12, -30) has water on (13, -30) behind it, and the lone hero shoves it in (#1504). The islet is the same world with water everywhere but on the foe's cell.
 const real = (seed: number, cx: number, cy: number): Uint8Array => world_chunk(seed, cx, cy);
-function sea(_seed: number, cx: number, cy: number): Uint8Array {
-  if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 3);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0, 0], i * 3);
+function islet(seed: number, cx: number, cy: number): Uint8Array {
+  const out = real(seed, cx, cy).slice();
+  for (let i = 0; i < out.length / 3; i++) {
+    if (!(cx * CHUNK + (i % CHUNK) === 12 && cy * CHUNK + Math.floor(i / CHUNK) === -30)) out[i * 3 + 1] = 0;
+  }
   return out;
 }
 const nobody = (): Int32Array => new Int32Array();
@@ -85,7 +86,7 @@ describe('a marble the troop ejects joins it (#1531)', () => {
   it('past the cap the marble is ejected and counted but no recruit joins', async () => {
     const saves = worldSaves(memoryStore(), 1);
     const crowd = Array.from({ length: 15 + RECRUIT_MAX }, (_, i): Axial => [i % 5, -20 - Math.floor(i / 5)]);
-    await saves.put(1, [11, -29], crowd, new FightState(), 0, [], [], [], 0, [], RECRUIT_MAX);
+    await saves.put(1, [11, -29], crowd, new FightState(), DEFAULT_YAW, [], [], [], 0, [], RECRUIT_MAX);
     const m = mode(real, true, saves);
     await m.open(1, 800, 600);
     expect(body().openworldRecruits).toBe(String(RECRUIT_MAX));
@@ -99,10 +100,8 @@ describe('a marble the troop ejects joins it (#1531)', () => {
   });
 
   it('with no free cell within three of the hero, the cap is not spent', () => {
-    const m = mode(sea);
-    m.enter(1, 800, 600);
-    m.fixture({ hero: [0, 0], troop: [], enemies: [[2, 0]] });
-    tap(m, 'ArrowRight');
+    const m = mode(islet);
+    shove(m); // the hero sails to (11, -30) and shoves the foe off its islet: it takes the islet, and nothing round it is free
     expect(body().openworldBeaten).toBe('1');
     expect(body().openworldRecruits).toBe('0');
     expect(m.hero!.troop).toHaveLength(0);

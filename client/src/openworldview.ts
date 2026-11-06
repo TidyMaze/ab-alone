@@ -11,6 +11,7 @@ import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './open
 import { CameraLife, Spring } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, gapFill, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
+import { RECRUIT_MAX } from './openworldrecruit';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
 import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
@@ -41,7 +42,7 @@ export const CAPACITY = {
   wall: 500,
   cap: 500,
   enemies: 700,
-  troop: TROOP,
+  troop: TROOP + RECRUIT_MAX,
 } as const;
 
 /** The chunks to load on each side of the hero's chunk for a ground radius of `radius` cells (a hex distance, see
@@ -917,6 +918,14 @@ export class OpenWorldView {
     if (glide && this.placed) this.glideTo(at, troop, glide);
     else this.snapTo(at, troop);
     this.frame();
+  }
+
+  /** A marble joins the troop (#1531): the last cell of `troop` takes it, drawn at once and at rest, while a push may still be drawn. The mesh grows to
+   * hold the troop (and lays it again) when it is full. */
+  join(troop: readonly Axial[]): void {
+    this.place(this.troop, troop);
+    this.marbleAt(troop.length).place(this.standing(troop[troop.length - 1]!));
+    this.drawMarbles();
   }
 
   /** Stands the hero on `at` and the troop on `troop` at once: no glide (a world entered, a fixture, reduced motion). */

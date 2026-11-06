@@ -309,7 +309,7 @@ The world (seed), the hero and troop cells, and the enemy groups beaten are save
 `ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
 
 **What is saved.** One record per seed, under the key `openworld:<seed>`:
-`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], time, logs: [n, ...], yaw, savedAt }`, where `fight` is the
+`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], time, logs: [n, ...], recruits, yaw, savedAt }`, where `fight` is the
 `FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
 The last world played is kept apart under `openworld:last` (`{ seed }`).
 
@@ -333,7 +333,7 @@ either (a bad `fight` makes a bad record). Both are deleted, and the world start
 field) or 2 loads with no lair beaten, so an old save is kept; an unknown later version, or a `lairs` that is not a list of
 whole numbers, is deleted like any garbage. `record` 4 adds `discovered`, the cells discovered (section 9): a record before it loads
 with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is garbage. `record` 5 adds `time`,
-the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage. `record` 6 adds `logs`, the numbers of the lore logs found (section 12): a record before it loads with none found; a `logs` that is not a list of whole numbers is garbage.
+the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage. `record` 6 adds `logs`, the numbers of the lore logs found (section 12): a record before it loads with none found; a `logs` that is not a list of whole numbers is garbage. `record` 7 adds `recruits`, the marbles that joined the troop (section 16): a record before it loads with none, and its troop holds 15 marbles at most as it always did; a `recruits` that is not a whole number from 0 to 5 is garbage, and so is a troop longer than 15 plus its `recruits`. `beat` and `beatMarble` keep `recruits` and write the current record, so a record of version 6 they touch still loads.
 
 ## 6. Tests
 
@@ -346,7 +346,7 @@ with the Playwright MCP before its PR, with a screenshot.
 Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, enemies })` puts the
 hero, the troop and the enemies of the loaded square (the generated ones are hidden; without `enemies` they stay, wandering, and a marble the hero is put
 beside fights, section 3c), `window.__openworldWander(tick | null)` sets the tick of the marbles' clock (section 3b), and
-`window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them. `window.__openworldTime(ms)` sets the time of
+`window.__openworldEnemies()` gives the enemies near the hero; the fixture also takes `recruits: n` (section 16), and `window.__openworldPads(seed)` gives the pads of the towers as `q, r` pairs (section 15). The e2e push test uses them. `window.__openworldTime(ms)` sets the time of
 day in ms of the 12 minute cycle (section 11), `window.__openworldLogs(seed)` gives the lore logs of a world as `q, r` pairs (section 12); `body[data-openworld-phase]` reads `day`, `dusk` or `night`, and `body[data-fight-board]`
 the same on a lair fight.
 
@@ -690,3 +690,27 @@ section 10.
   Which pads exist is the list of the towers beaten in the world's save (`lairs`, section 5): a boss beaten from the Modes menu or the Hub is a medal and
   adds nothing to that list, so it leaves no pad. No save field is added: `lairs` already holds only the lairs beaten through the world. A pad shows once its
   tower is beaten, wherever the save is read.
+
+- **Recruits.** A marble a push of the troop sends into the water or off the edge of the world joins the troop as a recruit. The rules allow one marble
+  to fall per push (a line push ejects the last enemy of the run it pushes, a shove one foe, sections 3, 4 and 4b), so a group of three that is pushed
+  out marble by marble brings up to three recruits, one for each marble that falls, and a group that is not pushed out brings none. Only a push of the
+  troop counts: a marble beaten in a wild fight (section 3c), a marble another hero ejected and a marble that walked into the water does not. The cap is
+  `RECRUIT_MAX` = **5** in `client/src/openworldrecruit.ts`, a third of the troop of 15: past it a marble still falls and counts as beaten, and nothing joins.
+  The recruit appears on the free cell nearest the hero within 3 cells (open ground, no enemy, no lair or place, not the hero's nor the troop's cell;
+  the order of `arrival` in `openworldteleport.ts`), at once and at rest, drawn with the push (`OpenWorldView.join`). When no cell within 3 is free,
+  as on a boat far out, none joins and the cap is not spent. From then on it is a troop marble in every rule: it is the last of the troop (the
+  followers flock, section 4b, the hero's line of two or three marbles counts it, the herd and the shove use it, a teleport brings it along), and the troop is 15 plus
+  its recruits. The wire of section 4 of `multiplayer.md` still carries 15 offsets, so the other heroes see the first 15 marbles and not the
+  newest recruits. The plate shows a line `#openworld-recruits` under the medals, hidden while there are none: "A marble joins the troop. Recruits 2 / 5"
+  when one has just joined, "Recruits 2 / 5" when the world opens. `body[data-openworld-recruits]` holds the count. The count is saved
+  with the world as `recruits` (record 7, section 5), and it is `recruits` that the troop of a record is checked against: the troop holds 15 plus them.
+  The rule is shared with the MCP server (`recruitCell`), whose `world_step` says the cell in `push.recruit` and whose `world_state` and
+  `save_world` carry `recruits` (`mcp.md` section 5).
+- **How it fits "Not now".** Section 1 keeps HP, damage, levels, items and economy out until a Decision (#313). A recruit is a marble of the troop,
+  which already pushes, flocks and is pushed under the rules of `rules.md`; it has no hit points, no level and no stat, and it is not spent or
+  traded. The pad is a teleporter of section 10, a place on the map. The points of interest are the logs and the gates already specified. Nothing
+  here is a currency, and no push is stronger for it than a troop of 15 plus its recruits can make it by being longer in line.
+- **Tests.** Rust: the pads and the density, above. Client: the recruit's cell and cap (`openworldrecruit.test.ts`), the mode (a recruit for an
+  ejection, none past the cap or with no free cell, the plate line, the save and its reload, `openworldmoderecruit.test.ts`), the record 7 and the
+  older records (`openworldsave.test.ts`), the pad in the network (`openworldmodepads.test.ts`). MCP: the recruit and the pad, the schema of the save.
+  E2E (`openworld-gains.spec.ts`): a recruit joins on a shove and a pad stands by a beaten tower, on a desktop and a phone, each under 15 s.

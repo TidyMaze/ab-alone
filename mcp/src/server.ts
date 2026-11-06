@@ -3,6 +3,7 @@
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
 import { BLUEPRINTS } from '../../client/src/collector';
+import { RECRUIT_MAX } from '../../client/src/openworldrecruit';
 import { COMMANDERS, TACTICS } from '../../client/src/roguelite';
 import { bossIds, runRules, worldRules } from './engine';
 import type { Result, Session } from './game';
@@ -34,7 +35,7 @@ const SAVE = z.object({
   version: z.int(),
   seed: z.int().min(0).max(4294967295),
   hero: CELL,
-  troop: z.array(CELL).max(15),
+  troop: z.array(CELL).max(15 + RECRUIT_MAX),
   fight: z.object({ removed: z.array(z.string().regex(/^-?\d+,-?\d+$/)), added: z.array(CELL), beaten: z.int().min(0) }),
   yaw: z.number(),
   broken: z.array(CELL),
@@ -42,7 +43,8 @@ const SAVE = z.object({
   discovered: z.array(z.tuple([z.int(), z.int(), z.string()])).optional(),
   time: z.number().min(0).optional(),
   logs: z.array(z.int().min(0)).optional(),
-});
+  recruits: z.int().min(0).max(RECRUIT_MAX).optional(),
+}).refine((save) => save.troop.length <= 15 + (save.recruits ?? 0), { message: 'the troop holds 15 marbles and its recruits' });
 
 export function createServer(
   session: Session,

@@ -340,7 +340,7 @@ describe('the same seed and moves as the client', () => {
     expect(near.state.enemies).toEqual(['(6,6)']);
     const pushed = value(open.step({ direction: 'E' }));
     expect(pushed.moved).toBe(true);
-    expect(pushed.push).toEqual({ direction: 'E', ejected: [] });
+    expect(pushed.push).toEqual({ direction: 'E', ejected: [], recruit: null });
     expect(pushed.state).toMatchObject({ ...PUSHED, beaten: 0, enemies: ['(7,5)', '(8,4)', '(7,6)'] });
     const row = value(open.state({ radius: 2 })).window.rows.find((r) => r.r === 6)!;
     expect(row.cells[7 - row.q0]).toBe('E');
@@ -356,7 +356,7 @@ describe('the same seed and moves as the client', () => {
     value(open.newWorld({ seed: 1 }));
     const walked = value(open.walk({ q: 5, r: 6 }));
     expect(walked.steps).toBe(10);
-    expect(walked.pushes).toEqual([{ direction: 'E', ejected: [] }]);
+    expect(walked.pushes).toEqual([{ direction: 'E', ejected: [], recruit: null }]);
     expect(walked.state).toMatchObject(PUSHED);
   });
 });
@@ -486,6 +486,7 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
       discovered: save.discovered,
       time: 0,
       logs: [],
+      recruits: 0,
       savedAt: save.savedAt,
     });
     const seen = Discovered.from(save.discovered!);

@@ -15,6 +15,7 @@ import { Discovered } from './openworlddiscovered';
 import { WorldMap } from './openworldmap';
 import { CLAIM_NOTE, goalLines } from './openworldgoal';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
+import { RECRUIT_MAX, recruitCell } from './openworldrecruit';
 import { WORLD_LOGS } from './lorelogs';
 import { enter, heroStep } from './openworldstep';
 import { pairs, teleport, teleporterNear } from './openworldteleport';
@@ -120,6 +121,8 @@ export class OpenWorldMode {
   /** The ring of each tower of the world entered, by number (#1532). */
   private rings: number[] = [];
   private found: number[] = [];
+  /** The marbles that joined the troop after a push ejected one (#1531), at most `RECRUIT_MAX`. */
+  private recruits = 0;
   private dirty = false;
   /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
   private unsaved = false;
@@ -235,6 +238,8 @@ export class OpenWorldMode {
     this.rings = rings.slice(0, this.lairs.length);
     this.placeRings = this.places.map((_, i) => rings[this.lairs.length + i] ?? 0);
     this.found = saved ? [...saved.logs] : [];
+    this.recruits = saved?.recruits ?? 0;
+    this.plateRecruits(false);
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     this.counted = 0;
     this.tod = saved?.time ?? 0; // an older save, or a new world, starts at the start of day (#1496)
@@ -349,6 +354,9 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldTroop;
     delete document.body.dataset.openworldEnemies;
     delete document.body.dataset.openworldBeaten;
+    delete document.body.dataset.openworldRecruits;
+    this.recruits = 0;
+    this.plateRecruits(false);
     delete document.body.dataset.openworldPush;
     delete document.body.dataset.openworldZoom;
     delete document.body.dataset.openworldYaw;
@@ -455,9 +463,13 @@ export class OpenWorldMode {
 
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
    * enemies of the loaded square replaced by `enemies`, none pushed (without `enemies`, the generated ones stay, wandering, and a marble that
-   * touches the hero starts a wild fight); `beaten` (#1175) sets the lairs beaten. A fixture ends the calm of a world just opened (#1511). */
-  fixture({ hero, troop, enemies, beaten }: { hero: Axial; troop: Axial[]; enemies?: Axial[]; beaten?: number[] }): void {
+   * touches the hero starts a wild fight); `beaten` (#1175) sets the lairs beaten, `recruits` (#1531) the marbles that joined the troop. A fixture ends the calm of a world just opened (#1511). */
+  fixture({ hero, troop, enemies, beaten, recruits }: { hero: Axial; troop: Axial[]; enemies?: Axial[]; beaten?: number[]; recruits?: number }): void {
     this.calmUntil = 0;
+    if (recruits !== undefined) {
+      this.recruits = Math.min(recruits, RECRUIT_MAX); // the recruits of the world (#1531)
+      this.plateRecruits(false);
+    }
     this.view!.snap();
     if (beaten) {
       this.beaten = [...beaten];
@@ -911,6 +923,7 @@ export class OpenWorldMode {
     if (now !== null) this.view!.ripple(from, this.hero!.at, now, this.lowTier()); // a ring on the water next to it (#1101)
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: span * slowBy(), pace }); // the step glides (#1040)
     const played = this.wild() ? null : this.troopPush(); // a marble that touches the hero fights: the troop does not push it (#1511)
+    const joined = played !== null && this.recruit(played);
     this.view!.updateEnemies();
     const log = this.logs.findIndex((cell) => same(cell, this.hero!.at));
     if (log >= 0) this.readLog(log); // rolled onto a lore log (#1589)
@@ -919,6 +932,7 @@ export class OpenWorldMode {
       const landed = now + span * slowBy();
       this.view!.punch(landed); // the camera feels the push (#1103)
       if (played.push.ejected.length > 0) this.view!.shake(landed); // and shakes when an enemy is ejected
+      if (joined) this.view!.join(this.hero!.troop); // the recruit stands beside the hero while the push is drawn (#1531)
     } else if (played) this.view!.show(this.hero!.at, this.hero!.troop); // reduced motion: the marbles jump
     this.dirty = true;
     this.persist();
@@ -990,6 +1004,26 @@ export class OpenWorldMode {
     return played;
   }
 
+  /** A marble the push ejected joins the troop (#1531): the free cell nearest the hero takes it, up to `RECRUIT_MAX`. Reports whether one joined. */
+  private recruit({ push }: Played): boolean {
+    if (push.ejected.length === 0) return false;
+    const hero = this.hero!;
+    const cell = recruitCell(hero.at, hero.troop, this.recruits, this.free);
+    if (!cell) return false;
+    hero.troop = [...hero.troop, cell];
+    this.recruits++;
+    this.plateRecruits(true);
+    return true;
+  }
+
+  /** The plate's line of the recruits (#1531): hidden while there are none, else "Recruits n / 5", with the joining told when one just did. */
+  private plateRecruits(joined: boolean): void {
+    const line = document.getElementById('openworld-recruits');
+    if (!line) return;
+    line.hidden = this.recruits === 0;
+    line.textContent = `${joined ? 'A marble joins the troop. ' : ''}Recruits ${this.recruits} / ${RECRUIT_MAX}`;
+  }
+
   /** Marks the world as changed: it is saved by the next frame, or when the mode is left. */
   private persist(): void {
     this.unsaved = true;
@@ -1001,7 +1035,7 @@ export class OpenWorldMode {
     if (!this.unsaved) return;
     this.unsaved = false;
     const { at, troop } = this.hero!;
-    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod, this.found).then((stored) => {
+    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod, this.found, this.recruits).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
   }
@@ -1100,6 +1134,7 @@ export class OpenWorldMode {
     document.body.dataset.openworldTroop = this.hero!.troop.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldEnemies = String(this.view!.enemyCount);
     document.body.dataset.openworldBeaten = String(this.fight.beaten);
+    document.body.dataset.openworldRecruits = String(this.recruits); // #1531
     document.body.dataset.openworldPush = String(this.pushes);
     document.body.dataset.openworldZoom = String(this.view!.zoom);
     document.body.dataset.openworldRoute = String(this.route.length); // the cells of a walk to a far cell still to take (#1137)

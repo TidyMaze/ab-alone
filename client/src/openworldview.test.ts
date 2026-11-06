@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, OFF_WORLD, type Terrain, type Tile, TROOP, World } from './openworld';
+import { RECRUIT_MAX } from './openworldrecruit';
 import { FightState } from './openworldfight';
 import { WORLD_LOOKS } from './daynight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
@@ -955,9 +956,9 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
 });
 
 describe('the instance capacity of each mesh (#976): no waste, and no write past the end', () => {
-  it('sizes the troop at the troop, and each other mesh at its measured maximum, not the widest view', () => {
+  it('sizes the troop at the troop and the recruits it can hold (#1531), and each other mesh at its measured maximum, not the widest view', () => {
     const view = new OpenWorldView(new World(grass));
-    expect(mesh(view, 'troop').instanceMatrix.count).toBe(TROOP);
+    expect(mesh(view, 'troop').instanceMatrix.count).toBe(TROOP + RECRUIT_MAX);
     expect(mesh(view, 'enemies').instanceMatrix.count).toBe(CAPACITY.enemies);
     expect(mesh(view, 'prop-mountain').instanceMatrix.count).toBe(CAPACITY.mountain);
     expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(CAPACITY.grass);

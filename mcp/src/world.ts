@@ -6,6 +6,7 @@
 // beaten and the cells discovered, saves them in the client's format (client/src/openworldsave.ts), and turns the engine's codes into words.
 import { decodeDiscovered, Discovered, type DiscoveredSave } from '../../client/src/openworlddiscovered';
 import { startTroop } from '../../client/src/openworld';
+import { recruitCell } from '../../client/src/openworldrecruit';
 import { teleport } from '../../client/src/openworldteleport';
 import { endingLine } from '../../client/src/tally';
 import { DIRECTIONS } from './notation';
@@ -55,7 +56,7 @@ export interface Outcome {
 type Cell = [q: number, r: number];
 export type Direction = (typeof DIRECTIONS)[number];
 
-/** A world as the client saves it (`worldSaves().put` of client/src/openworldsave.ts, record 6), cells as `[q, r]`. */
+/** A world as the client saves it (`worldSaves().put` of client/src/openworldsave.ts, record 7), cells as `[q, r]`. */
 export interface WorldSave {
   record?: number;
   version: number;
@@ -75,6 +76,8 @@ export interface WorldSave {
   time?: number;
   /** The lore logs the client found (#1589), kept as they were: the server exposes none. A save from before has none. */
   logs?: number[];
+  /** The marbles that joined the troop after a push ejected one (#1531), up to the client's cap. A save from before has none. */
+  recruits?: number;
   savedAt?: number;
 }
 
@@ -112,6 +115,8 @@ export interface WorldState {
   broken: number;
   /** Enemy marbles the troop has ejected. */
   beaten: number;
+  /** The marbles that joined the troop after a push ejected one (#1531), up to the cap of 5. */
+  recruits: number;
   /** The cells discovered: within 10 cells of every cell the hero stood on, as the client's map shows them (#1411). */
   discovered: number;
   /** The enemy marbles inside the window. */
@@ -128,6 +133,8 @@ export interface WorldState {
 export interface Push {
   direction: Direction;
   ejected: string[];
+  /** The cell of the marble that joined the troop because of it (#1531), `null` when none did: the cap is reached or no cell round the hero is free. */
+  recruit: string | null;
 }
 
 export interface Stepped {
@@ -161,7 +168,7 @@ const LETTERS = '~sgrPotW';
 const NAMES = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall'];
 /** The record of the client's save (`RECORD` of client/src/openworldsave.ts) and the crew of its ending line (`MARBLES` of
  * client/src/trainer.ts). */
-const RECORD = 6;
+const RECORD = 7;
 const CREW = 6;
 const WATER = 0;
 const BOULDER = 5;
@@ -198,6 +205,8 @@ interface Play {
   time: number;
   /** The numbers of the lore logs found, from the save resumed (#1589). */
   logs: number[];
+  /** The marbles that joined the troop (#1531). */
+  recruits: number;
   /** The hero's steps so far: with the seed it fixes the flock's ties. */
   tick: number;
 }
@@ -233,9 +242,9 @@ export class OpenWorld {
     if (save) {
       const { removed, added, beaten } = save.fight;
       const fight = this.rules.WorldFight.restore(Int32Array.from(removed.flatMap((key) => key.split(',').map(Number))), flat(added), beaten);
-      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered), time: save.time ?? 0, logs: [...(save.logs ?? [])], tick: 0 };
+      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered), time: save.time ?? 0, logs: [...(save.logs ?? [])], recruits: save.recruits ?? 0, tick: 0 };
     } else {
-      this.play = { seed, hero: [0, 0], troop: [], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered(), time: 0, logs: [], tick: 0 };
+      this.play = { seed, hero: [0, 0], troop: [], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered(), time: 0, logs: [], recruits: 0, tick: 0 };
       this.play.troop = startTroop((cell) => this.standable([cell[0], cell[1]], false)).map(([q, r]): Cell => [q, r]); // the client's own start (`Hero`): same cells, same order
     }
     this.play.discovered.reveal(this.play.hero); // a save from before the discovery: the cells round the hero, as the client
@@ -256,10 +265,10 @@ export class OpenWorld {
     const play = this.play;
     if (!play) return this.none();
     this.back();
-    const { seed, hero, troop, broken, fight, lairs, yaw, discovered, time, logs } = play;
+    const { seed, hero, troop, broken, fight, lairs, yaw, discovered, time, logs, recruits } = play;
     const removed = pairs(fight.removed()).map(([q, r]) => `${q},${r}`);
     const added = pairs(fight.added());
-    return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added, beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], discovered: discovered.toJSON(), time, logs: [...logs], savedAt: Date.now() });
+    return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added, beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], discovered: discovered.toJSON(), time, logs: [...logs], recruits, savedAt: Date.now() });
   }
 
   /** Rolls the hero one cell, then the troop pushes. Water is sailed (#1441); an enemy, a wall, a peak or a tree beside a tree
@@ -304,8 +313,7 @@ export class OpenWorld {
     const play = this.play;
     if (!play) return this.none();
     this.back();
-    const free = ([q, r]: Readonly<Cell>): boolean => OPEN.includes(this.terrain(q, r)!) && !this.occupied([q, r]) && !this.lairCells.some((l) => same(l, [q, r]));
-    const moved = teleport(this.network(), (cq, cr) => play.discovered.has(cq, cr), play.hero, [q, r], play.troop.length, free);
+    const moved = teleport(this.network(), (cq, cr) => play.discovered.has(cq, cr), play.hero, [q, r], play.troop.length, this.free);
     if ('refused' in moved) return fail('blocked', moved.refused);
     play.hero = [...moved.hero];
     play.troop = moved.troop.map(([q, r]): Cell => [q, r]);
@@ -374,8 +382,18 @@ export class OpenWorld {
     play.troop = pushedTroop;
     play.discovered.reveal(play.hero);
     const direction = DIRECTIONS[DELTAS.findIndex((d) => same(d, [out.dir[0]!, out.dir[1]!]))]!;
-    return { smashed, push: { direction, ejected: pairs(out.ejected).map(text) } };
+    const ejected = pairs(out.ejected);
+    // A marble ejected joins the troop (the client's `OpenWorldMode.recruit`, #1531), on the free cell nearest the hero.
+    const recruit = ejected.length > 0 ? recruitCell(play.hero, play.troop, play.recruits, this.free) : null;
+    if (recruit) {
+      play.troop = [...play.troop, [recruit[0], recruit[1]] as Cell];
+      play.recruits++;
+    }
+    return { smashed, push: { direction, ejected: ejected.map(text), recruit: recruit && text([recruit[0], recruit[1]]) } };
   }
+
+  /** Whether a marble can stand on a cell: open ground, no enemy, no lair (the troop's cells round a teleporter, and a recruit's, as the client's `free`). */
+  private readonly free = ([q, r]: Readonly<Cell>): boolean => OPEN.includes(this.terrain(q, r)!) && !this.occupied([q, r]) && !this.lairCells.some((l) => same(l, [q, r]));
 
   /** Whether a follower may stand on a cell: the open ground, no enemy on it; water only while the hero sails (the client's `Hero.standable`). */
   private standable(cell: Cell, sailing: boolean): boolean {
@@ -435,7 +453,7 @@ export class OpenWorld {
   }
 
   private view(radius: number): WorldState {
-    const { seed, hero, troop, broken, fight, lairs, discovered } = this.play!;
+    const { seed, hero, troop, broken, fight, lairs, discovered, recruits } = this.play!;
     const size = Math.min(Math.max(radius, 1), 8);
     const enemies = this.enemiesAround(hero, size);
     const rows: Row[] = [];
@@ -451,6 +469,7 @@ export class OpenWorld {
       troop: troop.map(text),
       broken: broken.length,
       beaten: fight.beaten(),
+      recruits,
       discovered: discovered.count,
       enemies: enemies.map(text),
       lairs: this.lairCells.map((cell, k) => ({ boss: this.bossOf(k), cell: text(cell), distance: hex(hero, cell), beaten: lairs.includes(k) })),
