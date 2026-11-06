@@ -833,6 +833,18 @@ describe('the settings toggles', () => {
     expect(localStorage.getItem('ab-alone.difficulty')).toBe('normal');
   });
 
+  it('the difficulty control says what each level changes, in its line, tooltip and name (#1538)', async () => {
+    await boot('?bot=off');
+    const note = (): string => document.getElementById('difficulty-note')!.textContent!;
+    expect(note()).toBe('Normal: full boss search; hover tells on hover.');
+    expect(row('difficulty').title).toBe('Difficulty: normal (100%). Normal: full boss search; hover tells on hover.');
+    expect(row('difficulty').getAttribute('aria-label')).toBe(row('difficulty').title);
+    row('difficulty').click();
+    expect(note()).toBe('Hard: double the boss search; hover tells off.');
+    row('difficulty').click();
+    expect(note()).toBe('Easy: half the boss search; hover tells always on.');
+  });
+
   it('starts on the saved difficulty', async () => {
     await bootWith({ 'ab-alone.difficulty': 'hard' });
     expect(row('difficulty').textContent).toBe('200%');

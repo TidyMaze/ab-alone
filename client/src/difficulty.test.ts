@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DIFFICULTIES,
   DIFFICULTY_LABELS,
+  DIFFICULTY_NOTES,
   DIFFICULTY_PERCENT,
   nextDifficulty,
   readDifficulty,
   scaleBudget,
+  TELL_MODE,
   writeDifficulty,
   type Difficulty,
 } from './difficulty';
@@ -71,5 +73,12 @@ describe('difficulty (#704)', () => {
     expect(scaleBudget(3000, 'hard')).toBe(6000);
 
     expect(scaleBudget(1, 'easy')).toBe(1); // at least 1
+  });
+
+  it('says what each level does to the tells that need a hover, and in a short line (#1538)', () => {
+    expect(TELL_MODE).toEqual({ easy: 'always', normal: 'hover', hard: 'never' });
+    expect(DIFFICULTY_NOTES.easy).toBe('Easy: half the boss search; hover tells always on.');
+    expect(DIFFICULTY_NOTES.normal).toBe('Normal: full boss search; hover tells on hover.');
+    expect(DIFFICULTY_NOTES.hard).toBe('Hard: double the boss search; hover tells off.');
   });
 });

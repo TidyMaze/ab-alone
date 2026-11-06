@@ -342,6 +342,126 @@ describe('main.ts boss fights', () => {
     });
   });
 
+  describe('win and attempt counters (#1538)', () => {
+    const tally = (): unknown => JSON.parse(localStorage.getItem('ab-alone.boss-tally') ?? '{}');
+
+    it('an attempt counts when the first move is played, not when the fight is opened, and again after a Retry', async () => {
+      const game = await boot('?bot=off', { reducedMotion: true });
+      fightBoss(game, 'The Hull');
+      fightBoss(game, 'The Echo'); // the Hull was opened and left
+      expect(tally()).toEqual({});
+      play(game, forward(game));
+      expect(tally()).toEqual({ echo: { wins: 0, attempts: 1 } });
+      play(game, forward(game)); // the second move of the same fight
+      expect(tally()).toEqual({ echo: { wins: 0, attempts: 1 } });
+      byId('boss-retry').click();
+      expect(tally()).toEqual({ echo: { wins: 0, attempts: 1 } });
+      play(game, forward(game));
+      expect(tally()).toEqual({ echo: { wins: 0, attempts: 2 } });
+    });
+
+    it('a win counts once, whatever the HUD redraws, and a lost fight adds an attempt only', async () => {
+      const game = await boot('?bot=off', { reducedMotion: true });
+      fightBoss(game, 'The Echo');
+      loseByRepetition(game);
+      expect(tally()).toEqual({ echo: { wins: 0, attempts: 1 } });
+      const { Encounter } = await import('abalone-wasm');
+      fightBoss(game, 'The Hull');
+      const won = (): number => (game.hook<number>('__plies') > 0 ? 1 : 0);
+      vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
+      vi.spyOn(Encounter.prototype, 'status').mockImplementation(won);
+      play(game, forward(game));
+      byId('boss-goal').click(); // the HUD draws again
+      expect(tally()).toEqual({ echo: { wins: 0, attempts: 1 }, hull: { wins: 1, attempts: 1 } });
+    });
+
+    it('keeps the counters of a player who played before the counters existed', async () => {
+      const game = await boot('?bot=off', { reducedMotion: true, storage: { 'ab-alone.medals': JSON.stringify({ hull: 9 }) } });
+      expect(tally()).toEqual({});
+      fightBoss(game, 'The Hull');
+      play(game, forward(game));
+      expect(tally()).toEqual({ hull: { wins: 0, attempts: 1 } });
+    });
+  });
+
+  describe('the tell by difficulty (#1538)', () => {
+    const level = (difficulty: string): { 'ab-alone.difficulty': string } => ({ 'ab-alone.difficulty': difficulty });
+    /** The Echo: the marble at (0, 2) is selected, then (0, 1) hovered when `over`. The bonus rings and the ghosts drawn. */
+    async function echoTell(difficulty: string, over: boolean): Promise<{ bonus: number; ghosts: number }> {
+      const game = await boot('?bot=off', { reducedMotion: true, storage: level(difficulty) });
+      fightBoss(game, 'The Echo');
+      game.click(0, 2);
+      if (over) hover(game, [0, 1]);
+      return { bonus: Number(body().echoBonus), ghosts: Number(body().ghosts) };
+    }
+
+    it('normal: the Echo shows its bonus on a hovered move only', async () => {
+      expect(await echoTell('normal', false)).toEqual({ bonus: 0, ghosts: 0 });
+      expect((await echoTell('normal', true)).bonus).toBe(1);
+    });
+
+    it('hard: the Echo shows no bonus and no reply, only the ghost of the hovered move', async () => {
+      const { bonus, ghosts } = await echoTell('hard', true);
+      expect(bonus).toBe(0);
+      const hull = await (async () => {
+        const game = await boot('?bot=off', { reducedMotion: true, storage: level('hard') });
+        fightBoss(game, 'The Hull');
+        const mv = forward(game);
+        game.click(...mv.cells[0]!);
+        hover(game, [mv.cells[0]![0] + DIRS[mv.dir]![0], mv.cells[0]![1] + DIRS[mv.dir]![1]]);
+        return Number(body().ghosts);
+      })();
+      expect(ghosts).toBe(hull); // the Echo's reply is not announced: its ghosts are those of any other boss
+    });
+
+    it('easy: the Echo shows the bonus of every move of the selected marble, with nothing hovered', async () => {
+      const { bonus } = await echoTell('easy', false);
+      expect(bonus).toBeGreaterThan(1);
+    });
+
+    it('easy: a hovered move shows what a normal one shows', async () => {
+      expect((await echoTell('easy', true)).ghosts).toBe((await echoTell('normal', true)).ghosts);
+    });
+
+    describe('The Chaplain', () => {
+      async function chaplain(difficulty: string): Promise<{ game: Game; mv: Move; at: Axial }> {
+        const game = await boot('?nodes=200', { reducedMotion: true, storage: level(difficulty) });
+        fightBoss(game, 'The Chaplain', SEED);
+        const exposing = (): Move | undefined =>
+          game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && game.hook<Axial[]>('__preview', m).length > 0);
+        const recorded = recordedGame();
+        for (let k = 0; k < EXPLODED_AT && !exposing(); k += 2) game.hook('__playMoves', recorded.slice(k, k + 2));
+        const mv = exposing()!;
+        const [q, r] = mv.cells[0]!;
+        const [dq, dr] = DIRS[mv.dir]!;
+        game.click(q, r);
+        return { game, mv, at: [q + dq, r + dr] };
+      }
+
+      it('normal: nothing is shown before a move is hovered', async () => {
+        await chaplain('normal');
+        expect(body().flips).toBe('0');
+        expect(byId('hud').querySelector('.boss .tell')?.textContent ?? '').not.toContain('Flips this turn');
+      });
+
+      it('hard: a hovered move shows no flip', async () => {
+        const { game, at } = await chaplain('hard');
+        hover(game, at);
+        expect(body().flips).toBe('0');
+        expect(byId('hud').querySelector('.boss .tell')?.textContent ?? '').not.toContain('Flips this turn');
+      });
+
+      it('easy: the flips of every move of the selected marble are shown with nothing hovered, the HUD waits for a hover', async () => {
+        const { game, mv, at } = await chaplain('easy');
+        expect(Number(body().flips)).toBeGreaterThanOrEqual(game.hook<Axial[]>('__preview', mv).length);
+        expect(Number(body().flips)).toBeGreaterThan(0);
+        expect(byId('hud').querySelector('.boss .tell')?.textContent ?? '').not.toContain('Flips this turn');
+        hover(game, at);
+        expect(byId('hud').querySelector('.boss .tell')!.textContent).toContain('Flips this turn');
+      });
+    });
+  });
+
   it('the flat HUD lists the boss phase and its tell as text', async () => {
     const game = await boot('?bot=off');
     byId('setting-flat-hud').click();

@@ -806,6 +806,19 @@ describe('main.ts, the Medal room (#812)', () => {
   });
 });
 
+describe('main.ts, the Medal room counters (#1538)', () => {
+  it('lists the wins of the attempts of each boss tried, next to its best turns', async () => {
+    const game = await boot('?bot=off');
+    await game.settle();
+    localStorage.setItem('ab-alone.medals', JSON.stringify({ echo: 7 }));
+    localStorage.setItem('ab-alone.boss-tally', JSON.stringify({ echo: { wins: 2, attempts: 5 }, hull: { wins: 0, attempts: 3 } }));
+    shipAt(game, [0, 1]);
+    game.click(0, 2);
+    expect(byId('reader').textContent).toContain('The Echo: 7 turns. Won 2 of 5. ');
+    expect(byId('reader').textContent).toContain('The Hull: Not beaten. Won 0 of 3. ');
+  });
+});
+
 // The deck plan (#1249): a label plate on every room, always shown and kept on its cell as the camera moves, the
 // marble labelled YOU, a lift-shaft rail of the five decks and the boss pips. The deck is framed closer than a board.
 describe('main.ts, the deck plan (#1249)', () => {
