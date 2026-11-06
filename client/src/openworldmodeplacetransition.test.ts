@@ -59,17 +59,20 @@ describe('entering a place starts the transition without holding the place back 
     expect(title()).toBe('The Ballast Mind');
   });
 
-  it('a dungeon gate shows the run, a town the Hub, each with its cue', () => {
+  it('a dungeon gate shows the run and its cue', () => {
     const gate = make(false);
     walk(gate.m, [5, 0], 'ArrowRight');
     expect(gate.onPlace).toHaveBeenCalledWith(7, 'dungeon', 0);
     expect(root().dataset.kind).toBe('dungeon');
     expect(title()).toBe('Rogue-lite run');
+  });
+
+  it('a town shows the Hub and no cue of its own', () => {
     const town = make(false);
     town.m.enter(7, 800, 600);
-    town.m.fixture({ hero: [1, 0], troop: [], enemies: [] });
-    town.m.key('ArrowLeft');
-    town.m.release('ArrowLeft');
+    town.m.fixture({ hero: [-1, 0], troop: [], enemies: [] });
+    town.m.key('ArrowRight');
+    town.m.release('ArrowRight');
     expect(town.onPlace).toHaveBeenCalledWith(7, 'town', 0);
     expect(root().dataset.kind).toBe('town');
     expect(title()).toBe('Hub');
@@ -84,6 +87,13 @@ describe('entering a place starts the transition without holding the place back 
 
   it('draws no title for a tower of a mode that was not told the names', () => {
     const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => false, worldSaves(memoryStore(), 1), () => LAIRS);
+    walk(m, [2, 0], 'ArrowRight');
+    expect(title()).toBe('');
+  });
+
+  it('draws no title for a mode told the bosses and not their names', () => {
+    const gap: undefined[] = Array.from({ length: 9 }, () => undefined); // onLair to teleportersOf
+    const m = new (OpenWorldMode as new (...args: unknown[]) => OpenWorldMode)(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => false, worldSaves(memoryStore(), 1), () => LAIRS, ...gap, () => IDS);
     walk(m, [2, 0], 'ArrowRight');
     expect(title()).toBe('');
   });

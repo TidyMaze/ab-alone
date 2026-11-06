@@ -214,6 +214,7 @@ import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, m
 import { FightState } from './openworldfight';
 import { wipe } from './wildwipe';
 import { OpenWorldMode, twistOf } from './openworldmode';
+import type { PlaceKind } from './placetransition';
 import { BOARD_LOOKS } from './boardlook';
 import type { Phase } from './daynight';
 import { bindJoystick, heldKeys } from './openworldjoystick';
@@ -2713,7 +2714,7 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPale
 let hover: Axial | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the hub (#522)
 let lairFrom: { seed: number; lair: number; phase: Phase } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170), and the phase of the world it was entered in (#1496)
-let placeFrom: { seed: number } | null = null; // the Open world a town or a dungeon gate was entered from: the Hub or the run it opened has a way back (#1593)
+let placeFrom: { seed: number; kind: PlaceKind } | null = null; // the Open world a town or a dungeon gate was entered from: the Hub or the run it opened has a way back (#1593)
 let wildFrom: { seed: number; home: Axial; phase: Phase } | null = null; // the Open world marble that started the wild fight (#1511): the world, the cell it starts on, and the phase it was met in
 /** Dresses the board for the phase the lair or the wild marble was met in (#1496, #1511): day, dusk or night, `body[data-fight-board]` reading the same. A fight that is neither has the ordinary board. */
 function syncBoardLook(): void {
@@ -5788,10 +5789,10 @@ function syncPlaceBack(): void {
   placeBack.hidden = !(placeFrom && (hub || run));
 }
 placeBack.addEventListener('click', () => {
-  const { seed } = placeFrom!;
+  const { seed, kind } = placeFrom!;
   leaveMode(); // the Hub or the run is left
   syncPlaceBack();
-  void openWorld.open(seed, innerWidth, innerHeight); // the world as the place left it: the hero on the entrance (#1593)
+  void openWorld.open(seed, innerWidth, innerHeight, true, kind); // the world as the place left it: the hero on the entrance (#1593)
 });
 backButton.addEventListener('click', () => {
   if (wildFrom) return returnFromWild();
@@ -5799,7 +5800,7 @@ backButton.addEventListener('click', () => {
     const { seed } = lairFrom;
     lairFrom = null;
     syncBoardLook();
-    void openWorld.open(seed, innerWidth, innerHeight); // the world as the lair left it: the hero on the entrance (#1170)
+    void openWorld.open(seed, innerWidth, innerHeight, true, 'tower'); // the world as the lair left it: the hero on the entrance (#1170)
     return;
   }
   enterHub(roomOf!);
@@ -6663,7 +6664,7 @@ const openWorld = new OpenWorldMode(
   (seed, kind, index) => {
     // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
     (kind === 'town' ? shipButton : runButton).click();
-    placeFrom = { seed };
+    placeFrom = { seed, kind };
     syncPlaceBack();
     if (kind === 'town') {
       storyEvent({ on: 'town' }); // the first town visited is stage 3 (#1586), before the line of this town is chosen
@@ -6675,6 +6676,7 @@ const openWorld = new OpenWorldMode(
   () => storyStage(store), // the clamp of Tally's lines is open from stage 7 (#1546)
   (seed) => Uint8Array.from(world_rings(seed)), // the ring of each tower and the dungeon tier of each gate (#1532)
   (seed) => Int32Array.from(world_pads(seed)), // the pad a tower beaten through the world leaves (#1531)
+  (id) => boss_name(id)!, // the title of a tower entered (#1519)
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
 const mapButton = document.getElementById('openworld-map-button')!;

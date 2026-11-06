@@ -20,6 +20,7 @@ import { WORLD_LOGS } from './lorelogs';
 import { enter, heroStep } from './openworldstep';
 import { pairs, teleport, teleporterNear } from './openworldteleport';
 import type { PeerHost } from './worldnet';
+import { PlaceTransition, placeTitle, type PlaceKind } from './placetransition';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The walk of the hero to a far cell, the bridge's `world_path` (docs/specs/openworld.md section 4): the seed, the cell the hero
@@ -104,6 +105,8 @@ export class OpenWorldMode {
   private fight = new FightState();
   private pushes = 0;
   /** The boss lairs of the world entered, by number, and the numbers of the ones beaten (#1170). */
+  /** The transition into a tower, a gate or a town and back (#1519). */
+  private readonly transition = new PlaceTransition(() => this.reduced());
   private lairs: Axial[] = [];
   private beaten: number[] = [];
   /** Lairs other heroes reported taken (#1305): drawn beaten for the visit, never counted, filed or saved, since no fight proves them. */
@@ -197,13 +200,16 @@ export class OpenWorldMode {
     private readonly ringsOf: (seed: number) => Uint8Array = () => new Uint8Array(),
     /** The pad beside each tower of a seed's world: `q, r` pairs in the order of the lairs (the bridge's `world_pads`, #1531). */
     private readonly padsOf: (seed: number) => Int32Array = () => new Int32Array(),
+    /** The name of a boss by its id, for the title of a tower entered (#1519). */
+    private readonly bossName: (id: string) => string = () => '',
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
    * The save is read before the first draw, and the seed is remembered as the last world played (#968). */
-  async open(seed: number, width: number, height: number, resume = true): Promise<void> {
+  async open(seed: number, width: number, height: number, resume = true, from?: PlaceKind): Promise<void> {
     const saved = resume ? await this.saves.load(seed) : null;
     this.enter(seed, width, height, saved, await this.skins?.());
+    if (from) this.transition.back(from); // back from a tower, a gate or a town: the matching transition (#1519)
     void this.saves.remember(seed);
   }
 
@@ -974,6 +980,8 @@ export class OpenWorldMode {
    * left; the page starts the boss fight. */
   private enterLair(lair: number): void {
     const seed = this.seed;
+    const ids = this.bossIds();
+    this.transition.enter('tower', placeTitle('tower', ids.length > 0 ? this.bossName(ids[lair % ids.length]!) : '')); // over the fight that starts at once (#1519)
     this.persist();
     this.leave();
     this.onLair(seed, lair);
@@ -984,6 +992,7 @@ export class OpenWorldMode {
   private enterPlace(place: { cell: Axial; kind: 'town' | 'dungeon' }): void {
     const seed = this.seed;
     const index = this.places.filter(({ kind }) => kind === place.kind).indexOf(place); // the place among those of its kind: the spawn town is 0 (#1516)
+    this.transition.enter(place.kind, placeTitle(place.kind, '')); // over the Hub or the run that starts at once (#1519)
     this.persist();
     this.leave();
     this.onPlace(seed, place.kind, index);

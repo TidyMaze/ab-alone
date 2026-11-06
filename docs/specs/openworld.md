@@ -369,7 +369,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).
   Until the model is loaded, the plain gold or green pillar is drawn.
 - **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`), the number of the lair, not of its place on the map,
-  the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from).
+  the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from). The fight is live at once, under the transition of motion.md story 10 (a cue of two doors, the boss's name) (#1519).
 - **Win.** The medal is recorded in `ab-alone.medals` as for any boss win, and the lair is added to `lairs` of the world's save.
   "Back to the Open world" resumes the world on the entrance with the lair shown beaten.
 - **Loss.** "Back to the Open world" returns the hero to the lair's entrance, the lair unbeaten. Retry stays the lair's fight.
@@ -598,7 +598,8 @@ plan as the game.
   in a lair's fight keeps no `lairFrom`: the Open world of the menu opens the world saved on the entrance.
 - **Marker.** A flat pad on the cell, the teleporter's pad recoloured to the map icons' colours, green on a town and orange on a gate
   (`town-pad`, `gate-pad`, `OpenWorldView.setPlaces`), lit at night as the teleporters are. No plate label: lairs have none. Real models are #1518.
-- **Not now**: moving the Hub's stations, 3D models of the places (#1518), the transitions (#1519), the door grammar (#1517).
+- **Transition** (#1519). Entering a town or a gate, like a tower (section 7), plays the transition of motion.md story 10 over the Hub or the run that starts at once, and "Back to the Open world" plays the matching one over the world.
+- **Not now**: moving the Hub's stations, 3D models of the places (#1518), the door grammar (#1517).
 
 ## 14. The goal on arrival (#1530)
 

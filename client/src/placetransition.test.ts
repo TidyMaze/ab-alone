@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ENTER_MS, PlaceTransition, RETURN_MS, placeFrame, placeTitle } from './placetransition';
+import { ENTER_MS, MAX_STEP_MS, PlaceTransition, RETURN_MS, placeFrame, placeTitle } from './placetransition';
 
 // The one enter-a-place transition of the tower, the dungeon gate and the town (#1519, docs/specs/motion.md story 10).
 const root = () => document.getElementById('place-transition')!;
@@ -19,6 +19,7 @@ describe('the numbers of the transition', () => {
   it('lasts about 600 ms in, a little less back, both inside the 1.2 s cap of a celebration', () => {
     expect(ENTER_MS).toBe(600);
     expect(RETURN_MS).toBe(400);
+    expect(MAX_STEP_MS).toBe(50);
   });
 
   it('starts dark and shut and ends clear and open, whatever the time given', () => {
@@ -28,7 +29,9 @@ describe('the numbers of the transition', () => {
     expect(placeFrame(9, true)).toEqual(placeFrame(1, true));
   });
 
-  it('lifts the dim and opens the cue without ever going back', () => {
+  it('lifts the dim evenly and opens the cue fast, then slowly, without ever going back', () => {
+    expect(placeFrame(0.5, false).dim).toBe(0.5);
+    expect(placeFrame(0.5, false).open).toBeGreaterThan(0.8);
     let last = placeFrame(0, false);
     for (let t = 0.05; t <= 1.0001; t += 0.05) {
       const now = placeFrame(t, false);
@@ -71,12 +74,28 @@ describe('entering a place', () => {
     t.enter('dungeon', 'Rogue-lite run');
     vi.advanceTimersByTime(ENTER_MS / 2);
     expect(num('--open')).toBeGreaterThan(0.5);
-    expect(num('--dim')).toBeLessThan(0.5);
+    expect(num('--dim')).toBeLessThan(0.6);
     expect(num('--title')).toBe(1);
     expect(body().placeTransition).toBe('enter');
     vi.advanceTimersByTime(ENTER_MS);
     expect(root().hidden).toBe(true);
     expect(body().placeTransition).toBeUndefined();
+  });
+
+  it('counts a frame that came late as a short one, so a place that is slow to draw does not eat the transition', () => {
+    let next: FrameRequestCallback = () => {};
+    vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => ((next = f), 1));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const t = new PlaceTransition(() => false);
+    t.enter('town', 'Hub');
+    next(1000);
+    next(1016);
+    next(6000); // 5 s with no frame
+    expect(root().hidden).toBe(false);
+    expect(num('--open')).toBeLessThan(0.3);
+    for (let now = 6016, i = 0; i < 40 && !root().hidden; i++, now += 16) next(now);
+    expect(root().hidden).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it('is skipped to its end by a press, a tap or a new key, and the same press goes on to the page', () => {
@@ -135,7 +154,8 @@ describe('under reduced motion', () => {
     expect(num('--title')).toBe(1);
     vi.advanceTimersByTime(ENTER_MS - 1);
     expect(root().hidden).toBe(false);
-    vi.advanceTimersByTime(2);
+    expect(num('--open')).toBe(1);
+    vi.advanceTimersByTime(ENTER_MS / 4);
     expect(root().hidden).toBe(true);
   });
 

@@ -1483,6 +1483,34 @@ body[data-firstrun] #hud .tally { animation: none; } /* the line stays while the
 @keyframes wipe-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes wipe-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
+/* Place transition (#1519, docs/specs/motion.md story 10): entering a tower, a dungeon gate or a town. Layers over the page, which already shows the
+   place and takes every press (placetransition.ts writes --dim, --open and --title, 1 to 0, 0 to 1 and 0 to 1 and back, over 600 ms): a dim that lifts,
+   a cue that opens (two doors that part for a tower, an arch that grows past the screen for a gate, the dim alone for a town) and the name of the place.
+   Opacity and transform only. The dim and the cue lie under the HUD (z-index 0), so its controls stay readable; the name lies over it (z-index 4) so
+   a panel of the Hub or the run does not hide it. Reduced motion: the dim and the cue are cut, the name stays. */
+#place-transition { display: contents; }
+#place-transition[hidden] { display: none; }
+#place-transition > * { position: fixed; pointer-events: none; }
+#place-transition :is(.pt-dim, .pt-door, .pt-arch) { z-index: 0; }
+#place-transition :is(.pt-door, .pt-arch) { display: none; }
+#place-transition .pt-dim { inset: 0; background: radial-gradient(ellipse at 50% 50%, rgba(8, 10, 14, 0.6), rgba(4, 6, 9, 0.97)); opacity: var(--dim); }
+#place-transition[data-kind='tower'] .pt-dim { display: none; }
+#place-transition[data-kind='tower'] .pt-door { display: block; top: 0; bottom: 0; width: 50%; background: #06080b; }
+#place-transition[data-kind='tower'] .pt-door-l { left: 0; border-right: 3px solid #d4a73c; transform: translateX(calc(var(--open) * -100%)); }
+#place-transition[data-kind='tower'] .pt-door-r { right: 0; border-left: 3px solid #d4a73c; transform: translateX(calc(var(--open) * 100%)); }
+#place-transition[data-kind='dungeon'] .pt-arch {
+  display: block; left: 50%; top: 50%; width: 36vmin; height: 46vmin; box-sizing: border-box; border: 0.6vmin solid #e8812a; border-bottom: 0;
+  border-radius: 50% 50% 0 0 / 38% 38% 0 0; box-shadow: 0 0 5vmin #e8812a, inset 0 0 5vmin #e8812a;
+  transform: translate(-50%, -50%) scale(calc(0.3 + var(--open) * 3.2)); opacity: calc(1 - var(--open));
+}
+#place-transition .pt-title {
+  z-index: 4; left: 50%; top: 18%; margin: 0; padding: 0.5rem 1.25rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge);
+  border-radius: var(--r-card); font: 600 1.375rem/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; zoom: var(--ui-scale);
+  opacity: var(--title); transform: translate(-50%, calc((1 - var(--title)) * 12px));
+}
+#place-transition .pt-title:empty { display: none; }
+#place-transition[data-motion='cut'] :is(.pt-dim, .pt-door, .pt-arch) { display: none; }
+
 /* Screen transitions (#1099, docs/specs/motion.md story 9): entering or leaving the Open world cross-fades the canvas in on --motion-base. The
    rule that stops matching swaps the animation for the other keyframes (the same name would not restart), so each change replays the fade. Opacity only: nothing waits, the game takes input from the first frame.
    A game that is over (the loss dim, end-dim) keeps its own animation. Reduced motion: the tokens are 0ms, a hard cut. */
