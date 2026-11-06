@@ -6,6 +6,7 @@ import { actBoss, BIOMES, ELITES, FORMATIONS, BONUS_SCRAP, MOVE_BUDGET, newRun, 
 import { AUTO_DELAY_MS } from './autoplay';
 import { LEGACY_UNLOCKED } from './collector';
 import type { View } from './camera';
+import { cardText, GIST } from './specialhelp';
 import { boot, type Game } from './test/harness';
 
 // The rogue-lite run on the harness (#798, docs/specs/roguelite.md): Rogue-lite run in the mode menu shows the map of
@@ -1572,5 +1573,114 @@ describe('main.ts, the start screen of a run (#1524)', () => {
     byId('run-start').click();
     expect(document.body.dataset.run).toBe('place'); // the Warden's Anchors wait for their cells
     expect(game.hud()).toContain('ascension 2');
+  });
+});
+
+describe('main.ts, the HUD of a run fight (#1540, #1541)', () => {
+  /** The first 32 plies of an army of 14 against the 8 marbles of the first fight (black plays its first legal move, the bot answers): White has thrown one Black marble off. */
+  const LOST_ONE = [[1,2,-4,3,0,0,0,0],[2,5,0,-4,1,-4,0,0],[1,4,-4,4,0,0,0,0],[2,5,0,-3,1,-3,0,0],[1,4,-4,3,0,0,0,0],[2,5,2,-4,2,-3,0,0],[1,2,-4,2,0,0,0,0],[3,3,1,-2,2,-3,3,-4],[1,0,-3,1,0,0,0,0],[3,3,2,-2,3,-3,4,-4],[1,1,-3,2,0,0,0,0],[3,3,1,-1,2,-2,3,-3],[1,0,-4,2,0,0,0,0],[1,1,4,-3,0,0,0,0],[1,1,-3,2,0,0,0,0],[3,3,0,-1,1,-2,2,-3],[1,0,-4,2,0,0,0,0],[1,1,3,-3,0,0,0,0],[1,1,-3,2,0,0,0,0],[2,5,2,-3,2,-2,0,0],[1,0,-4,2,0,0,0,0],[1,3,2,-1,0,0,0,0],[1,1,-3,2,0,0,0,0],[3,5,0,-2,0,-1,0,0],[1,0,-4,2,0,0,0,0],[3,3,-1,0,0,-1,1,-2],[1,4,-4,3,0,0,0,0],[3,3,0,0,1,-1,2,-2],[1,2,-4,2,0,0,0,0],[3,3,-1,1,0,0,1,-1],[1,4,-4,4,0,0,0,0],[3,3,-2,1,-1,0,0,-1]];
+  const hudText = (): string => document.getElementById('hud')!.textContent!;
+  const rows = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>('#hud button[data-special]')];
+  const card = (): string | undefined => document.querySelector('#hud .special-card')?.textContent ?? undefined;
+  const hoverOver = (game: Game, cell: Axial | null): void => {
+    const { x, y } = cell ? game.hook<{ x: number; y: number }>('__cellToScreen', ...cell) : { x: 1, y: 1 };
+    document.querySelector('body > canvas')!.dispatchEvent(new MouseEvent('pointermove', { clientX: x, clientY: y }));
+  };
+
+  it('an army fight reads the army, the army the run ends below and the marbles lost, not the ejections of both sides', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', pick(plainRun(1, 3), 0));
+    expect(hudText()).toContain('Army 14 (run ends below 9) · lost 0');
+    expect(hudText()).toContain('Bot ejected 0/6');
+    expect(hudText()).not.toContain('Black ejected');
+    await game.hook('__run', pick({ ...plainRun(1, 3), army: 9 }, 0));
+    expect(hudText()).toContain('Army 9 (run ends below 4) · lost 0');
+  });
+
+  it('the marbles lost this fight are in red, the army is what is left on the board', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...pick(plainRun(1, 3), 0), moves: LOST_ONE });
+    expect(hudText()).toContain('Army 13 (run ends below 9) · lost 1');
+    expect(document.querySelector('#hud .score .lost')!.textContent).toBe('lost 1');
+    expect(hudText()).toContain('Bot ejected 0/6');
+  });
+
+  it('an act boss fight of the run and a game of another mode keep the ejection line', async () => {
+    const game = await boot('?bot=off');
+    const { state } = await bossRun('hull');
+    await game.hook('__run', state);
+    expect(hudText()).toContain('Black ejected 0/6');
+    expect(hudText()).not.toContain('Army ');
+    game.openModes();
+    byId('boss-fight').click();
+    expect(hudText()).not.toContain('Army ');
+  });
+
+  it('a legend line for each special marble on the board of a player who met none, a card under it on a tap, and the card away on the second', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...pick({ ...plainRun(3, 3), specials: [0, 0, 1, 0, 0, 0, 0, 0, 1, 0] }, 0), placed: [[-4, 4, 3], [0, 4, 9]] });
+    expect(rows().map((b) => b.textContent)).toEqual(['Spark ' + GIST[2], 'Bomb ' + GIST[8]]);
+    expect(card()).toBeUndefined();
+    rows()[0]!.click();
+    expect(card()).toBe(cardText(3, 1));
+    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('true');
+    rows()[1]!.click();
+    expect(card()).toBe(cardText(9, 1, 3));
+    rows()[1]!.click();
+    expect(card()).toBeUndefined();
+  });
+
+  it('a hover on a special marble shows its card, on a plain marble or off the board none, and a press on it still selects it', async () => {
+    const game = await boot('?bot=off');
+    await game.hook('__run', { ...pick({ ...plainRun(3, 3), specials: [0, 0, 1, 0, 0, 0, 0, 0, 1, 0] }, 0), placed: [[-4, 4, 3], [0, 4, 9]] });
+    hoverOver(game, [-4, 4]);
+    expect(card()).toBe(cardText(3, 1));
+    hoverOver(game, [0, 4]);
+    expect(card()).toBe(cardText(9, 1, 3));
+    hoverOver(game, [-2, 2]); // a plain marble
+    expect(card()).toBeUndefined();
+    hoverOver(game, [0, 4]);
+    hoverOver(game, null);
+    expect(card()).toBeUndefined();
+    hoverOver(game, [-4, 4]);
+    game.click(-4, 4); // the press selects the marble as it does on any marble, the card does not block it
+    expect(game.hook<Axial[]>('__rings')).toEqual([[-4, 4]]);
+    play(game, [[-2, 2]], [-3, 2]);
+    expect(game.hook<number>('__plies')).toBeGreaterThan(0);
+  });
+
+  it('a hover on the bot\'s special marble says it is the bot\'s', async () => {
+    const game = await boot('?bot=off');
+    let seed = 1;
+    for (; ; seed++) {
+      const { run_map } = await import('abalone-wasm');
+      const nodes = parseMap(run_map(seed));
+      const index = nodes.findIndex((n) => n.act === 0 && n.row === 1 && n.kind === 'fight' && n.formation > 0);
+      if (index < 0) continue;
+      const path = [nodes.findIndex((n) => n.act === 0 && n.row === 0 && n.links.includes(nodes[index]!.col))];
+      if (path[0]! < 0) continue;
+      await game.hook('__run', pick({ ...newRun(seed, 3, LEGACY_UNLOCKED), path }, index));
+      break;
+    }
+    const [q, r, kind] = document.body.dataset.specials!.split(' ').map((s) => s.split(',').map(Number))[0]!;
+    expect(rows().length).toBeGreaterThan(0);
+    hoverOver(game, [q!, r!]);
+    expect(card()).toBe(cardText(kind!, 2));
+  });
+
+  it('a kind met in a fight is not in the legend of the next one, a new kind is, and the card still shows on a hover', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    const state = pick({ ...plainRun(3, 3), specials: [0, 0, 1, 0, 0, 0, 0, 0, 1, 0] }, 0);
+    await game.hook('__run', { ...state, placed: [[-4, 4, 3]] });
+    expect(rows().map((b) => b.dataset.special)).toEqual(['3']);
+    await game.hook('__run', { ...state, placed: [[-4, 4, 3]], fighting: false }); // the fight is over
+    await game.hook('__run', { ...state, placed: [[-4, 4, 3], [0, 4, 9]] });
+    expect(rows().map((b) => b.dataset.special)).toEqual(['9']);
+    hoverOver(game, [-4, 4]);
+    expect(card()).toBe(cardText(3, 1));
+    await game.hook('__run', { ...state, placed: [[-4, 4, 3], [0, 4, 9]], fighting: false });
+    await game.hook('__run', { ...state, placed: [[-4, 4, 3], [0, 4, 9]] });
+    expect(rows()).toEqual([]);
   });
 });

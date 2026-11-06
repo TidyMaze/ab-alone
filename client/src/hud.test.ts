@@ -283,3 +283,19 @@ describe('passNote (#1301)', () => {
     expect(passNote(0, 2)).toBe('');
   });
 });
+
+describe('the score of a run fight (#1540)', () => {
+  const base = { side: 1, status: 0, score: 'Black ejected 0/6 · White ejected 0/6', ejected: [0, 0] as const, win: [6, 6] as const, note: '', glass: 2 };
+
+  it('shows the run score in place of the ejection line, and the ejection line in every other fight', () => {
+    expect(hudHtml(base)).toContain('<div class="score">Black ejected 0/6');
+    const html = hudHtml({ ...base, runScore: '<div>Army 14 (run ends below 9)</div>' });
+    expect(html).toContain('<div class="score run"><div>Army 14 (run ends below 9)</div></div>');
+    expect(html).not.toContain('Black ejected');
+  });
+
+  it('keeps the run score on a phone held upright, where the ejection line leaves the screen, and paints the marbles lost in the danger colour', () => {
+    expect(css).toMatch(/@media \(orientation: portrait\) \{\s*#hud \.score:not\(\.run\) \{ position: absolute/);
+    expect(css).toMatch(/#hud \.score\.run \.lost \{[^}]*color: var\(--danger\)/);
+  });
+});
