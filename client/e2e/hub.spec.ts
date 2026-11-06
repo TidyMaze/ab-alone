@@ -329,7 +329,7 @@ test('every room wears its label plate without a hover, and a hover still names 
   await expect(page.locator('#hub-labels [data-cell="2,0"]')).toContainText('The Echo');
   await expect(page.locator('#hub-labels [data-cell="1,-2"]')).toContainText('Lift ▲ Cargo');
   await expect(page.locator('#hub-labels .you')).toHaveText(/you/i);
-  await expect(page.locator('#hub-pips')).toContainText('Bosses 0/5');
+  await expect(page.locator('#hub-pips')).toContainText('Medals 0 / 15');
   await shot(page, { path: testInfo.outputPath('1249-hub-plan.png') });
 
   // Hover over adjacent cell [1, 0]

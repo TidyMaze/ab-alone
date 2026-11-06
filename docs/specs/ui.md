@@ -143,6 +143,12 @@ and once a mode starts (a boss picked, Daily challenge, Play online, Hub, Battle
 least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the hub, Hold, the invite link)
 stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Hub (Mess deck, #602), after the first run of a fresh profile (section 4.7). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
 
+The boss list follows the Hub's lifts (#1527): a boss above the player's progress is locked, dimmed with `Beat The Hull first` under its
+name (`aria-disabled`, `data-locked`), and a press starts nothing. The rule is `bossOpen` of `hub.ts`, the lift of the boss's deck; a boss
+already beaten stays open, so an older save loses nothing, and the list reads the progress each time it opens. A link, a test hook, the Hub's
+doors, the Open world's lairs and the MCP do not go through the list and stay open. The lock is a player's: an automated page
+(`navigator.webdriver`, every e2e spec) has the list open unless the URL holds `?locks`, as `?firstrun` gives it a first launch.
+
 ```
 +---------------------------------+
 | (o) BLACK TO MOVE               |   display face, marker + text
@@ -476,7 +482,7 @@ The hub (game-design.md section 3.5) reads at a glance, with no hover:
   (its lift is open) or locked, and where the marble is. A window: a panel at the right edge, mid-height, left of the dock
   held sideways, the deck names alone on a short window. Held upright: a row of the five decks above the deck, under the
   plate and the cog.
-- **Boss pips.** `Bosses n/5` and a pip per deck boss in deck order: filled once beaten, a red ring while its deck is
+- **Boss pips.** `Medals n / 15` (the count the Open world and the Medal room give, #1527) and a pip per deck in deck order, titled by its deck and boss: filled once beaten, a red ring while its deck is
   open, dotted while locked. Top right, left of the cog; held upright, over the rail's right end.
 - The deck, radius 3, is framed a little closer than a board (Reset view frames it again): distance of a radius 3.6
   board, radius 3.4 held upright, so no edge plate is cut off at 360 px wide. A game the hub starts frames its own board.

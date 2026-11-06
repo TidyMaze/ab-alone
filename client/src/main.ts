@@ -307,7 +307,7 @@ import { HUB_CELLS, hubPath, roomAt, step, type Door, type Spot as HubSpot } fro
 import { entryConfirmDue, entryName, HUB_COACH, hubCoachDue, hubHelpOn, markEntered, markHubCoachDone, needsConfirm } from './hubcoach';
 import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
-import { labelsHtml, nextGoal, pipsHtml, railHtml } from './hubview';
+import { bossLockLine, labelsHtml, nextGoal, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
@@ -3986,7 +3986,7 @@ function refresh(): void {
     const goal = nextGoal(beaten, ranRun(store)); // the next thing to do (#1524)
     hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store), goal); // a beaten boss's door shows its medal (#1249)
     document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten, goal);
-    document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
+    document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten, loadMedals(store));
     placeHubLabels();
     hud();
     return;
@@ -5354,22 +5354,37 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   view = fitted = fightView();
   applyView();
 }
+/** Whether the boss menu locks the bosses above the Hub's lifts (#1527): a player's browser does, an automated page (every other spec) only with `?locks`.
+ * Links, `startBoss` itself, the Hub's doors, the lairs and the test hooks never ask. */
+const menuLocks = !navigator.webdriver || new URLSearchParams(location.search).has('locks');
 const bossEntries = new Map<string, HTMLButtonElement>();
 for (const id of boss_ids()) {
   const entry = document.createElement('button');
   entry.type = 'button';
   entry.textContent = boss_name(id)!;
   entry.title = bossBlurb(id)!; // the tower's one line of the story (#1544)
-  entry.addEventListener('click', () => startBoss(id, crypto.getRandomValues(new Uint32Array(1))[0]!));
+  entry.addEventListener('click', () => {
+    if (!entry.dataset.locked) startBoss(id, crypto.getRandomValues(new Uint32Array(1))[0]!);
+  });
   bossList.appendChild(entry);
   bossEntries.set(id, entry);
 }
 /** The medal and its best turn count next to each beaten boss (#791), read from the storage when the menu opens. */
 function showMedals(): void {
+  const beaten = loadProgress(store).beaten;
   for (const [id, entry] of bossEntries) {
     const turns = bestTurns(store, id);
+    const lock = menuLocks ? bossLockLine(id, beaten) : ''; // a boss above the Hub's lifts is locked, with its reason (#1527)
     entry.replaceChildren(boss_name(id)!);
     if (turns !== null) entry.append(' ', Object.assign(document.createElement('span'), { className: 'medal', textContent: medalLabel(turns) }));
+    if (lock) {
+      entry.append(' ', Object.assign(document.createElement('span'), { className: 'lock', textContent: lock }));
+      entry.dataset.locked = lock;
+      entry.setAttribute('aria-disabled', 'true');
+    } else {
+      delete entry.dataset.locked;
+      entry.removeAttribute('aria-disabled');
+    }
   }
 }
 bossButton.addEventListener('click', () => {

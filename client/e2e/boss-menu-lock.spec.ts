@@ -18,8 +18,8 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 800 }], ['ph
       await openModes(page);
       await page.locator('#boss-fight').click();
       const list = page.locator('#boss-list');
-      const echo = list.getByRole('button', { name: 'The Echo' });
-      const choir = list.getByRole('button', { name: 'The Choir' });
+      const echo = list.getByRole('button', { name: 'The Echo', exact: true });
+      const choir = list.getByRole('button', { name: /^The Choir/ });
       await expect(echo).not.toHaveAttribute('aria-disabled', 'true');
       await expect(choir).toHaveAttribute('aria-disabled', 'true');
       await expect(choir).toContainText('Beat The Hull first');
@@ -41,8 +41,8 @@ test('a save with The Echo beaten opens the Cargo deck bosses, and a boss beaten
   await openModes(page);
   await page.locator('#boss-fight').click();
   const list = page.locator('#boss-list');
-  for (const name of ['The Hull', 'The Swarm', 'The Pulsar']) await expect(list.getByRole('button', { name })).not.toHaveAttribute('aria-disabled', 'true');
-  await expect(list.getByRole('button', { name: 'The Choir' })).toHaveAttribute('aria-disabled', 'true');
+  for (const name of ['The Hull', 'The Swarm', 'The Pulsar']) await expect(list.getByRole('button', { name: new RegExp(`^${name}`) })).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(list.getByRole('button', { name: /^The Choir/ })).toHaveAttribute('aria-disabled', 'true');
 });
 
 test('a page with no ?locks keeps every boss open, as the other specs need, #1527', async ({ page }) => {

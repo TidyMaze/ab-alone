@@ -157,7 +157,7 @@ describe('canEnter: only the lifts are gated', () => {
   });
 });
 
-describe('bossOpen: the Hub's rule for a boss (#1527)', () => {
+describe('bossOpen: the Hub rule for a boss (#1527)', () => {
   it('opens the bosses of the Mess at the start, and the bosses of a deck once its lift is open', () => {
     expect(['echo', 'dual'].map((id) => bossOpen(id, []))).toEqual([true, true]);
     for (const id of ['hull', 'alien', 'railyard', 'assembly', 'swarm']) {
@@ -175,7 +175,7 @@ describe('bossOpen: the Hub's rule for a boss (#1527)', () => {
     expect(bossOpen('pulsar', ['ballast'])).toBe(false); // only the boss itself
   });
 
-  it('agrees with the lift of the boss's deck for every boss and every progress', () => {
+  it('agrees with the lift of the deck of the boss for every boss and every progress', () => {
     for (const id of BOSS_IDS) {
       for (const beaten of [[], ['echo'], ['echo', 'hull'], ['echo', 'hull', 'choir'], ['echo', 'hull', 'choir', 'chaplain']]) {
         expect(bossOpen(id, beaten)).toBe(canEnter({ kind: 'lift', to: deckOf('boss', id) }, beaten));

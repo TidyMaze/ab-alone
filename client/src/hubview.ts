@@ -1,9 +1,10 @@
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board main.ts draws the map with, the cell an
 // arrow key rolls the marble to, and the HUD plate. Pure: no DOM, no three.js.
 import { CELLS, VANISHED, type Axial } from './board';
-import { DECK_NAMES, type Deck } from './deck';
+import { DECK_NAMES, deckOf, type Deck } from './deck';
 import { medalLabel } from './medals';
-import { canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, type Door, type Spot } from './hub';
+import { BOSS_IDS } from './tally';
+import { bossOpen, canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, type Door, type Spot } from './hub';
 
 /** The bridge board with a hole on every cell off the hub map: the frame shrinks to the map, the other discs hide. */
 export const HUB_BOARD: readonly number[] = CELLS.map(([q, r]) =>
@@ -228,10 +229,16 @@ export function railHtml(at: Deck, beaten: readonly string[], goal: Goal | null 
   return `<h2>Lift shaft</h2><ul>${rows.reverse().join('')}</ul>${goal ? `<p class="goal"><span class="lead">Next goal: </span>${goal.text}</p>` : ''}`;
 }
 
-/** The boss pips: the count of bosses beaten, then a pip per deck boss in deck order. */
-export function pipsHtml(beaten: readonly string[]): string {
-  const states = DECK_NAMES.map((deck) => [bossTitle(bossOf(deck)), deckState(deck, beaten)] as const);
-  const count = states.filter(([, state]) => state === 'beaten').length;
-  const pips = states.map(([boss, state]) => `<span class="pip" data-state="${state}" title="${boss}: ${state}"></span>`);
-  return `<span class="count">Bosses ${count}/5</span>${pips.join('')}`;
+/** The boss pips: the count of medals out of the whole roster, as every screen says it (#1527), then a pip per deck in deck order, titled by its deck and boss. */
+export function pipsHtml(beaten: readonly string[], medals: Readonly<Record<string, number>>): string {
+  const states = DECK_NAMES.map((deck) => [deck, bossTitle(bossOf(deck)), deckState(deck, beaten)] as const);
+  const count = BOSS_IDS.filter((id) => medals[id] !== undefined).length;
+  const pips = states.map(([deck, boss, state]) => `<span class="pip" data-state="${state}" title="${title(deck)} deck, ${boss}: ${state}"></span>`);
+  return `<span class="count">Medals ${count} / ${BOSS_IDS.length}</span>${pips.join('')}`;
+}
+
+/** The reason the boss menu locks boss `id` (#1527), the boss to beat to open its deck, or '' when the menu lets the player start it (`bossOpen`). */
+export function bossLockLine(id: string, beaten: readonly string[]): string {
+  if (bossOpen(id, beaten)) return '';
+  return `Beat ${bossTitle(bossOf(DECK_NAMES[DECK_NAMES.indexOf(deckOf('boss', id)) - 1]!))} first`;
 }

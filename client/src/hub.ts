@@ -2,7 +2,7 @@
 // player's glass marble. Rooms are cells with a prop on the two outer rings, the same layout on every deck. Pure data
 // and rules: no DOM, no three.js.
 import { cellsFor, DIRECTIONS, type Axial } from './board';
-import { DECK_NAMES, type Deck } from './deck';
+import { DECK_NAMES, deckOf, type Deck } from './deck';
 
 export type Door =
   | { kind: 'boss'; boss: string }
@@ -105,6 +105,12 @@ export function canEnter(door: Door, beaten: readonly string[]): boolean {
   if (door.kind !== 'lift') return true;
   const below = DECK_NAMES[DECK_NAMES.indexOf(door.to) - 1];
   return !below || beaten.includes(BOSS[below]);
+}
+
+/** Whether the boss menu lets the player start boss `id` (#1527): the Hub's rule, since a boss door is reached through its deck's lift, so the
+ * boss of a deck whose lift is open, or a boss already beaten (an older save loses nothing). Links, test hooks and the MCP do not ask. */
+export function bossOpen(id: string, beaten: readonly string[]): boolean {
+  return beaten.includes(id) || canEnter({ kind: 'lift', to: deckOf('boss', id) }, beaten);
 }
 
 /** The marble after a roll to `to`: one neighbour cell, and an open lift carries it onto the lift back on the other
