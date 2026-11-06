@@ -27,6 +27,14 @@ const press = (key: string): KeyboardEvent => {
 };
 
 // The menu's click reads the saved world first: IndexedDB answers in a few tasks.
+/** Escape lands in the Hub (#1605): Browser Back from the Hub goes on to the table. */
+const toTable = async (game: Game): Promise<void> => {
+  game.frame(); // the frame that pushes the entry of the Hub
+  const popped = new Promise((done) => window.addEventListener('popstate', done, { once: true }));
+  history.back();
+  await popped;
+  await game.settle();
+};
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
 };
@@ -137,9 +145,12 @@ describe('the Open world mode', () => {
     byId('openworld').ownerDocument.dispatchEvent(new Event('visibilitychange'));
     window.dispatchEvent(new Event('resize'));
     game.frame();
+    press('m'); // the map open: Escape closes it first and the world stays (#1605)
+    expect(press('Escape').defaultPrevented).toBe(true);
+    expect(data().openworld).toBe('7');
     expect(press('Escape').defaultPrevented).toBe(true);
     expect(data().openworld).toBeUndefined();
-    expect(game.hud()).toContain('to move'); // the board's plate is back
+    expect(game.hud()).toContain('Hub'); // Escape presses the exit of the dock, as Browser Back does: the Hub, not the table beneath (#1605)
   });
 
   it('Escape closes the terminal reader opened from the log archive in the world, then the sheets of the page, and only then leaves it, #1591', async () => {
@@ -465,7 +476,7 @@ describe('the board keys in the Open world, #1063', () => {
     expect(game.hook('__plies')).toBe(0);
   });
 
-  it('a replay open before the Open world stays as it was when the world is left', async () => {
+  it('a replay open before the Open world stays as it was while the world is open, and Escape is not the board\'s Live', async () => {
     const game = await boot('?bot=off&openworld=7');
     playTwo(game);
     byId('replay').click();
@@ -473,10 +484,14 @@ describe('the board keys in the Open world, #1063', () => {
     const shown = byId('replay-label').textContent;
     await enterWorld(game);
     press('ArrowRight'); // the Open world's arrow: the board's replay does not step
-    press('Escape'); // leaves the Open world: Escape is not the board's Live
-    expect(data().openworld).toBeUndefined();
+    press('m');
+    press('Escape'); // closes the map: the world stays and the replay is not Live
+    expect(data().openworld).toBe('7');
     expect(byId('replay-label').textContent).toBe(shown);
     expect(byId('replay-bar').hidden).toBe(false);
+    press('Escape'); // leaves the Open world for the Hub, as its exit does (#1605)
+    expect(data().openworld).toBeUndefined();
+    expect(data().hub).toBeDefined();
   });
 
   it('the board takes its keys back once the Open world is left', async () => {
@@ -484,6 +499,7 @@ describe('the board keys in the Open world, #1063', () => {
     await enterWorld(game);
     press('Escape');
     expect(data().openworld).toBeUndefined();
+    await toTable(game);
     document.querySelector('canvas')!.focus();
     canvasKey('Tab');
     expect(game.hook<Axial[]>('__rings').length).toBeGreaterThan(0);

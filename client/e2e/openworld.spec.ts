@@ -40,8 +40,8 @@ shared('the hero rolls over the Open world, an obstacle stops it, and Escape lea
 });
 
 // #1063: while the Open world is on, its arrows roll the hero and do not open the board's replay underneath; Escape leaves
-// the world and the board is back as it was. The game (moves played) is loaded through the game file import.
-test('the arrows in the Open world do not open the board replay, and leaving the world returns the board, #1063', async ({ page }) => {
+// the world for the Hub, as the exit of the dock does (#1605). The game (moves played) is loaded through the game file import.
+test('the arrows in the Open world do not open the board replay, and leaving the world opens no replay, #1063', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const save = JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: false, moves: BLACK_WINS });
@@ -55,7 +55,7 @@ test('the arrows in the Open world do not open the board replay, and leaving the
   await page.keyboard.press('Escape');
   expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
   await expect(page.locator('#replay-bar')).toHaveJSProperty('hidden', true);
-  await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
+  await expect(page.locator('body')).toHaveAttribute('data-hub', /.+/); // Escape pressed the exit of the dock: the Hub, the game kept beneath (#1605)
 });
 
 // #988: a step up onto a higher cell. On seed 7 the spawn row runs grass at height 3 to (3, 0), then (4, 0) is grass at

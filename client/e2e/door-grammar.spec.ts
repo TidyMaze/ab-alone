@@ -238,3 +238,17 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 960, height: 540 }
     });
   });
 }
+
+for (const [from, start] of [['the plain table', async (_p: Page) => undefined], ['the Hub', async (p: Page) => { await pick(p, '#ship'); await hubShown(p); }]] as const) {
+  test(`Escape in the Open world presses the exit and lands in the Hub, opened from ${from}, #1605`, async ({ page }) => {
+    await page.goto('./?bot=off&net=hook');
+    await expect(page.locator('#hud')).toContainText('Black to move');
+    await start(page);
+    await pick(page, '#openworld');
+    await expect(body(page)).toHaveAttribute('data-openworld', /.+/);
+    await page.keyboard.press('Escape');
+    await hubShown(page);
+    await expect(body(page)).not.toHaveAttribute('data-openworld', /.*/);
+    await expect(firstSlot(page)).toHaveAttribute('id', 'new-game'); // the Hub is the home
+  });
+}
