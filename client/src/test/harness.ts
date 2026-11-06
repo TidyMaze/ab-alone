@@ -37,6 +37,9 @@ export interface BootOptions {
   storage?: Record<string, string>;
   /** The renderer runs on WebGPU, not its WebGL fallback: compute shaders, so clustered lighting (#neon tubes). */
   webgpu?: boolean;
+  /** Loads the code of the Open world (its chunk in the build, #1578) after the page, so a click that enters it finds it ready; true by
+   * default. False leaves it to the page, as a first entry in a browser. */
+  warmChunks?: boolean;
 }
 
 export interface Game {

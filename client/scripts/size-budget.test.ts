@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain Node script, no type declarations
-import { BUDGETS, main, measure, toMarkdown } from './size-budget.mjs';
+import { BUDGETS, main, measure, pageScripts, toMarkdown } from './size-budget.mjs';
 
 const MB = 1_000_000;
 
@@ -49,9 +49,27 @@ describe('measure', () => {
     expect(BUDGETS).toEqual({ firstScreen: 5 * MB, deck: 15 * MB, site: 250 * MB });
   });
 
+  it('counts the scripts the page loads at once, the chunk the entry shares with a mode included, not a mode chunk (#1578)', () => {
+    const files = { ...BUILD, 'assets/story-Ch3T6zbf.js': 1048576, 'assets/openworldwire-CNSvz_Fl.js': 2097152 };
+    const first = (scripts: string[]): number => measure(files, BUDGETS, scripts).parts[0].bytes;
+    expect(first([])).toBe(first(['assets/story-Ch3T6zbf.js']) - 1048576);
+    expect(first(['assets/index-C-lWdAi6.js', 'assets/story-Ch3T6zbf.js'])).toBe(1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 16384 + 32768 + 131072 + 262144 + 1048576);
+  });
+
   it('lists the source files that must stay out of the build', () => {
     const files = { ...BUILD, 'assets/hull.blend': 1, 'assets/hum.WAV': 1, 'a.psd': 1, 'b.kra': 1, 'c.xcf': 1 };
     expect(measure(files).sources).toEqual(['assets/hull.blend', 'assets/hum.WAV', 'a.psd', 'b.kra', 'c.xcf']);
+  });
+});
+
+describe('pageScripts', () => {
+  it('lists the module script and the preloaded chunks of the page, not its styles or what a script loads later', () => {
+    const html = `<script type="module" crossorigin src="/ab-alone/assets/index-DNrUl8Ct.js"></script>
+      <link rel="modulepreload" crossorigin href="/ab-alone/assets/story-Ch3T6zbf.js">
+      <link rel="stylesheet" crossorigin href="/ab-alone/assets/index-CPcrYfAe.css"><link rel="icon" href="/ab-alone/icons/icon-192.png">
+      <script>inline()</script>`;
+    expect(pageScripts(html)).toEqual(['assets/index-DNrUl8Ct.js', 'assets/story-Ch3T6zbf.js']);
+    expect(pageScripts('<p>no scripts</p>')).toEqual([]);
   });
 });
 
@@ -113,6 +131,17 @@ describe('main', () => {
     ]);
     expect(errors).toEqual([]);
     expect(exit).not.toHaveBeenCalled();
+  });
+
+  it('counts the chunks the page preloads in the first screen', () => {
+    const page = '<script type="module" src="/ab-alone/assets/index-1.js"></script><link rel="modulepreload" href="/ab-alone/assets/shared-2.js">';
+    const { out } = build({ 'index.html': page, 'assets/index-1.js': 'entry', 'assets/shared-2.js': 'shared', 'assets/world-3.js': 'a mode, loaded at its first entry' });
+    main(dir);
+    const sizes = Object.fromEntries(
+      Object.entries({ 'index.html': page, 'assets/index-1.js': 'entry', 'assets/shared-2.js': 'shared', 'assets/world-3.js': 'a mode, loaded at its first entry' }).map(([f, c]) => [f, gzipSync(c).length]),
+    );
+    expect(out).toEqual([toMarkdown(measure(sizes, BUDGETS, ['assets/index-1.js', 'assets/shared-2.js']).parts, [])]);
+    expect(measure(sizes, BUDGETS, ['assets/index-1.js', 'assets/shared-2.js']).parts[0].bytes).toBe(sizes['index.html'] + sizes['assets/index-1.js'] + sizes['assets/shared-2.js']);
   });
 
   it('appends the table to the run summary file when there is one', () => {
