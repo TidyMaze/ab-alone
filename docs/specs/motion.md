@@ -83,6 +83,12 @@ One switch, already in the code: `motionReduced(system, saved)` (the Reduced mot
 - **Not done.** The world's last frame is not held under the cue: the world is freed in the step the place starts (as before), so the first frame is the dim over the new place. Holding it would delay the place or read the canvas back. A sound for the cues is #1570's, the music is #1571's. Not measured: how it feels; 600 and 400 ms, the 60 % centre of the dim and the 15 / 20 % of the title are constants at the top of `placetransition.ts` and `ui.css`.
 
 **11. Hit moment of the Open world (#1561).** A troop push holds its contact frame 50 ms (`HIT_HOLD_MS`) and bursts four sparks at the contact cell (`openworld.md` section 4); the ejection keeps its one shake. Input never waits for the hold. Reduced: neither.
+**12. Exit of a screen (#1562).** When the screen changes (table, Hub, a mode, an online room: `screenNow()`), the outgoing scene is not faded out as a scene: a dim over the new screen starts opaque and lifts on `--motion-fast` (120 ms), overlapped with the 200 ms fade the Open world canvas already plays (`screen-in`, story 9).
+- **How it differs from the issue's wording.** The issue asks for the outgoing scene to fade out. A real overlap of two scenes would need the canvas read back or the old scene kept alive, which delays the new screen and breaks the no-delay rule of story 9. So the new screen is live from its first frame and a dim (`#screen-exit`, the radial vignette of story 10) is laid over it and lifts: it reads as a dip between two places, not as a cross-fade of two pictures.
+- **No delay.** `ScreenExit.sync` runs once a frame (`screenexit.ts`), flips `data-flip` between `a` and `b` (two keyframe names, so every change replays), and returns. The layer is made once at boot and is a CSS animation on opacity, `pointer-events: none`, `z-index: 0` under the HUD: no press is held, nothing waits for it, no long task.
+- **Not stacked.** A tower, a gate or a town keeps its own transition (story 10): `body[data-place-transition]` hides the layer and the script does not start one while it runs.
+- **Reduced.** The layer stays still: a hard cut.
+- **Browser checks.** `#screen-exit[data-flip]` exists after a change; `e2e/screen-transition.spec.ts` reads its opacity on every frame after the Hub opens.
 
 ## 5. Measures: frame time on a phone viewport, before and after (#1036)
 

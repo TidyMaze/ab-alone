@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { EXIT_MS, ScreenExit } from './screenexit';
 
-// The exit of a screen (#1562, docs/specs/motion.md story 11): a dim over the new screen that starts opaque and lifts in about 120 ms.
+// The exit of a screen (#1562, docs/specs/motion.md story 12): a dim over the new screen that starts opaque and lifts in about 120 ms.
 const layer = () => document.getElementById('screen-exit');
 let reduced = false;
 const exit = () => new ScreenExit(() => reduced);
@@ -18,11 +18,12 @@ describe('the exit of a screen', () => {
     expect(EXIT_MS).toBe(120);
   });
 
-  it('makes no layer for the first screen seen, nor for a screen that stays', () => {
+  it('makes its layer at once, clear, and plays nothing for the first screen seen nor for a screen that stays', () => {
     const e = exit();
+    expect(layer()).not.toBeNull();
     e.sync('table');
     e.sync('table');
-    expect(layer()).toBeNull();
+    expect(layer()!.dataset.flip).toBeUndefined();
   });
 
   it('plays when the screen changes, and again on the next change, which needs the other keyframes', () => {
@@ -48,10 +49,10 @@ describe('the exit of a screen', () => {
     e.sync('table');
     reduced = true;
     e.sync('hub');
-    expect(layer()).toBeNull();
+    expect(layer()!.dataset.flip).toBeUndefined();
     reduced = false;
     e.sync('hub');
-    expect(layer()).toBeNull();
+    expect(layer()!.dataset.flip).toBeUndefined();
   });
 
   it('does not stack on the transition of a place', () => {
@@ -59,6 +60,6 @@ describe('the exit of a screen', () => {
     e.sync('hub');
     document.body.dataset.placeTransition = 'enter';
     e.sync('mode');
-    expect(layer()).toBeNull();
+    expect(layer()!.dataset.flip).toBeUndefined();
   });
 });

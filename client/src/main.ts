@@ -36,6 +36,7 @@ import { lazyWorker } from './lazyworker';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
+import { ScreenExit } from './screenexit';
 import { backWay, needsEntry, type Screen, type Way } from './backnav';
 import { EXIT_LABEL, EXIT_NAME, exitOf, type Exit } from './exitslot';
 import { bossHtml, goalShown } from './bosshud';
@@ -7242,6 +7243,7 @@ const baseScreen: Screen = screenNow();
 exitReady = true;
 syncExit();
 new MutationObserver(syncExit).observe(document.body, { attributes: true }); // the Open world entered or left sets or clears body[data-openworld] (#1517)
+const screenExit = new ScreenExit(reducedMotion);
 let holdsEntry = (window.history.state as { ab?: number } | null)?.ab === 1; // a reload keeps the entry it was made on
 function screenNow(): Screen {
   if (online) return 'room';
@@ -7414,6 +7416,7 @@ renderer.setAnimationLoop((now) => {
   const music = sceneOf({ hub: hub !== null, royale: royale !== null, run: run ? (run.state.fighting ? 'fight' : 'map') : null, boss: fight?.id ?? null, world: heroBiome ? { biome: heroBiome, phase: openWorld.phase } : null });
   sfx.setScene(music, music.startsWith('boss:') && engine instanceof Encounter ? engine.phase() : 0); // the music follows where the player is (#1571)
   watchBack();
+  screenExit.sync(screenNow()); // the dim over a new screen (#1562)
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {

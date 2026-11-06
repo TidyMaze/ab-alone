@@ -81,5 +81,5 @@ test('the screen exit is cut under reduced motion (#1562)', async ({ page }) => 
   await ready(page, true);
   await page.evaluate(() => document.getElementById('ship')!.click());
   await page.waitForTimeout(100);
-  expect(await page.locator('#screen-exit').count()).toBe(0);
+  expect(await page.locator('#screen-exit[data-flip]').count()).toBe(0);
 });

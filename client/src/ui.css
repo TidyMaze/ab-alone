@@ -1514,6 +1514,15 @@ body[data-firstrun] #hud .tally { animation: none; } /* the line stays while the
 #place-transition .pt-title:empty { display: none; }
 #place-transition[data-motion='cut'] :is(.pt-dim, .pt-door, .pt-arch) { display: none; }
 
+/* Exit of a screen (#1562, docs/specs/motion.md story 12): a dim over the new screen, opaque when the screen changes, lifting on --motion-fast. The new
+   screen is live under it and the layer takes no press. Two keyframe names, as above, so each change replays. A place's own transition replaces it. */
+#screen-exit { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 50%, rgba(8, 10, 14, 0.6), rgba(4, 6, 9, 0.97)); }
+#screen-exit[data-flip='a'] { animation: screen-out-a var(--motion-fast) var(--ease-in); }
+#screen-exit[data-flip='b'] { animation: screen-out-b var(--motion-fast) var(--ease-in); }
+@keyframes screen-out-a { from { opacity: 1; } }
+@keyframes screen-out-b { from { opacity: 1; } }
+body[data-place-transition] #screen-exit { display: none; }
+
 /* Screen transitions (#1099, docs/specs/motion.md story 9): entering or leaving the Open world cross-fades the canvas in on --motion-base. The
    rule that stops matching swaps the animation for the other keyframes (the same name would not restart), so each change replays the fade. Opacity only: nothing waits, the game takes input from the first frame.
    A game that is over (the loss dim, end-dim) keeps its own animation. Reduced motion: the tokens are 0ms, a hard cut. */
