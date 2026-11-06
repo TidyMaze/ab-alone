@@ -6733,7 +6733,7 @@ async function enterOpenWorld(): Promise<void> {
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
   const hooks = hookHost;
-  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
+  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[]; recruits?: number }) => openWorld.fixture(fixture);
   hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
   hooks.__openworldEnemies = () => openWorld.enemies();
   hooks.__openworldWander = (tick: number | null) => ((wanderTick = tick), openWorld.stepWander(undefined, true)); // the tick of the marbles' clock, or null for the real one (#1511)
@@ -6741,6 +6741,7 @@ if (navigator.webdriver) {
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldTeleporters = (seed: number) => Array.from(world_teleporters(seed)); // every teleporter of a world, `q, r` pairs (#1412)
+  hooks.__openworldPads = (seed: number) => Array.from(world_pads(seed)); // the pad beside each tower of a world, `q, r` pairs in the order of the lairs (#1531)
   hooks.__openworldPlaces = (seed: number) => Array.from(world_places(seed)); // every town and dungeon gate of a world, `kind, q, r` triples (#1514)
   hooks.__openworldLogs = (seed: number) => Array.from(world_logs(seed)); // every lore log of a world, `q, r` pairs (#1589)
   hooks.__openworldLairs = (seed: number) => lairCells(seed); // the boss lairs of a world as cells, for the peer tests (#1305)

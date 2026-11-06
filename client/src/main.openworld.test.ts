@@ -831,6 +831,19 @@ describe('the teleporters of the Open world (#1412)', () => {
     expect(all).toHaveLength(3 * 10); // five towns then five dungeon gates
     expect(document.body.dataset.openworldPlaces!.split(' ')).toHaveLength(10);
   });
+
+  it('gives the e2e tests the pad of every tower of a world, and the mode adds the pad of a tower beaten to the teleporters (#1531)', async () => {
+    await boot('?bot=off&openworld=7');
+    await settle();
+    const hooks = window as unknown as { __openworldPads: (seed: number) => number[]; __openworldFixture: (f: object) => void };
+    const pads = hooks.__openworldPads(7);
+    expect(pads).toHaveLength(2 * 15);
+    const towers = document.body.dataset.openworldLairs!.split(' ').map((c) => c.split(',').map(Number));
+    expect(Math.abs(pads[0]! - towers[0]![0]!) + Math.abs(pads[1]! - towers[0]![1]!)).toBeGreaterThan(0);
+    hooks.__openworldFixture({ hero: [pads[0]!, pads[1]!], troop: [], enemies: [], beaten: [0], recruits: 2 });
+    expect(document.body.dataset.openworldTeleporters!.split(' ')).toContain(`${pads[0]},${pads[1]}`);
+    expect(document.body.dataset.openworldRecruits).toBe('2');
+  });
 });
 
 describe('the Open world on a machine with no GPU (#1483)', () => {
