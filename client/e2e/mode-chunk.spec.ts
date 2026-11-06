@@ -17,7 +17,7 @@ test('a table page asks for no Open world code, the menu entry asks for it once 
   expect(asked).toHaveLength(1);
 });
 
-test('a failed load shows Retry and Reload, the table stays alive, and Retry opens the world', async ({ page }) => {
+test('a failed load shows Retry and Reload over a table that is alive, and Reload gets the file back', async ({ page }) => {
   await page.route(CHUNK, (route) => route.abort());
   await page.goto('./?bot=off');
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready');
@@ -29,8 +29,12 @@ test('a failed load shows Retry and Reload, the table stays alive, and Retry ope
   await expect(page.locator('#loading')).toBeHidden();
   await shot(page, { path: 'test-results/chunk-error.png' });
   await expect(page.locator('body')).not.toHaveAttribute('data-openworld', /.+/);
+  // Chromium keeps a module that failed to load for the life of the page, so Retry asks it nothing new: Reload is what brings the file back.
   await page.unroute(CHUNK);
-  await message.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.locator('body')).toHaveAttribute('data-openworld', /.+/);
+  await message.getByRole('button', { name: 'Reload' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready');
   await expect(message).toBeHidden();
+  await page.locator('#modes').click();
+  await page.locator('#openworld').click();
+  await expect(page.locator('body')).toHaveAttribute('data-openworld', /.+/);
 });

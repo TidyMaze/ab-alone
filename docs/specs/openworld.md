@@ -748,6 +748,7 @@ are of a quiet moment (load average 4 on 10 cores), Chromium on the GPU of an Ap
   opens in the world sets them itself (`SceneRenderer.setWorldTone`) until the terrace does (the 32:9 edge check of `openworld.spec.ts` read the difference on the software renderer).
   The Mess deck's maps (`deck-mess*.ktx2`, `deck-albedo`, `deck-roughness`, `crack-decal`, 90 KB) are still fetched at the load: the board's materials are made with them at the top
   of the page, a change of its own.
+- **A chunk of its own (#1578, tech.md section 9.0).** The world's code is a chunk of the build loaded at the first entry; `?openworld=` loads it at the boot, behind the Loading plate. The longest task of the load did not move (309 ms median, 304 to 374 over 5 runs, the same setup as the table above).
 - **World to fight.** No long task over 200 ms: the longest, with the files loaded on the way, is 84 ms, the same as with them loaded in advance (89 ms), so no shader pre-warming
   was needed. The 309 ms of the entry is the page's own first draw (the wasm of the engine, the world's first chunks, the shaders) and is a budget, not a target of this section.
 - **Leaks found and fixed.** A round trip from the world to a fight and back used to leave 4 GPU textures (the sun's shadow map and the nodes of the lights of each world entered,

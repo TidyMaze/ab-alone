@@ -539,6 +539,25 @@ No database server. Everything is client-side.
 - Only third-party runtime dependencies: public STUN, signaling relays. Both degrade to the
   manual flow, single-player never needs them.
 
+### 9.0 Mode chunks (#1578)
+
+The code of a mode loads when the player first enters it, with `import()`, so the entry does not parse what a player may never open.
+Two chunks: the Open world (`client/src/openworldwire.ts`: its mode, view, minimap, saves and online layer, the HUD controls only it has) and the
+online Battle royale (`royale-net.ts`: the room and the rounds, loaded by Invite or an invite link). The page keeps a small stand-in for the
+Open world (`openworldhandle.ts`): off (not active, nothing to draw or hold) until its first `open` loads the code.
+
+- **First screen.** The build also splits off the code the entry shares with a chunk (three.js and the modules both use), and the page preloads
+  it: that is still the first screen, so `size-budget.mjs` counts every script and preload link of `index.html` (`pageScripts`), not the
+  `index-*.js` name. A chunk loaded at a first entry is not counted.
+- **Slow and failed loads** (`modechunk.ts`, `lazyChunk`): a load still running after 150 ms shows the Loading plate (`#loading`), a fast one flashes
+  nothing. A load that fails (offline, a new deploy that removed the old file) shows `#chunk-error` with Retry and Reload over a page that is
+  alive. Chromium keeps a module that failed to load for the life of the page and Vite deduplicates its preload link, so Retry asks a
+  second time only where the browser allows it (Firefox); Reload always brings the file back.
+- **Offline and Pages.** The chunks are hashed files of `dist/assets/`: the precache list of section 9.1 (every built file) and the Pages
+  artifact (all of `client/dist`) take them with no change.
+- **Not split: the rogue-lite.** `main.ts` uses 69 names of `roguelite.ts` (about 490 uses) across the run screens, and `runbook.ts` imports it
+  too: its chunk needs the run wiring moved first (a task of its own).
+
 ### 9.1 Offline app (#165, #193)
 
 The production build installs as an app and plays offline (hot-seat, bot, bosses) after one online
