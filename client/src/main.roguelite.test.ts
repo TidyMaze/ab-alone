@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import { cellIndex, type Axial, type Move } from './board';
-import { actBoss, BIOMES, ELITES, FORMATIONS, BONUS_SCRAP, MOVE_BUDGET, newRun, parseMap, pick, Relic, RELICS, relicText, visit, type MapNode, type Run } from './roguelite';
+import { actBoss, BIOMES, ELITES, FORMATIONS, BONUS_SCRAP, MAP_VERSION, MOVE_BUDGET, newRun, parseMap, pick, Relic, RELICS, relicText, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
 import { LEGACY_UNLOCKED } from './collector';
 import type { View } from './camera';
@@ -1257,7 +1257,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     expect(dailyButton().textContent).toBe(`Daily run ${today()} · tried today, back tomorrow`); // one try a day
     expect(dailyButton().disabled).toBe(true);
     const { run_map } = await import('abalone-wasm');
-    const expected = parseMap(run_map(dailySeed(today()))).filter((n) => n.act === 0 && n.row === 0).map((n) => `Act 1, ${n.kind}`);
+    const expected = parseMap(run_map(dailySeed(today()), 0, MAP_VERSION)).filter((n) => n.act === 0 && n.row === 0).map((n) => `Act 1, ${n.kind}`);
     expect(open().map((b) => b.getAttribute('aria-label'))).toEqual(expected); // the map of the seed of the day
     expect(localStorage.getItem('ab-alone.roguelite.daily')).toBe(JSON.stringify({ day: today(), score: null }));
     await game.settle();
@@ -1685,5 +1685,64 @@ describe('main.ts, the HUD of a run fight (#1540, #1541)', () => {
     await game.hook('__run', { ...state, placed: [[-4, 4, 3], [0, 4, 9]], fighting: false });
     await game.hook('__run', { ...state, placed: [[-4, 4, 3], [0, 4, 9]] });
     expect(rows()).toEqual([]);
+  });
+});
+
+describe('main.ts, the paced map and the map of a run saved before (#1543)', () => {
+  const kinds = (): (string | undefined)[] => [...map().querySelectorAll<HTMLElement>('button[data-node]')].filter((b) => b.getAttribute('aria-label')!.startsWith('Act 1')).map((b) => b.dataset.nodeKind);
+  const act1 = async (seed: number, version: number): Promise<string[]> => {
+    const { run_map } = await import('abalone-wasm');
+    return parseMap(run_map(seed, 0, version)).filter((n) => n.act === 0).map((n) => n.kind);
+  };
+  /** The first seed whose act 1 is not the same on the paced map and on the map of before. */
+  async function changed(): Promise<number> {
+    await boot('?bot=off'); // starts the engine
+    for (let seed = 0; ; seed++) if ((await act1(seed, 0)).join() !== (await act1(seed, MAP_VERSION)).join()) return seed;
+  }
+
+  it('a new run is dealt the paced map, and a reload keeps it', async () => {
+    const seed = await changed();
+    vi.spyOn(crypto, 'getRandomValues').mockImplementation((a) => {
+      (a as Uint32Array)[0] = seed;
+      return a;
+    });
+    const indexedDB = new IDBFactory();
+    const game = await startRun('?bot=off', indexedDB);
+    expect(kinds()).toEqual(await act1(seed, MAP_VERSION));
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(kinds()).toEqual(await act1(seed, MAP_VERSION));
+    vi.restoreAllMocks();
+  });
+
+  it('a run saved before keeps the map it was dealt, its nodes and the bot at each of them', async () => {
+    const seed = await changed();
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...plainRun(seed, 3), path: [0] }); // no map version: the map of before
+    expect(kinds()).toEqual(await act1(seed, 0));
+    await game.hook('__run', { ...plainRun(seed, 3), path: [0], map: MAP_VERSION });
+    expect(kinds()).toEqual(await act1(seed, MAP_VERSION));
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(kinds()).toEqual(await act1(seed, MAP_VERSION));
+    const { run_map } = await import('abalone-wasm');
+    let node = -1;
+    for (let s = seed; node < 0; s++) {
+      const [a, b] = [parseMap(run_map(s, 0, 0)), parseMap(run_map(s, 0, MAP_VERSION))];
+      node = b.findIndex((n, i) => n.act === 0 && n.kind === 'fight' && a[i]!.kind === 'elite');
+      if (node >= 0) {
+        const found = [node];
+        for (let m = b[node]!; m.row > 0; ) {
+          const prev = b.findIndex((o) => o.act === 0 && o.row === m.row - 1 && o.links.includes(m.col));
+          found.unshift(prev);
+          m = b[prev]!;
+        }
+        await game.hook('__run', pick({ ...newRun(s, 3, LEGACY_UNLOCKED), path: found.slice(0, -1), map: MAP_VERSION }, node));
+        expect(game.hook<number[]>('__board').filter((c) => c === 2)).toHaveLength(10); // a fight of the paced map
+        await game.hook('__run', pick({ ...newRun(s, 3, LEGACY_UNLOCKED), path: found.slice(0, -1) }, node));
+        expect(game.hook<number[]>('__board').filter((c) => c === 2)).toHaveLength(14); // an elite on the map of before
+      }
+    }
   });
 });
