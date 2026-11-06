@@ -84,10 +84,14 @@ describe('the sky of the Open world view', () => {
     const view = made();
     view.setTeleporters([[1, 1]]);
     view.setLogs([[2, 1]], []);
+    view.setPlaces([{ kind: 'town', cell: [1, 2] }, { kind: 'dungeon', cell: [2, 2] }]);
     const glow = (name: string): number => ((view.scene.getObjectByName(name) as THREE.InstancedMesh).material as THREE.MeshStandardMaterial).emissiveIntensity;
     const day = glow('teleporter-pad');
     const dayLog = glow('log-stake');
+    const dayPlace = glow('town-pad');
     view.setTime(9 * MIN, true);
+    expect(glow('town-pad')).toBeGreaterThan(dayPlace);
+    expect(glow('gate-pad')).toBeGreaterThan(dayPlace);
     expect(glow('teleporter-pad')).toBeGreaterThan(day);
     expect(glow('teleporter-ring')).toBeGreaterThan(day);
     expect(glow('log-stake')).toBeGreaterThan(dayLog);
@@ -95,6 +99,7 @@ describe('the sky of the Open world view', () => {
     view.setTime(MIN, true);
     expect(glow('teleporter-pad')).toBe(day);
     expect(glow('log-stake')).toBe(dayLog);
+    expect(glow('town-pad')).toBe(dayPlace);
     expect(view.shine.value).toBe(0);
   });
 
