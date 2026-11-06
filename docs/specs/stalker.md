@@ -37,7 +37,7 @@ shipped TypeScript fog is deleted once the Rust one is wired (task 4), not kept 
 - **Win and loss**: first to eject **6** wins (`rules.md` section 10.3), as the other bosses. Anti-stalling is unchanged
   (`game-design.md` section 5: threefold repetition, the 100-ply no-ejection cap). **A draw is a loss** for the player,
   as for every boss; it was a draw in the mode.
-- **Goal text** (`goal` of the `BOSSES` line, read before the first move): "The stalker sees your whole army. You see its
+- **Goal text** (`goal` of the `BOSSES` line, read before the first move): "From the fog the stalker sees your whole army. You see its
   marbles only near your own, and a move may be stopped by one you cannot see. Eject 6 to win; lose 6 or draw to lose."
 - **Name and id**: "The Stalker", `stalker`.
 - **Lore slot**: Extra, deck 4 Chapel, "any time, boss menu" (a new row of the section 7 table). Play order: last (14th)
@@ -74,7 +74,7 @@ phase up (the next offer uses the new `sight`); no boss marble in the visible se
   `marks` `kind: "last"` on the ringed cells. The state an agent reads is the seen board, never the full one, or an
   agent would play the whole board while a player cannot.
 - **Boss bar and phases**: the generic bar, three phases, the phase name is the sight ("Sight 3", "Sight 2", "Sight 1").
-  The HUD note "Stalker: the bot is not fogged" is dropped: "The stalker sees your whole army" is in the goal text.
+  The HUD note "Stalker: the bot is not fogged" is dropped: "the stalker sees your whole army" is in the goal text.
 - **Revealed marble and last-move ring**: the existing look of #998 (pale ring, the dark veil), unchanged.
 
 ## 5. Medal, daily, roster, ladder

@@ -114,7 +114,8 @@ No cutscenes, no forced dialogue, no quest log.
   press through, and Retry and leaving stay in the dock), a win again shows the same entry. Every entry is filed in the log archive when it is shown or read, after the
   terminals and in the order of the roster then of the logs, and the archive reopens it in the terminal reader (a log of the world and the Medal room have no audio log, so
   no Play log). Each entry has a stage, and none holds a secret word of a later one.
-- **Tally.** One-line announcements at match start and end. Never explains itself.
+- **Tally.** One-line announcements at match start and end. Never explains itself. Each of the 15 bosses has its own line (#1544), and each town of the Open world a
+  ledger line held back until its stage (#1516, section 13).
 - **Boss arenas.** Each boss board carries one lore object the player can inspect before the
   fight.
 - **Rule.** Skipping all lore must never block progress or make the game unplayable. Lore
@@ -367,7 +368,7 @@ secret-word rule (`lorelogs.test.ts`).
 
 ### 12.5 Towns and towers
 
-This amends #1516: **towns hold the delivered** (dazed, quiet, clear of the shell), and **the shelled stay in towers and dungeons**.
+This amends #1516: **towns hold the delivered** (dazed, quiet, clear of the shell), and **the shelled stay in towers and dungeons**. Section 13 maps every mode to its place in the story, and gives each town its ledger line.
 
 ### 12.6 The stage store (#1584)
 
@@ -414,3 +415,65 @@ fill**, the slag of the vein rising in the sealed chamber turn by turn: the vent
 sees "Slag fill 25 %" on the HUD. Nothing here is taken from any existing game, and the old framing of a lab, a test, a subject and a
 prize is gone from the fight, its specs and its lore entry. Its lines hold no secret word of section 12.2, so they may be met at any
 stage; `overseer.test.ts` guards the banned framing and the secret words. Its mechanic and balance are unchanged.
+
+## 13. The Ballast on Hollow: every mode a place in the story (#1516, #1544)
+
+The Open world is the map of the whole game (openworld.md section 13). This section says what each place **is** in the story, so a bright
+meadow, a tower and a Hub table are one wreck and not three games. It adds no mechanic and no balance. Section 12 stays the source of
+what may be said when.
+
+**The crash.** The Ballast came down in **five pieces**, one per deck of section 1. Each deck stands upright in the regolith as a
+**section**. The old lift of a deck is the shaft of its tower. Hollow has no atmosphere; what looks like weather and ground is made of
+the vein (below).
+
+| Mode | Place | In the story |
+|---|---|---|
+| The 15 bosses | **Towers** | A tower is a **station** of one section. Each boss is the seat Tally still enforces there: it keeps the count at that station, so the seat is "empty" and the game goes on. |
+| Rogue-lite run | **Dungeon gates** | The **mining cuts**, where the crew followed the slag-glass vein into the moon. Tally audits each cut as a run (section 2, the Hollow Survey). An act is one cut. |
+| Hub, bot and hot-seat tables, Medal room, terminals, Daily, Trainer | **Towns** | **Muster points** round a table zero, each with a ledger station where Tally files who is present. Towns hold the **delivered**; the shelled stay in towers and dungeons (section 12.5). |
+| Open world | **The moon** | The ground of all of it. **Biomes** (meadow, forest, tundra, desert, badlands, archipelago): slag-glass remembers heat, so the crew's memories were **fixed into the moon** as remembered places. That is why a dead world with no atmosphere shows grass, pines, snow and a sea. |
+| Five towers beaten | **The clamp** | The ending of section 12.2 (#1546): the docking clamp opens. |
+
+**The ship in sections.** The five senior seats are the ladder of section 3. The ten later bosses are the other stations of the same
+sections, so the 15 read as one ship (`deckOf` of `deck.ts` is the table; each boss entry of `lorelogs.ts` is titled by its section, and
+`lorelogs.test.ts` checks it):
+
+| Section (piece) | Senior seat | Other stations |
+|---|---|---|
+| Mess | The Echo | The Dual Room |
+| Cargo | The Hull | The Alien, The Rail Yard, The Assembly Line, The Swarm |
+| Furnace | The Choir | The Magnetizer, The Unstable Core |
+| Chapel | The Chaplain | The Overseer, The Stalker |
+| Bridge | The Ballast Mind | The Pulsar |
+
+**Each tower, in its lines.** A tower is told by four short pieces of data, all in Tally's register (flat, procedural; section 12.7), none
+copied from any existing game:
+
+- **Tally's line** at the start of its fight (`tally.ts`, `BOSS_LINES`). Every boss has its own; the ten later bosses share no sentence with
+  another boss. It is met from the boss menu at any time, so it is stage 1 for good and holds no secret word (`tally.test.ts`).
+- **A blurb**, one line of at most 80 characters saying what the station was (`lorelogs.ts`, `BOSS_BLURBS`, shown as the title of the boss's
+  button in the boss lists). It declares its `stage` (1) and holds no secret word.
+- **The entry of its win** (`BOSS_LORE`, section 12.3), gated by its stage, sealed before it.
+- **Its section's two terminals** (`LORE`, section 4): a deck has two, shared by every tower on it. A tower has no terminals of its own: a
+  third entry per tower would need a new Hub room (a UI change), and the win entry already stands for it.
+
+**Goal cards.** The goal of the ten later bosses (`goal` of `BOSSES` in `crates/abalone-wasm/src/encounter.rs`) opens in the boss's register
+("The watch counts every core.", "From the fog the stalker sees your whole army.") and then states the rule exactly as before, ending on the win and loss
+sentence. Clarity first: a rule never gives way to flavour. The Echo's card is rebuilt separately (#1524) and is not touched here.
+
+**Towns.** The five towns are indexed as the bridge lists them (`world_places`, openworld.md section 13): 0 the spawn town round table zero,
+then the towns of the forest, the tundra, the desert and the badlands. Each has one ledger line of Tally (`tally.ts`, `TOWN_LINES`, `townLine`),
+with the stage that may speak of it. Nothing shows before that stage. Entering a town puts its line on the plate of the Hub, until the first
+move. "Delivered", the cold and line 0412 are secret words (section 12.2): they appear in a line only from the stage that allows them, and in
+no blurb, Tally line or goal.
+
+| Town | Biome | Stage | Ledger line |
+|---|---|---|---|
+| 0 | the spawn clearing | 2 | Muster: table zero, laid. Seats: six. Counted, every one. Nobody here is hurt. |
+| 1 | forest | 3 | Muster: the pines. Residents entered as Out. They breathe, eat and wait. |
+| 2 | tundra | 4 | Muster: the white field. Cold lets go. Residents entered as delivered, in good order. |
+| 3 | desert | 4 | Muster: the dunes. Residents arrive clear and dazed, no name on file. Entered: delivered. |
+| 4 | badlands | 5 | Muster: the ridge. Line 0412 was first. The rest came after, one hand free each. |
+
+**Not now.** A tower's own Hub room and terminals, a town's own stations (openworld.md section 13), and binding "first town visited" to
+stage 3 (the ladder names it, `TRIGGERS` does not yet).

@@ -92,6 +92,8 @@ describe('main.ts boss fights', () => {
     await boot('?bot=off');
     const buttons = [...byId('boss-list').querySelectorAll('button')];
     expect(buttons.map((b) => b.title)).toEqual(BOSS_BLURBS.map((b) => b.blurb));
+    const together = [...byId('coop-list').querySelectorAll('button')]; // the same list of Fight together and Boss duel
+    expect(together.map((b) => b.title)).toEqual(BOSS_BLURBS.map((b) => b.blurb));
   });
 
   it('lists the bosses behind Boss fight, the button opens and closes the list', async () => {

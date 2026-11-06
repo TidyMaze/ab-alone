@@ -178,7 +178,7 @@ import { worldKeys } from './worldevents';
 import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
-import { tallyLine } from './tally';
+import { tallyLine, townLine } from './tally';
 import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
 import { generateKeys, type Keys, type Report } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
@@ -223,7 +223,7 @@ import { AMBIENT } from './openworldparticles';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
-import { audioDeckOf, bossLore, entryOf, STORY } from './lorelogs';
+import { audioDeckOf, bossBlurb, bossLore, entryOf, STORY } from './lorelogs';
 import { atStake, claimReload } from './autoreload';
 import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
 import { catchUp, fire, gated, SEALED, storyStage, type StoryEvent } from './story';
@@ -5359,6 +5359,7 @@ for (const id of boss_ids()) {
   const entry = document.createElement('button');
   entry.type = 'button';
   entry.textContent = boss_name(id)!;
+  entry.title = bossBlurb(id)!; // the tower's one line of the story (#1544)
   entry.addEventListener('click', () => startBoss(id, crypto.getRandomValues(new Uint32Array(1))[0]!));
   bossList.appendChild(entry);
   bossEntries.set(id, entry);
@@ -6058,6 +6059,7 @@ for (const id of boss_ids()) {
   const entry = document.createElement('button');
   entry.type = 'button';
   entry.textContent = boss_name(id)!;
+  entry.title = bossBlurb(id)!; // the tower's one line of the story (#1544)
   entry.addEventListener('click', () => {
     showCoopList(false);
     playOnline({ boss: id, seed: crypto.getRandomValues(new Uint32Array(1))[0]! }, listIsDuel);
@@ -6492,11 +6494,15 @@ const openWorld = new OpenWorldMode(
   (seed) => Int32Array.from(world_logs(seed)), // the lore logs (#1589)
   (id) => markRead(store, id), // a log read joins the log archive (#1589)
   (seed) => Int32Array.from(world_places(seed)), // the towns and dungeon gates (#1514)
-  (seed, kind) => {
+  (seed, kind, index) => {
     // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
     (kind === 'town' ? shipButton : runButton).click();
     placeFrom = { seed };
     syncPlaceBack();
+    if (kind === 'town') {
+      hub!.bumped = townLine(index, storyStage(store)); // Tally's ledger line of this town on the plate, once its stage is reached (#1516)
+      hud();
+    }
   },
 );
 document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());

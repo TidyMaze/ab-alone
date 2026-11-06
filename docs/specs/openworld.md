@@ -585,6 +585,9 @@ plan as the game.
   spawn clearing's town on `(0, 0)` is the cell the hero starts on, so it opens only when the hero rolls back onto it. A walk to a far
   cell, the Dungeon button and the troop's arrival on a teleporter go round the places as they go round the lairs, and a held arrow into
   a place enters it. The MCP server (`mcp/src/world.ts`) does not know the places: an agent steps over their cells as over ground.
+- **Ledger line** (#1516). Entering a town puts Tally's line for it on the plate of the Hub (`TOWN_LINES` of `tally.ts`, keyed by the town's index among the
+  towns: the spawn town 0, then the forest, tundra, desert and badlands towns; `onPlace` of `OpenWorldMode` gives the index), until the first move, and only from the
+  stage the line declares: a new player meets none (world.md section 13). A seed with a town left out shifts the later towns' lines by one (none in the seeds 1 to 2000).
 - **Exit.** `#place-back`, "Back to the Open world", is a dock button shown while the Hub or the run is on and came from a place
   (`placeFrom` of `main.ts`): it leaves the Hub or the run (a run left is abandoned, as by another mode) and opens the world at the entrance,
   as "Back to the Open world" of a lair. A table or a boss of that Hub keeps it, and the Hub of the mode menu after it. Any other mode, and the

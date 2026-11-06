@@ -177,7 +177,7 @@ export class OpenWorldMode {
     /** The towns and dungeon gates of a seed's world: `kind, q, r` triples (the bridge's `world_places`, #1514). */
     private readonly placesOf: (seed: number) => Int32Array = () => new Int32Array(),
     /** What starts a town or a dungeon gate rolled onto (#1593), given the seed of the world and the kind. */
-    private readonly onPlace: (seed: number, kind: 'town' | 'dungeon') => void = () => {},
+    private readonly onPlace: (seed: number, kind: 'town' | 'dungeon', index: number) => void = () => {},
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -810,7 +810,7 @@ export class OpenWorldMode {
     const next = neighbours(this.hero!.at).some((n) => same(n, to));
     if (lair >= 0 && next) return this.enterLair(lair), false;
     const place = this.places.find(({ cell }) => same(cell, to));
-    if (place && next) return this.enterPlace(place.kind), false; // a town or a dungeon gate is entered as a lair is (#1593)
+    if (place && next) return this.enterPlace(place), false; // a town or a dungeon gate is entered as a lair is (#1593)
     const from = this.hero!.at;
     if (!this.hero!.step(to)) return this.lean(to, at), false;
     this.cruising = pace !== 'tap';
@@ -876,12 +876,13 @@ export class OpenWorldMode {
   }
 
   /** The hero rolls onto a town or a dungeon gate (#1593): the world is saved with the hero on the entrance, as for a lair, and left; the page
-   * opens the Hub or starts the run. */
-  private enterPlace(kind: 'town' | 'dungeon'): void {
+   * opens the Hub or starts the run. It is told the place's index among those of its kind (#1516), the spawn town 0. */
+  private enterPlace(place: { cell: Axial; kind: 'town' | 'dungeon' }): void {
     const seed = this.seed;
+    const index = this.places.filter(({ kind }) => kind === place.kind).indexOf(place); // the place among those of its kind: the spawn town is 0 (#1516)
     this.persist();
     this.leave();
-    this.onPlace(seed, kind);
+    this.onPlace(seed, place.kind, index);
   }
 
   /** A blocked step leans the hero toward the cell it cannot take, and back: nothing under reduced motion (#1040). */

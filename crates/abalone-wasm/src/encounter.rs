@@ -246,7 +246,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "alien",
         builds: true,
-        goal: "Its eggs hatch; land on one to crush it. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "The brood is warm, and its eggs hatch. Land on one to crush it. Eject 6 to win; lose 6 or draw to lose.",
         def: alien_boss,
         start: alien_fight,
         reply: alien_move,
@@ -256,7 +256,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "railyard",
         builds: true,
-        goal: "Trains sweep the marked lines. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Freight runs on schedule, and trains sweep the marked lines. Eject 6 to win; lose 6 or draw to lose.",
         def: railyard_boss,
         start: railyard_fight,
         reply: railyard_move,
@@ -266,8 +266,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "magnetizer",
         builds: true,
-        goal:
-            "Your + and − marbles repel and push any line. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Charge against charge: your + and − marbles repel and push any line. Eject 6 to win; lose 6 or draw to lose.",
         def: magnetizer_boss,
         start: plain_fight,
         reply: magnetizer_move,
@@ -277,7 +276,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "pulsar",
         builds: true,
-        goal: "Pulses push every lone marble or pair away. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "A beacon pulses on schedule, and each pulse pushes every lone marble or pair away. Eject 6 to win; lose 6 or draw to lose.",
         def: pulsar_boss,
         start: pulsar_fight,
         reply: pulsar_move,
@@ -287,8 +286,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "overseer",
         builds: true,
-        goal:
-            "Push its cores onto or next to the vents. Eject 6 to win, cores count; lose 6, draw or 40 turns.",
+        goal: "The watch counts every core. Push its cores onto or next to the vents. Eject 6 to win, cores count; lose 6, draw or 40 turns.",
         def: overseer_boss,
         start: overseer_fight,
         reply: overseer_move,
@@ -298,7 +296,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "assembly",
         builds: true,
-        goal: "Belts carry every marble off the board; later, presses strike. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Throughput is the only measure. Belts carry every marble off the board; later, presses strike. Eject 6 to win; lose 6 or draw to lose.",
         def: assembly_boss,
         start: assembly_fight,
         reply: assembly_move,
@@ -308,7 +306,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "core",
         builds: true,
-        goal: "Centre cells charge marbles, a charged marble weighs more in a push, 4 blow it off. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "The core runs hot. Centre cells charge marbles, a charged marble weighs more in a push, 4 blow it off. Eject 6 to win; lose 6 or draw to lose.",
         def: unstable_boss,
         start: unstable_fight,
         reply: unstable_move,
@@ -318,7 +316,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "dual",
         builds: true,
-        goal: "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Two rooms, a void between them: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose.",
         def: dual_boss,
         start: dual_fight,
         reply: dual_move,
@@ -328,7 +326,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "stalker",
         builds: true,
-        goal: "The stalker sees your whole army. You see its marbles only near your own, and a move may be stopped by one you cannot see. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "From the fog the stalker sees your whole army. You see its marbles only near your own, and a move may be stopped by one you cannot see. Eject 6 to win; lose 6 or draw to lose.",
         def: stalker_boss,
         start: stalker_fight,
         reply: search_reply,
@@ -338,7 +336,7 @@ const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "swarm",
         builds: false,
-        goal: "You start in the centre, no swarm marble yet: a wave lands on its marks on the rim every turn, and the swarm moves. Survive 40 turns to win, each swarm marble you eject brings the evac 2 turns closer; the swarm wins once it ejects 2 of your marbles.",
+        goal: "Wave on wave, and no queen. You start in the centre, no swarm marble yet: a wave lands on its marks on the rim every turn, and the swarm moves. Survive 40 turns to win, each swarm marble you eject brings the evac 2 turns closer; the swarm wins once it ejects 2 of your marbles.",
         def: swarm_boss,
         start: swarm_fight,
         reply: search_reply,
@@ -1296,7 +1294,7 @@ mod tests {
             (
                 "alien",
                 "The brood is warm, and its eggs hatch.",
-                &["land on one to crush it"],
+                &["Land on one to crush it"],
             ),
             (
                 "railyard",
@@ -1315,7 +1313,7 @@ mod tests {
             ),
             (
                 "overseer",
-                "Watch begun.",
+                "The watch counts every core.",
                 &[
                     "Push its cores onto or next to the vents",
                     "Eject 6 to win, cores count",
@@ -1341,7 +1339,7 @@ mod tests {
             ),
             (
                 "dual",
-                "Two rooms on the books",
+                "Two rooms, a void between them",
                 &[
                     "comes back in the other room",
                     "at 5 a bridge fills the void",
@@ -2775,7 +2773,7 @@ mod tests {
     fn the_dual_room_goal_names_the_void_and_the_bridge() {
         assert_eq!(
             boss_goal("dual").unwrap(),
-            "Two rooms on the books, a void between them: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose."
+            "Two rooms, a void between them: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose."
         );
     }
 

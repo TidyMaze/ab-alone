@@ -13,21 +13,23 @@ const MODE_LINES: Record<'local' | 'bot' | 'online', string> = {
   online: 'Link: two crews, one ledger. Both counted.',
 };
 
+/** Tally's line for each boss (#294, #1544). A boss menu starts any fight at any time, so a line holds no secret word of the story (world.md
+ * section 12.2): it is stage 1 for good (`tally.test.ts`). The ten later bosses each say something no other boss says. */
 const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
   echo: 'Mirror logged. Six out to balance the books.',
   hull: 'Rim on file. Six out to balance the books.',
   choir: 'Six out to balance the books.',
   chaplain: 'Conversions on file. Six out to balance.',
   ballast: 'The ledger plays itself. Twelve out to balance.',
-  alien: 'Brood on file. Six out to balance the books.',
-  railyard: 'Freight on schedule. Six out to balance the books.',
-  magnetizer: 'Charges on file. Six out to balance the books.',
-  pulsar: 'Beacons on schedule. Six out to balance the books.',
-  overseer: 'Cores on file. Six burnt to balance the books.',
-  assembly: 'Throughput on file. Six out to balance the books.',
+  alien: 'Brood on file. It bred while the count was open.',
+  railyard: 'Freight on schedule. Nothing on the line stops it.',
+  magnetizer: 'Poles on file. Charge against charge, entered as a push.',
+  pulsar: 'Beacons on schedule. One pulse at a time, each counted.',
+  overseer: 'Cores on file. Watch closes at six burnt.',
+  assembly: 'Throughput on file. Every belt runs to the edge.',
   core: 'Charges on file. Four and a marble is written off.',
-  dual: 'Returns on file. Six out to balance the books.',
-  stalker: 'Sightings on file. Six out to balance the books.',
+  dual: 'Returns on file. Two rooms, one void, one count.',
+  stalker: 'Sightings on file. The fog keeps its own count.',
   swarm: 'Waves on file. Forty turns to the evac.',
 };
 
@@ -46,3 +48,20 @@ export const endingLine = (crew: number): string => `Variance noted. Clamp: open
 /** Tally's line while some lairs of the Open world are beaten and not all (#1315): the seats on file out of the lairs, and one line of
  * lore (world.md section 2, what happened). One line, no speech, nothing gated. */
 export const ledgerLine = (filed: number, total: number): string => `Seats on file: ${filed} of ${total}. Slag-glass remembers heat.`;
+
+/** Tally's ledger line of a town of the Open world (#1516, world.md section 13), by the town's index: the spawn town first, then the towns of the
+ * forest, the tundra, the desert and the badlands. Towns hold the delivered, so each line comes with the stage that may speak of it: `townLine`
+ * says nothing before it, and no line holds a secret word of a later stage (`tally.test.ts`). */
+export const TOWN_LINES: readonly { stage: number; line: string }[] = [
+  { stage: 2, line: 'Muster: table zero, laid. Seats: six. Counted, every one. Nobody here is hurt.' },
+  { stage: 3, line: 'Muster: the pines. Residents entered as Out. They breathe, eat and wait.' },
+  { stage: 4, line: 'Muster: the white field. Cold lets go. Residents entered as delivered, in good order.' },
+  { stage: 4, line: 'Muster: the dunes. Residents arrive clear and dazed, no name on file. Entered: delivered.' },
+  { stage: 5, line: 'Muster: the ridge. Line 0412 was first. The rest came after, one hand free each.' },
+];
+
+/** The ledger line of the town with this index, once the story is at its stage; '' before it, and for a town the table does not hold. */
+export function townLine(index: number, stage: number): string {
+  const town = TOWN_LINES[index];
+  return town && stage >= town.stage ? town.line : '';
+}

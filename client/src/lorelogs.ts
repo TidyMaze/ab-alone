@@ -46,6 +46,38 @@ export const BOSS_LORE: readonly BossLore[] = [
   boss('swarm', 3, 'Cargo: the Swarm', 'Seat: empty. Wave on wave, and no queen. The evac lifted with the clear crew aboard. Forty turns. Every marble you threw out brought it nearer. Entered: thrown out, not harmed.'),
 ];
 
+/** The one line of a tower (#1516, #1544, world.md section 13): a boss is a station of one section of the Ballast, the deck it sits on (`deckOf`), and
+ * this is what the station was. The boss menu shows it, so it is stage 1 for good and holds no secret word at any stage (`lorelogs.test.ts`). */
+export interface BossBlurb {
+  boss: string;
+  stage: number;
+  blurb: string;
+}
+
+const tower = (boss: string, blurb: string): BossBlurb => ({ boss, stage: 1, blurb });
+
+/** One blurb per boss, in the order of the roster, 80 characters at most. */
+export const BOSS_BLURBS: readonly BossBlurb[] = [
+  tower('echo', 'The last card-player of the mess. It answers each move with its mirror.'),
+  tower('hull', 'The loadmaster, fused to the frame of the bay he keeps.'),
+  tower('choir', 'The furnace shift, in three groups, one voice at a time.'),
+  tower('chaplain', 'The ship chaplain, who preached the shell. Three around one, and it turns.'),
+  tower('ballast', "The last seat, on the Bridge. It plays the crew's last orders."),
+  tower('alien', 'Something that came up with the ore. It breeds in the warm hold.'),
+  tower('railyard', 'The ore freight, still on schedule, on rails laid for ore.'),
+  tower('magnetizer', 'The furnace lifting magnets, awake by themselves.'),
+  tower('pulsar', 'Six navigation beacons on the bridge, each pulse a push no hand made.'),
+  tower('overseer', "The Chapel's watch system. It keeps the count and never stopped."),
+  tower('assembly', 'Belts and presses of the cargo hold. Throughput, not malice.'),
+  tower('core', 'A furnace core left charging. What it holds, it hands to the marbles.'),
+  tower('dual', 'Two galleys of the mess, split by a void.'),
+  tower('stalker', 'The night watch of the Chapel. It sees the board from the fog.'),
+  tower('swarm', 'Vermin of the cargo hold, in waves, with no queen to kill.'),
+];
+
+/** The blurb of a boss, none for a boss the roster does not hold. */
+export const bossBlurb = (boss: string): string | undefined => BOSS_BLURBS.find((b) => b.boss === boss)?.blurb;
+
 const log = (id: string, stage: number, title: string, body: string, reread = false): WorldLog => ({ id: `log-${id}`, stage, title, body, reread });
 
 /** Twelve logs, in the order of the cells of `world_logs`: log `k` lies in the sextant `k % 6` (meadow, forest, tundra, desert, badlands,
