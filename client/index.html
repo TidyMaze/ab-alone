@@ -32,6 +32,11 @@
       <p>The game could not start: <span id="boot-reason"></span></p>
       <button id="boot-reload" type="button">Reload</button>
     </div>
+    <!-- A mode whose code did not load (#1578): the page is alive under it, Retry asks the file again. -->
+    <div id="chunk-error" role="alert" hidden>
+      <p>The <span id="chunk-name"></span> could not load. Check the connection and try again.</p>
+      <div class="actions"><button id="chunk-retry" type="button">Retry</button><button id="chunk-reload" type="button">Reload</button></div>
+    </div>
     <!-- The Hub's deck plan (#1249): a label plate over each room, the lift-shaft rail and the boss pips. -->
     <div id="hub-plan" hidden>
       <div id="hub-labels"></div>

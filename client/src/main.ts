@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_logs, world_pads, world_path, world_places, world_rings, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -174,10 +174,8 @@ import { countAttempt, dailyCard, dailyFor, dailyLine, dailySeed, dailyTitle, re
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
 import { hookHost, netHook } from './hooks';
-import { hookPeers, hookTransport, p2pPeers, p2pTransport } from './p2p';
-import { WorldPeersHost } from './worldnet';
-import { worldKeys } from './worldevents';
-import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
+import { hookTransport, p2pTransport } from './p2p';
+import { PUBLIC_SEED } from './worldpeers';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner, type EndAnim } from './endbanner';
 import { CountWatch, EdgeWatch, EndWatch, OutWatch, PhaseWatch, SelectionWatch, clickable, turnBack } from './cues';
@@ -213,18 +211,15 @@ import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
-import { FightState } from './openworldfight';
 import { wipe } from './wildwipe';
-import { OpenWorldMode, twistOf } from './openworldmode';
+import { lazyChunk } from './modechunk';
+import { OpenWorldHandle } from './openworldhandle';
+import { twistOf } from './openworldtwist';
 import type { PlaceKind } from './placetransition';
 import { BOARD_LOOKS } from './boardlook';
 import type { Phase } from './daynight';
 import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
-import { worldSaves } from './openworldsave';
-import { BIOME_LOOK, LAIR_LOOK, LOOK, MARBLE_LOOK as WORLD_MARBLES, PROPS, TELEPORTER_LOOK, WATER, loadModels } from './openworldview';
-import { applyNeonWorld } from './neonworld';
-import { AMBIENT } from './openworldparticles';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
@@ -676,7 +671,6 @@ if (plateNormal) {
 const neonLook = neonLookOn(location.search); // `?look=neon` (#1424): the circuit slab, colours and light only; never stored
 if (neonLook) document.body.dataset.look = 'neon'; // the style sheet's own hooks for the look
 const neonTell = tellLook(neonLook); // the sizes of the bosses' tells: the look's thick ones, or the game's own
-if (neonLook) applyNeonWorld(true, { LOOK, WATER, BIOME_LOOK, PROPS, MARBLE_LOOK: WORLD_MARBLES, LAIR_LOOK, TELEPORTER_LOOK, AMBIENT }); // the Open world's palette, the minimap's too
 const sceneRenderer = new SceneRenderer({
   renderer,
   neon: neonLook,
@@ -3748,8 +3742,8 @@ function medalNote(boss: { id: string }): string {
     storyEvent({ on: 'won', id: boss.id }); // before the lore of the win is chosen: the stage counts this win (#1584)
     if (epilogueDue(store, storyStage(store))) openEpilogue(); // the win that reaches stage 7 (#1546)
     medalSeen = { game: engine, note: medalLine(result, result === 'kept' ? bestTurns(store, boss.id)! : turns) };
-    if (lairFrom) void openWorldSaves.beat(lairFrom.seed, lairFrom.lair); // the lair is beaten in the Open world too (#1170)
-    if (lairFrom) peersHost.lairWon(lairFrom.seed, lairCells(lairFrom.seed)[lairFrom.lair]!); // and seen beaten by the other heroes (#1305)
+    if (lairFrom) void openWorld.loaded.saves.beat(lairFrom.seed, lairFrom.lair); // the lair is beaten in the Open world too (#1170)
+    if (lairFrom) openWorld.loaded.peers.lairWon(lairFrom.seed, lairCells(lairFrom.seed)[lairFrom.lair]!); // and seen beaten by the other heroes (#1305)
   }
   return medalSeen.note;
 }
@@ -5725,8 +5719,8 @@ let wildSeen: unknown = null;
 function wildWon(wild: NonNullable<typeof wildFrom>): string {
   if (wildSeen !== engine) {
     wildSeen = engine;
-    void openWorldSaves.beatMarble(wild.seed, wild.home);
-    peersHost.wildWon(wild.seed, wild.home);
+    void openWorld.loaded.saves.beatMarble(wild.seed, wild.home);
+    openWorld.loaded.peers.wildWon(wild.seed, wild.home);
   }
   return 'The marble is gone from the world.';
 }
@@ -6721,133 +6715,59 @@ const openWorldButton = document.getElementById('openworld') as HTMLButtonElemen
 // URL is read only under automation (navigator.webdriver), so the e2e specs and test hooks keep their private worlds.
 const openWorldFresh = navigator.webdriver && openWorldParam === 'new';
 const openWorldFixedSeed = !navigator.webdriver || openWorldParam === '' || openWorldFresh ? NaN : Number(openWorldParam);
-const openWorldSaves = worldSaves(gameStore, world_version());
-const openWorld = new OpenWorldMode(
-  (seed, cx, cy) => world_chunk(seed, cx, cy),
-  (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
-  () =>
-    loadModels(
-      {
-        low: `${import.meta.env.BASE_URL}assets/pbr/openworld.glb`,
-        high: `${import.meta.env.BASE_URL}assets/pbr/openworld-hi.glb`,
-        lair: `${import.meta.env.BASE_URL}assets/pbr/openworld-lair.glb`,
-      },
-      meshoptLoader(),
-    ),
-  () => reducedMotion(),
-  openWorldSaves,
-  (seed) => Int32Array.from(world_lairs(seed)),
-  (seed, lair) => {
-    const ids = boss_ids();
-    startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair, phase: openWorld.phase }); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496)
-  },
-  // The marbles of the Open world wear the skins of the ship (#1176): the worn glass for the hero and the troop, the worn shell
-  // for the enemies, once their maps are on.
-  async () => {
-    await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m)));
-    return { player: marbleMaterials[2]!, shell: marbleMaterials[1]! };
-  },
-  () => ({ have: boss_ids().filter((id) => hasMedal(store, id)).length, total: boss_ids().length }), // one medal per boss, from the shared store (#1171)
-  () => {
-    // Tally's claim line, once per player (#1171): the flag sits in the same store as the medals. The line number is the stage 5 secret (#1584).
-    if (read(store, 'ab-alone.tally0412') === 'seen') return '';
-    write(store, 'ab-alone.tally0412', 'seen');
-    return storyStage(store) >= 5 ? 'Claim 0412: unworked.' : 'Claim: unworked.';
-  },
-  (seed, from, to, blocked, broken) => Int32Array.from(world_path(seed, from[0], from[1], to[0], to[1], blocked, broken)), // the walk to a far cell (#1137)
-  () => steering,
-  // The lights node the renderer keeps per scene holds GPU textures (clustered lighting: 2 per scene) that nothing else frees, so
-  // each world entered leaked them (#1258).
-  (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
-  (seed, from, beaten, blocked, broken) => Int32Array.from(world_dungeon(seed, from[0], from[1], beaten, blocked, broken)), // the Dungeon button (#1291)
-  (seed) => Int32Array.from(world_teleporters(seed)), // the teleporters (#1412)
-  () => boss_ids(), // lair k is boss k round the roster: the tower icons of the map (#1438)
-  (seed) => Int32Array.from(world_logs(seed)), // the lore logs (#1589)
-  (id) => markRead(store, id), // a log read joins the log archive (#1589)
-  (seed) => Int32Array.from(world_places(seed)), // the towns and dungeon gates (#1514)
-  (seed, kind, index) => {
-    // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
-    (kind === 'town' ? shipButton : runButton).click();
-    placeFrom = { seed, kind };
-    syncExit();
-    if (kind === 'town') {
-      storyEvent({ on: 'town' }); // the first town visited is stage 3 (#1586), before the line of this town is chosen
-      hub!.bumped = townLine(index, storyStage(store)); // Tally's ledger line of this town on the plate, once its stage is reached (#1516)
-      sawLines(hub!.bumped);
-      hud();
-    }
-  },
-  () => storyStage(store), // the clamp of Tally's lines is open from stage 7 (#1546)
-  (seed) => Uint8Array.from(world_rings(seed)), // the ring of each tower and the dungeon tier of each gate (#1532)
-  (seed) => Int32Array.from(world_pads(seed)), // the pad a tower beaten through the world leaves (#1531)
-  (id) => boss_name(id)!, // the title of a tower entered (#1519)
-);
-openWorld.cue = (event) => playCue(event); // the step, the pickup and the time of day (#1570)
-document.getElementById('openworld-dungeon')!.addEventListener('click', () => openWorld.dungeon());
-const mapButton = document.getElementById('openworld-map-button')!;
-mapButton.addEventListener('click', () => {
-  openWorld.toggleMap(); // the map of the cells discovered (#1411)
-  mapButton.blur(); // the keys and the pad go back to the world
-});
-const teleportButton = document.getElementById('openworld-teleport')!;
-teleportButton.addEventListener('click', () => {
-  openWorld.teleport(); // the choice of a teleporter on the map (#1412)
-  teleportButton.blur();
-});
-// The public world (#1305): one fixed seed where everybody lands by default, the only world with other heroes. It joins its room only
-// after the opt-in (consent.ts); Stay solo opens the same world offline. New world and any other seed stay private and offline. An
-// automated page stays offline too unless it asks for the hook transport (?net=hook) or the opt-in dialog (?consent).
+// The world's code is a chunk of the build, loaded at the first entry (#1578, openworldwire.ts): until then `openWorld` is off.
+const openWorldCode = lazyChunk('Open world', () => import('./openworldwire'));
 let worldOnline = false;
-const netBox = document.getElementById('openworld-online')!;
-const netHide = document.getElementById('openworld-hide') as HTMLButtonElement;
-const netName = document.getElementById('openworld-name') as HTMLInputElement;
-const peersHost = new WorldPeersHost(
-  (room) => (netHook(location.search) ? hookPeers() : p2pPeers(room)),
-  () => worldOnline,
-  document.getElementById('openworld-peers')!,
-  (status) => {
-    // The HUD's online controls: the status line, and Hide or Show. They exist in the public world only.
-    if (netBox.hidden && status.available) netName.value = readName(store); // the field shows the stored name when the controls appear
-    netBox.hidden = !status.available;
-    document.getElementById('openworld-net')!.textContent = status.text;
-    netHide.textContent = status.hidden ? 'Show' : 'Hide';
-    netHide.setAttribute('aria-pressed', String(status.hidden));
-  },
-  () => readName(store),
-  // The signed events of the public world (#1305): the player's key, the engine's rule of what can break, and what a break of another hero does.
-  {
-    keys: () => worldKeys(store),
-    canBreak: (seed, q, r) => world_can_break(seed, q, r),
-    apply: (cell) => openWorld.remoteBreak(cell),
-    canBeaten: (seed, q, r) => world_is_enemy(seed, q, r),
-    beat: (cell) => openWorld.remoteBeaten(cell),
-    canLair: (seed, q, r) => lairCells(seed).some(([a, b]) => a === q && b === r),
-    lair: (cell) => openWorld.remoteLair(cell),
-  },
-  undefined,
-  store, // the signed events are kept in this browser (#1305)
+// The clock the enemy marbles wander by (#1511): the wall clock in ticks. Under automation it stands at tick 0, where the marbles start,
+// until a spec sets it (`__openworldWander`).
+let wanderTick: number | null = navigator.webdriver ? 0 : null;
+const openWorld = new OpenWorldHandle(async () =>
+  (await openWorldCode()).wireOpenWorld({
+    store,
+    gameStore,
+    neon: neonLook,
+    reduced: reducedMotion,
+    // The marbles of the Open world wear the skins of the ship (#1176): the worn glass for the hero and the troop, the worn shell
+    // for the enemies, once their maps are on.
+    skins: async () => {
+      await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m)));
+      return { player: marbleMaterials[2]!, shell: marbleMaterials[1]! };
+    },
+    steering: () => steering,
+    // The lights node the renderer keeps per scene holds GPU textures (clustered lighting: 2 per scene) that nothing else frees, so
+    // each world entered leaked them (#1258).
+    releaseScene: (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
+    startLair: (seed, lair, phase) => {
+      const ids = boss_ids();
+      startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair, phase }); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496)
+    },
+    onPlace: (seed, kind, index) => {
+      // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
+      (kind === 'town' ? shipButton : runButton).click();
+      placeFrom = { seed, kind };
+      syncExit();
+      if (kind === 'town') {
+        storyEvent({ on: 'town' }); // the first town visited is stage 3 (#1586), before the line of this town is chosen
+        hub!.bumped = townLine(index, storyStage(store)); // Tally's ledger line of this town on the plate, once its stage is reached (#1516)
+        sawLines(hub!.bumped);
+        hud();
+      }
+    },
+    online: () => worldOnline,
+    lairCells,
+    onWild: (seed, home, phase) => {
+      loadBoard(); // as the wipe closes, half a second before the fight starts (#1520)
+      wipe(document.getElementById('wild-wipe')!, reducedMotion(), () => startWild({ seed, home, phase }));
+    },
+    cue: (event) => playCue(event),
+    wanderTick: () => wanderTick,
+  }),
 );
 /** The boss lairs of the world `seed` (#1305), one cell per boss, the bridge's `world_lairs` read as cells. */
 function lairCells(seed: number): Axial[] {
   const flat = Array.from(world_lairs(seed));
   return Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
 }
-openWorld.peers = peersHost;
-const wildWipe = document.getElementById('wild-wipe')!;
-openWorld.onWild = (seed, home) => {
-  loadBoard(); // as the wipe closes, half a second before the fight starts (#1520)
-  const phase = openWorld.phase; // the hour the marble was met at dresses the arena
-  wipe(wildWipe, reducedMotion(), () => startWild({ seed, home, phase }));
-};
-// The clock the enemy marbles wander by (#1511): the wall clock in ticks, so every peer sees them in the same places. Under automation it stands
-// at tick 0, where the marbles start, until a spec sets it (`__openworldWander`).
-let wanderTick: number | null = navigator.webdriver ? 0 : null;
-openWorld.wander = () => wanderTick ?? Math.floor(Date.now() / FightState.tickMs);
-netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
-netName.addEventListener('input', () => {
-  writeName(store, cleanName(netName.value)); // the field keeps what was typed, the store and the peers get the clean name
-  peersHost.setName();
-});
 /** Whether this page may take the public world online, asking first when the opt-in is due. */
 async function publicWorldOnline(): Promise<boolean> {
   const query = new URLSearchParams(location.search);
@@ -6871,11 +6791,11 @@ async function enterOpenWorld(): Promise<void> {
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
   const hooks = hookHost;
-  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[]; recruits?: number }) => openWorld.fixture(fixture);
+  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[]; recruits?: number }) => openWorld.loaded.mode.fixture(fixture);
   hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
-  hooks.__openworldEnemies = () => openWorld.enemies();
-  hooks.__openworldWander = (tick: number | null) => ((wanderTick = tick), openWorld.stepWander(undefined, true)); // the tick of the marbles' clock, or null for the real one (#1511)
-  hooks.__openworldTime = (ms: number) => openWorld.setTime(ms); // the time of day in ms of the 12 minute cycle: 0 day, 6 min dusk, 7.5 min night (#1496)
+  hooks.__openworldEnemies = () => openWorld.loaded.mode.enemies();
+  hooks.__openworldWander = (tick: number | null) => ((wanderTick = tick), openWorld.loaded.mode.stepWander(undefined, true)); // the tick of the marbles' clock, or null for the real one (#1511)
+  hooks.__openworldTime = (ms: number) => openWorld.loaded.mode.setTime(ms); // the time of day in ms of the 12 minute cycle: 0 day, 6 min dusk, 7.5 min night (#1496)
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldTeleporters = (seed: number) => Array.from(world_teleporters(seed)); // every teleporter of a world, `q, r` pairs (#1412)
@@ -6883,7 +6803,7 @@ if (navigator.webdriver) {
   hooks.__openworldPlaces = (seed: number) => Array.from(world_places(seed)); // every town and dungeon gate of a world, `kind, q, r` triples (#1514)
   hooks.__openworldLogs = (seed: number) => Array.from(world_logs(seed)); // every lore log of a world, `q, r` pairs (#1589)
   hooks.__openworldLairs = (seed: number) => lairCells(seed); // the boss lairs of a world as cells, for the peer tests (#1305)
-  hooks.__openworldCamera = (at?: number) => openWorld.camera(at); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
+  hooks.__openworldCamera = (at?: number) => openWorld.loaded.mode.camera(at); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');

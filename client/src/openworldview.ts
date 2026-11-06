@@ -21,6 +21,7 @@ import { ICON } from './openworldlairicon';
 import { NEON, lightNeon, neonSunPosition, neonStars, neonWorldOn } from './neonlook';
 import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
+import { wrapPi } from './openworldtwist';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
@@ -108,11 +109,7 @@ const NEAR = 0.1;
  * at 57 FPS, so it is too far. */
 export const MAX_ZOOM = 6;
 
-/** An angle in radians turned into (-pi, pi]: the shortest turn of the camera around the hero (#1026). */
-export const wrapPi = (angle: number): number => {
-  const turn = ((((angle + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
-  return turn === -Math.PI ? Math.PI : turn;
-};
+export { wrapPi };
 
 /** Puts the camera `k` zooms up and back from `at` (the point it looks at, the hero's column top when eased), turned `yaw` radians
  * round it (0 is the back at +z, as before #1026), looking down at it, and the planes of the camera with the zoom. */

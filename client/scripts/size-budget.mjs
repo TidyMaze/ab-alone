@@ -4,7 +4,7 @@
 // whole site. It fails over a budget, or when dist/ holds a source file. The table goes to the run summary in CI, to
 // the console elsewhere.
 // Run from client/: bun run scripts/size-budget.mjs dist
-import { appendFileSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { DECK_NAMES } from '../src/deck.ts';
@@ -23,11 +23,18 @@ const FIRST_SCREEN = new RegExp(
 /** The deck a file belongs to (`deck-cargo.png`, `deck-cargo-normal.png`), or undefined for a shared file. */
 const deckOf = (file) => DECK_NAMES.find((deck) => new RegExp(`^deck-${deck}[-.]`).test(basename(file)));
 
-/** The parts of the build with their gzipped size and budget, and the source files, from each file's gzipped size. */
-export function measure(sizes, budgets = BUDGETS) {
+/** The scripts the page loads at once: its module script and the chunks it preloads, which the build splits off the entry when a
+ * mode's code shares modules with it (#1578). A mode's own chunk is not among them, it loads at the first entry of the mode. */
+export function pageScripts(html) {
+  return [...html.matchAll(/<(?:script|link)\b[^>]*?\b(?:src|href)="[^"]*?(assets\/[^"/]+\.js)"/g)].map((match) => match[1]);
+}
+
+/** The parts of the build with their gzipped size and budget, and the source files, from each file's gzipped size. `scripts` are the
+ * ones the page loads at once (`pageScripts`), the first screen holds them besides the files its pattern names. */
+export function measure(sizes, budgets = BUDGETS, scripts = []) {
   const files = Object.keys(sizes);
   const sum = (keep) => files.filter(keep).reduce((total, file) => total + sizes[file], 0);
-  const firstScreen = (file) => FIRST_SCREEN.test(file) && [undefined, FIRST_DECK].includes(deckOf(file));
+  const firstScreen = (file) => (FIRST_SCREEN.test(file) || scripts.includes(file)) && [undefined, FIRST_DECK].includes(deckOf(file));
   return {
     parts: [
       { name: 'First screen', bytes: sum(firstScreen), budget: budgets.firstScreen },
@@ -54,7 +61,8 @@ export function main(dir, summary, budgets = BUDGETS) {
   for (const file of readdirSync(dir, { recursive: true }).map(String)) {
     if (statSync(join(dir, file)).isFile()) sizes[file.split(sep).join('/')] = gzipSync(readFileSync(join(dir, file))).length;
   }
-  const { parts, sources } = measure(sizes, budgets);
+  const page = join(dir, 'index.html');
+  const { parts, sources } = measure(sizes, budgets, existsSync(page) ? pageScripts(readFileSync(page, 'utf8')) : []);
   const table = toMarkdown(parts, sources);
   if (summary) appendFileSync(summary, table);
   else console.log(table);

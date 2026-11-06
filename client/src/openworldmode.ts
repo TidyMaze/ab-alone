@@ -22,7 +22,8 @@ import { enter, heroStep } from './openworldstep';
 import { pairs, teleport, teleporterNear } from './openworldteleport';
 import type { PeerHost } from './worldnet';
 import { PlaceTransition, placeTitle, type PlaceKind } from './placetransition';
-import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
+import { MAX_REACH, OpenWorldView, type Played, type PropModels } from './openworldview';
+import { twistOf } from './openworldtwist';
 
 /** The walk of the hero to a far cell, the bridge's `world_path` (docs/specs/openworld.md section 4): the seed, the cell the hero
  * stands on, the cell asked for, the cells it cannot enter (enemies, lairs) and the broken cells (#1154), as `q, r` pairs; its answer
@@ -78,8 +79,7 @@ const TELEPORT_KEYS = new Set(['t', 'T']);
 const HELP_KEYS = new Set(['h', 'H']);
 /** The ground a marble can stand on: the troop arrives on it round a teleporter (#1412). */
 
-/** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
-export const twistOf = (prev: number, next: number): number => wrapPi(next - prev);
+export { twistOf };
 
 export class OpenWorldMode {
   active = false;

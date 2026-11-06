@@ -389,6 +389,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   );
 
   await import('../main');
+  if (options.warmChunks !== false) await import('../openworldwire');
   const hook = <T>(name: string, ...args: unknown[]): T => {
     const fn = (window as unknown as Record<string, ((...args: unknown[]) => T) | undefined>)[name];
     if (!fn) throw new Error(`main.ts sets no ${name} hook`);
