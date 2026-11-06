@@ -37,8 +37,8 @@ test('the HUD of an army fight reads the army, what the run ends below and the m
 
 test('a legend line for each special marble on the board, a card on a hover or a tap of its line, and none of it blocks a move, #1541', async ({ page }) => {
   await load(page, {});
-  const rows = page.locator('#hud button[data-special]');
-  await expect(rows).toHaveText(['Spark bursts when pushed off', 'Bomb bursts on its side\'s 3rd turn']);
+  const rows = page.locator('#hud button.special');
+  await expect(rows).toHaveText(['Spark bursts when pushed off', 'Bomb bursts on its 3rd turn']);
   const card = page.locator('#hud .special-card');
   await expect(card).toHaveCount(0);
   await shot(page, { path: 'test-results/roguelite-hud-legend.png' });
@@ -52,6 +52,9 @@ test('a legend line for each special marble on the board, a card on a hover or a
   await rows.nth(1).click(); // a tap on the legend line: the touch route to the same card
   await expect(card).toContainText('Bomb (yours): On its side\'s third turn it bursts');
   await expect(card).toContainText('3 turns left');
+  await expect(rows).toHaveCount(0); // the card is in the lines' place
+  await card.click(); // a tap on the card puts it away
+  await expect(rows).toHaveCount(2);
   await page.mouse.click(plain.x, plain.y); // a press on a marble selects it whatever the card
   await expect.poll(() => page.evaluate(() => (window as any).__rings().length)).toBe(1);
   await page.mouse.click((await at(page, -3, 2)).x, (await at(page, -3, 2)).y);
@@ -62,7 +65,7 @@ test('on a phone the legend is on screen and a tap on a line shows the card, #15
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await load(page, {});
-  const rows = page.locator('#hud button[data-special]');
+  const rows = page.locator('#hud button.special');
   await expect(rows).toHaveCount(2);
   for (const row of await rows.all()) {
     const box = (await row.boundingBox())!;

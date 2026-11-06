@@ -216,7 +216,7 @@ describe('the Tally line, #294', () => {
 
   // #1038: on a phone the pips alone show the ejected count. The score text stays for a screen reader, one name for the count.
   it('hides the score text on a phone held upright, out of sight but in the accessibility tree', () => {
-    expect(css).toMatch(/@media \(orientation: portrait\) \{\s*#hud \.score \{[^}]*clip-path: inset\(50%\);[^}]*\}/);
+    expect(css).toMatch(/@media \(orientation: portrait\) \{\s*#hud \.score:not\(\.run\) \{[^}]*clip-path: inset\(50%\);[^}]*\}/);
   });
 
   it('hides the redundant pips on compact/mobile screens (#425)', () => {
@@ -297,5 +297,14 @@ describe('the score of a run fight (#1540)', () => {
   it('keeps the run score on a phone held upright, where the ejection line leaves the screen, and paints the marbles lost in the danger colour', () => {
     expect(css).toMatch(/@media \(orientation: portrait\) \{\s*#hud \.score:not\(\.run\) \{ position: absolute/);
     expect(css).toMatch(/#hud \.score\.run \.lost \{[^}]*color: var\(--danger\)/);
+  });
+});
+
+describe('the special marbles legend (#1541)', () => {
+  it('makes its lines and its card the only parts of the plate that take a tap, and puts a card over the placement screen', () => {
+    expect(css).toMatch(/#hud :is\(\.special, \.special-card\) \{ pointer-events: auto;/);
+    expect(css).toMatch(/#hud \.specials \{ display: flex; flex-direction: column;[^}]*\}/);
+    expect(css).not.toMatch(/#hud \.specials \{[^}]*pointer-events: auto/);
+    expect(css).toContain('#chrome:has(.special-card) { z-index: 2; }');
   });
 });

@@ -48,7 +48,7 @@ First to eject 6 wins. On top of it, the ship:
   act bosses and treasure nodes, and rest sites where you rest or upgrade a special marble (Heavy+,
   Anchor+, Spark+), up to 3 one-use tactics to play in a fight (Reinforce, Freeze, Swap, Fall back),
   scrap earned in fights and spent at shop nodes on marbles, special marbles, relics, tactics and flask charges, 2 flasks an act (refilled at each act) that heal 3 marbles on the map between nodes, and
-  seven special marbles in all (Heavy, Anchor, Spark, Magnet, Shield, Bomb, Medic), enemy armies
+  seven special marbles in all (Heavy, Anchor, Spark, Magnet, Shield, Bomb, Medic), explained on the fight's HUD (a legend line for each one on the board you have not met, a card with its rule when you hover it or tap its line) beside your army, the army your run ends below and the marbles lost in red, enemy armies
   that vary (five formations, special marbles of their own, more in later acts, and the named elites The
   Wall, The Artificer and The Brute), twenty-one events with two or three choices, some of them gambles, one of them a cursed chest (a relic or three Heavies, but the marbles lost in the next 2 fights cost 2 each), a move budget in each act, whose fights won within it open a bonus room (a relic and scrap) before the boss, "?" nodes
   that turn into an event, a fight or a treasure when entered, two exits at the end of each act to biomes (Forest, Tundra, Desert,

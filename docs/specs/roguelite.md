@@ -28,7 +28,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
   that does not end the run offers a reward (section 6): a marble or a special marble (Heavy,
   Anchor, Spark, and section 13's Magnet, Shield, Bomb, Medic), placed before the next fights.
 - **End**: the run is lost when a fight is lost (a draw is a loss) or the army is below 4 marbles,
-  and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
+  and won by beating the act 3 boss. The bot wins a fight at 6 ejections, or once the army is down to 3 marbles when it started with 9 or fewer (`army_game_against`: the army's count is `army - 3`, at most 6), so a
   fight never goes on after the run is lost; the army wins at the usual 6 ejections, also against the 10 marbles of a fight node (4 are left) and the 8 of the first fight (2 are left).
 - **Meta**: unlocks only, between runs (section 8, #801, and the Collector's blueprints of section 15): other special
   marble types, relics, tactics and commanders (section 17), and the runes of section 27 that open hidden branches on the map, never power. Every run starts from zero.
@@ -1186,3 +1186,40 @@ Hull beats it 2 or 3 times in 32 from 30 to 70 %, The Choir, The Chaplain and Th
 multiplier cannot tune a boss that is won or lost on its rules, which is what the issue saw in the ladder. So act 1 stays below 85 %, and
 act 3 as easy as act 2, whatever `ACT_PERCENT` is set to between 30 and 300 %. Only the whole run, which is the product, was brought into its
 band. The follow-up is #1599.
+
+## 31. The HUD of an army fight, and reading the special marbles (#1540, #1541)
+
+The HUD of a run's army fight (a fight, an elite; not an act boss, whose plate is its boss's) says what the fight risks and what
+the marbles on the board do. Every number is the engine's own count, never a rule of the page's.
+
+- **The score** replaces the ejection line ("Black ejected 0/6 · White ejected 0/6") in an army fight of a run, in no other mode
+  (`runScoreHtml`, `client/src/runhud.ts`). Two lines: `Army 14 (run ends below 9) · lost 0` and `Bot ejected 0/6`.
+  - *Army* is the Black marbles on the board now, so a Reinforce counts.
+  - *Run ends below N* is the army on the board less the ejections the bot still needs (`win_ejections(2)` less the marbles lost),
+    plus one: the army at which the fight, and so the run, is lost. The bot wins at the number of marbles in `army_game_against`, `army - 3`
+    at most 6 (the rule of `MIN_ARMY`): **below 4** for an army of 9 or fewer, the issue's wording, and 5 less than the army above it,
+    **below 9** for an army of 14. The test reads the engine's count for every army from `MIN_ARMY` to 14.
+  - *Lost* is the marbles the bot ejected this fight (lost for the run), in the danger colour once it is above 0, with its word, never
+    the colour alone.
+  - *Bot ejected 3/6* is the bot's marbles out of the 6 that end the fight: the fight ends at 6 whatever the bot has left (it has 10, or 8
+    in the first fight, so 4 or 2 stand at the end), so the bot's marbles left are not shown: they would not say how close the fight is.
+  - Held upright the ejection line leaves the screen (ui.md section 4), this score does not: the pips are hidden on a phone, so the
+    score is the only count. The pips stay as they are, 6 a side.
+- **The legend** is a line per kind of special marble on the board, either side's, that the player has not met (`Legend`,
+  `client/src/specialhelp.ts`): the glyph, the name and a short line (`GIST`: "weighs 2 in a push", "bursts on its 3rd turn"). The first fight
+  shows every kind on its board, and a later fight the kinds it holds that no earlier fight showed. The kinds are met at the end of the fight
+  they were on the board in, so a fight keeps its lines whole; they are kept in the browser (`ab-alone.roguelite.met`, a list of kinds), a
+  blocked storage shows them every fight. A fight of an act boss that takes the build has it too (section 28).
+- **The card** is the rule of one marble (`RULES`, plain words, "Weighs 2 in a push, on either side. A lone Heavy pushes 1 plain
+  marble, and it takes 3 plain marbles to push it.") with whose it is, "yours" or "the bot's", and, for a Bomb, the turns it has left. It
+  takes the place of the legend's lines on the plate, so the plate stays as tall as the lines were (it covers no cell of the board at any
+  size, `phone-layout`), and is shown:
+  - **on a hover**: the mouse over a special marble (the board's own hover cell, `pointermove`), at any time of the fight, legend or not;
+  - **on a tap of a legend line**, the way on a touch screen, which has no hover. **A press on a marble never shows it**: a press selects the
+    marble and plays moves as it always did, so a card never blocks a move. The line is a button (24 px high on a touch screen at least,
+    keys reach it), and the card is a button too: a second tap puts it away.
+  A card read while the placement screen is up lies over the screen, which is below it otherwise.
+- **The words**: the rules say what the engine does (`specialhelp.test.ts` reads the engine: a Bomb's fuse is 3, and the numbers of the
+  compendium's short help are in the rule), use no word the story keeps back (`SECRETS` of `story.ts`) and no term the player has not met
+  by then (a push, an ejection, a burst).
+- **Not in this slice**: the bot's marbles left, a card on a marble of another mode, the upgraded forms in the legend beyond their name and rule.

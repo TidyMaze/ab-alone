@@ -444,9 +444,25 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 /* #1038: on a phone held upright the pips alone show the ejected count. The score text leaves the screen but not the
    accessibility tree, so a screen reader still reads the one name of the count (as the folded plate does). */
 @media (orientation: portrait) {
-  #hud .score { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #hud .score:not(.run) { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
+/* #1540: a run's army fight has no ejection line to hide held upright: its score is the army, the army the run ends below and the
+   marbles lost, the lost ones in the danger colour. */
+#hud .score.run { font-size: 0.9375rem; }
+#hud .score.run .lost { color: var(--danger); font-weight: 600; white-space: nowrap; }
 #hud small { display: block; color: var(--muted); font-size: 0.8125rem; }
+/* #1541: the legend of the special marbles on the board, a line each, and the card of the one hovered or tapped, which takes the lines'
+   place (the plate stays as tall as the lines were, held sideways it has no room for more). A line and the card are buttons: a tap is
+   the touch way to the card and puts it away, while a press on a marble selects it, as always. */
+#hud .specials { display: flex; flex-direction: column; gap: 0.125rem; margin-top: 0.375rem; }
+#hud :is(.special, .special-card) { pointer-events: auto; color: var(--text); background: transparent; font: inherit; font-size: 0.75rem; text-align: left; cursor: help; }
+#hud .special { display: flex; align-items: center; gap: 0.375rem; padding: 0.0625rem 0.25rem; border: 1px solid var(--edge); border-radius: 2px; }
+@media (pointer: coarse) { #hud :is(.special, .special-card) { min-height: 1.5rem; } } /* a target of 24 px at least on a touch screen */
+#hud .special .glyph { flex: none; width: 0.875rem; height: 0.875rem; }
+#hud :is(.special, .special-card):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A card read while the placement screen is up lies over it, not under it: the plate's gaps still let taps through. */
+#chrome:has(.special-card) { z-index: 2; }
+#hud .special-card { padding: 0.25rem 0.5rem; border: 0; border-left: 3px solid var(--accent); line-height: 1.35; }
 /* The rogue-lite relic bar (#1457): a glyph per relic under the run line, on the map and in the fights. Its name and rule
    are the native tooltip on hover, and show under the glyph once it has the focus (a tap or Tab), for touch and keys. */
 #hud .relics, #hud .affinities { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.375rem; pointer-events: auto; }

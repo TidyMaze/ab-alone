@@ -1580,7 +1580,7 @@ describe('main.ts, the HUD of a run fight (#1540, #1541)', () => {
   /** The first 32 plies of an army of 14 against the 8 marbles of the first fight (black plays its first legal move, the bot answers): White has thrown one Black marble off. */
   const LOST_ONE = [[1,2,-4,3,0,0,0,0],[2,5,0,-4,1,-4,0,0],[1,4,-4,4,0,0,0,0],[2,5,0,-3,1,-3,0,0],[1,4,-4,3,0,0,0,0],[2,5,2,-4,2,-3,0,0],[1,2,-4,2,0,0,0,0],[3,3,1,-2,2,-3,3,-4],[1,0,-3,1,0,0,0,0],[3,3,2,-2,3,-3,4,-4],[1,1,-3,2,0,0,0,0],[3,3,1,-1,2,-2,3,-3],[1,0,-4,2,0,0,0,0],[1,1,4,-3,0,0,0,0],[1,1,-3,2,0,0,0,0],[3,3,0,-1,1,-2,2,-3],[1,0,-4,2,0,0,0,0],[1,1,3,-3,0,0,0,0],[1,1,-3,2,0,0,0,0],[2,5,2,-3,2,-2,0,0],[1,0,-4,2,0,0,0,0],[1,3,2,-1,0,0,0,0],[1,1,-3,2,0,0,0,0],[3,5,0,-2,0,-1,0,0],[1,0,-4,2,0,0,0,0],[3,3,-1,0,0,-1,1,-2],[1,4,-4,3,0,0,0,0],[3,3,0,0,1,-1,2,-2],[1,2,-4,2,0,0,0,0],[3,3,-1,1,0,0,1,-1],[1,4,-4,4,0,0,0,0],[3,3,-2,1,-1,0,0,-1]];
   const hudText = (): string => document.getElementById('hud')!.textContent!;
-  const rows = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>('#hud button[data-special]')];
+  const rows = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>('#hud button.special')];
   const card = (): string | undefined => document.querySelector('#hud .special-card')?.textContent ?? undefined;
   const hoverOver = (game: Game, cell: Axial | null): void => {
     const { x, y } = cell ? game.hook<{ x: number; y: number }>('__cellToScreen', ...cell) : { x: 1, y: 1 };
@@ -1616,18 +1616,20 @@ describe('main.ts, the HUD of a run fight (#1540, #1541)', () => {
     expect(hudText()).not.toContain('Army ');
   });
 
-  it('a legend line for each special marble on the board of a player who met none, a card under it on a tap, and the card away on the second', async () => {
+  it('a legend line for each special marble on the board of a player who met none, a card in their place on a tap, and the lines back on the second', async () => {
     const game = await boot('?bot=off');
     await game.hook('__run', { ...pick({ ...plainRun(3, 3), specials: [0, 0, 1, 0, 0, 0, 0, 0, 1, 0] }, 0), placed: [[-4, 4, 3], [0, 4, 9]] });
     expect(rows().map((b) => b.textContent)).toEqual(['Spark ' + GIST[2], 'Bomb ' + GIST[8]]);
     expect(card()).toBeUndefined();
     rows()[0]!.click();
     expect(card()).toBe(cardText(3, 1));
-    expect(rows()[0]!.getAttribute('aria-pressed')).toBe('true');
+    expect(rows()).toEqual([]); // the card takes the lines' place
+    byId('hud').querySelector<HTMLButtonElement>('.special-card')!.click();
+    expect(card()).toBeUndefined();
     rows()[1]!.click();
     expect(card()).toBe(cardText(9, 1, 3));
-    rows()[1]!.click();
-    expect(card()).toBeUndefined();
+    byId('hud').querySelector<HTMLButtonElement>('.special-card')!.click();
+    expect(rows()).toHaveLength(2);
   });
 
   it('a hover on a special marble shows its card, on a plain marble or off the board none, and a press on it still selects it', async () => {
@@ -1645,6 +1647,7 @@ describe('main.ts, the HUD of a run fight (#1540, #1541)', () => {
     hoverOver(game, [-4, 4]);
     game.click(-4, 4); // the press selects the marble as it does on any marble, the card does not block it
     expect(game.hook<Axial[]>('__rings')).toEqual([[-4, 4]]);
+    game.click(-4, 4); // the selection taken back
     play(game, [[-2, 2]], [-3, 2]);
     expect(game.hook<number>('__plies')).toBeGreaterThan(0);
   });

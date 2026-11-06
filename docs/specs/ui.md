@@ -166,7 +166,10 @@ doors, the Open world's lairs and the MCP do not go through the list and stay op
   per side are scratched out as marbles are ejected; on compact and mobile screens (under 1100 px wide
   or 500 px tall), decorative pips are hidden to slim down the HUD plate. Held upright on a phone the
   pips are the count and the score text is out of sight (#1038). The pips of each side take its marble
-  colour: dark for Black, pale for White. The render backend note
+  colour: dark for Black, pale for White. In an army fight of a rogue-lite run the score line is the army, the army the run ends below and
+  the marbles lost in red, then the bot's ejections, and it stays on screen held upright (roguelite.md section 31, #1540). The legend of the
+  special marbles on the board and the card of the one hovered or tapped sit under the notes and take no more height than the lines (#1541).
+  The render backend note
   (WebGL2 / WebGPU) is dropped from the player HUD and kept in `environment.backend` of diagnostics.
 - **Tally line (#294, #425).** Matches start with Tally's accounting line per mode/boss, which fades
   out via CSS animation after 5 seconds or clears on the first move.

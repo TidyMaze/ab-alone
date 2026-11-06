@@ -43,7 +43,7 @@ const problems = (page: Page) =>
       const name = plates[el.id] ?? (el.textContent || el.getAttribute('aria-label')!);
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // a scrolling column brings it into view
       const box = el.getBoundingClientRect();
-      if (el.id !== 'hud-fold' && meets(box, hud)) found.push(`${name} covers the HUD`); // its own fold button (#957)
+      if (el.id !== 'hud-fold' && !el.closest('#hud') && meets(box, hud)) found.push(`${name} covers the HUD`); // its own fold button (#957), and the legend lines of a rogue-lite fight (#1541) are on the plate
       if (!onScreen(box)) found.push(`${name} is off screen`);
       const sheeted = el.closest('#mode-menu, #daily-card, #lobby-sheet, #lore') != null; // #1032 #1488 #1589: a sheet above the dock (the open Lobby too) may lie over the board's lower cells
       if (!sheeted) for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
@@ -322,6 +322,17 @@ for (const { name, viewport, mobile } of sizes) {
       await page.locator('#boss-list button').first().click();
       await expect(hud).toContainText('P1');
       await check(page, testInfo, 'in a boss fight');
+    });
+
+    test('nothing covers the board or the HUD in a rogue-lite fight with its legend and a card, #1540 #1541', async ({ page }, testInfo) => {
+      await page.goto('./?bot=off&net=hook');
+      await page.waitForFunction(() => (window as any).__run);
+      const moves = [[1, 2, -4, 3, 0, 0, 0, 0], [2, 5, 0, -4, 1, -4, 0, 0]]; // no placement screen over the board
+      await page.evaluate((m) => (window as any).__run({ seed: 3, army: 14, path: [0], fighting: true, moves: m, end: '', specials: [0, 0, 1, 0, 0, 0, 0, 0, 1, 0], placed: [[-4, 4, 3], [0, 4, 9]], reward: false }), moves);
+      await expect(page.locator('#hud button.special')).toHaveCount(2);
+      await page.locator('#hud button.special').first().click();
+      await expect(page.locator('#hud .special-card')).toBeVisible();
+      await check(page, testInfo, 'in a rogue-lite fight with its legend');
     });
 
     test('nothing covers the board or the HUD waiting for an opponent, turned around, bugs #227 #234', async ({ page }, testInfo) => {

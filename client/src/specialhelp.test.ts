@@ -45,6 +45,15 @@ describe('the rule texts', () => {
   });
 });
 
+describe('the spec', () => {
+  it('quotes the rule of the Heavy and the short lines it gives as examples, as the code has them', async () => {
+    const spec = new TextDecoder().decode(await readFile(new URL('../../docs/specs/roguelite.md', import.meta.url))).replace(/\s+/g, ' '); // a line break in the quote is a space
+    expect(spec).toContain(RULES[0]!);
+    expect(spec).toContain(`"${GIST[0]}"`);
+    expect(spec).toContain(`"${GIST[8]}"`);
+  });
+});
+
 describe('marksOn', () => {
   it('lists the special marbles on the board with the side that owns each, in the order of the bridge', () => {
     const board = Array(61).fill(0) as number[];
@@ -71,23 +80,25 @@ describe('cardText', () => {
 
 describe('legendHtml', () => {
   it('is a line per kind with its glyph, name and short line, none without a kind', () => {
-    expect(legendHtml([], 0, '')).toBe('');
-    const html = legendHtml([3, 9], 0, '');
-    expect(html).toContain('<button type="button" class="special" data-special="3" aria-pressed="false">');
+    expect(legendHtml([], null)).toBe('');
+    const html = legendHtml([3, 9], null);
+    expect(html).toContain('<button type="button" class="special" data-special="3">');
     expect(html).toContain(`Spark</b> ${GIST[2]}`);
     expect(html).toContain(`Bomb</b> ${GIST[8]}`);
     expect(html).not.toContain('special-card');
   });
 
-  it('presses the line of the kind shown and writes the card under it', () => {
-    const html = legendHtml([3, 9], 9, 'Bomb (yours): rule');
-    expect(html).toContain('data-special="9" aria-pressed="true"');
-    expect(html).toContain('data-special="3" aria-pressed="false"');
-    expect(html).toContain('<p class="special-card" role="status">Bomb (yours): rule</p>');
+  it('shows the card in place of the lines, as the button that puts it away', () => {
+    const html = legendHtml([3, 9], { kind: 9, text: 'Bomb (yours): rule' });
+    expect(html).toBe('<div class="specials"><button type="button" class="special-card" data-special="9">Bomb (yours): rule</button></div>');
   });
 
   it('shows the card alone when every kind on the board is met', () => {
-    expect(legendHtml([], 3, 'Spark (yours): rule')).toBe('<div class="specials"><p class="special-card" role="status">Spark (yours): rule</p></div>');
+    expect(legendHtml([], { kind: 3, text: 'Spark (yours): rule' })).toContain('data-special="3">Spark (yours): rule</button>');
+  });
+
+  it('keeps each short line to one line of the narrowest plate: 28 letters or fewer', () => {
+    GIST.forEach((line, k) => expect(line.length <= 28, SPECIAL_LOOKS[k]!.name).toBe(true));
   });
 });
 

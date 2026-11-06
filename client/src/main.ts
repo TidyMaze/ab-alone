@@ -310,6 +310,8 @@ import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight, type FrameShape, typ
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
+import { runScoreHtml } from './runhud';
+import { cardText, Legend, legendHtml, marksOn } from './specialhelp';
 import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, tallyAttempt, tallyWin, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
 import { HUB_CELLS, hubPath, roomAt, step, type Door, type Spot as HubSpot } from './hub';
@@ -3754,6 +3756,24 @@ function medalNote(boss: { id: string }): string {
 
 // The HUD, and the lobby controls after it: their state (shown, a lobby waiting) is set while the HUD is drawn (#1044).
 let hudEjected: readonly [number, number] | undefined; // ejected counts of the last HUD render (#1095)
+const legend = new Legend(store); // the kinds of special marble met in earlier fights (#1541)
+let specialHover: Axial | null = null; // the special marble under a mouse pointer, whose card the HUD shows (#1541)
+let specialTapped = 0; // the kind whose legend line was pressed: a touch screen has no hover (#1541)
+const sameCell = (a: Axial, b: Axial): boolean => a[0] === b[0] && a[1] === b[1];
+/** The legend of the special marbles on the board, those not met in an earlier fight, and the card of the marble hovered or of the line pressed. */
+function specialsHtml(): string {
+  const marks = marksOn(engine.board(), engine.specials());
+  const mark = marks.find((m) => specialHover && sameCell(m.cell, specialHover)) ?? marks.find((m) => m.kind === specialTapped);
+  const turns = mark && parseFuses(engine.fuses()).find((f) => sameCell(f.cell, mark.cell))?.turns; // only a Bomb has a fuse
+  return legendHtml(legend.fresh([...new Set(marks.map((m) => m.kind))].sort((a, b) => a - b)), mark ? { kind: mark.kind, text: cardText(mark.kind, mark.side, turns) } : null);
+}
+/** The pointer is over `cell`, or off the board: the card shows while it is over a special marble. */
+function hoverSpecial(cell: Axial | null): void {
+  const over = cell && built() && marksOn(engine.board(), engine.specials()).some((m) => sameCell(m.cell, cell)) ? cell : null;
+  if (over === specialHover) return;
+  specialHover = over;
+  hud();
+}
 let copiedNote: { game: unknown } | undefined; // Copy of the daily result card was pressed on this game: every HUD redraw keeps the note (#1295)
 function hud(extra = ''): void {
   drawHud(extra);
@@ -3816,6 +3836,7 @@ function drawHud(extra = ''): void {
     status,
     glass: glassOf(),
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
+    runScore: run?.state.fighting && engine instanceof Engine ? runScoreHtml(engine.board(), ejected, win) : undefined, // an army fight of a run reads the army, not both sides' ejections (#1540)
     ejected,
     win,
     note: `${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${built() ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
@@ -3840,6 +3861,7 @@ function drawHud(extra = ''): void {
     if (run.state.fighting && built()) {
       const mask = placing(run.state) || replaying !== null ? 0 : engine.tactics();
       document.getElementById('hud')!.insertAdjacentHTML('beforeend', tacticBarHtml(run.state, mask, swapping));
+      document.getElementById('hud')!.insertAdjacentHTML('beforeend', specialsHtml());
     }
     document.body.dataset.tactics = run.state.tactics.join(','); // read by the e2e tests
   }
@@ -4977,6 +4999,7 @@ canvas.addEventListener('pointermove', (e) => {
   const next = cellAt(e);
   if (next === hover) return;
   hover = next;
+  hoverSpecial(next);
   refreshGhosts(legalMoves());
 });
 
@@ -5115,6 +5138,7 @@ const pollPad = gamepad((action: PadAction) => {
   }
 });
 canvas.addEventListener('pointerleave', () => {
+  hoverSpecial(null);
   if (hub && hub.onPointerLeave()) {
     hud();
   }
@@ -6391,6 +6415,7 @@ function showRun(): void {
   recordAscension(store, state); // a run won unlocks the next ascension level (#1465)
   recordRunes(store, state.found); // an elite archetype beaten for the first time keeps its rune for good (#1476)
   recordSeen(store, state); // the compendium (#1466)
+  if (!state.fighting) legend.end(); // the special marbles seen in the fight are met (#1541)
   if (cueWatch.reward.entered(state.reward)) playCue('reward', AFTER_EJECTION + 0.7); // after the win of the fight that earned it
   if (cueWatch.shop.entered(state.shop)) playCue('shop');
   if (cueWatch.relics.rose(map, state.relics.length)) playCue('relic'); // taken, from a boss, the shop or an event: not the ones a run is loaded with
@@ -6448,6 +6473,9 @@ function fightRun(game: Engine | Encounter): void {
   if (boss) document.body.dataset.boss = boss.id;
   else delete document.body.dataset.boss;
   engine = game;
+  legend.begin();
+  specialHover = null;
+  specialTapped = 0;
   history.length = 0;
   history.push(...run!.state.moves);
   replaying = null;
@@ -6505,6 +6533,11 @@ function swapAt(q: number, r: number): void {
   hud(' · those marbles cannot swap');
 }
 document.getElementById('hud')!.addEventListener('click', (e) => {
+  const line = (e.target as Element).closest<HTMLButtonElement>('button[data-special]');
+  if (line) {
+    specialTapped = specialTapped === Number(line.dataset.special) ? 0 : Number(line.dataset.special); // a second tap puts the card away (#1541)
+    return hud();
+  }
   const button = (e.target as Element).closest<HTMLButtonElement>('button[data-tactic]');
   if (!button) return; // the bar exists in an army fight only, its buttons disabled during a replay
   const code = Number(button.dataset.tactic);
