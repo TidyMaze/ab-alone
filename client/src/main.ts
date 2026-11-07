@@ -674,7 +674,7 @@ if (plateNormal) {
   plateNormal.repeat.set(0.15, 0.15);
 }
 
-const neonLook = neonLookOn(location.search); // `?look=neon` (#1424): the circuit slab, colours and light only; never stored
+const neonLook = neonLookOn(location.search); // the default look (#1424), `?look=terrace` for the old one: the circuit slab, colours and light; never stored
 if (neonLook) document.body.dataset.look = 'neon'; // the style sheet's own hooks for the look
 const neonTell = tellLook(neonLook); // the sizes of the bosses' tells: the look's thick ones, or the game's own
 const sceneRenderer = new SceneRenderer({

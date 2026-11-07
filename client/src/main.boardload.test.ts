@@ -51,7 +51,7 @@ describe('the files of the board (#1520)', () => {
   });
 
   it('a page opened in the world draws it with the tone mapping and the exposure of the terrace, which the world shared with the board when this was in first', async () => {
-    const game = await boot('?bot=off&openworld=7');
+    const game = await boot('?bot=off&openworld=7&look=terrace'); // the terrace's tone mapping: the neon default has its own (#1424)
     await game.settle();
     game.frame();
     expect(game.tone()).toEqual({ mapping: THREE.AgXToneMapping, exposure: TERRACE_EXPOSURE });

@@ -115,7 +115,7 @@ describe('main.ts board and HUD', () => {
 
   it('draws the 169 cells and their bevels with 2 instanced meshes, the discs kept for picking only (#885)', async () => {
     const scene = catchScene();
-    await boot('?bot=off');
+    await boot('?bot=off&look=terrace'); // the terrace's mesh count: the neon look draws its own board (#1424)
     const drawn = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh && c.geometry.type !== 'SphereGeometry');
     expect(drawn.map((m) => [m.count, m.geometry.type])).toEqual([[169, 'CylinderGeometry'], [169, 'TorusGeometry']]);
     const { discs } = parts(scene());
@@ -221,7 +221,7 @@ describe('main.ts board and HUD', () => {
 
   it('draws The Ballast Mind on its radius 5 board (#564): 85 discs round six void pillars, a frame of radius 5', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&look=terrace'); // the terrace's discs and pillars: the neon look draws its own board (#1424)
     const shown = (): number => parts(scene()).discs.filter((d) => d.visible).length;
     startBoss(game, 'ballast');
     expect(shown()).toBe(85);
@@ -498,7 +498,7 @@ describe('main.ts board and HUD', () => {
 
   it('opens holes in the frame where The Hull makes cells vanish', async () => {
     const scene = catchScene();
-    const game = await boot('?nodes=1');
+    const game = await boot('?nodes=1&look=terrace'); // counts the terrace look's 109 holes; the neon default gives 110 (#1424)
     startBoss(game, 'hull');
     await game.hook<Promise<number>>('__playTurns', 6, [0, 1, 2, 3, 4, 5]); // a crack at ply 8, its cell gone at ply 11
     const vanished = Number(document.body.dataset.vanished);
