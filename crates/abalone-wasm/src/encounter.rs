@@ -416,7 +416,8 @@ pub fn boss_takes_build(id: &str) -> bool {
 /// The Echo, which has the mirror already.
 #[wasm_bindgen]
 pub fn boss_takes_mirror(id: &str) -> bool {
-    id != "echo" && boss_entry(id).is_some_and(|b| matches!((b.start)((b.def)(), 0), Fight::Plain(_)))
+    id != "echo"
+        && boss_entry(id).is_some_and(|b| matches!((b.start)((b.def)(), 0), Fight::Plain(_)))
 }
 
 /// The goal of a boss id, the text the client shows before the first move. `None` when unknown.
@@ -1494,7 +1495,10 @@ mod tests {
     fn only_the_plain_bosses_take_the_mirror_trait_and_not_the_echo() {
         assert!(boss_takes_mirror("hull"));
         assert!(boss_takes_mirror("pulsar"));
-        assert!(!boss_takes_mirror("echo"), "the Echo has the mirror already");
+        assert!(
+            !boss_takes_mirror("echo"),
+            "the Echo has the mirror already"
+        );
         assert!(!boss_takes_mirror("choir"), "a set-up fight");
         assert!(!boss_takes_mirror("swarm"), "a set-up fight");
         assert!(!boss_takes_mirror("nope"));
@@ -1506,11 +1510,19 @@ mod tests {
         plain.set_mirror().unwrap();
         let mv = first_move(&plain);
         plain.play(&mv).unwrap();
-        assert_eq!(plain.last_bonuses().len(), MOVE_STRIDE, "the copy is played at once");
+        assert_eq!(
+            plain.last_bonuses().len(),
+            MOVE_STRIDE,
+            "the copy is played at once"
+        );
         assert_eq!(plain.to_move(), 2, "the boss moves after its copy");
         let reply = plain.boss_move();
         plain.play(&reply).unwrap();
-        assert_eq!(plain.free_moves().len(), MOVE_STRIDE, "the player is offered the mirror of the boss's move");
+        assert_eq!(
+            plain.free_moves().len(),
+            MOVE_STRIDE,
+            "the player is offered the mirror of the boss's move"
+        );
         assert_eq!(plain.free_taken(), 0);
     }
 
@@ -1531,8 +1543,14 @@ mod tests {
         let mv = first_move(&plain);
         plain.play(&mv).unwrap();
         assert!(plain.set_mirror().is_err(), "the fight has started");
-        assert!(Encounter::new("choir", 1).unwrap().set_mirror().is_err(), "a set-up fight takes no mirror");
-        assert!(Encounter::new("echo", 1).unwrap().set_mirror().is_err(), "the Echo has it already");
+        assert!(
+            Encounter::new("choir", 1).unwrap().set_mirror().is_err(),
+            "a set-up fight takes no mirror"
+        );
+        assert!(
+            Encounter::new("echo", 1).unwrap().set_mirror().is_err(),
+            "the Echo has it already"
+        );
     }
 
     #[test]

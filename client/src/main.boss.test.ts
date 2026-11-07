@@ -130,7 +130,7 @@ describe('main.ts boss fights', () => {
   it('a picked boss switches the page to its fight: the boss block, the goal, Retry, no local controls', async () => {
     const game = await boot('?bot=off');
     fightBoss(game, 'The Echo', 42);
-    expect(game.hook('__fight')).toEqual({ id: 'echo', seed: 42 });
+    expect(game.hook('__fight')).toEqual({ id: 'echo', seed: 42, mirror: false });
     expect(body().boss).toBe('echo');
     expect(byId('mode-menu').hidden).toBe(true); // picking a mode closes the menu
     expect(byId('modes').getAttribute('aria-expanded')).toBe('false');
@@ -239,7 +239,7 @@ describe('main.ts boss fights', () => {
     drawSeed(99); // Retry draws no new seed
     byId('boss-retry').click();
     expect(game.hook('__plies')).toBe(0);
-    expect(game.hook('__fight')).toEqual({ id: 'chaplain', seed: 7 });
+    expect(game.hook('__fight')).toEqual({ id: 'chaplain', seed: 7, mirror: false });
     expect(byId('boss-bar').querySelector('.name')!.textContent).toBe('The Chaplain');
     expect(byId('boss-retry').hidden).toBe(false);
   });
@@ -494,7 +494,7 @@ describe('main.ts daily challenge', () => {
     play(game, forward(game));
     byId('boss-retry').click();
     expect(game.hook('__plies')).toBe(0);
-    expect(game.hook('__fight')).toEqual({ id: 'echo', seed, daily: { day: '2027-03-30', attempt: 2 } });
+    expect(game.hook('__fight')).toEqual({ id: 'echo', seed, daily: { day: '2027-03-30', attempt: 2 }, mirror: false });
     expect(byId('hud').querySelector('.boss .daily')!.textContent).toBe('Daily challenge 2027-03-30 · attempt 2');
   });
 
