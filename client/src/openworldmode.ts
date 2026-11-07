@@ -2,7 +2,7 @@
 // thing main.ts switches on and off. It draws itself with the page's renderer while it is on, and the page's board stays
 // untouched.
 import type * as THREE from 'three/webgpu';
-import type { Axial } from './board';
+import { axialTo3D, type Axial } from './board';
 import { PhaseWatch, StepWatch, type WorldCue } from './cues';
 import { phaseOf, type Phase, wrapTime } from './daynight';
 import { type Biome, chunkOf, Hero, neighbours, same, type Tile, WALKABLE, World } from './openworld';
@@ -24,6 +24,7 @@ import type { Store } from './quality';
 import { enter, heroStep } from './openworldstep';
 import { pairs, teleport, teleporterNear } from './openworldteleport';
 import type { PeerHost } from './worldnet';
+import type { Source } from './stations';
 import { PlaceTransition, placeTitle, type PlaceKind } from './placetransition';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels } from './openworldview';
 import { twistOf } from './openworldtwist';
@@ -301,6 +302,20 @@ export class OpenWorldMode {
       this.dirty = true;
       this.mark(String(seed)); // the detailed props drawn now are published too (#989)
     });
+  }
+
+  /** The camera the hero is seen through, the listener's of the sounding stations (#1577): only while the world is open. */
+  get ears(): THREE.Camera {
+    return this.view!.camera;
+  }
+
+  /** The towns, dungeon gates and towers of the world entered, which sound near the listener (#1577, `stations.ts`). */
+  get stations(): Source[] {
+    const at = ([q, r]: Axial) => axialTo3D(q, r);
+    return [
+      ...this.places.map(({ cell, kind }): Source => ({ id: `${kind}:${cell}`, kind: kind === 'town' ? 'town' : 'gate', ...at(cell) })),
+      ...this.lairs.map((cell): Source => ({ id: `tower:${cell}`, kind: 'tower', ...at(cell) })),
+    ];
   }
 
   /** The biome of the hero's cell, null before the world is drawn (#1571). */

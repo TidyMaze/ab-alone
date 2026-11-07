@@ -9,6 +9,7 @@
 import { RADIUS, type Axial } from './board';
 import { EJECT_MS, PUSH_MS } from './eject';
 import { pulseRate, sceneMix, SMALL_SPEAKER_HZ, type SceneId, type SceneLayer } from './scenes';
+import { audible, STATION_TONES, stationGain, type Listener, type Source, type StationKind } from './stations';
 import type { Tension } from './tension';
 
 /** The last note of an ejection: who lost a marble. */
@@ -509,6 +510,10 @@ export const cueDb = (voices: readonly Voice[]): number =>
     const gain = Math.max(...voice.env.map(([, g]) => g)) * (voice.source === 'triangle' ? 8 / Math.PI ** 2 : 1);
     return Math.max(loudest, smallSpeakerDb([{ freq: Math.sqrt(voice.freq[0] * voice.freq[1]), gain }]));
   }, -Infinity);
+/** The level in dBFS on a small speaker of a station of `kind` at `distance` cells from the listener (#1577): its tones at the
+ * distance gain, on the ambience bus at 100 %. Calculated, not heard. */
+export const stationDb = (kind: StationKind, distance: number): number =>
+  smallSpeakerDb(STATION_TONES[kind].map(({ freq, gain }) => ({ freq, gain: gain * stationGain(distance) })));
 /** The gain of each tension layer at `level`: level n plays the first n layers. */
 export const layerGains = (level: Tension): number[] => TENSION.map((_, i) => (i < level ? 1 : 0));
 
@@ -534,6 +539,18 @@ interface Live {
   lfos: OscillatorNode[];
 }
 
+/** A station that sounds: its gain into the pan and the oscillators of its loop, and what the page last asked of it. */
+interface Station {
+  kind: StationKind;
+  gain: number;
+  pan: number;
+  level: GainNode;
+  panner: StereoPannerNode;
+  sources: OscillatorNode[];
+}
+/** A station follows the listener over about 50 ms (a step of the camera is not a click). */
+const STATION_TAU = 0.02;
+
 /** The sound player. The audio context is made on the first user gesture (browsers block audio before one), only
  * while a slider is above 0. */
 export class Sfx {
@@ -543,6 +560,7 @@ export class Sfx {
   private want: { id: SceneId; phase: number } | null = null; // the scene the page asked for (#1571)
   private live: Live | null = null; // what plays of it
   private log: AudioScheduledSourceNode[] = []; // the sources of the audio log playing
+  private readonly near = new Map<string, Station>(); // the stations that sound, by id (#1577)
 
   constructor(
     private readonly create: () => AudioContext | null,
@@ -730,6 +748,52 @@ export class Sfx {
       live.lfos.push(lfo);
       live.sources.push(lfo);
     }
+  }
+
+  /** The stations that sound now, nearest first: their id, kind, distance gain and pan (#1577). */
+  get stations(): { id: string; kind: StationKind; gain: number; pan: number }[] {
+    return [...this.near].map(([id, { kind, gain, pan }]) => ({ id, kind, gain, pan }));
+  }
+
+  /** Called every frame with the listener (the camera) and the stations of the place (world.md section 7, Spatial; #1577): the
+   * nearest few within the range sound, each a quiet loop through a pan and a distance gain on the ambience bus, the others
+   * fade out and stop. With the ambience at 0, or before the first gesture, nothing is built. */
+  listen(listener: Listener, sources: readonly Source[]): void {
+    const { graph } = this;
+    if (!graph) return;
+    const now = graph.ctx.currentTime;
+    const heard = this.mix.ambience > 0 ? audible(listener, sources) : [];
+    const kept = new Set(heard.map(({ id }) => id));
+    for (const [id, station] of this.near) {
+      if (kept.has(id)) continue;
+      station.level.gain.setTargetAtTime(0, now, CROSSFADE_TAU);
+      for (const source of station.sources) source.stop(now + SCENE_RELEASE);
+      this.near.delete(id);
+    }
+    for (const { id, kind, gain, pan } of heard) {
+      const station = this.near.get(id) ?? this.startStation(graph, kind);
+      this.near.set(id, Object.assign(station, { gain, pan }));
+      station.level.gain.setTargetAtTime(gain, now, STATION_TAU);
+      station.panner.pan.setTargetAtTime(pan, now, STATION_TAU);
+    }
+  }
+
+  private startStation({ ctx, buses }: Graph, kind: StationKind): Station {
+    const level = ctx.createGain();
+    level.gain.value = 0; // silent when it starts, then up
+    const panner = ctx.createStereoPanner();
+    level.connect(panner).connect(buses.ambience);
+    const sources = STATION_TONES[kind].map(({ freq, gain }) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const tone = ctx.createGain();
+      tone.gain.value = gain;
+      osc.connect(tone).connect(level);
+      osc.start(ctx.currentTime);
+      return osc;
+    });
+    return { kind, gain: 0, pan: 0, level, panner, sources };
   }
 
   /** Crossfades the tension layers to `level` over about a second. */

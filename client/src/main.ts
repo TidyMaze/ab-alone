@@ -309,6 +309,7 @@ import { nextPalette, paletteById, themeColors, type Palette } from './palettes'
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { sceneOf } from './scenes';
+import { hubStations, listenerOf, type Listener, type Source } from './stations';
 import { AFTER_EJECTION, AFTER_SLIDE, BUSES, Sfx, TellWatch, columnOf, type Bus, type CueEvent, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
@@ -5424,6 +5425,8 @@ hookHost.__gain = (bus: Bus) => sfx.gain(bus);
 hookHost.__tension = () => ({ level: sfx.tension, layers: sfx.layers });
 // The scene of the music and what plays of it (#1571).
 hookHost.__scene = () => sfx.scene;
+// The stations that sound near the camera: id, kind, distance gain and pan (#1577).
+hookHost.__stations = () => sfx.stations;
 // The sound twins of the boss tells played so far (#358).
 hookHost.__tellCues = () => tellCues;
 // The cues of the cue table played so far (#1570).
@@ -7652,11 +7655,16 @@ function unveil(): void {
   renderer.domElement.style.opacity = '';
   delete document.body.dataset.veil;
 }
+const EARS_DIRECTION = new THREE.Vector3();
+const NOWHERE: Listener = { x: 0, z: 0, yaw: 0 }; // no place with stations: none sounds
 renderer.setAnimationLoop((now) => {
   pollPad(now); // the gamepad, read once per frame (#1252)
   const heroBiome = openWorld.active ? openWorld.biome : null;
   const music = sceneOf({ hub: hub !== null, royale: royale !== null, run: run ? (run.state.fighting ? 'fight' : 'map') : null, boss: fight?.id ?? null, world: heroBiome ? { biome: heroBiome, phase: openWorld.phase } : null });
   sfx.setScene(music, music.startsWith('boss:') && engine instanceof Encounter ? engine.phase() : 0); // the music follows where the player is (#1571)
+  const ears = openWorld.active ? { camera: openWorld.loaded.mode.ears, sources: openWorld.loaded.mode.stations } : hub ? { camera: sceneRenderer.camera, sources: hubStations(hub.at.deck) } : null;
+  if (ears) sfx.listen(listenerOf(ears.camera.position, ears.camera.getWorldDirection(EARS_DIRECTION)), ears.sources); // the stations near the camera sound (#1577)
+  else sfx.listen(NOWHERE, []);
   watchBack();
   screenExit.sync(screenNow()); // the dim over a new screen (#1562)
   lastDraw = timeDraw(lastDraw, now);

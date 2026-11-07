@@ -376,7 +376,25 @@ Rules never change with the look: cell size and edge clarity stay constant. Visu
   context is made. The game is fully playable on mute: every audio cue has a visual twin (the
   ejection animation for the ejection sound, the tells on the board for their sounds, the transcript for an
   audio log).
-- **Spatial.** Positional audio in the hub, stereo is enough on the board.
+- **Spatial (#1577).** Positional audio in the Hub and the Open world, stereo is enough on the board. A station is a place that
+  sounds, a quiet loop of steady sines synthesized in code (no audio file, `STATION_TONES`, `stations.ts`): in the Hub a terminal
+  (a mains hum) and a lift (low machinery), in the Open world a town, a dungeon gate and a tower, each its own pair or trio of
+  tones, one of them above 150 Hz for a small speaker. Each station heard has a stereo panner and a distance gain on the
+  ambience bus (a stereo panner with a gain, not a `PannerNode`: the camera looks down on a flat map, left and right is all the
+  position there is to hear): the gain falls in a straight line from 1 on the station to 0 at `STATION_RANGE`, 4 cells, silent
+  beyond it. **At most 3 stations sound at once** (`MAX_STATIONS`), the nearest (the id breaks a tie); the others are not built,
+  and one that leaves the range or the nearest three fades over about a second and stops 1.5 s later (`SCENE_RELEASE`), one that
+  comes in starts silent and rises. **The listener follows the camera:** it stands on the ground the camera looks at and faces the
+  way the camera heads on the ground (`listenerOf`), checked every frame; a station straight to the right of the camera pans to
+  0.8 (`STATION_PAN`) on the right, one ahead or behind to the middle, and the pan turns with a camera turn of the Open world. The
+  ambience slider at 0 builds nothing (the stations are on the ambience bus, so the audio-log duck lowers them with the rest), and
+  no context exists before the first gesture. The Hub's stations are those of the deck on screen, the Open world's those of the
+  towns, gates and towers of the world; no other scene has one.
+  Calculated, not heard: `stationDb` (`sound.ts`) calculates what a small speaker plays of a station by the same high-pass as the
+  cues: at one cell from it (gain 0.75) between -50 and -38 dBFS, today terminal -45.2, machinery -46.5, town -44.4, gate -46.0,
+  tower -42.2, which `soundstations.test.ts` asserts, and at nine tenths of the range (gain 0.1, 3.6 cells) at least 15 dB lower,
+  -59.7 to -64.0, silent at the range. `main.stations.test.ts` reads the live stations and their gain and pan through the test
+  hook `__stations`. An owner should listen on a laptop and a phone before the tones and the range are tuned.
 
 ## 8. Accessibility
 
