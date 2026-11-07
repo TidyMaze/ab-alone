@@ -34,7 +34,7 @@ test('Free camera is a settings item, not a HUD button, lit while it is on, #938
   expect(await page.evaluate(() => (window as unknown as { __freeCamActive: () => boolean }).__freeCamActive())).toBe(true);
 });
 
-test('Play online shows its name and is as tall as Fight together, #839', async ({ page }) => {
+test('Play online shows its name and is as tall as Boss with a partner, #839', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await openModes(page);

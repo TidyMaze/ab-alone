@@ -60,6 +60,8 @@
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
         </button>
       </div>
+      <!-- The line of a bot game played while the room waits (#1529): shown once a player joins the room, a press switches to it. -->
+      <button id="room-switch" type="button" hidden>A player joined the room: switch to it</button>
       <div id="replay-bar" role="group" aria-label="Replay" hidden>
         <input id="replay-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Position in the move log" />
         <div id="replay-label" aria-live="polite"></div>
@@ -148,14 +150,14 @@
       <div id="mode-menu" role="group" aria-label="Game modes" hidden>
         <button id="update" type="button" hidden>New version: reload</button>
         <button autocomplete="off" id="play-online" type="button" disabled>Play online</button>
-        <button autocomplete="off" id="fight-together" type="button" aria-expanded="false" disabled>Fight together</button>
+        <button autocomplete="off" id="fight-together" type="button" aria-expanded="false" disabled>Boss with a partner</button>
         <div id="coop-list" hidden></div>
-        <button autocomplete="off" id="boss-duel" type="button" aria-expanded="false" disabled>Boss duel</button>
+        <button autocomplete="off" id="boss-duel" type="button" aria-expanded="false" disabled>Boss vs a player</button>
         <button autocomplete="off" id="battle-royale" type="button" disabled>Battle royale</button>
         <button autocomplete="off" id="ranked" type="button" disabled>Ranked</button>
         <button id="leaderboard" type="button">Leaderboard</button>
         <button id="console-entry" type="button" hidden>Console</button>
-        <button autocomplete="off" id="boss-fight" type="button" aria-expanded="false" disabled>Boss fight</button>
+        <button autocomplete="off" id="boss-fight" type="button" aria-expanded="false" disabled>Solo boss fight</button>
         <div id="boss-list" hidden></div>
         <button autocomplete="off" id="daily" type="button" disabled>Daily challenge</button>
         <button autocomplete="off" id="roguelite" type="button" disabled>Rogue-lite run</button>
@@ -171,9 +173,7 @@
         <button id="royale-start" type="button" hidden>Start</button>
         <button id="royale-invite" type="button" hidden>Invite</button>
         <div id="lobby-offer" hidden>
-          <p id="lobby-offer-text">Nobody has joined yet</p>
-          <button id="lobby-bot" type="button">Play the bot (not rated)</button>
-          <button id="lobby-copy" type="button">Copy invite link</button>
+          <button id="lobby-bot" type="button">Play the bot while you wait</button>
         </div>
         <label id="invite-label" for="invite" hidden>Invite link: send it to your opponent</label>
         <div id="invite-row">

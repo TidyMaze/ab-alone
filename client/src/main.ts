@@ -179,7 +179,7 @@ import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailySeed, dailyTitle, recordDailyResult, utcDay, type Daily } from './daily';
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
-import { lobbyState, lobbyWaitMs, type LobbyMode } from './lobby';
+import { botGameOf, lobbyState, lobbyWaitMs } from './lobby';
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
 import { hookHost, netHook } from './hooks';
 import { hookTransport, p2pTransport } from './p2p';
@@ -6224,32 +6224,56 @@ inviteCopy.addEventListener('click', async () => {
   inviteBox.select();
   hud(' · invite link selected: copy it by hand');
 });
-// The offer (#1529, lobby.ts): a creator's Play online room that waited 30 s with no peer says nobody joined, and offers the bot
-// (not rated) and the invite link. Ranked, Co-op and a boss duel never offer: they wait for a second player only.
+// The offer (#1529, lobby.ts): a creator's lobby that waited 20 s with no peer offers a bot game of the same kind, a table or the
+// same boss. The room stays open and listening beside it (`parked`); a peer who joins shows a line to switch to the room.
 const lobbyOffer = document.getElementById('lobby-offer')!;
 const lobbyBot = document.getElementById('lobby-bot') as HTMLButtonElement;
-const lobbyCopy = document.getElementById('lobby-copy') as HTMLButtonElement;
+const roomSwitch = document.getElementById('room-switch') as HTMLButtonElement;
 let lobbyOpenedAt = 0; // when the creator's room opened its lobby; 0 with no room waiting
 let lobbyTimer: ReturnType<typeof setTimeout> | undefined;
-const lobbyMode = (): LobbyMode => (fight ? (duel ? 'duel' : 'coop') : rankedMode ? 'ranked' : 'online');
-/** Draws the offer from the room: a peer in hides it, the wait with none shows it. A wait in Play online re-arms its timer. */
+/** The room a bot game plays beside: its session and transport keep listening, `back` seats the page in it again. */
+let parked: { session: OnlineSession; link: Transport; ranked: RankedMode | null; back: () => void } | null = null;
+let restoreRoom: (() => void) | null = null; // `back` of the page's room, set by goOnline
+/** Draws the offer from the room: a peer in hides it, the wait with none shows it, and the timer is armed while waiting. */
 function syncOffer(): void {
   clearTimeout(lobbyTimer);
   const session = online;
   const waitMs = lobbyWaitMs(location.search, navigator.webdriver);
   const waited = session && lobbyOpenedAt ? Date.now() - lobbyOpenedAt : 0;
-  const state = session && lobbyOpenedAt
-    ? lobbyState(waited, session.presenceOf(3 - session.side) === 'waiting' ? 0 : 1, lobbyMode(), waitMs)
-    : 'joined';
+  const state = session && lobbyOpenedAt ? lobbyState(waited, session.presenceOf(3 - session.side) === 'waiting' ? 0 : 1, waitMs) : 'joined';
   lobbyOffer.hidden = state !== 'offer';
-  if (state === 'wait' && lobbyMode() === 'online') lobbyTimer = setTimeout(syncOffer, waitMs - waited);
+  if (state === 'wait') lobbyTimer = setTimeout(syncOffer, waitMs - waited);
+}
+/** The switch line shows while a bot game plays beside a room and a player is in it. */
+function syncSwitch(): void {
+  roomSwitch.hidden = !parked || parked.session.presenceOf(3 - parked.session.side) === 'waiting';
 }
 lobbyBot.addEventListener('click', () => {
-  leaveMode(); // the room goes with its invite link: nothing of it was published or rated
-  applyDeck(deckOf('local'));
-  newGame();
+  const room = { session: online!, link: link!, ranked: rankedMode, back: restoreRoom! };
+  const bot = botGameOf(fight);
+  online = link = rankedMode = null; // the page plays a bot game: not the room's, never rated
+  duel = false;
+  onlineLine = undefined;
+  onlineNote = '';
+  for (const key of ['online', 'seat', 'opponent', 'coordinator', 'handover']) delete document.body.dataset[key];
+  rematchButton.hidden = true;
+  if (bot) startBoss(bot.id, bot.seed);
+  else {
+    leaveMode();
+    applyDeck(deckOf('local'));
+    newGame();
+  }
+  parked = room;
+  syncSwitch();
 });
-lobbyCopy.addEventListener('click', () => inviteCopy.click());
+roomSwitch.addEventListener('click', () => {
+  const room = parked!;
+  parked = null; // the bot game is left as it is today, the room is not closed with it
+  leaveMode();
+  rankedMode = room.ranked;
+  roomSwitch.hidden = true;
+  room.back();
+});
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
 rematchButton.addEventListener('click', () => void online?.rematch());
 // Co-op (docs/specs/coop-boss.md section 3): every page plays the boss reply to each human move itself, from the same
@@ -6287,19 +6311,23 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
   if (consentWanted() && !(await onlineAllowed())) return; // Stay solo (#1338): nothing was contacted, the game in progress goes on
   leaveMode();
   stopAnalysis();
-  fight = coop ? { id: coop.boss, seed: coop.seed } : null;
-  duel = asDuel;
-  // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
-  const again = coop ? 'Retry' : 'Rematch';
-  rematchButton.textContent = again;
-  rematchButton.setAttribute('aria-label', again);
-  rematchButton.dataset.label = again;
-  applyDeck(deckOf('online'));
-  newGameButton.hidden = true;
-  engine = makeGame();
-  history.length = 0;
-  replaying = null;
-  selected = [];
+  // Seats the page in the room: its game, its buttons and its deck. Run again when the player switches back from a bot game (#1529).
+  const seat = (): void => {
+    fight = coop ? { id: coop.boss, seed: coop.seed } : null;
+    duel = asDuel;
+    // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
+    const again = coop ? 'Retry' : 'Rematch';
+    rematchButton.textContent = again;
+    rematchButton.setAttribute('aria-label', again);
+    rematchButton.dataset.label = again;
+    applyDeck(deckOf('online'));
+    newGameButton.hidden = true;
+    engine = makeGame();
+    history.length = 0;
+    replaying = null;
+    selected = [];
+  };
+  seat();
   diag.connecting();
   const net = roomTransport(room);
   link = net;
@@ -6310,8 +6338,8 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
   // The status line shows our color and whether the key bound to the other seat is connected (#121).
   // Our color is the session's: it swaps at each rematch.
   const note = (): void => {
+    if (!online) return syncSwitch(); // the room was left for the ship (#522), or a bot game plays beside it (#1529)
     const session = online; // set before the session calls back, and below before the first note
-    if (!session) return; // the room was left for the ship (#522)
     const role = session.role;
     const mine = session.side;
     const other = coop && !duel ? 3 - side : 3 - mine; // co-op: the partner's seat, both seats play Black
@@ -6394,12 +6422,25 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
       refresh();
     },
   });
+  const fit = (): void => {
+    if (coop) {
+      view = fitted = fightView(); // as in a solo fight
+      applyView();
+    }
+  };
   note();
   refresh();
-  if (coop) {
-    view = fitted = fightView(); // as in a solo fight
-    applyView();
-  }
+  fit();
+  const session = online;
+  restoreRoom = (): void => {
+    online = session;
+    link = net;
+    stopAnalysis();
+    seat();
+    note();
+    refresh();
+    fit();
+  };
 }
 /** Opens a new room as its creator and shows its invite link: a co-op room with `coop` (#529), a versus room without. */
 function playOnline(coop?: CoopFight, asDuel = false): void {
@@ -6475,6 +6516,11 @@ function leaveOnline(): void {
   lobbyOpenedAt = 0; // the wait and its offer end with the room (#1529)
   clearTimeout(lobbyTimer);
   lobbyOffer.hidden = true;
+  if (parked) {
+    ({ session: online, link } = parked); // a bot game was left: the room it played beside closes the usual way
+    parked = null;
+    roomSwitch.hidden = true;
+  }
   if (!online) return;
   online = null;
   duel = false;

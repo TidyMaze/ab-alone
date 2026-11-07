@@ -253,7 +253,7 @@ for (const { name, viewport, mobile } of sizes) {
     // drawn in the button's font; main.boss.test.ts checks that every boss is named on its day. Bug #603: the boss list
     // of Fight together (#530) is checked too. The page clock moves to that day and the minute timer of the open page
     // renames the button, as it does at 00:00 UTC (bug #629).
-    for (const list of ['Boss fight', 'Fight together']) {
+    for (const list of ['Boss fight', 'Boss with a partner']) {
       test(`nothing covers the board or the HUD with the mode menu and the ${list} list open, widest daily boss, bugs #227 #234 #357 #575 #603 #715`, async ({ page }, testInfo) => {
         await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
         await page.goto('./?bot=off&net=hook');
@@ -287,7 +287,7 @@ for (const { name, viewport, mobile } of sizes) {
       await page.locator('canvas').waitFor();
       await openModes(page);
       await page.getByRole('button', { name: 'Boss fight' }).click();
-      await page.getByRole('button', { name: 'Fight together' }).click();
+      await page.getByRole('button', { name: 'Boss with a partner' }).click();
       await expect(page.locator('#coop-list')).toBeVisible();
       await expect(page.locator('#boss-list')).toBeHidden();
       await check(page, testInfo, 'after Boss fight then Fight together');
@@ -425,7 +425,7 @@ for (const { name, viewport } of sizes.filter((s) => s.mobile && s.viewport.widt
     test.skip(({ browserName }) => browserName === 'firefox', 'Firefox has no mobile emulation');
     test.use({ viewport, isMobile: true, hasTouch: true });
 
-    for (const list of ['Boss fight', 'Fight together']) {
+    for (const list of ['Boss fight', 'Boss with a partner']) {
       test(`nothing covers the board or the HUD with the ${list} list of every boss open, #666`, async ({ page }, testInfo) => {
         await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
         await page.goto('./?bot=off&net=hook');

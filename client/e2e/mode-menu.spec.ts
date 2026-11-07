@@ -136,7 +136,7 @@ for (const viewport of [{ width: 360, height: 780 }, { width: 375, height: 812 }
 // fold. On a desktop window every boss and Daily challenge show without a scroll. #699: the Boss fight and Fight together
 // lists have room for every boss of the game (BOSS_IDS): the list is no longer padded, the 13 real bosses are checked.
 for (const viewport of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }]) {
-  for (const [name, id] of [['Boss fight', 'boss-list'], ['Fight together', 'coop-list']]) {
+  for (const [name, id] of [['Boss fight', 'boss-list'], ['Boss with a partner', 'coop-list']]) {
     test(`every boss of the ${name} list and Daily challenge fit without a scroll in a ${viewport.width}x${viewport.height} window, bugs #653 #699`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto('./?bot=off');

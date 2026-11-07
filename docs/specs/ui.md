@@ -129,8 +129,8 @@ name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
-Game modes (#357): the buttons that start a game mode, Play online (its name shown, #839), Fight together (with the boss list it opens under
-it, #530), Battle royale (#502), Boss fight (with the boss list it opens under it), Daily challenge and Hub (the hub,
+Game modes (#357): the buttons that start a game mode, Play online (its name shown, #839), Boss with a partner (the id `fight-together`, with the boss list it opens under
+it, #530), Battle royale (#502), Solo boss fight (the id `boss-fight`, with the boss list it opens under it), Daily challenge and Hub (the hub,
 game-design.md section 3.5, #521), live in one menu behind an icon-only button, a play triangle of the icon set,
 labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
 names. The button is the last of the column and the open menu lies under it, so opening or closing it moves no other
@@ -235,7 +235,7 @@ doors, the Open world's lairs and the MCP do not go through the list and stay op
   not any peer. A dot before the text repeats the state (accent here, hazard waiting, danger
   disconnected, muted watching); the words alone carry it. While the creator waits, the invite
   link below the buttons has a caption and the accent border.
-- **Fight together (#530).** An item of the mode menu under Play online. It opens the list of the bosses of Boss
+- **Boss with a partner (#530, named Fight together until #1529).** An item of the mode menu under Play online. It opens the list of the bosses of Boss
   fight under it; picking one opens a co-op room against that boss with a random seed (coop-boss.md), and the invite
   link's caption reads "Invite link: send it to your partner". Both seats play Black, so the HUD names the partner,
   never a colour. On a seated player's human ply the turn line reads "Your turn" or "Partner's turn", on the boss
@@ -767,6 +767,26 @@ buttons on, as before (thumb-dock.md section 2).
 
 - **Tests.** `exitslot.test.ts` (where it leads), `main.back.test.ts` (Back lands there), `client/e2e/door-grammar.spec.ts` (every mode entered and left by the same first slot, the dock
   at 390x844, 960x540 and 844x390).
+
+### 4.12 The empty lobby and the boss names (#1529)
+
+A lobby nobody joins never leaves the creator with nothing to do, and no mode hides until a peer is seen (it would need a presence
+server, and it would hide every mode from the first player). The wait, the texts and the choices sit in `lobby.ts`, tested.
+
+- **The boss entries say who plays.** `Solo boss fight` (id `boss-fight`), `Boss with a partner` (id `fight-together`, a co-op room) and
+  `Boss vs a player` (id `boss-duel`, the creator is the hero and the joiner plays the boss). Only the labels changed; the ids, the
+  HUD lines ("Fight together · attempt 2", "Boss duel") and the invite links did not.
+- **The offer.** After 20 s with no peer in the room, the Lobby sheet shows one button, `Play the bot while you wait` (`#lobby-bot`),
+  for all four lobbies: Play online, Ranked, Boss with a partner and Boss vs a player. The invite link stays in the sheet above it.
+  A peer in the room, before or after the 20 s, means no offer.
+- **The bot game is of the same kind.** A table (Play online, Ranked) or the same boss and seed (the two boss rooms), against the bot,
+  as New game and a solo boss fight play. The room stays open and listening: its session, its transport and its invite link are kept,
+  with no new network traffic. The page is a local game while it lasts: no seat, no ranking, no Ranked panel.
+- **A bot game never counts.** It is never sent to the room and never rated, in Ranked or the Leaderboard.
+- **The switch line.** When a player joins the room during the bot game, a button under the HUD (`#room-switch`, 44 px, accent border)
+  reads "A player joined the room: switch to it". A press leaves the bot game as any mode change does and seats the page in the room
+  (a new game in its seat, the boss deck of a co-op room, the Rematch or Retry button). Leaving the bot game by another mode closes the
+  room, as leaving a room does today.
 
 ## 5. Board framing
 

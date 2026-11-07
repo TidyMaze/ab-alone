@@ -673,7 +673,7 @@ test('a co-op boss fight from Fight together: the seats take turns, both pages p
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
-  await a.getByRole('button', { name: 'Fight together' }).click();
+  await a.getByRole('button', { name: 'Boss with a partner' }).click();
   await a.locator('#coop-list').getByRole('button', { name: 'The Echo' }).click();
   const hash = new URL(await inviteLink(a)).hash;
   expect(hash).toMatch(/^#room=[\w-]+&boss=echo&seed=\d+&key=[\w-]{8}$/);
@@ -727,7 +727,7 @@ test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on 
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
-  await a.getByRole('button', { name: 'Fight together' }).click();
+  await a.getByRole('button', { name: 'Boss with a partner' }).click();
   await a.locator('#coop-list').getByRole('button', { name: 'The Echo' }).click();
   const hash = new URL(await inviteLink(a)).hash;
   await b.goto(`./?bot=off&net=hook&quality=low${hash}`);
@@ -783,7 +783,7 @@ test('a boss duel from Boss duel: the joiner plays the boss, both pages judge th
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
-  await a.getByRole('button', { name: 'Boss duel' }).click();
+  await a.getByRole('button', { name: 'Boss vs a player' }).click();
   await a.locator('#coop-list').getByRole('button', { name: 'The Hull' }).click();
   const hash = new URL(await inviteLink(a)).hash;
   expect(hash).toMatch(/^#room=[\w-]+&boss=hull&seed=\d+&seat=boss&key=[\w-]{8}$/);

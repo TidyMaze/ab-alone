@@ -38,7 +38,7 @@ test('Play the bot while you wait: a bot game, the room kept, a switch line once
 
   await b.goto(`./?net=hook&quality=low${new URL(invite).hash}`);
   await b.locator('canvas').waitFor();
-  await open(a);
+  await a.evaluate(() => (window as any).__netOpen()); // a's room is parked beside its bot game: no data-seat to wait for
   await open(b);
   const line = a.getByRole('button', { name: 'A player joined the room: switch to it' });
   await expect(line).toBeVisible();

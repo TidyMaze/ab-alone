@@ -46,7 +46,8 @@ describe('botGameOf (#1529)', () => {
   });
 
   it('is the same boss and seed for Fight together and Boss duel', () => {
-    expect(botGameOf({ id: 'echo', seed: 7, extra: 1 })).toEqual({ id: 'echo', seed: 7 });
+    const fight = { id: 'echo', seed: 7, mirror: true };
+    expect(botGameOf(fight)).toEqual({ id: 'echo', seed: 7 });
   });
 });
 

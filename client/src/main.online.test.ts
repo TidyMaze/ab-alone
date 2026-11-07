@@ -190,14 +190,18 @@ describe('Play online', () => {
       const game = await waited(open);
       const invite = byId<HTMLInputElement>('invite').value;
       const room = game.room();
-      const boss = game.hook('__fight');
+      const fightOf = () => {
+        const f = game.hook<{ id: string; seed: number } | null>('__fight');
+        return f && { id: f.id, seed: f.seed };
+      };
+      const boss = fightOf();
       byId('lobby-bot').click();
       expect(data().online).toBeUndefined(); // the page plays a bot game, not the room's
       expect(byId('lobby-offer').hidden).toBe(true);
       expect(byId('invite').hidden).toBe(false);
       expect(byId<HTMLInputElement>('invite').value).toBe(invite);
       expect(byId('new-game').hidden).toBe(boss !== null); // a table has New game, a boss has Retry
-      expect(game.hook('__fight')).toEqual(boss); // the same boss and seed, or none for a table
+      expect(fightOf()).toEqual(boss); // the same boss and seed, or none for a table
       expect(game.hook('__plies')).toBe(0);
       expect(byId('room-switch').hidden).toBe(true);
       const white = await opponent(game.peer()!, game.room()!, 2);
