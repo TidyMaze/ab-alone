@@ -1097,7 +1097,7 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
 @media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
   #dock-wrap #mode-menu { max-height: calc(100dvh - 8rem); }
   #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { display: grid; grid-template-columns: repeat(3, 1fr); }
-  #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 28px; }
+  #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 24px; }
 }
 #dock-wrap :is(#goal-sheet, #trainer-card) { font: 0.875rem/1.4 var(--ui); color: var(--text); }
 #dock-wrap #goal-sheet p { margin: 0; }
