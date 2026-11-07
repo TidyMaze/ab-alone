@@ -157,56 +157,103 @@ describe('Play online', () => {
     expect(presence()).toBe('You are Black. Waiting for an opponent...');
   });
 
-  it('offers the bot and the invite link once the wait has no peer, and a peer joining hides the offer (#1529)', async () => {
+  // The four lobbies a creator can wait in (#1529): a table (Play online, Ranked) or a boss (Fight together, Boss duel).
+  const lobbies: [string, (game: Game) => void][] = [
+    ['Play online', (game) => (game.openModes(), byId('play-online').click())],
+    ['Ranked', (game) => (declineBoard(), game.openModes(), byId('ranked').click())],
+    ['Fight together', (game) => (game.openModes(), byId('fight-together').click(), bossButton('The Echo').click())],
+    ['Boss duel', (game) => (game.openModes(), byId('boss-duel').click(), bossButton('The Echo').click())],
+  ];
+  const bossButton = (name: string): HTMLElement => [...byId('coop-list').querySelectorAll('button')].find((b) => b.textContent === name)!;
+  /** Opens a lobby, waits out the 80 ms wait (?lobbywait) with no peer, and returns the page. */
+  async function waited(open: (game: Game) => void): Promise<Game> {
     const game = await boot('?bot=off&lobbywait=80');
-    game.openModes();
-    byId('play-online').click();
-    await until(game, () => data().seat === 'player');
-    await new Promise((done) => setTimeout(done, 150)); // the wait is 80 ms here (?lobbywait)
-    expect(byId('lobby-offer').hidden).toBe(false);
-    expect(byId('lobby-offer').textContent).toContain('Nobody has joined yet');
-    expect(byId('lobby-bot').textContent).toBe('Play the bot (not rated)');
-    expect(byId('lobby-copy').textContent).toBe('Copy invite link');
-    const white = await opponent(game.peer()!, game.room()!, 2);
-    await until(game, () => data().opponent === 'here');
-    expect(byId('lobby-offer').hidden).toBe(true);
-    expect(white.session).toBeDefined();
-  });
-
-  it('Copy invite link in the offer copies the link, as the Copy button does (#1529)', async () => {
-    clipboard(async () => {});
-    const game = await boot('?bot=off&lobbywait=80');
-    game.openModes();
-    byId('play-online').click();
+    open(game);
     await until(game, () => data().seat === 'player');
     await new Promise((done) => setTimeout(done, 150));
-    byId('lobby-copy').click();
-    await until(game, () => calls() === 1);
-    expect(copied()).toBe(byId<HTMLInputElement>('invite').value);
-  });
+    return game;
+  }
 
-  it('Play the bot in the offer leaves the room, unrated and unpublished, and starts a bot game (#1529)', async () => {
-    const game = await boot('?bot=off&lobbywait=80');
-    game.openModes();
-    byId('play-online').click();
-    await until(game, () => data().seat === 'player');
-    await new Promise((done) => setTimeout(done, 150));
+  for (const [name, open] of lobbies) {
+    it(`${name}: after the wait with no peer the lobby offers one button, Play the bot while you wait (#1529)`, async () => {
+      const game = await waited(open);
+      expect(byId('lobby-offer').hidden).toBe(false);
+      expect([...byId('lobby-offer').children].map((el) => el.textContent)).toEqual(['Play the bot while you wait']);
+      expect(byId('invite').hidden).toBe(false); // the link stays in the sheet, no second button for it
+      const white = await opponent(game.peer()!, game.room()!, 2);
+      await until(game, () => data().opponent === 'here');
+      expect(byId('lobby-offer').hidden).toBe(true);
+      expect(white.session).toBeDefined();
+    });
+
+    it(`${name}: Play the bot starts a bot game of the same kind and the room stays open and listening (#1529)`, async () => {
+      const game = await waited(open);
+      const invite = byId<HTMLInputElement>('invite').value;
+      const room = game.room();
+      const boss = game.hook('__fight');
+      byId('lobby-bot').click();
+      expect(data().online).toBeUndefined(); // the page plays a bot game, not the room's
+      expect(byId('lobby-offer').hidden).toBe(true);
+      expect(byId('invite').hidden).toBe(false);
+      expect(byId<HTMLInputElement>('invite').value).toBe(invite);
+      expect(byId('new-game').hidden).toBe(boss !== null); // a table has New game, a boss has Retry
+      expect(game.hook('__fight')).toEqual(boss); // the same boss and seed, or none for a table
+      expect(game.hook('__plies')).toBe(0);
+      expect(byId('room-switch').hidden).toBe(true);
+      const white = await opponent(game.peer()!, game.room()!, 2);
+      await until(game, () => !byId('room-switch').hidden);
+      expect(game.room()).toBe(room);
+      expect(byId('room-switch').textContent).toBe('A player joined the room: switch to it');
+      expect(byId('hud').querySelector('.rank-badge')).toBeNull(); // a bot game is never rated
+      expect(white.reports).toEqual([]);
+    });
+
+    it(`${name}: pressing the switch line leaves the bot game for the room, the player in its seat (#1529)`, async () => {
+      const game = await waited(open);
+      byId('lobby-bot').click();
+      await opponent(game.peer()!, game.room()!, 2);
+      await until(game, () => !byId('room-switch').hidden);
+      byId('room-switch').click();
+      expect(byId('room-switch').hidden).toBe(true);
+      await until(game, () => data().seat === 'player' && data().opponent === 'here');
+      expect(game.hook('__plies')).toBe(0);
+      expect(byId('lobby-offer').hidden).toBe(true);
+    });
+  }
+
+  it('a bot game from Ranked never counts: no rating, no report to the room, nothing stored (#1529)', async () => {
+    const game = await waited(lobbies[1]![1]);
     byId('lobby-bot').click();
-    expect(data().online).toBeUndefined();
-    expect(byId('lobby-offer').hidden).toBe(true);
-    expect(byId('invite').hidden).toBe(true);
-    expect(byId('new-game').hidden).toBe(false);
-    expect(location.hash).toBe('');
+    const white = await opponent(game.peer()!, game.room()!, 2);
+    await until(game, () => !byId('room-switch').hidden);
+    click(game, [0, 2], [0, 1]);
+    expect(game.hook('__plies')).toBe(1);
+    expect(byId('hud').querySelector('.rank-badge')).toBeNull();
+    expect(byId('hud').querySelector('.rank-result')).toBeNull();
+    expect(white.reports).toEqual([]);
+    expect(localStorage.getItem('ab-alone.ranked')).toBeNull();
   });
 
-  it('never offers the bot in Ranked, which waits for a second player only (#1529)', async () => {
-    const game = await boot('?bot=off&lobbywait=80');
-    declineBoard();
+  it('leaving the bot game closes the room: its link goes and a later peer is not offered a switch (#1529)', async () => {
+    const game = await waited(lobbies[0]![1]);
+    byId('lobby-bot').click();
     game.openModes();
-    byId('ranked').click();
-    await until(game, () => data().seat === 'player');
-    await new Promise((done) => setTimeout(done, 150));
-    expect(byId('lobby-offer').hidden).toBe(true);
+    byId('boss-fight').click();
+    byId('boss-list').querySelector('button')!.click(); // another mode: the bot game is left as it is today
+    expect(byId('invite').hidden).toBe(true);
+    expect(location.hash).toBe('');
+    await opponent(game.peer()!, game.room()!, 2).catch(() => {});
+    await game.settle();
+    expect(byId('room-switch').hidden).toBe(true);
+  });
+
+  it('no switch line shows when nobody joins during the bot game, and New game keeps the room listening (#1529)', async () => {
+    const game = await waited(lobbies[0]![1]);
+    byId('lobby-bot').click();
+    byId('new-game').click();
+    expect(byId('room-switch').hidden).toBe(true);
+    await opponent(game.peer()!, game.room()!, 2);
+    await until(game, () => !byId('room-switch').hidden);
   });
 
   it('scrolls the button column back to the top, so no button above the link is left out of reach (#839)', async () => {
