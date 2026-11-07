@@ -140,6 +140,21 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     vi.useRealTimers();
   });
 
+  it('a run fight played with Auto-play marks the run, saved with it, and a fight played by hand does not (#1542)', async () => {
+    const game = await boot('?nodes=50');
+    await game.hook('__run', pick(plainRun(3, 3), 0));
+    playMove(game);
+    expect(document.body.dataset.auto).toBe('false');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    byId('auto-play').click();
+    await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
+    game.frame(1000);
+    await vi.advanceTimersByTimeAsync(0);
+    byId('auto-play').click();
+    vi.useRealTimers();
+    expect(document.body.dataset.auto).toBe('true');
+  });
+
   it('Auto-play is greyed against an act boss without its medal, and plays with it (#1489)', async () => {
     const game = await boot('?nodes=50');
     const { state } = await bossRun('hull');

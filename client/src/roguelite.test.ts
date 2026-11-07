@@ -173,7 +173,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5, 3, []);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], first: 0, flawless: 0, daily: '', keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false, runes: 0, found: 0, map: 0 });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], placed: [], reward: false, event: false, best: 3, relics: [], commander: -1, ascension: 0, top: 0, relic: false, rest: false, tactics: [], scrap: 0, shop: false, bought: [], enemies: true, told: '', unlocked: [], cells: 0, carried: [], banked: [], drop: 0, collector: false, exits: true, exit: false, biomes: [], first: 0, flawless: 0, daily: '', auto: false, keys: [], curse: 0, flasks: 2, affinities: [0, 0, 0], scroll: false, spent: [0, 0, 0, 0], bonus: false, runes: 0, found: 0, map: 0 });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -296,7 +296,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily', 'curse', 'affinities', 'scroll', 'spent', 'bonus']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event', 'relics', 'relic', 'rest', 'tactics', 'scrap', 'shop', 'bought', 'enemies', 'unlocked', 'cells', 'carried', 'banked', 'drop', 'collector', 'told', 'commander', 'ascension', 'top', 'exits', 'exit', 'biomes', 'flawless', 'daily', 'auto', 'curse', 'affinities', 'scroll', 'spent', 'bonus']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual({ ...fight, enemies: false, exits: false, spent: [] }); // before the varied enemies (#1462): the plain army; before the bonus room (#1473): no count
     await store.put(RUN_KEY, { ...fight, specials: [1, 0, 2] }); // saved before the upgrades (#1458): none upgraded
@@ -2353,6 +2353,32 @@ describe('roguelite score and daily run (#1466)', () => {
       await store.put(RUN_KEY, { ...fresh(), ...bad });
       expect(await loadRun(store, mapOf, engine)).toBeNull();
     }
+  });
+});
+
+describe('roguelite Auto-play mark (#1542)', () => {
+  const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), ...state });
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+
+  it('a run played by hand has no mark, a run that used Auto-play says so in its score line and its summary', () => {
+    const hand = parse(mapHtml(TWO, fresh({ path: [0], army: 3, end: 'lost' })));
+    expect(hand.querySelector('.run-score')!.textContent).toBe('Score: 30 (marbles 3 × 10)');
+    expect(hand.body.textContent).not.toContain('Auto-play used');
+    const auto = parse(mapHtml(TWO, fresh({ path: [0], army: 3, end: 'lost', auto: true })));
+    expect(auto.querySelector('.run-score')!.textContent).toBe('Score: 30 (marbles 3 × 10) · Auto-play used');
+    expect([...auto.querySelectorAll('.run-help')].map((p) => p.textContent)).toContain('Auto-play used');
+  });
+
+  it('the mark is saved with the run, an older run loads as played by hand and a bad one is dropped', async () => {
+    const store = memoryStore();
+    const mapOf = (): MapNode[] => TWO;
+    await saveRun(store, fresh({ auto: true }));
+    expect((await loadRun(store, mapOf, engine))!.state.auto).toBe(true);
+    const { auto: _auto, ...older } = fresh();
+    await store.put(RUN_KEY, older);
+    expect((await loadRun(store, mapOf, engine))!.state.auto).toBe(false);
+    await store.put(RUN_KEY, { ...fresh(), auto: 1 });
+    expect(await loadRun(store, mapOf, engine)).toBeNull();
   });
 });
 

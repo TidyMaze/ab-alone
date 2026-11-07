@@ -35,15 +35,35 @@ const parse = (html: string): Document => new DOMParser().parseFromString(`<div>
 // Act 1: a fight 0 leads to an elite 1, then the boss 2 (the last act).
 const MAP = parseMap([[0, 0, 0, 0, 1, 0, 0], [0, 1, 0, 2, 1, 0, 1], [0, 2, 0, 1, 0, 0, 0]].flat());
 const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), ...state });
-const entry = (state: Partial<Finished> = {}): Finished => ({ seed: 1, commander: 0, ascension: 0, result: 'lost', score: 100, daily: '', ...state });
+const entry = (state: Partial<Finished> = {}): Finished => ({ seed: 1, commander: 0, ascension: 0, result: 'lost', score: 100, daily: '', auto: false, ...state });
 
 describe('finished', () => {
   it('is null while the run is on, else the line of the history', () => {
     expect(finished(MAP, fresh({ path: [0] }))).toBeNull();
     expect(finished(MAP, fresh({ seed: 9, path: [0, 1, 2], army: 10, flawless: 1, end: 'won', commander: 2 }))).toEqual({
-      seed: 9, commander: 2, ascension: 0, result: 'won', score: 100 + 25 + 100 + 15, daily: '',
+      seed: 9, commander: 2, ascension: 0, result: 'won', score: 100 + 25 + 100 + 15, daily: '', auto: false,
     });
     expect(finished(MAP, fresh({ path: [0], army: 3, end: 'lost', daily: '2026-11-03' }))).toMatchObject({ result: 'lost', score: 30, daily: '2026-11-03' });
+  });
+});
+
+describe('Auto-play in the book (#1542)', () => {
+  it('a run that used Auto-play is kept marked, in the history and in the try of its day, its score shown', () => {
+    expect(finished(MAP, fresh({ path: [0], army: 3, end: 'lost', auto: true }))).toMatchObject({ auto: true });
+    const store = memoryStorage();
+    startDailyTry(store, '2026-11-03');
+    recordFinished(store, entry({ daily: '2026-11-03', score: 420, auto: true }));
+    expect(readDaily(store, '2026-11-03')).toEqual({ score: 420, auto: true });
+    expect(parse(bookHtml('2026-11-03', { score: 420, auto: true })).querySelector('button[data-daily]')!.textContent).toBe('Daily run 2026-11-03 · score 420 (Auto-play used, not ranked), back tomorrow');
+    expect(parse(historyHtml([entry({ auto: true, score: 90 })])).querySelector('li')!.textContent).toBe('The Warden · lost · score 90 · Auto-play used');
+    expect(readHistory(store)[0]!.auto).toBe(true);
+  });
+
+  it('a history entry or a daily try saved before the mark is read as played by hand', () => {
+    const { auto: _auto, ...old } = entry();
+    expect(readHistory({ getItem: () => JSON.stringify([old]), setItem: () => undefined })).toEqual([{ ...old, auto: false }]);
+    expect(readDaily({ getItem: () => JSON.stringify({ day: '2026-11-03', score: 5 }), setItem: () => undefined }, '2026-11-03')).toEqual({ score: 5, auto: false });
+    expect(readHistory({ getItem: () => JSON.stringify([{ ...old, auto: 1 }]), setItem: () => undefined })).toEqual([]);
   });
 });
 
@@ -104,9 +124,9 @@ describe('the daily run', () => {
     const store = memoryStorage();
     expect(readDaily(store, '2026-11-03')).toBeNull();
     startDailyTry(store, '2026-11-03');
-    expect(readDaily(store, '2026-11-03')).toEqual({ score: null });
+    expect(readDaily(store, '2026-11-03')).toEqual({ score: null, auto: false });
     recordFinished(store, entry({ daily: '2026-11-03', score: 420 }));
-    expect(readDaily(store, '2026-11-03')).toEqual({ score: 420 });
+    expect(readDaily(store, '2026-11-03')).toEqual({ score: 420, auto: false });
     expect(readDaily(store, '2026-11-04')).toBeNull(); // the next day tries afresh
   });
 
@@ -114,9 +134,9 @@ describe('the daily run', () => {
     const store = memoryStorage();
     startDailyTry(store, '2026-11-03');
     recordFinished(store, entry({ seed: 2, daily: '2026-11-02', score: 5 }));
-    expect(readDaily(store, '2026-11-03')).toEqual({ score: null });
+    expect(readDaily(store, '2026-11-03')).toEqual({ score: null, auto: false });
     recordFinished(store, entry({ seed: 3, score: 5 })); // not a daily run
-    expect(readDaily(store, '2026-11-03')).toEqual({ score: null });
+    expect(readDaily(store, '2026-11-03')).toEqual({ score: null, auto: false });
   });
 
   it.each(['x', '[]', '{"day":"2026-11-03","score":"high"}', '{"day":3,"score":null}', '{"day":"2026-11-03","score":-1}'])('reads no try from %s', (saved) => {
