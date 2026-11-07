@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { FightState } from './openworldfight';
@@ -186,6 +187,50 @@ describe('a wild fight (#1511)', () => {
     await settle();
     expect(data().openworld).toBe('1305');
     mark.mockRestore();
+  });
+
+  it('a reload during a wild fight puts the hero back on its cell, with no fight on screen (#1511, #1626)', async () => {
+    const store = new IDBFactory();
+    const game = await boot(`?openworld=${seed}`, { indexedDB: store });
+    await openWorld(game);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    hooks().__openworldFixture({ hero: beside, troop: [] });
+    vi.advanceTimersByTime(1000);
+    vi.useRealTimers();
+    expect(byId('wild-flee').hidden).toBe(false);
+    await boot(`?openworld=${seed}`, { indexedDB: store }); // the reload: the same saved world
+    await settle();
+    expect(data().openworldAt).toBe(beside.join(','));
+    expect(byId('wild-flee').hidden).toBe(true);
+  });
+
+  it('a marble that walks up to the hero starts the fight on the tick it arrives, and F flees (#1511, #1626)', async () => {
+    await openWorld(await boot(`?bot=off&openworld=${seed}`));
+    const start = hooks().__openworldEnemies();
+    const home = start[0]!;
+    let tick = 0;
+    let at: Axial | undefined;
+    for (let t = 1; t < 400 && !at; t++) {
+      hooks().__openworldWander(t);
+      at = hooks().__openworldEnemies().find((c) => c.join() !== home.join());
+      tick = t;
+    }
+    expect(at).toBeDefined();
+    hooks().__openworldWander(0);
+    // A cell beside the walker that is not beside the marble at home: the hero stands there while the marble is still.
+    const near = DIRS.map(([a, b]): Axial => [at![0] + a, at![1] + b]).find((c) => Math.max(Math.abs(c[0] - home[0]), Math.abs(c[1] - home[1]), Math.abs(c[0] - home[0] + c[1] - home[1])) >= 2)!;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    hooks().__openworldFixture({ hero: near, troop: [] });
+    vi.advanceTimersByTime(1000);
+    expect(data().openworld).toBe(String(seed)); // the marble is at home, two cells off: no fight
+    hooks().__openworldWander(tick);
+    vi.advanceTimersByTime(1000);
+    expect(data().openworld).toBeUndefined(); // the fight starts on the tick the marble arrives
+    expect(byId('wild-flee').hidden).toBe(false);
+    vi.useRealTimers();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));
+    await settle();
+    expect(data().openworldAt).toBe(near.join(','));
   });
 
   it('the wild fight is not saved: after Flee the local game is the one the player left, not the fight\'s moves', async () => {
