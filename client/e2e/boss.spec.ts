@@ -279,6 +279,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   expect(await tellCues(page)).toEqual(['choir']); // the next-army tell appears
   await shot(page, { path: testInfo.outputPath('choir-start.png') });
 
+  const before = await armies(); // the armies before the two moves, as #183 reads them
   const mv = await page.evaluate(() =>
     (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
   );
