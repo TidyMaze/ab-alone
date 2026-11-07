@@ -5,7 +5,7 @@ import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, roomsOf, type Spot } from './hub';
 import { SECRETS } from './story';
 import { BOSS_IDS } from './tally';
-import { arrowCell, bossLockLine, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextBossTitle, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel } from './hubview';
+import { arrowCell, bossLockLine, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labelsHtml, nextBossTitle, nextGoal, pipsHtml, railHtml, reachabilityText, roomLabel, type Goal } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -398,7 +398,20 @@ describe('the next goal (#1521, #1524)', () => {
     expect(html).not.toContain('data-goal');
   });
 
-  it('quiets every other plate of the deck while the goal room is on it, the room under the marble and the YOU plate aside, and none when the goal is elsewhere (#1526)', () => {
+  it('makes the lift on the way to a goal on another deck the loud plate, the adjacent deck of its way, and quiets the rest (#1526)', () => {
+    // Cargo (index 1) to Mess: the lift down; Furnace (2) to Bridge (4): the lift up to Chapel, the next deck on the way, not the Bridge's.
+    const down = labelsHtml({ deck: 'cargo', cell: [0, 0] }, [], {}, nextGoal([], false));
+    expect(down.match(/data-goal/g)).toHaveLength(1);
+    expect(down).toContain('<div class="hub-label" data-cell="-1,2" data-kind="lift" data-goal>');
+    expect(down).toContain('<div class="hub-label" data-cell="1,-2" data-kind="lift" data-mark="locked" data-quiet>');
+    const up: Goal = { text: '', deck: 'bridge', room: 'boss' };
+    const furnace = labelsHtml({ deck: 'furnace', cell: [0, 0] }, [], {}, up);
+    expect(furnace.match(/data-goal/g)).toHaveLength(1);
+    expect(furnace).toContain('<div class="hub-label" data-cell="1,-2" data-kind="lift" data-mark="locked" data-goal>');
+    expect(furnace).toContain('<div class="hub-label" data-cell="-1,2" data-kind="lift" data-mark="locked" data-quiet>');
+  });
+
+  it('quiets every other plate of the deck while the goal room is on it, the room under the marble and the YOU plate aside (#1526)', () => {
     const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, nextGoal([], false));
     expect(html.match(/data-quiet/g)).toHaveLength(11); // the twelve plates of the Mess but the Echo's door
     expect(html).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-goal>');
@@ -409,7 +422,6 @@ describe('the next goal (#1521, #1524)', () => {
     expect(here.match(/data-quiet/g)).toHaveLength(10); // the room under the marble wears its own ring, not the quiet weight
     expect(here).toMatch(/data-kind="bot" data-here>/);
     for (const html of [
-      labelsHtml({ deck: 'cargo', cell: [0, 0] }, [], {}, nextGoal([], false)), // the goal is on another deck: no plate is louder
       labelsHtml({ deck: 'mess', cell: [0, 0] }, []),
       labelsHtml({ deck: 'mess', cell: [0, 0] }, BOSSES, {}, nextGoal(BOSSES, true)),
     ])
@@ -424,7 +436,6 @@ describe('the next goal (#1521, #1524)', () => {
     expect(run.match(/data-goal/g)).toHaveLength(1);
     expect(run).toMatch(/data-kind="run" data-goal>/);
     expect(run).not.toMatch(/data-kind="boss"[^>]*data-goal/);
-    expect(labelsHtml({ deck: 'cargo', cell: [0, 0] }, [], {}, nextGoal([], false))).not.toContain('data-goal'); // another deck
     expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, [])).not.toContain('data-goal');
     expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, BOSSES, {}, nextGoal(BOSSES, true))).not.toContain('data-goal');
   });

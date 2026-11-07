@@ -148,9 +148,16 @@ export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], med
   return { name, state: line, short, mark: '' };
 }
 
-/** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked, and the room of the next `goal` is marked when it is on this deck: the deck's own boss door (not the Dual Room's) or the Rogue-lite room. Then every other plate is quiet, but the one under the marble (#1526). */
+/** The deck next to `deck` on the way to `to`: the lift a player takes from here toward a goal on another deck (#1526). */
+const wayTo = (deck: Deck, to: Deck): Deck => DECK_NAMES[DECK_NAMES.indexOf(deck) + Math.sign(DECK_NAMES.indexOf(to) - DECK_NAMES.indexOf(deck))]!;
+
+/** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked, and the room of the next `goal` is marked when it is on this deck: the deck's own boss door (not the Dual Room's) or the Rogue-lite room. A goal on another deck marks the lift on its way (`wayTo`). Then every other plate is quiet, but the one under the marble (#1526). */
 export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}, goal: Goal | null = null): string {
-  const goalRoom = (door: Door): boolean => deck === goal?.deck && (goal.room === 'run' ? door.kind === 'run' : door.kind === 'boss' && door.boss === bossOf(deck));
+  const goalRoom = (door: Door): boolean => {
+    if (!goal?.deck) return false;
+    if (goal.deck !== deck) return door.kind === 'lift' && door.to === wayTo(deck, goal.deck);
+    return goal.room === 'run' ? door.kind === 'run' : door.kind === 'boss' && door.boss === bossOf(deck);
+  };
   const goalOnDeck = roomsOf(deck).some(({ door }) => goalRoom(door)); // the goal room is the loud plate, the others are quiet (#1526)
   const plates = roomsOf(deck).map(({ cell: [q, r], door }) => {
     const { name, state, short, mark } = roomLabel(deck, door, beaten, medals);

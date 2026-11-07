@@ -512,9 +512,10 @@ The hub (game-design.md section 3.5) reads at a glance, with no hover:
   deck (`canEnter`), the lore-slot boss of world.md section 3. The other bosses of the deck are **stations** and never lock a lift. The plates say which each
   door is (`boss, Mess seat`, `boss, Mess station`) and the lift-shaft rail names the seat only (`Seat: The Echo waits`, `Seat: The Echo beaten`).
 - **One loud station (#1526).** While the plate of the next goal (section 4.7, `nextGoal`) is on the deck, it is the one solid amber plate and every
-  other plate is quiet (`data-quiet`, 78 % opacity), but the one under the marble, which keeps its ring. When the goal is on another deck no plate
-  is quiet, and the rail's ringed row points the way. The colours of the plates come down from a colour per mode to the three above. Not done under
-  this issue: the pylons and the staircase of the plinth, and the number of stations per town, which stay with the art direction (#1424).
+  other plate is quiet (`data-quiet`, 78 % opacity), but the one under the marble, which keeps its ring. When the goal is on another deck, the lift
+  on its way (the neighbour deck toward it, `wayTo`) is the loud plate, the others are quiet, and the rail's ringed row names the deck. The colours of
+  the plates come down from a colour per mode to the three above. The staircase is the file's pier (`scene_hub_pier`), taken out of the Hub's scene (`withoutHubStaircase`).
+  Not done under this issue: the pylons of the plinth (art direction, #1424), and the number of stations per town (towns, #1513).
 - **Notice board (#1528).** A card at the left edge, the rail's twin (`#hub-board`, `hubboard.ts`), titled "Notice board", in Tally's flat register (a
   fact, no remark, no secret word of world.md section 12.2: `hubboard.test.ts` checks every state against `SECRETS`): "Daily: The Hull. Not played."
   (or "Won in 12 turns.", "Lost in 9 turns.", "Started, not finished."), "Next boss: The Hull." (the first boss not beaten, in deck order, "none left"

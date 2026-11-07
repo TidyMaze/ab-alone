@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { cellsFor } from './board';
 import { DIST_MAX } from './camera';
-import { BLENDER_VIEW, boardPoints, fitTerrace, hubKit } from './tablezero';
+import { BLENDER_VIEW, boardPoints, fitTerrace, hubKit, withoutHubStaircase } from './tablezero';
 import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, aimSunShadow, SUN_SHADOW, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
 
 describe('Table Zero is the scene of every mode', () => {
@@ -327,5 +327,19 @@ describe("the hub props of the file are the game's to place (#1374)", () => {
   });
   it('are none in a file without them', () => {
     expect(hubKit(new THREE.Group())).toEqual({ parts: {}, lockbar: null });
+  });
+});
+
+describe('the Hub file has no staircase (#1526)', () => {
+  it('takes the stepped pier out of the Hub scene and keeps every other node', () => {
+    const root = new THREE.Group();
+    const pier = new THREE.Mesh();
+    pier.name = 'scene_hub_pier';
+    const lift = new THREE.Mesh();
+    lift.name = 'scene_hub_prop_lift';
+    root.add(pier, lift);
+    expect(withoutHubStaircase(root)).toBe(root);
+    expect(root.getObjectByName('scene_hub_pier')).toBeUndefined();
+    expect(root.getObjectByName('scene_hub_prop_lift')).toBe(lift);
   });
 });

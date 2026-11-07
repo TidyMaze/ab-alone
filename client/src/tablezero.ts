@@ -237,6 +237,12 @@ export interface HubKit {
   lockbar: THREE.Mesh | null;
 }
 
+/** The Hub file's staircase (#1526): its stepped pier, a bar of steps that leads nowhere. Taken out of the Hub's scene, no other node. */
+export function withoutHubStaircase(root: THREE.Object3D): THREE.Object3D {
+  root.getObjectByName('scene_hub_pier')?.removeFromParent();
+  return root;
+}
+
 /**
  * The hub file's props, not merged into its board: the game puts one on each room of its deck, whichever cell the file drew it on.
  * A part is a mesh with the file's material (unlit ones as the terrace draws them), placed relative to its prop; the shadow is blended.

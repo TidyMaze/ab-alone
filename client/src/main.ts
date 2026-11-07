@@ -203,7 +203,7 @@ import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
 import { neonBreachGeometry, neonEggGeometry, nextToSight, neonLookOn, neonMarbleRim, neonPedestal, neonTells, neonVeil, tellLook, NEON } from './neonlook';
-import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
+import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, withoutHubStaircase, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_NOTES, DIFFICULTY_PERCENT, TELL_MODE, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -4082,7 +4082,7 @@ function loadBoard(): void {
     const drawn = mergeByMaterial(arena.scene, true, neonLook); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     terraceBoards.arena = drawn.getObjectByName('terrace_board') as THREE.Group;
-    hubProps = hubKit(hubDeck.scene);
+    hubProps = hubKit(withoutHubStaircase(hubDeck.scene));
     for (const [name, file] of [['ballast', ballast], ['dual', dual], ['hub', hubDeck], ['royale', royaleSlab]] as const) {
       if (name === 'royale') file.scene.add(...arena.scene.children.filter((c) => /^scene_post_\d+$/.test(c.name)).map((c) => c.clone())); // its slab stands in the arena's footprint: the arena's six posts frame it (#1374)
       const board = mergeByMaterial(file.scene, false, neonLook);
