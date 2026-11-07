@@ -7,7 +7,7 @@ import { png } from './gen-assets.mjs';
 
 export const ICON_SIZES = [192, 512];
 
-const BASE = [0x0b, 0x0d, 0x0f];
+const BASE = [0x04, 0x05, 0x0c]; // #1424: the neon base (world.md palette)
 const STEEL = [0x4a, 0x52, 0x58];
 const RUST = [0x7a, 0x3b, 0x1d];
 const CYAN = [0x7f, 0xd6, 0xe8];

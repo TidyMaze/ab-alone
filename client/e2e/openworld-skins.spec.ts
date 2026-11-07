@@ -6,7 +6,8 @@ import { openModes } from './modes';
 // stands the state up (no walk). The hero is at the centre of the screen: the old glossy blue marble read bluer than red by about 22 of
 // 255, the default Marble skin is neutral (about 3).
 test('the hero of the Open world wears the ship skin, not the glossy blue marble, #1176', async ({ page }) => {
-  await page.goto('./?bot=off&openworld=7');
+  // look=terrace: the neon default (#1424) paints the player's cyan ring, which is blue over red by design; this pins the terrace colours.
+  await page.goto('./?bot=off&openworld=7&look=terrace');
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   await page.evaluate(() =>

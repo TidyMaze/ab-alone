@@ -24,7 +24,7 @@ function decode(png: Buffer): { w: number; h: number; at: (x: number, y: number)
   return { w, h, at };
 }
 
-const BASE = [0x0b, 0x0d, 0x0f]; // world.md section 5: near-black base
+const BASE = [0x04, 0x05, 0x0c]; // world.md palette: the neon base (#1424)
 const ICONS: Map<string, Buffer> = generateIcons(); // drawn once, about a second
 
 describe('gen-icons', () => {
@@ -92,10 +92,10 @@ describe('web app manifest', () => {
 
   it('takes its colours from the world palette', () => {
     const palette = read('../../docs/specs/world.md').match(/\*\*Palette\.\*\*([^\n]*\n[^\n]*)/)![1]!;
-    expect(palette).toContain('#0b0d0f');
-    expect(manifest.theme_color).toBe('#0b0d0f');
-    expect(manifest.background_color).toBe('#0b0d0f');
-    expect(html).toContain('<meta name="theme-color" content="#0b0d0f" />');
+    expect(palette).toContain('#04050c');
+    expect(manifest.theme_color).toBe('#04050c');
+    expect(manifest.background_color).toBe('#04050c');
+    expect(html).toContain('<meta name="theme-color" content="#04050c" />');
   });
 
   it('lists every generated icon with its real size, and a maskable one', () => {
