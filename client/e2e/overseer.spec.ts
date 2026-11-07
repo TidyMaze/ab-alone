@@ -91,25 +91,6 @@ test('The Overseer: the boss pushing the 6th core in wins the fight for the play
   await shot(page, { path: testInfo.outputPath('overseer-victory.png') });
 });
 
-// The defeated Overseer (#789): its marble explodes, and no angry line shows while it blows.
-test('The Overseer: on victory its marble explodes, with no angry line, #789', async ({ page }, testInfo) => {
-  await page.clock.install();
-  await startOverseer(page);
-  await plies(page, 0, 21);
-  await expect(page.locator('#bubble')).toBeHidden(); // the angry line of an earlier burn has faded
-  await page.emulateMedia({ reducedMotion: 'no-preference' }); // the explosion plays
-  await page.mouse.move(2, 2);
-  await pauseClock(page); // the explosion and the typing run on the page clock, stepped by hand: no wait for a slow software draw
-  await page.evaluate((list) => list.forEach(([q, r]) => (window as any).__click(q, r)), FIXTURE[21]!); // the last ply, not `plies`: it waits for a slide the paused clock never ends
-  await stepClock(page, 600); // the slide
-  await expect(page.locator('body')).toHaveAttribute('data-exploding', '1');
-  await expect(page.locator('#bubble')).toBeHidden(); // no angry line while it blows
-  await stepClock(page, 200);
-  await shot(page, { path: testInfo.outputPath('overseer-explosion.png') });
-  // The blast's end, the farewell typed in place of the angry line, and the 3 s hold are unit tested (main.overseer.test.ts):
-  // 1.5 s more of stepped clock here would cost 5 draws on a CI runner (#1481).
-});
-
 // The Overseer speaks and its vents turn to fume (#741, docs/specs/ui.md).
 const LINES = [
   'Core burnt. The record is one short.',

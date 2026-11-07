@@ -210,6 +210,9 @@ describe('main.ts The Unstable Core (#751)', () => {
     expect(marbleAt(game, -3, 4)).not.toBeNull(); // to (-3, 4), freed by the rim marble
     game.frame(SWEEP_MS / 2);
     expect(sweep(game)!.scale).toBeGreaterThan(0.5);
+    const grown = sweep(game)!.scale;
+    game.frame(100);
+    expect(sweep(game)!.scale).toBeGreaterThan(grown); // it grows frame by frame (the e2e #751 checked this, now removed)
     game.frame(SWEEP_MS);
     expect(sweep(game)).toBeNull();
     expect(named(scene(), 'wedge-glow')).toHaveLength(0);
