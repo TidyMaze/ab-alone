@@ -30,6 +30,7 @@ import {
   SLOW_RUNS,
   readFlatHud,
   foldedByDefault,
+  hudFoldAt,
   readHudFolded,
   readTranscript,
   readSteering,
@@ -348,6 +349,25 @@ describe('folded HUD panel by default (#1610): a portrait window under 700 px ta
     writeHudFolded(s, true);
     expect(readHudFolded(s, false)).toBe(true);
     expect(readHudFolded(throwing, true)).toBe(true);
+  });
+  it('the boot default follows the window: folded when portrait under 700 px, unfolded otherwise', () => {
+    expect(hudFoldAt(memoryStorage(), 320, 480)).toBe(true);
+    expect(hudFoldAt(memoryStorage(), 375, 812)).toBe(false);
+    expect(hudFoldAt(throwing, 320, 480)).toBe(true);
+  });
+  it('a resize with no stored choice re-applies the default of the new size, both ways', () => {
+    const s = memoryStorage();
+    expect(hudFoldAt(s, 360, 640)).toBe(true); // held upright at boot
+    expect(hudFoldAt(s, 640, 360)).toBe(false); // turned sideways
+    expect(hudFoldAt(s, 360, 640)).toBe(true); // upright again
+  });
+  it('a resize never overrides a stored choice, folded or unfolded', () => {
+    const folded = memoryStorage();
+    writeHudFolded(folded, false);
+    expect(hudFoldAt(folded, 360, 640)).toBe(false);
+    const unfolded = memoryStorage();
+    writeHudFolded(unfolded, true);
+    expect(hudFoldAt(unfolded, 640, 360)).toBe(true);
   });
 });
 

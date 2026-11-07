@@ -777,7 +777,7 @@ middle of the window's width, and of its height wider than tall (held upright, t
 for The Dual Room the centre is the middle between its two rooms (#957). A fight against The Pulsar opens drawn back, along the same line, just
 far enough that the six pulsars off the corners and the counter above each fit the window too, and
 Reset view goes back there (#691). The HUD plate never pushes the board aside: the player folds it
-instead (section 4, #957). A portrait window under 700 px tall starts with the plate folded (#1610); once the player unfolds it, it may cover the board, by his choice. A new window size, such as a phone turned upright, fits that view again
+instead (section 4, #957). A portrait window under 700 px tall starts with the plate folded (#1610), judged on the inner height the player sees, so a tall phone whose browser bars leave under 700 px starts folded too. Until the player folds or unfolds the plate, each new window size (a phone turned upright, a rotation) re-applies that default; his stored choice always wins and is never overridden. Once he unfolds it, the plate may cover the board, by his choice. A new window size fits that view again
 while the player has not moved the camera; once he orbits or zooms, his view stays until Reset view
 (#696). A co-op Pulsar fight opens on the same view. The chrome adds a rim only: a fixed, non-interactive radial gradient
 from transparent at 65 % to near-black (`#0b0d0f` at 75 % opacity) at 100 %, the same in both themes because the 3D deck is dark either way (fog at the rim, never over the cells). No border or

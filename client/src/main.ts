@@ -250,8 +250,7 @@ import {
   hasParticles,
   readClearBoard,
   readFlatHud,
-  foldedByDefault,
-  readHudFolded,
+  hudFoldAt,
   readFps,
   readReducedMotion,
   readGlassSkin,
@@ -5131,7 +5130,7 @@ function foldHud(folded: boolean): void {
   hudFold.setAttribute('aria-expanded', String(!folded));
   hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
 }
-foldHud(readHudFolded(store, foldedByDefault(innerWidth, innerHeight))); // a portrait phone under 700 px starts folded (#1610)
+foldHud(hudFoldAt(store, innerWidth, innerHeight)); // a portrait phone under 700 px starts folded (#1610)
 hudFold.addEventListener('click', () => {
   const folded = hudFold.getAttribute('aria-expanded') === 'true';
   writeHudFolded(store, folded);
@@ -5146,6 +5145,7 @@ addEventListener('resize', () => {
   setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
   renderer.setSize(innerWidth, innerHeight);
   openWorld.resize(innerWidth, innerHeight);
+  foldHud(hudFoldAt(store, innerWidth, innerHeight)); // no stored choice: the default of the new size (#1610)
   applyView(); // the reader fits the screen to the new window
 });
 

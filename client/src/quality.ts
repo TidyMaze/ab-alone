@@ -159,6 +159,10 @@ export const readHudFolded = (store: Store, byDefault = false): boolean => {
   return stored === 'on' ? true : stored === 'off' ? false : byDefault;
 };
 export const writeHudFolded = (store: Store, on: boolean): void => write(store, FOLD_KEY, on ? 'on' : 'off');
+// The fold for a window of this size (#1610): the boot and each resize read it, so a player who never chose gets the default
+// of the new size (a turned phone), and a stored choice always wins.
+export const hudFoldAt = (store: Store, width: number, height: number): boolean =>
+  readHudFolded(store, foldedByDefault(width, height));
 // The audio log transcript (#516): on unless the player turned it off.
 export const readTranscript = (store: Store): boolean => read(store, TRANSCRIPT_KEY) !== 'off';
 export const writeTranscript = (store: Store, on: boolean): void => write(store, TRANSCRIPT_KEY, on ? 'on' : 'off');

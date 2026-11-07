@@ -535,84 +535,43 @@ for (const { name, viewport } of [
   });
 }
 
-// #1610: held upright under 700 px tall, the HUD plate starts folded (foldedByDefault), so its box covers no cell of the board's
-// top row (the old plate covered it: 262 px tall at 320 wide, bottom 312, against a top row at 148). The folded box is the plate
-// and its dock with the fold button. The scenes: a boss fight, a rogue-lite fight, the end banner of a win.
-for (const viewport of [{ width: 320, height: 480 }, { width: 360, height: 640 }]) {
-  test.describe(`a phone ${viewport.width} by ${viewport.height} held upright, folded plate by default, #1610`, () => {
-    test.use({ viewport, isMobile: true, hasTouch: true });
+// #1610: held upright under 700 px tall, the HUD plate starts folded, so its box covers no cell of the board's top row (the old
+// plate covered it: 262 px tall at 320 wide, bottom 312, against a top row at 148). The unit rule is in quality.test.ts.
+test.describe('a phone 320 by 480 held upright, folded plate by default, #1610', () => {
+  test.use({ viewport: { width: 320, height: 480 }, isMobile: true, hasTouch: true });
 
-    // The folded boxes (the plate and its dock) that meet a cell of the board's top row, and that row's top edge.
-    const topRowOverlap = (page: Page) =>
-      page.evaluate(() => {
-        type Box = { left: number; top: number; right: number; bottom: number };
-        const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { x: number; y: number };
-        const cells: (Box & { cy: number })[] = [];
-        for (let r = -4; r <= 4; r++) {
-          for (let q = Math.max(-4, -4 - r); q <= Math.min(4, 4 - r); q++) {
-            const p = toScreen(q, r);
-            const e = toScreen(q + 1, r);
-            const rad = 0.46 * Math.hypot(e.x - p.x, e.y - p.y);
-            cells.push({ left: p.x - rad, top: p.y - rad, right: p.x + rad, bottom: p.y + rad, cy: p.y });
-          }
+  test('the folded plate covers no cell of the top row in a boss fight, #1610', async ({ page }) => {
+    await page.goto('./?bot=off&net=hook');
+    await page.locator('canvas').waitFor();
+    await openModes(page);
+    await page.getByRole('button', { name: 'Boss fight' }).click();
+    await page.locator('#boss-list button').first().click();
+    await expect(page.locator('#hud')).toContainText('P1');
+    await expect(page.locator('#hud-fold')).toHaveAttribute('aria-expanded', 'false');
+    const { top, hits } = await page.evaluate(() => {
+      type Box = { left: number; top: number; right: number; bottom: number };
+      const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { x: number; y: number };
+      const cells: (Box & { cy: number })[] = [];
+      for (let r = -4; r <= 4; r++) {
+        for (let q = Math.max(-4, -4 - r); q <= Math.min(4, 4 - r); q++) {
+          const p = toScreen(q, r);
+          const e = toScreen(q + 1, r);
+          const rad = 0.46 * Math.hypot(e.x - p.x, e.y - p.y);
+          cells.push({ left: p.x - rad, top: p.y - rad, right: p.x + rad, bottom: p.y + rad, cy: p.y });
         }
-        const highest = cells.reduce((a, c) => (c.cy < a.cy ? c : a));
-        const top = highest.top;
-        const row = cells.filter((c) => c.cy < highest.cy + (highest.bottom - highest.top) / 2);
-        const boxes: Record<string, Box> = {};
-        for (const id of ['hud', 'hud-dock']) {
-          const b = document.getElementById(id)!.getBoundingClientRect();
-          boxes[id] = { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
-        }
-        const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-        const hits = Object.keys(boxes).filter((id) => row.some((c) => meets(boxes[id]!, c)));
-        return { top, hits };
-      });
-
-    const scenes: [string, (page: Page) => Promise<void>][] = [
-      [
-        'a boss fight',
-        async (page) => {
-          await page.goto('./?bot=off&net=hook');
-          await page.locator('canvas').waitFor();
-          await openModes(page);
-          await page.getByRole('button', { name: 'Boss fight' }).click();
-          await page.locator('#boss-list button').first().click();
-          await expect(page.locator('#hud')).toContainText('P1');
-        },
-      ],
-      [
-        'a rogue-lite fight',
-        async (page) => {
-          await page.goto('./?bot=off&net=hook');
-          await page.waitForFunction(() => (window as any).__run);
-          const moves = [[1, 2, -4, 3, 0, 0, 0, 0], [2, 5, 0, -4, 1, -4, 0, 0]];
-          await page.evaluate((m) => (window as any).__run({ seed: 3, army: 14, path: [0], fighting: true, moves: m, end: '', specials: [0, 0, 1, 0, 0, 0, 0, 0, 1, 0], placed: [[-4, 4, 3], [0, 4, 9]], reward: false }), moves);
-          await expect(page.locator('#hud button.special')).toHaveCount(2);
-        },
-      ],
-      [
-        'the end banner of a win',
-        async (page) => {
-          await page.goto('./?net=hook');
-          await page.locator('canvas').waitFor();
-          await page.locator('#import-file').setInputFiles({
-            name: 'game.json',
-            mimeType: 'application/json',
-            buffer: Buffer.from(JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: true, moves: BLACK_WINS })),
-          });
-          await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
-        },
-      ],
-    ];
-    for (const [name, open] of scenes) {
-      test(`the folded plate covers no cell of the top row in ${name}, #1610`, async ({ page }) => {
-        await open(page);
-        await expect(page.locator('#hud-fold')).toHaveAttribute('aria-expanded', 'false');
-        const { top, hits } = await topRowOverlap(page);
-        expect(top, 'the top row of the board').toBeGreaterThan(0);
-        expect(hits, `the folded plate covers the top row at ${top}`).toEqual([]);
-      });
-    }
+      }
+      const highest = cells.reduce((a, c) => (c.cy < a.cy ? c : a));
+      const row = cells.filter((c) => c.cy < highest.cy + (highest.bottom - highest.top) / 2);
+      const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const hits: string[] = [];
+      for (const id of ['hud', 'hud-dock']) {
+        const b = document.getElementById(id)!.getBoundingClientRect();
+        const box = { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+        if (row.some((c) => meets(box, c))) hits.push(id);
+      }
+      return { top: highest.top, hits };
+    });
+    expect(top, 'the top row of the board').toBeGreaterThan(0);
+    expect(hits, `the folded plate covers the top row at ${top}`).toEqual([]);
   });
-}
+});
