@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { roomsOf } from './hub';
-import { entryConfirmDue, entryName, HUB_COACH, hubCoachDue, hubHelpOn, markEntered, markHubCoachDone, needsConfirm } from './hubcoach';
+import { entryConfirmDue, entryName, HUB_COACH, hubCoachDue, WALK_LESSON, hubHelpOn, markEntered, markHubCoachDone, needsConfirm } from './hubcoach';
 import type { Store } from './quality';
 import { SECRETS } from './story';
 
@@ -13,11 +13,10 @@ const memory = (): NonNullable<Store> => {
 };
 
 describe('the coach line of the Hub', () => {
-  it('names the place and the way to move, in plain words, with no secret word of a later stage', () => {
-    expect(HUB_COACH).toBe('This is the Mess. Tap or click the cell next to you to roll. Roll onto a room to enter it.');
-    expect(HUB_COACH).toMatch(/tap or click the cell next to you/i);
-    expect(HUB_COACH).toMatch(/roll onto a room to enter it/i);
-    for (const { word } of SECRETS) expect(HUB_COACH).not.toMatch(word);
+  it('is the one lesson of the roll (#1604), in plain words, with no secret word of a later stage', () => {
+    expect(HUB_COACH).toBe(WALK_LESSON);
+    expect(WALK_LESSON).toBe('Tap or click a next cell to roll. The arrow keys or the stick do the same.');
+    for (const { word } of SECRETS) expect(WALK_LESSON).not.toMatch(word);
   });
 
   it('is due to a new player until the first roll, then never again, and not to one who beat a boss', () => {

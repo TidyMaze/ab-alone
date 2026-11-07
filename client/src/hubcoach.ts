@@ -9,15 +9,18 @@ import { read, write, type Store } from './quality';
 const COACH_KEY = 'ab-alone.hubcoach';
 const ENTERED_KEY = 'ab-alone.entered';
 
-/** What the Hub's coach line says the first time: the place, how to roll, how to enter a room. */
-export const HUB_COACH = 'This is the Mess. Tap or click the cell next to you to roll. Roll onto a room to enter it.';
+/** The one lesson of the roll (#1604): the Hub's coach line and the Open world's controls both say it, until the player rolled once in either. */
+export const WALK_LESSON = 'Tap or click a next cell to roll. The arrow keys or the stick do the same.';
+export const HUB_COACH = WALK_LESSON;
 
 /** Whether the coach line and the confirm are on: for a player, and in an automated browser (every e2e spec boots in one) only when
  * `?firstrun` asks for a player's first launch, so the specs that walk into rooms boot as before. */
 export const hubHelpOn = (search: string, automated: boolean): boolean => !automated || new URLSearchParams(search).has('firstrun');
 
 /** The coach line shows until the player rolled once (`markHubCoachDone`), never to one who beat a boss. */
-export const hubCoachDue = (store: Store, beaten: readonly string[]): boolean => beaten.length === 0 && read(store, COACH_KEY) !== 'done';
+export const hubCoachDue = (store: Store, beaten: readonly string[]): boolean => beaten.length === 0 && walkLessonDue(store);
+/** The lesson of the roll is due until the player rolled once, in the Hub or the Open world (the one key, `ab-alone.hubcoach`). */
+export const walkLessonDue = (store: Store): boolean => read(store, COACH_KEY) !== 'done';
 export const markHubCoachDone = (store: Store): void => write(store, COACH_KEY, 'done');
 
 /** The confirm asks until the player entered a mode once (`markEntered`), never a returning player who beat a boss. */

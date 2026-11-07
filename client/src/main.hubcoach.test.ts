@@ -14,7 +14,7 @@ const press = (key: string): KeyboardEvent => {
   window.dispatchEvent(e);
   return e;
 };
-const COACH_LINE = 'This is the Mess. Tap or click the cell next to you to roll. Roll onto a room to enter it.';
+const COACH_LINE = 'Tap or click a next cell to roll. The arrow keys or the stick do the same.';
 const entered = { 'ab-alone.entered': 'yes' };
 /** Boots as a player's first launch and skips the cold open: the Hub. */
 async function firstHub(storage: Record<string, string> = {}): Promise<Game> {

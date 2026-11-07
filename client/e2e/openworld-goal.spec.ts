@@ -80,3 +80,13 @@ for (const [name, viewport] of [['upright 390 by 844', { width: 390, height: 844
     });
   });
 }
+
+test('the one lesson of the roll shows on the first entry with the controls open (#1604; the roll and never back: openworldlesson.test.ts)', async ({ page }, testInfo) => {
+  await page.goto('./?bot=off&openworld=7&firstrun'); // a player's first launch: the lesson is on (the automated page keeps it off)
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
+  await page.getByRole('button', { name: 'Begin' }).click(); // the first-run story card covers the world until begun
+  await showHud(page, '#openworld-lesson');
+  await expect(page.locator('#openworld-lesson')).toHaveText('Tap or click a next cell to roll. The arrow keys or the stick do the same.');
+  await expect(page.locator('#openworld-controls')).toHaveJSProperty('open', true);
+  await shot(page, { path: testInfo.outputPath('1604-lesson.png') });
+});

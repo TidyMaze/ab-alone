@@ -19,6 +19,8 @@ import { CLAIM_NOTE, contractLine, goalLines } from './openworldgoal';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
 import { RECRUIT_MAX, recruitCell } from './openworldrecruit';
 import { WORLD_LOGS } from './lorelogs';
+import { hubHelpOn, markHubCoachDone, walkLessonDue, WALK_LESSON } from './hubcoach';
+import type { Store } from './quality';
 import { enter, heroStep } from './openworldstep';
 import { pairs, teleport, teleporterNear } from './openworldteleport';
 import type { PeerHost } from './worldnet';
@@ -84,6 +86,9 @@ export { twistOf };
 
 export class OpenWorldMode {
   active = false;
+  /** The page's storage: the one lesson of the roll (#1604) is shown only with one, and its key is saved in it. */
+  store: Store = null;
+  private lesson = false; // the lesson is on in the world entered (not yet rolled)
   hero: Hero | null = null;
   /** The online layer of the public world (#1305): told of each world entered and left, and of each frame. None draws solo. */
   peers: PeerHost | null = null;
@@ -277,6 +282,7 @@ export class OpenWorldMode {
     view.setPlaces(this.places);
     view.setLogs(this.logs, this.found);
     this.peers?.enter(seed, view.scene, view.camera, world);
+    this.showLesson();
     this.keepAlive();
     const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
     if (medals) {
@@ -468,6 +474,26 @@ export class OpenWorldMode {
       const out = document.getElementById(id);
       if (out && out.textContent !== line) out.textContent = line;
     }
+  }
+
+  /** The one lesson of the roll (#1604): the controls open on the entry while the lesson is due, and its line says it (the Hub's coach says the same). */
+  private showLesson(): void {
+    this.lesson = this.store !== null && hubHelpOn(location.search, navigator.webdriver) && walkLessonDue(this.store);
+    const line = document.getElementById('openworld-lesson');
+    if (line) {
+      line.hidden = !this.lesson;
+      line.textContent = WALK_LESSON;
+    }
+    const controls = document.getElementById('openworld-controls') as HTMLDetailsElement | null;
+    if (controls && this.lesson) controls.open = true;
+  }
+
+  /** The first roll ends the lesson for good: its line goes and the key is saved, so the Hub does not show it either. */
+  private endLesson(): void {
+    this.lesson = false;
+    markHubCoachDone(this.store!);
+    const line = document.getElementById('openworld-lesson');
+    if (line) line.hidden = true;
   }
 
   /** The H key (#1530): opens the controls hint of the HUD, or closes it. A folded plate is shown first, with the hint open. The player's choice stays
@@ -933,6 +959,7 @@ export class OpenWorldMode {
     const from = this.hero!.at;
     if (!this.hero!.step(to)) return this.lean(to, at), false;
     this.cruising = pace !== 'tap';
+    if (this.lesson) this.endLesson(); // the first roll of the lesson (#1604)
     const span = pace === 'tap' ? GLIDE_MS : stepMs(this.walked);
     this.walked = pace === 'tap' ? 0 : this.walked + 1;
     if (this.hero!.smashed) {

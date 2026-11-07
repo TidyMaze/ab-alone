@@ -622,8 +622,9 @@ covering no plate), `hubview.test.ts` and `main.firstrun.test.ts`.
 A new player lands in the Hub with a goal and has to learn how to move there. Two small plates, both of the coach plate's look
 (`hubcoach.ts`; one line at the top between the HUD and the cog, above the dock on a phone held upright, over no room plate):
 
-- **Coach line.** "This is the Mess. Tap or click the cell next to you to roll. Roll onto a room to enter it." It shows when the Hub
-  opens until the player has rolled once (`ab-alone.hubcoach = done`, localStorage, the only key), and never comes back. A player who
+- **Coach line.** "Tap or click a next cell to roll. The arrow keys or the stick do the same." (`WALK_LESSON`, the one lesson of the roll, #1604,
+  also the first line of the Open world's controls, openworld.md section 14). It shows when the Hub
+  opens until the player has rolled once, in the Hub or the Open world (`ab-alone.hubcoach = done`, localStorage, the only key), and never comes back. A player who
   beat a boss never sees it.
 - **First entry confirm.** Rolling onto a room that starts a mode (a boss door, a table, the Daily, the Rogue-lite, the Open world, any
   but a lift, a terminal and the Medal room) does not roll yet: a plate names the room ("Enter House table (play the ship's bot)?") with Stay and Enter, Enter

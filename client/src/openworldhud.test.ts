@@ -71,7 +71,7 @@ describe('the Open world help (#1252)', () => {
   it('names the keys, and the pad\'s buttons while the pad is in use (body[data-pad])', () => {
     expect(css).toContain('.pad-hint, .tap-hint, body[data-pad] .keys-hint { display: none; }');
     expect(css).toContain('body[data-pad] .pad-hint { display: inline; }');
-    expect(html).toMatch(/<span class="keys-hint">arrows[^<]*Q E[^<]*Esc to leave\.<\/span>/);
+    expect(html).toMatch(/<span class="keys-hint">Q E[^<]*Esc to leave\.<\/span>/);
     expect(html).toMatch(/<span class="pad-hint">left stick to walk, LB RB[^<]*R3[^<]*B to leave\.<\/span>/);
   });
 });
@@ -171,7 +171,7 @@ describe('the goal and the collapsed controls of the Open world plate (#1530)', 
     expect(html.indexOf('id="openworld-goal"')).toBeLessThan(html.indexOf('id="openworld-medals"'));
     expect(html).toMatch(/<details id="openworld-controls">\s*<summary>Controls<span class="keys-hint"> \(H\)<\/span><\/summary>/);
     expect(html).not.toMatch(/<details id="openworld-controls" open/);
-    expect(html).toMatch(/<details id="openworld-controls">[\s\S]*class="keys-hint">arrows[^<]*Q E[^<]*H to close this[^<]*Esc to leave\.<[\s\S]*<p id="openworld-mode"><\/p>[\s\S]*<\/details>/);
+    expect(html).toMatch(/<details id="openworld-controls">[\s\S]*class="keys-hint">Q E[^<]*H to close this[^<]*Esc to leave\.<[\s\S]*<p id="openworld-mode"><\/p>[\s\S]*<\/details>/);
     expect(html).toMatch(/<button id="openworld-dungeon" type="button">Nearest tower<\/button>/);
     expect(html).not.toContain('>Dungeon<');
     expect(html).not.toContain('Open world: <span class="keys-hint">');

@@ -143,6 +143,7 @@ export function wireOpenWorld(deps: OpenWorldDeps): OpenWorldParts {
     store, // the signed events are kept in this browser (#1305)
   );
   mode.peers = peers;
+  mode.store = store; // the one lesson of the roll (#1604)
   mode.onWild = (seed, home) => deps.onWild(seed, home, mode.phase); // the hour the marble was met at dresses the arena
   // The clock the enemy marbles wander by (#1511): the wall clock in ticks, so every peer sees them in the same places.
   mode.wander = () => deps.wanderTick() ?? Math.floor(Date.now() / FightState.tickMs);

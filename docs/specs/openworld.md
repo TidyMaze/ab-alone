@@ -620,6 +620,10 @@ The panel (`#openworld-hud`) opens on what to do, not on the keys.
 - **Controls.** The keys, taps and pad buttons are behind `#openworld-controls`, a `<details>` closed on arrival, with the steering line
   (`#openworld-mode`) inside. A tap on its summary (44 px) or H opens and closes it; H on a folded plate shows the plate with the controls open. Nothing else
   opens or closes it: a player who opened it and closed it finds it closed in the next world.
+- **The one lesson of the roll (#1604).** While the lesson is due (`ab-alone.hubcoach` is not `done`, and the page has storage and is not an automated
+  browser, or it is `?firstrun`), the first entry opens the controls and shows its first line, `#openworld-lesson`: "Tap or click a next cell to roll.
+  The arrow keys or the stick do the same." (`WALK_LESSON`, the Hub's coach line too). The first roll ends it: the line goes, the key is saved, and
+  the controls stay closed in every world after. Hub and Open world share that one key; a player who rolled in the Hub never sees it here.
 - **Nearest tower.** The button `#openworld-dungeon` (its id is kept) walks to the nearest tower of the ring to beat (#1291, #1532). It was "Dungeon", which
   now names the gates of section 13.
 - **Claim.** The first-visit line stays, once per player, with its stage rule (`Claim: unworked.` before stage 5, "Claim 0412: unworked." from it), and

@@ -55,7 +55,7 @@ for (const [name, viewport, touch] of [
       await firstHub(page);
       const coach = page.locator('#hub-coach');
       await expect(coach).toBeVisible();
-      await expect(coach).toContainText('This is the Mess. Tap or click the cell next to you to roll. Roll onto a room to enter it.');
+      await expect(coach).toContainText('Tap or click a next cell to roll. The arrow keys or the stick do the same.');
       await coversNothing(page, coach);
       await shot(page, { path: `test-results/hub-walk-coach-${touch ? 'phone' : 'desktop'}.png` });
       await hookClick(page, 1, 0);
