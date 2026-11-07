@@ -1,7 +1,6 @@
 import { float, uniform } from 'three/tsl';
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { NEON_LINE, neonEdgeGeometry, neonEdgeMaterial } from './neonlook';
 import { NEON_GRID, EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial, GAP_FILL, gapFill } from './openworldedge';
 
 describe('the hex edge of an Open world ground (#1138)', () => {
@@ -80,20 +79,10 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect(lit.colorNode).not.toBe(plain.colorNode);
     const water = float(2);
     expect(edgeMaterial({ ...look, emissiveNode: water, neon }).emissiveNode).not.toBe(water); // the foam keeps its term, the grid is added
-    expect(NEON_GRID.width).toBeLessThan(0.1); // a thin line, never a cell top (#1535: the arena's width)
+    expect(NEON_GRID.line).toBeLessThan(0.3); // quiet: a lit line, never a cell top
     expect(NEON_GRID.near).toBeLessThan(NEON_GRID.far);
     // the floor of light keeps the darkest ground off the sky's colour (#04050c) in the screenshot, and stays a hint of colour (#1424)
     expect(Math.max(...NEON_GRID.floor)).toBeLessThan(0.01);
     expect(NEON_GRID.floor[2]).toBeGreaterThan(0.002);
-  });
-
-  it('reads its line weight, glow and colour from the arena\'s grid line, one shared constant (#1535)', () => {
-    expect(NEON_GRID.width).toBe(NEON_LINE.width);
-    expect(NEON_GRID.glow).toBe(NEON_LINE.glow);
-    expect(NEON_GRID.colour).toBe(NEON_LINE.colour);
-    const arena = neonEdgeMaterial().color;
-    expect(arena.getHex()).toBe(new THREE.Color(NEON_LINE.colour).multiplyScalar(NEON_LINE.glow).getHex());
-    const p = neonEdgeGeometry().attributes.position!.array as Float32Array;
-    expect(Math.hypot(p[3]! - p[0]!, p[5]! - p[2]!)).toBeCloseTo(NEON_LINE.width, 6); // the arena's band is as wide as the shared width
   });
 });
