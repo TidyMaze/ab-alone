@@ -46,6 +46,7 @@ import { goalCardHtml } from './goalcard';
 import { drawBossBar } from './bossbar';
 import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
+import { PushIn } from './pushin';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
 import { openInEditor } from './editorexport';
@@ -748,6 +749,8 @@ function frameCamera(): void {
 }
 frameCamera();
 let view = resetView();
+// The boss camera's push-in when a lair starts the fight (#1519): eased from a farther pose into `view`, ended by the first press or key.
+const pushIn = new PushIn();
 // The terminal reader (#512): while the player reads the deck console, the view to go back to, else null.
 let reading: View | null = null;
 const consoleDef = spaceshipArchitecture(tier).find((p) => p.id === 'console-screen')!; // in every tier (room.ts)
@@ -764,7 +767,7 @@ function applyView(): void {
     return;
   }
   sceneRenderer.fogRadius = fogRadius;
-  sceneRenderer.applyView(view, sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
+  sceneRenderer.applyView(pushIn.frame(view, performance.now()) ?? view, sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
   placeHubLabels();
 }
 // The hub's deck plan (#1249): the label plates over the rooms, the lift-shaft rail and the boss pips, shown in the hub only.
@@ -3695,6 +3698,13 @@ function skipEjections(): void {
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
 addEventListener('keydown', skipEjections, { capture: true });
+// A press, a key or a turn of the wheel ends the boss camera's push-in on the final framing at once (#1519): nothing waits for it.
+const snapPushIn = (): void => {
+  if (pushIn.snap()) applyView();
+};
+addEventListener('pointerdown', snapPushIn, { capture: true });
+addEventListener('keydown', snapPushIn, { capture: true });
+addEventListener('wheel', snapPushIn, { capture: true, passive: true });
 
 let selected: Axial[] = [];
 let keyDir = -1; // the direction picked with Q W E A S D for the selected group, -1 for none (#738)
@@ -5556,6 +5566,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   playCue('boss-intro', 0.12); // after the click on the boss, short so as not to ride on the tally line
   refresh(); // the HUD of the fight first: the view keeps off its plate
   view = fitted = fightView();
+  pushIn.start(performance.now(), { lair: lair !== null, reduced: reducedMotion() }); // a lair's fight pushes in, unless reduced motion (#1519)
   applyView();
 }
 /** Whether the boss menu locks the bosses above the Hub's lifts (#1527): a player's browser does, an automated page (every other spec) only with `?locks`.
@@ -7520,6 +7531,7 @@ renderer.setAnimationLoop((now) => {
     }
     return;
   }
+  if (pushIn.active) applyView(); // the boss camera's push-in eases each frame until it ends (#1519)
   const moves = moving(); // before the effects run, so the frame that ends one draws
   const wanted = drawWanted(dirty > 0, moves, drawAsked, navigator.webdriver);
   if (moves) dirty = CHANGE_DRAWS; // its last picture draws twice too, for the bloom

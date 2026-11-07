@@ -169,6 +169,27 @@ describe('the day and the night of the Open world (#1496)', () => {
   });
 });
 
+describe('the boss camera of a lair pushes in (#1519)', () => {
+  it('its frames run until the push-in ends, and a press with nothing running is nothing', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await walkOnto(game, 0); // the fight starts, the push-in with it
+    expect(data().boss).toBeTruthy();
+    game.frame(100); // a frame during the push-in: the view eases
+    game.frame(400); // past its 350 ms: this frame draws the final framing
+    game.frame(100);
+    window.dispatchEvent(new Event('pointerdown'));
+    expect(data().boss).toBeTruthy();
+  });
+
+  it('a press during the push-in snaps it to the final framing', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await walkOnto(game, 0);
+    window.dispatchEvent(new Event('pointerdown')); // the push-in is running: it ends on this press
+    game.frame(100); // no push-in now: the frame draws the view as it is
+    expect(data().boss).toBeTruthy();
+  });
+});
+
 describe("Tally's line in the Open world (#1171)", () => {
   it('shows "Claim: unworked." the first time the player opens an Open world, and never again (the line number comes with stage 5, #1584)', async () => {
     const game = await boot('?bot=off&openworld=7'); // the link opens the world at the load (#1361)
