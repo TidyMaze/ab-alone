@@ -64,6 +64,16 @@ describe('the one lesson of the roll in the Open world (#1604)', () => {
     expect(lesson().hidden).toBe(true);
   });
 
+  it('a roll with no lesson line on the page still saves the key and does not throw', () => {
+    const store = memory();
+    const m = setup(store);
+    m.enter(7, 800, 600);
+    lesson().remove();
+    m.fixture({ hero: [0, 0], troop: [], enemies: [] });
+    expect(roll(m, [1, 0])).toBe(true);
+    expect(store.getItem('ab-alone.hubcoach')).toBe('done');
+  });
+
   it('a player who rolled in the Hub before never sees it in the Open world', () => {
     const store = memory();
     store.setItem('ab-alone.hubcoach', 'done');
