@@ -20,7 +20,7 @@ describe('the lobby sheet and the result cards, #1136', () => {
   it('draws their buttons and fields as 6 px, 48 px high, Start and Copy result filled', () => {
     expect(css).toMatch(/#dock-wrap :is\(#lobby-sheet, #daily-card\) :is\(button, input, textarea\) \{[^}]*border-radius: var\(--r-button\);/);
     expect(css).toMatch(/#dock-wrap #lobby-sheet button, #dock-wrap #daily-card #daily-copy \{[^}]*min-height: var\(--target\);/);
-    expect(css).toMatch(/#dock-wrap :is\(#royale-start, #daily-copy\) \{[^}]*background: var\(--active-fill\);[^}]*color: var\(--active-ink\);/);
+    expect(css).toMatch(/#dock-wrap :is\(#royale-start, #daily-copy(?:, #lobby-bot)?\) \{[^}]*background: var\(--active-fill\);[^}]*color: var\(--active-ink\);/);
   });
 
   it('uses no backdrop blur', () => {
