@@ -10,6 +10,15 @@ describe('kickAt', () => {
     expect(REST).toEqual({ zoom: 1, x: 0, y: 0 });
   });
 
+  // The e2e pushfeel check used to read this span from wall-clock frames (916 ms on a slow CI runner, #1617): the animation clock
+  // gives it. The kick ends at KICK_MS, and the first frame of a 60 Hz clock at or after that ends it: 400 ms at most from its start.
+  it('is at rest by the first 60 Hz frame at or after KICK_MS, so the kick span is at most 400 ms, #1617', () => {
+    const frames = Array.from({ length: 60 }, (_, i) => (i * 1000) / 60);
+    const off = frames.find((t) => t >= KICK_MS)!;
+    expect(off).toBeLessThanOrEqual(400);
+    expect(kickAt(off, false)).toBe(REST);
+  });
+
   it('starts from rest, so the picture never jumps', () => {
     const k = kickAt(0, false);
     expect(k.zoom).toBe(1);

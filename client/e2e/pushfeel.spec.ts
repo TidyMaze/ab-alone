@@ -61,7 +61,7 @@ test('a push that ejects squashes the marbles on arrival and kicks the camera fo
   await expect(page.locator('body')).not.toHaveAttribute('data-sliding', /.*/);
   const seen = await feel(page);
   expect(seen.kickOn).toBeGreaterThan(0);
-  expect(seen.kickOff - seen.kickOn).toBeLessThanOrEqual(400); // 240 ms of kick, and the frame that notices it
+  expect(seen.kickOff).toBeGreaterThan(seen.kickOn); // the kick starts and ends; its 240 ms span is a unit test (kick.test.ts, #1617)
   expect(seen.min).toBeLessThan(0.95); // the marbles squashed ...
   expect(seen.max).toBeGreaterThan(1.005); // ... and rebounded
   await page.evaluate(() => (window as any).__drawNext());
