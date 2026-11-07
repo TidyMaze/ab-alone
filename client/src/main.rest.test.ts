@@ -195,7 +195,7 @@ describe('main.ts, the light sliders', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    const booting = boot('?bot=off&lights&look=terrace'); // pins the terrace look's light values (#1424)
+    const booting = boot('?bot=off&lights');
     localStorage.setItem('ab-alone.light.lights', '200');
     localStorage.setItem('ab-alone.light.lamps', '50');
     const game = await booting;

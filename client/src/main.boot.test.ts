@@ -186,7 +186,7 @@ describe('the renderer and its textures', () => {
 
   it('gives the black marbles of the terrace the reflection of its own sky, to a player and not under automation (#1314)', async () => {
     const reflection = async (webdriver: boolean): Promise<THREE.Texture | null> => {
-      const game = await boot('?bot=off&look=terrace', { webdriver }); // pins the terrace look's sky reflection (#1314)
+      const game = await boot('?bot=off', { webdriver });
       await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
       const { scene } = await drawn(game);
       const shell = materials(scene).find((m) => m.color.getHex() === 0x0a0c0f)!;
@@ -197,8 +197,8 @@ describe('the renderer and its textures', () => {
     expect((env!.userData as { scene: THREE.Scene }).scene.children).toHaveLength(3); // a sky ramp, a window, a cyan strip: no lamps
   });
 
-  it('wears the neon look by default: black sky and stars, slate marbles and pedestals, the edge lines (#1424)', async () => {
-    const game = await boot('?bot=off');
+  it('wears the neon look on ?look=neon only: black sky and stars, slate marbles and pedestals, the edge lines (#1424)', async () => {
+    const game = await boot('?bot=off&look=neon');
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
     const { scene } = await drawn(game);
     const terrace = scene.getObjectByName('terrace')!;
@@ -209,7 +209,7 @@ describe('the renderer and its textures', () => {
     expect(materials(scene).some((m) => m.color.getHex() === 0xf2f0ea)).toBe(true); // the white one
   });
 
-  it('draws the board closer on a phone by default: about 85 % of the width, not 65 % with ?look=terrace (#1424)', async () => {
+  it('draws the board closer on a phone with ?look=neon: about 85 % of the width, not 65 % (#1424)', async () => {
     const distance = async (search: string): Promise<number> => {
       vi.stubGlobal('innerWidth', 390);
       vi.stubGlobal('innerHeight', 844);
@@ -217,12 +217,12 @@ describe('the renderer and its textures', () => {
       await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
       return (game.hook('__view') as { distance: number }).distance;
     };
-    expect(await distance('?bot=off&look=terrace')).toBe(18);
-    expect(await distance('?bot=off')).toBe(13.8);
+    expect(await distance('?bot=off')).toBe(18);
+    expect(await distance('?bot=off&look=neon')).toBe(13.8);
   });
 
-  it('leaves the terrace as it was with ?look=terrace (#1424)', async () => {
-    const game = await boot('?bot=off&look=terrace');
+  it('leaves the terrace as it was without ?look=neon (#1424)', async () => {
+    const game = await boot('?bot=off');
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
     const { scene } = await drawn(game);
     const terrace = scene.getObjectByName('terrace')!;

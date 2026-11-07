@@ -95,7 +95,7 @@ describe('main.ts The Alien (#588)', () => {
 
   it('lays an egg in the Alien colour of the worn shell skin, with a shell map of its own, never the pale of my marbles (#1402)', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off&scene=room&look=terrace', { reducedMotion: true }); // the terrace's egg: the neon look's egg has no shell map (#1424)
+    const game = await boot('?bot=off&scene=room', { reducedMotion: true });
     fightAlien(game);
     plies(game, 4);
     const egg = scene().getObjectByName('egg') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
@@ -116,7 +116,7 @@ describe('main.ts The Alien (#588)', () => {
 
   it('the counter goes down after each player move, pulses on 1, then the egg hatches into an Alien marble', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off&look=terrace'); // the terrace's egg counter: the neon look draws its own egg (#1424)
+    const game = await boot('?bot=off');
     fightAlien(game);
     plies(game, 4);
     const counts: number[] = [];

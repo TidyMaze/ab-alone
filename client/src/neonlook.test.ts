@@ -16,9 +16,9 @@ const painted = (...hexes: number[]): THREE.BufferGeometry => {
 const at = (g: THREE.BufferGeometry, i: number): THREE.Color => new THREE.Color().fromBufferAttribute(g.attributes.color!, i);
 
 describe('the neon look (#1424)', () => {
-  it('is the default look: on with no look or ?look=neon, off for ?look=terrace and the board looks (#1424)', () => {
-    for (const s of ['', '?bot=off', '?look=neon']) expect(neonLookOn(s)).toBe(true);
-    for (const s of ['?look=terrace', '?bot=off&look=terrace', '?look=tonal', '?look=pbr', '?look=']) expect(neonLookOn(s)).toBe(false);
+  it('is on for ?look=neon only', () => {
+    expect(neonLookOn('?look=neon')).toBe(true);
+    for (const s of ['', '?look=tonal', '?look=', '?neon']) expect(neonLookOn(s)).toBe(false);
   });
 
   it('puts the brightest colour of a cell on the slate, and keeps its bevel darker', () => {

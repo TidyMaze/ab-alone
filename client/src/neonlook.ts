@@ -1,6 +1,6 @@
 // The neon look (#1424): direction A "Circuit Slab" of the sci-fi mockups (art/mockups/neon), dark slate cells in dark gaps, neon on
-// edges only. Colours, materials, light and sky: the same board, geometry, rules and camera. The default look (#1424): `?look=terrace` is the way back to the terrace, for that visit only;
-// it is never stored.
+// edges only. Colours, materials, light and sky: the same board, geometry, rules and camera. Off unless the address says `?look=neon`;
+// it is never stored, so a player who did not ask for it never sees it.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -41,11 +41,9 @@ export const setNeonWorldOn = (on: boolean): void => {
   worldOn = on;
 };
 
-/** The neon look is the default (#1424): no `look` in the address, or `?look=neon`. `?look=terrace` is the way back to the terrace
- * look, for that visit only. The board looks `pbr` and `tonal` keep the terrace scene, as before. */
+/** `?look=neon`, nothing else. */
 export function neonLookOn(search: string): boolean {
-  const look = new URLSearchParams(search).get('look');
-  return look === null || look === 'neon';
+  return new URLSearchParams(search).get('look') === 'neon';
 }
 
 const luma = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
