@@ -304,3 +304,21 @@ describe('the goal of the Open world on arrival (#1530)', () => {
     expect(controls.open).toBe(false);
   });
 });
+
+describe("the choice of the Echo's mirror before a tower (#1620)", () => {
+  it('after The Echo is beaten, a tower that takes the mirror asks first, and the choice starts the fight with it', async () => {
+    const game = await boot('?bot=off&openworld=7', { storage: { 'ab-alone.medals': JSON.stringify({ echo: 9 }) } });
+    await walkOnto(game, 0); // The Echo's own tower has the mirror already: no question
+    expect(byId('trait').hidden).toBe(true);
+    expect(data().boss).toBe('echo');
+    await settle();
+    await walkOnto(game, 1); // the second tower is The Hull's
+    expect(byId('trait').hidden).toBe(false);
+    expect(byId('trait-yes').textContent).toMatch(/^Bring the Echo's mirror \(cost: /);
+    expect(data().boss).not.toBe('hull');
+    byId('trait-yes').click();
+    expect(byId('trait').hidden).toBe(true);
+    expect(data().boss).toBe('hull');
+    expect(localStorage.getItem('ab-alone.medal-trait')).toBe('mirror');
+  });
+});

@@ -34,6 +34,8 @@ export interface TrainerRef {
 export interface BossRef {
   id: string;
   seed: number;
+  /** The player brought The Echo's mirror into this fight (#1620). */
+  mirror?: boolean;
 }
 
 export interface MoveAnswer {
@@ -111,16 +113,14 @@ export function engineFor<E extends { place_special(q: number, r: number, kind: 
   return engine;
 }
 
-/** The boss fight of a request: the boss `id` of `seed`, and in a run (`relics` given, 0 for none) the build of the army when the
- * boss takes it (#1494): the rogue-lite flag with the run's relics, then its special marbles `placed`. */
-export function encounterFor<E extends { takes_build(): boolean; place_special(q: number, r: number, kind: number): void; set_relics(mask: number): void }>(
-  make: { new (id: string, seed: number): E },
-  id: string,
-  seed: number,
-  placed: number[][] = [],
-  relics?: number,
-): E {
+/** The boss fight of a request: the boss `id` of `seed`, with the mirror of the player's trait when `mirror` (#1620), and in a run
+ * (`relics` given, 0 for none) the build of the army when the boss takes it (#1494): the rogue-lite flag with the run's relics, then
+ * its special marbles `placed`. */
+export function encounterFor<
+  E extends { takes_build(): boolean; place_special(q: number, r: number, kind: number): void; set_relics(mask: number): void; set_mirror(): void },
+>(make: { new (id: string, seed: number): E }, id: string, seed: number, placed: number[][] = [], relics?: number, mirror = false): E {
   const fight = new make(id, seed);
+  if (mirror) fight.set_mirror();
   if (relics === undefined || !fight.takes_build()) return fight;
   fight.set_relics(relics);
   for (const [q, r, kind] of placed) fight.place_special(q!, r!, kind!);
@@ -131,10 +131,10 @@ export function encounterFor<E extends { takes_build(): boolean; place_special(q
 export function answer(
   req: BotRequest,
   makeEngine: (army?: number, placed?: number[][], foes?: number | number[], trainer?: TrainerRef, relics?: number) => EngineLike,
-  makeEncounter: (id: string, seed: number, placed?: number[][], relics?: number) => EncounterLike,
+  makeEncounter: (id: string, seed: number, placed?: number[][], relics?: number, mirror?: boolean) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
-    const fight = makeEncounter(req.boss.id, req.boss.seed, req.placed, req.relics);
+    const fight = makeEncounter(req.boss.id, req.boss.seed, req.placed, req.relics, req.boss.mirror);
     if (req.difficultyPercent && fight.scale_node_budget) {
       fight.scale_node_budget(req.difficultyPercent);
     }

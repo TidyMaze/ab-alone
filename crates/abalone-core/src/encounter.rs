@@ -236,8 +236,13 @@ impl Encounter {
 
     /// The same fight, where each move gives the other side its mirror as a bonus move.
     pub fn echoing(mut self) -> Self {
-        self.echo = true;
+        self.set_echo();
         self
+    }
+
+    /// Turns the mirror rule on for this fight, as the player's trait (#1620), before its first move.
+    pub fn set_echo(&mut self) {
+        self.echo = true;
     }
 
     /// The same fight, whose hooks' losses count by colour as long as no marble flips.

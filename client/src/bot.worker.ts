@@ -8,7 +8,7 @@ self.onmessage = async (e: MessageEvent<BotRequest>) => {
   const { id } = e.data;
   try {
     const failure = await ready;
-    self.postMessage(failure ? { id, error: failure } : answer(e.data, (army, placed, foes, trainer, relics) => engineFor(Engine, army, placed, foes, trainer, relics), (boss, seed, placed, relics) => encounterFor(Encounter, boss, seed, placed, relics)));
+    self.postMessage(failure ? { id, error: failure } : answer(e.data, (army, placed, foes, trainer, relics) => engineFor(Engine, army, placed, foes, trainer, relics), (boss, seed, placed, relics, mirror) => encounterFor(Encounter, boss, seed, placed, relics, mirror)));
   } catch (err) {
     self.postMessage({ id, error: String(err) });
   }

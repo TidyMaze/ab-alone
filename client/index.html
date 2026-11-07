@@ -206,6 +206,16 @@
     <div id="run-map" role="region" aria-label="Rogue-lite map" hidden></div>
     <div id="bubble" hidden><span id="bubble-text" aria-hidden="true"></span><span id="bubble-line" role="status"></span></div>
     <div id="reader" role="region" aria-label="Terminal" aria-live="polite" hidden></div>
+    <!-- The choice before a tower (#1620): the Echo's mirror is brought into the fight or not, asked once The Echo is beaten. -->
+    <div id="trait" role="alertdialog" aria-modal="true" aria-labelledby="trait-text" tabindex="-1" hidden>
+      <div class="card">
+        <p id="trait-text"></p>
+        <div class="actions">
+          <button id="trait-no" type="button"></button>
+          <button id="trait-yes" type="button"></button>
+        </div>
+      </div>
+    </div>
     <!-- The first-launch guide (#1293): a page at a time, over the game, opened again from the settings menu. -->
     <div id="guide" role="dialog" aria-modal="true" aria-labelledby="guide-title" aria-describedby="guide-text" tabindex="-1" hidden>
       <div class="card">

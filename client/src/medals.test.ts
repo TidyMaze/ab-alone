@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestTurns, tallyAttempt, tallyWin, hasMedal, loadMedals, loadTallies, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, tallyLine } from './medals';
+import { bestTurns, tallyAttempt, tallyWin, hasMedal, loadMedals, loadTallies, loadTraitPick, medalLabel, medalLine, medalRoom, MIRROR_COST, playerTurns, recordMedal, saveTraitPick, tallyLine, traitOffer } from './medals';
 
 const KEY = 'ab-alone.medals';
 const TALLY = 'ab-alone.boss-tally';
@@ -156,5 +156,27 @@ describe('boss win and attempt counters (#1538)', () => {
   it('does not throw in private mode', () => {
     expect(() => tallyAttempt(null, 'echo')).not.toThrow();
     expect(() => tallyWin(null, 'echo')).not.toThrow();
+  });
+});
+
+describe('the mirror trait (#1620)', () => {
+  it('is offered only once The Echo is beaten, and only to a fight that takes the mirror', () => {
+    expect(traitOffer(memory(), true)).toBe(false);
+    expect(traitOffer(memory(JSON.stringify({ hull: 4 })), true)).toBe(false);
+    expect(traitOffer(memory(JSON.stringify({ echo: 9 })), false)).toBe(false);
+    expect(traitOffer(memory(JSON.stringify({ echo: 9 })), true)).toBe(true);
+  });
+
+  it('keeps the last pick with the medals, and reads anything else as no mirror', () => {
+    const store = memory();
+    expect(loadTraitPick(store)).toBe('none');
+    saveTraitPick(store, 'mirror');
+    expect(loadTraitPick(store)).toBe('mirror');
+    expect(loadTraitPick(memory('{}'))).toBe('none');
+    expect(loadTraitPick({ getItem: () => 'yes', setItem: () => {} } as unknown as Storage)).toBe('none');
+  });
+
+  it('states the cost of the mirror in words on its choice', () => {
+    expect(MIRROR_COST).toMatch(/^Bring the Echo's mirror \(cost: .+\)$/);
   });
 });

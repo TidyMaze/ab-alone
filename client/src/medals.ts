@@ -41,6 +41,22 @@ export function recordMedal(store: Store, boss: string, turns: number): MedalRes
   return best === undefined ? 'first' : 'record';
 }
 
+/** The player's last pick of the mirror trait (#1620): brought into the fight, or fought without. */
+export type TraitPick = 'mirror' | 'none';
+const TRAIT_KEY = 'ab-alone.medal-trait';
+
+/** The last pick of the mirror trait, `none` when unsaved or not `mirror`. */
+export const loadTraitPick = (store: Store): TraitPick => (read(store, TRAIT_KEY) === 'mirror' ? 'mirror' : 'none');
+
+/** Saves the pick of the mirror trait next to the medals. */
+export const saveTraitPick = (store: Store, pick: TraitPick): void => write(store, TRAIT_KEY, pick);
+
+/** Whether the choice of the mirror is asked before a fight: The Echo's medal is held (#1620) and the fight takes the mirror. */
+export const traitOffer = (store: Store, takesMirror: boolean): boolean => takesMirror && hasMedal(store, 'echo');
+
+/** The choice's first option, its cost in words (#1620): the mirror copies each of your moves for the foe at once. */
+export const MIRROR_COST = "Bring the Echo's mirror (cost: each of your moves gives the foe its copy at once, for free)";
+
 /** The fights of one boss on this device (#1538): the ones whose first move was played, and the ones won. */
 export interface Tally {
   wins: number;

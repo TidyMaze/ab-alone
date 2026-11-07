@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, boss_takes_mirror, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -34,6 +34,7 @@ import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFir
 import { openWorldLeads } from './menuorder';
 import { worldSaves } from './openworldsave';
 import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
+import { askMirror } from './traitchoice';
 import { lazyWorker } from './lazyworker';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
@@ -462,7 +463,7 @@ const closeGoal = (): void => {
   goalOpen = false;
   hud();
 };
-let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
+let fight: { id: string; seed: number; daily?: { day: string; attempt: number }; mirror?: boolean } | null = null; // mirror: the player's trait brought in (#1620)
 let hub: HubController | null = null;
 const PULSAR_DOCK = 1.2; // the near pylons are fitted 20 % further out on the terrace, so the dock does not cover them (#1374)
 const activeRadius =(): number => (fight?.id === 'ballast' ? 5 : 4);
@@ -490,7 +491,7 @@ const fightView = (): View => {
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
 // camera himself and a new window size fits it again. Once he orbits or zooms, his view stays until Reset view.
 let fitted: View | null = null;
-const makeGame = (): Engine | Encounter => (fight ? encounterFor(Encounter, fight.id, fight.seed, run?.state.placed, run ? relicMask(run.state) : undefined) : trainer ? Engine.trainer(trainer.wave, MARBLES - trainer.lost) : new Engine());
+const makeGame = (): Engine | Encounter => (fight ? encounterFor(Encounter, fight.id, fight.seed, run?.state.placed, run ? relicMask(run.state) : undefined, fight.mirror) : trainer ? Engine.trainer(trainer.wave, MARBLES - trainer.lost) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
 // The rogue-lite run (#798) while it is on, else null: its map and where it stands.
@@ -2756,7 +2757,7 @@ const gameStore = indexedDbStore();
 const saves = new LocalSaves(gameStore, navigator.storage);
 // Without ?bot=off the page resumes the game of either mode: a hot-seat game from the hub's table goes on with
 // no bot (#565).
-const loadLocal = () => saves.load(botWorker ? undefined : false, (boss) => (boss ? new Encounter(boss.id, boss.seed) : new Engine())); // the saved local game, with the bot or at the table it was played at
+const loadLocal = () => saves.load(botWorker ? undefined : false, (boss) => (boss ? encounterFor(Encounter, boss.id, boss.seed, undefined, undefined, boss.mirror) : new Engine())); // the saved local game, with the bot or at the table it was played at
 const resumed = await loadLocal();
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
@@ -4021,7 +4022,7 @@ const stalkerBoss = (): boolean => fight?.id === 'stalker' && engine instanceof 
 const fogged = stalkerBoss;
 /** Only the Stalker fight is saved among the boss fights (#1122), and not the daily: a reload could not tell it was one. */
 const stalkerSaved = (): boolean => stalkerBoss() && !fight!.daily;
-const savedGame = (): LocalGame => ({ bot: worker !== null, moves: history, ...(stalkerSaved() ? { boss: { id: 'stalker', seed: fight!.seed } } : {}) });
+const savedGame = (): LocalGame => ({ bot: worker !== null, moves: history, ...(stalkerSaved() ? { boss: { id: 'stalker', seed: fight!.seed, mirror: fight!.mirror } } : {}) });
 /** The HUD line of the Stalker boss: the sight, and the ejections before it narrows. */
 function sightNote(): string {
   const [sight, left] = (engine as Encounter).stalker() as unknown as number[];
@@ -5542,16 +5543,16 @@ newGameButton.disabled = false; // listener ready (#146)
 const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
-function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null): void {
+function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null, mirror = false): void {
   leaveMode();
   lairFrom = lair; // a fight picked in a menu, a door or the daily is no lair's (#1170)
   syncBoardLook();
   worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
-  fight = { id, seed, daily };
+  fight = { id, seed, daily, mirror };
   storyEvent({ on: 'start', id }); // The Ballast Mind's fight starts is stage 6 (#1584)
   goalOpen = false;
-  engine = resumeFrom?.engine ?? new Encounter(id, seed);
+  engine = resumeFrom?.engine ?? encounterFor(Encounter, id, seed, undefined, undefined, mirror); // the mirror of the trait starts with the fight (#1620)
   history.length = 0;
   history.push(...(resumeFrom?.moves ?? []));
   replaying = null;
@@ -5720,7 +5721,7 @@ wildFlee.addEventListener('click', () => wildFrom && returnFromWild());
 addEventListener('keydown', (e) => {
   if ((e.key === 'f' || e.key === 'F') && wildFrom && engine.status() === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement)) wildFlee.click(); // Flee by the keyboard
 });
-retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom))); // a lair's retry stays the lair's (#1170)
+retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom, fight!.mirror))); // a lair's retry stays the lair's (#1170), its trait too
 
 // The hub (#521, game-design.md section 3.5): Hub draws the map of the saved deck, in that deck's look, with the
 // player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
@@ -5753,6 +5754,7 @@ function enterHub(at: HubSpot): void {
 const hubCoach = document.getElementById('hub-coach')!;
 hubCoach.textContent = HUB_COACH;
 const hubConfirm = document.getElementById('hub-confirm')!;
+const traitChoice = { panel: document.getElementById('trait')!, text: document.getElementById('trait-text')!, yes: document.getElementById('trait-yes') as HTMLButtonElement, no: document.getElementById('trait-no') as HTMLButtonElement }; // the choice before a tower (#1620)
 const hubConfirmText = document.getElementById('hub-confirm-text')!;
 const hubConfirmYes = document.getElementById('hub-confirm-yes')!;
 const helpOn = hubHelpOn(location.search, navigator.webdriver);
@@ -6799,7 +6801,9 @@ const openWorld = new OpenWorldHandle(async () =>
     releaseScene: (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
     startLair: (seed, lair, phase) => {
       const ids = boss_ids();
-      startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair, phase }); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496)
+      const id = ids[lair % ids.length]!;
+      const fightSeed = crypto.getRandomValues(new Uint32Array(1))[0]!;
+      askMirror(traitChoice, store, boss_takes_mirror(id), (mirror) => startBoss(id, fightSeed, undefined, undefined, { seed, lair, phase }, mirror)); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496); the Echo's mirror is asked first (#1620)
     },
     onPlace: (seed, kind, index, biome, contract) => {
       // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
@@ -7359,7 +7363,7 @@ function watchBack(): void {
 async function backToTable(): Promise<void> {
   const saved = await loadLocal();
   if (!saved) return newGame();
-  if (saved.boss) return startBoss(saved.boss.id, saved.boss.seed, undefined, saved);
+  if (saved.boss) return startBoss(saved.boss.id, saved.boss.seed, undefined, saved, null, saved.boss.mirror);
   leaveHub();
   applyDeck(deckOf('local'));
   worker = saved.bot ? botWorker : null;
@@ -7468,7 +7472,7 @@ refresh();
 // Until the terrace is drawn the room would show (#1389): the canvas stays hidden on a plain dark page, and shows after a terrace frame.
 veilCanvas();
 document.body.appendChild(renderer.domElement);
-if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed); // a Stalker fight comes back under its fog (#1122)
+if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed, null, resumed.boss.mirror); // a Stalker fight comes back under its fog (#1122)
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
 let draws = 0;

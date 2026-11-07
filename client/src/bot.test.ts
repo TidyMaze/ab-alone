@@ -99,6 +99,44 @@ describe('answer', () => {
     expect(made).toEqual([['hull', 9, [[0, 4, 1]], 0b11], ['hull', 9, undefined, undefined]]);
   });
 
+  it('hands a boss fight the mirror trait the player brought into it, #1620', () => {
+    const made: unknown[][] = [];
+    const make = (id: string, seed: number, placed?: number[][], relics?: number, mirror?: boolean): FakeEncounter => (
+      made.push([id, seed, mirror]),
+      new FakeEncounter(id, seed)
+    );
+    answer({ id: 6, history: [], nodes: 5, boss: { id: 'hull', seed: 9, mirror: true } }, () => new FakeEngine(), make);
+    answer({ id: 7, history: [], nodes: 5, boss: { id: 'hull', seed: 9 } }, () => new FakeEngine(), make);
+    expect(made).toEqual([
+      ['hull', 9, true],
+      ['hull', 9, undefined],
+    ]);
+  });
+
+  it('sets the mirror of a boss fight before its relics, and only when asked, #1620', () => {
+    const log: string[] = [];
+    class Boss {
+      constructor(
+        readonly id: string,
+        readonly seed: number,
+      ) {}
+      takes_build(): boolean {
+        return true;
+      }
+      set_mirror(): void {
+        log.push(`${this.id} mirror`);
+      }
+      set_relics(mask: number): void {
+        log.push(`${this.id} relics ${mask}`);
+      }
+      place_special(): void {}
+    }
+    encounterFor(Boss, 'hull', 3, [], 5, true);
+    encounterFor(Boss, 'hull', 3, [], 5, false);
+    encounterFor(Boss, 'hull', 3);
+    expect(log).toEqual(['hull mirror', 'hull relics 5', 'hull relics 5']); // the mirror first, none without the flag, no relics in no run
+  });
+
   it('builds the boss fight of a request: plain, or with the build of a run when the boss takes it, #1494', () => {
     const log: string[] = [];
     class Boss {
@@ -109,6 +147,7 @@ describe('answer', () => {
       takes_build(): boolean {
         return this.id !== 'echo';
       }
+      set_mirror(): void {}
       set_relics(mask: number): void {
         log.push(`${this.id} relics ${mask}`);
       }

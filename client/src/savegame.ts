@@ -20,6 +20,8 @@ export interface LocalGame {
 export interface BossFight {
   id: string;
   seed: number;
+  /** The player brought The Echo's mirror into the fight (#1620). */
+  mirror?: boolean;
 }
 
 /** The stored form, also the export file of #219. */
