@@ -5364,6 +5364,7 @@ hookHost.__palette = () => palette;
 
 // Used by the browser checks to count the plies played, bot replies included, and to compare them.
 hookHost.__plies = () => history.length;
+hookHost.__botBusy = () => thinking || afterSlide.length > 0 || sliding(); // no move thinking or waiting for a slide: the bot is idle (#1624)
 hookHost.__sealed = () => sealedResult; // the ranked result both seats signed (#1287), read by the tests
 hookHost.__history = () => history;
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.

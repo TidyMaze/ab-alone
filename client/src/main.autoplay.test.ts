@@ -56,6 +56,18 @@ describe('main.ts, auto-play, #792', () => {
     expect(byId('hint').disabled).toBe(false); // the bot no longer thinks
   });
 
+  it('reports the bot busy while its move is searched, and idle once the move is dropped (#1624)', async () => {
+    const game = await boot('?nodes=50');
+    const busy = (): boolean => game.hook<boolean>('__botBusy');
+    expect(busy()).toBe(false);
+    timers();
+    auto().click();
+    expect(busy()).toBe(true);
+    auto().click(); // off while the move is searched: it is dropped
+    await move(game);
+    expect(busy()).toBe(false);
+  });
+
   it('starts again after a stop', async () => {
     const game = await boot('?nodes=50');
     timers();

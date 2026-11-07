@@ -17,7 +17,7 @@ test('the bot plays the player side of a bot game until Auto-play is turned off'
   await toggle(page).click();
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#hint')).toBeEnabled(); // the bot is done thinking: the board answers clicks again
-  await page.waitForTimeout(1000); // the bot's own reply, asked for before the click, lands after the last slide (<= 320 ms, ui.md 4.3); let it land
+  await expect.poll(() => page.evaluate(() => (window as any).__botBusy() as boolean)).toBe(false); // the bot's own reply, asked for before the click, lands after the last slide (ui.md 4.3)
   const stopped = await plies(page);
   await page.waitForTimeout(1500);
   expect(await plies(page)).toBe(stopped);
