@@ -250,6 +250,7 @@ import {
   hasParticles,
   readClearBoard,
   readFlatHud,
+  foldedByDefault,
   readHudFolded,
   readFps,
   readReducedMotion,
@@ -5130,7 +5131,7 @@ function foldHud(folded: boolean): void {
   hudFold.setAttribute('aria-expanded', String(!folded));
   hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
 }
-foldHud(readHudFolded(store));
+foldHud(readHudFolded(store, foldedByDefault(innerWidth, innerHeight))); // a portrait phone under 700 px starts folded (#1610)
 hudFold.addEventListener('click', () => {
   const folded = hudFold.getAttribute('aria-expanded') === 'true';
   writeHudFolded(store, folded);
