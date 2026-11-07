@@ -69,7 +69,7 @@ describe('the arrival squash', () => {
     expect(squashed.position.y).toBe(0.36);
     expect(squashed.matrix.elements[13]).toBeCloseTo(0.36 - 0.36 * (1 - height(squashed)), 9);
     game.frame(SQUASH_MS / 2);
-    expect(height(pushed())).toBeGreaterThan(1); // the rebound
+    expect(height(pushed())).toBeGreaterThan(1.005); // the rebound, the bound the pushfeel e2e used to check (#1625)
     game.frame(SQUASH_MS);
     expect(pushed().matrixAutoUpdate).toBe(true); // at rest: the marble is drawn as any other
   });
