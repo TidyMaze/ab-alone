@@ -215,6 +215,7 @@ import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, setting
 import { groupSettings } from './settingsgroups';
 import { icon } from './icons';
 import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
+import { GpuCost, gpuStatsOn, modeOfScene } from './gpucost';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
@@ -564,11 +565,20 @@ if (queryQuality === 'high' || queryQuality === 'low') {
 // No MSAA on a desktop (#857): with the clustered lights it cost 27 FPS against 108 at a ratio of 1. FXAA ends the
 // post-process pipeline instead (scene.ts). A touch screen keeps MSAA (#868): a phone draws 1.5 on a 2.6 to 3x screen,
 // which shows the steps, and its tiled GPU resolves MSAA in tile memory. Fixed when the renderer is made.
-const renderer = new THREE.WebGPURenderer({ antialias: matchMedia('(pointer: coarse)').matches, forceWebGL });
+// The GPU frame cost (#1581) is read from timestamp queries, only with ?gpustats (dev): off for a player, no query made.
+const gpuOn = gpuStatsOn(location.search);
+const renderer = new THREE.WebGPURenderer({ antialias: matchMedia('(pointer: coarse)').matches, forceWebGL, trackTimestamp: gpuOn });
 // The render cost (#851) is the last drawn frame's. three zeroes `info` before every animation frame, so a still frame,
 // which draws nothing, would read 0 draw calls: the counts are zeroed by hand before each real draw instead (#1245).
 renderer.info.autoReset = false;
 await renderer.init().catch(bootFailed);
+const gpu = new GpuCost(gpuOn && renderer.hasFeature('timestamp-query'));
+// One drawn frame's GPU time, read a frame later (three resolves the queries asynchronously) into the window of its mode.
+const gpuFrame = (mode: string): void => {
+  if (gpu.supported) void renderer.resolveTimestampsAsync('render').then((ms) => gpu.record(mode, ms));
+};
+const gpuText = (fps: string, mode: string): string => (gpuOn ? `${fps}\n${gpu.text(mode)}` : fps);
+Object.defineProperty(window, '__gpuCost', { configurable: true, get: () => gpu.snapshot() });
 // A machine with no GPU (#1483): the renderer says so, or the first frames do (endWindow). It takes the low tier unless the player
 // stored one, and the Open world lays the ground in view only. `?software=on` or `off` forces it, for the browser checks.
 const softwareParam = new URLSearchParams(location.search).get('software');
@@ -837,7 +847,7 @@ let theme: Theme = readTheme(store);
 let palette: Palette = readPalette(store); // the colorblind palette (#381), palettes.ts
 let difficulty: Difficulty = readDifficulty(store); // the AI and boss difficulty (#704), difficulty.ts
 // The FPS readout (#426): off by default. Off, the frame loop only checks the flag; on, it keeps the last frame stamps.
-let fpsOn = readFps(store);
+let fpsOn = readFps(store) || gpuOn; // the GPU readout (#1581) rides in the FPS box
 let fpsStamps: number[] = [];
 let lastFps = 0;
 function applyTheme(): void {
@@ -7534,11 +7544,12 @@ renderer.setAnimationLoop((now) => {
     unveil();
     hidePlate(); // a page that opened in the world has no bay to wait for (#1520)
     if (software && !navigator.webdriver) adaptResolution(now); // the Open world steps its resolution down on a software renderer only (#1483)
+    if (drew) gpuFrame(modeOfScene(music));
     if (fpsOn) {
       // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
       if (drew) stampDrawn(fpsStamps, now);
       lastFps = fpsAt(fpsStamps, now);
-      fpsBox.textContent = fpsLabel(lastFps);
+      fpsBox.textContent = gpuText(fpsLabel(lastFps), modeOfScene(music));
     }
     return;
   }
@@ -7549,7 +7560,7 @@ renderer.setAnimationLoop((now) => {
   if (fpsOn) {
     fpsStamps = keepWindow(fpsStamps, now);
     lastFps = fpsOf(fpsStamps);
-    fpsBox.textContent = `${lastFps} FPS`;
+    fpsBox.textContent = gpuText(`${lastFps} FPS`, modeOfScene(music));
   }
   driveAccents(roomAccents, accentOn(tier, software), now, reducedMotion());
   driveSkyGlow(sceneRenderer.scene, accentOn(tier, software));
@@ -7601,6 +7612,7 @@ renderer.setAnimationLoop((now) => {
   for (const sync of syncPedestals) sync();
   renderer.info.reset();
   sceneRenderer.render(pose, innerWidth, innerHeight);
+  gpuFrame(modeOfScene(music));
   drawnKick = pose;
   if (sceneRenderer.terraceOn) unveil();
   draws++;
