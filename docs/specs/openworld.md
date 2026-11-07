@@ -763,3 +763,41 @@ are of a quiet moment (load average 4 on 10 cores), Chromium on the GPU of an Ap
 - **Tests.** Client: the files fetched at the load, by a world page, a wild fight's reload, the wipe and the ship (`main.boardload.test.ts`), the lights and the marks freed
   (`openworldview.test.ts`, `scene.test.ts`, `main.board.test.ts`). E2E: the network log of `?openworld=7`, of a wild fight and of a page that does not open in the world
   (`openworld-assets.spec.ts`); the budget by hand (`world-budget.spec.ts`).
+
+## 18. The loop: town, dungeon, tower (#1515, Decision #1513)
+
+One loop through the world, each place doing one job. Same rules everywhere (#313): no HP, no levels, no stats, no currency. Only variety carries between runs and never power (Decision #934).
+
+- **Town (the loadout).** A town is where the hero prepares and recovers. Rolling onto a town opens its loadout panel (the Hub today, section 13; the panel is the first build slice).
+  1. **Loadout**: the trait slot of section 18.1, and the special marbles and tactics the player brings to the next run (roguelite.md sections 5 and 11).
+  2. **Troop restore**: the troop is set back to 15 plus its recruits (section 16, `RECRUIT_MAX` 5) at no cost, only in a town. A marble missing from the troop of the save comes back there.
+  3. **Posted contract**: one line naming the nearest tower or gate of the ring to beat (section 15): its kind, its boss or act, its ring (danger 1 to 5) and its distance in cells, e.g. "Contract: The Echo, ring 1, 187 cells, to the upper left."
+- **Dungeon (variety).** A gate's run pays variety only: the blueprints it banks (roguelite.md section 15), the cells that turn into special marbles, the relics and the tactics it unlocks. Never a stronger army (#934). The town's loadout lists what the last run banked, so a dungeon shows its change on the loadout screen.
+- **Tower (one trait).** A tower's medal (#791) gives one **trait**, unlocked for good: one rule taken from that boss's own mechanic (section 18.1). It is never a number. It opens the next ring's towers and gates as the ring to beat (section 15), and the next town's contract names them.
+- **Danger grows with distance.** The ring of a place is its danger: ring 1 (nearest, 160 to 306 cells) to ring 5 (319 to 447). Enemies, the boss tier and the dungeon tier follow the ring (section 15). A player who walks outward meets a higher number and a new trait option, never a flatter fight.
+
+### 18.1 The medal trait
+
+The trait is what the medal's tower teaches the player's side of the board. A town's loadout offers the traits unlocked, and the player brings **at most one per fight**, or none. Each trait has its cost stated on its loadout line, the boss's own cost, so every bring is a trade.
+
+**Options for the first medal trait (The Echo, ring 1):**
+
+| Option | What it is | Verdict |
+|---|---|---|
+| A. A flat bonus: one extra marble, or one extra push a turn | A number on every fight | Rejected: it is power (#934) and a stat (#313), and the player picks nothing |
+| B. The boss's rule always on for the player's side (the Echo's mirror on every fight) | A forced rule, no choice | Rejected: the player cannot refuse it, so the loadout has nothing to choose |
+| C. An optional trait per fight, with the boss's own cost on its line (the mirror copies your moves onto the foe's side, and the turn it costs is stated) | Bring it or leave it; one trait a fight | **Chosen**: each fight the player decides between the trait's reach and its cost, and the same boss gives a different plan on each fight |
+
+**Why C:** it changes the player's choice on every fight (bring the mirror or not, against this foe or that one), it adds no number and no power, and it is variety in the sense of #934.
+
+**Rules of the slot.** One trait slot, one trait a fight, chosen in the town's loadout before a tower, a gate or a wild fight starts; a fight started from the Modes menu or the Hub uses the same slot. A tower's medal always unlocks its own trait. Traits are unlocked only by medals, never bought. The first trait is The Echo's mirror (the first tower, section 15). The other 14 medals each unlock one trait, one per boss, in the build slices after the first.
+
+**Metrics** (measured on the build, not before):
+- Share of fights started with a trait in the slot: target 30 % to 60 % by the 5th tower. Under 10 %: the trait is not worth its cost. Over 80 %: it is a free bonus and its cost is too small.
+- Pick spread: no trait above 40 % of the brings of its ring.
+- Town visits before a tower or a gate: target 50 % or more of the walks into one, so the loadout is used.
+- Median time from the spawn to the first medal: target under 10 min (not measured yet).
+
+**Tests (when built):** Rust for the trait's rule (one trait a fight, the boss's cost applied). Client: the slot, the unlock by medal, the loadout line, the save of the slot. E2E: a fresh profile reaches the first town and reads its contract, each under 15 s.
+
+**Not now:** a trait bought, traded or crafted; a second trait slot; the 3D town (#1518); the story bosses' gates (section 13).
