@@ -33,6 +33,9 @@ export const NEON = {
 export const NEON_LIGHT = { sun: 0xe8f0ff, sunIntensity: 3.2, elevation: 24, azimuth: 50, sky: 0x9a6bff, skyMix: 0xe8eeff, skyAmount: 1, ground: 0x2a3347, hemisphere: 2.9, exposure: 1 } as const;
 
 /** The dishes are drawn this much smaller across: the gap between two cells (1 - the flat-to-flat of a 0.5 hexagon, 0.134) grows by 40 %, so the cyan line keeps its width and its dark floor at 390 px. */
+/** The grid line of the neon look (#1535), one constant for the arena's cell gaps and the Open world's ground: a band `width` world units wide (the gap of the arena's hexagon, `outer` - `inner`), lit at `glow` in `colour`. */
+export const NEON_LINE = { colour: NEON.cyan, glow: 1.4, inner: 0.53, outer: 0.56, width: 0.56 - 0.53 } as const;
+
 export const NEON_CELL_SCALE = (1 - (1 - Math.sqrt(3) / 2) * 1.4) / (Math.sqrt(3) / 2);
 
 /** Whether the Open world wears the look (set by `applyNeonWorld`, read by the world's view). */
@@ -202,7 +205,7 @@ export function neonMarbleRim<M extends THREE.Material>(side: 'black' | 'white',
 }
 
 /** The thin cyan hexagon of a cell, drawn in its gap: the brightest line of the board. One instance per cell. */
-export function neonEdgeGeometry(inner = 0.53, outer = 0.56, y = 0.07, turn = 0): THREE.BufferGeometry {
+export function neonEdgeGeometry(inner: number = NEON_LINE.inner, outer: number = NEON_LINE.outer, y = 0.07, turn = 0): THREE.BufferGeometry {
   const position: number[] = [];
   const at = (r: number, k: number): [number, number, number] => [Math.sin((k * Math.PI) / 3 + turn) * r, y, Math.cos((k * Math.PI) / 3 + turn) * r];
   for (let k = 0; k < 6; k++) position.push(...at(inner, k), ...at(outer, k), ...at(outer, k + 1), ...at(inner, k), ...at(outer, k + 1), ...at(inner, k + 1));
@@ -211,7 +214,7 @@ export function neonEdgeGeometry(inner = 0.53, outer = 0.56, y = 0.07, turn = 0)
   return g;
 }
 
-export const neonEdgeMaterial = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ name: 'neon_edge', color: new THREE.Color(NEON.cyan).multiplyScalar(1.4), fog: false, side: THREE.DoubleSide });
+export const neonEdgeMaterial = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({ name: 'neon_edge', color: new THREE.Color(NEON_LINE.colour).multiplyScalar(NEON_LINE.glow), fog: false, side: THREE.DoubleSide });
 
 /** The kit's pedestal under a marble, in slate with a thin cyan ring on its rim (60 % cyan): a copy, the file's own stays as it is. */
 export function neonPedestal(pedestal: THREE.Mesh): THREE.Mesh {
