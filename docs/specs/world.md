@@ -126,7 +126,9 @@ No cutscenes, no forced dialogue, no quest log.
 The one-page summary of sections 5 to 8, with the asset list, its size budget and how each asset
 is made in the repo, is [art.md](art.md).
 
-**Palette.** The neon look (#1424, #1550): cyan (`#19e6ff`, the player) and violet (`#9a6bff`, sky and crystals) on near-black slate (`#04050c`, cells `#5d6a82`); sodium `#d9822b` for hazard only; red `#ff6b5a` for danger only. Every hex and the rule are in [art.md](art.md) section 1, checked by `client/src/artpalette.test.ts`. Nothing saturated outside that list.
+**Palette.** Near-black base (#0b0d0f), rust (#7a3b1d), oxidized steel (#4a5258), sodium orange
+(#d9822b) for hazard and furnace, a single cold cyan (#7fd6e8) for the player's accents (the ring and the ghost marble, `main.ts` `pal.core`), not an inner light.
+Red is reserved for danger (breach, ejection warning). Nothing saturated outside these.
 
 **Materials.** Brushed and pitted steel, oil stains, welded patches, taped cables, condensation,
 dust. PBR textures, no emissive surfaces except lights, screens and marbles.

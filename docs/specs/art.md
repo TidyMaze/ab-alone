@@ -15,55 +15,42 @@ and no new look: each rule names its source (section numbers), and changes when 
 
 ## 1. Direction
 
-Status: v1 (#1550, 2026-11-07), the neon look of #1424 as the game ships it. The look's default is the owner's
-decision (#1424); until it flips, the neon look is on at `?look=neon`. Numbers are read from `client/src`.
-
-- **Brief.** A viewport onto a dark circuit slab lit by cold light: slate cells in near-black gaps, neon on the
-  edges, lines and lamps, the player's cyan as the one light that moves. Never a web app around a canvas; clarity of
-  play wins over mood (ui.md 1). The player is the last warm thing aboard, an opaque white marble; the crew hardened
-  into black shells and still plays by the rules (world.md 2).
+- **Brief.** A viewport onto a dim ship deck lit by one practical lamp, a cyan glow where the
+  player is, never a web app around a canvas; clarity of play wins over mood (ui.md 1). The
+  player is the last warm thing aboard, an opaque glass marble; the crew hardened into black
+  shells and still plays by the rules (world.md 2).
 - **Tone.** Cosmic dread, grief, bureaucracy. Never gore for its own sake (world.md 2).
-- **Palette (neon, #1550).** Every colour is one of these tokens. The hue check (`client/src/artpalette.test.ts`)
-  fails on any colour of `NEON` (`neonlook.ts`) or of the first `:root` of `ui.css` that is not listed here.
-  Sky `#04050c`, gap `#0a0e18`, gap floor `#020307`, slab `#171c2b`, rim `#0f1320`, rim light `#39466a`,
-  ground `#1d2433`, far ground `#131824`, cell `#5d6a82`, boulder `#2c2f36`, black marble `#14161a`,
-  white marble `#f2f0ea`, neon cyan `#19e6ff`, turn cyan `#5fd0e6`, pedestal ring `#7fd6e8`, violet `#9a6bff`,
-  crystal `#6a609f`. Chrome (`ui.css`): base `#0b0d0f`, panel `#161a1d`, edge `#4a5258`, text `#d8d4c8`,
-  muted `#9aa3a8`, accent `#7fd6e8`, hazard `#d9822b`, danger `#ff6b5a`. Light: sun `#e8f0ff`, sky
-  `#9a6bff`, sky mix `#e8eeff`, ground `#2a3347`.
-  The hues are cyan and violet on near-black. Sodium `#d9822b` is hazard only; red `#ff6b5a` is danger only.
-  Nothing saturated outside this list. Colorblind palettes (protan, deutan, tritan, high contrast) are chosen in the
-  settings menu (#381). Dark is the deck; light is only a fallback.
-- **Materials.** Slate and steel, flat tones painted on the geometry (`neonPaint`), a neon edge line on each cell.
-  Nothing emissive but the edges, the lamps, the screens and the marbles.
-- **Marbles** (world.md 5, 8). Player: an opaque white sphere (`#f2f0ea`), no core, one of the white skins of the
-  settings. Shell: black (`#14161a`), a faint heat pulse, no core. The pulse is a slow sodium glow, one every 6 s,
-  far fainter than a flash and still 3:1 on every deck at its brightest; off under safe mode, reduced motion and the
-  low tier (#509). Boss: the shell plus one accent, a rust crown for The Hull, candle wax for The Chaplain, a wire
-  wrap for The Ballast Mind (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape
-  cue. Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its
-  own way and each cell disc is turned by its own angle, seeded, so the set never lines up and a game always looks
-  the same.
-- **Light** (world.md 5). One cold sun low on the left (`#e8f0ff`, 3.2), a violet-tinted hemisphere (sky `#9a6bff`,
-  ground `#2a3347`, 2.9), ACES at 1.15. The player's cyan is the light that moves. Tube lights, a ring lamp and the
-  sky glow (`neonlight.ts`, `neonfx.ts`) are the only other sources. Fine stars on a black sky, no haze. Soft
-  contact shadows ground marbles onto the cells (#459), off under the low tier and automation. Every cell edge, marble
-  and target stays legible: cell edge 3:1, each marble 3:1 on the deck (#344), target arrows 3:1 on their outline with
-  an empty cell in the same shot under 3:1. The checks (owner 2026-11-05, #1508) are on the default look and skins:
-  cell edge 2.43 (min of 3 runs on 0df19363), default shell 3:1 on the deck, default glass 1.44 (desktop), 1.15 (phone)
-  and smoked 1.37, each the min of 3 runs on 0df19363. Those numbers predate the neon look: not yet re-measured
-  under it (open).
-- **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold slate and ore dust
-  (online, The Hull). Furnace: sodium glow, steam (The Choir). Chapel: candles, wood and wire (The Chaplain). Bridge:
-  cold white, too clean (The Ballast Mind). Fog thickens toward the rim, never over a cell. The Pulsar's fight is drawn
-  in space (#1146): the bay is hidden, a field of stars and a distant glow take the backdrop, the board and the lamps
-  stay (#1189).
-- **Open world** (#1177, #1173). Carried over from the board: the sky and fog fade to the neon black `#04050c`, wall
-  edges and the cap use sodium `#d9822b`, and the ground, rock, peak, water and biome grounds are pulled toward the
-  slate of the palette. The hero and its troop wear the white marble, the foes the black shell (#1176). The HUD plate
-  and chip use the shared `--panel`, `--edge`, `--text`, `--plate-accent`, `--target`, `--r-card` tokens (#1172).
-  The props and landmarks are flat-shaded vertex-coloured models; the low grass is tinted per biome (meadow, forest,
-  tundra, desert, badlands, archipelago). Open, not yet checked by the hue test: the biome grounds and the models.
+- **Palette** (world.md 5, 8, ui.md 2). Near-black `#0b0d0f` base, oxidized steel `#4a5258`, rust
+  `#7a3b1d`, sodium orange `#d9822b` for hazard and furnace, one cold cyan `#7fd6e8` for the
+  player's light, red `#ff6b5a` for danger only, bone-white `#d8d4c8` for tells (3:1 on the
+  surface). Nothing saturated outside it. Colorblind players choose from protan, deutan, tritan
+  and high-contrast palettes in the settings menu (#381). Dark is the deck; light is only a fallback.
+- **Materials** (world.md 5). Brushed, pitted steel, oil stains, welds, taped cables,
+  condensation, dust. Nothing emissive but lights, screens and marbles.
+- **Marbles** (world.md 5, 8). Player: an opaque sphere in one of ten white ambientCG materials (Marble by
+  default), with no core inside: the opaque skin hid the cyan one, and each was a draw call (#885). Shell: black, one of ten dark ambientCG
+  materials (Leather by default, the skins' choice in the settings), a faint heat pulse, no core. The pulse is
+  a slow sodium glow on the default Leather shell, one every 6 s, far fainter than a flash and still 3:1 on every deck at
+  its brightest; off under safe mode, reduced motion and the low tier (#509). Boss: the shell plus one
+  accent, a rust crown for The Hull, candle wax for The Chaplain, a wire wrap for The Ballast Mind
+  (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape cue.
+  Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
+  its own angle, seeded, so the set never lines up and a game always looks the same.
+- **Light** (world.md 5). Low-key: one hard source per deck, the rim's cold cyan on the player's turn, no light on the
+  marbles, slow and rare flicker. Localized spaceship architectural lights (emergency sodium strip above the airlock,
+  cold rim backlight on forward bay, warm console bounce on the avionics desk, and subtle cyan ground wash grounding the pedestal, #644).
+  Soft contact shadows ground marbles onto the deck cells and frame
+  (#459), disabled under low quality tier and automation to save software WebGL. Every cell and
+  marble stays legible: cell edge 3:1, each marble 3:1 on the deck (#344). The checks (owner 2026-11-05, #1508) are on the default look, default deck and default skins only: cell edge at 2.43 (min of 3 runs on 0df19363), default shell 3:1 on the deck, default glass at 1.44 (desktop), 1.15 (phone) and smoked 1.37, each the min of 3 runs on 0df19363; target arrows 3:1 on their outline, with an empty cell in the same shot under 3:1 (not lowered). The deck steel is lit to
+  a mid-tone so the black shell stands out, the frame's plate stays dark.
+- **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold,
+  steel and ore dust (online, The Hull). Furnace: orange glow, steam (The Choir). Chapel: candles,
+  wood and wire (The Chaplain). Bridge: cold white, too clean (The Ballast Mind). Fog thickens
+  toward the rim, never over a cell.
+  The Pulsar's fight is drawn in space (#1146): the bay is hidden, a field of stars and a distant glow take
+  the backdrop, the board and the lamps stay. It holds through a settings toggle, a deck change and a late bay
+  load (#1189); the ship's hub and any other game get the bay back.
+- **Open world** (#1177). Carried over from the ship: the palette (the fog and sky fade to the deck black `#0b0d0f`, wall edges and the cap use sodium `#d9822b`, the grass, sand, rock, peak, water and biome grounds are pulled toward steel, #1173); the marbles (the hero and its troop wear the player's white skin, the foes the shell skin, #1176); the HUD (plate and chip use the shared `--panel`, `--edge`, `--text`, `--plate-accent`, `--target`, `--r-card` tokens, so they follow the theme, #1172). Different: the props and landmarks are flat-shaded vertex-coloured models, no texture (`flatShading`), and the low grass is tinted per biome (meadow, forest, tundra, desert, badlands, archipelago), which the ship has not.
 - **Type** (ui.md 3). Chakra Petch 600, uppercase, for the turn and the result; IBM Plex Sans for
   the rest. Sizes in rem, nothing under 0.8125rem.
 - **HUD** (world.md 6). The board, its rim and its frame carry the game, menus are a terminal in
@@ -79,7 +66,7 @@ decision (#1424); until it flips, the neon look is on at `?look=neon`. Numbers a
   twin.
 - **Voice** (world.md 2, 4, 11). Tally says one short accounting line at the start and the end of a
   match ("Mess: one remaining.") and never explains itself. No voice acting.
-- **Never.** Any colour outside the palette bullet of section 1; a tell shown by a flash, a halo or colour alone (world.md 5, 8); red for a normal
+- **Never.** A tell shown by a flash, a halo or colour alone (world.md 5, 8); red for a normal
   state, an effect over a cell or a legal target (ui.md 1); a flat overlay as the only copy of
   game information (world.md 6); cutscenes or lore that blocks progress (world.md 4); anything
   taken from an existing work (world.md, header).
