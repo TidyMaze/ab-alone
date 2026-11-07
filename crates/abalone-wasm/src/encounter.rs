@@ -1635,6 +1635,16 @@ mod tests {
     }
 
     #[test]
+    fn node_budget_is_the_search_budget_at_a_percent_for_every_kind_of_fight() {
+        let f = fight();
+        assert_eq!(f.node_budget(100), 200);
+        assert_eq!(f.node_budget(50), 100);
+        assert_eq!(f.node_budget(0), 1, "a floor of 1");
+        assert_eq!(Encounter::new("choir", 0).unwrap().node_budget(200), 400);
+        assert_eq!(Encounter::new("swarm", 0).unwrap().node_budget(100), 1500);
+    }
+
+    #[test]
     fn scale_node_budget_scales_plain_and_choir_fights() {
         let mut f = fight();
         f.scale_node_budget(50);

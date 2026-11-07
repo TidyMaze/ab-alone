@@ -8,6 +8,7 @@ import {
   RATING_PER_DOUBLING,
   RUN_START_PERCENT,
   botLine,
+  bossLine,
   levelOfRating,
   progressBudget,
   ratingOfBudget,
@@ -44,6 +45,13 @@ describe('the bot rating (#1611)', () => {
     expect(BOT_NOTE).toMatch(/estimate/i);
     expect(BOT_NOTE).toMatch(/Ranked/);
     expect(BOT_NOTE).not.toMatch(/\bElo\b/);
+  });
+
+  test('a boss reads Boss, not Bot, from its own budget: the same rating and level, and an estimate of the search alone', () => {
+    expect(bossLine(200)).toBe('Boss ~1070 · Easy');
+    expect(bossLine(BOT_NODES)).toBe('Boss ~1500 · Normal');
+    expect(bossLine(60000)).toBe('Boss ~1600 · Hard');
+    expect(BOT_NOTE).toMatch(/boss/i);
   });
 
   test('the bot grows with the bosses beaten: sixteen steps, never down, from the bottom of Easy to the peak', () => {

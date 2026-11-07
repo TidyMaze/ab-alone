@@ -107,8 +107,8 @@ const presence = (): string => document.querySelector('#hud .presence')?.textCon
 
 /** Opens a co-op room against The Echo with Fight together and seats the partner once the page's session exists. The
  * partner reads the boss and the seed from the invite link, as a joiner does. */
-async function hosted() {
-  const game = await boot('?bot=off', calm);
+async function hosted(storage: Record<string, string> = {}) {
+  const game = await boot('?bot=off', { ...calm, storage });
   fightTogether(game, 'The Echo');
   await until(game, () => data().seat === 'player');
   const two = await partner(game.peer()!, game.room()!, 2, coopFromHash(location.hash)!);
@@ -152,6 +152,11 @@ describe('co-op: the encounter judges the room', () => {
     expect(byId('rematch').textContent).toBe('Rematch'); // and its button, Retry in co-op (#531)
     expect(byId('rematch').getAttribute('aria-label')).toBe('Rematch');
     expect(byId('rematch').dataset.label).toBe('Rematch');
+  });
+
+  it('a co-op boss shows its rating at its own budget, not scaled by the difficulty setting (#1611)', async () => {
+    await hosted({ 'ab-alone.difficulty': 'hard' });
+    expect(document.querySelector('#hud .bot-rating')?.textContent).toBe('Boss ~1070 · Easy'); // The Echo, 200 positions
   });
 
   it('opening one boss list closes the other, so both are never open at once (bug #615)', async () => {

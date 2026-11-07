@@ -43,12 +43,57 @@ describe('main.ts, the bot rating, #1611', () => {
     expect(badge()!.textContent).toBe('Bot ~940 · Easy'); // 200 positions at 25 %: 50
   });
 
-  it('a boss fight shows none for now: its own budget is fixed, and the badge is for the bot the game scales', async () => {
+  it('a boss fight reads Boss from its own search budget, with the same tooltip, the difficulty percent applied as the engine does', async () => {
     const game = await boot('?real=1');
     game.openModes();
     byId('boss-fight').click();
-    byId('boss-list').querySelector('button')!.click();
-    expect(badge()).toBeNull();
-    expect(document.body.dataset.botRating).toBeUndefined();
+    byId('boss-list').querySelector('button')!.click(); // The Echo: 200 positions
+    expect(badge()!.textContent).toBe('Boss ~1070 · Easy');
+    expect(badge()!.title).toMatch(/estimate/i);
+    expect(document.body.dataset.botRating).toBe('1070');
+    await boot('?real=1', { storage: { 'ab-alone.difficulty': 'hard' } });
+    byId('boss-fight').click();
+    byId('boss-list').querySelector('button')!.click(); // 400 positions
+    expect(badge()!.textContent).toBe('Boss ~1130 · Easy');
+  });
+
+  it('the Choir and the Swarm read their own budgets, and a boss fight needs no bot worker', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('boss-fight').click();
+    const pick = (name: string) => [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === name)!.click();
+    pick('The Swarm');
+    expect(badge()!.textContent).toBe('Boss ~1400 · Normal'); // 1500 positions
+    pick('The Choir');
+    expect(badge()!.textContent).toMatch(/^Boss ~\d+ · /);
+  });
+
+  it('the Daily shows its boss rating too', async () => {
+    const game = await boot('?real=1');
+    game.openModes();
+    byId('daily').click();
+    expect(badge()!.textContent).toMatch(/^Boss ~\d+ · /);
+  });
+
+  it('a boss of a run reads its act percent: the first act boss searches half', async () => {
+    const game = await boot('?real=1', { indexedDB: new IDBFactory() });
+    const { boss_ids, run_map } = await import('abalone-wasm');
+    const { actBoss, parseMap, pick, newRun } = await import('./roguelite');
+    const { LEGACY_UNLOCKED } = await import('./collector');
+    const nodes = parseMap(run_map(3));
+    const path: number[] = [0];
+    for (let n = nodes[0]!; n.kind !== 'boss'; ) {
+      const i = nodes.findIndex((m) => m.act === n.act && m.row === n.row + 1 && m.col === n.links[0]);
+      path.push(i);
+      n = nodes[i]!;
+    }
+    const state = pick({ ...newRun(3, 3, LEGACY_UNLOCKED), enemies: false, path: path.slice(0, -1) }, path[path.length - 1]!);
+    await game.hook('__run', state);
+    const boss = actBoss(nodes, state, boss_ids())!;
+    expect(boss.percent).toBe(50);
+    const { Encounter } = await import('abalone-wasm');
+    const nodesOf = new Encounter(boss.id, 0).node_budget(boss.percent);
+    const { ratingOfBudget } = await import('./botrating');
+    expect(badge()!.textContent).toMatch(new RegExp(`^Boss ~${ratingOfBudget(nodesOf)} · `));
   });
 });
