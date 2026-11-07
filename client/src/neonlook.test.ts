@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, neonMarbleRim } from './neonlook';
+import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, neonMarbleRim } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { contrastRatio } from './contrast';
@@ -51,14 +51,37 @@ describe('the neon look (#1424)', () => {
     expect(contrastRatio(rgb(NEON_RIM.colour), rgb(NEON.cell)), 'rim vs cell').toBeGreaterThanOrEqual(3);
   });
 
-  it('draws the rim on the black shell under the neon look only, never on the white side (#1552)', () => {
+  it('draws the rim on the black shell under the neon look only, the white side too, softer (#1552, #1553)', () => {
     // The rim is a node (the renderer is WebGPU, its WebGL 2 fallback too: onBeforeCompile is not run there, #1552).
     const shell = (): THREE.MeshPhysicalMaterial => new THREE.MeshPhysicalMaterial({ color: NEON.blackMarble });
+    const glass = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: NEON.whiteMarble, roughness: 0.6 });
     const emissive = (material: THREE.Material): unknown => (material as THREE.Material & { emissiveNode?: { isNode?: boolean } }).emissiveNode;
-    expect(emissive(neonMarbleRim('black', shell(), true))).toBeDefined();
     expect((emissive(neonMarbleRim('black', shell(), true)) as { isNode: boolean }).isNode).toBe(true);
+    expect((emissive(neonMarbleRim('white', glass(), true)) as { isNode: boolean }).isNode).toBe(true);
     expect(emissive(neonMarbleRim('black', shell(), false))).toBeUndefined();
-    expect(emissive(neonMarbleRim('white', shell(), true))).toBeUndefined();
+    expect(emissive(neonMarbleRim('white', glass(), false))).toBeUndefined();
+    expect((emissive(neonMarbleRim('black', new THREE.MeshBasicMaterial(), true)) as { isNode: boolean }).isNode).toBe(true); // no emissive of its own: black
+    expect(NEON_WHITE_RIM.strength).toBeLessThan(NEON_RIM.strength);
+    expect(NEON_WHITE_RIM.colour).not.toBe(NEON_RIM.colour);
+  });
+
+  it('gives both marble colours a sharper sun highlight under the neon look, none under the terrace (#1553)', () => {
+    // The terrace's own numbers (terraceShell 0.3 and 0.12, terraceGlass 0.6): the look only changes them when it is on.
+    const shell = (): THREE.MeshPhysicalMaterial => new THREE.MeshPhysicalMaterial({ color: NEON.blackMarble, roughness: 0.3, specularIntensity: 0.12 });
+    const glass = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: NEON.whiteMarble, roughness: 0.6 });
+    const on = neonMarbleRim('black', shell(), true) as THREE.MeshPhysicalMaterial;
+    expect(on.specularIntensity, 'black highlight').toBe(NEON_GLOSS.specularIntensity);
+    expect(on.specularIntensity, 'black highlight above the terrace').toBeGreaterThan(0.12);
+    expect(on.roughness, 'black roughness').toBe(NEON_GLOSS.roughness.black);
+    const white = neonMarbleRim('white', glass(), true) as THREE.MeshStandardMaterial;
+    expect(white.roughness, 'white highlight').toBe(NEON_GLOSS.roughness.white);
+    expect(white.roughness, 'white roughness below the terrace').toBeLessThan(0.6);
+    expect(white.roughness, 'white keeps its shading, not a mirror').toBeGreaterThanOrEqual(0.35);
+    const off = neonMarbleRim('black', shell(), false) as THREE.MeshPhysicalMaterial;
+    expect(off.specularIntensity, 'terrace black unchanged').toBe(0.12);
+    expect(off.roughness, 'terrace black roughness unchanged').toBe(0.3);
+    const offWhite = neonMarbleRim('white', glass(), false) as THREE.MeshStandardMaterial;
+    expect(offWhite.roughness, 'terrace white unchanged').toBe(0.6);
   });
 
   it('paints the ground, the lamps and the turn bar, and leaves an unknown node alone', () => {

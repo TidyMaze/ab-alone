@@ -196,12 +196,26 @@ export function neonMaterial(name: string): THREE.Material {
  * it stands over (0x0a0e18, 1.1:1 without it). `strength` scales the glow, `power` narrows it to the silhouette. */
 export const NEON_RIM = { colour: NEON.pedestalRing, strength: 2.2, power: 2 } as const;
 
-/** The black shell takes the rim under the neon look; the white side, and the look off, keep their material as it is. */
+/** The sun's highlight on a marble under the neon look (#1553): sharper than the terrace's (black 0.3 and specular 0.12, white 0.6). */
+export const NEON_GLOSS = { roughness: { black: 0.3, white: 0.4 }, specularIntensity: 0.5 } as const;
+/** The soft rim of the white marble (#1553): a pale cool edge, weaker than the black shell's cyan, so the white does not bloom. */
+export const NEON_WHITE_RIM = { colour: 0xbfd0e0, strength: 0.35, power: 3 } as const;
+
+/** The marbles under the neon look (#1552, #1553): a fresnel rim on both colours (cyan on the black shell, a soft pale edge on the
+ * white) and the sharper highlight of `NEON_GLOSS`. The look off, the material is left as it is. */
 export function neonMarbleRim<M extends THREE.Material>(side: 'black' | 'white', material: M, on: boolean): M {
-  if (side !== 'black' || !on) return material;
+  if (!on) return material;
+  const rim = side === 'black' ? NEON_RIM : NEON_WHITE_RIM;
   // A TSL emissive node, not onBeforeCompile: the renderer is WebGPU (its WebGL 2 fallback too), which never runs that hook.
+  // The node replaces the emissive, so the white's own emissive is its base.
+  const base = 'emissive' in material ? (material.emissive as THREE.Color) : new THREE.Color(0);
   const fresnel = float(1).sub(abs(dot(normalView, positionViewDirection)));
-  return Object.assign(material, { emissiveNode: color(NEON_RIM.colour).mul(fresnel.pow(float(NEON_RIM.power))).mul(float(NEON_RIM.strength)) });
+  const gloss: Record<string, number> = { roughness: NEON_GLOSS.roughness[side] };
+  if (material instanceof THREE.MeshPhysicalMaterial) gloss.specularIntensity = NEON_GLOSS.specularIntensity;
+  return Object.assign(material, {
+    ...gloss,
+    emissiveNode: color(rim.colour).mul(fresnel.pow(float(rim.power))).mul(float(rim.strength)).add(color(base)),
+  });
 }
 
 /** The thin cyan hexagon of a cell, drawn in its gap: the brightest line of the board. One instance per cell. */

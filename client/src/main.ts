@@ -4122,7 +4122,7 @@ if (!bootsInWorld) loadBoard();
 // The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
 // clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
 const terraceShell = neonMarbleRim('black', new THREE.MeshPhysicalMaterial({ color: neonLook ? NEON.blackMarble : 0x0a0c0f, roughness: 0.3, metalness: 0, specularIntensity: 0.12, envMapIntensity: 6 }), neonLook); // #1552: the cyan rim on the edge, under the look only // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
-const terraceGlass = new THREE.MeshStandardMaterial({ color: neonLook ? NEON.whiteMarble : 0xe8d9b4, emissive: neonLook ? 0x2a2a2a : 0x2a2012, roughness: 0.6, metalness: 0 }); // warm ivory: the emissive keeps the hemisphere's blue fill off it, no reflection: the whites take no blue fill
+const terraceGlass = neonMarbleRim('white', new THREE.MeshStandardMaterial({ color: neonLook ? NEON.whiteMarble : 0xe8d9b4, emissive: neonLook ? 0x2a2a2a : 0x2a2012, roughness: 0.6, metalness: 0 }), neonLook); // #1553: the soft rim and the sharper highlight, under the look only // warm ivory: the emissive keeps the hemisphere's blue fill off it, no reflection: the whites take no blue fill
 function terraceMarbles(on: boolean): void {
   marbleMaterials[1] = on && skin === DEFAULT_SKIN ? terraceShell : shellMaterial(skin);
   marbleMaterials[2] = on && glass === DEFAULT_GLASS_SKIN ? terraceGlass : glassMaterial(glass);
