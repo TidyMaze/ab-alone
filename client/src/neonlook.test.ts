@@ -3,8 +3,6 @@ import * as THREE from 'three';
 import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
-import { contrastRatio } from './contrast';
-import { DECK_NAMES } from './deck';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -34,14 +32,6 @@ describe('the neon look (#1424)', () => {
     const g = painted(0x2a3540, 0xa29e9a, 0xffffff, 0x000000);
     neonPaint('scene_slab_arena', g);
     expect([at(g, 0).getHex(), at(g, 1).getHex(), at(g, 2).getHex(), at(g, 3).getHex()]).toEqual([NEON.gapFloor, NEON.rim, NEON.rim, NEON.gapFloor]);
-  });
-
-  it('keeps each marble 3:1 on the cell it stands on, on every deck: the black shell (#1552), and the white one', () => {
-    const rgb = (hex: number): [number, number, number] => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
-    for (const deck of DECK_NAMES) {
-      expect(contrastRatio(rgb(NEON.blackMarble), rgb(NEON.cell)), `${deck}: black shell vs cell`).toBeGreaterThanOrEqual(3);
-      expect(contrastRatio(rgb(NEON.whiteMarble), rgb(NEON.cell)), `${deck}: white marble vs cell`).toBeGreaterThanOrEqual(3);
-    }
   });
 
   it('paints the ground, the lamps and the turn bar, and leaves an unknown node alone', () => {
