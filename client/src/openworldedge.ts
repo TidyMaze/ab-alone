@@ -3,7 +3,7 @@
 // extra mesh, no extra draw call): the band is computed from the prism's own position, before the instance moves it.
 import * as THREE from 'three/webgpu';
 import { NEON_LINE } from './neonlook';
-import { abs, attribute, color, float, fwidth, length, materialColor, max, mix, positionLocal, positionWorld, smoothstep, step, texture, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, color, float, fwidth, length, materialColor, max, mix, positionLocal, positionWorld, sin, smoothstep, step, texture, vec2, vec3 } from 'three/tsl';
 
 /** The radius of a ground prism (a hex of side 0.56 tiles the grid of spacing 1 with a thin gap) and its apothem. */
 export const HEX_RADIUS = 0.56;
@@ -12,6 +12,18 @@ export const HEX_APOTHEM = HEX_RADIUS * Math.cos(Math.PI / 6);
 export const EDGE_WIDTH = 0.07;
 /** How much the band changes the cell's colour: a share of it taken away on land, added on water. */
 export const EDGE_GAIN = { land: -0.22, water: 0.5 };
+
+/** The surface detail of the land (#1555): a striation of two waves over the top of each cell, a share of its colour lighter or darker,
+ * in world space so the bands run across the cells. Procedural: no texture, no draw call, and the hue of the cell is kept. */
+export const SURFACE_DETAIL = { amplitude: 0.12, frequency: 2.1, warp: 1.3, warpFrequency: 0.37 } as const;
+/** The direction of the striation (a unit vector in x, z). */
+const STRIPE = [0.6, 0.8] as const;
+
+/** The plain form of the striation's factor at the point `(x, z)`: the colour of a land top times it, within `1 +- amplitude`. */
+export const surfaceDetail = (x: number, z: number): number => {
+  const { amplitude, frequency, warp, warpFrequency } = SURFACE_DETAIL;
+  return 1 + amplitude * Math.sin((x * STRIPE[0] + z * STRIPE[1]) * frequency + Math.sin(z * warpFrequency) * warp);
+};
 
 /** The edges of a `CylinderGeometry` prism of six sides have their normals at 30, 90 and 150 degrees from +z. */
 const NORMALS = [0, 1, 2].map((k) => [Math.sin(Math.PI / 6 + (k * Math.PI) / 3), Math.cos(Math.PI / 6 + (k * Math.PI) / 3)] as const);
@@ -52,7 +64,7 @@ export const NEON_GRID = { width: NEON_LINE.width, glow: NEON_LINE.glow, colour:
 
 /** A ground material: white until an instance colours it (the colour comes per cell), with the edge band of `gain` on the top face and
  * the `emissiveNode` given in place of the plain emissive colour. */
-export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node; positionNode?: THREE.Node; widen?: THREE.UniformNode<'float', number>; neon?: NeonGrid }): THREE.MeshStandardNodeMaterial {
+export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node; positionNode?: THREE.Node; widen?: THREE.UniformNode<'float', number>; neon?: NeonGrid; detail?: boolean }): THREE.MeshStandardNodeMaterial {
   const material = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, emissive: look.emissive, roughness: look.roughness });
   const position = attribute('position', 'vec3');
   const flat = vec2(position.x, position.z);
@@ -62,7 +74,14 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
   const pixel = fwidth(distance).max(1e-6); // the world length of a pixel across the edge: a wide zoom thins the band under it
   const fade = smoothstep(FADE_FROM_PX, FADE_TO_PX, float(EDGE_WIDTH).div(pixel));
   const top = step(0.5, attribute('normal', 'vec3').y); // the sides of the column keep their colour
-  material.colorNode = materialColor.mul(float(1).add(band.mul(top).mul(fade).mul(look.gain)));
+  const shaded = materialColor.mul(float(1).add(band.mul(top).mul(fade).mul(look.gain)));
+  if (look.detail) {
+    // the striation on the tops of the land only (`top`), the sides keep their colour (#1555): procedural, so it works on WebGPU and WebGL2 alike
+    const flatWorld = vec2(positionWorld.x, positionWorld.z);
+    const { amplitude, frequency, warp, warpFrequency } = SURFACE_DETAIL;
+    const wave = sin(flatWorld.dot(vec2(STRIPE[0], STRIPE[1])).mul(frequency).add(sin(flatWorld.y.mul(warpFrequency)).mul(warp)));
+    material.colorNode = shaded.mul(float(1).add(wave.mul(amplitude).mul(top)));
+  } else material.colorNode = shaded;
   if (look.emissiveNode) material.emissiveNode = look.emissiveNode; // the water's foam and ripples (#1101)
   if (look.neon) {
     const { hero, traces } = look.neon;

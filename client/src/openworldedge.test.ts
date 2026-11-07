@@ -2,7 +2,7 @@ import { float, uniform } from 'three/tsl';
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { NEON_LINE, neonEdgeGeometry, neonEdgeMaterial } from './neonlook';
-import { NEON_GRID, EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial, GAP_FILL, gapFill } from './openworldedge';
+import { NEON_GRID, EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial, GAP_FILL, gapFill, SURFACE_DETAIL, surfaceDetail } from './openworldedge';
 
 describe('the hex edge of an Open world ground (#1138)', () => {
   it('is 0 on an edge of the prism, the apothem at the centre, and the same on the six edges of the hex', () => {
@@ -85,6 +85,21 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     // the floor of light keeps the darkest ground off the sky's colour (#04050c) in the screenshot, and stays a hint of colour (#1424)
     expect(Math.max(...NEON_GRID.floor)).toBeLessThan(0.01);
     expect(NEON_GRID.floor[2]).toBeGreaterThan(0.002);
+  });
+
+  it('adds a striation to the top of the land, a share of its colour lighter or darker and never a new hue (#1555)', () => {
+    const samples: number[] = [];
+    for (let x = -20; x <= 20; x += 0.37) for (let z = -20; z <= 20; z += 0.41) samples.push(surfaceDetail(x, z));
+    const { amplitude } = SURFACE_DETAIL;
+    expect(amplitude).toBeGreaterThan(0);
+    expect(amplitude).toBeLessThan(0.15); // a surface, not a pattern: the cells keep their own colour
+    expect(Math.min(...samples)).toBeGreaterThanOrEqual(1 - amplitude - 1e-9);
+    expect(Math.max(...samples)).toBeLessThanOrEqual(1 + amplitude + 1e-9);
+    expect(new Set(samples.map((v) => v.toFixed(3))).size).toBeGreaterThan(50); // it varies across the ground
+    expect(surfaceDetail(3, -2)).toBe(surfaceDetail(3, -2)); // a fixed function of the place: the same every frame
+    const look = { emissive: 0, roughness: 0.9, gain: EDGE_GAIN.land };
+    expect(edgeMaterial({ ...look, detail: true }).colorNode).not.toBeNull();
+    expect(edgeMaterial(look).colorNode).not.toBeNull();
   });
 
   it('reads its line weight, glow and colour from the arena\'s grid line, one shared constant (#1535)', () => {
