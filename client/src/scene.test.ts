@@ -300,6 +300,13 @@ describe('SceneRenderer (#632)', () => {
     expect(rimColour()).toBe(glowHex(DECK_KEY.mess.key));
   });
 
+  it('a rogue-lite flag before any deck, or off the neon look, changes no rim (#1554)', () => {
+    const flat = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
+    expect(() => flat.setRunFight(true)).not.toThrow(); // no neon look: nothing to recolour
+    const bare = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    expect(() => bare.setRunFight(true)).not.toThrow(); // no deck applied yet: nothing to recolour
+  });
+
   it('draws frame geometry and caches unchanged shapes', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
