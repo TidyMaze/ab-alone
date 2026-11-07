@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { audible, listenerOf, MAX_STATIONS, STATION_KINDS, STATION_PAN, STATION_RANGE, STATION_TONES, stationGain, type Source } from './stations';
+import { axialTo3D } from './board';
+import { DECK_NAMES } from './deck';
+import { roomsOf } from './hub';
+import { audible, hubStations, listenerOf, MAX_STATIONS, STATION_KINDS, STATION_PAN, STATION_RANGE, STATION_TONES, stationGain, type Source } from './stations';
 import { SMALL_SPEAKER_HZ } from './scenes';
 
 // Positional audio (world.md section 7, Spatial; #1577): which stations the player hears and where, pure arithmetic.
@@ -89,6 +92,20 @@ describe('STATION_TONES, one quiet loop per kind', () => {
       const tones = STATION_TONES[kind];
       expect(tones.some((t) => t.freq > SMALL_SPEAKER_HZ)).toBe(true);
       expect(tones.reduce((sum, t) => sum + t.gain, 0)).toBeLessThanOrEqual(0.06);
+    }
+  });
+});
+
+describe('hubStations, the stations of a deck of the Hub', () => {
+  it('has a terminal for each terminal room and machinery for each lift, on the cell of the room, and nothing else', () => {
+    for (const deck of DECK_NAMES) {
+      const rooms = roomsOf(deck).filter(({ door }) => door.kind === 'terminal' || door.kind === 'lift');
+      const stations = hubStations(deck);
+      expect(stations).toHaveLength(rooms.length);
+      for (const room of rooms) {
+        const { x, z } = axialTo3D(room.cell[0], room.cell[1]);
+        expect(stations).toContainEqual({ id: `${deck}:${room.cell}`, kind: room.door.kind === 'terminal' ? 'terminal' : 'machinery', x, z });
+      }
     }
   });
 });
