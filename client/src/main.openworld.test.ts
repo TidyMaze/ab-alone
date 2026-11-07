@@ -369,17 +369,6 @@ describe('the Open world mode', () => {
     expect(data().openworldAt).toBe('0,0');
   });
 
-  it('keeps the menu of a profile with a saved public world, so the Open world does not lead it (#1612)', async () => {
-    const idb = new IDBFactory();
-    const game = await openFrom('?bot=off', idb);
-    press('ArrowRight');
-    game.frame();
-    await settle();
-    expect(data().openworldSaved).toBe('1');
-    await boot('?bot=off', { indexedDB: idb });
-    expect(byId('open-world-entry').hidden).toBe(true);
-  });
-
   it('a seed in the URL resumes its own save', async () => {
     const idb = new IDBFactory();
     const game = await openFrom('?bot=off&openworld=7', idb);

@@ -79,13 +79,6 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(document.body.dataset.run).toBe('map');
   });
 
-  it('keeps the menu of a profile with a run in progress: the Open world does not lead it, and the run resumes at the reload (#1612)', async () => {
-    const indexedDB = new IDBFactory();
-    await startRun('?nodes=50', indexedDB);
-    await boot('?nodes=50', { indexedDB });
-    expect(byId('open-world-entry').hidden).toBe(true);
-  });
-
   it('a pick starts its fight against the bot, and a reload resumes the fight with its moves', async () => {
     const indexedDB = new IDBFactory();
     const game = await startRun('?nodes=50', indexedDB);

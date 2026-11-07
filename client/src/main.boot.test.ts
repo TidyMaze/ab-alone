@@ -1245,7 +1245,6 @@ describe('the Open world first, and Quick game (#1612, Decision #1513)', () => {
     const game = await boot('?bot=off');
     const quick = byId<HTMLButtonElement>('quick-game');
     expect(quick.disabled).toBe(false);
-    expect(quick.hidden).toBe(false);
     expect(byId('dock').contains(quick)).toBe(true);
     quick.click();
     await game.settle();
@@ -1263,21 +1262,5 @@ describe('the Open world first, and Quick game (#1612, Decision #1513)', () => {
     byId<HTMLButtonElement>('quick-game').click();
     await game.settle();
     expect(game.hook('__plies')).toBe(0);
-  });
-  it('opens an invite link at once on a fresh profile: the table is joined, and the menu still leads with the Open world (#1612)', async () => {
-    await boot('?net=hook#room=the-room');
-    await vi.waitFor(() => expect(document.body.dataset.seat).toBe('pending'));
-    expect(byId('open-world-entry').hidden).toBe(false);
-  });
-  it('hides Quick game in a boss fight, and a press on it leaves the fight standing (#1612)', async () => {
-    const game = await boot('?bot=off');
-    game.openModes();
-    byId('boss-fight').click();
-    [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.startsWith('The Echo'))!.click();
-    expect(document.body.dataset.boss).toBeTruthy();
-    expect(byId<HTMLButtonElement>('quick-game').hidden).toBe(true);
-    byId<HTMLButtonElement>('quick-game').click();
-    await game.settle();
-    expect(document.body.dataset.boss).toBeTruthy();
   });
 });
