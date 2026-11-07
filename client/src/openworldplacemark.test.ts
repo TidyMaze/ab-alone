@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, World } from './openworld';
 import { ICON } from './openworldlairicon';
-import { GROUND, OpenWorldView, topOf } from './openworldview';
+import { GROUND, OpenWorldView, PLACE_LOOK, topOf } from './openworldview';
 
 // Grass everywhere in the square -12..12 of chunks, at level 2, and level 5 on (3, 0).
 function grass(cx: number, cy: number): Uint8Array {
@@ -55,5 +55,48 @@ describe('the marker of a town and a dungeon gate (#1593)', () => {
     expect(mesh(view, 'gate-pad').count).toBe(0);
     view.show(far);
     expect(mesh(view, 'gate-pad').count).toBe(1);
+  });
+});
+
+// The silhouette of a town and a gate from far away (#1518): a tall green spire on each town, a wide orange arch on each gate.
+describe('the silhouette of a town and a gate from far away (#1518)', () => {
+  const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
+  const size = (view: OpenWorldView, name: string): THREE.Vector3 => {
+    const geometry = mesh(view, name).geometry;
+    geometry.computeBoundingBox();
+    return geometry.boundingBox!.getSize(new THREE.Vector3());
+  };
+
+  it('stands a spire on each town and an arch on each gate, on the same cell and top as its pad', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.show([0, 0]);
+    view.setPlaces([
+      { kind: 'town', cell: [3, 0] },
+      { kind: 'dungeon', cell: [-2, 1] },
+    ]);
+    expect(mesh(view, 'town-spire').count).toBe(1);
+    expect(mesh(view, 'gate-arch').count).toBe(1);
+    const pad = new THREE.Matrix4();
+    const spire = new THREE.Matrix4();
+    const arch = new THREE.Matrix4();
+    mesh(view, 'town-pad').getMatrixAt(0, pad);
+    mesh(view, 'town-spire').getMatrixAt(0, spire);
+    expect(spire.elements).toEqual(pad.elements);
+    mesh(view, 'gate-pad').getMatrixAt(0, pad);
+    mesh(view, 'gate-arch').getMatrixAt(0, arch);
+    expect(arch.elements).toEqual(pad.elements);
+  });
+
+  it('the spire is tall and narrow, the arch wide and low, and both glow in the colour of their kind', () => {
+    const view = new OpenWorldView(new World(grass));
+    const spire = size(view, 'town-spire');
+    const arch = size(view, 'gate-arch');
+    expect(spire.y).toBeGreaterThanOrEqual(2);
+    expect(spire.y).toBeGreaterThan(spire.x * 3);
+    expect(arch.x).toBeGreaterThan(arch.y * 1.5);
+    expect((mesh(view, 'town-spire').material as THREE.MeshStandardMaterial).emissive.getStyle()).toBe(new THREE.Color(PLACE_LOOK.spire.colour).getStyle());
+    expect((mesh(view, 'gate-arch').material as THREE.MeshStandardMaterial).emissive.getStyle()).toBe(new THREE.Color(PLACE_LOOK.arch.colour).getStyle());
+    expect(PLACE_LOOK.spire.colour).toBe('#19e6ff'); // the art spec's neon cyan (docs/specs/art.md section 1)
+    expect(PLACE_LOOK.arch.colour).toBe('#d9822b'); // the art spec's sodium hazard (docs/specs/art.md section 1)
   });
 });

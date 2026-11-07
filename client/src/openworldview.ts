@@ -324,6 +324,11 @@ export const MARBLE = 0.3;
 export const LAIR_LOOK = { open: 0xffb020, beaten: 0x4caf6a, height: 5 };
 /** A teleporter (#1412): a flat glowing hex pad on its cell and a ring floating `ring` over it, in a violet none of the terrain nor the marbles has. */
 export const TELEPORTER_LOOK = { colour: 0xb36bff, ring: 1.1, emissive: 0.5, nightGlow: 0.9 };
+/** The silhouette of a town (#1518): a tall spire on its pad, seen from far away; a dungeon gate: a wide arch on its pad. */
+export const PLACE_LOOK = {
+  spire: { height: 3.6, radius: 0.32, colour: '#19e6ff' },
+  arch: { radius: 0.6, tube: 0.09, colour: '#d9822b' },
+};
 /** A lore log (#1589): a tall amber stake that glows while unread, a short dull grey one once found (the shape changes, not only the colour). */
 export const LOG_LOOK = { open: 0xffd166, found: 0x8d9792, height: { open: 1, found: 0.45 }, emissive: 0.45, nightGlow: 0.8 };
 /** The most logs a world holds, abalone-core `LOGS`. */
@@ -548,6 +553,9 @@ export class OpenWorldView {
   private placeList: readonly { kind: 'town' | 'dungeon'; cell: Axial }[] = [];
   private readonly townPads: THREE.InstancedMesh;
   private readonly gatePads: THREE.InstancedMesh;
+  /** The silhouettes of the places (#1518): a spire over each town's pad, an arch over each gate's, so they read from far away. */
+  private readonly townSpires: THREE.InstancedMesh;
+  private readonly gateArches: THREE.InstancedMesh;
   /** The lore logs of the world (#1589), the numbers of the ones found, and their stakes, laid for the ones in the loaded chunks. */
   private logCells: readonly Axial[] = [];
   private logsFound: readonly number[] = [];
@@ -676,6 +684,10 @@ export class OpenWorldView {
     this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, pad, glow());
     this.townPads = this.instances('town-pad', PLACE_CAPACITY, pad, glow(new THREE.Color(ICON.town).getHex()));
     this.gatePads = this.instances('gate-pad', PLACE_CAPACITY, pad, glow(new THREE.Color(ICON.dungeon).getHex()));
+    const spire = new THREE.ConeGeometry(PLACE_LOOK.spire.radius, PLACE_LOOK.spire.height, 6).translate(0, PLACE_LOOK.spire.height / 2 + 0.08, 0);
+    this.townSpires = this.instances('town-spire', PLACE_CAPACITY, spire, glow(new THREE.Color(PLACE_LOOK.spire.colour).getHex()));
+    const arch = new THREE.TorusGeometry(PLACE_LOOK.arch.radius, PLACE_LOOK.arch.tube, 6, 16, Math.PI).translate(0, PLACE_LOOK.arch.tube + 0.08, 0);
+    this.gateArches = this.instances('gate-arch', PLACE_CAPACITY, arch, glow(new THREE.Color(PLACE_LOOK.arch.colour).getHex()));
     this.rings = this.instances('teleporter-ring', TELEPORTER_CAPACITY, new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0), glow());
     const stake = (found: boolean): THREE.BufferGeometry => {
       const height = found ? LOG_LOOK.height.found : LOG_LOOK.height.open;
@@ -1334,7 +1346,7 @@ export class OpenWorldView {
     this.hemisphere.intensity = look.hemiIntensity;
     for (const material of this.waterTint) (material as THREE.MeshStandardMaterial).color.setHex(look.water);
     this.shine.value = look.glow;
-    for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
+    for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads, this.townSpires, this.gateArches]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
     (this.stakes.material as THREE.MeshStandardMaterial).emissiveIntensity = LOG_LOOK.emissive + LOG_LOOK.nightGlow * look.glow;
   }
 
@@ -1644,11 +1656,14 @@ export class OpenWorldView {
       const p = axialTo3D(q, r);
       dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
       dummy.updateMatrix();
-      (kind === 'town' ? this.townPads : this.gatePads).setMatrixAt(counts[kind]++, dummy.matrix);
+      const [pad, mark] = kind === 'town' ? [this.townPads, this.townSpires] : [this.gatePads, this.gateArches];
+      const n = counts[kind]++;
+      pad.setMatrixAt(n, dummy.matrix);
+      mark.setMatrixAt(n, dummy.matrix);
     }
-    this.townPads.count = counts.town;
-    this.gatePads.count = counts.dungeon;
-    this.townPads.instanceMatrix.needsUpdate = this.gatePads.instanceMatrix.needsUpdate = true;
+    for (const mesh of [this.townPads, this.townSpires, this.gatePads, this.gateArches]) mesh.instanceMatrix.needsUpdate = true;
+    this.townPads.count = this.townSpires.count = counts.town;
+    this.gatePads.count = this.gateArches.count = counts.dungeon;
   }
 
   /** The lore logs of the world (#1589) and the numbers (places in `cells`) of the ones found: the ones in the loaded chunks are drawn, and
