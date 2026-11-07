@@ -37,6 +37,7 @@ test('the Collector: a drop on the reward screen, the room after the act boss, a
   // A new run reads what was banked: the act 1 boss beaten unlocked the Anchor and the Shield (14 to bank less 2), the Lucky coin is one less.
   await page.reload();
   await page.waitForFunction(() => typeof (window as any).__run === 'function');
+  await expect(page.locator('#roguelite')).toBeEnabled(); // a disabled button ignores click(): wait for the game to enable it
   await page.evaluate(() => (document.getElementById('roguelite') as HTMLButtonElement).click());
   await openMore(page);
   await expect(panel).toContainText('Blueprints to bank: 11');

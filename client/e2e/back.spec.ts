@@ -51,7 +51,7 @@ test('Back from the Hub returns to the table, and a Back on the table leaves the
   await page.goBack();
   await expect(page.locator('#hud')).toContainText('Black to move');
   await page.goBack(); // the page started here: the browser's own Back
-  expect(page.url()).not.toContain('bot=off');
+  await expect.poll(() => page.url()).not.toContain('bot=off'); // the URL changes after goBack resolves: wait for it, as the next test does
 });
 
 test('a mode left by its own button leaves no entry to press twice, #1564', async ({ page }) => {
