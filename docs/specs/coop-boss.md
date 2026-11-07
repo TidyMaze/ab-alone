@@ -64,7 +64,7 @@ Peers on different engine versions would compute different boss replies, so they
 
 ## 4. Invite link
 
-The creator picks the boss with Fight together in the mode menu (ui.md section 4, #530), and the page draws a random
+The creator picks the boss with Boss with a partner in the mode menu (ui.md section 4, #530), and the page draws a random
 unsigned 32-bit seed when it opens the room. The link carries them next to the room id, in this order:
 
 ```

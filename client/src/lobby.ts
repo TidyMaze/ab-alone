@@ -23,7 +23,7 @@ export function lobbyWaitMs(search: string, webdriver: boolean): number {
   return webdriver && Number.isInteger(ms) && ms >= 50 ? ms : BOT_OFFER_MS;
 }
 
-/** The bot game of a lobby: the same boss and seed as a boss room (Fight together, Boss duel), null for a table (Play online, Ranked). */
+/** The bot game of a lobby: the same boss and seed as a boss room (Boss with a partner, Boss vs a player), null for a table (Play online, Ranked). */
 export function botGameOf(fight: { id: string; seed: number } | null): { id: string; seed: number } | null {
   return fight && { id: fight.id, seed: fight.seed };
 }

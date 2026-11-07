@@ -242,7 +242,7 @@ doors, the Open world's lairs and the MCP do not go through the list and stay op
   turn "White to move" as in solo. The status line reads "Waiting for a partner...", "Joining the fight...", "Your
   partner is here.", "Your partner is disconnected." or "Room is full, watching". Strings kept verbatim for the e2e
   tests. It is greyed offline, like Play online. The boss block shows the room's attempt, one muted line under the
-  phase notches as in a daily fight: "Fight together · attempt 2" (#531). The Rematch button reads "Retry" and its
+  phase notches as in a daily fight: "Boss with a partner · attempt 2" (#531). The Rematch button reads "Retry" and its
   line names the partner: "You asked for a retry. Waiting for your partner..." and "Your partner asks for a retry."
   When both asked, the same fight restarts (coop-boss.md section 5).
 - **Rematch.** When an online game is over, each seated player sees a Rematch button under
@@ -774,8 +774,8 @@ A lobby nobody joins never leaves the creator with nothing to do, and no mode hi
 server, and it would hide every mode from the first player). The wait, the texts and the choices sit in `lobby.ts`, tested.
 
 - **The boss entries say who plays.** `Solo boss fight` (id `boss-fight`), `Boss with a partner` (id `fight-together`, a co-op room) and
-  `Boss vs a player` (id `boss-duel`, the creator is the hero and the joiner plays the boss). Only the labels changed; the ids, the
-  HUD lines ("Fight together · attempt 2", "Boss duel") and the invite links did not.
+  `Boss vs a player` (id `boss-duel`, the creator is the hero and the joiner plays the boss). The labels changed (#1529), then the HUD lines (#1630: "Boss with a partner · attempt 2", "Boss vs a player"); the ids and the
+  invite links did not.
 - **The offer.** After 20 s with no peer in the room, the Lobby sheet shows one button, `Play the bot while you wait` (`#lobby-bot`),
   for all four lobbies: Play online, Ranked, Boss with a partner and Boss vs a player. The invite link stays in the sheet above it.
   A peer in the room, before or after the 20 s, means no offer.

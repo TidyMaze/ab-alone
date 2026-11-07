@@ -27,7 +27,7 @@ export function retryText(we: boolean, they: boolean): string {
 }
 
 /** The boss plate line of the room's attempt, one counter for every seat (#531). */
-export const attemptLine = (attempt: number): string => `Fight together · attempt ${attempt}`;
+export const attemptLine = (attempt: number): string => `Boss with a partner · attempt ${attempt}`;
 
 /** The HUD turn line of a boss duel (#1316): White plays the boss, Black the hero. `side` is our seat, `ours` whether it is our ply. */
 export function duelTurn(side: number, ours: boolean): string {
@@ -36,4 +36,4 @@ export function duelTurn(side: number, ours: boolean): string {
 }
 
 /** The boss plate line of a boss duel, which has no attempt counter (#1316). */
-export const DUEL_LINE = 'Boss duel';
+export const DUEL_LINE = 'Boss vs a player';
