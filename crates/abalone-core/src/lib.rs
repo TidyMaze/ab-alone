@@ -1,3 +1,4 @@
+pub mod armyfight;
 pub mod board;
 pub mod encounter;
 pub mod game;

@@ -29,6 +29,9 @@ pub struct Weights {
     pub egg: i32,
     /// Per charge (The Unstable Core's) on the side's marbles minus the foe's.
     pub charges: i32,
+    /// Per own marble lined up behind a foe marble on the rim, pushing it toward the edge: the foe's
+    /// are the side's danger.
+    pub pressure: i32,
 }
 
 /// Hand-tuned weights of the plain search.
@@ -40,6 +43,7 @@ pub const DEFAULT_WEIGHTS: Weights = Weights {
     threat: 0,
     egg: 0,
     charges: 0,
+    pressure: 0,
 };
 
 /// What a search found.
@@ -141,6 +145,12 @@ fn threatened(board: &Board) -> [i32; 2] {
     out
 }
 
+/// Own marbles lined up behind a marble of the other colour on the rim, along a line that ends off the board, for Black
+/// and for White: up to 2 per foe marble and edge direction. The push that ejects needs 2 behind 1 (or 3 behind 2).
+fn pressures(_board: &Board) -> [i32; 2] {
+    [0, 0]
+}
+
 /// Charges on the marbles of Black and of White (`Board::unstable`, The Unstable Core's).
 fn charges_of(board: &Board) -> [i32; 2] {
     let mut out = [0, 0];
@@ -166,6 +176,12 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
         let at = threatened(board);
         at[index(other(player))] - at[index(player)]
     };
+    let pressed = if w.pressure == 0 {
+        0
+    } else {
+        let at = pressures(board);
+        at[index(player)] - at[index(other(player))]
+    };
     let charged = if w.charges == 0 {
         0
     } else {
@@ -189,6 +205,7 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
         + w.threat * threat
         + w.egg * eggs
         + w.charges * charged
+        + w.pressure * pressed
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
@@ -838,6 +855,7 @@ mod tests {
             threat: 0,
             egg: 7,
             charges: 0,
+            pressure: 0,
         };
         assert_eq!(evaluate(&board, Player::White, [0, 0], &only_eggs), 14);
         assert_eq!(evaluate(&board, Player::Black, [0, 0], &only_eggs), -14);
@@ -864,6 +882,7 @@ mod tests {
             threat: 0,
             egg: 0,
             charges: 5,
+            pressure: 0,
         };
         // White holds 3 charges, Black 1; a charge on an empty cell counts for nobody.
         assert_eq!(evaluate(&board, Player::White, [0, 0], &only), 10);
@@ -911,6 +930,7 @@ mod tests {
             threat: 10,
             egg: 0,
             charges: 0,
+            pressure: 0,
         };
         let board = game.board();
         assert_eq!(evaluate(board, Player::White, [0, 0], &only_threat), 10);
@@ -920,6 +940,40 @@ mod tests {
             ..only_threat
         };
         assert_eq!(evaluate(board, Player::White, [0, 0], &off), 0);
+    }
+
+    #[test]
+    fn marbles_lined_up_behind_a_foe_on_the_rim_are_a_pressure_for_their_side() {
+        // Two Black marbles in line behind a White one on the top rim: the push toward the edge that ejects it. The third
+        // does not count, and a White marble off the rim has none.
+        let game = game_from(
+            &[(0, -3), (0, -2), (0, -1), (-2, 2)],
+            &[(0, -4), (2, 1)],
+            Player::Black,
+            [0, 0],
+        );
+        let only = Weights {
+            marbles: 0,
+            ejected: 0,
+            centre: 0,
+            cohesion: 0,
+            threat: 0,
+            egg: 0,
+            charges: 0,
+            pressure: 7,
+        };
+        let board = game.board();
+        assert_eq!(pressures(board), [2, 0]);
+        assert_eq!(evaluate(board, Player::Black, [0, 0], &only), 14);
+        assert_eq!(evaluate(board, Player::White, [0, 0], &only), -14);
+        let off = Weights {
+            pressure: 0,
+            ..only
+        };
+        assert_eq!(evaluate(board, Player::Black, [0, 0], &off), 0);
+        // A White pair behind a Black marble is Black's danger.
+        let danger = game_from(&[(0, 4)], &[(0, 3), (0, 2)], Player::Black, [0, 0]);
+        assert_eq!(pressures(danger.board()), [0, 2]);
     }
 
     fn game_from(black: &[P], white: &[P], to_move: Player, ejected: [u8; 2]) -> Game {
