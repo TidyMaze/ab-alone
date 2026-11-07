@@ -233,7 +233,7 @@ export class OpenWorldMode {
     if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
     this.fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
     this.fighting = false;
-    this.calmUntil = performance.now() + FLEE_GRACE_MS; // the marble next to the hero when the world opens does not fight for 5 s (#1511)
+    this.calmUntil = Infinity; // the marble next to the hero when the world opens does not fight for 5 s from its first draw (#1511, frame)
     this.ticked = this.wander();
     this.fight.setClock(seed, this.ticked); // the marbles stand where the clock has them from the first draw (#1511)
     this.pushes = 0;
@@ -844,6 +844,7 @@ export class OpenWorldMode {
     if (!this.dirty && !sparks && !loops) return false;
     this.dirty = false;
     render(this.view!.scene, this.view!.camera);
+    if (this.calmUntil === Infinity) this.calmUntil = now + FLEE_GRACE_MS; // the calm starts on the first draw, so a slow page (software GL) gets its 5 s (#1511)
     this.view!.drain(); // what this frame replaced is no longer in use by it (#1017)
     return true;
   }

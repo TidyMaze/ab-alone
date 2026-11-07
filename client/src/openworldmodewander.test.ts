@@ -204,11 +204,29 @@ describe('a marble that touches the hero starts a wild fight (#1511)', () => {
     m.onWild = onWild;
     m.enter(found.seed, 800, 600);
     m.hero!.at = next;
+    m.frame(vi.fn(), 1000); // the first draw of the world starts the calm (#1511)
     m.frame(vi.fn(), 1000 + FLEE_GRACE_MS - 1);
     expect(onWild).not.toHaveBeenCalled();
     m.frame(vi.fn(), 1000 + FLEE_GRACE_MS);
     expect(onWild).toHaveBeenCalledWith(found.seed, found.home);
     m.frame(vi.fn(), 1000 + FLEE_GRACE_MS + 20);
+    expect(onWild).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the 5 s calm on the first draw, not on the open: a world that has not drawn in 5 s keeps its marble calm (#1511, under software GL)', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const m = made();
+    const onWild = vi.fn();
+    m.onWild = onWild;
+    m.enter(found.seed, 800, 600);
+    m.hero!.at = next;
+    const render = vi.fn();
+    m.frame(render, 1000 + 10 * FLEE_GRACE_MS); // a slow first frame: 50 s after the open, the world draws now
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(onWild).not.toHaveBeenCalled();
+    m.frame(vi.fn(), 1000 + 10 * FLEE_GRACE_MS + FLEE_GRACE_MS - 1);
+    expect(onWild).not.toHaveBeenCalled();
+    m.frame(vi.fn(), 1000 + 10 * FLEE_GRACE_MS + FLEE_GRACE_MS);
     expect(onWild).toHaveBeenCalledTimes(1);
   });
 
