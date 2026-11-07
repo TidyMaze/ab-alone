@@ -405,7 +405,11 @@ export class SceneRenderer {
     this.particlePositionAttr.needsUpdate = true;
   }
 
+  /** The deck last applied: the neon sky set later (`setNeon`) takes its key. */
+  private deck: Deck | null = null;
+
   applyDeck(next: Deck): void {
+    this.deck = next;
     const light = DECKS[next];
     this.renderer.toneMappingExposure = light.exposure;
     if (this.neon) {
@@ -537,7 +541,8 @@ export class SceneRenderer {
   /** The neon look (#1424, `?look=neon`): black sky with fine stars, a cold sun, ACES, in place of the terrace's own light. Asked once, after `setTerrace`. */
   setNeon(): void {
     lightNeon(this.sun, this.hemisphere);
-    this.scene.background = new THREE.Color(NEON.sky);
+    // the sky of the deck already on (applyDeck can run before the terrace, at the boot): its key, not the plain sky (#1551)
+    this.scene.background = this.deck ? neonSkyOf(this.deck) : new THREE.Color(NEON.sky);
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = NEON_LIGHT.exposure;
     if (!this.terrace.getObjectByName('starfield')) this.terrace.add(neonStars());

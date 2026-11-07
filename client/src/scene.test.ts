@@ -666,6 +666,14 @@ describe('SceneRenderer (#632)', () => {
     expect(slab.color.toArray().join()).not.toBe(cargo); // the terrace leaves the slab alone
   });
 
+  it('keeps the key of the deck the page opened on when the neon look turns the terrace on (#1551)', () => {
+    const boot = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    boot.applyDeck('mess'); // the page's first deck, set before the terrace is on
+    boot.setTerrace(true);
+    boot.setNeon();
+    expect((boot.scene.background as THREE.Color).getHex()).toBe(neonSkyOf('mess').getHex());
+  });
+
   it('keeps a backdrop texture of the room under the neon look, the sky takes the key only without one (#1551)', () => {
     const backdrop = new THREE.Texture();
     const room = new SceneRenderer({ renderer: createMockRenderer(), neon: true, backdrop, devicePixelRatio: 1, webdriver: false });
