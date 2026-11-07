@@ -96,4 +96,12 @@ describe('the sky', () => {
     expect(night.glow).toBe(1);
     expect(day.glow).toBe(0);
   });
+
+  it('reads its looks from the table it is given, the neon look has its own (#1536)', () => {
+    const looks = { day: { ...WORLD_LOOKS.night }, dusk: WORLD_LOOKS.dusk, night: WORLD_LOOKS.night };
+    const sky = new Sky(looks);
+    expect(sky.look).toEqual(looks.day);
+    sky.set(6 * MIN, true);
+    expect(sky.look).toEqual(looks.dusk);
+  });
 });

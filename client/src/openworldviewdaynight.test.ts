@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { CHUNK, World } from './openworld';
 import { BLEND_MS, WORLD_LOOKS } from './daynight';
-import { setNeonWorldOn } from './neonlook';
+import { NEON, NEON_WORLD_LOOKS, setNeonWorldOn } from './neonlook';
 import { OpenWorldView } from './openworldview';
 import { stripedMaterial, stripeFadeNode } from './openworldstripe';
 import { sunPosition } from './tablezero';
@@ -103,12 +103,48 @@ describe('the sky of the Open world view', () => {
     expect(view.shine.value).toBe(0);
   });
 
-  it('leaves the neon look alone: its black sky and cold sun stay whatever the time', () => {
+});
+
+describe('the sky of the Open world under the neon look (#1536)', () => {
+  it('starts on the neon day: the black sky and fog, the cold sun, the violet-white hemisphere', () => {
     setNeonWorldOn(true);
     const view = made();
-    const before = (view.scene.background as THREE.Color).getHex();
-    expect(view.setTime(9 * MIN, true)).toBe(false);
-    expect((view.scene.background as THREE.Color).getHex()).toBe(before);
+    const { sun, hemisphere } = lights(view);
+    const day = NEON_WORLD_LOOKS.day;
+    expect((view.scene.background as THREE.Color).getHex()).toBe(NEON.sky);
+    expect(view.scene.fog!.color.getHex()).toBe(NEON.sky);
+    expect([sun.color.getHex(), sun.intensity]).toEqual([day.sun, day.sunIntensity]);
+    expect([hemisphere.color.getHex(), hemisphere.groundColor.getHex(), hemisphere.intensity]).toEqual([day.hemiSky, day.hemiGround, day.hemiIntensity]);
+  });
+
+  it('turns to dusk and to night with the clock: the sky, the sun, the ambient, the glow, and draws again once', () => {
+    setNeonWorldOn(true);
+    const view = made();
+    const { sun, hemisphere } = lights(view);
+    expect(view.setTime(6 * MIN, true)).toBe(true);
+    const dusk = NEON_WORLD_LOOKS.dusk;
+    expect((view.scene.background as THREE.Color).getHex()).toBe(dusk.sky);
+    expect(view.scene.fog!.color.getHex()).toBe(dusk.sky);
+    expect([sun.color.getHex(), sun.intensity]).toEqual([dusk.sun, dusk.sunIntensity]);
+    expect(hemisphere.color.getHex()).toBe(dusk.hemiSky);
+    expect(view.shine.value).toBe(dusk.glow);
+    expect(view.setTime(9 * MIN, true)).toBe(true);
+    const night = NEON_WORLD_LOOKS.night;
+    expect((view.scene.background as THREE.Color).getHex()).toBe(night.sky);
+    expect([sun.color.getHex(), sun.intensity]).toEqual([night.sun, night.sunIntensity]);
+    expect([hemisphere.color.getHex(), hemisphere.groundColor.getHex(), hemisphere.intensity]).toEqual([night.hemiSky, night.hemiGround, night.hemiIntensity]);
+    expect(view.shine.value).toBe(1);
+    expect(view.setTime(9.5 * MIN, true)).toBe(false); // the same look: nothing to draw
+  });
+
+  it('puts the neon sun where the night says, and keeps it there as the hero moves', () => {
+    setNeonWorldOn(true);
+    const view = made();
+    const { sun } = lights(view);
+    view.setTime(9 * MIN, true);
+    view.show([2, 1]);
+    const night = NEON_WORLD_LOOKS.night;
+    expect(sun.position.clone().sub(view.focusPoint).toArray().map((v) => +v.toFixed(3))).toEqual(sunPosition(30, night.elevation, night.azimuth).map((v) => +v.toFixed(3)));
   });
 });
 

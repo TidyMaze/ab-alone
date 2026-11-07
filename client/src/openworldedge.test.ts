@@ -72,7 +72,7 @@ describe('the hex edge of an Open world ground (#1138)', () => {
 
   it('draws the neon grid and traces in the shader, with no extra node when the look is off (#1424)', () => {
     const look = { emissive: 0, roughness: 0.2, gain: -0.7 };
-    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1) };
+    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1), shine: uniform(0) };
     const plain = edgeMaterial(look);
     const lit = edgeMaterial({ ...look, neon });
     expect(plain.emissiveNode).toBeNull();

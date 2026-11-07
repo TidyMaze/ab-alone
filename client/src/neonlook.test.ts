@@ -4,7 +4,7 @@ import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowM
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
-import { DECK_KEY, NEON_GLOW, neonDeckLook, neonSkyOf } from './neonlook';
+import { DECK_KEY, NEON_GLOW, NEON_WORLD_LOOKS, neonDeckLook, neonSkyOf } from './neonlook';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -291,5 +291,24 @@ describe('the tells of the neon look (#1424)', () => {
     expect(nextToSight(1, 0, seen)).toBe(1); // a cell touching the sight is on its edge
     expect(nextToSight(2, 0, seen)).toBe(0); // one deeper in the fog is not
     expect(NEON_TELL.fogRings).toBe(0);
+  });
+});
+
+describe('the Open world under the neon look: day, dusk and night (#1536)', () => {
+  it('its day is the look the neon look ships: the black sky, the cold sun, the violet-white hemisphere, no glow', () => {
+    const day = NEON_WORLD_LOOKS.day;
+    expect([day.sky, day.sun, day.sunIntensity, day.elevation, day.azimuth]).toEqual([NEON.sky, NEON_LIGHT.sun, NEON_LIGHT.sunIntensity, NEON_LIGHT.elevation, NEON_LIGHT.azimuth]);
+    expect([day.hemiSky, day.hemiGround, day.hemiIntensity, day.glow]).toEqual([NEON_LIGHT.skyMix, NEON_LIGHT.ground, NEON_LIGHT.hemisphere, 0]);
+  });
+
+  it('dusk takes the violet sky and violet light, and night the pedestal ring moon, in readable light', () => {
+    const { day, dusk, night } = NEON_WORLD_LOOKS;
+    expect(dusk.sky).not.toBe(day.sky);
+    expect(dusk.sun).toBe(NEON_LIGHT.sun);
+    expect(night.sky).toBe(NEON.sky);
+    expect(night.sun).toBe(NEON.pedestalRing);
+    expect(night.sunIntensity).toBeLessThan(day.sunIntensity);
+    expect(night.hemiIntensity).toBeGreaterThanOrEqual(1);
+    expect([dusk.glow, night.glow]).toEqual([0.4, 1]);
   });
 });

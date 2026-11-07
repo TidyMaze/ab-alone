@@ -58,9 +58,11 @@ export const gapFill = (zoom: number): number => {
 export interface NeonGrid {
   hero: THREE.UniformNode<'vec2', THREE.Vector2>;
   traces: THREE.Texture;
+  /** The Open world's time of night, 0 by day to 1 at night (`shine`, #1496): the grid line glows more by night (#1536). */
+  shine: THREE.UniformNode<'float', number>;
 }
 /** The look's numbers: the cyan line is the arena's grid line (`NEON_LINE`, #1535), the violet traces 25 %; both quieter far from the hero (full within `NEAR`, a third past `FAR`), and the far ground darker, and a `floor` of light (linear RGB) under the darkest rock and water so no ground reads as the sky colour #04050c at the screen edge. */
-export const NEON_GRID = { width: NEON_LINE.width, glow: NEON_LINE.glow, colour: NEON_LINE.colour, trace: 0.2, quiet: 0.2, near: 6, far: 18, farDim: 0.55, traceScale: 1 / 40, floor: [0.0008, 0.0015, 0.003] } as const;
+export const NEON_GRID = { width: NEON_LINE.width, glow: NEON_LINE.glow, colour: NEON_LINE.colour, trace: 0.2, quiet: 0.2, near: 6, far: 18, farDim: 0.55, traceScale: 1 / 40, nightGlow: 0.5, floor: [0.0008, 0.0015, 0.003] } as const;
 
 /** A ground material: white until an instance colours it (the colour comes per cell), with the edge band of `gain` on the top face and
  * the `emissiveNode` given in place of the plain emissive colour. */
@@ -84,7 +86,7 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
   } else material.colorNode = shaded;
   if (look.emissiveNode) material.emissiveNode = look.emissiveNode; // the water's foam and ripples (#1101)
   if (look.neon) {
-    const { hero, traces } = look.neon;
+    const { hero, traces, shine } = look.neon;
     const flatWorld = vec2(positionWorld.x, positionWorld.z);
     const near = float(1).sub(smoothstep(NEON_GRID.near, NEON_GRID.far, length(flatWorld.sub(hero)))); // 1 round the hero, 0 far out
     const quiet = mix(float(NEON_GRID.quiet), float(1), near);
@@ -92,7 +94,7 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
     const lineWidth = float(NEON_GRID.width);
     const lineFade = smoothstep(FADE_FROM_PX, FADE_TO_PX, lineWidth.div(pixel)); // the arena's line, thinned under a pixel as the band is
     const line = float(1).sub(smoothstep(0, lineWidth, distance)).mul(lineFade).mul(top); // the grid line in the gap, never on a cell top
-    const glow = color(NEON_GRID.colour).mul(line).mul(NEON_GRID.glow).mul(quiet);
+    const glow = color(NEON_GRID.colour).mul(line).mul(float(NEON_GRID.glow).mul(float(1).add(shine.mul(NEON_GRID.nightGlow)))).mul(quiet);
     const circuit = color(0x9a6bff).mul(texture(traces, flatWorld.mul(NEON_GRID.traceScale)).r).mul(NEON_GRID.trace).mul(top).mul(quiet);
     material.emissiveNode = ((look.emissiveNode ?? vec3(0)) as ReturnType<typeof vec3>).add(glow).add(circuit).add(color(new THREE.Color(...NEON_GRID.floor)));
   }

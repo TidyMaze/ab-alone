@@ -72,9 +72,16 @@ export function mixHex(a: number, b: number, k: number): number {
  * where the phase changes. One object that `set` writes into: a frame allocates nothing.
  */
 export class Sky {
-  readonly look: WorldLook = { ...WORLD_LOOKS.day };
+  readonly look: WorldLook;
+  /** The three looks this sky moves through: the terrace's (`WORLD_LOOKS`) or the neon look's (`NEON_WORLD_LOOKS`, #1536). */
+  private readonly looks: Readonly<Record<Phase, WorldLook>>;
   /** Which look is written: the phase of the round and the blend step. `set` writes when it changes. */
   private stamp = 0;
+
+  constructor(looks: Readonly<Record<Phase, WorldLook>> = WORLD_LOOKS) {
+    this.looks = looks;
+    this.look = { ...looks.day };
+  }
 
   /** Moves the look to time `ms`; whether it changed. */
   set(ms: number, blend: boolean): boolean {
@@ -86,7 +93,7 @@ export class Sky {
     const stamp = index * (STEPS + 1) + step;
     if (stamp === this.stamp) return false;
     this.stamp = stamp;
-    const [from, to, k] = [WORLD_LOOKS[ROUND[index]!], WORLD_LOOKS[ROUND[(index + 1) % ROUND.length]!], step / STEPS];
+    const [from, to, k] = [this.looks[ROUND[index]!], this.looks[ROUND[(index + 1) % ROUND.length]!], step / STEPS];
     const { look } = this;
     look.sky = mixHex(from.sky, to.sky, k);
     look.sun = mixHex(from.sun, to.sun, k);

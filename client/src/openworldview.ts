@@ -19,7 +19,7 @@ import { contactOf, heldClock } from './openworldhit';
 import { SUN, SUN_SHADOW, aimSunShadow, sunDirection } from './tablezero';
 import { Sky, WORLD_LOOKS } from './daynight';
 import { ICON } from './openworldlairicon';
-import { NEON, lightNeon, neonSunPosition, neonStars, neonWorldOn } from './neonlook';
+import { NEON, NEON_WORLD_LOOKS, lightNeon, neonStars, neonWorldOn } from './neonlook';
 import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 import { wrapPi } from './openworldtwist';
@@ -483,7 +483,7 @@ export class OpenWorldView {
   private readonly accents = this.neon ? accentLights('openworld') : [];
   private skyGlow: THREE.Object3D | null = null;
   /** The look of the sky at the time of day (#1496), written by `setTime`; the shine of the things that matter at night, a uniform the marbles' and the lairs' materials read. */
-  private readonly sky = new Sky();
+  private readonly sky = new Sky(this.neon ? NEON_WORLD_LOOKS : WORLD_LOOKS); // the neon look has its own day, dusk and night (#1536)
   readonly shine = uniform(0);
   private readonly hemisphere: THREE.HemisphereLight;
   private readonly sunDirection = new THREE.Vector3();
@@ -651,7 +651,7 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : this.neon ? WORLD_EDGE_GAIN : EDGE_GAIN.land, neon: traces ? { hero: this.heroXZ, traces } : undefined, emissiveNode: water ? waterEmissive(this.uniforms, shoreRed(), deepRed()) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen, detail: this.neon && (ground === 'grass' || ground === 'rock' || ground === 'peak') }); // the land's striation (#1555)
+      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : this.neon ? WORLD_EDGE_GAIN : EDGE_GAIN.land, neon: traces ? { hero: this.heroXZ, traces, shine: this.shine } : undefined, emissiveNode: water ? waterEmissive(this.uniforms, shoreRed(), deepRed()) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen, detail: this.neon && (ground === 'grass' || ground === 'rock' || ground === 'peak') }); // the land's striation (#1555)
       this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, material());
       this.managed.push(this.grounds[ground]);
       this.flats[ground] = this.instances(`terrain-${ground}-flat`, 1, top, material()); // grows on the first low build (`fit`)
@@ -696,6 +696,7 @@ export class OpenWorldView {
     this.stakes = this.instances('log-stake', LOG_CAPACITY, stake(false), new THREE.MeshStandardMaterial({ color: LOG_LOOK.open, emissive: LOG_LOOK.open, emissiveIntensity: LOG_LOOK.emissive, roughness: 0.5, flatShading: true }));
     this.stakesFound = this.instances('log-stake-found', LOG_CAPACITY, stake(true), new THREE.MeshStandardMaterial({ color: LOG_LOOK.found, roughness: 0.9, flatShading: true }));
     this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
+    sunDirection(this.sunDirection, this.sky.look.elevation, this.sky.look.azimuth); // the sun's way is the day's at the start, under either look (#1536)
     if (!this.neon) this.applyLook(); // the sky of the time of day, the day's at the start (#1496)
   }
 
@@ -1325,10 +1326,10 @@ export class OpenWorldView {
   /**
    * Moves the sky to the time of day `ms` (#1496): the sky and fog colour, the sun or the moon, the ambient light, the water's tint and the
    * shine of the marbles, the lairs and the teleporters. Returns whether the look changed, so the scene is drawn again. `blend` is off under
-   * reduced motion: the look then switches where the phase changes. The neon look has a sky of its own and keeps it.
+   * reduced motion: the look then switches where the phase changes. Under the neon look the same clock moves its own three looks (#1536).
    */
   setTime(ms: number, blend: boolean): boolean {
-    if (this.neon || !this.sky.set(ms, blend)) return false;
+    if (!this.sky.set(ms, blend)) return false;
     this.applyLook();
     return true;
   }
@@ -1382,7 +1383,7 @@ export class OpenWorldView {
       this.fitShadow();
     }
     this.sun.target.position.copy(at);
-    this.sun.position.copy(at).add(this.neon ? this.sunAway.set(...neonSunPosition(30 * scale)) : this.sunAway.copy(this.sunDirection).multiplyScalar(30 * scale));
+    this.sun.position.copy(at).add(this.sunAway.copy(this.sunDirection).multiplyScalar(30 * scale));
     this.stars?.position.copy(this.camera.position);
     this.skyGlow?.position.set(this.camera.position.x, this.camera.position.y + 0.5, this.camera.position.z);
     this.heroXZ.value.set(at.x, at.z);

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { abs, color, dot, float, normalView, positionViewDirection } from 'three/tsl';
 import type { Deck } from './deck';
+import { mixHex, type Phase, type WorldLook } from './daynight';
 
 /** The approved numbers (mock/mock.js, directions.json). Neon is on edges, lines and lamps, never on a cell top. */
 export const NEON = {
@@ -55,6 +56,15 @@ export const GROUND_TINT = 0.4;
 export const SKY_TINT = 0.25;
 /** The brightest channel of the rim and the posts' glow: above 1, unlit (the rim read dim at 1.2). */
 export const NEON_GLOW = 2.2;
+
+/** The Open world's day, dusk and night under the neon look (#1536, the clock of daynight.ts). Day is the look above, as shipped. Dusk: the
+ * sky takes a fifth of the violet over the black, the light is violet too: no warm wash on the white marbles (art-1518). Night: the sky stays black, the moon is the pedestal
+ * ring's cyan, and the glow of the lairs, the marbles and the grid is full. Only palette tokens, and mixes of them (art.md, section 1). */
+export const NEON_WORLD_LOOKS: Readonly<Record<Phase, WorldLook>> = {
+  day: { sky: NEON.sky, sun: NEON_LIGHT.sun, sunIntensity: NEON_LIGHT.sunIntensity, elevation: NEON_LIGHT.elevation, azimuth: NEON_LIGHT.azimuth, hemiSky: NEON_LIGHT.skyMix, hemiGround: NEON_LIGHT.ground, hemiIntensity: NEON_LIGHT.hemisphere, water: 0xffffff, glow: 0 },
+  dusk: { sky: mixHex(NEON.sky, NEON.violet, 0.2), sun: NEON_LIGHT.sun, sunIntensity: 2.4, elevation: 14, azimuth: 62, hemiSky: NEON_LIGHT.skyMix, hemiGround: NEON.ground, hemiIntensity: 2.2, water: 0xffffff, glow: 0.4 },
+  night: { sky: NEON.sky, sun: NEON.pedestalRing, sunIntensity: 1.3, elevation: 38, azimuth: -30, hemiSky: NEON.rimLight, hemiGround: NEON.groundFar, hemiIntensity: 1.6, water: 0xffffff, glow: 1 },
+};
 
 /** The dishes are drawn this much smaller across: the gap between two cells (1 - the flat-to-flat of a 0.5 hexagon, 0.134) grows by 40 %, so the cyan line keeps its width and its dark floor at 390 px. */
 /** The grid line of the neon look (#1535), one constant for the arena's cell gaps and the Open world's ground: a band `width` world units wide (the gap of the arena's hexagon, `outer` - `inner`), lit at `glow` in `colour`. */
