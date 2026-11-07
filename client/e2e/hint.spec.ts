@@ -301,7 +301,14 @@ async function ghostRise(page: Page): Promise<{ first: number; later: number }> 
         if (document.body.dataset.hint !== 'shown') return;
         ob.disconnect();
         const first = w.__ghostOpacity();
-        setTimeout(() => done({ first, later: w.__ghostOpacity() }), 450);
+        // Wait for the rise to reach its whole value (a slow runner frames late, so a fixed 450 ms read too early); 3 s cap.
+        const t0 = performance.now();
+        const poll = () => {
+          const later = w.__ghostOpacity();
+          if (later >= 0.44 || performance.now() - t0 > 3000) done({ first, later });
+          else setTimeout(poll, 50);
+        };
+        setTimeout(poll, 450);
       }).observe(document.body, { attributes: true, attributeFilter: ['data-hint'] });
     });
   });
