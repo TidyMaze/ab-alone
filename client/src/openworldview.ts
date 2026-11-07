@@ -1946,7 +1946,7 @@ export class OpenWorldView {
     const v = variety(q, r);
     const tint = BIOME_LOOK[tile.biome].prop;
     if (tile.terrain === 'peak') lay('mountain', near, p.x, top + (1.2 + v * 0.8) / 2, p.z, 1.2 + v * 0.8, WHITE);
-    else if (tile.terrain === 'tree') lay('tree', near, p.x, top + (0.8 + v * 0.4) / 2, p.z, 0.8 + v * 0.4, tint);
+    else if (tile.terrain === 'tree') lay('tree', near, p.x, top + (1.6 + v * 0.8) / 2, p.z, 1.6 + v * 0.8, tint); // twice the pine's height (#1557 art round 3)
     else if (tile.terrain === 'boulder') lay('boulder', near, p.x, top + 0.2, p.z, 0.8, tint);
     else if (tile.terrain === 'wall') {
       lay('wall', near, p.x, top + WALL / 2, p.z, WALL, WHITE);
