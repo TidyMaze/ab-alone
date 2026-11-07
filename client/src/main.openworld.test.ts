@@ -118,6 +118,7 @@ describe('the Open world mode', () => {
     await settle();
     expect(mesh('enemies').instance).toHaveLength(3); // an instanced mesh: its first colour, r g b
     expect(mesh('hero').instance).toBeNull(); // the hero is one plain mesh: no instance colours
+    expect(() => (window as unknown as { __openworldZoom: (scale: number) => void }).__openworldZoom(0.5)).not.toThrow(); // the zoom hook, as the wheel: a close capture
   });
 
   it('counts the point lights of the scene it draws: none in the Open world, within the budget (#1234)', async () => {
