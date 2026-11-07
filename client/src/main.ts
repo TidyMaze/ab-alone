@@ -516,13 +516,10 @@ let ticking = 0;
 // it (a hover, an orbit, a slider, a resize that clears the canvas).
 const CHANGE_DRAWS = 2;
 let dirty = CHANGE_DRAWS;
-// The top-level awaits still in flight (#1628): a press in that window reaches refresh() before the lets declared below
-// are initialised, so refresh() waits for the page to resume.
-let suspended = 0;
-const awaiting = <T>(run: () => Promise<T>): Promise<T> => {
-  suspended++; // before run(): the saved game's open may already press a button in the same tick
-  return run().finally(() => suspended--);
-};
+// The page is booting (#1628): its top-level awaits yield, and a promise callback that runs in that window (a terrace load, a press
+// on a button already live) reaches refresh() before the lets declared further down are initialised. refresh() returns until
+// `booted` is set, right after the last declaration, before the boot's final refresh.
+let booted = false;
 for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'pointerleave', 'wheel', 'keydown', 'keyup', 'input', 'change', 'click', 'resize'])
   addEventListener(type, () => (dirty = CHANGE_DRAWS), { capture: true, passive: true });
 
@@ -1844,7 +1841,7 @@ const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
   1: shellMaterial(skin),
   2: glassMaterial(glass),
 };
-await awaiting(() => Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m)))); // the worn skins are dressed from the first frame
+await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m))); // the worn skins are dressed from the first frame
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
 // Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. A ghost's see-through
 // glass holds a cyan core as a child; a marble's opaque skin would hide one, so it has none (#885).
@@ -2784,7 +2781,7 @@ const saves = new LocalSaves(gameStore, navigator.storage);
 // Without ?bot=off the page resumes the game of either mode: a hot-seat game from the hub's table goes on with
 // no bot (#565).
 const loadLocal = () => saves.load(botWorker ? undefined : false, (boss) => (boss ? encounterFor(Encounter, boss.id, boss.seed, undefined, undefined, boss.mirror) : new Engine())); // the saved local game, with the bot or at the table it was played at
-const resumed = await awaiting(loadLocal);
+const resumed = await loadLocal();
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 // The bot's army is the bridge's plan for the node (#1462), or its count for a run saved before.
@@ -2798,7 +2795,7 @@ const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
   return boss ? encounterFor(Encounter, boss.id, boss.seed, state.placed, relicMask(state)) : armyEngine(state, map); // an act boss takes the army's build when its rules allow it (#1494)
 };
 const loadSavedRun = () => loadRun(gameStore, (seed, runes, version) => parseMap(run_map(seed, runes, version)), runEngine);
-const resumedRun = await awaiting(loadSavedRun);
+const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
   engine = resumed.engine;
@@ -4231,7 +4228,7 @@ function syncTableZero(): void {
   updateFog();
 }
 function refresh(): void {
-  if (suspended) return; // the page is awaiting its saved game: the lets below are not initialised yet (#1628)
+  if (!booted) return; // the page is still booting: the lets declared further down are not initialised yet (#1628)
   if (!replaying && cueWatch.selection.changed(selected)) playCue('selection'); // when the selection changes, not on each redraw
   syncTableZero();
   dirty = CHANGE_DRAWS;
@@ -7415,7 +7412,7 @@ const royaleInvite = royaleFromHash(location.hash);
 const creator = creatorFromHash(location.hash); // the fingerprint of the creator's key, none in an older link (#1323)
 // The Open world leads the mode menu of a fresh profile (#1612, menuorder.ts); a profile with a save or a boss beaten keeps its menu.
 // A saved run or a saved public world is a save too: the profile keeps its menu (#1612).
-const worldSaved = (await awaiting(() => worldSaves(gameStore, world_version()).load(PUBLIC_SEED))) !== null;
+const worldSaved = (await worldSaves(gameStore, world_version()).load(PUBLIC_SEED)) !== null;
 const leadsMenu = openWorldLeads(resumed !== null || resumedRun !== null || worldSaved, loadProgress(store).beaten.length);
 if (leadsMenu) modeMenu.insertBefore(openWorldButton, document.getElementById('play-online'));
 document.getElementById('open-world-entry')!.hidden = !leadsMenu;
@@ -7554,6 +7551,10 @@ if (serviceWorker) {
     });
 }
 
+let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
+let draws = 0;
+let drawAsked = false;
+booted = true; // every top-level let is declared: the page's callbacks may refresh from here (#1628)
 refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
@@ -7562,9 +7563,6 @@ veilCanvas();
 document.body.appendChild(renderer.domElement);
 if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed, null, resumed.boss.mirror); // a Stalker fight comes back under its fog (#1122)
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
-let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
-let draws = 0;
-let drawAsked = false;
 // Used by the browser checks to wait for a draw: under automation the loop skips frames (#216), so a frame is not a draw (#365).
 hookHost.__draws = () => draws;
 // Used by the browser checks to ask for the next draw, which the throttle does not hold (#435): returns the draws so far.
