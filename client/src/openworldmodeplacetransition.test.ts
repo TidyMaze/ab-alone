@@ -62,7 +62,7 @@ describe('entering a place starts the transition without holding the place back 
   it('a dungeon gate shows the run and its cue', () => {
     const gate = make(false);
     walk(gate.m, [5, 0], 'ArrowRight');
-    expect(gate.onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, expect.any(String));
+    expect(gate.onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, expect.any(String), '');
     expect(root().dataset.kind).toBe('dungeon');
     expect(title()).toBe('Mining cut · Rogue-lite run');
   });
@@ -73,7 +73,7 @@ describe('entering a place starts the transition without holding the place back 
     town.m.fixture({ hero: [-1, 0], troop: [], enemies: [] });
     town.m.key('ArrowRight');
     town.m.release('ArrowRight');
-    expect(town.onPlace).toHaveBeenCalledWith(7, 'town', 0, expect.any(String));
+    expect(town.onPlace).toHaveBeenCalledWith(7, 'town', 0, expect.any(String), 'Contract: The Echo, ring 1, 3 cells, to the upper right.'); // the camera's yaw turns the bearing as the minimap does
     expect(root().dataset.kind).toBe('town');
     expect(title()).toBe('Muster point · the Hub');
   });

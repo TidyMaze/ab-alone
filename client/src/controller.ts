@@ -25,6 +25,8 @@ export class HubController implements ModeController<HubSpot> {
   at: HubSpot;
   hover: Axial | null = null;
   bumped = '';
+  /** The posted contract of the town rolled onto (#1618), empty from any other entry. */
+  contract = '';
 
   constructor(initialSpot: HubSpot) {
     this.at = initialSpot;
@@ -34,6 +36,7 @@ export class HubController implements ModeController<HubSpot> {
     this.at = spot;
     this.hover = null;
     this.bumped = '';
+    this.contract = '';
     delete document.body.dataset.hubHover;
     document.body.dataset.hub = `${spot.deck} ${spot.cell[0]},${spot.cell[1]}`;
   }
@@ -92,7 +95,7 @@ export class HubController implements ModeController<HubSpot> {
   }
 
   hud(): string {
-    return hubHtml(this.at, this.bumped, this.hover);
+    return hubHtml(this.at, this.bumped, this.hover, this.contract);
   }
 
   draw(

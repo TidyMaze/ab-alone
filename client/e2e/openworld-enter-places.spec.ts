@@ -35,6 +35,7 @@ for (const { name, viewport, touch } of sizes) {
         await page.keyboard.press('ArrowRight');
         await expect(body).not.toHaveAttribute('data-openworld', /.*/);
         await expect(body).toHaveAttribute(shown, /.+/); // the Hub's deck and cell, the run's screen
+        if (kind === 'town') await expect(page.locator('.hub-contract')).toHaveText(/^Contract: The [A-Za-z ]+, ring 1, \d+ cells?, (to the |straight )(upper |lower )?\w+\.$/); // the posted contract (#1618)
         await expect(page.locator('#exit')).toBeVisible();
         await expect(page.locator('#exit')).toHaveAttribute('data-label', 'World');
         await shot(page, { path: `test-results/place-${kind}-${name}-inside.png` });

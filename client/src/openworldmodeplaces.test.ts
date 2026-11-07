@@ -71,7 +71,7 @@ describe('entering a town or a dungeon gate (#1593)', () => {
     m.enter(7, 800, 600);
     m.fixture({ hero: [5, 0], troop: [[4, 0]], enemies: [] });
     roll(m, 'ArrowRight');
-    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, 'meadow');
+    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, 'meadow', '');
     expect(m.active).toBe(false);
     for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
     expect((await saves.load(7))!.hero).toEqual([5, 0]);
@@ -88,7 +88,7 @@ describe('entering a town or a dungeon gate (#1593)', () => {
     m.enter(7, 800, 600);
     m.fixture({ hero: [5, 0], troop: [[4, 0]], enemies: [] });
     roll(m, 'ArrowRight');
-    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, 'desert');
+    expect(onPlace).toHaveBeenCalledWith(7, 'dungeon', 0, 'desert', '');
   });
 
   it('rolling back onto the spawn town starts the town, the hero having started on it did not', () => {
@@ -99,7 +99,7 @@ describe('entering a town or a dungeon gate (#1593)', () => {
     expect(m.active).toBe(true);
     m.fixture({ hero: [-1, 0], troop: [], enemies: [] });
     roll(m, 'ArrowRight');
-    expect(onPlace).toHaveBeenCalledWith(7, 'town', 0, 'meadow');
+    expect(onPlace).toHaveBeenCalledWith(7, 'town', 0, 'meadow', expect.any(String));
     expect(m.active).toBe(false);
   });
 
@@ -109,7 +109,7 @@ describe('entering a town or a dungeon gate (#1593)', () => {
     m.enter(7, 800, 600);
     m.fixture({ hero: [59, 0], troop: [], enemies: [] });
     roll(m, 'ArrowRight');
-    expect(onPlace).toHaveBeenCalledWith(7, 'town', 1, 'meadow');
+    expect(onPlace).toHaveBeenCalledWith(7, 'town', 1, 'meadow', expect.any(String));
   });
 
   it('ignores a press on a place the hero is not next to, and leaves the world on one even when nothing is listening', () => {

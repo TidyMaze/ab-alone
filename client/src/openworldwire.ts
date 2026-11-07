@@ -43,7 +43,7 @@ export interface OpenWorldDeps {
   /** A lair starts the boss fight on the board of the hour (#1170). */
   startLair: (seed: number, lair: number, phase: Phase) => void;
   /** A town opens the Hub and a gate the rogue-lite run (#1593). */
-  onPlace: (seed: number, kind: 'town' | 'dungeon', index: number, biome: Biome) => void;
+  onPlace: (seed: number, kind: 'town' | 'dungeon', index: number, biome: Biome, contract: string) => void;
   /** Whether the page took the public world online. */
   online: () => boolean;
   /** The boss lairs of a world as cells (#1305). */

@@ -41,3 +41,25 @@ export function goalLines({ hero, yaw, lairs, logsLeft }: GoalState): { goal: st
   if (!near) return { goal: `Goal done: all ${lairs.length} towers are beaten.`, bearing: logsLeft > 0 ? `Left: ${plural(logsLeft, 'lore log')} to find.` : 'Left: the dungeon gates.' };
   return { goal: `Goal: beat the ${plural(lairs.length, 'tower')} of Hollow. One medal each.`, bearing: `Nearest tower: ${plural(near.cells, 'cell')}, ${near.way}.` };
 }
+
+/** A tower as the contract reads it: its cell, whether it is beaten, whether guidance points at it (the ring to beat), its boss and its ring. */
+export interface ContractTower {
+  cell: Axial;
+  beaten: boolean;
+  guided?: boolean;
+  name: string;
+  ring: number;
+}
+
+/** The posted contract of a town (#1618, section 18): the nearest tower of the ring to beat, by its boss, its ring, its cells and its way from the
+ * town. Once every tower is beaten, it says so. Empty for a world with no tower. */
+export function contractLine({ hero, yaw, lairs }: { hero: Axial; yaw: number; lairs: readonly ContractTower[] }): string {
+  if (lairs.length === 0) return '';
+  const near = lairs
+    .filter(({ beaten, guided }) => !beaten && guided !== false)
+    .map((tower) => ({ ...tower, ...bearingOf(hero, tower.cell, yaw) }))
+    .sort((a, b) => a.cells - b.cells)[0];
+  const n = lairs.length;
+  if (!near) return `No contract: all ${n} ${n === 1 ? 'tower is' : 'towers are'} beaten.`;
+  return `Contract: ${near.name}, ring ${near.ring}, ${plural(near.cells, 'cell')}, ${near.way}.`;
+}

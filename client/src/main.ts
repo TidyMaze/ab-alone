@@ -6797,7 +6797,7 @@ const openWorld = new OpenWorldHandle(async () =>
       const ids = boss_ids();
       startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair, phase }); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496)
     },
-    onPlace: (seed, kind, index, biome) => {
+    onPlace: (seed, kind, index, biome, contract) => {
       // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
       gateBiome = kind === 'dungeon' ? BIOMES.findIndex(({ id }) => id === biome) : 0; // the run begins in the gate's biome (#1597)
       (kind === 'town' ? shipButton : runButton).click();
@@ -6806,6 +6806,7 @@ const openWorld = new OpenWorldHandle(async () =>
       if (kind === 'town') {
         storyEvent({ on: 'town' }); // the first town visited is stage 3 (#1586), before the line of this town is chosen
         hub!.bumped = townLine(index, storyStage(store)); // Tally's ledger line of this town on the plate, once its stage is reached (#1516)
+        hub!.contract = contract; // the posted contract of the nearest tower of the ring to beat (#1618)
         sawLines(hub!.bumped);
         hud();
       }

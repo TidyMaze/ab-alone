@@ -15,7 +15,7 @@ import { endingLine, ledgerLine } from './tally';
 import { MARBLES } from './trainer';
 import { Discovered } from './openworlddiscovered';
 import { WorldMap } from './openworldmap';
-import { CLAIM_NOTE, goalLines } from './openworldgoal';
+import { CLAIM_NOTE, contractLine, goalLines } from './openworldgoal';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
 import { RECRUIT_MAX, recruitCell } from './openworldrecruit';
 import { WORLD_LOGS } from './lorelogs';
@@ -200,7 +200,7 @@ export class OpenWorldMode {
     /** The towns and dungeon gates of a seed's world: `kind, q, r` triples (the bridge's `world_places`, #1514). */
     private readonly placesOf: (seed: number) => Int32Array = () => new Int32Array(),
     /** What starts a town or a dungeon gate rolled onto (#1593), given the seed of the world and the kind. */
-    private readonly onPlace: (seed: number, kind: 'town' | 'dungeon', index: number, biome: Biome) => void = () => {},
+    private readonly onPlace: (seed: number, kind: 'town' | 'dungeon', index: number, biome: Biome, contract: string) => void = () => {},
     /** The stage of the story (#1546): the clamp of Tally's lines is open from stage 7. */
     private readonly stage: () => number = () => 1,
     /** The rings of a seed's world (the bridge's `world_rings`, #1532): the ring of each tower by number, then one per place (0 for a town, the
@@ -1008,10 +1008,23 @@ export class OpenWorldMode {
     const seed = this.seed;
     const index = this.places.filter(({ kind }) => kind === place.kind).indexOf(place); // the place among those of its kind: the spawn town is 0 (#1516)
     const biome = this.world!.tile(place.cell[0], place.cell[1])!.biome; // the ground the gate stands in: its run begins in that biome (#1597)
+    const contract = place.kind === 'town' ? this.contractOf(place.cell) : ''; // the town's posted contract (#1618), read before the view is left
     this.transition.enter(place.kind, placeTitle(place.kind, '')); // over the Hub or the run that starts at once (#1519)
     this.persist();
     this.leave();
-    this.onPlace(seed, place.kind, index, biome);
+    this.onPlace(seed, place.kind, index, biome, contract);
+  }
+
+  /** The posted contract of the town at `town` (#1618, section 18): the nearest tower of the ring to beat, by its boss and ring, as the Nearest
+   * tower button points. */
+  private contractOf(town: Axial): string {
+    const guided = this.guided();
+    const ids = this.bossIds();
+    return contractLine({
+      hero: town,
+      yaw: this.view!.drawnYaw,
+      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), guided: guided[i], name: this.bossName(ids[i % ids.length]!), ring: this.ringOf(i) })),
+    });
   }
 
   /** A blocked step leans the hero toward the cell it cannot take, and back: nothing under reduced motion (#1040). */

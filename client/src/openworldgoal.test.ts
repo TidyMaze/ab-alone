@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
-import { bearingOf, goalLines, WAYS } from './openworldgoal';
+import { bearingOf, contractLine, goalLines, WAYS } from './openworldgoal';
 import { SECRETS } from './story';
 
 // The goal of the Open world on arrival (#1530, docs/specs/openworld.md section 14): one sentence of objective and a text bearing to the nearest
@@ -84,5 +84,42 @@ describe('the goal lines of the ring to beat (#1532)', () => {
   it('points at the nearest tower that is guided, not a nearer one outside the ring to beat', () => {
     const lairs = [{ cell: [5, 0] as Axial, beaten: false, guided: false }, { cell: [30, 0] as Axial, beaten: false, guided: true }];
     expect(goalLines({ ...at, lairs }).bearing).toBe('Nearest tower: 30 cells, to the right.');
+  });
+});
+
+// The posted contract of a town (#1618, docs/specs/openworld.md section 18): the nearest tower of the ring to beat, by its boss, ring and bearing.
+describe('the posted contract of a town (#1618)', () => {
+  const tower = (cell: Axial, extra: { beaten?: boolean; guided?: boolean; name?: string; ring?: number } = {}) => ({ cell, beaten: false, name: 'The Echo', ring: 1, ...extra });
+  const at = { hero: [0, 0] as Axial, yaw: 0 };
+
+  it('names the nearest tower of the ring to beat: its boss, ring, cells and way', () => {
+    expect(contractLine({ ...at, lairs: [tower([10, 0])] })).toBe('Contract: The Echo, ring 1, 10 cells, to the right.');
+    expect(contractLine({ ...at, lairs: [tower([10, 0], { name: 'The Ballast Mind', ring: 2 }), tower([2, -4], { name: 'The Chaplain' })] })).toBe(
+      'Contract: The Chaplain, ring 1, 4 cells, straight up.',
+    );
+  });
+
+  it('says one cell for a cell, and skips the towers beaten or outside the ring to beat', () => {
+    expect(contractLine({ ...at, lairs: [tower([1, 0])] })).toBe('Contract: The Echo, ring 1, 1 cell, to the right.');
+    expect(contractLine({ ...at, lairs: [tower([1, 0], { beaten: true }), tower([5, 0], { guided: false }), tower([9, 0])] })).toBe(
+      'Contract: The Echo, ring 1, 9 cells, to the right.',
+    );
+  });
+
+  it('reads the next ring once the ring to beat is beaten, and nothing once every tower is', () => {
+    expect(contractLine({ ...at, lairs: [tower([9, 0], { beaten: true }), tower([30, 0], { guided: true, name: 'The Stalker', ring: 2 })] })).toBe(
+      'Contract: The Stalker, ring 2, 30 cells, to the right.',
+    );
+    expect(contractLine({ ...at, lairs: [tower([9, 0], { beaten: true }), tower([30, 0], { beaten: true })] })).toBe('No contract: all 2 towers are beaten.');
+    expect(contractLine({ ...at, lairs: [tower([9, 0], { beaten: true })] })).toBe('No contract: all 1 tower is beaten.');
+  });
+
+  it('says nothing for a world with no tower', () => {
+    expect(contractLine({ ...at, lairs: [] })).toBe('');
+  });
+
+  it('holds no secret word of a later stage', () => {
+    const lines = [contractLine({ ...at, lairs: [tower([9, 0])] }), contractLine({ ...at, lairs: [tower([9, 0], { beaten: true })] })];
+    for (const line of lines) for (const { word } of SECRETS) expect(line).not.toMatch(word);
   });
 });
