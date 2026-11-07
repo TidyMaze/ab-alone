@@ -62,7 +62,11 @@ for (const { name, viewport, touch } of sizes) {
         await expect(cue.locator('.pt-title')).toHaveText(title);
         await expect(cue.locator('.pt-title')).toBeVisible();
         await expect(cue.locator('.pt-dim')).toBeHidden();
-        await expect(cue).toBeHidden({ timeout: 2000 }); // gone by itself after 600 ms
+        // Its 600 ms clock counts frames, at most 50 ms each: a runner drawing a frame a second needs 12 s, so its end by itself is a
+        // unit test (placetransition.test.ts, "until the press or 600 ms", #1625); here a press ends it, as on the way in above.
+        await page.mouse.click(5, 5);
+        await expect(body).not.toHaveAttribute('data-place-transition', /.*/);
+        await expect(cue).toBeHidden();
       });
     }
   });

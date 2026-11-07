@@ -45,14 +45,24 @@ test('a 2v1 push is played from the start in 5 plies, no ejection is reachable t
   page,
 }) => {
   const { hud, click } = await open(page);
+  const plies = (): Promise<number> => page.evaluate(() => (window as any).__plies() as number);
   await click([0, 2], [0, 3], [0, 1]); // 1. Black pair NW to (0,1)(0,2)
-  await expect(hud).toContainText('White to move');
+  await expect.poll(plies).toBe(1); // each ply is played before the next one's clicks (#1625: a lost click left no White marble to push)
   await click([0, -2], [0, -1]); // 2. White steps to (0,-1)
+  await expect.poll(plies).toBe(2);
   await click([0, 1], [0, 2], [0, 0]); // 3. Black pair NW, now touching White
+  await expect.poll(plies).toBe(3);
   await click([2, -2], [2, -1]); // 4. White plays elsewhere, leaving (0,-2) free behind its marble
+  await expect.poll(plies).toBe(4);
   await expect(hud).toContainText('Black to move');
-  const before = await page.screenshot();
+  const board = (): Promise<number[]> => page.evaluate(() => (window as any).__board() as number[]);
+  const before = await board();
   await click([0, 0], [0, 1], [0, -1]); // 5. 2v1 inline push on the White marble
   await expect(hud).toContainText('White to move');
-  expect((await page.screenshot()).equals(before)).toBe(false);
+  // The board, not a screenshot (the canvas may not have drawn the push yet, #1625): the tail cell empties, the White
+  // marble's cell turns Black and the cell behind it turns White, no marble leaves the board.
+  const after = await board();
+  const changed = before.flatMap((c, i) => (c === after[i] ? [] : [`${c}>${after[i]}`])).sort();
+  expect(changed).toEqual(['0>2', '1>0', '2>1']);
+  for (const side of [1, 2]) expect(after.filter((c) => c === side).length).toBe(before.filter((c) => c === side).length);
 });

@@ -525,6 +525,8 @@ let dirty = CHANGE_DRAWS;
 // on a button already live) reaches refresh() before the lets declared further down are initialised. refresh() returns until
 // `booted` is set, right after the last declaration, before the boot's final refresh.
 let booted = false;
+let bootEnded!: () => void;
+const bootEnd = new Promise<void>((done) => (bootEnded = done)); // a test hook that loads a game waits for it (#1625)
 for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'pointerleave', 'wheel', 'keydown', 'keyup', 'input', 'change', 'click', 'resize'])
   addEventListener(type, () => (dirty = CHANGE_DRAWS), { capture: true, passive: true });
 
@@ -7059,6 +7061,7 @@ addEventListener('blur', () => openWorld.release()); // no key stays held once t
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
 // shows its summary (#801), what it leaves out taken from a new run, as a save is decoded (no relic before #1457).
 hookHost.__run = async (state: Run) => {
+  await bootEnd; // the page's own resume, after its last await, would replace the run loaded here (#1625)
   if (state.end) return startRun({ ...newRun(state.seed, state.best, LEGACY_UNLOCKED), ...state }, parseMap(run_map(state.seed, state.runes, state.map)));
   await saveRun(gameStore, state);
   resumeRun((await loadSavedRun())!); // the browser checks load valid runs
@@ -7630,6 +7633,7 @@ let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
 let draws = 0;
 let drawAsked = false;
 booted = true; // every top-level let is declared: the page's callbacks may refresh from here (#1628)
+bootEnded();
 refresh();
 applyView(); // the stored closer board view (#1567)
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
