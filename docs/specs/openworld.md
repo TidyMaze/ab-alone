@@ -560,7 +560,7 @@ plan as the game.
 | Teleporters | Pads in the clearing and in the open ground, one a square of 8 x 8 chunks (section 10) | Roll onto a pad, Teleport button | Pick another pad | Built. Pads inside towns and gate clearings are planned |
 | Console | Leaves the player's UI | n/a | n/a | Planned |
 | Boss fight menu | Fast travel to the towers already found | Menu entry | n/a | Planned |
-| Quick game (bot, hot-seat, online) | Outside the world: a permanent button that skips it | The button | Back to the menu | Planned |
+| Quick game (bot, hot-seat, online) | Outside the world: a permanent button that skips it | The button (dock, and the Open world plate) | Back to the menu | Bot built (#1612): the dock and the plate start a bot game, an unfinished game asks first. Hot-seat and online are planned |
 
 - **Rule for every place**: it is entered by walking or rolling onto it, and every exit returns the hero to the entrance cell, as a
   lair does (section 7). No place moves the hero anywhere else.

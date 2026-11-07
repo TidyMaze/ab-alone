@@ -3,7 +3,10 @@ import * as THREE from 'three';
 import type * as THREEWebGPU from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { framing } from './camera';
+import { encodeMove, type Move } from './board';
+import { loadProgress, saveProgress } from './progress';
 import { boot, type Game } from './test/harness';
+import { BOSS_IDS } from './tally';
 
 // The start of main.ts on the harness (src/test/harness.ts): the service worker's New version button, the renderer
 // and its textures, the view and the fog, the theme, the UI scale, safe mode, the settings menu with its toggles and
@@ -1201,4 +1204,63 @@ it('hides the loading plate even when the bay is missing, so the page never load
   const game = await boot('?bot=off', { missing: ['spaceship-bay.glb'] });
   await game.settle();
   await vi.waitFor(() => expect(byId('loading').hidden).toBe(true));
+});
+
+describe('the Open world first, and Quick game (#1612, Decision #1513)', () => {
+  const entries = (): string[] => [...byId('mode-menu').querySelectorAll('button')].map((b) => b.id).filter((id) => id !== 'update');
+
+  it('leads the mode menu with the Open world on a fresh profile', async () => {
+    await boot('?bot=off');
+    expect(entries()[0]).toBe('openworld');
+    expect(entries()).toContain('play-online');
+  });
+
+  it('keeps Play online first in the menu of a profile with a boss beaten', async () => {
+    const data = new Map<string, string>();
+    const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+    saveProgress(store, { at: loadProgress(store).at, beaten: [BOSS_IDS[0]!] });
+    await bootWith({ 'ab-alone.progress': data.get('ab-alone.progress')! }, '?bot=off');
+    expect(entries()[0]).toBe('play-online');
+  });
+
+  it('shows a one-tap Open world button in the dock on a fresh profile, and it enters the world', async () => {
+    const game = await boot('?bot=off');
+    const entry = byId<HTMLButtonElement>('open-world-entry');
+    expect(entry.hidden).toBe(false);
+    expect(byId('dock').contains(entry)).toBe(true);
+    entry.click();
+    await game.settle();
+    expect(byId('openworld-hud').hidden).toBe(false);
+  });
+
+  it('hides that Open world button from a profile with a boss beaten', async () => {
+    const data = new Map<string, string>();
+    const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+    saveProgress(store, { at: loadProgress(store).at, beaten: [BOSS_IDS[0]!] });
+    await bootWith({ 'ab-alone.progress': data.get('ab-alone.progress')! }, '?bot=off');
+    expect(byId('open-world-entry').hidden).toBe(true);
+  });
+
+  it('puts a Quick game button in the dock, enabled, that starts a new game from any screen', async () => {
+    const game = await boot('?bot=off');
+    const quick = byId<HTMLButtonElement>('quick-game');
+    expect(quick.disabled).toBe(false);
+    expect(byId('dock').contains(quick)).toBe(true);
+    quick.click();
+    await game.settle();
+    expect(game.hook('__plies')).toBe(0);
+  });
+
+  it('asks for a second press before Quick game drops an unfinished game, as New game does (#1612)', async () => {
+    const game = await boot('?bot=off');
+    const first = encodeMove((game.hook('__legal') as Move[])[0]!);
+    game.hook('__playMoves', [first]); // one ply: an unfinished game
+    byId<HTMLButtonElement>('quick-game').click();
+    await game.settle();
+    expect(game.hook('__plies')).toBe(1);
+    expect(byId<HTMLButtonElement>('quick-game').textContent).toMatch(/Confirm/); // the question sits on the button pressed
+    byId<HTMLButtonElement>('quick-game').click();
+    await game.settle();
+    expect(game.hook('__plies')).toBe(0);
+  });
 });

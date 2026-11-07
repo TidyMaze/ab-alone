@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -31,6 +31,8 @@ import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFirstRunDone } from './firstrun';
+import { openWorldLeads } from './menuorder';
+import { worldSaves } from './openworldsave';
 import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
 import { lazyWorker } from './lazyworker';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -5826,6 +5828,30 @@ function startLocal(bot: boolean): void {
   worker = bot ? botWorker : null;
   newGame();
 }
+// Quick game (#1612, Decision #1513): a bot game from the dock and from the Open world's plate, outside the world. An unfinished game
+// asks first, as New game does (pressNewGame), and the question shows on the Quick game button that was pressed, since the New game
+// button is hidden in a fight, a run or the world.
+const quickButtons = [document.getElementById('quick-game')!, document.getElementById('openworld-quick')!] as HTMLButtonElement[];
+let confirmQuick: Confirm = null;
+let quickLapse = 0; // ends the question
+function askQuickGame(confirm: Confirm): void {
+  confirmQuick = confirm;
+  for (const quick of quickButtons) quick.textContent = confirm === null ? 'Quick game' : 'Confirm quick game';
+  clearTimeout(quickLapse);
+  if (confirm !== null) quickLapse = setTimeout(askQuickGame, CONFIRM_MS, null);
+}
+for (const quick of quickButtons) {
+  quick.addEventListener('click', () => {
+    const press = pressNewGame(confirmQuick, performance.now(), history.length);
+    askQuickGame(press.confirm);
+    if (press.start) startLocal(true);
+  });
+  quick.disabled = false; // listener ready (#146)
+}
+// The one-tap Open world of a fresh profile (#1612): the dock entry opens the world as the mode menu's entry does.
+const openWorldEntry = document.getElementById('open-world-entry') as HTMLButtonElement;
+openWorldEntry.addEventListener('click', () => openWorldButton.click());
+openWorldEntry.disabled = false; // listener ready (#146)
 /** The exit of the dock (#1517): to the Open world, the hero on the entrance cell the mode was entered from (a lair, a wild marble, a town, a gate),
  * or to the Hub, the saved world left as Esc leaves it. The Hub of a table's door keeps the door's cell. */
 function leaveByExit(): void {
@@ -7231,6 +7257,12 @@ const coopInvite = coopFromHash(location.hash);
 const duelInvite = bossSeatFromHash(location.hash);
 const royaleInvite = royaleFromHash(location.hash);
 const creator = creatorFromHash(location.hash); // the fingerprint of the creator's key, none in an older link (#1323)
+// The Open world leads the mode menu of a fresh profile (#1612, menuorder.ts); a profile with a save or a boss beaten keeps its menu.
+// A saved run or a saved public world is a save too: the profile keeps its menu (#1612).
+const worldSaved = (await worldSaves(gameStore, world_version()).load(PUBLIC_SEED)) !== null;
+const leadsMenu = openWorldLeads(resumed !== null || resumedRun !== null || worldSaved, loadProgress(store).beaten.length);
+if (leadsMenu) modeMenu.insertBefore(openWorldButton, document.getElementById('play-online'));
+document.getElementById('open-world-entry')!.hidden = !leadsMenu;
 if (invited) void goOnline(invited, 2, undefined, creator);
 else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
 else if (duelInvite && boss_ids().includes(duelInvite.boss)) void goOnline(duelInvite.room, 2, duelInvite, creator, true); // the joiner plays the boss (#1316)
