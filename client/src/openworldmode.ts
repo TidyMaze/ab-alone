@@ -15,7 +15,7 @@ import { endingLine, ledgerLine } from './tally';
 import { MARBLES } from './trainer';
 import { Discovered } from './openworlddiscovered';
 import { WorldMap } from './openworldmap';
-import { CLAIM_NOTE, contractLine, goalLines } from './openworldgoal';
+import { CLAIM_NOTE, contractLine, goalCell, goalLines } from './openworldgoal';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
 import { RECRUIT_MAX, recruitCell } from './openworldrecruit';
 import { WORLD_LOGS } from './lorelogs';
@@ -464,12 +464,14 @@ export class OpenWorldMode {
    * camera turn. */
   private showGoal(): void {
     const guided = this.guided();
-    const { goal, bearing } = goalLines({
+    const state = {
       hero: this.hero!.at,
       yaw: this.view!.drawnYaw,
       lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i), guided: guided[i] })),
       logsLeft: this.logs.length - this.found.length,
-    });
+    };
+    this.view!.setGoal(goalCell(state)); // the camera frames the tower the goal names (#1534)
+    const { goal, bearing } = goalLines(state);
     for (const [id, line] of [['openworld-goal', goal], ['openworld-bearing', bearing]] as const) {
       const out = document.getElementById(id);
       if (out && out.textContent !== line) out.textContent = line;

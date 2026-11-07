@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CameraLife, PUNCH, PUNCH_MS, SHAKE_MS, SHAKE_PX, Spring } from './openworldcamera';
+import { CameraLife, FRAME_REACH, FRAME_SHARE, framingShift, PUNCH, PUNCH_MS, SHAKE_MS, SHAKE_PX, Spring } from './openworldcamera';
 
 describe('the camera offsets of the Open world (docs/specs/openworld-animation.md section 5, #1103)', () => {
   it('lasts 250 ms at most, each one', () => {
@@ -142,5 +142,28 @@ describe('the follow of the Open world camera (#1333)', () => {
     expect(spring.x).toBe(3);
     expect(spring.step(3, 0.05)).toBe(false);
     expect(spring.place(3)).toBe(false); // already there
+  });
+});
+
+describe('the framing of the Open world on a narrow screen (#1534): the camera looks part of the way to the tower it walks to', () => {
+  const hero = { x: 0, z: 0 };
+  const goal = { x: 6, z: -4 };
+
+  it('shifts the look a share of the way to a tower within the reach, on a portrait screen', () => {
+    expect(framingShift(hero, goal, FRAME_REACH, true)).toEqual({ x: 6 * FRAME_SHARE, z: -4 * FRAME_SHARE });
+    expect([FRAME_SHARE, FRAME_REACH]).toEqual([0.5, 8]);
+  });
+
+  it('does not shift on a landscape screen, whatever the distance', () => {
+    expect(framingShift(hero, goal, 1, false)).toEqual({ x: 0, z: 0 });
+  });
+
+  it('does not shift for a tower beyond the reach, and shifts for one exactly at it', () => {
+    expect(framingShift(hero, goal, FRAME_REACH + 1, true)).toEqual({ x: 0, z: 0 });
+    expect(framingShift(hero, goal, FRAME_REACH, true).x).toBe(6 * FRAME_SHARE);
+  });
+
+  it('is measured from the hero: a hero that stands on the tower gets no shift', () => {
+    expect(framingShift(goal, goal, 0, true)).toEqual({ x: 0, z: 0 });
   });
 });

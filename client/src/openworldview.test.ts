@@ -4,6 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, OFF_WORLD, type Terrain, type Tile, TROOP, World } from './openworld';
 import { RECRUIT_MAX } from './openworldrecruit';
+import { FRAME_REACH, FRAME_SHARE } from './openworldcamera';
 import { FightState } from './openworldfight';
 import { WORLD_LOOKS } from './daynight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
@@ -909,6 +910,32 @@ describe('the zoom of the Open world camera (#976)', () => {
     view.show([1, 0]);
     expect(view.follow(1 / 60, true)).toBe(true);
     expect(view.focusHeight).toBe(view.scene.getObjectByName('hero')!.position.y);
+  });
+});
+
+describe('the camera frames the tower the hero walks to on a narrow screen (#1534)', () => {
+  it('looks a share of the way to a tower within the reach on a portrait screen, and at the hero on a landscape one', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(390, 844);
+    view.show([0, 0]);
+    view.setGoal([3, 0]);
+    view.follow(1, true);
+    expect(view.focusPoint.x).toBeCloseTo(axialTo3D(3, 0).x * FRAME_SHARE);
+    view.resize(1600, 900);
+    view.follow(1, true);
+    expect(view.focusPoint.x).toBeCloseTo(0);
+  });
+
+  it('looks at the hero alone with no goal, or with a tower beyond the reach', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(390, 844);
+    view.show([0, 0]);
+    view.setGoal(null);
+    view.follow(1, true);
+    expect(view.focusPoint.x).toBeCloseTo(0);
+    view.setGoal([FRAME_REACH + 1, 0]);
+    view.follow(1, true);
+    expect(view.focusPoint.x).toBeCloseTo(0);
   });
 });
 

@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
-import { bearingOf, contractLine, goalLines, WAYS } from './openworldgoal';
+import { bearingOf, contractLine, goalCell, goalLines, WAYS } from './openworldgoal';
 import { SECRETS } from './story';
+
+describe('the tower the goal names (#1534): the cell the camera frames', () => {
+  const hero: Axial = [0, 0];
+  const tower = (cell: Axial, beaten = false, guided?: boolean) => ({ cell, beaten, guided });
+
+  it('is the nearest tower not beaten that guidance points at', () => {
+    const lairs = [tower([5, 0]), tower([2, 0]), tower([1, 0], true), tower([0, 1], false, false)];
+    expect(goalCell({ hero, yaw: 0, lairs })).toEqual([2, 0]);
+  });
+
+  it('is null when every tower is beaten, or no tower stands in the world', () => {
+    expect(goalCell({ hero, yaw: 0, lairs: [tower([1, 0], true)] })).toBeNull();
+    expect(goalCell({ hero, yaw: 0, lairs: [] })).toBeNull();
+  });
+});
 
 // The goal of the Open world on arrival (#1530, docs/specs/openworld.md section 14): one sentence of objective and a text bearing to the nearest
 // tower not beaten, from the minimap's own turn of the cells (`screenOffset`).

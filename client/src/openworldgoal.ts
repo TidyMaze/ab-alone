@@ -42,6 +42,16 @@ export function goalLines({ hero, yaw, lairs, logsLeft }: GoalState): { goal: st
   return { goal: `Goal: beat the ${plural(lairs.length, 'tower')} of Hollow. One medal each.`, bearing: `Nearest tower: ${plural(near.cells, 'cell')}, ${near.way}.` };
 }
 
+/** The cell of the tower the goal names (#1534): the nearest one not beaten that guidance points at, the one the camera frames. `null` once
+ * every tower is beaten, or for a world with no tower. */
+export function goalCell({ hero, yaw, lairs }: Omit<GoalState, 'logsLeft'>): Axial | null {
+  const near = lairs
+    .filter(({ beaten, guided }) => !beaten && guided !== false)
+    .map(({ cell }) => ({ cell, cells: bearingOf(hero, cell, yaw).cells }))
+    .sort((a, b) => a.cells - b.cells)[0];
+  return near ? near.cell : null;
+}
+
 /** A tower as the contract reads it: its cell, whether it is beaten, whether guidance points at it (the ring to beat), its boss and its ring. */
 export interface ContractTower {
   cell: Axial;

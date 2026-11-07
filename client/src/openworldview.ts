@@ -8,7 +8,7 @@ import { uniform, vertexColor } from 'three/tsl';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './openworldboat';
-import { CameraLife, Spring } from './openworldcamera';
+import { CameraLife, framingShift, Spring } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, gapFill, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { RECRUIT_MAX } from './openworldrecruit';
@@ -77,6 +77,9 @@ export function footprint(camera: THREE.Camera): THREE.Vector3[] {
 }
 /** How far along a ray a corner that sees no ground reaches: far past any reach, so it is clipped by `MAX_REACH`. */
 const SKY_DISTANCE = 1e4;
+
+/** No offset of the look from the hero (#1534). */
+const NO_SHIFT = { x: 0, z: 0 };
 
 /** The hex distance in cells between two cells: the steps a marble takes from one to the other. */
 const hexDistance = ([q1, r1]: Axial, [q2, r2]: Axial): number => {
@@ -535,6 +538,8 @@ export class OpenWorldView {
    * camera does not glide in from the origin. */
   private readonly focus = new THREE.Vector3();
   private readonly follows: [Spring, Spring, Spring] = [new Spring(0, FOLLOW), new Spring(0, FOLLOW), new Spring(0, FOLLOW)];
+  /** The tower the goal names, `setGoal`: on a narrow screen the look leans toward it when it is near (`framing`, #1534). */
+  private goal: Axial | null = null;
   /** The camera's offsets (punch, shake, #1103): never the focus, which the chunks follow. */
   private readonly life = new CameraLife();
   private lifeOn = false;
@@ -1088,9 +1093,10 @@ export class OpenWorldView {
   follow(dt: number, instant: boolean): boolean {
     const { position } = this.hero;
     const [x, y, z] = this.follows;
-    let moved = chase(x, position.x, dt, instant);
+    const shift = this.framing();
+    let moved = chase(x, position.x + shift.x, dt, instant);
     moved = chase(y, position.y, dt, instant) || moved;
-    moved = chase(z, position.z, dt, instant) || moved;
+    moved = chase(z, position.z + shift.z, dt, instant) || moved;
     moved = chase(this.yawGap, 0, dt, instant) || moved;
     moved = chase(this.zoomNow, this.level, dt, instant) || moved;
     if (!moved) return false;
@@ -1098,6 +1104,17 @@ export class OpenWorldView {
     this.yawNow = wrapPi(this.yawGoal + this.yawGap.x);
     this.frame();
     return true;
+  }
+
+  /** The tower the goal names (#1534), or `null` when none is left: the camera frames it on a narrow screen when it is near. */
+  setGoal(cell: Axial | null): void {
+    this.goal = cell;
+  }
+
+  /** The look's offset from the hero on the ground (#1534): toward the goal's tower on a narrow screen, within reach (`framingShift`). */
+  private framing(): { x: number; z: number } {
+    if (!this.goal) return NO_SHIFT;
+    return framingShift(this.hero.position, axialTo3D(this.goal[0], this.goal[1]), hexDistance(this.heroCell, this.goal), this.camera.aspect < 1);
   }
 
   /** The point the camera looks at, on the ground under the hero (the tests and the browser checks read it). */

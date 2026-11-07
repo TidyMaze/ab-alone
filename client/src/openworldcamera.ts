@@ -57,6 +57,18 @@ export class CameraLife {
   }
 }
 
+/** The framing of a narrow screen (#1534): a tower within `FRAME_REACH` cells of the hero pulls the look `FRAME_SHARE` of the way to it, so a
+ * phone sees the tower the hero walks to, not only the hero. The share is of the ground offset, on each axis. */
+export const FRAME_REACH = 8;
+export const FRAME_SHARE = 0.5;
+
+/** The offset of the look from the hero on the ground (x, z), for the tower at `goal`, `cells` cells away: nothing unless the screen is
+ * `narrow` and the tower is within `FRAME_REACH`. */
+export function framingShift(hero: { x: number; z: number }, goal: { x: number; z: number }, cells: number, narrow: boolean): { x: number; z: number } {
+  if (!narrow || cells > FRAME_REACH) return { x: 0, z: 0 };
+  return { x: (goal.x - hero.x) * FRAME_SHARE, z: (goal.z - hero.z) * FRAME_SHARE };
+}
+
 /** A value of the camera that follows its goal as a critically damped spring (#1333): the point it looks at, its turn, its zoom. Its
  * speed never jumps, whatever the goal does: a step of the goal starts it from rest, a change of the goal's speed bends its own
  * speed over a few frames. It is integrated exactly for any frame time, so a long frame (a hidden tab) lands near the goal and never
