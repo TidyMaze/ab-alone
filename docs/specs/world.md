@@ -314,7 +314,7 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   (`sceneOf`, `scenes.ts`): the Hub; a game of the board against the bot, in hot seat, online or in the trainer (`bot`); the
   royale; the rogue-lite map (every screen of a run but its fight) and its fight; a boss fight (`boss:<id>`); the Open world
   by the biome under the hero and the hour of the day (`world:<biome>:<day|dusk|night>`, 6 biomes by 3 hours). Each scene is a
-  set of layers synthesized in code, no melody and no new audio file: a `drone` of steady sines (an open fifth for the Hub, a
+  set of layers synthesized in code, no melody and no new audio file (the three MP3s are listed in CREDITS.md): a `drone` of steady sines (an open fifth for the Hub, a
   fifth lower for the bot, a beating minor second for the royale, a major triad for the map, a minor third for the fight), a
   `pulse` for a boss, `wind` outdoors (noise through a band, on the ambience bus). In the Open world each biome has its own root
   (meadow A, forest G, tundra F, desert D, badlands C, archipelago B) and the hour moves it: a fifth above the root by day, a
@@ -436,7 +436,7 @@ Resolved by the design review on #51 (answers recorded here):
 
 Still open:
 
-1. Audio assets: original recordings, licensed, or procedurally generated (budget)?
+1. Audio assets: closed. The three MP3 files are AI-generated for this project, see CREDITS.md.
 2. Photosensitivity safe mode on by default: confirm.
 3. Tech review (#54) asks for an audio and asset pipeline section: who owns it?
 
