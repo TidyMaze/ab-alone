@@ -473,13 +473,13 @@ describe('main.ts board and HUD', () => {
     expect(ghosts.children).toHaveLength(0);
   });
 
-  it("shows Tally's line of the mode at the start of a match, gone after the first move", async () => {
+  it('shows who plays and the goal at the start of a match, gone after the first move (#1568)', async () => {
     const local = await boot('?bot=off');
-    expect(local.hud()).toContain('Mess: two crews, one table. Ledger open.');
+    expect(local.hud()).toContain('Two players, one board. Eject 6 to win.');
     step(local);
-    expect(local.hud()).not.toContain('Ledger open');
+    expect(local.hud()).not.toContain('Eject 6 to win');
     const bot = await boot('?nodes=1');
-    expect(bot.hud()).toContain('Mess: one seat filled. The other is counted.');
+    expect(bot.hud()).toContain('You vs Bot. Eject 6 to win.');
     startBoss(bot, 'hull');
     expect(bot.hud()).toContain('Rim on file.'); // #1038: the boss bar names the boss, the line keeps its flavour
     await bot.settle(); // the bot's pending answers arrive before the test ends
@@ -512,7 +512,7 @@ describe('main.ts board and HUD', () => {
     const game = await boot('?bot=off');
     document.getElementById('play-online')!.click();
     await until(game, () => document.body.dataset.seat === 'player');
-    expect(game.hud()).toContain('Link: two crews, one ledger. Both counted.');
+    expect(game.hud()).toContain('You vs your opponent, online. Eject 6 to win.');
     // The opponent: a second session on the other end of the room, with its own engine.
     const { Engine, engine_version } = await import('abalone-wasm');
     const theirs = new Engine();
@@ -564,7 +564,7 @@ describe('main.ts board and HUD', () => {
     const game = await boot('?bot=off#room=abcdefgh');
     await until(game, () => document.body.dataset.seat === 'pending');
     expect(game.room()).toBe('abcdefgh');
-    expect(game.hud()).toContain('Link: two crews, one ledger. Both counted.');
+    expect(game.hud()).toContain('You vs your opponent, online. Eject 6 to win.');
   });
 
   it('draws target arrows without adding dynamic PointLights to avoid shader recompilation stalls (#777)', async () => {

@@ -460,7 +460,7 @@ describe('main.ts, the hub doors (#522)', () => {
     shipAt(game, [-1, 0]);
     game.click(-1, -1);
     expect(hub()).toBeUndefined();
-    expect(game.hud()).toContain('Mess: two crews, one table.');
+    expect(game.hud()).toContain('Two players, one board.');
     await repeat(game); // the page plays both sides: no bot
     expect(game.turn()).toBe('Draw');
     back().click();
@@ -495,7 +495,7 @@ describe('main.ts, the hub doors (#522)', () => {
     ship(game);
     game.click(-2, 0); // the bot table, next to the hot-seat one
     expect(hub()).toBeUndefined();
-    expect(game.hud()).toContain('Mess: one seat filled.');
+    expect(game.hud()).toContain('You vs Bot.');
     await game.hook<Promise<number>>('__playTurns', 30, [4]); // the player marches one way, the bot pushes six off
     expect(data().over).toBe('loss');
     back().click();

@@ -157,13 +157,13 @@ test('the hot-seat table starts a game for two at one table, #522', async ({ pag
   await shipAt(page, './', [-1, 0]);
   await hookClick(page, -1, -1);
   await expect(page.locator('body')).not.toHaveAttribute('data-hub');
-  await expect(page.locator('#hud')).toContainText('Mess: two crews, one table.');
+  await expect(page.locator('#hud')).toContainText('Two players, one board.');
 });
 
 test('the bot table starts a game the bot answers, #522', async ({ page }) => {
   await shipAt(page, './?nodes=100', [-1, 0]);
   await hookClick(page, -2, 0);
-  await expect(page.locator('#hud')).toContainText('Mess: one seat filled.');
+  await expect(page.locator('#hud')).toContainText('You vs Bot.');
   await hookClick(page, 0, 2); // Black (0, 2) to (0, 1)
   await hookClick(page, 0, 1);
   await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(2); // the bot replied

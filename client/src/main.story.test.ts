@@ -172,12 +172,13 @@ describe('the moments of the ladder fire from main.ts (#1584)', () => {
   });
 });
 
-describe("Tally's line of the bot table (#1584)", () => {
-  it('changes after the first boss win: the next match says it was never an enemy', async () => {
+describe('the bot table subtitle (#1568, the story line of #1584 goes to the archive)', () => {
+  it('names the bot after the first boss win too: the story line is not on the plate', async () => {
     const first = await boot('?nodes=50');
-    expect(first.hud()).toContain('Mess: one seat filled. The other is counted.');
+    expect(first.hud()).toContain('You vs Bot. Eject 6 to win.');
     expect(first.hud()).not.toContain('never an enemy');
     const next = await boot('?nodes=50', { storage: saved(2) });
-    expect(next.hud()).toContain('Mess: one seat filled. The other is counted. It was never an enemy.');
+    expect(next.hud()).toContain('You vs Bot. Eject 6 to win.');
+    expect(next.hud()).not.toContain('never an enemy');
   });
 });

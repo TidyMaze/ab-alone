@@ -81,7 +81,7 @@ test('a game at the hub hot-seat table survives a reload, still with no bot (#56
   await page.getByRole('button', { name: 'Hub' }).click();
   await click(page, -1, -1); // the hot-seat table
   const hud = page.locator('#hud');
-  await expect(hud).toContainText('Mess: two crews, one table.');
+  await expect(hud).toContainText('Two players, one board.');
   await move(page, [0, 2], [0, 1]); // Black
   await expect.poll(() => savedPlies(page)).toBe(1);
 

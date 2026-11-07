@@ -81,7 +81,7 @@ describe('the Ledger section of the settings menu (#1585)', () => {
 describe('the lines the world delivers are filed in the Ledger once seen (#1585)', () => {
   it("files Tally's line of the bot table when the match starts", async () => {
     const game = await boot('?nodes=50', { storage: story(2) });
-    expect(game.hud()).toContain(line('bot'));
+    expect(game.hud()).toContain('You vs Bot. Eject 6 to win.'); // the plate names the match (#1568), Tally's line is filed
     expect(stored()).toEqual(['bot']);
   });
 

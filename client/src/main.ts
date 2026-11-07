@@ -187,6 +187,7 @@ import type { Transport } from './transport';
 import { endBanner, royaleBanner, type EndAnim } from './endbanner';
 import { CountWatch, EdgeWatch, EndWatch, OutWatch, PhaseWatch, SelectionWatch, clickable, turnBack } from './cues';
 import { tallyLine, townLine } from './tally';
+import { matchLine } from './matchline';
 import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
 import { generateKeys, type Keys, type Report } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
@@ -3804,8 +3805,12 @@ function drawHud(extra = ''): void {
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
   const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
-  const tally = (shownPly() === 0 || firstRun === 'fight') && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '';
-  sawLines(tally); // the line of the story at the start of a match (#1585)
+  const opening = (shownPly() === 0 || firstRun === 'fight') && status === 0;
+  const flavour = opening ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '';
+  sawLines(flavour); // the line of the story at the start of a match (#1585), kept in the ledger whatever the plate shows
+  // The plate's subtitle: a match says who plays and the goal (#1568); a boss fight and the first run keep Tally's line.
+  const scripted = firstRun === 'open' || firstRun === 'fight'; // the first run keeps Tally's line, its coach note explains it (#1521)
+  const tally = opening && !fight && !scripted ? matchLine({ mode: online ? 'online' : worker ? 'bot' : 'local', win: win[0] }) : flavour;
   const moves = run?.state.fighting ? movesLine(run.map, run.state) : ''; // the budget and the count of the act in a fight (#1473), the map has its own
   // End banner (#282): body[data-over] carries the animation id for the CSS and the e2e tests.
   const end = endBanner({
