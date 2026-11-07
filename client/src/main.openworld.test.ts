@@ -90,6 +90,14 @@ describe('the Open world mode', () => {
     expect(byId('openworld-hud').dataset.folded).toBeUndefined(); // the plate is shown again
   });
 
+  it('reads the frames the world has drawn since the open through a test hook: none in a page that has not drawn it, #1601', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect((window as unknown as { __openworldDrawn: () => number }).__openworldDrawn()).toBe(0); // jsdom has no WebGL: the mode counts the draws (openworldmodewander.test.ts)
+  });
+
   it('reads what the camera draws through a test hook, at rest: the shake is 0, #1103', async () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();

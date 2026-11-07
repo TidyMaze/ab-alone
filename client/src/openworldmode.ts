@@ -100,6 +100,8 @@ export class OpenWorldMode {
   onWild: (seed: number, home: Axial) => void = () => {};
   /** The page clock (ms) before which no wild fight starts: a world that just opened gives 5 s to walk away. 0 when none is due. */
   private calmUntil = 0;
+  /** Frames drawn since the world opened: a spec waits for the first one before it looks at the wild fight (#1601, `__openworldDrawn`). */
+  drawn = 0;
   /** Whether a wild fight has started: the hero takes no more steps while the page plays the transition. */
   private fighting = false;
   /** The timer that keeps the hero alive for the room while the tab is hidden (#1371). */
@@ -844,6 +846,7 @@ export class OpenWorldMode {
     if (!this.dirty && !sparks && !loops) return false;
     this.dirty = false;
     render(this.view!.scene, this.view!.camera);
+    this.drawn++;
     if (this.calmUntil === Infinity) this.calmUntil = now + FLEE_GRACE_MS; // the calm starts on the first draw, so a slow page (software GL) gets its 5 s (#1511)
     this.view!.drain(); // what this frame replaced is no longer in use by it (#1017)
     return true;

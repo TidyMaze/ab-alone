@@ -6766,6 +6766,7 @@ if (navigator.webdriver) {
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[]; recruits?: number }) => openWorld.loaded.mode.fixture(fixture);
   hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
   hooks.__openworldEnemies = () => openWorld.loaded.mode.enemies();
+  hooks.__openworldDrawn = () => openWorld.loaded.mode.drawn; // the frames drawn since the world opened: a spec waits for one before it reads the wild fight (#1601)
   hooks.__openworldWander = (tick: number | null) => ((wanderTick = tick), openWorld.loaded.mode.stepWander(undefined, true)); // the tick of the marbles' clock, or null for the real one (#1511)
   hooks.__openworldTime = (ms: number) => openWorld.loaded.mode.setTime(ms); // the time of day in ms of the 12 minute cycle: 0 day, 6 min dusk, 7.5 min night (#1496)
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)

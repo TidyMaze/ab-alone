@@ -6,7 +6,7 @@ lowTierOnCi();
 
 // #1511: a wandering marble that touches the hero starts a wild fight the player can flee. Seed 3 has a marble within the hero's sight of the
 // spawn. The marbles stand still (tick 0) until a spec sets the clock; the hero is put beside one with the test hook.
-type Hooks = { __openworldFixture: (f: object) => void; __openworldEnemies: () => [number, number][]; __openworldWander: (tick: number | null) => void };
+type Hooks = { __openworldFixture: (f: object) => void; __openworldEnemies: () => [number, number][]; __openworldWander: (tick: number | null) => void; __openworldDrawn: () => number };
 const hooks = (page: Page) => ({
   enemies: () => page.evaluate(() => (window as unknown as Hooks).__openworldEnemies()),
   put: (hero: [number, number]) => page.evaluate((h) => (window as unknown as Hooks).__openworldFixture({ hero: h, troop: [] }), hero),
@@ -47,6 +47,7 @@ test('a reload during a wild fight puts the hero back in the world on its cell, 
   await expect(page.getByRole('button', { name: 'Flee' })).toBeVisible();
   await page.reload();
   await expect.poll(() => data(page, 'openworldAt')).toBe(`${q + 1},${r}`);
+  await expect.poll(() => page.evaluate(() => (window as unknown as Hooks).__openworldDrawn())).toBeGreaterThan(0); // drawn: the 5 s calm starts on this draw (#1601)
   await expect(page.getByRole('button', { name: 'Flee' })).toBeHidden();
 });
 

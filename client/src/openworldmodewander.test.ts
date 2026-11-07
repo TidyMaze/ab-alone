@@ -197,6 +197,19 @@ describe('a marble that touches the hero starts a wild fight (#1511)', () => {
     expect(m.key('ArrowUp')).toBe(true);
   });
 
+  it('counts the frames it draws since the open, and no frame it skips: a spec waits for the first draw (#1601)', () => {
+    const m = made();
+    m.enter(found.seed, 800, 600);
+    expect(m.drawn).toBe(0);
+    m.frame(vi.fn(), 1000);
+    expect(m.drawn).toBe(1);
+    m.frame(vi.fn(), 1001); // nothing moved: no draw
+    expect(m.drawn).toBe(1);
+    (m as unknown as { dirty: boolean }).dirty = true;
+    m.frame(vi.fn(), 1002);
+    expect(m.drawn).toBe(2);
+  });
+
   it('gives a world just opened 5 s: the marble next to the hero fights when the calm ends, once', () => {
     vi.spyOn(performance, 'now').mockReturnValue(1000);
     const m = made();
