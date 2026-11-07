@@ -44,6 +44,8 @@ const TERMINALS: Record<Deck, readonly [string, string]> = {
   chapel: ['chapel-door', 'chapel-sermon'],
   bridge: ['bridge-clamp', 'bridge-last-orders'],
 };
+/** The second terminal of each deck (#1556): the hub draws it as a lectern, the first one as the CRT. */
+export const LECTERN_TERMINALS: ReadonlySet<string> = new Set(Object.values(TERMINALS).map(([, second]) => second));
 
 // The gallery ring (#1249): the other bosses of each deck (README "The game", deck.ts) in roster order, then the modes
 // with no table, the Open world on the Mess where every player starts.

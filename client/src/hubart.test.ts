@@ -211,6 +211,22 @@ describe('the hub props of the Blender file on the rooms of the game (#1374)', (
     expect((glyph.children[0] as THREE.Mesh).geometry).toBe(kit.parts.door![0]!.geometry);
   });
 
+  // #1556: the two terminals of a deck were the same CRT twice; the second one stands a cyan lectern instead
+  it('gives the second terminal of a deck a lectern, and the first one the CRT of the file', () => {
+    const withCrt: HubKit = { ...kit, parts: { ...kit.parts, crt: [mesh('crt')] } };
+    const first = createKitGlyph(withCrt, { kind: 'terminal', lore: 'mess-house-rule' });
+    expect(first.name).toBe('door-terminal');
+    expect(first.getObjectByName('crt')).toBeDefined();
+    expect(first.getObjectByName('lectern')).toBeUndefined();
+    const second = createKitGlyph(withCrt, { kind: 'terminal', lore: 'mess-corner-table' });
+    expect(second.name).toBe('door-terminal');
+    expect(second.getObjectByName('crt')).toBeUndefined();
+    const lectern = second.getObjectByName('lectern') as THREE.Group;
+    expect(lectern).toBeInstanceOf(THREE.Group);
+    const colors = lectern.children.map((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color?.getHex());
+    expect(colors).toContain(0x19e6ff); // its screen is the palette's neon cyan (art.md 1)
+  });
+
   it('shows a gold seal on a beaten boss door, and none on a shut one', () => {
     expect(createKitGlyph(kit, { kind: 'boss', boss: 'echo' }).getObjectByName('beaten-seal')).toBeUndefined();
     expect(createKitGlyph(kit, { kind: 'boss', boss: 'echo' }, { beaten: true }).getObjectByName('beaten-seal')).toBeDefined();

@@ -3,7 +3,7 @@
 // marbles, a podium, a globe, a target dummy), ringed in its own contrast-safe colour.
 import * as THREE from 'three';
 import type { Axial } from './board';
-import type { Door } from './hub';
+import { LECTERN_TERMINALS, type Door } from './hub';
 import type { HubKit } from './tablezero';
 
 export const GLYPH_COLORS = {
@@ -61,6 +61,10 @@ const seatGeo = new THREE.BoxGeometry(0.06, 0.22, 0.06);
 const plinthGeo = new THREE.CylinderGeometry(0.13, 0.16, 0.14, 12);
 const medalGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.03, 20);
 const cagePostGeo = new THREE.BoxGeometry(0.04, 0.34, 0.04);
+const lecternBaseGeo = new THREE.BoxGeometry(0.46, 0.04, 0.34);
+const lecternPostGeo = new THREE.BoxGeometry(0.1, 0.5, 0.1);
+const lecternScreenGeo = new THREE.BoxGeometry(0.5, 0.34, 0.04);
+const lecternScreen = new THREE.MeshBasicMaterial({ color: 0x19e6ff }); // the neon cyan of the palette (art.md 1)
 const arrowShape = new THREE.Shape(
   [[0.26, 0], [0.04, 0.18], [0.04, 0.07], [-0.2, 0.07], [-0.2, -0.07], [0.04, -0.07], [0.04, -0.18]].map(
     ([x, y]) => new THREE.Vector2(x, y),
@@ -266,6 +270,14 @@ export const KIT_PROP: Record<Door['kind'], string> = {
   lift: 'lift',
 };
 
+/** The second terminal of a deck (#1556): a lectern, a plate base and post, and a cyan screen tilted toward the camera. */
+function lectern(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'lectern';
+  group.add(part(lecternBaseGeo, plate, [0, 0.015, 0]), part(lecternPostGeo, plate, [0, 0.27, 0]), part(lecternScreenGeo, lecternScreen, [0, 0.66, 0.08], 0.4));
+  return group;
+}
+
 /** A small gap over the top of the file's lift cage, so the arrow lies on top of it, in view (#523, #1374). */
 const ARROW_GAP = 0.02;
 
@@ -286,7 +298,8 @@ const KIT_SEAL: [number, number, number] = [0, 0.5, 0.06];
 export function createKitGlyph(kit: HubKit, door: Door, options: GlyphOptions = {}): THREE.Group {
   const group = new THREE.Group();
   group.name = `door-${door.kind}`;
-  for (const piece of kit.parts[KIT_PROP[door.kind]] ?? []) group.add(piece.clone());
+  if (door.kind === 'terminal' && LECTERN_TERMINALS.has(door.lore)) group.add(lectern());
+  else for (const piece of kit.parts[KIT_PROP[door.kind]] ?? []) group.add(piece.clone());
   if (options.beaten) {
     const seal = part(sealGeo, materials.medals, KIT_SEAL, Math.PI / 2);
     seal.name = 'beaten-seal';
