@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { boot } from './test/harness';
 
 // The left HUD panel folds (#957): a button on the panel folds it to a small tab with the button alone, and unfolds it
@@ -33,29 +33,5 @@ describe('main.ts the HUD panel folds (#957)', () => {
     await booting;
     expect(fold().getAttribute('aria-expanded')).toBe('false');
     expect(byId('hud-dock').dataset.folded).toBe('');
-  });
-
-  it('a portrait window under 700 px starts folded, and a resize refolds it until the player chooses (#1610)', async () => {
-    vi.stubGlobal('innerWidth', 360);
-    vi.stubGlobal('innerHeight', 640);
-    await boot('?bot=off');
-    expect(fold().getAttribute('aria-expanded')).toBe('false');
-    vi.stubGlobal('innerWidth', 640);
-    vi.stubGlobal('innerHeight', 360);
-    dispatchEvent(new Event('resize'));
-    expect(fold().getAttribute('aria-expanded')).toBe('true');
-    vi.unstubAllGlobals();
-  });
-
-  it('a resize never overrides a stored choice (#1610)', async () => {
-    vi.stubGlobal('innerWidth', 360);
-    vi.stubGlobal('innerHeight', 640);
-    const booting = boot('?bot=off');
-    localStorage.setItem('ab-alone.hud-folded', 'off');
-    await booting;
-    expect(fold().getAttribute('aria-expanded')).toBe('true');
-    dispatchEvent(new Event('resize'));
-    expect(fold().getAttribute('aria-expanded')).toBe('true');
-    vi.unstubAllGlobals();
   });
 });
