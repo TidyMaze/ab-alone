@@ -207,7 +207,7 @@ describe('the renderer and its textures', () => {
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
     const { scene } = await drawn(game);
     const terrace = scene.getObjectByName('terrace')!;
-    expect((scene.background as THREE.Color).getHex()).toBe(0x04050c);
+    expect((scene.background as THREE.Color).getHex()).toBe(neonSkyOf(deckOf('local')).getHex()); // the boot deck's key, not the plain black (#1551)
     expect(terrace.getObjectByName('starfield')).toBeDefined();
     expect(terrace.getObjectByName('terrace_edges')).toBeDefined();
     expect(materials(scene).some((m) => m.color.getHex() === 0x14161a)).toBe(true); // the black marble
@@ -379,7 +379,7 @@ describe('the renderer and its textures', () => {
       const booting = boot('?bot=off&scene=room');
       const { options, draw } = renderer();
       const game = await booting;
-      expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: false, trackTimestamp: false }]);
       const scene = draw();
       expect((scene.background as THREE.Color).getHex()).toBe(neonSkyOf(deckOf('local')).getHex()); // the sky takes the deck's key (#1551)
       expect(materials(scene).some((m) => m.map && !(m.map as THREE.CanvasTexture).isCanvasTexture)).toBe(false);
@@ -411,7 +411,7 @@ describe('the renderer and its textures', () => {
       const booting = boot('?bot=off&backend=webgl');
       const { options } = renderer();
       await booting;
-      expect(options).toEqual([{ antialias: false, forceWebGL: true }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: true, trackTimestamp: false }]);
     });
 
     const bevel = (scene: THREE.Scene) => materials(scene).find((m) => m.color.getHex() === 0xc4cacf && m.metalness === 0.3)!;
@@ -444,14 +444,14 @@ describe('the renderer and its textures', () => {
       const booting = boot('?bot=off&quality=low', { webdriver: false }); // low: no reflections, the stub has no PMREM
       const { options } = renderer();
       await booting;
-      expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: false, trackTimestamp: false }]);
     });
 
     it('has no MSAA on a 1x desktop screen either: FXAA smooths it, MSAA cost 27 FPS against 108 (#857)', async () => {
       const booting = boot('?bot=off&quality=low', { webdriver: false });
       const { options } = renderer();
       await booting;
-      expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: false, trackTimestamp: false }]);
     });
 
     it('drops MSAA on a 3x desktop screen drawn at 1.5: the edges are too fine to show (#844)', async () => {
@@ -459,7 +459,7 @@ describe('the renderer and its textures', () => {
       const booting = boot('?bot=off&quality=low', { webdriver: false });
       const { options } = renderer();
       await booting;
-      expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: false, trackTimestamp: false }]);
     });
 
     it('keeps MSAA on a DPR-3 phone, a touch screen: its 1.5 shows the steps, its tiled GPU resolves MSAA cheaply (#868)', async () => {
@@ -468,7 +468,7 @@ describe('the renderer and its textures', () => {
       const booting = boot('?bot=off&quality=low', { webdriver: false, touch: true });
       const { options } = renderer();
       await booting;
-      expect(options).toEqual([{ antialias: true, forceWebGL: false }]);
+      expect(options).toEqual([{ antialias: true, forceWebGL: false, trackTimestamp: false }]);
     });
   });
 });
