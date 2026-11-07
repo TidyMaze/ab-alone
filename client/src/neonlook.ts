@@ -49,6 +49,9 @@ export const DECK_KEY: Record<Deck, { key: number; accent: number }> = {
   chapel: { key: 0x6a609f, accent: 0x9a6bff }, // candles, wood and wire
   bridge: { key: 0xe8f0ff, accent: 0x19e6ff }, // cold white, too clean
 };
+/** The key of a rogue-lite fight (#1554, art.md Decks): the violet of the run's own marks, on any deck, so the rim and the posts
+ * tell a run's fight from a plain match on the same Mess arena at a glance. */
+export const RUN_KEY: { key: number; accent: number } = { key: NEON.violet, accent: NEON.violet };
 /** The slab takes this much of its deck's key over the slate (`NEON.slab`), and the sky this much over `NEON.sky` (#1551). */
 export const SLAB_TINT = 0.12;
 /** The ground outside the board and the sky take this much of the key (#1551: the deck's identity is the surround). */
@@ -315,8 +318,8 @@ function glowMaterial(kind: 'rim' | 'post'): THREE.MeshBasicMaterial {
 export const neonSkyOf = (deck: Deck): THREE.Color => new THREE.Color(NEON.sky).lerp(new THREE.Color(DECK_KEY[deck].key), SKY_TINT);
 
 /** The deck in play under the neon look (#1551): the slab takes its key over the slate, the rim glows in its key, the posts in its accent. */
-export function neonDeckLook(deck: Deck): void {
-  const { key, accent } = DECK_KEY[deck];
+export function neonDeckLook(deck: Deck, run = false): void {
+  const { key, accent } = run ? RUN_KEY : DECK_KEY[deck];
   // The slab's vertex colours run from the gap floor up to the rim: the rim's colour times this is the tinted slate.
   const [slab, top] = [new THREE.Color(NEON.slab).lerp(new THREE.Color(key), SLAB_TINT), new THREE.Color(NEON.rim)];
   (neonMaterial('scene_slab_arena') as THREE.MeshStandardMaterial).color.setRGB(slab.r / top.r, slab.g / top.g, slab.b / top.b);

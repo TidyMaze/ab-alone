@@ -1739,7 +1739,7 @@ void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fo
 const cellRoughness = (name: Deck): THREE.Texture | null => (name === 'mess' ? (messRoughness ?? deckRoughness) : deckRoughness);
 function applyDeck(next: Deck): void {
   deck = next;
-  sceneRenderer.applyDeck(deck);
+  sceneRenderer.applyDeck(deck, run !== null); // a rogue-lite fight's rim is violet (#1554)
   if (steel.roughnessMap) steel.roughnessMap = cellRoughness(next); // only the textured look has one
   document.body.dataset.deck = deck; // read by the e2e tests
   applyLook();
@@ -6619,6 +6619,7 @@ document.getElementById('hud')!.addEventListener('click', (e) => {
 function leaveRun(): void {
   if (!run) return;
   run = null;
+  sceneRenderer.setRunFight(false); // the violet of the run goes at once (#1554)
   armed = 0;
   swapping = false;
   delete document.body.dataset.tactics;

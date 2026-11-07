@@ -4,7 +4,7 @@ import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowM
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
-import { DECK_KEY, NEON_GLOW, NEON_WORLD_LOOKS, neonDeckLook, neonSkyOf } from './neonlook';
+import { DECK_KEY, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, neonSkyOf } from './neonlook';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -195,6 +195,19 @@ describe('the neon look (#1424)', () => {
     expect(rim!.color.getHex()).toBe(new THREE.Color(DECK_KEY.cargo.key).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(DECK_KEY.cargo.key).toArray())).getHex());
     expect(post!.color.getHex()).toBe(new THREE.Color(DECK_KEY.cargo.accent).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(DECK_KEY.cargo.accent).toArray())).getHex());
     neonDeckLook('mess');
+  });
+
+  it('glows the rim and the posts violet in a rogue-lite fight, on any deck, and the deck key again after (#1554)', () => {
+    const glowHex = (hex: number): number => new THREE.Color(hex).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(hex).toArray())).getHex();
+    const colours = (): number[] => {
+      const [rim, post] = neonGlow([new THREE.Vector3(1, 0, 2)], true).children.map((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
+      return [rim!, post!];
+    };
+    neonDeckLook('mess', true);
+    expect(colours()).toEqual([glowHex(RUN_KEY.key), glowHex(RUN_KEY.accent)]);
+    expect(RUN_KEY.key).toBe(NEON.violet);
+    neonDeckLook('mess');
+    expect(colours()[0]).toBe(glowHex(DECK_KEY.mess.key));
   });
 });
 

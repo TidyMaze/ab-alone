@@ -408,12 +408,22 @@ export class SceneRenderer {
   /** The deck last applied: the neon sky set later (`setNeon`) takes its key. */
   private deck: Deck | null = null;
 
-  applyDeck(next: Deck): void {
+  /** Whether the deck on is a rogue-lite fight's (#1554): its rim is violet until `setRunFight(false)`. */
+  private runFight = false;
+
+  /** A rogue-lite fight's violet rim and posts (#1554), set at once: leaving a run gives the deck's own key back. */
+  setRunFight(on: boolean): void {
+    this.runFight = on;
+    if (this.neon && this.deck) neonDeckLook(this.deck, on);
+  }
+
+  applyDeck(next: Deck, run = false): void {
     this.deck = next;
+    this.runFight = run;
     const light = DECKS[next];
     this.renderer.toneMappingExposure = light.exposure;
     if (this.neon) {
-      neonDeckLook(next); // the slab, the rim and the posts take the deck's key (#1551)
+      neonDeckLook(next, run); // the slab, the rim and the posts take the deck's key (#1551), violet in a rogue-lite fight (#1554)
       // the sky takes the deck's key, but a backdrop texture in the room stays (#1551 fix-forward: main.boot)
       if (!(this.scene.background as THREE.Texture | null)?.isTexture) this.scene.background = neonSkyOf(next);
     }

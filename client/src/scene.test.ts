@@ -9,7 +9,7 @@ import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
 import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
-import { NEON, NEON_LIGHT, neonMaterial, neonSkyOf } from './neonlook';
+import { DECK_KEY, NEON, NEON_GLOW, NEON_LIGHT, neonGlow, neonMaterial, neonSkyOf } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
@@ -285,6 +285,19 @@ describe('SceneRenderer (#632)', () => {
     sr.applyDeck('bridge');
     expect(sr.currentBay).toBe(mockBay);
     sr.applyDeck('furnace');
+  });
+
+  it('glows the neon rim violet while a rogue-lite fight is on, the deck key after (#1554)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    const rimColour = (): number => ((neonGlow([], true).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex();
+    const glowHex = (hex: number): number => new THREE.Color(hex).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(hex).toArray())).getHex();
+    sr.applyDeck('mess', true);
+    expect(rimColour()).toBe(glowHex(NEON.violet));
+    sr.applyDeck('mess');
+    expect(rimColour()).toBe(glowHex(DECK_KEY.mess.key));
+    sr.applyDeck('mess', true);
+    sr.setRunFight(false); // leaving a run drops the violet at once, without a new applyDeck (#1554)
+    expect(rimColour()).toBe(glowHex(DECK_KEY.mess.key));
   });
 
   it('draws frame geometry and caches unchanged shapes', () => {
