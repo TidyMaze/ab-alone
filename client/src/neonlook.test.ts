@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, neonMarbleRim } from './neonlook';
+import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE,neonMarbleRim } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
@@ -75,6 +75,21 @@ describe('the neon look (#1424)', () => {
     expect(off.roughness, 'terrace black roughness unchanged').toBe(0.3);
     const offWhite = neonMarbleRim('white', glass(), false) as THREE.MeshStandardMaterial;
     expect(offWhite.roughness, 'terrace white unchanged').toBe(0.6);
+  });
+
+  it('shades the white marble by its normal under the neon look, so its lit side does not clip (#1553 slice B)', () => {
+    // Measured on the bot game at 960x540: the white's lit cap sat at 255 (clipped), its volume gone. A colour node darkens the
+    // side away from the sun, the look only; the black shell keeps its colour, the terrace keeps its white as it is.
+    const glass = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: NEON.whiteMarble, roughness: 0.6 });
+    const shade = (material: THREE.Material): unknown => (material as THREE.Material & { colorNode?: { isNode?: boolean } }).colorNode;
+    expect((shade(neonMarbleRim('white', glass(), true)) as { isNode: boolean }).isNode).toBe(true);
+    expect(shade(neonMarbleRim('white', glass(), false))).toBeUndefined();
+    expect(shade(neonMarbleRim('black', new THREE.MeshPhysicalMaterial({ color: NEON.blackMarble }), true))).toBeUndefined();
+    expect(NEON_WHITE_SHADE.floor, 'the shaded side keeps some light').toBeGreaterThan(0.4);
+    expect(NEON_WHITE_SHADE.floor, 'the shaded side is darker than the lit one').toBeLessThan(NEON_WHITE_SHADE.lit);
+    expect(NEON_WHITE_SHADE.lit, 'the lit side is below the clip').toBeLessThan(1);    const [x, y] = NEON_WHITE_SHADE.light;
+    expect(x, 'the sun stands on the left, as the neon sun does').toBeLessThan(0);
+    expect(y, 'the sun stands above the marble, as the neon sun does').toBeGreaterThan(0);
   });
 
   it('paints the ground, the lamps and the turn bar, and leaves an unknown node alone', () => {

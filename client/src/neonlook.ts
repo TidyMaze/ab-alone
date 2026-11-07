@@ -3,7 +3,7 @@
 // it is never stored.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { abs, color, dot, float, normalView, positionViewDirection } from 'three/tsl';
+import { abs, clamp, color, dot, float, mix, normalize, normalView, positionViewDirection, vec3 } from 'three/tsl';
 import type { Deck } from './deck';
 import { mixHex, type Phase, type WorldLook } from './daynight';
 
@@ -239,7 +239,10 @@ export const NEON_RIM = { colour: NEON.pedestalRing, strength: 2.2, power: 2 } a
 export const NEON_GLOSS = { roughness: { black: 0.3, white: 0.4 }, specularIntensity: 0.5 } as const;
 /** The soft rim of the white marble (#1553): a pale cool edge, weaker than the black shell's cyan, so the white does not bloom. */
 export const NEON_WHITE_RIM = { colour: 0xbfd0e0, strength: 0.35, power: 3 } as const;
-
+/** The white marble's shade under the neon look (#1553, slice B): its colour is `floor` on the side away from the sun and `lit` on the
+ * side facing it, by the normal in view space (a colour node, no map, no pass). `lit` below 1 keeps the lit cap off 255 (clipped
+ * at 255 before, measured on the bot game). `light` is the sun's side, left and up, in view space. */
+export const NEON_WHITE_SHADE = { floor: 0.5, lit: 0.85, light: [-0.5, 0.7, 0.5] as const } as const;
 /** The marbles under the neon look (#1552, #1553): a fresnel rim on both colours (cyan on the black shell, a soft pale edge on the
  * white) and the sharper highlight of `NEON_GLOSS`. The look off, the material is left as it is. */
 export function neonMarbleRim<M extends THREE.Material>(side: 'black' | 'white', material: M, on: boolean): M {
@@ -251,8 +254,13 @@ export function neonMarbleRim<M extends THREE.Material>(side: 'black' | 'white',
   const fresnel = float(1).sub(abs(dot(normalView, positionViewDirection)));
   const gloss: Record<string, number> = { roughness: NEON_GLOSS.roughness[side] };
   if (material instanceof THREE.MeshPhysicalMaterial) gloss.specularIntensity = NEON_GLOSS.specularIntensity;
+  // The white's lit cap clipped at 255 (#1553, measured): its colour falls to `floor` on the side away from the sun, the volume back.
+  const [lx, ly, lz] = NEON_WHITE_SHADE.light;
+  const facing = clamp(dot(normalView, normalize(vec3(lx, ly, lz))), 0, 1);
+  const shade = side === 'white' ? { colorNode: color((material as unknown as THREE.MeshStandardMaterial).color).mul(mix(float(NEON_WHITE_SHADE.floor), float(NEON_WHITE_SHADE.lit), facing)) } : {};
   return Object.assign(material, {
     ...gloss,
+    ...shade,
     emissiveNode: color(rim.colour).mul(fresnel.pow(float(rim.power))).mul(float(rim.strength)).add(color(base)),
   });
 }
