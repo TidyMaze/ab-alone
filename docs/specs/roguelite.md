@@ -1152,7 +1152,7 @@ cannot say. The table is a measure of the curve (act against act, boss against b
 - **The map and the route**: the engine's (`run::run_map_v` at the current `MAP_VERSION`, since the paced map of section 2, #1543; `RUN_SIM_MAP=0` plays the map of before; a run seed per row of the table). The bot takes a rest when the army is
   under its ceiling (14, 12 from level 2), else a fight or the boss, else a node with nothing to play (an event, a "?", a
   treasure, a shop, a secret room: left at once), an elite last. At the end of an act it takes the first exit offered
-  (`run::exits`), so acts 2 and 3 are the biome's boss (section 18); act 1 deals one of the 15 bosses of the roster from the seed
+  (`run::exits`), so acts 2 and 3 are the biome's boss (section 18); act 1 deals one of the 11 bosses of its pool (`LadderBoss::act_one`, #1599: the roster less The Echo, The Hull, The Chaplain and The Choir) from the seed
   (the engine's splitmix64, not the page's hash: the same spread, not the same boss for a seed).
 - **The act boss fight is the engine's**: `play_act_boss` (the ladder's bot of `boss-balance.md`, which plays two random first moves, never
   repeats a position and reads the tells and hooks) at the boss's own node budget times **3** against the boss at `ACT_PERCENT` of its
@@ -1370,6 +1370,19 @@ Hull beats it 2 or 3 times in 32 from 30 to 70 %, The Choir, The Chaplain and Th
 multiplier cannot tune a boss that is won or lost on its rules, which is what the issue saw in the ladder. So act 1 stays below 85 %, and
 act 3 as easy as act 2, whatever `ACT_PERCENT` is set to between 30 and 300 %. Only the whole run, which is the product, was brought into its
 band. The follow-up is #1599.
+
+**#1599, the act 1 pool.** The Echo, The Hull, The Chaplain and The Choir leave the Meadow's act 1 pool (`ACT_ONE_LEAVES`, the same list in
+`roguelite.ts` and `ladder.rs`, a test keeps them equal). Acts 2 and 3 stay the biome's boss, so the four are in no act's pool yet: the
+acts 2 and 3 that take them are a separate decision, not made here. Bot numbers, `RUN_SIM_POOL=1` on 40 seeds, the boss of each act at its
+`ACT_PERCENT`:
+
+| act | before (15 bosses) | after (11 bosses) |
+|---|---|---|
+| 1 at 50 % | 32/40 (80 %), lost to chaplain 2, choir 1, echo 1, hull 2, railyard 1, stalker 1 | 31/40 (78 %), lost to ballast 1, magnetizer 2, pulsar 1, railyard 1, stalker 1, swarm 2, unstable 1 |
+| 2 at 120 % | 26/40 (65 %) | 26/40 (65 %) |
+| 3 at 200 % | 21/40 (52 %) | 21/40 (52 %) |
+
+Act 1 did not reach the 85 % target: 78 %, one fight in 40 fewer won. Not run: the whole-run table (`RUN_SIM` without `RUN_SIM_POOL`), not measured here.
 
 ## 31. The HUD of an army fight, and reading the special marbles (#1540, #1541)
 

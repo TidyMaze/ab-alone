@@ -689,10 +689,14 @@ export function runNodes(map: MapNode[], run: Run, nodes: number): number {
  * 300 % for the fourth act's. The run simulator (crates/abalone-core/examples/run_sim.rs) keeps a copy of the first three. */
 export const ACT_PERCENT = [50, 120, 200, 300];
 
+/** The roster bosses the Meadow's act 1 never deals (#1599, `ACT_ONE_LEAVES` of ladder.rs): they leave act 1 for acts 2 and 3. */
+export const ACT_ONE_LEAVES = ['echo', 'hull', 'chaplain', 'choir'];
+
 /** The roster boss that ends act `act` of the run (#800), one of `ids` (the bridge's boss_ids): the run seed deals them, a new one
- * each act. The boss of an act in a biome is the biome's (#1472), when the roster has it; the fourth act's is FINAL_BOSS (#1467). */
+ * each act, the Meadow's act 1 without `ACT_ONE_LEAVES`. The boss of an act in a biome is the biome's (#1472), when the roster has it; the fourth act's is FINAL_BOSS (#1467). */
 export function bossOfAct(run: Run, act: number, ids: string[]): string {
-  const dealt = [...ids];
+  const stay = ids.filter((id) => act !== 0 || !ACT_ONE_LEAVES.includes(id));
+  const dealt = [...(stay.length ? stay : ids)];
   for (let i = dealt.length - 1; i > 0; i--) {
     const j = hash(run.seed, i) % (i + 1);
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];

@@ -62,7 +62,18 @@ pub enum LadderBoss {
     Unstable,
 }
 
+/// The roster bosses the Meadow's act 1 never deals (#1599): they leave act 1 for acts 2 and 3 (client/src/roguelite.ts).
+pub const ACT_ONE_LEAVES: [&str; 4] = ["echo", "hull", "chaplain", "choir"];
+
 impl LadderBoss {
+    /// The bosses the Meadow's act 1 deals, in `ALL`'s order: the roster less `ACT_ONE_LEAVES`.
+    pub fn act_one() -> Vec<LadderBoss> {
+        LadderBoss::ALL
+            .into_iter()
+            .filter(|b| !ACT_ONE_LEAVES.contains(&b.id()))
+            .collect()
+    }
+
     pub const ALL: [LadderBoss; 15] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
@@ -511,6 +522,17 @@ pub fn run_ladder(boss: LadderBoss, player_budget: u32, seeds: u32, ply_cap: u32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn act_one_deals_the_roster_less_the_four_that_leave_it() {
+        let act_one: Vec<_> = LadderBoss::act_one().iter().map(|b| b.id()).collect();
+        assert_eq!(act_one.len(), 11);
+        assert!(ACT_ONE_LEAVES.iter().all(|id| !act_one.contains(id)));
+        assert!(LadderBoss::ALL
+            .iter()
+            .all(|b| act_one.contains(&b.id()) || ACT_ONE_LEAVES.contains(&b.id())));
+        assert_eq!(ACT_ONE_LEAVES, ["echo", "hull", "chaplain", "choir"]);
+    }
     use crate::board::{Belts, Board, Cell};
     use crate::encounter::assembly::assembly_boss;
     use crate::encounter::ballast::{ballast_board, ballast_boss};

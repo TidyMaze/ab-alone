@@ -5,6 +5,7 @@ import { cellIndex, type Move } from './board';
 import { BLUEPRINTS, blueprintId, CELLS, COLLECT_COST, LEGACY_UNLOCKED } from './collector';
 import { GLASS, SHELL } from './marbles';
 import {
+  ACT_ONE_LEAVES,
   ACT_PERCENT,
   actBoss,
   BONUS_SCRAP,
@@ -837,6 +838,14 @@ describe('roguelite', () => {
     expect(nodes.map((b) => b.textContent)).toEqual(['Fight', 'Elitekey', 'Rest', 'Event', 'Boss']);
     expect(nodes.map((b) => b.className)).toEqual(['node', 'node elite marked', 'node rest', 'node event', 'node boss']);
     expect(nodes[2]!.getAttribute('aria-label')).toBe('Act 1, rest');
+  });
+
+  it("the Meadow's act 1 deals no Echo, Hull, Choir or Chaplain (#1599): they leave act 1 for acts 2 and 3", () => {
+    const ids = ['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'overseer', 'dual', 'railyard', 'stalker', 'swarm', 'magnetizer', 'pulsar', 'assembly', 'core'];
+    const first = new Set(Array.from({ length: 200 }, (_, seed) => actBoss(MAP, pick(at(newRun(seed + 1, 3, LEGACY_UNLOCKED), 0), 2), ids)!.id));
+    expect(ACT_ONE_LEAVES).toEqual(['echo', 'hull', 'chaplain', 'choir']);
+    expect([...first].sort()).toEqual(ids.filter((id) => !ACT_ONE_LEAVES.includes(id)).sort()); // the 11 others, each one dealt
+    expect(ACT_ONE_LEAVES).toContain(actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ['echo', 'hull', 'choir', 'chaplain'])!.id); // a roster of the four only: it is kept
   });
 
   it('a boss node is a roster boss picked by the run seed, at the act strength, a new one each act', () => {

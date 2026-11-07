@@ -73,7 +73,7 @@ struct Settings {
     played: Fights,
 }
 
-/// The roster boss of the biome of an act (section 18); the Meadow's act 1 boss is dealt from the whole roster.
+/// The roster boss of the biome of an act (section 18); the Meadow's act 1 boss is dealt from the act 1 pool (#1599).
 fn boss_of(seed: u64, act: usize, biome: Biome) -> LadderBoss {
     match biome {
         Biome::Forest => LadderBoss::Alien,
@@ -82,8 +82,9 @@ fn boss_of(seed: u64, act: usize, biome: Biome) -> LadderBoss {
         Biome::Badlands => LadderBoss::Unstable,
         Biome::Archipelago => LadderBoss::Ballast,
         Biome::Meadow => {
+            let pool = LadderBoss::act_one();
             let deal = mix(seed ^ mix(act as u64 | 5 << 32));
-            LadderBoss::ALL[(deal % LadderBoss::ALL.len() as u64) as usize]
+            pool[(deal % pool.len() as u64) as usize]
         }
     }
 }
