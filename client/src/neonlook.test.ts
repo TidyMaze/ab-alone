@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook } from './neonlook';
+import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, neonMarbleRim } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { contrastRatio } from './contrast';
@@ -42,6 +42,23 @@ describe('the neon look (#1424)', () => {
       expect(contrastRatio(rgb(NEON.blackMarble), rgb(NEON.cell)), `${deck}: black shell vs cell`).toBeGreaterThanOrEqual(3);
       expect(contrastRatio(rgb(NEON.whiteMarble), rgb(NEON.cell)), `${deck}: white marble vs cell`).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it('gives the black shell a cyan rim, 3:1 on the gap and on the cell (#1552)', () => {
+    const rgb = (hex: number): [number, number, number] => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+    expect(NEON_RIM.colour).toBe(NEON.pedestalRing);
+    expect(contrastRatio(rgb(NEON_RIM.colour), rgb(NEON.gap)), 'rim vs gap').toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(rgb(NEON_RIM.colour), rgb(NEON.cell)), 'rim vs cell').toBeGreaterThanOrEqual(3);
+  });
+
+  it('draws the rim on the black shell under the neon look only, never on the white side (#1552)', () => {
+    // The rim is a node (the renderer is WebGPU, its WebGL 2 fallback too: onBeforeCompile is not run there, #1552).
+    const shell = (): THREE.MeshPhysicalMaterial => new THREE.MeshPhysicalMaterial({ color: NEON.blackMarble });
+    const emissive = (material: THREE.Material): unknown => (material as THREE.Material & { emissiveNode?: { isNode?: boolean } }).emissiveNode;
+    expect(emissive(neonMarbleRim('black', shell(), true))).toBeDefined();
+    expect((emissive(neonMarbleRim('black', shell(), true)) as { isNode: boolean }).isNode).toBe(true);
+    expect(emissive(neonMarbleRim('black', shell(), false))).toBeUndefined();
+    expect(emissive(neonMarbleRim('white', shell(), true))).toBeUndefined();
   });
 
   it('paints the ground, the lamps and the turn bar, and leaves an unknown node alone', () => {
