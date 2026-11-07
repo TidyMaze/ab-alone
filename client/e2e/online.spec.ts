@@ -736,7 +736,7 @@ test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on 
   await open(b);
   await seat(b, 'player');
   await expect(status(a)).toHaveText('Your partner is here.');
-  for (const page of [a, b]) await expect(page.locator('#hud .boss')).toContainText('Fight together · attempt 1');
+  for (const page of [a, b]) await expect(page.locator('#hud .boss')).toContainText('Boss with a partner · attempt 1');
   for (const [seatNo, fq, fr, tq, tr, done] of COOP_DRAW) {
     const [mover, other] = seatNo === 0 ? [a, b] : [b, a];
     await play(mover, fq, fr);
@@ -753,7 +753,7 @@ test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on 
   await retry(b).click();
   for (const page of [a, b]) {
     await expect.poll(() => plies(page)).toBe(0);
-    await expect(page.locator('#hud .boss')).toContainText('Fight together · attempt 2');
+    await expect(page.locator('#hud .boss')).toContainText('Boss with a partner · attempt 2');
     await expect(retry(page)).toBeHidden();
     await expect(asked(page)).toHaveCount(0);
   }
@@ -808,7 +808,7 @@ test('a boss duel from Boss duel: the joiner plays the boss, both pages judge th
   await expect(turn(a)).toHaveText('Your turn');
   const history = (page: Page) => page.evaluate(() => (window as any).__history());
   expect(await history(a)).toEqual(await history(b));
-  await expect(a.locator('#hud .boss')).toContainText('Boss duel');
+  await expect(a.locator('#hud .boss')).toContainText('Boss vs a player');
   await expect(a.locator('#hud')).not.toContainText('refused');
   await expect(b.locator('#hud')).not.toContainText('refused');
   await a.screenshot({ path: test.info().outputPath('duel-hero.png') });

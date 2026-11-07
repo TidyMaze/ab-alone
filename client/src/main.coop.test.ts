@@ -342,7 +342,7 @@ describe('co-op: the end of the fight', () => {
     const { game, two } = await hosted();
     const fight = game.hook('__fight');
     const retry = byId<HTMLButtonElement>('rematch');
-    expect(game.hud()).toContain('Fight together · attempt 1');
+    expect(game.hud()).toContain('Boss with a partner · attempt 1');
     await defeat(game, two);
     expect(retry.hidden).toBe(false);
     expect(retry.textContent).toBe('Retry');
@@ -355,7 +355,7 @@ describe('co-op: the end of the fight', () => {
     retry.click();
     await until(game, () => game.hook('__plies') === 0);
     expect(game.turn()).toBe('Your turn');
-    expect(game.hud()).toContain('Fight together · attempt 2');
+    expect(game.hud()).toContain('Boss with a partner · attempt 2');
     expect(game.hook('__fight')).toEqual(fight); // the same boss and seed
     expect(data().online).toBe('Black'); // no colour swap
     expect(retry.hidden).toBe(true);
@@ -438,7 +438,7 @@ describe('boss duel: the joiner plays the boss (#1316)', () => {
     expect(game.hook('__plies')).toBe(1); // the boss seat answers: no reply was computed for it (the helper's own engine did, its page does not)
     expect(game.turn()).toBe('Your turn');
     expect(byId('rematch').hidden).toBe(true);
-    expect(document.querySelector('#hud .boss')?.textContent).toContain('Boss duel');
+    expect(document.querySelector('#hud .boss')?.textContent).toContain('Boss vs a player');
   });
 
   it('starts nothing for a seat=boss link with an unknown boss', async () => {

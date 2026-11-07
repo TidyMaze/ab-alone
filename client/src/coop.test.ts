@@ -27,8 +27,8 @@ describe('co-op turns, docs/specs/coop-boss.md section 2', () => {
   });
 
   it("counts the room's attempts in the boss plate: one counter for both players (#531)", () => {
-    expect(attemptLine(1)).toBe('Fight together · attempt 1');
-    expect(attemptLine(2)).toBe('Fight together · attempt 2');
+    expect(attemptLine(1)).toBe('Boss with a partner · attempt 1');
+    expect(attemptLine(2)).toBe('Boss with a partner · attempt 2');
   });
 });
 
