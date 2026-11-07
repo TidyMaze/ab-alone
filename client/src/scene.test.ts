@@ -9,7 +9,7 @@ import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
 import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
-import { NEON, NEON_LIGHT } from './neonlook';
+import { NEON, NEON_LIGHT, neonMaterial } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
@@ -652,6 +652,18 @@ describe('SceneRenderer (#632)', () => {
     sr.setTerrace(false);
     sr.setTerrace(true); // a page on the low tier: no shadow
     expect(sr.sun.castShadow).toBe(false);
+  });
+
+  it('gives the slab, the rim and the posts the deck key under the neon look, and the terrace none (#1551)', () => {
+    const neon = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    neon.applyDeck('cargo');
+    const slab = neonMaterial('scene_slab_arena') as THREE.MeshStandardMaterial;
+    const cargo = slab.color.toArray().join();
+    neon.applyDeck('chapel');
+    expect(slab.color.toArray().join()).not.toBe(cargo);
+    const terrace = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
+    terrace.applyDeck('cargo');
+    expect(slab.color.toArray().join()).not.toBe(cargo); // the terrace leaves the slab alone
   });
 
   it('lights the turn bar of the side to move on the terrace, none at the end (#1314)', () => {

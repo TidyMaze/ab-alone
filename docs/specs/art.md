@@ -31,7 +31,8 @@ decision (#1424); until it flips, the neon look is on at `?look=neon`. Numbers a
   crystal `#6a609f`. Chrome (`ui.css`): base `#0b0d0f`, panel `#161a1d`, edge `#4a5258`, text `#d8d4c8`,
   muted `#9aa3a8`, accent `#7fd6e8`, hazard `#d9822b`, danger `#ff6b5a`. Light: sun `#e8f0ff`, sky
   `#9a6bff`, sky mix `#e8eeff`, ground `#2a3347`.
-  The hues are cyan and violet on near-black. Sodium `#d9822b` is hazard only; red `#ff6b5a` is danger only.
+  The hues are cyan and violet on near-black. Sodium `#d9822b` is hazard, and the Furnace's key; red `#ff6b5a` is danger only.
+  The slab takes 12 % of its deck's key over `slab` (#1551).
   Nothing saturated outside this list. Colorblind palettes (protan, deutan, tritan, high contrast) are chosen in the
   settings menu (#381). Dark is the deck; light is only a fallback.
 - **Materials.** Slate and steel, flat tones painted on the geometry (`neonPaint`), a neon edge line on each cell.
@@ -55,7 +56,9 @@ decision (#1424); until it flips, the neon look is on at `?look=neon`. Numbers a
   under it (open).
 - **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold slate and ore dust
   (online, The Hull). Furnace: sodium glow, steam (The Choir). Chapel: candles, wood and wire (The Chaplain). Bridge:
-  cold white, too clean (The Ballast Mind). Fog thickens toward the rim, never over a cell. The Pulsar's fight is drawn
+  cold white, too clean (The Ballast Mind). Under the neon look each deck has its key (`DECK_KEY`, `neonlook.ts`, #1551):
+  the rim glow takes it (warm `#d8d4c8`, cold `#7fd6e8`, sodium `#d9822b`, candle `#6a609f`, white `#e8f0ff`), the posts
+  glow in its accent, the slab takes 12 % of it. The cells and the marbles keep their colours on every deck. Fog thickens toward the rim, never over a cell. The Pulsar's fight is drawn
   in space (#1146): the bay is hidden, a field of stars and a distant glow take the backdrop, the board and the lamps
   stay (#1189).
 - **Open world** (#1177, #1173). Carried over from the board: the sky and fog fade to the neon black `#04050c`, wall

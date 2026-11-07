@@ -14,7 +14,7 @@ import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
 import { type BoardLook, TERRACE_LOOK } from './boardlook';
-import { NEON, NEON_LIGHT, lightNeon, neonStars } from './neonlook';
+import { NEON, NEON_LIGHT, lightNeon, neonDeckLook, neonSkyOf, neonStars } from './neonlook';
 import { TERRACE_EXPOSURE, addSun, aimSunShadow, sunPosition } from './tablezero';
 
 export const BONE = 0xd8d4c8;
@@ -408,6 +408,10 @@ export class SceneRenderer {
   applyDeck(next: Deck): void {
     const light = DECKS[next];
     this.renderer.toneMappingExposure = light.exposure;
+    if (this.neon) {
+      neonDeckLook(next); // the slab, the rim and the posts take the deck's key (#1551)
+      this.scene.background = neonSkyOf(next);
+    }
     if (this.currentBay) applyDeckAtmosphere(this.currentBay, next as DeckId);
   }
 

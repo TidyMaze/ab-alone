@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { abs, color, dot, float, normalView, positionViewDirection } from 'three/tsl';
+import type { Deck } from './deck';
 
 /** The approved numbers (mock/mock.js, directions.json). Neon is on edges, lines and lamps, never on a cell top. */
 export const NEON = {
@@ -31,6 +32,22 @@ export const NEON = {
 
 /** The mock's light: a cold sun low on the left, a violet-tinted hemisphere, ACES at 1.15. */
 export const NEON_LIGHT = { sun: 0xe8f0ff, sunIntensity: 3.2, elevation: 24, azimuth: 50, sky: 0x9a6bff, skyMix: 0xe8eeff, skyAmount: 1, ground: 0x2a3347, hemisphere: 2.9, exposure: 1 } as const;
+
+/** The key of each deck under the neon look (#1551, art.md Decks): `key` is the violet rim's colour, `accent` the posts' glow. Palette tokens only (art.md, artpalette.test.ts). */
+export const DECK_KEY: Record<Deck, { key: number; accent: number }> = {
+  mess: { key: 0xd8d4c8, accent: 0xf2f0ea }, // a warm lamp, the worn laminate
+  cargo: { key: 0x7fd6e8, accent: 0x5fd0e6 }, // cold slate, the ore dust
+  furnace: { key: 0xd9822b, accent: 0x6a609f }, // sodium glow, the steam
+  chapel: { key: 0x6a609f, accent: 0x9a6bff }, // candles, wood and wire
+  bridge: { key: 0xe8f0ff, accent: 0x19e6ff }, // cold white, too clean
+};
+/** The slab takes this much of its deck's key over the slate (`NEON.slab`), and the sky this much over `NEON.sky` (#1551). */
+export const SLAB_TINT = 0.12;
+/** The ground outside the board and the sky take this much of the key (#1551: the deck's identity is the surround). */
+export const GROUND_TINT = 0.4;
+export const SKY_TINT = 0.25;
+/** The brightest channel of the rim and the posts' glow: above 1, unlit (the rim read dim at 1.2). */
+export const NEON_GLOW = 2.2;
 
 /** The dishes are drawn this much smaller across: the gap between two cells (1 - the flat-to-flat of a 0.5 hexagon, 0.134) grows by 40 %, so the cyan line keeps its width and its dark floor at 390 px. */
 /** The grid line of the neon look (#1535), one constant for the arena's cell gaps and the Open world's ground: a band `width` world units wide (the gap of the arena's hexagon, `outer` - `inner`), lit at `glow` in `colour`. */
@@ -177,10 +194,15 @@ export function neonPaint(name: string, geometry: THREE.BufferGeometry): void {
   RULES.find(([re]) => re.test(name))?.[1](geometry);
 }
 
-/** The lit materials: the glass of the cells, the slate of the rest; and the lamps, which no light touches. */
+/** The slab of each deck's board (every deck's arena, ballast, dual, hub and royale slab). */
+const SLAB = /^scene_(slab_arena|ballast_slab|dual_slab_[ns]|slab_hub|royale_slab)$/;
+/** The ground outside the board, one material, tinted per deck. */
+const GROUND = /^scene_col_(map_b|plateau)/;
+
+/** The lit materials: the glass of the cells, the slate of the rest, the slab (tinted per deck); and the lamps, which no light touches. */
 const lit = new Map<string, THREE.Material>();
 export function neonMaterial(name: string): THREE.Material {
-  const kind = /^scene_tower_lamp/.test(name) ? 'lamp' : /^scene_(cell|ballast_cell|dual_cell|hub_cell|royale_cell)/.test(name) || name === 'dish' ? 'glass' : /^scene_turnbar/.test(name) ? 'bar' : 'slate';
+  const kind = /^scene_tower_lamp/.test(name) ? 'lamp' : /^scene_(cell|ballast_cell|dual_cell|hub_cell|royale_cell)/.test(name) || name === 'dish' ? 'glass' : /^scene_turnbar/.test(name) ? 'bar' : SLAB.test(name) ? 'slab' : GROUND.test(name) ? 'ground' : 'slate';
   if (!lit.has(kind)) {
     lit.set(
       kind,
@@ -250,16 +272,46 @@ export function neonPedestal(pedestal: THREE.Mesh): THREE.Mesh {
   return copy;
 }
 
+/** The glow of the rim (the deck's key) and of the posts (its accent): one material each, brightest channel at 1.2 (unlit). */
+const glows = new Map<'rim' | 'post', THREE.MeshBasicMaterial>();
+const glowColour = (hex: number): THREE.Color => {
+  const c = new THREE.Color(hex);
+  return c.multiplyScalar(NEON_GLOW / Math.max(...c.toArray()));
+};
+function glowMaterial(kind: 'rim' | 'post'): THREE.MeshBasicMaterial {
+  if (!glows.has(kind)) {
+    const deck = DECK_KEY.mess;
+    glows.set(kind, new THREE.MeshBasicMaterial({ name: `neon_${kind}`, color: glowColour(kind === 'rim' ? deck.key : deck.accent), fog: false, side: THREE.DoubleSide }));
+  }
+  return glows.get(kind)!;
+}
+
+/** The sky of a deck under the neon look: `NEON.sky` with a little of the deck's key (#1551). */
+export const neonSkyOf = (deck: Deck): THREE.Color => new THREE.Color(NEON.sky).lerp(new THREE.Color(DECK_KEY[deck].key), SKY_TINT);
+
+/** The deck in play under the neon look (#1551): the slab takes its key over the slate, the rim glows in its key, the posts in its accent. */
+export function neonDeckLook(deck: Deck): void {
+  const { key, accent } = DECK_KEY[deck];
+  // The slab's vertex colours run from the gap floor up to the rim: the rim's colour times this is the tinted slate.
+  const [slab, top] = [new THREE.Color(NEON.slab).lerp(new THREE.Color(key), SLAB_TINT), new THREE.Color(NEON.rim)];
+  (neonMaterial('scene_slab_arena') as THREE.MeshStandardMaterial).color.setRGB(slab.r / top.r, slab.g / top.g, slab.b / top.b);
+  const ground = new THREE.Color(NEON.ground).lerp(new THREE.Color(key), GROUND_TINT);
+  const base = new THREE.Color(NEON.ground);
+  (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.setRGB(ground.r / base.r, ground.g / base.g, ground.b / base.b);
+  glowMaterial('rim').color.copy(glowColour(key));
+  glowMaterial('post').color.copy(glowColour(accent));
+}
+
 /** The violet channel along the inner top edge of the slab's rim (about 0.05 of a cell wide) and a glowing band and tip on each post, unlit at 1.2. */
 export function neonGlow(posts: readonly THREE.Vector3[], rim: boolean): THREE.Group {
   const group = new THREE.Group();
   group.name = 'neon_glow';
-  const violet = new THREE.MeshBasicMaterial({ name: 'neon_violet', color: new THREE.Color(NEON.violet).multiplyScalar(1.2), fog: false, side: THREE.DoubleSide });
-  if (rim) group.add(new THREE.Mesh(neonEdgeGeometry(4.93, 4.98, 0.158, Math.PI / 6), violet)); // the rim's inner top edge (slab_arena: a flat-top hexagon of 4.9)
+  const postGlow = glowMaterial('post');
+  if (rim) group.add(new THREE.Mesh(neonEdgeGeometry(4.93, 4.98, 0.158, Math.PI / 6), glowMaterial('rim'))); // the rim's inner top edge (slab_arena: a flat-top hexagon of 4.9)
   for (const p of posts) {
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.147, 0.147, 0.05, 8, 1, true), violet);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.147, 0.147, 0.05, 8, 1, true), postGlow);
     band.position.set(p.x, p.y + 0.7, p.z);
-    const tip = new THREE.Mesh(new THREE.CircleGeometry(0.098, 8).rotateX(-Math.PI / 2), violet);
+    const tip = new THREE.Mesh(new THREE.CircleGeometry(0.098, 8).rotateX(-Math.PI / 2), postGlow);
     tip.position.set(p.x, p.y + 1.075, p.z);
     group.add(band, tip);
   }

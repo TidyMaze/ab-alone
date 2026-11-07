@@ -5,6 +5,7 @@ import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { contrastRatio } from './contrast';
 import { DECK_NAMES } from './deck';
+import { DECK_KEY, NEON_GLOW, neonDeckLook, neonSkyOf } from './neonlook';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -111,7 +112,7 @@ describe('the neon look (#1424)', () => {
     expect(lamp).toBeInstanceOf(THREE.MeshBasicMaterial);
     expect(bar).toBeInstanceOf(THREE.MeshBasicMaterial);
     expect(neonMaterial('scene_cell_04')).toBe(glass);
-    expect(neonMaterial('scene_slab_arena')).toBe(slate);
+    expect(neonMaterial('scene_slab_arena')).not.toBe(slate); // the slab has its own material, tinted per deck (#1551)
   });
 
   it('lights with a cold sun low on the left and a neutral cool hemisphere', () => {
@@ -157,9 +158,36 @@ describe('the neon look (#1424)', () => {
   it('glows: a violet channel on the rim and a band and a tip on each post, unlit above 1', () => {
     const glow = neonGlow([new THREE.Vector3(1, 0, 2), new THREE.Vector3(-1, 0, 2)], true);
     expect(glow.children).toHaveLength(5);
-    expect(((glow.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.b).toBeGreaterThan(1);
+    expect(Math.max(...((glow.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.toArray())).toBeGreaterThan(1);
     expect(glow.children[1]!.position.toArray()).toEqual([1, 0.7, 2]);
     expect(neonGlow([], false).children).toHaveLength(0);
+  });
+
+  it('gives each deck its own key colour, from the palette, and its own slab tint (#1551)', () => {
+    const keys = DECK_NAMES.map((d) => DECK_KEY[d].key);
+    expect(new Set(keys).size).toBe(DECK_NAMES.length);
+    const tints = DECK_NAMES.map((d) => {
+      neonDeckLook(d);
+      return (neonMaterial('scene_slab_arena') as THREE.MeshStandardMaterial).color.toArray().join(); // not a hex: the tint is a multiplier of the rim, above 1
+    });
+    expect(new Set(tints).size).toBe(DECK_NAMES.length);
+    const grounds = DECK_NAMES.map((d) => {
+      neonDeckLook(d);
+      return (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.toArray().join();
+    });
+    expect(new Set(grounds).size).toBe(DECK_NAMES.length); // the ground outside the board too (#1551)
+    expect(new Set(DECK_NAMES.map((d) => neonSkyOf(d).getHexString())).size).toBe(DECK_NAMES.length); // the sky too (#1551)
+    neonDeckLook('mess');
+  });
+
+  it('glows the rim in the deck key and the posts in its accent, the brightest channel at NEON_GLOW (#1551)', () => {
+    neonDeckLook('cargo');
+    const glow = neonGlow([new THREE.Vector3(1, 0, 2)], true);
+    const [rim, post] = [glow.children[0], glow.children[1]].map((m) => (m as THREE.Mesh).material as THREE.MeshBasicMaterial);
+    expect(Math.max(...rim!.color.toArray())).toBeCloseTo(NEON_GLOW);
+    expect(rim!.color.getHex()).toBe(new THREE.Color(DECK_KEY.cargo.key).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(DECK_KEY.cargo.key).toArray())).getHex());
+    expect(post!.color.getHex()).toBe(new THREE.Color(DECK_KEY.cargo.accent).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(DECK_KEY.cargo.accent).toArray())).getHex());
+    neonDeckLook('mess');
   });
 });
 
@@ -191,8 +219,8 @@ describe('the neon look of the terrace file (#1424)', () => {
     expect(bar.material).toBe(neonMaterial('scene_turnbar_black'));
     expect(out.getObjectByName('neon_glow')!.children).toHaveLength(3); // the rim channel, a band and a tip
     expect(out.getObjectByName('neon_glow')!.parent).toBe(out); // not split: the board is the file itself
-    // the sky mesh is not merged: only the slab (lit) is
-    expect((out.children as THREE.Mesh[]).filter((m) => m.isMesh && m.name === '').length).toBe(1);
+    // the sky mesh is not merged: the slab (lit, its own tint per deck) and the posts' slate are
+    expect((out.children as THREE.Mesh[]).filter((m) => m.isMesh && m.name === '').length).toBe(2);
   });
   it('leaves the dish alone without the look', () => {
     const root = new THREE.Group();

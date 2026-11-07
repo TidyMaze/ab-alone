@@ -1,7 +1,8 @@
 // The allowed-hue check of the art direction (#1550): every colour token the code paints the neon look
 // and the chrome with must be listed in the palette bullet of docs/specs/art.md. Reads the code, not a copy.
 import { describe, expect, it } from 'vitest';
-import { NEON } from './neonlook';
+import { DECK_KEY, NEON } from './neonlook';
+import { DECK_NAMES } from './deck';
 import css from './ui.css?raw';
 import doc from '../../docs/specs/art.md?raw';
 
@@ -20,6 +21,11 @@ describe('the allowed hues of the art direction (#1550)', () => {
       .map(([k, v]) => [k, `#${v.toString(16).padStart(6, '0')}`] as const)
       .filter(([, hex]) => !allowed.has(hex));
     expect(missing).toEqual([]);
+  });
+
+  it('lists every deck key and accent of the neon look (#1551)', () => {
+    const tokens = DECK_NAMES.flatMap((d) => [DECK_KEY[d].key, DECK_KEY[d].accent]).map((v) => `#${v.toString(16).padStart(6, '0')}`);
+    expect(tokens.filter((hex) => !allowed.has(hex))).toEqual([]);
   });
 
   it('lists every chrome colour token of the first :root block of ui.css', () => {
