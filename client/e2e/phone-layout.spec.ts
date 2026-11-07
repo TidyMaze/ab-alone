@@ -192,6 +192,22 @@ test.describe('a phone 390 by 844 held upright', () => {
   });
 });
 
+// #1567: the closer view of the board (one tap, stored per device): the plate, the dock, the zoom button and the settings menu
+// cover no cell at the two common phone sizes, and every cell is on the window.
+for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 800 }]) {
+  test.describe(`the closer board view on a phone ${viewport.width} by ${viewport.height} held upright`, () => {
+    test.use({ viewport, isMobile: true, hasTouch: true });
+    test('the HUD plate and the dock cover no cell, #1567', async ({ page }, testInfo) => {
+      await page.addInitScript(() => localStorage.setItem('ab-alone.board-zoom', 'on'));
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await expect(page.locator('#hud')).toContainText('Black to move');
+      await expect(page.getByRole('button', { name: 'Zoom the board' })).toHaveAttribute('aria-pressed', 'true');
+      await check(page, testInfo, 'the closer board view');
+    });
+  });
+}
+
 // #1388: on the Hub, held upright, the five-section rail and the Bosses strip sit just under the plate and the cog, clear of the board.
 for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 640 }]) {
   test.describe(`the Hub on a phone ${viewport.width} by ${viewport.height} held upright`, () => {

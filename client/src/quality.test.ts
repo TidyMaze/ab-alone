@@ -32,6 +32,8 @@ import {
   SLOW_RUNS,
   readFlatHud,
   readHudFolded,
+  readBoardZoom,
+  writeBoardZoom,
   readTranscript,
   readSteering,
   writeSteering,
@@ -811,5 +813,18 @@ describe('the low tier offer after a sustained slow frame rate (#849)', () => {
     data['ab-alone.low-offer'] = 'junk';
     expect(readLowOffer(store)).toBeNull();
     expect(readLowOffer(null)).toBeNull();
+  });
+});
+
+describe('board zoom storage (#1567): off unless the player turned it on, per device', () => {
+  it('writes then reads back, under its own key, off by default and when storage throws', () => {
+    const s = memoryStorage();
+    expect(readBoardZoom(s)).toBe(false);
+    writeBoardZoom(s, true);
+    expect(s.data.get('ab-alone.board-zoom')).toBe('on');
+    expect(readBoardZoom(s)).toBe(true);
+    writeBoardZoom(s, false);
+    expect(readBoardZoom(s)).toBe(false);
+    expect(readBoardZoom(throwing)).toBe(false);
   });
 });
