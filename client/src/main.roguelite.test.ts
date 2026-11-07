@@ -147,9 +147,11 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(document.body.dataset.auto).toBe('false');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     byId('auto-play').click();
-    await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
-    game.frame(1000);
-    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
+      game.frame(1000);
+      await vi.advanceTimersByTimeAsync(0);
+    }
     byId('auto-play').click();
     vi.useRealTimers();
     expect(document.body.dataset.auto).toBe('true');
@@ -1293,7 +1295,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     localStorage.setItem('ab-alone.roguelite.daily', JSON.stringify({ day: today(), score: null }));
     await game.hook('__run', { ...dailyRun(today(), 3), map: 0, army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
     expect(map().querySelector('.run-score')!.textContent).toBe('Score: 180 (acts 1 × 100, elites 2 × 25, marbles 3 × 10)');
-    expect(JSON.parse(localStorage.getItem('ab-alone.roguelite.daily')!)).toEqual({ day: today(), score: 180 });
+    expect(JSON.parse(localStorage.getItem('ab-alone.roguelite.daily')!)).toEqual({ day: today(), score: 180, auto: false });
     byId('run-new').click();
     openMore();
     expect(dailyButton().textContent).toBe(`Daily run ${today()} · score 180, back tomorrow`);

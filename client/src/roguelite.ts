@@ -134,6 +134,8 @@ export interface Run {
   first: number;
   flawless: number;
   daily: string;
+  /** Whether any fight, elite or boss of the run was played with Auto-play (#1542): the run is marked, and the Daily's ranking leaves it out. A run saved before is played by hand. */
+  auto: boolean;
   keys: number[];
   curse: number;
   flasks: number;
@@ -405,6 +407,7 @@ export const newRun = (seed: number, best: number, unlocked: readonly number[], 
   first: 0,
   flawless: 0,
   daily: '',
+  auto: false,
   keys: [],
   curse: 0,
   flasks: FLASKS,
@@ -1174,10 +1177,13 @@ export function scoreParts(map: MapNode[], run: Run): [string, number, number][]
 /** The score of a run, at any point of it: what `scoreParts` counts, in points. */
 export const runScore = (map: MapNode[], run: Run): number => scoreParts(map, run).reduce((total, [, count, each]) => total + count * each, 0);
 
+/** What marks a run that used Auto-play (#1542), in its score line, summary and history. */
+export const AUTO_MARK = 'Auto-play used';
+
 /** The score line of a run over, with where the points come from. */
 function scoreLine(map: MapNode[], run: Run): string {
   const parts = scoreParts(map, run).map(([label, count, each]) => `${label} ${count} × ${each}`);
-  return `<p class="run-score">Score: ${runScore(map, run)}${parts.length ? ` (${parts.join(', ')})` : ''}</p>`;
+  return `<p class="run-score">Score: ${runScore(map, run)}${parts.length ? ` (${parts.join(', ')})` : ''}${run.auto ? ` · ${AUTO_MARK}` : ''}</p>`;
 }
 
 /** The unlocks of a run over: the special marble types and commanders of the acts it won past its `best`, the next
@@ -1278,6 +1284,7 @@ function summaryHtml(map: MapNode[], run: Run): string {
     `Path: ${acts.join(' · ')}`,
     ...(run.biomes.length ? [`Biomes: ${[BIOMES[biomeOf(run, 0)]!.name, ...run.biomes.slice(0, new Set(run.path.map((n) => map[n]!.act)).size - 1).map((b) => BIOMES[b]!.name)].join(', ')}`] : []),
     `Fights: ${fights - lost} won, ${lost} lost`,
+    ...(run.auto ? [AUTO_MARK] : []),
     `Army at the end: ${owned(run.army, run.specials)}`,
     ...(run.ascension ? [`Ascension: ${run.ascension}`] : []),
     ...(run.scrap ? [`Scrap left: ${run.scrap}, lost with the run`] : []),
@@ -1735,7 +1742,7 @@ const isCounts = (v: unknown): v is number[] => [PLAIN.length, 2 * PLAIN.length,
  * the plain army, one saved before the Collector (#1470) the relics and tactics unlocked and no cells, blueprint or room, one saved before the events told (#1463) none, one saved before the biomes (#1472) no exit to offer and the Meadow in every act, one saved before the gate runs (#1597) the Meadow first, one saved before the commanders (#1464) none, one saved before the ascension levels (#1465) at level 0, one saved before the keys (#1467) none and three acts, one saved before the cursed chest (#1474) no curse, one saved before the flasks (#1475) FLASKS, one saved before the bonus room (#1473) no count and no room, one saved before the runes (#1476) none, one saved before the pacing of the map (#1543) the map of version 0. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], first = 0, flawless = 0, daily = '', keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, runes = 0, found = 0, spent = [], bonus = false, map = 0 } =
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS, relics = [], commander = -1, ascension = 0, top = 0, relic = false, rest = false, tactics = [], scrap = 0, shop = false, bought = [], enemies = false, unlocked = LEGACY_UNLOCKED, cells = 0, carried = [], banked = [], drop = 0, collector = false, told = '', exits = false, exit = false, biomes = [], first = 0, flawless = 0, daily = '', auto = false, keys = [], curse = 0, flasks = FLASKS, affinities = [0, 0, 0], scroll = false, runes = 0, found = 0, spent = [], bonus = false, map = 0 } =
     raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
@@ -1786,6 +1793,7 @@ function decodeRun(raw: unknown): Run | null {
     isInt(flawless, MAX_FLAWLESS) &&
     typeof daily === 'string' &&
     (daily === '' || DAY.test(daily)) &&
+    typeof auto === 'boolean' &&
     Array.isArray(keys) &&
     keys.every((k, i) => isInt(k, KEYS.length - 1) && keys.indexOf(k) === i) &&
     isInt(curse, CURSE_FIGHTS) &&
@@ -1801,7 +1809,7 @@ function decodeRun(raw: unknown): Run | null {
     (spent.length === 0 || (spent.length === MOVE_BUDGET.length && spent.every((n) => isInt(n, MAX_SPENT)))) &&
     typeof bonus === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, first, flawless, daily, keys, curse, flasks, affinities, scroll, runes, found, spent: [...spent], bonus, map }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials: SPECIAL_LOOKS.map((_, k) => specials[k] ?? 0), placed: placed as number[][], reward, event, best, relics, commander: commander as number, ascension, top, relic, rest, tactics, scrap, shop, bought, enemies, unlocked: [...unlocked], cells, carried, banked, drop, collector, told, exits, exit, biomes, first, flawless, daily, auto, keys, curse, flasks, affinities, scroll, runes, found, spent: [...spent], bonus, map }
     : null;
 }
 

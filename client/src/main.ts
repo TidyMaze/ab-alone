@@ -3026,6 +3026,7 @@ async function botTurn(): Promise<void> {
       thinking = false; // an auto-played move keeps the board shut to clicks until it is played
       if (!autoPlay) return void refresh(); // turned off while the bot thought
     }
+    if (auto && run?.state.fighting) run.state = { ...run.state, auto: true }; // a run that used Auto-play is marked (#1542)
     playMove(move);
     if (bots && turnBack(engine.to_move(), PLAYER, engine.status(), replaying !== null)) playCue('turn-start', AFTER_SLIDE); // the bot has answered
     refresh();
@@ -3895,6 +3896,7 @@ function drawHud(extra = ''): void {
       document.getElementById('hud')!.insertAdjacentHTML('beforeend', specialsHtml());
     }
     document.body.dataset.tactics = run.state.tactics.join(','); // read by the e2e tests
+    document.body.dataset.auto = String(run.state.auto);
   }
   hudEjected = ejected; // the next render moves only the pips that are new (#1095)
   rematchButton.hidden = online?.role !== 'player' || status === 0 || duel; // spectators never see it, nor a duel yet (#1316)
@@ -6738,6 +6740,7 @@ function leaveRun(): void {
   armed = 0;
   swapping = false;
   delete document.body.dataset.tactics;
+  delete document.body.dataset.auto;
   runPanel.hidden = true;
   delete document.body.dataset.run;
   delete document.body.dataset.biome;

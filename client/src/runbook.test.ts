@@ -55,7 +55,7 @@ describe('Auto-play in the book (#1542)', () => {
     recordFinished(store, entry({ daily: '2026-11-03', score: 420, auto: true }));
     expect(readDaily(store, '2026-11-03')).toEqual({ score: 420, auto: true });
     expect(parse(bookHtml('2026-11-03', { score: 420, auto: true })).querySelector('button[data-daily]')!.textContent).toBe('Daily run 2026-11-03 · score 420 (Auto-play used, not ranked), back tomorrow');
-    expect(parse(historyHtml([entry({ auto: true, score: 90 })])).querySelector('li')!.textContent).toBe('The Warden · lost · score 90 · Auto-play used');
+    expect(parse(historyHtml([entry({ auto: true, score: 90 })])).querySelector('li')!.textContent).toBe('The Captain · lost · score 90 · Auto-play used');
     expect(readHistory(store)[0]!.auto).toBe(true);
   });
 
@@ -151,8 +151,8 @@ describe('the daily run', () => {
   it('is a button on the start screen: open, then disabled with its score or while it is on', () => {
     const button = (tried: ReturnType<typeof readDaily>): HTMLButtonElement => parse(bookHtml('2026-11-03', tried)).querySelector<HTMLButtonElement>('button[data-daily]')!;
     expect([button(null).textContent, button(null).disabled]).toEqual(['Daily run 2026-11-03', false]);
-    expect([button({ score: 420 }).textContent, button({ score: 420 }).disabled]).toEqual(['Daily run 2026-11-03 · score 420, back tomorrow', true]);
-    expect([button({ score: null }).textContent, button({ score: null }).disabled]).toEqual(['Daily run 2026-11-03 · tried today, back tomorrow', true]);
+    expect([button({ score: 420, auto: false }).textContent, button({ score: 420, auto: false }).disabled]).toEqual(['Daily run 2026-11-03 · score 420, back tomorrow', true]);
+    expect([button({ score: null, auto: false }).textContent, button({ score: null, auto: false }).disabled]).toEqual(['Daily run 2026-11-03 · tried today, back tomorrow', true]);
     expect([...parse(bookHtml('2026-11-03', null)).querySelectorAll('button[data-book]')].map((b) => [b.textContent, (b as HTMLElement).dataset.book])).toEqual([
       ['Run history', 'history'],
       ['Compendium', 'compendium'],

@@ -2357,6 +2357,7 @@ describe('roguelite score and daily run (#1466)', () => {
 });
 
 describe('roguelite Auto-play mark (#1542)', () => {
+  const TWO = parseMap([[0, 0, 0, 0, 1, 0, 0], [0, 1, 0, 2, 1, 0, 1], [0, 2, 0, 1, 0, 0, 0], [1, 0, 0, 0, 1, 0, 0], [1, 1, 0, 1, 0, 0, 0]].flat());
   const fresh = (state: Partial<Run> = {}): Run => ({ ...newRun(1, 3, LEGACY_UNLOCKED), ...state });
   const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
 

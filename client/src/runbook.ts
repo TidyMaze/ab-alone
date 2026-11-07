@@ -2,7 +2,7 @@
 // a day and the compendium of what the runs held, kept in the browser next to the other progress (roguelite.ts). Only variety
 // is kept, never power (Decision #934).
 
-import { EVENTS, eventOf, glyph, lineGlyph, MAX_ASCENSION, readBest, RELICS, runScore, SPECIAL_LOOKS, TACTICS, COMMANDERS, type MapNode, type Run } from './roguelite';
+import { AUTO_MARK, EVENTS, eventOf, glyph, lineGlyph, MAX_ASCENSION, readBest, RELICS, runScore, SPECIAL_LOOKS, TACTICS, COMMANDERS, type MapNode, type Run } from './roguelite';
 import { read, write, type Store } from './quality';
 
 /** A run over, as the history keeps it: its seed (a run is kept once), commander (an index of COMMANDERS, -1 for none),
@@ -14,6 +14,8 @@ export interface Finished {
   result: 'won' | 'lost';
   score: number;
   daily: string;
+  /** Auto-play was used in the run (#1542). */
+  auto: boolean;
 }
 
 /** The runs the history keeps, the newest first. */
@@ -33,11 +35,12 @@ const parsed = (store: Store, key: string): unknown => {
 
 /** The line of a run over for the history, null while it is on. */
 export function finished(map: MapNode[], run: Run): Finished | null {
-  return run.end ? { seed: run.seed, commander: run.commander, ascension: run.ascension, result: run.end, score: runScore(map, run), daily: run.daily } : null;
+  return run.end ? { seed: run.seed, commander: run.commander, ascension: run.ascension, result: run.end, score: runScore(map, run), daily: run.daily, auto: run.auto } : null;
 }
 
 function isFinished(v: unknown): v is Finished {
   const f = v as Finished | null;
+  if (typeof f === 'object' && f !== null && f.auto === undefined) f.auto = false; // a run kept before the mark was played by hand
   return (
     typeof f === 'object' &&
     f !== null &&
@@ -47,7 +50,8 @@ function isFinished(v: unknown): v is Finished {
     (f.result === 'won' || f.result === 'lost') &&
     isInt(f.score, 0, 9_999_999) &&
     typeof f.daily === 'string' &&
-    (f.daily === '' || DAY.test(f.daily))
+    (f.daily === '' || DAY.test(f.daily)) &&
+    typeof f.auto === 'boolean'
   );
 }
 
@@ -60,11 +64,13 @@ export function readHistory(store: Store): Finished[] {
 /** What the daily run of `day` has: its `score`, null while its try is on; null when it was not tried that day. */
 export interface DailyTry {
   score: number | null;
+  /** The run used Auto-play: its score is shown, marked, and is not ranked (#1542). */
+  auto: boolean;
 }
 export function readDaily(store: Store, day: string): DailyTry | null {
-  const saved = parsed(store, DAILY_KEY) as { day?: unknown; score?: unknown } | null;
-  const ok = saved !== null && typeof saved === 'object' && saved.day === day && (saved.score === null || isInt(saved.score, 0, 9_999_999));
-  return ok ? { score: saved.score as number | null } : null;
+  const saved = parsed(store, DAILY_KEY) as { day?: unknown; score?: unknown; auto?: unknown } | null;
+  const ok = saved !== null && typeof saved === 'object' && saved.day === day && (saved.score === null || isInt(saved.score, 0, 9_999_999)) && (saved.auto === undefined || typeof saved.auto === 'boolean');
+  return ok ? { score: saved.score as number | null, auto: saved.auto === true } : null;
 }
 
 /** Spends the try of `day`: the daily run is on, with no score yet. Only the current day is kept. */
@@ -75,13 +81,13 @@ export function recordFinished(store: Store, run: Finished): void {
   const history = readHistory(store);
   if (history.some((h) => h.seed === run.seed)) return;
   write(store, HISTORY_KEY, JSON.stringify([run, ...history].slice(0, MAX_HISTORY)));
-  if (run.daily && readDaily(store, run.daily)?.score === null) write(store, DAILY_KEY, JSON.stringify({ day: run.daily, score: run.score }));
+  if (run.daily && readDaily(store, run.daily)?.score === null) write(store, DAILY_KEY, JSON.stringify({ day: run.daily, score: run.score, auto: run.auto }));
 }
 
 /** What the start screen holds besides the commanders: the daily run of `day` (shut once tried, with its score when it has
  * one), and the history and the compendium. */
 export function bookHtml(day: string, tried: DailyTry | null): string {
-  const label = tried ? `Daily run ${day} · ${tried.score === null ? 'tried today' : `score ${tried.score}`}, back tomorrow` : `Daily run ${day}`;
+  const label = tried ? `Daily run ${day} · ${tried.score === null ? 'tried today' : `score ${tried.score}${tried.auto ? ` (${AUTO_MARK}, not ranked)` : ''}`}, back tomorrow` : `Daily run ${day}`;
   return (
     `<div class="run-book"><button type="button" data-daily="1"${tried ? ' disabled' : ''}>${label}</button>` +
     '<button type="button" data-book="history">Run history</button><button type="button" data-book="compendium">Compendium</button></div>'
@@ -95,7 +101,7 @@ const back = '<button type="button" data-book="map">Back</button>';
 export function historyHtml(history: Finished[]): string {
   const items = history.map((h) => {
     const commander = COMMANDERS[h.commander]?.name ?? 'No commander';
-    return `<li>${commander} · ${h.result} · score ${h.score}${h.ascension ? ` · ascension ${h.ascension}` : ''}${h.daily ? ` · daily ${h.daily}` : ''}</li>`;
+    return `<li>${commander} · ${h.result} · score ${h.score}${h.ascension ? ` · ascension ${h.ascension}` : ''}${h.auto ? ` · ${AUTO_MARK}` : ''}${h.daily ? ` · daily ${h.daily}` : ''}</li>`;
   });
   return `<p class="run-line">Run history</p>${back}${items.length ? `<ol class="run-history">${items.join('')}</ol>` : '<p class="run-help">No run finished yet</p>'}`;
 }

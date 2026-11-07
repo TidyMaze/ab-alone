@@ -39,3 +39,18 @@ test('the rogue-lite run: a score at the end, the daily run, the history and the
   await expect(map.locator('.run-line')).toHaveText(`Daily run ${day} · army 14 marbles · pick a fight`); // resumed
   await shot(page, { path: 'test-results/roguelite-score-daily.png' });
 });
+
+// A run that used Auto-play says so at its end, in its score line and its summary (#1542, docs/specs/roguelite.md section 21).
+test('the rogue-lite run: a run over that used Auto-play is marked, #1542', async ({ page }) => {
+  const map = page.locator('#run-map');
+  await page.goto('./?bot=off');
+  await page.waitForFunction(() => typeof (window as any).__run === 'function');
+  const over = { seed: 3, army: 3, path: [0, 2, 6, 9, 10], fighting: false, moves: [], end: 'lost', specials: [1, 0, 0], placed: [], reward: false, event: false, best: 0, relics: [3], flawless: 2, auto: true };
+  await page.evaluate((s) => (window as any).__run(s), over);
+  await expect(map.locator('.run-score')).toHaveText('Score: 210 (acts 1 × 100, elites 2 × 25, marbles 3 × 10, flawless fights 2 × 15) · Auto-play used');
+  await expect(map.locator('.run-help', { hasText: /^Auto-play used$/ })).toBeVisible();
+  await shot(page, { path: 'test-results/1542-auto-960x540.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(map.locator('.run-score')).toBeVisible();
+  await shot(page, { path: 'test-results/1542-auto-390x844.png' });
+});

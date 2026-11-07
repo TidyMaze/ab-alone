@@ -150,6 +150,7 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   boss needs that boss's medal). The bot plays the army's side through the search of its own reply, with the run's
   specials and relics, and never a tactic: tactics stay the player's. The map, rewards, rests, shops and events stay the
   player's too, and Auto-play turns itself off when the fight ends.
+  A run that used it is marked (#1542, section 21): see `Auto-play used` there. No rule changes on when it is offered.
 - **Bridge**: `Engine::place_special(q, r, kind)` and `Engine::specials()` (records `[q, r, kind]`,
   `1` Heavy, `2` Anchor, `3` Spark, the upgraded `4` Heavy+, `5` Anchor+, `6` Spark+ of section
   10, and `7` Magnet, `8` Shield, `9` Bomb, `10` Medic of section 13).
@@ -805,6 +806,13 @@ changes what a run holds.
   - **One try a day**: pressing the button spends the day (`ab-alone.roguelite.daily`), even if the run is abandoned; the
     button then stays shut, `tried today, back tomorrow`. The day changes at 00:00 UTC.
   - **Its score** is kept when the run ends, and the button reads `score N, back tomorrow`.
+- **Auto-play (#1542)**: the run keeps `auto`, on once the bot has played a move of any fight, elite or boss of the run (it
+  is saved with the run, and a run saved before loads as played by hand). A run with `auto` says `Auto-play used` in its
+  score line (`Score: 30 (marbles 3 × 10) · Auto-play used`), as a line of its summary, in its history line and in the daily
+  button. Its score is shown, marked, but **the Daily's ranking and best score count only runs played by hand**: a daily try
+  records `auto` with its score, and the button reads `score N (Auto-play used, not ranked)`. There is no online board yet; any
+  ranking or best score added later counts the entries with `auto` off only. The MCP run has no Auto-play and no score (below), so
+  it is always by hand.
 - **Run history**: `Run history` on the start screen lists the last 10 runs over, the newest first: commander, result,
   score, the ascension level when above 0 and the day of a daily run (`The Warden · won · score 640 · ascension 2`).
   Kept in `ab-alone.roguelite.history`, a run once (by its seed).
