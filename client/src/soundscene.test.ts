@@ -145,13 +145,15 @@ describe('Sfx.setScene, the wind of the Open world (#1571)', () => {
 
 describe('Sfx.setScene, the room tone and the song (#1571)', () => {
   /** The gate of each file track: the gain between it and its bus. */
-  const gate = (ctx: FakeContext, track: number): FakeGain => ctx.tracks[track]!.outputs[0] as FakeGain;
+  const gate = (ctx: FakeContext, track: number): FakeGain => ctx.tracks[track]!.outputs[0]!.outputs[0] as FakeGain; // track, level, gate
+  const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0)); // the files decode after the sync code (#1575)
 
-  it('opens both for the ship and closes both outdoors, fading over the same second', () => {
+  it('opens both for the ship and closes both outdoors, fading over the same second', async () => {
     const { ctx, sfx } = setup();
     sfx.setScene('hub');
     sfx.unlock();
-    expect(ctx.tracks.map((t) => (t.outputs[0] as FakeGain).gain.value)).toEqual([1, 1, 1]);
+    await flush();
+    expect(ctx.tracks.map((t, i) => gate(ctx, i).gain.value)).toEqual([1, 1, 1]);
     sfx.setScene('world:meadow:day');
     expect(ctx.tracks.map((t, i) => targets(gate(ctx, i)))).toEqual([[0], [0], [0]]);
     expect(sfx.scene).toMatchObject({ room: false, track: false });
@@ -160,20 +162,22 @@ describe('Sfx.setScene, the room tone and the song (#1571)', () => {
     expect(sfx.scene).toMatchObject({ room: true, track: true });
   });
 
-  it('keeps the room tone, not the song, in a boss fight: the pulse is its music', () => {
+  it('keeps the room tone, not the song, in a boss fight: the pulse is its music', async () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
+    await flush();
     sfx.setScene('boss:echo');
     expect(targets(gate(ctx, 0))).toEqual([]); // already open: no change
     expect(targets(gate(ctx, 2))).toEqual([0]);
     expect(sfx.scene).toMatchObject({ room: true, track: false });
   });
 
-  it('starts closed when the first scene is outdoors, so the room tone never plays there', () => {
+  it('starts closed when the first scene is outdoors, so the room tone never plays there', async () => {
     const { ctx, sfx } = setup();
     sfx.setScene('world:tundra:dusk');
     sfx.unlock();
-    expect(ctx.tracks.map((t) => (t.outputs[0] as FakeGain).gain.value)).toEqual([0, 0, 0]);
+    await flush();
+    expect(ctx.tracks.map((t, i) => gate(ctx, i).gain.value)).toEqual([0, 0, 0]);
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EJECT_MS, PUSH_MS, VOID_MS } from './eject';
-import { FakeBufferSource, FakeContext, FakeFilter, FakeGain, FakeNode, FakeOscillator } from './test/audio';
+import { FakeBuffer, FakeBufferSource, FakeContext, FakeFilter, FakeGain, FakeNode, FakeOscillator } from './test/audio';
 import {
   AFTER_EJECTION,
   AMBIENCE_TRACKS,
@@ -34,6 +34,7 @@ import {
   knockVoices,
   PICK,
   layerGains,
+  loopPoints,
   smallSpeakerDb,
   tellVoices,
   type Bus,
@@ -603,6 +604,7 @@ describe('Sfx.tell, the sound twin of a boss tell', () => {
 });
 
 const FULL: Mix = { music: 100, ambience: 100, effects: 100, voice: 100 };
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0)); // the decoded files arrive after the sync code
 const MUTED: Mix = { music: 0, ambience: 0, effects: 0, voice: 0 };
 function setup(mix: Mix = FULL, ctx = new FakeContext()) {
   const make = vi.fn(() => ctx as unknown as AudioContext);
@@ -616,7 +618,7 @@ const duck = (ctx: FakeContext, b: Bus): FakeGain => next(bus(ctx, b)) as FakeGa
 /** The steady sources started with the context: the hum, then the tension drones. */
 const STEADY = HUM.length + TENSION.flat().length;
 /** The gain of each tension layer into the music bus: not the gate of the song (#1571), which goes there too. */
-const tensionLayers = (ctx: FakeContext): FakeGain[] => ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension) && !ctx.tracks.some((t) => t.outputs[0] === g));
+const tensionLayers = (ctx: FakeContext): FakeGain[] => ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension) && g.inputs.length > 0); // a gate has no input until its track decodes
 /** The node after `node` on the way out, through its only output. */
 const next = (node: FakeNode): FakeNode => {
   expect(node.outputs).toHaveLength(1);
@@ -663,29 +665,71 @@ describe('Sfx.unlock, on a user gesture', () => {
     });
   });
 
-  it('starts the reactor room ambience tracks and the hauler music track looped on their buses', () => {
+  it('loads the reactor room tracks and the hauler music track with the context, before any play (preload, #1575)', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
-    expect(AMBIENCE_TRACKS.map((t) => t.url)).toEqual([
-      'audio/reactor-room-tone-1.mp3',
-      'audio/reactor-room-tone-2.mp3',
-    ]);
-    expect(MUSIC_TRACK.url).toBe('audio/dead-ore-hauler.mp3');
+    expect(ctx.fetch.mock.calls.map(([url]) => url)).toEqual([...AMBIENCE_TRACKS.map((t) => t.url), MUSIC_TRACK.url]);
+    expect(ctx.tracks).toHaveLength(0); // decoding is not instant: nothing plays until it is done
+  });
+
+  it('loops each decoded track from its loop points, at its level, through its gate on its bus (#1575)', async () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    await flush();
+    const loop = { start: 100 / 8000, end: 900 / 8000 }; // the fake decodes a tone from sample 100 to 900 at 8 kHz
     expect(ctx.tracks).toHaveLength(AMBIENCE_TRACKS.length + 1);
-    AMBIENCE_TRACKS.forEach((track, i) => {
-      const node = ctx.tracks[i]!;
-      expect(node.media.src).toBe(track.url);
-      expect(node.media.loop).toBe(true);
-      expect(node.media.volume).toBe(track.gain);
-      expect(node.media.played).toBe(1);
-      expect(next(next(node))).toBe(bus(ctx, ROUTE.hum)); // through the gate of the room tone (#1571)
+    [...AMBIENCE_TRACKS, MUSIC_TRACK].forEach((track, i) => {
+      const source = ctx.tracks[i]!;
+      expect(source.loop).toBe(true);
+      expect(source.loopStart).toBeCloseTo(loop.start);
+      expect(source.loopEnd).toBeCloseTo(loop.end);
+      expect(source.offsets).toEqual([loop.start]); // started now, from the loop start: no encoder padding
+      expect(source.times).toEqual([5]);
+      const level = next(source) as FakeGain;
+      expect(level.gain.value).toBe(track.gain);
     });
-    const musicNode = ctx.tracks.at(-1)!;
-    expect(musicNode.media.src).toBe(MUSIC_TRACK.url);
-    expect(musicNode.media.loop).toBe(true);
-    expect(musicNode.media.volume).toBe(MUSIC_TRACK.gain);
-    expect(musicNode.media.played).toBe(1);
-    expect(next(next(musicNode))).toBe(bus(ctx, ROUTE.tension)); // through the gate of the song (#1571)
+    expect(next(next(next(ctx.tracks[0]!)))).toBe(bus(ctx, ROUTE.hum)); // through the gate of the room tone (#1571)
+    expect(next(next(next(ctx.tracks.at(-1)!)))).toBe(bus(ctx, ROUTE.tension)); // through the gate of the song (#1571)
+  });
+
+  it('a track that fails to load logs one warning with its URL and the others play: the game goes on', async () => {
+    const { ctx, sfx } = setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    ctx.fetch.mockImplementation(async (url: string) => {
+      if (url === MUSIC_TRACK.url) throw new Error('offline');
+      return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8) };
+    });
+    sfx.unlock();
+    await flush();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toContain(MUSIC_TRACK.url);
+    expect(ctx.tracks).toHaveLength(AMBIENCE_TRACKS.length);
+    expect(sfx.ejection(2)).toBe('toll');
+    warn.mockRestore();
+  });
+
+  it('a file the server refuses (not OK) is logged the same way', async () => {
+    const { ctx, sfx } = setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    ctx.fetch.mockImplementation(async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) }));
+    sfx.unlock();
+    await flush();
+    expect(warn).toHaveBeenCalledTimes(AMBIENCE_TRACKS.length + 1);
+    expect(warn.mock.calls[0]![0]).toContain(AMBIENCE_TRACKS[0]!.url);
+    expect(ctx.tracks).toHaveLength(0);
+    warn.mockRestore();
+  });
+
+  it('a file that does not decode is logged once with its URL and stays silent', async () => {
+    const { ctx, sfx } = setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    ctx.decodeAudioData = vi.fn(() => Promise.reject(new Error('bad mp3'))) as unknown as typeof ctx.decodeAudioData;
+    sfx.unlock();
+    await flush();
+    expect(warn).toHaveBeenCalledTimes(AMBIENCE_TRACKS.length + 1);
+    expect(warn.mock.calls[0]![0]).toContain(AMBIENCE_TRACKS[0]!.url);
+    expect(ctx.tracks).toHaveLength(0);
+    warn.mockRestore();
   });
 
   it('starts the tension drones with the context, each layer through its own gain into the music bus, silent while calm', () => {
@@ -1255,5 +1299,30 @@ describe('the room reverb of the effects bus (#1574)', () => {
     const sfx = new Sfx(() => ctx as unknown as AudioContext, { ...FULL });
     sfx.knock(1);
     expect(ctx.convolvers).toHaveLength(0);
+  });
+});
+
+describe('loopPoints, the loop of a decoded track (#1575)', () => {
+  /** A buffer of `length` samples at 1 kHz, `[from, to)` of each channel at `level`, the rest silent. */
+  const track = (spans: [from: number, to: number][], length = 1000): FakeBuffer => {
+    const b = new FakeBuffer(spans.length, length, 1000);
+    spans.forEach(([from, to], c) => b.getChannelData(c).fill(0.3, from, to));
+    return b;
+  };
+
+  it('is the audible part: the encoder padding at both ends is left out of the loop', () => {
+    expect(loopPoints(track([[10, 990]]) as unknown as AudioBuffer)).toEqual({ start: 0.01, end: 0.99 });
+  });
+
+  it('spans the widest audible part over the channels', () => {
+    expect(loopPoints(track([[100, 500], [300, 800]]) as unknown as AudioBuffer)).toEqual({ start: 0.1, end: 0.8 });
+  });
+
+  it('ignores a silent channel', () => {
+    expect(loopPoints(track([[0, 0], [200, 400]]) as unknown as AudioBuffer)).toEqual({ start: 0.2, end: 0.4 });
+  });
+
+  it('a silent track loops over all of it', () => {
+    expect(loopPoints(track([[0, 0]]) as unknown as AudioBuffer)).toEqual({ start: 0, end: 1 });
   });
 });

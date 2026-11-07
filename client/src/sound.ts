@@ -908,14 +908,52 @@ function gate(ctx: AudioContext, out: AudioNode, open: boolean): GainNode {
   return door;
 }
 
-/** Looped audio tracks, started once with the context, each routed into `out`. */
+/** The sample level under which a sample is silence for the loop points: about -80 dBFS (#1575). */
+export const SILENT_SAMPLE = 1e-4;
+
+/** The loop of a decoded track, in seconds: from its first to its last audible sample over the channels, so the silence an
+ * MP3 encoder pads at either end is out of the loop and the seam is the music's own (#1575). A silent track loops over all of it. */
+export function loopPoints(buffer: AudioBuffer): { start: number; end: number } {
+  let first = buffer.length;
+  let last = -1;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    let i = 0;
+    while (i < data.length && Math.abs(data[i]!) < SILENT_SAMPLE) i++;
+    if (i === data.length) continue; // this channel is silent
+    let j = data.length - 1;
+    while (Math.abs(data[j]!) < SILENT_SAMPLE) j--;
+    first = Math.min(first, i);
+    last = Math.max(last, j);
+  }
+  if (last < 0) return { start: 0, end: buffer.duration };
+  return { start: first / buffer.sampleRate, end: (last + 1) / buffer.sampleRate };
+}
+
+/** Looped audio tracks, each fetched and decoded once with the context (a preload, #1575), then looped sample-accurately from its
+ * loop points, at its level, into `out`. A file that does not load or decode is logged once with its URL and stays silent. */
 function startTracks(ctx: AudioContext, tracks: readonly Track[], out: AudioNode): void {
   for (const { url, gain } of tracks) {
-    const audio = new Audio(url);
-    audio.loop = true;
-    audio.volume = gain;
-    ctx.createMediaElementSource(audio).connect(out);
-    audio.play().catch(() => undefined);
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((data) => ctx.decodeAudioData(data))
+      .then((buffer) => {
+        const { start, end } = loopPoints(buffer);
+        const level = ctx.createGain();
+        level.gain.value = gain;
+        level.connect(out);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.loopStart = start;
+        source.loopEnd = end;
+        source.connect(level);
+        source.start(ctx.currentTime, start);
+      })
+      .catch((error: unknown) => console.warn(`Audio file not played: ${url}`, error));
   }
 }
 

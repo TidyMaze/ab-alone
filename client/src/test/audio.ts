@@ -19,8 +19,10 @@ export class FakeParam {
 }
 export class FakeNode {
   outputs: FakeNode[] = [];
+  inputs: FakeNode[] = [];
   connect<T extends FakeNode>(to: T): T {
     this.outputs.push(to);
+    to.inputs?.push(this); // an AudioParam has no inputs list
     return to;
   }
 }
@@ -50,6 +52,8 @@ export class FakeOscillator extends FakeSource {
 export class FakeBufferSource extends FakeSource {
   buffer: FakeBuffer | null = null;
   loop = false;
+  loopStart = 0;
+  loopEnd = 0;
 }
 export class FakePanner extends FakeNode {
   pan = new FakeParam();
@@ -57,40 +61,31 @@ export class FakePanner extends FakeNode {
 export class FakeConvolver extends FakeNode {
   buffer: FakeBuffer | null = null;
 }
-export class FakeAudio {
-  loop = false;
-  volume = 1;
-  played = 0;
-  fail = false;
-  rejection: Promise<void> | null = null;
-  constructor(public src: string) {}
-  play() {
-    this.played++;
-    if (this.fail) {
-      this.rejection = Promise.reject(new Error('blocked'));
-      vi.spyOn(this.rejection, 'catch');
-      return this.rejection;
-    }
-    return Promise.resolve();
-  }
-}
-export class FakeMediaElementSource extends FakeNode {
-  constructor(public media: FakeAudio) {
-    super();
-  }
-}
 export class FakeBuffer {
-  data: Float32Array;
+  channelData: Float32Array[];
   constructor(
     public channels: number,
-    length: number,
+    public length: number,
     public rate: number,
   ) {
-    this.data = new Float32Array(length);
+    this.channelData = Array.from({ length: channels }, () => new Float32Array(length));
+  }
+  get sampleRate(): number {
+    return this.rate;
+  }
+  /** The first channel. */
+  get data(): Float32Array {
+    return this.channelData[0]!;
+  }
+  get numberOfChannels(): number {
+    return this.channels;
+  }
+  get duration(): number {
+    return this.length / this.rate;
   }
   getChannelData(i: number) {
     expect(i).toBeLessThan(this.channels);
-    return this.data;
+    return this.channelData[i]!;
   }
 }
 export class FakeContext {
@@ -98,7 +93,7 @@ export class FakeContext {
   sampleRate = 8000;
   destination = new FakeNode();
   sources: FakeSource[] = [];
-  tracks: FakeMediaElementSource[] = [];
+  fetch = vi.fn(async (_url: string) => ({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8) }));
   gains: FakeGain[] = [];
   buffers: FakeBuffer[] = [];
   panners: FakePanner[] = [];
@@ -110,7 +105,7 @@ export class FakeContext {
     public state: 'suspended' | 'running' = 'running',
     private failResume = false,
   ) {
-    globalThis.Audio = FakeAudio as unknown as typeof Audio;
+    globalThis.fetch = this.fetch as unknown as typeof fetch; // the audio files: a fetch that always loads (#1575)
   }
   resume() {
     this.resumed++;
@@ -160,10 +155,14 @@ export class FakeContext {
     this.convolvers.push(c);
     return c;
   }
-  createMediaElementSource(media: FakeAudio) {
-    media.fail = this.failResume;
-    const s = new FakeMediaElementSource(media);
-    this.tracks.push(s);
-    return s;
+  /** The audio file decoded: 1000 samples at the context rate, silence at both ends, a tone in between (#1575). */
+  decodeAudioData(_data: ArrayBuffer): Promise<AudioBuffer> {
+    const b = new FakeBuffer(1, 1000, this.sampleRate);
+    b.data.fill(0.5, 100, 900);
+    return Promise.resolve(b as unknown as AudioBuffer);
+  }
+  /** The file tracks once decoded: their buffer sources, not the noise of the synthesized layers. */
+  get tracks(): FakeBufferSource[] {
+    return this.sources.filter((s): s is FakeBufferSource => s instanceof FakeBufferSource && s.buffer !== null && !this.buffers.includes(s.buffer));
   }
 }
