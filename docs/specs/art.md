@@ -42,7 +42,12 @@ decision (#1424); until it flips, the neon look is on at `?look=neon`. Numbers a
   far fainter than a flash; off under safe mode, reduced motion and the
   low tier (#509). Boss: the shell plus one accent, a rust crown for The Hull, candle wax for The Chaplain, a wire
   wrap for The Ballast Mind (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape
-  cue. Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its
+  cue. Both sides read as glossy spheres under both looks (#1553): a sharp sun highlight and a fresnel rim (the shell's cyan, a soft pale
+  edge on the white), the white shaded by its normal so its lit cap stays under 255 and does not bloom, and a reflection of the sky on
+  each, a colour node of the reflection vector (`marbleSheen`, `NEON_SHEEN` in `neonlook.ts`: strong on the black shell, a hint on the
+  white). It needs no envMap, no texture and no draw call, so the black shell is a sphere, never a hole in the board, on the low tier
+  and under automation too, where the PMREM reflection is left out; on the high tier it adds to the envMap. Side is told by value first
+  (black shell against light white), the colour-blind palettes change no marble colour. Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its
   own way and each cell disc is turned by its own angle, seeded, so the set never lines up and a game always looks
   the same.
 - **Light** (world.md 5). One cold sun low on the left (`#e8f0ff`, 3.2), a violet-tinted hemisphere (sky `#9a6bff`,

@@ -3,7 +3,7 @@
 // it is never stored.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { abs, clamp, color, dot, float, mix, normalize, normalView, positionViewDirection, vec3 } from 'three/tsl';
+import { abs, clamp, color, dot, float, mix, normalize, normalView, positionViewDirection, pow, reflect, vec3 } from 'three/tsl';
 import type { Deck } from './deck';
 import { mixHex, type Phase, type WorldLook } from './daynight';
 
@@ -275,6 +275,27 @@ export function neonMarbleRim<M extends THREE.Material>(side: 'black' | 'white',
     ...shade,
     emissiveNode: (color(rim.colour).mul(fresnel.pow(float(rim.power))).mul(float(rim.strength)) as ReturnType<typeof color>).add(base),
   });
+}
+
+/** The reflection of the sky on a marble (#1553), the same under both looks: a soft sky on the upper half of the sphere that grows
+ * toward the edge, and a window of the sun, small and bright. `sky` and `spot` scale them per side; the white takes a hint, so it does
+ * not bloom. `light` is the sun's side in view space, left and up, as `NEON_WHITE_SHADE.light`. */
+export const NEON_SHEEN = { black: { sky: 0.6, spot: 3 }, white: { sky: 0.06, spot: 0.4 }, tint: 0xa8cfe6, light: [-0.5, 0.7, 0.5] as const, tight: 40 } as const;
+
+/** Adds the sheen to the marble's emissive, whatever it holds (its glow, the neon rim): a colour node of the reflection vector, with
+ * no envMap (left out under automation and on the low tier, where the black shell was a flat disc), no map and no draw call. */
+export function marbleSheen<M extends THREE.Material>(side: 'black' | 'white', material: M): M {
+  const { sky, spot } = NEON_SHEEN[side];
+  const own = (material as { emissiveNode?: ReturnType<typeof color> }).emissiveNode;
+  const base = (own ?? color('emissive' in material ? (material.emissive as THREE.Color) : new THREE.Color(0))) as ReturnType<typeof color>;
+  const view = normalView;
+  const r = reflect(positionViewDirection.negate(), view);
+  const [lx, ly, lz] = NEON_SHEEN.light;
+  const window = pow(clamp(dot(r, normalize(vec3(lx, ly, lz))), 0, 1), float(NEON_SHEEN.tight));
+  const up = clamp(r.y, 0, 1);
+  const edge = float(0.5).add(float(1).sub(abs(dot(view, positionViewDirection))));
+  const lift = color(NEON_SHEEN.tint).mul(up.mul(edge).mul(float(sky)).add(window.mul(float(spot))));
+  return Object.assign(material, { emissiveNode: base.add(lift as unknown as typeof base) });
 }
 
 /** The thin cyan hexagon of a cell, drawn in its gap: the brightest line of the board. One instance per cell. */
