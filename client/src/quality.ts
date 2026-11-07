@@ -151,18 +151,9 @@ export const writeReducedMotion = (store: Store, on: boolean): void => write(sto
 // The flat HUD fallback (#391): off unless the player turned it on.
 export const readFlatHud = (store: Store): boolean => read(store, FLAT_KEY) === 'on';
 export const writeFlatHud = (store: Store, on: boolean): void => write(store, FLAT_KEY, on ? 'on' : 'off');
-// The left HUD panel folded to a tab (#957): unfolded unless the player folded it. A portrait window under 700 px tall starts it
-// folded (#1610): the plate would cover the board there, so the default is the fold, and a stored choice still wins.
-export const foldedByDefault = (width: number, height: number): boolean => width < height && height < 700;
-export const readHudFolded = (store: Store, byDefault = false): boolean => {
-  const stored = read(store, FOLD_KEY);
-  return stored === 'on' ? true : stored === 'off' ? false : byDefault;
-};
+// The left HUD panel folded to a tab (#957): unfolded unless the player folded it.
+export const readHudFolded = (store: Store): boolean => read(store, FOLD_KEY) === 'on';
 export const writeHudFolded = (store: Store, on: boolean): void => write(store, FOLD_KEY, on ? 'on' : 'off');
-// The fold for a window of this size (#1610): the boot and each resize read it, so a player who never chose gets the default
-// of the new size (a turned phone), and a stored choice always wins.
-export const hudFoldAt = (store: Store, width: number, height: number): boolean =>
-  readHudFolded(store, foldedByDefault(width, height));
 // The audio log transcript (#516): on unless the player turned it off.
 export const readTranscript = (store: Store): boolean => read(store, TRANSCRIPT_KEY) !== 'off';
 export const writeTranscript = (store: Store, on: boolean): void => write(store, TRANSCRIPT_KEY, on ? 'on' : 'off');

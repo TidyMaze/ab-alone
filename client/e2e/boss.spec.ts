@@ -370,6 +370,7 @@ test('The Ballast Mind radius 5 board frames in 1280x720 and phone upright, task
   expect(cells.every((c) => c.x > 30 && c.x < 1250 && c.y > 30 && c.y < 690)).toBe(true);
 
   // Reset view keeps the framing
+  await openModes(page); // Replay and Reset view sit in the Game modes menu (#1612)
   await page.getByRole('button', { name: 'Reset view' }).click();
   const resetCells = await page.evaluate(() => {
     const toScreen = (window as any).__cellToScreen;

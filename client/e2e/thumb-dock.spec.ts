@@ -82,7 +82,7 @@ for (const { name, viewport } of viewports) {
       await page.locator('canvas').waitFor();
       await expect(page.locator('#hud')).toContainText('Black to move');
       const result = await check(page, 'a normal game');
-      expect(result.ui.order).toEqual(['New game', 'Reset view', 'Hint', 'Replay', 'Game modes']);
+      expect(result.ui.order).toEqual(['New game', 'Hint', 'Open world', 'Quick game', 'Game modes']);
     });
 
     test('a boss fight: the dock holds Goal and Retry, clear of the board, bug #1032', async ({ page }) => {
@@ -114,6 +114,7 @@ for (const { name, viewport } of viewports) {
       );
       await click(target.cell);
       await expect(page.locator('#replay')).toBeEnabled();
+      await openModes(page); // Replay sits in the Game modes menu (#1612)
       await page.locator('#replay').click();
       await expect(page.locator('#replay-bar')).toBeVisible();
       const result = await check(page, 'a review');

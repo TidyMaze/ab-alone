@@ -34,6 +34,9 @@ test('the mode menu closes on Escape and on a press outside, and is reachable by
   await button.focus();
   await page.keyboard.press('Enter');
   await expect(online).toBeVisible();
+  // A fresh profile lists Open world first (#1612, Decision #1513): the first Tab lands on it, the next on Play online.
+  await page.keyboard.press(tab);
+  await expect(page.locator('#openworld')).toBeFocused(); // by id: the dock's World button has the same name
   await page.keyboard.press(tab);
   await expect(online).toBeFocused();
   await page.keyboard.press('Escape');

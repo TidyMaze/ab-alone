@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
 import { shot } from './shot';
 
 const cellToScreen = (page: Page, q: number, r: number) =>
@@ -45,6 +46,7 @@ test('rotate and zoom, play a move at that angle, reset the view and play again'
   await expect(page.locator('#hud')).toContainText('White to move');
 
   // Reset the view: the default camera is back, so is the cell position.
+  await openModes(page); // Replay and Reset view sit in the Game modes menu (#1612)
   await page.getByRole('button', { name: 'Reset view' }).click();
   const reset = await cellToScreen(page, 4, 0);
   expect(reset.x).toBeCloseTo(start.x, 1);

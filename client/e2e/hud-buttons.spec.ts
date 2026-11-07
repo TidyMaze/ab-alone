@@ -24,7 +24,7 @@ test('Free camera is a settings item, not a HUD button, lit while it is on, #938
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#free-cam')).toHaveCount(0);
-  await expect(page.locator('#dock > #reset-view')).toHaveCount(1); // Reset view alone, in the thumb dock (#1032)
+  await expect(page.locator('#mode-menu > #reset-view')).toHaveCount(1); // Reset view in the Game modes menu, not the dock (#1612: five dock controls fit 320 px)
   await page.locator('#settings').click();
   await openAdvanced(page); // a developer view, under Advanced (#1566)
   const item = page.getByRole('button', { name: 'Free camera' });

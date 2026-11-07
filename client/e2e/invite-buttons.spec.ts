@@ -19,8 +19,9 @@ test.describe('a phone held sideways', () => {
     await page.mouse.click(at.x, at.y);
     await expect(page.locator('#invite')).toBeVisible();
 
+    // Reset view lives in the Modes menu since #1612, so the column check covers Settings and the Modes button.
     const covered = await page.evaluate(() =>
-      ['settings', 'reset-view'].filter((id) => {
+      ['settings', 'modes'].filter((id) => {
         const r = document.getElementById(id)!.getBoundingClientRect();
         const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         return !document.getElementById(id)!.contains(top);

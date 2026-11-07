@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -31,6 +31,8 @@ import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFirstRunDone } from './firstrun';
+import { openWorldLeads } from './menuorder';
+import { worldSaves } from './openworldsave';
 import { askBot, askEval, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
 import { lazyWorker } from './lazyworker';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -250,7 +252,7 @@ import {
   hasParticles,
   readClearBoard,
   readFlatHud,
-  hudFoldAt,
+  readHudFolded,
   readFps,
   readReducedMotion,
   readGlassSkin,
@@ -323,7 +325,7 @@ import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
 import { LEGACY_UNLOCKED, readUnlocked, recordUnlocked } from './collector';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
-import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
+import { CONFIRM_MS, newGameLabel, pressNewGame, quickGameHidden, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
   actBoss,
@@ -2908,7 +2910,10 @@ function syncReplay(): void {
   replaySlider.value = String(shownPly());
   document.getElementById('replay-label')!.textContent = replayLabel(shownPly(), history.length);
 }
-replayButton.addEventListener('click', () => showPly(history.length));
+replayButton.addEventListener('click', () => {
+  moveModes('outside'); // the Replay button sits in the Game modes menu (#1612): a press closes it
+  showPly(history.length);
+});
 for (const step of ['first', 'prev', 'next', 'last'] as const) {
   document.getElementById(`replay-${step}`)!.addEventListener('click', () => stepReplay(step));
 }
@@ -4138,6 +4143,7 @@ function refresh(): void {
   dirty = CHANGE_DRAWS;
   syncSpace();
   syncAuto();
+  syncQuick();
   if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {
     const { beaten } = loadProgress(store);
@@ -5118,6 +5124,7 @@ canvas.addEventListener(
 );
 
 document.getElementById('reset-view')!.addEventListener('click', () => {
+  moveModes('outside'); // the Reset view button sits in the Game modes menu (#1612): a press closes it
   if (freeCam.active) toggleFreeCam(false);
   view = fitted = fightView();
   applyView();
@@ -5130,7 +5137,7 @@ function foldHud(folded: boolean): void {
   hudFold.setAttribute('aria-expanded', String(!folded));
   hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
 }
-foldHud(hudFoldAt(store, innerWidth, innerHeight)); // a portrait phone under 700 px starts folded (#1610)
+foldHud(readHudFolded(store));
 hudFold.addEventListener('click', () => {
   const folded = hudFold.getAttribute('aria-expanded') === 'true';
   writeHudFolded(store, folded);
@@ -5145,7 +5152,6 @@ addEventListener('resize', () => {
   setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
   renderer.setSize(innerWidth, innerHeight);
   openWorld.resize(innerWidth, innerHeight);
-  foldHud(hudFoldAt(store, innerWidth, innerHeight)); // no stored choice: the default of the new size (#1610)
   applyView(); // the reader fits the screen to the new window
 });
 
@@ -5826,6 +5832,36 @@ function startLocal(bot: boolean): void {
   worker = bot ? botWorker : null;
   newGame();
 }
+// Quick game (#1612, Decision #1513): a bot game from the dock and from the Open world's plate, outside the world. An unfinished game
+// asks first, as New game does (pressNewGame), and the question shows on the Quick game button that was pressed, since the New game
+// button is hidden in a fight, a run or the world.
+const quickButtons = [document.getElementById('quick-game')!, document.getElementById('openworld-quick')!] as HTMLButtonElement[];
+let confirmQuick: Confirm = null;
+let quickLapse = 0; // ends the question
+function askQuickGame(confirm: Confirm): void {
+  confirmQuick = confirm;
+  for (const quick of quickButtons) quick.textContent = confirm === null ? 'Quick game' : 'Confirm quick game';
+  clearTimeout(quickLapse);
+  if (confirm !== null) quickLapse = setTimeout(askQuickGame, CONFIRM_MS, null);
+}
+/** Quick game is hidden in a fight, a boss or a wild one (#1612): the press of a fight that is still on does nothing, as a hidden button does. */
+function syncQuick(): void {
+  const hidden = quickGameHidden(fight !== null, wildFrom !== null);
+  for (const id of ['quick-game', 'openworld-quick']) document.getElementById(id)!.hidden = hidden; // by id: refresh() may run before the buttons below are set up
+}
+for (const quick of quickButtons) {
+  quick.addEventListener('click', () => {
+    if (quickGameHidden(fight !== null, wildFrom !== null)) return;
+    const press = pressNewGame(confirmQuick, performance.now(), history.length);
+    askQuickGame(press.confirm);
+    if (press.start) startLocal(true);
+  });
+  quick.disabled = false; // listener ready (#146)
+}
+// The one-tap Open world of a fresh profile (#1612): the dock entry opens the world as the mode menu's entry does.
+const openWorldEntry = document.getElementById('open-world-entry') as HTMLButtonElement;
+openWorldEntry.addEventListener('click', () => openWorldButton.click());
+openWorldEntry.disabled = false; // listener ready (#146)
 /** The exit of the dock (#1517): to the Open world, the hero on the entrance cell the mode was entered from (a lair, a wild marble, a town, a gate),
  * or to the Hub, the saved world left as Esc leaves it. The Hub of a table's door keeps the door's cell. */
 function leaveByExit(): void {
@@ -5879,6 +5915,7 @@ function leaveMode(): void {
   skipEjections(); // the effects of the mode's last move end with it
   clearStray(document);
   newGameButton.hidden = false;
+  syncQuick();
 }
 function leaveHub(): void {
   if (!hub) return;
@@ -7231,6 +7268,12 @@ const coopInvite = coopFromHash(location.hash);
 const duelInvite = bossSeatFromHash(location.hash);
 const royaleInvite = royaleFromHash(location.hash);
 const creator = creatorFromHash(location.hash); // the fingerprint of the creator's key, none in an older link (#1323)
+// The Open world leads the mode menu of a fresh profile (#1612, menuorder.ts); a profile with a save or a boss beaten keeps its menu.
+// A saved run or a saved public world is a save too: the profile keeps its menu (#1612).
+const worldSaved = (await worldSaves(gameStore, world_version()).load(PUBLIC_SEED)) !== null;
+const leadsMenu = openWorldLeads(resumed !== null || resumedRun !== null || worldSaved, loadProgress(store).beaten.length);
+if (leadsMenu) modeMenu.insertBefore(openWorldButton, document.getElementById('play-online'));
+document.getElementById('open-world-entry')!.hidden = !leadsMenu;
 if (invited) void goOnline(invited, 2, undefined, creator);
 else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
 else if (duelInvite && boss_ids().includes(duelInvite.boss)) void goOnline(duelInvite.room, 2, duelInvite, creator, true); // the joiner plays the boss (#1316)

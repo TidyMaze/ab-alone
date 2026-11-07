@@ -77,6 +77,7 @@
           <p id="openworld-mode"></p>
         </details>
         <button id="openworld-dungeon" type="button">Nearest tower</button>
+        <button id="openworld-quick" type="button" autocomplete="off" disabled>Quick game</button>
         <p id="openworld-dungeon-note" role="status"></p>
         <div id="openworld-online" hidden>
           <p id="openworld-net" role="status"></p>
@@ -128,9 +129,7 @@
         <button id="rematch" type="button" data-label="Rematch" aria-label="Rematch" hidden>Rematch</button>
         <button id="boss-goal" type="button" data-label="Goal" aria-label="Goal" aria-expanded="true" hidden>Goal</button>
         <button autocomplete="off" id="new-game" type="button" data-label="New" disabled></button>
-        <button autocomplete="off" id="reset-view" type="button" data-label="View" aria-label="Reset view" disabled>Reset view</button>
         <button autocomplete="off" id="hint" type="button" data-label="Hint" aria-label="Hint" aria-pressed="false" disabled>Hint</button>
-        <button autocomplete="off" id="replay" type="button" data-label="Replay" aria-label="Replay" disabled>Replay</button>
         <div id="dock-replay" class="steps" role="group" aria-label="Replay">
           <button id="replay-first" type="button" aria-label="First position" title="First position">&#9198;</button>
           <button id="replay-prev" type="button" aria-label="Previous move" title="Previous move">&#9664;</button>
@@ -140,6 +139,8 @@
         </div>
         <button id="royale-hold" type="button" data-label="Hold" aria-label="Hold" hidden>Hold</button>
         <button id="lobby" type="button" data-label="Lobby" aria-label="Lobby" aria-expanded="false" aria-controls="lobby-sheet" hidden>Lobby</button>
+        <button autocomplete="off" id="open-world-entry" type="button" data-label="World" aria-label="Open world" title="Open world (#1612)" disabled hidden>Open world</button>
+        <button autocomplete="off" id="quick-game" type="button" data-label="Quick" aria-label="Quick game" title="Quick game: a bot game, outside the world (#1612)" disabled>Quick game</button>
         <button autocomplete="off" id="modes" type="button" data-label="Modes" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
         <button id="auto-play" type="button" data-label="Auto" aria-label="Auto-play" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
       </nav>
@@ -160,6 +161,10 @@
         <button autocomplete="off" id="trainer" type="button" disabled>Trainer</button>
         <button autocomplete="off" id="openworld" type="button" disabled>Open world</button>
         <button autocomplete="off" id="ship" type="button" disabled>Hub</button>
+        <div id="menu-view">
+          <button autocomplete="off" id="reset-view" type="button" aria-label="Reset view" disabled>Reset view</button>
+          <button autocomplete="off" id="replay" type="button" data-label="Replay" aria-label="Replay" disabled>Replay</button>
+        </div>
       </div>
       <div id="lobby-sheet" role="group" aria-label="Lobby" hidden>
         <button id="royale-start" type="button" hidden>Start</button>
