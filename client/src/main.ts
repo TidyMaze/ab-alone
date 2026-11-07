@@ -273,8 +273,9 @@ import {
   hasBloom,
   hasNormalMaps,
   meshDetail,
-  nextPixelRatio,
   offersLowTier,
+  RATIO_BACK_START,
+  stepRatio,
   readLowOffer,
   slowRun,
   writeLowOffer,
@@ -898,6 +899,7 @@ const RATIO_FRAMES = 30;
 let pixelRatio = 1;
 let frameTimes: number[] = [];
 let lastFrame = performance.now();
+let ratioBack = RATIO_BACK_START; // the step back up (#1580): its judgement carries across the windows
 function setPixelRatio(ratio: number): void {
   pixelRatio = ratio;
   frameTimes = [];
@@ -911,7 +913,7 @@ let lowRun = 0;
 let softwareJudged = software; // a renderer that says it is software needs no judging
 let lowOfferShown = false;
 const lowOffer = document.getElementById('low-offer') as HTMLDivElement;
-function endWindow(): void {
+function endWindow(now: number): void {
   // The first window only (#1483): a GPU page that is slow later (a throttled tab, a heavy scene) stays on its GPU paths.
   if (!softwareJudged && looksSoftware(frameTimes)) {
     software = true; // the renderer did not say so, the frames do: the next world lays the ground in view only
@@ -919,14 +921,15 @@ function endWindow(): void {
   }
   softwareJudged = true;
   lowRun = slowRun(lowRun, frameTimes);
-  const next = nextPixelRatio(pixelRatio, frameTimes, ratioFloor(devicePixelRatio, software));
-  if (next !== pixelRatio) setPixelRatio(next);
+  const step = stepRatio(pixelRatio, ratioBack, frameTimes, ratioFloor(devicePixelRatio, software), renderPixelRatio(devicePixelRatio, navigator.webdriver), now);
+  ratioBack = step.back;
+  if (step.ratio !== pixelRatio) setPixelRatio(step.ratio);
   else frameTimes = [];
 }
 function adaptResolution(now: number): void {
   frameTimes.push(now - lastFrame);
   lastFrame = now;
-  if (frameTimes.length >= ratioFrames(software)) endWindow();
+  if (frameTimes.length >= ratioFrames(software)) endWindow(now);
 }
 function offerLowTier(quiet: boolean): void {
   if (!quiet || online || royaleNet || !offersLowTier(tier, lowRun, readLowOffer(store), lowOfferShown)) return;
@@ -947,7 +950,7 @@ function answerLowOffer(accepted: boolean): void {
 // For the tests (adaptation is skipped under automation): one window of frames of `ms` each.
 hookHost.__slowWindow = (ms: number) => {
   frameTimes = Array.from({ length: RATIO_FRAMES }, () => ms);
-  endWindow();
+  endWindow(performance.now());
 };
 
 // How many times the look was rebuilt: an orbit never rebuilds it (bug #475, e2e/camera.spec.ts).

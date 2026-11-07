@@ -274,12 +274,55 @@ export const smoothEdges = (drawnRatio: number, msaa: boolean): boolean => drawn
 
 // The adaptive resolution (#843): while the median frame of the last ones takes more than 20 ms (under 50 FPS), the
 // pixel ratio steps down a quarter, never under `floor`. The median, so one long frame (a shader compile, a texture
-// load) changes nothing. It never steps back up: with vsync a fast frame and a frame with room to spare look the same.
+// load) changes nothing. It steps back up only after a run of fast frames (stepRatio, #1580): a frame with room to spare looks the same.
 const SLOW_FRAME_MS = 20;
 const RATIO_STEP = 0.25;
 const isSlow = (frameMs: readonly number[]): boolean => [...frameMs].sort((a, b) => a - b)[frameMs.length >> 1]! > SLOW_FRAME_MS;
 export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor: number): number {
   return isSlow(frameMs) ? Math.max(floor, ratio - RATIO_STEP) : ratio;
+}
+
+// The step back up (#1580): after UP_FRAMES frames in a row under FAST_FRAME_MS (60 FPS) the ratio steps up a quarter, never over
+// the ceiling. A slow window within UP_JUDGE_MS of a step up is a vsync flip: the ratio the step reached is blocked for BLOCK_MS,
+// and each further block is twice the last (60, 120, 240 s), so the picture does not flip every few seconds.
+const FAST_FRAME_MS = 17;
+const UP_FRAMES = 300;
+const UP_JUDGE_MS = 10_000;
+const BLOCK_MS = 60_000;
+export interface RatioBack {
+  /** Frames in a row under FAST_FRAME_MS. */
+  fast: number;
+  /** The page clock (ms) of the last step up, -Infinity before the first. */
+  steppedUpAt: number;
+  /** The ratio a flip blocked, NaN for none, and the page clock (ms) until which it stays blocked. */
+  blockedRatio: number;
+  blockedUntil: number;
+  /** The length of the next block (ms). */
+  blockMs: number;
+}
+export const RATIO_BACK_START: RatioBack = { fast: 0, steppedUpAt: -Infinity, blockedRatio: NaN, blockedUntil: 0, blockMs: BLOCK_MS };
+const medianOf = (frameMs: readonly number[]): number => [...frameMs].sort((a, b) => a - b)[frameMs.length >> 1]!;
+/** The pixel ratio after one window of frames (`now`: the page clock at its end): the step down is nextPixelRatio's, unchanged. */
+export function stepRatio(
+  ratio: number,
+  back: RatioBack,
+  frameMs: readonly number[],
+  floor: number,
+  ceiling: number,
+  now: number,
+): { ratio: number; back: RatioBack } {
+  if (isSlow(frameMs)) {
+    const lower = nextPixelRatio(ratio, frameMs, floor);
+    // A slow window at the floor steps nothing down, so it flips nothing and blocks nothing.
+    const flip = lower < ratio && now - back.steppedUpAt <= UP_JUDGE_MS;
+    const block = flip ? { blockedRatio: ratio, blockedUntil: now + back.blockMs, blockMs: back.blockMs * 2 } : {};
+    return { ratio: lower, back: { ...back, fast: 0, ...block } };
+  }
+  const fast = medianOf(frameMs) < FAST_FRAME_MS ? back.fast + frameMs.length : 0;
+  const target = Math.min(ceiling, ratio + RATIO_STEP);
+  const blocked = target === back.blockedRatio && now < back.blockedUntil;
+  if (fast < UP_FRAMES || target <= ratio || blocked) return { ratio, back: { ...back, fast } };
+  return { ratio: target, back: { ...back, fast: 0, steppedUpAt: now } };
 }
 
 // The lowest pixel ratio the adaptive resolution steps down to: 1 on a GPU (a fast frame at a lower one only blurs), half of it on a

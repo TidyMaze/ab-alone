@@ -23,6 +23,8 @@ import {
   renderPixelRatio,
   smoothEdges,
   nextPixelRatio,
+  stepRatio,
+  RATIO_BACK_START,
   slowRun,
   offersLowTier,
   readLowOffer,
@@ -579,6 +581,69 @@ describe('nextPixelRatio, the adaptive resolution (#843)', () => {
   });
   it('reads the median: one long frame (a shader compile, a texture load) changes nothing', () => {
     expect(nextPixelRatio(1.5, [...frames(16, 29), 8000], 1)).toBe(1.5);
+  });
+});
+
+describe('stepRatio, the step back up (#1580)', () => {
+  // Runs the adaptive resolution (main.ts endWindow) over windows of 30 frames: `frameMs(i)` is the i-th frame's time.
+  // Returns each change of the ratio with its time on the page clock (ms).
+  function drive(frameMs: (i: number) => number, frames: number, start: number, ceiling: number): { at: number; ratio: number }[] {
+    const changes: { at: number; ratio: number }[] = [];
+    let ratio = start;
+    let back = RATIO_BACK_START;
+    let now = 0;
+    let win: number[] = [];
+    for (let i = 0; i < frames; i++) {
+      const ms = frameMs(i);
+      now += ms;
+      win.push(ms);
+      if (win.length < 30) continue;
+      const next = stepRatio(ratio, back, win, 1, ceiling, now);
+      if (next.ratio !== ratio) changes.push({ at: now, ratio: next.ratio });
+      ratio = next.ratio;
+      back = next.back;
+      win = [];
+    }
+    return changes;
+  }
+  // Ten fast windows (300 frames at 16 ms), then one slow window at 25 ms: the step up is flipped back at once, every time.
+  const flicker = (i: number): number => (Math.floor(i / 30) % 11 === 10 ? 25 : 16);
+
+  it('steps up after 300 frames under 17 ms, not before', () => {
+    expect(drive(() => 16, 270, 1, 1.25)).toEqual([]);
+    expect(drive(() => 16, 300, 1, 1.25)).toEqual([{ at: 4800, ratio: 1.25 }]);
+  });
+  it('a 60 Hz trace (16.7 ms) steps up once and stays at the ceiling', () => {
+    expect(drive(() => 1000 / 60, 30 * 200, 1, 1.25).map((c) => c.ratio)).toEqual([1.25]);
+  });
+  it('a 30 Hz trace (33.3 ms) never steps up', () => {
+    expect(drive(() => 1000 / 30, 30 * 100, 1.5, 1.5).map((c) => c.ratio)).toEqual([1.25, 1]);
+  });
+  it('a median between 17 and 20 ms keeps the ratio: no step up, no step down', () => {
+    expect(drive(() => 18, 30 * 100, 1.25, 1.5)).toEqual([]);
+  });
+  it('a slow window more than 10 s after a step up steps down without a block', () => {
+    const late = (i: number): number => (Math.floor(i / 30) === 35 ? 25 : 16);
+    expect(drive(late, 30 * 46, 1, 1.25)).toEqual([
+      { at: 4800, ratio: 1.25 },
+      { at: 17550, ratio: 1 },
+      { at: 22350, ratio: 1.25 },
+    ]);
+  });
+  it('a slow window within 10 s of a step up blocks that ratio: the flicker flips at most once per 60 s', () => {
+    const ups = drive(flicker, 30 * 11 * 120, 1, 1.5).filter((c) => c.ratio > 1);
+    const gaps = ups.slice(1).map((c, i) => c.at - ups[i]!.at);
+    expect(gaps.length).toBeGreaterThanOrEqual(3);
+    expect(gaps.every((g) => g >= 60000)).toBe(true);
+  });
+  it('the block doubles each time: 60 s, then 120 s, then 240 s', () => {
+    const ups = drive(flicker, 30 * 11 * 200, 1, 1.5).filter((c) => c.ratio > 1);
+    const gaps = ups.slice(1).map((c, i) => c.at - ups[i]!.at);
+    expect(gaps[0]).toBeGreaterThanOrEqual(60000);
+    expect(gaps[0]).toBeLessThan(62000);
+    expect(gaps[1]).toBeGreaterThanOrEqual(120000);
+    expect(gaps[1]).toBeLessThan(126000);
+    expect(gaps[2]).toBeGreaterThanOrEqual(240000);
   });
 });
 
