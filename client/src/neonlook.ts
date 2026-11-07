@@ -246,25 +246,34 @@ export const NEON_WHITE_RIM = { colour: 0xbfd0e0, strength: 0.35, power: 3 } as 
  * side facing it, by the normal in view space (a colour node, no map, no pass). `lit` below 1 keeps the lit cap off 255 (clipped
  * at 255 before, measured on the bot game). `light` is the sun's side, left and up, in view space. */
 export const NEON_WHITE_SHADE = { floor: 0.5, lit: 0.85, light: [-0.5, 0.7, 0.5] as const } as const;
+/** The marble an Open world's enemies or hero wear (#1558): under the neon look and the default skin, the arena's own marble (the terrace's
+ * black shell or white glass, with its rim); a skin the player chose, or the look off, is worn as it is. */
+export function neonShellFor<M>(neon: boolean, defaultSkin: boolean, terrace: M, worn: M): M {
+  return neon && defaultSkin ? terrace : worn;
+}
+
 /** The marbles under the neon look (#1552, #1553): a fresnel rim on both colours (cyan on the black shell, a soft pale edge on the
  * white) and the sharper highlight of `NEON_GLOSS`. The look off, the material is left as it is. */
 export function neonMarbleRim<M extends THREE.Material>(side: 'black' | 'white', material: M, on: boolean): M {
   if (!on) return material;
   const rim = side === 'black' ? NEON_RIM : NEON_WHITE_RIM;
   // A TSL emissive node, not onBeforeCompile: the renderer is WebGPU (its WebGL 2 fallback too), which never runs that hook.
-  // The node replaces the emissive, so the white's own emissive is its base.
-  const base = 'emissive' in material ? (material.emissive as THREE.Color) : new THREE.Color(0);
+  // The node replaces the emissive, so the marble's own glow is its base: its emissive node (the Open world's glow), else its emissive.
+  const own = (material as { emissiveNode?: ReturnType<typeof color> }).emissiveNode;
+  const base = (own ?? color('emissive' in material ? (material.emissive as THREE.Color) : new THREE.Color(0))) as ReturnType<typeof color>;
   const fresnel = float(1).sub(abs(dot(normalView, positionViewDirection)));
   const gloss: Record<string, number> = { roughness: NEON_GLOSS.roughness[side] };
   if (material instanceof THREE.MeshPhysicalMaterial) gloss.specularIntensity = NEON_GLOSS.specularIntensity;
   // The white's lit cap clipped at 255 (#1553, measured): its colour falls to `floor` on the side away from the sun, the volume back.
+  // Its colour is the marble's colour node when it has one (the Open world's stripe), so the shade keeps the stripe.
   const [lx, ly, lz] = NEON_WHITE_SHADE.light;
   const facing = clamp(dot(normalView, normalize(vec3(lx, ly, lz))), 0, 1);
-  const shade = side === 'white' ? { colorNode: color((material as unknown as THREE.MeshStandardMaterial).color).mul(mix(float(NEON_WHITE_SHADE.floor), float(NEON_WHITE_SHADE.lit), facing)) } : {};
+  const tint = (material as { colorNode?: ReturnType<typeof color> }).colorNode ?? color((material as unknown as THREE.MeshStandardMaterial).color);
+  const shade = side === 'white' ? { colorNode: tint.mul(mix(float(NEON_WHITE_SHADE.floor), float(NEON_WHITE_SHADE.lit), facing)) } : {};
   return Object.assign(material, {
     ...gloss,
     ...shade,
-    emissiveNode: color(rim.colour).mul(fresnel.pow(float(rim.power))).mul(float(rim.strength)).add(color(base)),
+    emissiveNode: (color(rim.colour).mul(fresnel.pow(float(rim.power))).mul(float(rim.strength)) as ReturnType<typeof color>).add(base),
   });
 }
 

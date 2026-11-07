@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE,neonMarbleRim } from './neonlook';
+import { color as tslColor } from 'three/tsl';
+import type { Node } from 'three/webgpu';
+import { neonShellFor, NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE,neonMarbleRim } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
@@ -56,6 +58,27 @@ describe('the neon look (#1424)', () => {
     expect((emissive(neonMarbleRim('black', new THREE.MeshBasicMaterial(), true)) as { isNode: boolean }).isNode).toBe(true); // no emissive of its own: black
     expect(NEON_WHITE_RIM.strength).toBeLessThan(NEON_RIM.strength);
     expect(NEON_WHITE_RIM.colour).not.toBe(NEON_RIM.colour);
+  });
+
+  it('shades the stripe of an Open world marble and adds the rim to its glow, neither replaced (#1553, the Open world)', () => {
+    // The Open world's marble is a stripe (its colour node) and a glow (its emissive node): the white's shade multiplies the stripe,
+    // and the rim adds to the glow.
+    const marble = Object.assign(new THREE.MeshStandardMaterial({ color: NEON.whiteMarble }), { colorNode: tslColor(0x6fa8dc), emissiveNode: tslColor(0x222222) });
+    const stripe = marble.colorNode as Node;
+    const glow = marble.emissiveNode as Node;
+    neonMarbleRim('white', marble, true);
+    // A node reaches another when the other is one of its inputs, at any depth: the stripe and the glow are inside the new nodes.
+    const reaches = (node: Node, target: Node, depth = 0): boolean => node === target || (depth < 8 && Object.values(node).some((v) => (v as Node)?.isNode === true && reaches(v as Node, target, depth + 1)));
+    expect(reaches(marble.colorNode as Node, stripe), 'the stripe is shaded, not replaced').toBe(true);
+    expect(reaches(marble.emissiveNode as Node, glow), 'the glow is kept under the rim').toBe(true);
+  });
+
+  it("the Open world marbles wear the arena's black shell under the neon look when the default skin is worn, the worn skin otherwise (#1558)", () => {
+    const terrace = { name: 'terrace' };
+    const worn = { name: 'worn' };
+    expect(neonShellFor(true, true, terrace, worn), 'neon, default skin: the arena marble').toBe(terrace);
+    expect(neonShellFor(true, false, terrace, worn), 'neon, a skin the player chose: worn as it is').toBe(worn);
+    expect(neonShellFor(false, true, terrace, worn), 'the look off: the worn skin, as before').toBe(worn);
   });
 
   it('gives both marble colours a sharper sun highlight under the neon look, none under the terrace (#1553)', () => {

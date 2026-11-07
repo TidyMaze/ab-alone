@@ -8,7 +8,7 @@ import { FightState } from './openworldfight';
 import { WORLD_LOOKS } from './daynight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
-import { setNeonWorldOn } from './neonlook';
+import { NEON_GLOSS, setNeonWorldOn } from './neonlook';
 import { SUN, sunPosition } from './tablezero';
 import {
   BIOME_LOOK,
@@ -726,6 +726,29 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(fog.near).toBeCloseTo(2 * Math.hypot(14, 11));
     expect(view.camera.far).toBeGreaterThan(fog.far);
     expect(view.camera.near).toBeCloseTo(0.2); // the near plane too: the depth precision stays
+  });
+
+  it('under the neon look the Open world marbles take the arena finish: the white hero, troop and the black foes (#1553)', () => {
+    // The arena's numbers (NEON_GLOSS, the rim of neonMarbleRim): the same gloss and glow on the marbles of both worlds.
+    const marbles = (): { hero: THREE.Material; troop: THREE.Material; foes: THREE.Material } => {
+      const view = new OpenWorldView(new World(bytes));
+      view.show([2, 1]);
+      const at = (name: string): THREE.Material => (view.scene.getObjectByName(name) as THREE.Mesh).material as THREE.Material;
+      return { hero: at('hero'), troop: at('troop'), foes: at('enemies') };
+    };
+    const plain = marbles();
+    expect((plain.hero as THREE.MeshStandardMaterial).roughness, 'the default look keeps its own gloss (MARBLE_LOOK.hero)').toBe(0.08);
+    setNeonWorldOn(true);
+    try {
+      const neon = marbles();
+      expect((neon.hero as THREE.MeshStandardMaterial).roughness).toBe(NEON_GLOSS.roughness.white);
+      expect((neon.troop as THREE.MeshStandardMaterial).roughness).toBe(NEON_GLOSS.roughness.white);
+      expect((neon.foes as THREE.MeshStandardMaterial).roughness).toBe(NEON_GLOSS.roughness.black);
+      expect((neon.hero as THREE.Material & { emissiveNode?: unknown }).emissiveNode, 'the rim on the hero').toBeDefined();
+      expect((neon.foes as THREE.Material & { emissiveNode?: unknown }).emissiveNode, 'the rim on the foes').toBeDefined();
+    } finally {
+      setNeonWorldOn(false);
+    }
   });
 
   it('under the neon look the fog ends further out than in the default look: the far ground keeps its colour to the screen edge (#1424)', () => {

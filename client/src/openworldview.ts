@@ -19,7 +19,7 @@ import { contactOf, heldClock } from './openworldhit';
 import { SUN, SUN_SHADOW, aimSunShadow, sunDirection } from './tablezero';
 import { Sky, WORLD_LOOKS } from './daynight';
 import { ICON } from './openworldlairicon';
-import { NEON, NEON_WORLD_LOOKS, lightNeon, neonStars, neonWorldOn } from './neonlook';
+import { NEON, NEON_WORLD_LOOKS, lightNeon, neonMarbleRim, neonStars, neonWorldOn } from './neonlook';
 import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 import { wrapPi } from './openworldtwist';
@@ -666,15 +666,15 @@ export class OpenWorldView {
       this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.detailed[prop]!);
     }
-    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player, this.shine));
+    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player, this.shine), this.neon));
     this.hero.name = 'hero';
     this.hero.castShadow = this.hero.receiveShadow = true;
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
-    this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player, this.shine));
-    this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
+    this.troop = this.instances('troop', CAPACITY.troop, marble, neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player, this.shine), this.neon));
+    this.foes = this.instances('enemies', CAPACITY.enemies, marble, neonMarbleRim('black', stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell), this.neon));
     this.boats = this.instances('boats', 1 + CAPACITY.troop, boatGeometry(MARBLE), boatMaterial());
-    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell));
+    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), neonMarbleRim('black', stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell), this.neon));
     this.ejected.name = 'ejected';
     this.ejected.castShadow = true;
     this.ejected.visible = false;

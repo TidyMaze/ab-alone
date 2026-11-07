@@ -7,6 +7,7 @@ import type { World } from './openworld';
 import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './openworldboat';
 import { GROUND, MARBLE, topOf } from './openworldview';
 import { hexDistance, MAX_PEERS, TROOP_MAX } from './worldpeers';
+import { neonMarbleRim, neonWorldOn } from './neonlook';
 
 /** The marbles of every hero drawn: its own and a full troop each, one instanced mesh. */
 const CAPACITY = MAX_PEERS * (1 + TROOP_MAX);
@@ -68,7 +69,7 @@ export class PeersLayer {
     private readonly world: Pick<World, 'tile'>,
     private readonly root: HTMLElement,
   ) {
-    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(MARBLE, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x2a2a2a, roughness: 0.2 }), CAPACITY);
+    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(MARBLE, 16, 12), neonMarbleRim('white', new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x2a2a2a, roughness: 0.2 }), neonWorldOn()), CAPACITY); // #1553: the white's finish under the neon look, the peers' as the hero's
     this.mesh.setColorAt(0, new THREE.Color(0xffffff)); // the colour buffer exists before the first draw: a shader built without it never reads one
     this.mesh.name = 'peers';
     this.mesh.count = 0;

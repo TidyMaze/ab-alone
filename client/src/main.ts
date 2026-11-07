@@ -203,7 +203,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { neonBreachGeometry, neonEggGeometry, nextToSight, neonLookOn, neonMarbleRim, neonPedestal, neonTells, neonVeil, tellLook, targetArrowMaterial, NEON } from './neonlook';
+import { neonBreachGeometry, neonEggGeometry, nextToSight, neonLookOn, neonMarbleRim, neonPedestal, neonShellFor, neonTells, neonVeil, tellLook, targetArrowMaterial, NEON } from './neonlook';
 import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, withoutHubStaircase, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_NOTES, DIFFICULTY_PERCENT, TELL_MODE, type Difficulty } from './difficulty';
@@ -6804,7 +6804,8 @@ const openWorld = new OpenWorldHandle(async () =>
     // for the enemies, once their maps are on.
     skins: async () => {
       await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m)));
-      return { player: marbleMaterials[2]!, shell: marbleMaterials[1]! };
+      // The arena's own marbles under the neon look (#1558): the terrace's black shell and white glass, the default skins only, as the terrace wears them.
+      return { player: neonShellFor(neonLook, glass === DEFAULT_GLASS_SKIN, terraceGlass, marbleMaterials[2]!), shell: neonShellFor(neonLook, skin === DEFAULT_SKIN, terraceShell, marbleMaterials[1]!) };
     },
     steering: () => steering,
     // The lights node the renderer keeps per scene holds GPU textures (clustered lighting: 2 per scene) that nothing else frees, so
@@ -6883,6 +6884,13 @@ if (navigator.webdriver) {
   hooks.__openworldLogs = (seed: number) => Array.from(world_logs(seed)); // every lore log of a world, `q, r` pairs (#1589)
   hooks.__openworldLairs = (seed: number) => lairCells(seed); // the boss lairs of a world as cells, for the peer tests (#1305)
   hooks.__openworldCamera = (at?: number) => openWorld.loaded.mode.camera(at); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
+  hooks.__openworldZoom = (scale: number) => openWorld.loaded.mode.zoom(scale); // the camera's zoom by `scale` (less than 1 closer), as the wheel: a close capture needs it (#1558)
+  hooks.__openworldMesh = (name: string) => { // a scene mesh's look, for the captures and the finish checks (#1558)
+    const scene = (openWorld.loaded.mode as unknown as { view: { scene: THREE.Scene } }).view.scene;
+    const mesh = scene.getObjectByName(name) as THREE.InstancedMesh;
+    const m = mesh.material as THREE.MeshStandardMaterial & { colorNode?: unknown; emissiveNode?: unknown };
+    return { count: mesh.count, visible: mesh.visible, color: m.color.getHexString(), emissive: m.emissive.getHexString(), emissiveIntensity: m.emissiveIntensity, roughness: m.roughness, metalness: m.metalness, map: !!m.map, colorNode: !!m.colorNode, emissiveNode: !!m.emissiveNode, instance: mesh.instanceColor ? Array.from(mesh.instanceColor.array.slice(0, 3)) : null };
+  };
 }
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
