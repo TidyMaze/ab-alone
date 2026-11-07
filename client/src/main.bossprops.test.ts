@@ -27,10 +27,14 @@ const fight = (name: string): void => {
 };
 
 describe('main.ts boss props (#1374)', () => {
-  it('wears one prop of the kit in each fight that has one, and none in a fight that has its own or in the room', async () => {
+  it('has a test for every boss of the kit and The Pulsar', () => {
     expect(names).toHaveLength(Object.keys(BOSS_PROPS).length);
-    for (const [look, expected] of [['', 1], ['&scene=room', 0]] as const) {
-      for (const name of [...names, 'The Pulsar']) {
+  });
+
+  // One page boot per fight, one test per fight: a single test of all twenty boots ran into the 30 s timeout on a loaded machine (#1628).
+  for (const [look, expected] of [['', 1], ['&scene=room', 0]] as const) {
+    for (const name of [...names, 'The Pulsar']) {
+      it(`${name} ${look ? 'in the room' : 'on the terrace'}: ${name === 'The Pulsar' || !expected ? 'no prop' : 'one prop of the kit'}${look === '' && name === 'The Echo' ? ', on its spot' : ''}`, async () => {
         const scene = catchScene();
         const game = await boot(`?bot=off${look}`, { reducedMotion: true });
         expect(props(scene())).toHaveLength(0); // no fight, no prop
@@ -44,8 +48,7 @@ describe('main.ts boss props (#1374)', () => {
           const spot = bossProp('echo')!;
           expect([props(scene())[0]!.position.x, props(scene())[0]!.position.z]).toEqual([spot.x, spot.z]);
         }
-        vi.restoreAllMocks();
-      }
+      });
     }
-  });
+  }
 });
