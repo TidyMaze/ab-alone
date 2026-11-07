@@ -47,14 +47,14 @@ describe('main.ts, the bot rating, #1611', () => {
     const game = await boot('?real=1');
     game.openModes();
     byId('boss-fight').click();
-    byId('boss-list').querySelector('button')!.click(); // The Echo: 200 positions
-    expect(badge()!.textContent).toBe('Boss ~1070 · Easy');
+    byId('boss-list').querySelector('button')!.click(); // The Echo: 100 positions
+    expect(badge()!.textContent).toBe('Boss ~1000 · Easy');
     expect(badge()!.title).toMatch(/estimate/i);
-    expect(document.body.dataset.botRating).toBe('1070');
+    expect(document.body.dataset.botRating).toBe('1000');
     await boot('?real=1', { storage: { 'ab-alone.difficulty': 'hard' } });
     byId('boss-fight').click();
-    byId('boss-list').querySelector('button')!.click(); // 400 positions
-    expect(badge()!.textContent).toBe('Boss ~1130 · Easy');
+    byId('boss-list').querySelector('button')!.click(); // 200 positions
+    expect(badge()!.textContent).toBe('Boss ~1070 · Easy');
   });
 
   it('the Choir and the Swarm read their own budgets, and a boss fight needs no bot worker', async () => {
@@ -63,7 +63,7 @@ describe('main.ts, the bot rating, #1611', () => {
     byId('boss-fight').click();
     const pick = (name: string) => [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === name)!.click();
     pick('The Swarm');
-    expect(badge()!.textContent).toBe('Boss ~1400 · Normal'); // 1500 positions
+    expect(badge()!.textContent).toBe('Boss ~1260 · Easy'); // 1500 positions
     pick('The Choir');
     expect(badge()!.textContent).toMatch(/^Boss ~\d+ · /);
   });

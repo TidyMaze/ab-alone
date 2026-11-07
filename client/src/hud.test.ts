@@ -109,6 +109,11 @@ describe('hudHtml', () => {
     expect(hudHtml({ ...base, turn: 'Your turn', status: 2 })).toContain('White wins');
   });
 
+  it('puts the rating in the middle of the pips row, and nothing there without one (#1611)', () => {
+    expect(hudHtml({ ...base, rating: '<span class="bot-rating">Boss ~1000 · Easy</span>' })).toMatch(/<div class="pipline"><div class="pips".*<\/div><span class="bot-rating">Boss ~1000 · Easy<\/span><\/div>/);
+    expect(hudHtml(base)).toContain('</div></div><small>');
+  });
+
   it('keeps the score text verbatim and the note', () => {
     const html = hudHtml(base);
     expect(html).toContain('Black ejected 0/6 · White ejected 0/6');

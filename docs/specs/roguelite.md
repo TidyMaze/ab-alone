@@ -1297,7 +1297,11 @@ and meets a weaker one at the start that grows with the game. `client/src/botrat
 - **The levels**: Easy under 1300, Normal 1300 to 1599, Hard 1600 to 1799, Very hard 1800 to 1999, Master 2000 and up. At 65 points a
   doubling, Hard starts at 58000 positions, Very hard at about 500000 and Master at about 4.2 million (30 s or more a move on a native
   machine): out of reach of a bot that answers in seconds. The curves below therefore peak at 60000, **Hard**, and Very hard and
-  Master are not reached by search alone. Reaching them would take a stronger evaluation, not a bigger budget.
+  Master are not reached by search alone. **The peak, said plainly:** the levels table stays as it is, but Very hard and Master read as
+  **unused for now**: no bot, boss or setting of the game is rated there. **The next step, written, not built:** a stronger evaluation (the
+  weights and terms of `evaluate`, not more positions), measured with the same ladder: `bot_rating` run again with the new evaluation
+  at the same budgets gives its own table, and the rating of a budget is then read off that one. A search budget alone cannot get there:
+  each doubling is worth 65 points, and a doubling costs twice the time of a move.
 - **Over the game**: the bot of a plain game searches `BOT_NODES` times `PROGRESS_PERCENT[medals]`, the medals count (the bosses beaten, 0 to
   15), from 1 % (200 positions, 1070, the bottom of Easy) geometrically up to 300 % (60000, Hard, with all 15 medals; 300 % is the fourth act
   boss's own strength): 1, 1.5, 2.1, 3.1, 4.6, 6.7, 9.8, 14.3, 21, 30.6, 44.8, 65.5, 95.8, 140, 205, 300 %. It never goes down. The
@@ -1309,10 +1313,17 @@ and meets a weaker one at the start that grows with the game. `client/src/botrat
   in a run. The act bosses keep `ACT_PERCENT`: the curve is for the bot of a fight, and the boss is its own measure (section 30).
 - **Fixed strength** (nothing above applies): the Daily, the boss fight, the duel and co-op, online games, the Trainer, a wild marble
   of the Open world, and the test budget of `?nodes=`. Boss fights outside a run keep their own `node_budget` and balance, with no progress
-  scaling. The MCP's run follows `runNodes` (its `bot_nodes` is the peak) and its plain bot the fixed `bot_nodes`.
-- **The HUD** shows `Bot ~1070 · Easy` after the note of a plain bot game and of a run's fight, nowhere else for now: a boss's budget is
-  in the engine, not on the page, and a boss has rules of its own that are not in a rating (the rating counts the search only, and the tooltip
-  says it). The map of a run has no such line: a fight node has no bot yet to rate. The test hook is `body[data-bot-rating]`.
+  scaling; the HUD rates them all the same (below). The MCP's run follows `runNodes` (its `bot_nodes` is the peak) and its plain bot the fixed `bot_nodes`.
+- **The HUD** shows `Bot ~1070 · Easy` in the middle of the pips row of a plain bot game and of a run's fight (a line of its own where
+  the pips are hidden: a compact landscape window, a phone held upright; there the score text is smaller so the plate stays as tall). The map of a run has no such line: a
+  fight node has no bot yet to rate. The test hook is `body[data-bot-rating]`.
+- **A boss is rated by its own search budget** (second slice): `Boss ~1650 · Hard`, the same rating and level scale, in a boss fight
+  outside a run, as the act boss of a run, in the Daily, and in co-op and duel fights (also for those that have no bot worker on the page).
+  The number is `ratingOfBudget` of the boss's `node_budget` at the percent the fight searches it at: the difficulty setting, or the act's
+  `ACT_PERCENT` (with the relics that change it) for an act boss, as the engine scales it (the wasm `Encounter.node_budget(percent)`
+  returns it, one function for the plain, Choir and Swarm fights, so the page does not copy the numbers). Co-op and duel bosses are shown at
+  100 %, not scaled. Same tooltip as the bot's: an estimate of the search alone, without the boss's special rules, which a rating does
+  not count (a boss rated Easy can still be hard to beat). The test hook is the same `body[data-bot-rating]`.
 - **The simulator** (`run_sim`, section 30) plays only the act bosses, at `ACT_PERCENT`, and counts every fight and elite as won, so
   the curve cannot change its table: it is the same before and after (bot-only numbers, 12 seeds, level 0, the same seeds as the first 12
   of section 30's table).

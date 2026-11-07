@@ -33,11 +33,16 @@ export type BotLevel = (typeof BOT_LEVELS)[number]['name'];
 
 export const levelOfRating = (rating: number): BotLevel => BOT_LEVELS.filter((l) => l.from <= rating).pop()!.name;
 
-/** What the HUD shows: `Bot ~1340 · Normal`. */
-export const botLine = (nodes: number): string => {
+const lineOf = (who: string, nodes: number): string => {
   const rating = ratingOfBudget(nodes);
-  return `Bot ~${rating} · ${levelOfRating(rating)}`;
+  return `${who} ~${rating} · ${levelOfRating(rating)}`;
 };
+
+/** What the HUD shows for the bot: `Bot ~1340 · Normal`. */
+export const botLine = (nodes: number): string => lineOf('Bot', nodes);
+
+/** What the HUD shows for a boss, from its own search budget: `Boss ~1650 · Hard`. */
+export const bossLine = (nodes: number): string => lineOf('Boss', nodes);
 
 /** The tooltip of the line: what the number is and is not. */
 export const BOT_NOTE =

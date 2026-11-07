@@ -14,6 +14,7 @@ export interface HudState {
   ejected: readonly [number, number];
   win: readonly [number, number]; // ejections each side needs: one pip each
   note: string;
+  rating?: string; // the bot's or the boss's rating line (#1611), in the middle of the pips row, in the note's place where the pips are hidden
   online?: OnlineStatus; // online games only: own color and the opponent's presence
   end?: EndBanner; // once over: the end banner (#282), replaces the turn line text
   rematch?: string; // online games only, once over: who asked for a rematch (rematchText)
@@ -32,7 +33,7 @@ const marble = (side: number, glass: number): string => (side === glass ? 'pale'
 const pips = (out: number, slots: number, was = out): string =>
   Array.from({ length: Math.max(slots, out) }, (_, i) => `<span class="pip${i < out ? ' out' : ''}${i >= was && i < out ? ' fresh' : ''}"></span>`).join('');
 
-export function hudHtml({ side, status, glass, score, runScore, ejected, win, note, online, rematch, end, tally = '', tallyNote = '', turn: ply, was }: HudState): string {
+export function hudHtml({ side, status, glass, score, runScore, ejected, win, note, rating = '', online, rematch, end, tally = '', tallyNote = '', turn: ply, was }: HudState): string {
   const over = status !== 0;
   const turn = end ? end.title : over ? (status === 3 ? 'Draw' : `${sideName(status, glass)} wins`) : (ply ?? `${sideName(side, glass)} to move`);
   const marker = `<span class="marker ${over ? 'over' : side === 1 ? 'black' : 'white'}" aria-hidden="true"></span>`;
@@ -46,7 +47,7 @@ export function hudHtml({ side, status, glass, score, runScore, ejected, win, no
     (online ? `<div class="presence ${online.tone}">${online.text}</div>` : '') +
     (rematch ? `<div class="rematch">${rematch}</div>` : '') +
     (runScore === undefined ? `<div class="score">${score}</div>` : `<div class="score run">${runScore}</div>`) +
-    `<div class="pips" aria-hidden="true"><span class="${marble(1, glass)}">${pips(ejected[0], win[0], was?.[0])}</span><span class="${marble(2, glass)}">${pips(ejected[1], win[1], was?.[1])}</span></div>` +
+    `<div class="pipline"><div class="pips" aria-hidden="true"><span class="${marble(1, glass)}">${pips(ejected[0], win[0], was?.[0])}</span><span class="${marble(2, glass)}">${pips(ejected[1], win[1], was?.[1])}</span></div>${rating}</div>` +
     `<small>${note}</small>`
   );
 }

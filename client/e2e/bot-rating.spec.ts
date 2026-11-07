@@ -43,8 +43,8 @@ test('a boss fight shows Boss and its rating from its own search budget, on a ph
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(line(page)).toHaveText('Boss ~1070 · Easy');
-  await expect(page.locator('body')).toHaveAttribute('data-bot-rating', '1070');
+  await expect(line(page)).toHaveText('Boss ~1000 · Easy');
+  await expect(page.locator('body')).toHaveAttribute('data-bot-rating', '1000');
   expect(await line(page).getAttribute('title')).toMatch(/search/i);
   await shot(page, { path: 'test-results/1611-boss-960.png' });
   await page.setViewportSize({ width: 390, height: 844 });

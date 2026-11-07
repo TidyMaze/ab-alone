@@ -762,6 +762,16 @@ impl Encounter {
         }
     }
 
+    /// The boss search budget in positions at `percent` of its baseline (50, 100, 200, an act's strength), as
+    /// `scale_node_budget` would set it: what the fight HUD rates the boss by (#1611).
+    pub fn node_budget(&self, percent: u32) -> u32 {
+        match &self.fight {
+            Fight::Plain(e) => e.node_budget_at(percent),
+            Fight::Choir(c) => c.node_budget_at(percent),
+            Fight::Swarm(_) => Swarm::node_budget_at(percent),
+        }
+    }
+
     /// The 61 cells, board specials included.
     pub fn board(&self) -> Vec<u8> {
         board_bytes(self.fight.game().board())
@@ -1637,10 +1647,11 @@ mod tests {
     #[test]
     fn node_budget_is_the_search_budget_at_a_percent_for_every_kind_of_fight() {
         let f = fight();
-        assert_eq!(f.node_budget(100), 200);
-        assert_eq!(f.node_budget(50), 100);
+        assert_eq!(f.node_budget(100), 100);
+        assert_eq!(f.node_budget(200), 200);
+        assert_eq!(f.node_budget(50), 50);
         assert_eq!(f.node_budget(0), 1, "a floor of 1");
-        assert_eq!(Encounter::new("choir", 0).unwrap().node_budget(200), 400);
+        assert_eq!(Encounter::new("choir", 0).unwrap().node_budget(200), 3000);
         assert_eq!(Encounter::new("swarm", 0).unwrap().node_budget(100), 1500);
     }
 

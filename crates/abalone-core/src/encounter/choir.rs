@@ -392,6 +392,11 @@ impl Choir {
     pub fn scale_node_budget(&mut self, percent: u32) {
         self.enc.scale_node_budget(percent);
     }
+
+    /// The Choir node budget at `percent` (see `Encounter::node_budget_at`).
+    pub fn node_budget_at(&self, percent: u32) -> u32 {
+        self.enc.node_budget_at(percent)
+    }
 }
 
 /// The army that owns every marble of `mv`, `None` when they are not all of one army.

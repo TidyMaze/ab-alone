@@ -307,7 +307,12 @@ impl Swarm {
 
     /// Scales the boss search budget by a percentage of the baseline (the difficulty).
     pub fn scale_node_budget(&mut self, percent: u32) {
-        self.budget = (u64::from(SWARM_NODE_BUDGET) * u64::from(percent) / 100).max(1) as u32;
+        self.budget = Self::node_budget_at(percent);
+    }
+
+    /// The search budget at `percent` of the baseline (see `Encounter::node_budget_at`).
+    pub fn node_budget_at(percent: u32) -> u32 {
+        (u64::from(SWARM_NODE_BUDGET) * u64::from(percent) / 100).max(1) as u32
     }
 
     /// `None` while the fight runs.

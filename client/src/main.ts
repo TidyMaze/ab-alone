@@ -38,7 +38,7 @@ import { askMirror } from './traitchoice';
 import { lazyWorker } from './lazyworker';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
-import { BOT_NOTE, botLine, progressBudget, ratingOfBudget } from './botrating';
+import { BOT_NOTE, botLine, bossLine, progressBudget, ratingOfBudget } from './botrating';
 import { bootFailed } from './bootfail';
 import { ScreenExit } from './screenexit';
 import { backWay, needsEntry, type Screen, type Way } from './backnav';
@@ -2979,13 +2979,15 @@ function gameNodes(): number {
   return run ? fightBudget(run.map, run.state, grows ? runNodes(run.map, run.state, base) : base) : base;
 }
 
-/** The HUD note `others`, then the estimated rating and level of the bot in a game it scales in: a plain bot game or a run's fight (#1611). A boss, the
- * Trainer, a wild marble and an online game have a fixed strength. The tooltip says it is an estimate; the test hook is the number. */
-function botNote(others: string): string {
-  if (!worker || fight || online || trainer || wildFrom || (run && !run.state.fighting)) return others;
-  const nodes = gameNodes();
+/** The estimated rating and level of the bot in a game it scales in (a plain bot game or a run's fight), or of a boss from its own search budget
+ * (#1611); none for the Trainer, a wild marble, an online game that is no boss and the map of a run. The tooltip says it is an estimate; the test
+ * hook is the number. */
+function ratingLine(): string {
+  const boss = fight && engine instanceof Encounter ? engine : null; // a boss, co-op and duel ones too, rated by its own search budget at the percent the bot searches it at (#1611)
+  if (!boss && (!worker || fight || online || trainer || wildFrom || (run && !run.state.fighting))) return '';
+  const nodes = boss ? boss.node_budget(online ? 100 : (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]) : gameNodes(); // online: shown, not scaled
   document.body.dataset.botRating = String(ratingOfBudget(nodes));
-  return `${others && `${others} · `}<span class="bot-rating" title="${BOT_NOTE}">${botLine(nodes)}</span>`;
+  return `<span class="bot-rating" title="${BOT_NOTE}">${boss ? bossLine(nodes) : botLine(nodes)}</span>`;
 }
 
 async function botTurn(): Promise<void> {
@@ -3867,7 +3869,8 @@ function drawHud(extra = ''): void {
     runScore: run?.state.fighting && engine instanceof Engine ? runScoreHtml(engine.board(), ejected, win) : undefined, // an army fight of a run reads the army, not both sides' ejections (#1540)
     ejected,
     win,
-    note: botNote(`${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${built() ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`), // the other notes start with ' · '
+    rating: ratingLine(),
+    note: `${run ? runLine(run.map, run.state) : ''}${moves && ` · ${moves}`}${built() ? fuseNote(parseFuses(engine.fuses())) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${passNote(engine.passed(), glassOf())}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,

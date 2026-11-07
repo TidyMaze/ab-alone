@@ -35,7 +35,7 @@ You are the last one with a clear visor. Six of them over the edge, and you walk
 Real Abalone underneath: 61 cells, 14 marbles each, push 1 to 3 in a line, out-number to shove.
 First to eject 6 wins. On top of it, the ship:
 
-- **Play alone or together**: hot-seat on one screen, versus TALLY's bot (alpha-beta, in a Web Worker, with its estimated rating and level on the HUD, growing with the bosses beaten and along a rogue-lite run),
+- **Play alone or together**: hot-seat on one screen, versus TALLY's bot (alpha-beta, in a Web Worker, with its estimated rating and level on the HUD, a boss's too from its own search, growing with the bosses beaten and along a rogue-lite run),
   online 1v1 peer to peer with an invite link, ranked online (Elo), a gamepad.
 - **15 souls-like bosses**, each bends one rule, tells you one move ahead and has an answer on the
   board: The Echo, The Hull, The Choir, The Chaplain, The Ballast Mind, The Alien, The Rail Yard,

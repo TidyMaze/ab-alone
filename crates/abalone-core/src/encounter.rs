@@ -551,7 +551,12 @@ impl Encounter {
 
     /// Scales the boss node budget by a percentage (e.g. 50, 100, 200). Minimum is 1.
     pub fn scale_node_budget(&mut self, percent: u32) {
-        self.boss.node_budget = (self.boss.node_budget as u64 * percent as u64 / 100).max(1) as u32;
+        self.boss.node_budget = self.node_budget_at(percent);
+    }
+
+    /// The boss node budget at `percent` of what it is now (the difficulty, an act's strength), as `scale_node_budget` would set it.
+    pub fn node_budget_at(&self, percent: u32) -> u32 {
+        (self.boss.node_budget as u64 * percent as u64 / 100).max(1) as u32
     }
 
     /// `None` while the game runs. A draw is a loss for the player.

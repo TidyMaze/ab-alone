@@ -156,7 +156,7 @@ describe('co-op: the encounter judges the room', () => {
 
   it('a co-op boss shows its rating at its own budget, not scaled by the difficulty setting (#1611)', async () => {
     await hosted({ 'ab-alone.difficulty': 'hard' });
-    expect(document.querySelector('#hud .bot-rating')?.textContent).toBe('Boss ~1070 · Easy'); // The Echo, 200 positions
+    expect(document.querySelector('#hud .bot-rating')?.textContent).toBe('Boss ~1000 · Easy'); // The Echo, 100 positions
   });
 
   it('opening one boss list closes the other, so both are never open at once (bug #615)', async () => {
