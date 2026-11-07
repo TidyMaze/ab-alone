@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import type * as THREEWebGPU from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { framing } from './camera';
+import { deckOf } from './deck';
+import { neonSkyOf } from './neonlook';
 import { encodeMove, type Move } from './board';
 import { loadProgress, saveProgress } from './progress';
 import { boot, type Game } from './test/harness';
@@ -379,7 +381,7 @@ describe('the renderer and its textures', () => {
       const game = await booting;
       expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
       const scene = draw();
-      expect((scene.background as THREE.Color).getHex()).toBe(0x0b0d0f);
+      expect((scene.background as THREE.Color).getHex()).toBe(neonSkyOf(deckOf('local')).getHex()); // the sky takes the deck's key (#1551)
       expect(materials(scene).some((m) => m.map && !(m.map as THREE.CanvasTexture).isCanvasTexture)).toBe(false);
       expect((await diagnostics(game)).environment.backend).toBe('WebGPU');
     });

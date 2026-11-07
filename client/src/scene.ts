@@ -410,7 +410,8 @@ export class SceneRenderer {
     this.renderer.toneMappingExposure = light.exposure;
     if (this.neon) {
       neonDeckLook(next); // the slab, the rim and the posts take the deck's key (#1551)
-      this.scene.background = neonSkyOf(next);
+      // the sky takes the deck's key, but a backdrop texture in the room stays (#1551 fix-forward: main.boot)
+      if (!(this.scene.background as THREE.Texture | null)?.isTexture) this.scene.background = neonSkyOf(next);
     }
     if (this.currentBay) applyDeckAtmosphere(this.currentBay, next as DeckId);
   }

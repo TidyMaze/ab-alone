@@ -9,7 +9,7 @@ import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
 import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
-import { NEON, NEON_LIGHT, neonMaterial } from './neonlook';
+import { NEON, NEON_LIGHT, neonMaterial, neonSkyOf } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
@@ -664,6 +664,16 @@ describe('SceneRenderer (#632)', () => {
     const terrace = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
     terrace.applyDeck('cargo');
     expect(slab.color.toArray().join()).not.toBe(cargo); // the terrace leaves the slab alone
+  });
+
+  it('keeps a backdrop texture of the room under the neon look, the sky takes the key only without one (#1551)', () => {
+    const backdrop = new THREE.Texture();
+    const room = new SceneRenderer({ renderer: createMockRenderer(), neon: true, backdrop, devicePixelRatio: 1, webdriver: false });
+    room.applyDeck('chapel');
+    expect(room.scene.background).toBe(backdrop);
+    const sky = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    sky.applyDeck('chapel');
+    expect((sky.scene.background as THREE.Color).getHex()).toBe(neonSkyOf('chapel').getHex());
   });
 
   it('lights the turn bar of the side to move on the terrace, none at the end (#1314)', () => {
