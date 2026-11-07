@@ -325,7 +325,7 @@ import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
 import { LEGACY_UNLOCKED, readUnlocked, recordUnlocked } from './collector';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
-import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
+import { CONFIRM_MS, newGameLabel, pressNewGame, quickGameHidden, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
   actBoss,
@@ -4140,6 +4140,7 @@ function refresh(): void {
   dirty = CHANGE_DRAWS;
   syncSpace();
   syncAuto();
+  syncQuick();
   if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {
     const { beaten } = loadProgress(store);
@@ -5840,8 +5841,14 @@ function askQuickGame(confirm: Confirm): void {
   clearTimeout(quickLapse);
   if (confirm !== null) quickLapse = setTimeout(askQuickGame, CONFIRM_MS, null);
 }
+/** Quick game is hidden in a fight, a boss or a wild one (#1612): the press of a fight that is still on does nothing, as a hidden button does. */
+function syncQuick(): void {
+  const hidden = quickGameHidden(fight !== null, wildFrom !== null);
+  for (const id of ['quick-game', 'openworld-quick']) document.getElementById(id)!.hidden = hidden; // by id: refresh() may run before the buttons below are set up
+}
 for (const quick of quickButtons) {
   quick.addEventListener('click', () => {
+    if (quickGameHidden(fight !== null, wildFrom !== null)) return;
     const press = pressNewGame(confirmQuick, performance.now(), history.length);
     askQuickGame(press.confirm);
     if (press.start) startLocal(true);
@@ -5905,6 +5912,7 @@ function leaveMode(): void {
   skipEjections(); // the effects of the mode's last move end with it
   clearStray(document);
   newGameButton.hidden = false;
+  syncQuick();
 }
 function leaveHub(): void {
   if (!hub) return;
