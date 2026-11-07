@@ -27,6 +27,8 @@ export class HubController implements ModeController<HubSpot> {
   bumped = '';
   /** The posted contract of the town rolled onto (#1618), empty from any other entry. */
   contract = '';
+  /** The blueprints the last dungeon banked, as the town's line (#1622), empty from any other entry. */
+  banked = '';
 
   constructor(initialSpot: HubSpot) {
     this.at = initialSpot;
@@ -37,6 +39,7 @@ export class HubController implements ModeController<HubSpot> {
     this.hover = null;
     this.bumped = '';
     this.contract = '';
+    this.banked = '';
     delete document.body.dataset.hubHover;
     document.body.dataset.hub = `${spot.deck} ${spot.cell[0]},${spot.cell[1]}`;
   }
@@ -95,7 +98,7 @@ export class HubController implements ModeController<HubSpot> {
   }
 
   hud(): string {
-    return hubHtml(this.at, this.bumped, this.hover, this.contract);
+    return hubHtml(this.at, this.bumped, this.hover, this.contract, this.banked);
   }
 
   draw(

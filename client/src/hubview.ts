@@ -96,11 +96,12 @@ export function hubTargetText(at: Spot, hovered: Axial): { name: string; desc: s
 }
 
 /** The HUD plate in the hub: the deck, the room the marble stands on, Tally's line, and target inspection (#628). */
-export function hubHtml({ deck, cell }: Spot, tally = '', hover: Axial | null = null, contract = ''): string {
+export function hubHtml({ deck, cell }: Spot, tally = '', hover: Axial | null = null, contract = '', banked = ''): string {
   const door = roomAt(deck, cell);
   const here = door && plain(deck, door);
   const room = !here ? '' : here.name + (door.kind === 'lift' ? '' : ` · ${here.line}`);
   const posted = contract ? `<div class="hub-contract">${contract}</div>` : ''; // the town's contract (#1618), above Tally's line
+  const logged = banked ? `<div class="hub-banked">${banked}</div>` : ''; // the blueprints the last dungeon banked (#1622)
   const line = tally ? `<div class="tally">${tally}</div>` : '';
   const preview = hover
     ? (() => {
@@ -108,7 +109,7 @@ export function hubHtml({ deck, cell }: Spot, tally = '', hover: Axial | null = 
         return `<div class="hub-preview">Target: ${name} · ${desc} <span class="affordance">(${reach})</span></div>`;
       })()
     : '';
-  return `<div class="turn"><span>Hub · ${title(deck)}</span></div><small>${room}</small>${posted}${line}${preview}`;
+  return `<div class="turn"><span>Hub · ${title(deck)}</span></div><small>${room}</small>${posted}${logged}${line}${preview}`;
 }
 
 /** Tally's line when a roll to `to` bumps a locked lift next to the marble (#523), else ''. */

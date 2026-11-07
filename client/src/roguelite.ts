@@ -1447,6 +1447,11 @@ export function affinityBarHtml(run: Run): string {
   return chips.length ? `<div class="affinities" role="group" aria-label="Affinities">${chips.join('')}</div>` : '';
 }
 
+/** The town's line of the blueprints the last dungeon banked (#1622, section 18): one line each, or none banked yet. */
+export function bankedTownLine(ids: readonly number[]): string {
+  return ids.length ? `Banked by the last dungeon:<br>${ids.map((id) => blueprintText(id)).join('<br>')}` : 'No blueprint banked yet.';
+}
+
 /** The Collector's room between two acts (#1470): a button per blueprint carried with its cost in cells (disabled when the
  * cells fall short), what this run banked, and Leave. */
 export function collectorHtml(run: Run): string {

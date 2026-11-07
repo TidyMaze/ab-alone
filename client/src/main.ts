@@ -403,6 +403,7 @@ import {
   visit,
   type MapNode,
   type Run,
+  bankedTownLine,
 } from './roguelite';
 import { bookHtml, compendiumHtml, finished, historyHtml, ranRun, readDaily, readHistory, readSeen, recordFinished, recordSeen, startDailyTry } from './runbook';
 import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
@@ -6416,6 +6417,7 @@ const playOnlineButton = document.getElementById('play-online') as HTMLButtonEle
 const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
 let runMore = false; // More is open on the start screen (#1524): shut for each new run, kept while a commander or a level is picked and through the book
+let lastBanked: number[] = []; // the blueprints the run in progress or the last one banked (#1622): the town's line lists them
 let gateBiome = 0; // the biome of the ground of the gate the next run starts from (#1597): the Meadow for a run of the mode menu or the Hub
 function beginRun(): void {
   const first = gateBiome;
@@ -6432,6 +6434,7 @@ function beginDailyRun(): void {
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
+  lastBanked = state.banked; // the run's blueprints banked so far (#1622)
   runMore = false;
   armed = 0;
   swapping = false;
@@ -6664,6 +6667,7 @@ runPanel.addEventListener('click', (e) => {
     showRun();
   } else if (button?.dataset.collect || button?.dataset.depart) {
     run!.state = button.dataset.collect ? collect(run!.state, Number(button.dataset.collect)) : leaveCollector(run!.state);
+    lastBanked = run!.state.banked; // the town lists them (#1622)
     recordUnlocked(store, run!.state.banked); // a blueprint banked is unlocked for the next runs, even if this one is lost (#1470)
     void saveRun(gameStore, run!.state);
     showRun();
@@ -6807,6 +6811,7 @@ const openWorld = new OpenWorldHandle(async () =>
         storyEvent({ on: 'town' }); // the first town visited is stage 3 (#1586), before the line of this town is chosen
         hub!.bumped = townLine(index, storyStage(store)); // Tally's ledger line of this town on the plate, once its stage is reached (#1516)
         hub!.contract = contract; // the posted contract of the nearest tower of the ring to beat (#1618)
+        hub!.banked = bankedTownLine(lastBanked); // the blueprints the last dungeon banked (#1622)
         sawLines(hub!.bumped);
         hud();
       }

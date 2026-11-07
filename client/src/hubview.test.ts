@@ -85,6 +85,12 @@ describe('a locked lift (#523)', () => {
     expect(bumpLine({ deck: 'mess', cell: [0, 0] }, [1, -2], [])).toBe('');
   });
 
+  it('shows the banked line of a town under its contract (#1622)', () => {
+    expect(hubHtml(below, '', null, 'Contract: The Echo, ring 1, 3 cells, to the right.', 'No blueprint banked yet.')).toContain(
+      '<div class="hub-contract">Contract: The Echo, ring 1, 3 cells, to the right.</div><div class="hub-banked">No blueprint banked yet.</div>',
+    );
+  });
+
   it('puts the posted contract under the room, above Tally\'s line (#1618)', () => {
     expect(hubHtml(below, '', null, 'Contract: The Echo, ring 1, 3 cells, to the right.')).toBe(
       '<div class="turn"><span>Hub · Mess</span></div><small></small><div class="hub-contract">Contract: The Echo, ring 1, 3 cells, to the right.</div>',

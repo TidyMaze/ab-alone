@@ -33,6 +33,8 @@ import {
   chooseCommander,
   COMMANDERS,
   collect,
+  bankedTownLine,
+  blueprintText,
   collectorHtml,
   earned,
   leaveCollector,
@@ -2785,5 +2787,15 @@ describe('the start screen (#1524)', () => {
       const doc = screen(run, false);
       for (const selector of ['.run-intro', '#run-start', 'button[data-more]', '.run-more']) expect(doc.querySelector(selector), selector).toBeNull();
     }
+  });
+});
+
+describe('the town line of the banked blueprints (#1622)', () => {
+  it('says no blueprint when the last dungeon banked none', () => {
+    expect(bankedTownLine([])).toBe('No blueprint banked yet.');
+  });
+
+  it('lists each blueprint the last dungeon banked on its own line, with its type and rule', () => {
+    expect(bankedTownLine([1, 6])).toBe(`Banked by the last dungeon:<br>${blueprintText(1)}<br>${blueprintText(6)}`);
   });
 });
