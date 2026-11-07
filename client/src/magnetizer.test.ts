@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { RGB } from './palettes';
 import { COUNTER } from './alien';
-import { contrastRatio, type RGB } from './contrast';
 import { BLINK_MS, blinkAt, drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, REPULSION_STRIDE, repulsionMoves } from './magnetizer';
 
 const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
@@ -84,9 +84,6 @@ describe('drawGlyph', () => {
     expect(draw(1).calls).toEqual(['clear', 'arc', 'fill', 'bar 13 28 38 8', 'bar 28 13 8 38']);
   });
 
-  it('reads at 3:1 and more, the tell colours of The Alien', () => {
-    expect(contrastRatio(rgb(COUNTER.ink), rgb(COUNTER.plate))).toBeGreaterThan(3);
-  });
 });
 
 describe('drawAnnounce', () => {

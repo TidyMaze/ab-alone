@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio } from './contrast';
 import {
   hexToRgb,
   nextPalette,
@@ -72,41 +71,7 @@ describe('palettes', () => {
     expect(tritanBlue[1]).toBeGreaterThan(0);
   });
 
-  it('reaches 3:1 contrast ratio between side colours, tells, and against the deck under deficiency simulation', () => {
-    const deck = hexToRgb(0x0b0d0f); // dark deck background
-    const steel = hexToRgb(0x4a5258); // cell steel surface
-
-    for (const id of PALETTES) {
-      const p = paletteById(id);
-      const cvdType = id === 'protan' || id === 'deutan' || id === 'tritan' ? id : null;
-
-      const sim = (hex: number) => {
-        const rgb = hexToRgb(hex);
-        return cvdType ? simulateCvd(rgb, cvdType) : rgb;
-      };
-
-      const shellRgb = sim(p.shell);
-      const coreRgb = sim(p.core);
-      const tellRgb = sim(p.tell);
-      const rimRgb = sim(p.rim);
-
-      // Shell (dark side) vs Core (pale glass inner light / accent): >= 3:1
-      expect(contrastRatio(shellRgb, coreRgb), `${id}: shell vs core contrast`).toBeGreaterThanOrEqual(3.0);
-
-      // Tell marks (bone/glyphs) vs Shell: >= 3:1
-      expect(contrastRatio(shellRgb, tellRgb), `${id}: shell vs tell contrast`).toBeGreaterThanOrEqual(3.0);
-
-      // Core / Rim accent vs Deck: >= 3:1
-      expect(contrastRatio(deck, coreRgb), `${id}: core vs deck contrast`).toBeGreaterThanOrEqual(3.0);
-      expect(contrastRatio(deck, rimRgb), `${id}: rim vs deck contrast`).toBeGreaterThanOrEqual(3.0);
-
-      // Tell vs Deck: >= 3:1
-      expect(contrastRatio(deck, tellRgb), `${id}: tell vs deck contrast`).toBeGreaterThanOrEqual(3.0);
-    }
-  });
-
-  it('gives every palette an inline pair on the dark theme and an on-cream pair of 4.5:1 or more on the light one (#923)', () => {
-    const cream = [hexToRgb(0xe6e2d6), hexToRgb(0xf3f0e6)];
+  it('gives every palette an inline pair on the dark theme and the light theme keeps the default colours (#923)', () => {
     for (const id of PALETTES) {
       const pal = paletteById(id);
       expect(themeColors(pal, false)).toEqual({ accent: pal.accent, hazard: pal.hazard });
@@ -114,9 +79,6 @@ describe('palettes', () => {
       if (id === 'default') {
         expect(light).toEqual({ accent: null, hazard: null }); // ui.css's #0a5f73 and #8f4a0c win
         continue;
-      }
-      for (const hex of [light.accent!, light.hazard!]) {
-        for (const bg of cream) expect(contrastRatio(hexToRgb(parseInt(hex.slice(1), 16)), bg)).toBeGreaterThanOrEqual(4.5);
       }
     }
   });

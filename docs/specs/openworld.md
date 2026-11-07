@@ -502,13 +502,10 @@ The Open world goes through day, dusk and night, and a lair is fought on a hexag
   low over the board (long shadows) and a violet hemisphere. **Night**: a dark blue ground, a pale moonlight key and a glowing cyan
   line round every cell (a hidden ring under each dish that only the night look shows). A fight outside the Open world keeps the
   terrace as it was (`TERRACE_LOOK`); the neon look is left alone.
-- **Contrast.** Both sides stay readable on all three boards: each marble is at least 3:1 against the cells, measured on the rendered
-  start of the first lair's fight with the cells' tint set for it (`cell` of the look): the white ones 3.07 to 3.77, the black ones 3.10
-  to 4.45 (`e2e/openworld-daynight.spec.ts`, `bun run e2e:contrast`).
 - **Reduced motion.** The phases still change; there is no blend: the look switches where the phase changes.
 - **Tests.** Unit: the phase from the time, the blend and its steps, the save, the sky of the view, the board looks, the terrace's look
   and the mark of the fight. E2E (`openworld-daynight.spec.ts`): a world at each phase set with the hook, a lair entered at each phase on
-  its board, and the contrast at each.
+  its board.
 
 ## 12. Lore logs (#1589)
 
@@ -727,8 +724,7 @@ section 10.
 ## 17. Budget: the world as the first screen (#1520, Decision #1513)
 
 The world is where a new player lands, so its load, its memory and the switch to a fight are budgeted like the frame of `tech.md` section 5.5 (under 150 draw
-calls). One fixed script measures them: `bun run e2e:budget` (`client/e2e/world-budget.spec.ts`, tag `@budget`). It is a report by hand, not a gate, like the contrast
-report (`e2e:contrast`): five fresh pages on `?openworld=3` (a marble stands within sight of the spawn), each loads the world, waits 1.5 s, reads `window.__renderCost`
+calls). One fixed script measures them: `bun run e2e:budget` (`client/e2e/world-budget.spec.ts`, tag `@budget`). It is a report by hand, not a gate: five fresh pages on `?openworld=3` (a marble stands within sight of the spawn), each loads the world, waits 1.5 s, reads `window.__renderCost`
 (`renderer.info` of one frame), collects the garbage with the DevTools collector (`HeapProfiler.collectGarbage`, twice, no `--expose-gc`) and reads the JS heap, puts the hero
 beside the marble (a wild fight, section 3c), waits for the arena, Flees, collects and reads the heap, and does it a second time. The longest task is the longest `longtask`
 entry of the page. The last test prints the median and the range of the five runs. Run on a loaded machine the long tasks grow by a quarter or more: the numbers below

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { relativeLuminance } from './contrast';
 import {
   ROOM_SURFACE,
   pedestalParts,
@@ -14,10 +13,6 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     expect(ROOM_SURFACE.depth).toBeGreaterThanOrEqual(20);
   });
 
-  it('room surface color is low-key, darker than the board steel', () => {
-    const hex = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
-    expect(relativeLuminance(hex(ROOM_SURFACE.color))).toBeLessThan(relativeLuminance(hex(0x4a5258)));
-  });
 
   it('pedestal sits under the board without exceeding board elevation (#769)', () => {
     const parts = pedestalParts();
@@ -83,16 +78,6 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     }
   });
 
-  it('architectural materials are low-key and preserve contrast against board steel', () => {
-    const hex = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
-    const elements = spaceshipArchitecture('high');
-    for (const el of elements) {
-      // Accent parts like emergency lintels can have controlled hazard tones, but structural steel stays dark
-      if (!el.id.includes('hazard')) {
-        expect(relativeLuminance(hex(el.color))).toBeLessThan(relativeLuminance(hex(0x4a5258)));
-      }
-    }
-  });
 
   it('tier switches detail: high tier has full conduits and detail, low tier streamlines', () => {
     const high = spaceshipArchitecture('high');

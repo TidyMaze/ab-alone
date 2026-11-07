@@ -1,7 +1,7 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 
 // The Open world budget (#1520, docs/specs/openworld.md section 17): a fixed script, run by hand with `bun run e2e:budget`. It is a report,
-// not a gate (tag @budget, like @contrast): every run is a fresh page on `?openworld=7`, and the last test prints the median and the range
+// not a gate (tag @budget): every run is a fresh page on `?openworld=7`, and the last test prints the median and the range
 // of RUNS runs, since a loaded machine moves the long tasks. It measures, for the world: the triangles and draw calls of a frame, the
 // JS heap once collected, the longest task from the load to the first drawn world, the longest task from a wild fight's touch to its
 // arena (the first fight of the page, then a second), the heap once collected after the first fight, back in the world, against the heap

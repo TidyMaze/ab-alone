@@ -667,7 +667,7 @@ describe('main.ts boss tells', () => {
     const cracks = game.hook<{ cell: Axial }[]>('__cracks');
     expect(game.hook('__crackDecals')).toEqual(cracks.map((c) => c.cell));
     expect(cues(game)).toEqual(['crack']); // the crack appears
-    expect(game.hook('__crackDecalShown', false)).toBe(false); // the e2e contrast check hides the decal
+    expect(game.hook('__crackDecalShown', false)).toBe(false); // the crack decal stays hidden
     expect(game.hook('__crackDecalShown', true)).toBe(true);
     await turn(game);
     expect(cues(game)).toEqual(['crack', 'crack']); // it ticked down on ply 9

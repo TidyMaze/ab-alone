@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
+import type { RGB } from './palettes';
 import { describe, expect, it } from 'vitest';
 import { cellIndex, type Move } from './board';
 import { BLUEPRINTS, blueprintId, CELLS, COLLECT_COST, LEGACY_UNLOCKED } from './collector';
-import { contrastRatio, type RGB } from './contrast';
 import { GLASS, SHELL } from './marbles';
 import {
   ACT_PERCENT,
@@ -487,19 +487,14 @@ describe('roguelite', () => {
     expect(sparkBurst(board, spark, { cells: [[0, 4]], dir: 5 })).toBeNull(); // a marble walking off: never legal
   });
 
-  it('gives each type its own shape and a colour 3:1 on both marbles', () => {
-    const rgb = (hex: number): RGB => [hex >> 16, (hex >> 8) & 0xff, hex & 0xff];
+  it('gives each type its own shape (#1461)', () => {
     expect(SPECIAL_LOOKS.map((l) => l.name)).toEqual(['Heavy', 'Anchor', 'Spark', 'Heavy+', 'Anchor+', 'Spark+', 'Magnet', 'Shield', 'Bomb', 'Medic']);
     expect(new Set([0, 1, 2, 6, 7, 8, 9].map((k) => JSON.stringify(SPECIAL_LOOKS[k]!.points))).size).toBe(7); // a shape each (#1461)
-    // An upgraded type (#1458) keeps its type's shape and colour, and carries a `+` in the shell's ink, 3:1 on it.
+    // An upgraded type (#1458) keeps its type's shape and colour, and carries a `+` in the shell's ink.
     expect(SPECIAL_LOOKS.map((l) => l.plus)).toEqual([false, false, false, true, true, true, false, false, false, false]);
     for (const k of [0, 1, 2]) expect(SPECIAL_LOOKS[k + 3]).toMatchObject({ points: SPECIAL_LOOKS[k]!.points, color: SPECIAL_LOOKS[k]!.color });
     expect(PLUS_INK).toBe(SHELL.color);
     expect(SPECIAL_LOOKS.slice(3, 6).map((l) => l.help)).toEqual(['weighs 3 in a push', 'never pushed off, nor the marble in front of it', 'bursts 2 cells']);
-    for (const { color } of SPECIAL_LOOKS) {
-      expect(contrastRatio(rgb(color), rgb(GLASS.color))).toBeGreaterThanOrEqual(3);
-      expect(contrastRatio(rgb(color), rgb(SHELL.color))).toBeGreaterThanOrEqual(3);
-    }
   });
 
   it('draws the placement screen: the types owned, what is left of each, the one picked pressed', () => {
@@ -1354,14 +1349,6 @@ describe('roguelite tactics', () => {
     expect(swapping.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']); // only the Swap
   });
 
-  it('the glyph of a tactic reads 3 to 1 on the HUD plate in both themes', () => {
-    const ratio = (fg: string, bg: string): number => {
-      const rgb = (hex: string): RGB => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as unknown as RGB;
-      return contrastRatio(rgb(fg), rgb(bg));
-    };
-    expect(ratio('#7fd6e8', '#161a1d')).toBeGreaterThanOrEqual(3); // --accent on --panel, dark
-    expect(ratio('#0a5f73', '#f3f0e6')).toBeGreaterThanOrEqual(3); // light
-  });
 });
 
 // The scrap and the shop (#1459, docs/specs/roguelite.md section 12): a currency earned in fights, spent at a Shop node.
@@ -1565,7 +1552,7 @@ describe('roguelite Magnet, Shield, Bomb and Medic', () => {
   const counts = (...kinds: number[]): number[] => SPECIAL_LOOKS.map((_, k) => kinds.filter((kind) => kind === k + 1).length);
   const won = (run: Run): Run => ({ ...run, path: [0], reward: true });
 
-  it('looks: a shape of its own and a colour of its own, 3:1 on the glass and on the shell, never the colour alone', () => {
+  it('looks: a shape of its own and a colour of its own, never the colour alone', () => {
     const plain = [0, 1, 2, 6, 7, 8, 9].map((k) => SPECIAL_LOOKS[k]!);
     expect(new Set(plain.map((l) => l.color)).size).toBe(7);
     expect(new Set(plain.map((l) => JSON.stringify(l.points))).size).toBe(7);
@@ -1575,10 +1562,6 @@ describe('roguelite Magnet, Shield, Bomb and Medic', () => {
       ['Bomb', false, 'bursts after your third turn and is lost'],
       ['Medic', false, 'comes back once on your back row when ejected'],
     ]);
-    for (const { color } of SPECIAL_LOOKS.slice(6)) {
-      expect(contrastRatio(rgb(color), rgb(GLASS.color))).toBeGreaterThanOrEqual(3);
-      expect(contrastRatio(rgb(color), rgb(SHELL.color))).toBeGreaterThanOrEqual(3);
-    }
   });
 
   it('every event gains one count per special marble type, and four events give the new ones', () => {

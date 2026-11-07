@@ -3,7 +3,6 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
 import { BONE } from './scene';
-import { contrastRatio, type RGB } from './contrast';
 import { SKINS } from './skins';
 import { CONVERTED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
@@ -107,11 +106,10 @@ describe('main.ts converted look (#508)', () => {
     expect(box(outline!).max.y).toBeGreaterThan(box(glyph!).max.y);
   }, 60_000);
 
-  it('wears the Chaplain glyph above the wax and a cracked pale skin on the shell half, 3:1 on every shell skin (#790)', async () => {
+  it('wears the Chaplain glyph above the wax and a cracked pale skin on the shell half (#790)', async () => {
     const scene = catchScene();
     const game = await boot('?nodes=200&scene=room', { reducedMotion: true });
     const cells = await convertOne(game);
-    const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
     for (const cell of cells) {
       const marble = marbleOn(scene(), cell);
       const [glyph, cracks, shell] = ['glyph', 'cracks', 'shell'].map((name) => part(marble, name));
@@ -120,9 +118,6 @@ describe('main.ts converted look (#508)', () => {
       expect(cracks!.geometry).toBe(shell!.geometry);
       expect(cracks!.scale.x).toBeGreaterThan(1); // just outside the shell: no z-fight
       expect(cracks!.material).not.toBe(shell!.material);
-      for (const m of [glyph!.material, cracks!.material] as THREE.MeshBasicMaterial[]) {
-        for (const skin of SKINS) expect(contrastRatio(rgb(m.color.getHex()), rgb(skin.color)), skin.id).toBeGreaterThanOrEqual(3);
-      }
     }
   }, 60_000);
 

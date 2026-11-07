@@ -205,8 +205,7 @@ doors, the Open world's lairs and the MCP do not go through the list and stay op
 - **Boss health bar (#788).** In every boss fight (solo, daily, co-op) `#boss-bar` sits at the top centre: the boss's
   name in the display font, a red bar under it. The bar is cut into one fragment per ejection the player needs to win,
   read from the engine (`win_ejections`: 6 for most bosses, 12 for The Ballast Mind), and one fragment empties from the
-  right per ejection, to an outline in `--muted` while the filled ones are `--danger` (3:1 against the plate in both
-  themes). The fragment where a phase begins (`phase_ejections`) has a light tick on its left edge, so the phase steps
+  right per ejection, to an outline in `--muted` while the filled ones are `--danger`. The fragment where a phase begins (`phase_ejections`) has a light tick on its left edge, so the phase steps
   read without colour. It is one `role="meter"` for a screen reader ("2 of 6 ejected, phase 1 of 3"). Wider than tall it
   is centred in the top band between the plate and the button column, at most 24 rem wide and at least 10 rem (the top
   row of the board lies below it, also at 812 by 375); held upright it is the first row of the column, above the
@@ -283,7 +282,7 @@ doors, the Open world's lairs and the MCP do not go through the list and stay op
   Hold", "Order locked, waiting for the others..." once the order is committed, "Waiting for the round..." past the
   deadline or for a spectator, and "Desync after round 4: a peer's game differs" in the danger colour. Under it,
   while the open round takes orders (to a spectator too), the order deadline in whole seconds, "Order deadline: 12 s"
-  (#673), in the text colour (above 3:1 on the plate in both themes), redrawn each second from the round start as it
+  (#673), in the text colour, redrawn each second from the round start as it
   reached the page; in the last 5 s it pulses its opacity (to 0.6 at least), not under Reduced motion. It goes once
   every seat committed or the deadline passed. A seat silent for 2 rounds is played by the bot (tech.md section 6,
   #674): its reveal line reads as for any seat. Hold and the targets work only while the order can be committed. These strings are kept verbatim for the e2e tests, with
@@ -794,7 +793,7 @@ mode once that toggle exists (#32), and it has no motion.
   spatter and the slide. Until the player presses it, it follows `prefers-reduced-motion`; the choice is saved
   locally like the volume sliders and Theme. One pure function, `motionReduced` in `client/src/settings.ts`, decides it.
 - The Overseer's speech bubble (#741) is a fixed element over its pedestal: monospace, pale text on near-black (an
-  angry one white on dark red), 3:1 and more on every skin, sized with the UI scale and at most 16 rem wide. Typing is
+  angry one white on dark red), sized with the UI scale and at most 16 rem wide. Typing is
   17 characters a second with a 1 px colour split of the text for 25 ms per character (not a flash) and a soft blip on
   the effects bus; it holds 3 s (angry: 1 s) after the last character, fades over 400 ms, and the angry one shakes
   for as long as it shows. Reduced motion shows the whole text at once, with no split and no shake. Screen readers get
@@ -803,21 +802,12 @@ mode once that toggle exists (#32), and it has no motion.
   its marble has exploded, and an angry line due on that ply is dropped (#789).
 - No flash above 3 per second, no full-screen white, ever (photosensitivity, world.md section 8).
 
-## 7. Contrast targets (WCAG 2.1 AA)
+## 7. Colour and contrast
 
-Measured with the relative luminance formula, values in the checked pairs:
-
-| Pair | Dark | Light | Target |
-|---|---|---|---|
-| `--text` on `--panel` | 11.8 | 15.7 | 4.5 |
-| `--muted` on `--panel` | 6.8 | 7.6 | 4.5 |
-| `--accent` on `--bg` | 11.8 | 5.6 | 4.5 |
-| `--hazard` on `--panel` | 6.0 | 5.8 | 4.5 |
-| `--danger` on `--panel` | 6.3 | 6.5 | 4.5 |
-| `--edge` on `--bg` (plate border) | 2.5 | 2.5 | none, decorative |
+Visuals are judged by the art director on captures, no contrast test (owner, 2026-11-07).
 
 Meaning is never carried by colour alone: turn side by marker shape and words, score by text,
-result by words. Non-text parts that carry meaning (the turn marker) need 3:1 against the plate.
+result by words.
 
 ## 8. Out of scope
 

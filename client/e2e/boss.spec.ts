@@ -137,7 +137,7 @@ for (const tier of ['high', 'low']) {
 
   test(`start The Hull (${tier} tier): the cracked cell wears the crack decal, #355`, async ({ page }) => {
     const body = page.locator('body');
-    await page.setViewportSize({ width: 1280, height: 720 }); // the contrast check's window, as contrast.spec.ts
+    await page.setViewportSize({ width: 1280, height: 720 });
     await startHull(page, tier, CRACK_SEED);
     expect(await page.evaluate(() => (window as any).__playTurns(4, [4, 2]))).toBe(4); // the forward moves to the crack
     // The decals and the cracked cells in one call to the page (#431): one crack, which wears the decal.

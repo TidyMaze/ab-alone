@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { contrastRatio, type RGB } from '../src/contrast';
 import { FRAME } from '../src/frame';
 import { BLACK_WINS } from './end-games';
 import { openModes } from './modes';
@@ -45,41 +44,8 @@ test('clear board and the low tier keep the frame, #292', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-rim', 'near'); // the turn is game information (#300)
 });
 
-// Waits for a draw that began after this call: the screenshot below then shows the new turn's rim, not the last turn's.
-const freshDraw = async (page: Page) => {
-  const asked = await page.evaluate(() => (window as any).__drawNext() as number);
-  await page.waitForFunction((n) => (window as any).__draws() > n, asked);
-};
 const SODIUM = 0xd9822b;
 const CYAN = 0x7fd6e8;
-// A point on the rim's top, 2 cells from the middle of its left side at each end toward the corner on the x axis, clear
-// of any marble: the side facing 150 degrees for the near half (+z, side 1's end), 210 degrees for the far half (-z,
-// side 2's), on the screen. `middle` is the middle of the side itself: the near half's unlit metal there glowed with the
-// bloom of the pedestal's cyan bars (contrast 1.7 against its own light, #1311), where toward the corner it did not (4.5).
-const rimPoint = (page: Page, end: 'near' | 'far', middle = false) => {
-  const d = 4 * (Math.sqrt(3) / 2) + FRAME.margin + FRAME.rim / 2;
-  const a = ((end === 'near' ? 150 : 210) * Math.PI) / 180;
-  const along = middle ? 0 : end === 'near' ? 2 : -2; // toward the corner at 180 degrees
-  const z = d * Math.sin(a) + along * Math.cos(a);
-  const r = z / (Math.sqrt(3) / 2);
-  return page.evaluate(([q, rr]) => (window as any).__cellToScreen(q, rr) as { x: number; y: number }, [d * Math.cos(a) - along * Math.sin(a) - r / 2, r]);
-};
-const pixel = (page: Page, png: Buffer, p: { x: number; y: number }) =>
-  page.evaluate(
-    async ([b64, x, y]) => {
-      const img = new Image();
-      img.src = `data:image/png;base64,${b64}`;
-      await img.decode();
-      const c = document.createElement('canvas');
-      [c.width, c.height] = [img.width, img.height];
-      const g = c.getContext('2d')!;
-      g.drawImage(img, 0, 0);
-      const [r, gr, b] = g.getImageData(Math.round(x as number), Math.round(y as number), 1, 1).data;
-      return [r, gr, b] as RGB;
-    },
-    [png.toString('base64'), p.x, p.y] as const,
-  );
-
 test('the rim half at the end of the side to move lights in its colour, then goes out at the end, #300', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('./?bot=off&scene=room'); // hot-seat: Black, side 1, wears the shell and starts at the near end
@@ -90,31 +56,12 @@ test('the rim half at the end of the side to move lights in its colour, then goe
   expect((await frame(page)).lit).toEqual({ near: SODIUM, far: 0 });
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-  const blackTurn = await page.screenshot({ type: 'png' });
 
   await clickAt(page, 0, 2);
   await clickAt(page, 0, 1);
   await expect(page.locator('#hud')).toContainText('White to move');
   await expect(page.locator('body')).toHaveAttribute('data-rim', 'far');
   expect((await frame(page)).lit).toEqual({ near: 0, far: CYAN });
-
-  // By place, not colour alone (world.md section 8): each half is 3:1 brighter lit than dark.
-  const [near, far] = [await rimPoint(page, 'near'), await rimPoint(page, 'far')];
-  const [nearMiddle, farMiddle] = [await rimPoint(page, 'near', true), await rimPoint(page, 'far', true)];
-  await freshDraw(page);
-  await expect
-    .poll(async () => {
-      const whiteTurn = await page.screenshot({ type: 'png' });
-      let worst = Infinity;
-      for (const [n, f] of [[near, far], [nearMiddle, farMiddle]] as const)
-        worst = Math.min(
-          worst,
-          contrastRatio(await pixel(page, blackTurn, n), await pixel(page, whiteTurn, n)),
-          contrastRatio(await pixel(page, whiteTurn, f), await pixel(page, blackTurn, f)),
-        );
-      return worst;
-    }, { timeout: 10_000 })
-    .toBeGreaterThanOrEqual(3);
 
   await page.locator('#import-file').setInputFiles({
     name: 'game.json',

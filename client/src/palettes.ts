@@ -1,6 +1,6 @@
 // Colorblind and high-contrast palettes (docs/specs/world.md section 8, issue #381).
 // Pure data and CVD simulation: main.ts and ui.css apply the colours.
-import type { RGB } from './contrast';
+export type RGB = readonly [number, number, number];
 
 export type Palette = 'default' | 'protan' | 'deutan' | 'tritan' | 'contrast';
 

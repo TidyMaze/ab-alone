@@ -579,7 +579,7 @@ describe('main.ts board and HUD', () => {
     expect(lights.length).toBe(0);
   });
 
-  it('draws the target arrows dark on their luminous ring, so they read 3:1 on the lit cells (#787)', async () => {
+  it('draws the target arrows dark on their luminous ring (#787)', async () => {
     const game = await boot('?bot=off&scene=room');
     const legal = game.hook<{ cells: Axial[] }[]>('__legal');
     game.click(...legal.find((m) => m.cells.length === 1)!.cells[0]!);

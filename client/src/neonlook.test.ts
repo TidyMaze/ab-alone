@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, neonMarbleRim } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
-import { contrastRatio } from './contrast';
 import { DECK_NAMES } from './deck';
 import { DECK_KEY, NEON_GLOW, neonDeckLook, neonSkyOf } from './neonlook';
 
@@ -19,13 +18,11 @@ const painted = (...hexes: number[]): THREE.BufferGeometry => {
 const at = (g: THREE.BufferGeometry, i: number): THREE.Color => new THREE.Color().fromBufferAttribute(g.attributes.color!, i);
 
 describe('the neon look (#1424)', () => {
-  it('draws the target arrow near-black under the neon look, 3:1 on the slate cell; the terrace keeps the kit arrow (#1508)', () => {
+  it('draws the target arrow near-black under the neon look; the terrace keeps the kit arrow (#1508)', () => {
     const kit = new THREE.MeshStandardMaterial({ color: 0x888888 });
     const arrow = targetArrowMaterial(true, kit) as THREE.MeshBasicMaterial;
     expect(arrow).toBeInstanceOf(THREE.MeshBasicMaterial);
     expect(arrow.color.getHex()).toBe(NEON.arrow);
-    const srgb = (hex: number) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255] as const;
-    expect(contrastRatio(srgb(NEON.arrow), srgb(NEON.cell)), 'arrow vs cell').toBeGreaterThanOrEqual(3);
     expect(targetArrowMaterial(false, kit)).toBe(kit);
   });
 
@@ -45,21 +42,6 @@ describe('the neon look (#1424)', () => {
     const g = painted(0x2a3540, 0xa29e9a, 0xffffff, 0x000000);
     neonPaint('scene_slab_arena', g);
     expect([at(g, 0).getHex(), at(g, 1).getHex(), at(g, 2).getHex(), at(g, 3).getHex()]).toEqual([NEON.gapFloor, NEON.rim, NEON.rim, NEON.gapFloor]);
-  });
-
-  it('keeps each marble 3:1 on the cell it stands on, on every deck: the black shell (#1552), and the white one', () => {
-    const rgb = (hex: number): [number, number, number] => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
-    for (const deck of DECK_NAMES) {
-      expect(contrastRatio(rgb(NEON.blackMarble), rgb(NEON.cell)), `${deck}: black shell vs cell`).toBeGreaterThanOrEqual(3);
-      expect(contrastRatio(rgb(NEON.whiteMarble), rgb(NEON.cell)), `${deck}: white marble vs cell`).toBeGreaterThanOrEqual(3);
-    }
-  });
-
-  it('gives the black shell a cyan rim, 3:1 on the gap and on the cell (#1552)', () => {
-    const rgb = (hex: number): [number, number, number] => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
-    expect(NEON_RIM.colour).toBe(NEON.pedestalRing);
-    expect(contrastRatio(rgb(NEON_RIM.colour), rgb(NEON.gap)), 'rim vs gap').toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(NEON_RIM.colour), rgb(NEON.cell)), 'rim vs cell').toBeGreaterThanOrEqual(3);
   });
 
   it('draws the rim on the black shell under the neon look only, the white side too, softer (#1552, #1553)', () => {

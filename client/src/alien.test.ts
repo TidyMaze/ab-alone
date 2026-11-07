@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { RGB } from './palettes';
 import { COUNTER, COUNTER_MAX, drawCounter, drawShell, eggGlow, eggText, parseEggs, shellTint } from './alien';
-import { contrastRatio, type RGB } from './contrast';
 import { SKINS } from './skins';
 import { TONAL, tonalMarble } from './look';
 
@@ -57,9 +57,6 @@ describe('the counter above an egg', () => {
     expect(COUNTER_MAX).toBe(4);
   });
 
-  it('reads 3:1 and more: the pale digit on its near-black plate', () => {
-    expect(contrastRatio(rgb(COUNTER.ink), rgb(COUNTER.plate))).toBeGreaterThanOrEqual(3);
-  });
 
   it('draws the plate, then the digit in the middle', () => {
     const calls: string[] = [];
@@ -122,8 +119,4 @@ describe('the shell of an egg', () => {
     expect(a.g.arc.mock.calls).toEqual(b.g.arc.mock.calls);
   });
 
-  it('shows its marks 3:1 on the Alien colour in every shell skin, the terrace shell and the tonal look', () => {
-    const bases = [...SKINS.map((s) => s.color), 0x0a0c0f, tonalMarble(1, 0x000000), TONAL.black.inner, TONAL.black.outer];
-    for (const base of bases) expect(contrastRatio(rgb(shellTint(base)), rgb(base))).toBeGreaterThanOrEqual(3);
-  });
 });

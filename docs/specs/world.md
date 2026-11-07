@@ -148,7 +148,7 @@ Clear-board mode removes it.
 | Shelled (enemy) | Matte black organic shell, ridged like a scarab, faint heat pulse | Ridged, no core |
 | Boss variants | Same shell with one accent (rust crown, candle wax, wire wrap) | Added silhouette |
 | Flipped (by The Chaplain) | Player glass slowly shelling over: black ridges creep from the base up until the flip completes | Half glass, half ridged |
-| Battle royale slots | Shell tint per player (six Okabe-Ito tints, 3:1 on the deck in every colour vision, #501) plus an engraved near-black glyph, 3:1 on its tint and repeated beside the seat's name on the HUD plate (#558), never color alone | Unique glyph each: disc, triangle, square, cross, star, diamond |
+| Battle royale slots | Shell tint per player (six Okabe-Ito tints, #501) plus an engraved near-black glyph, repeated beside the seat's name on the HUD plate (#558), never color alone | Unique glyph each: disc, triangle, square, cross, star, diamond |
 
 **Board look per deck.**
 
@@ -161,10 +161,10 @@ Clear-board mode removes it.
 | Bridge | Polished white-grey panel, thin cell lines | Almost none | Clean, wrong, too tidy |
 
 **Tell marks.** Boss tells use engraved glyphs and steady ring outlines on the cell or marble
-(pale bone-white, 3:1 against the surface), never a halo or glow alone: a black halo is lost on
+(pale bone-white, against the surface), never a halo or glow alone: a black halo is lost on
 a matte black shell. The Chaplain's tell is a ring outline on the marbles about to flip plus a
 glyph on the three boss marbles in contact. A tell on a cell is pale bone-white or near-black,
-whichever reads 3:1 on that surface: The Hull's crack is near-black on the light deck (#355).
+whichever shows better on that surface: The Hull's crack is near-black on the light deck (#355).
 
 **Ejection.** A marble pushed off the board rolls one cell out over the rim with the line that
 pushes it, in 200 ms (the sharp inhale of section 7). Then the void takes it (the thud): it falls,
@@ -173,8 +173,7 @@ never more than 1.5 s. It only ever fades, never brightens, so it cannot flash (
 or a key ends it at once, and it never holds the next move. Reduced motion: a plain 400 ms fade one
 cell out, where the push left it.
 
-Rules never change with the look: cell size, contrast and edge clarity stay constant
-(contrast 3:1 minimum between cell edge and surface). The checks (owner 2026-11-05, #1508) are on the default look, default deck and default skins only: cell edge at 2.43, default shell 3:1 on the deck, default glass at 1.44 (desktop), 1.15 (phone) and smoked 1.37 (each the min of 3 runs on 0df19363, the rest of the 3:1 kept); target arrows 3:1 on their outline, with an empty cell in the same shot under 3:1.
+Rules never change with the look: cell size and edge clarity stay constant. Visuals are judged by the art director on captures, no contrast test (owner, 2026-11-07).
 
 ## 6. Diegetic HUD rules
 

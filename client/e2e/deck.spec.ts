@@ -4,7 +4,7 @@ import { openModes } from './modes';
 
 // #400: each mode and boss plays on its deck (docs/specs/world.md sections 1, 3 and 5), named in body[data-deck].
 // body[data-deck-set] names the deck whose texture set the cells wear (#401). The light and the texture of each deck are
-// checked by e2e/contrast.spec.ts.
+// judged by the art director on captures.
 
 test('hot-seat, each boss and online play on their decks, #400', async ({ page }) => {
   await page.goto('./?bot=off&net=hook');

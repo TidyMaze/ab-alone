@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { RGB } from './palettes';
 import { CELLS, axialTo3D, cellIndex, type Axial } from './board';
-import { contrastRatio, type RGB } from './contrast';
 import {
   CHARGE_TURNS,
   FLASH_MS,
@@ -169,11 +169,6 @@ describe('PULSAR_PARTS', () => {
     expect(new Set(PULSAR_PARTS.map((p) => p.id)).size).toBe(4);
   });
 
-  it('reads its pale core 3:1 against its steel base and the near-black deck', () => {
-    const [base, core] = PULSAR_PARTS;
-    expect(contrastRatio(rgb(core!.color), rgb(base!.color))).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(core!.color), rgb(0x0b0d0f))).toBeGreaterThanOrEqual(3);
-  });
 });
 
 describe('the ripples of a pulsar that fires next turn (#741)', () => {

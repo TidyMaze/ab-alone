@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { RGB } from './palettes';
 import { CELLS, axialTo3D, cellIndex, type Axial } from './board';
-import { contrastRatio, type RGB } from './contrast';
 import {
   APPROACH,
   CHEVRON_COLOR,
@@ -162,9 +162,7 @@ describe('the tell on the board', () => {
     expect(railSpan(parseTrains([4, 1, -4, 0, 4, 0])[0]!).yaw).toBeCloseTo(0);
   });
 
-  it('draws the chevrons in an amber that reads 3:1 on the steel deck and the near-black frame', () => {
-    expect(contrastRatio(rgb(CHEVRON_COLOR), rgb(0x4a5258))).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(CHEVRON_COLOR), rgb(0x0b0d0f))).toBeGreaterThanOrEqual(3);
+  it('draws the chevrons pointing along +x', () => {
     const xs = CHEVRON_SHAPE.map(([x]) => x);
     expect(Math.max(...xs)).toBeGreaterThan(Math.abs(Math.min(...xs))); // it points +x
   });

@@ -39,7 +39,7 @@ decision (#1424); until it flips, the neon look is on at `?look=neon`. Numbers a
   Nothing emissive but the edges, the lamps, the screens and the marbles.
 - **Marbles** (world.md 5, 8). Player: an opaque white sphere (`#f2f0ea`), no core, one of the white skins of the
   settings. Shell: black (`#14161a`), a faint heat pulse, no core. The pulse is a slow sodium glow, one every 6 s,
-  far fainter than a flash and still 3:1 on every deck at its brightest; off under safe mode, reduced motion and the
+  far fainter than a flash; off under safe mode, reduced motion and the
   low tier (#509). Boss: the shell plus one accent, a rust crown for The Hull, candle wax for The Chaplain, a wire
   wrap for The Ballast Mind (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape
   cue. Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its
@@ -48,12 +48,7 @@ decision (#1424); until it flips, the neon look is on at `?look=neon`. Numbers a
 - **Light** (world.md 5). One cold sun low on the left (`#e8f0ff`, 3.2), a violet-tinted hemisphere (sky `#9a6bff`,
   ground `#2a3347`, 2.9), ACES at 1.15. The player's cyan is the light that moves. Tube lights, a ring lamp and the
   sky glow (`neonlight.ts`, `neonfx.ts`) are the only other sources. Fine stars on a black sky, no haze. Soft
-  contact shadows ground marbles onto the cells (#459), off under the low tier and automation. Every cell edge, marble
-  and target stays legible: cell edge 3:1, each marble 3:1 on the deck (#344), target arrows 3:1 on their outline with
-  an empty cell in the same shot under 3:1. The checks (owner 2026-11-05, #1508) are on the default look and skins:
-  cell edge 2.43 (min of 3 runs on 0df19363), default shell 3:1 on the deck, default glass 1.44 (desktop), 1.15 (phone)
-  and smoked 1.37, each the min of 3 runs on 0df19363. Those numbers predate the neon look: not yet re-measured
-  under it (open).
+  contact shadows ground marbles onto the cells (#459), off under the low tier and automation. Visuals are judged by the art director on captures, no contrast test (owner, 2026-11-07).
 - **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold slate and ore dust
   (online, The Hull). Furnace: sodium glow, steam (The Choir). Chapel: candles, wood and wire (The Chaplain). Bridge:
   cold white, too clean (The Ballast Mind). Under the neon look each deck has its key (`DECK_KEY`, `neonlook.ts`, #1551):

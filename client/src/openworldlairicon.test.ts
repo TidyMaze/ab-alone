@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, type RGB } from './contrast';
+import type { RGB } from './palettes';
 import { setNeonWorldOn } from './neonlook';
 import { TERRAINS } from './openworld';
 import { BOSS_COLOURS, dungeonIcon, ICON, iconSize, lairIcon, logIcon, portalIcon, townIcon } from './openworldlairicon';
@@ -48,30 +48,7 @@ describe('the boss colours', () => {
     expect(new Set(Object.values(BOSS_COLOURS)).size).toBe(BOSSES.length);
   });
 
-  it('read 3:1 over the plate, and the ink of the letter reads 3:1 over them', () => {
-    for (const colour of [...Object.values(BOSS_COLOURS), ICON.unknown]) {
-      expect(contrastRatio(rgb(colour), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
-      expect(contrastRatio(rgb(colour), rgb(ICON.ink))).toBeGreaterThanOrEqual(3);
-    }
-    for (const colour of [ICON.portal, ICON.here]) expect(contrastRatio(rgb(colour), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(ICON.done), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(ICON.log), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(ICON.town), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(ICON.dungeon), rgb(ICON.plate))).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(rgb(ICON.check), rgb(ICON.done))).toBeGreaterThanOrEqual(3);
-  });
 
-  it('keep the edge of the icon 3:1 over every terrain, in the plain look and in the neon one: the dark halo or the light rim reads on each', () => {
-    for (const neon of [false, true]) {
-      setNeonWorldOn(neon);
-      for (const terrain of TERRAINS) {
-        const ground = rgb(terrainColour(terrain));
-        const best = Math.max(contrastRatio(rgb(ICON.halo), ground), contrastRatio(rgb(ICON.rim), ground));
-        expect(best, `${terrain} (neon ${neon})`).toBeGreaterThanOrEqual(3);
-      }
-    }
-    setNeonWorldOn(false);
-  });
 });
 
 describe('iconSize', () => {

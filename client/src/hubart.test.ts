@@ -5,7 +5,7 @@ import { createDoorGlyph, createKitGlyph, GLYPH_COLORS, KIT_PROP } from './hubar
 import type { HubKit } from './tablezero';
 
 describe('hub door 3D glyphs (#628)', () => {
-  it('defines distinct contrast-safe accent colors for every door kind', () => {
+  it('defines the accent colors of every door kind', () => {
     expect(GLYPH_COLORS.boss).toBe(0xe03131); // Crimson
     expect(GLYPH_COLORS.bossCore).toBe(0xff922b); // Amber core
     expect(GLYPH_COLORS.bot).toBe(0x22b8cf); // Cold cyan

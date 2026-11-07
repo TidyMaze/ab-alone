@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { Axial } from './board';
 import type { Terrain, Tile } from './openworld';
 import { BIOME_LOOK, LOOK, PROPS, WATER } from './openworldview';
-import { contrastRatio, type RGB } from './contrast';
 import { setNeonWorldOn } from './neonlook';
 import { mapColour, WORLD } from './neonworld';
 import { WALKABLE } from './openworld';
@@ -78,8 +77,6 @@ describe('terrainColour', () => {
 
   describe('the mountain you cannot cross (#1439)', () => {
     const hex = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
-    const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
-    const ratio = (a: string, b: string): number => contrastRatio(rgb(a), rgb(b));
 
     it('is the peak and the wall, which the core blocks (the walkable terrains of openworld.ts), never the walkable rock', () => {
       expect(WALKABLE.has('rock')).toBe(true);
@@ -90,20 +87,12 @@ describe('terrainColour', () => {
       expect(terrainColour('rock')).not.toBe(COLOURS.mountain);
     });
 
-    it('reads 3:1 against the walkable rock, in the plain look and in the neon one (its rock, lifted for the map)', () => {
-      expect(ratio(terrainColour('peak'), terrainColour('rock'))).toBeGreaterThanOrEqual(3);
-      expect(ratio(COLOURS.mountain, hex(mapColour(WORLD.rock)))).toBeGreaterThanOrEqual(3);
+    it('keeps the wall the mountain colour in the neon look too, where the rock is lifted for the map', () => {
       setNeonWorldOn(true);
       expect(terrainColour('wall')).toBe(COLOURS.mountain); // the neon look keeps it
       setNeonWorldOn(false);
     });
 
-    it('keeps the hero, the troop and the tower icons readable on the mountain and on the rock', () => {
-      for (const ground of [terrainColour('peak'), terrainColour('rock')]) {
-        for (const mark of [COLOURS.hero, COLOURS.troop]) expect(Math.max(ratio(mark, ground), ratio(COLOURS.edge, ground)), `${mark} on ${ground}`).toBeGreaterThanOrEqual(3);
-        expect(Math.max(ratio(ICON.rim, ground), ratio(ICON.halo, ground))).toBeGreaterThanOrEqual(3);
-      }
-    });
 
     it('outlines the dots of the hero, the troop and the enemies in the dark, so they read on the pale mountain', () => {
       const { ctx, log } = fakeContext();
@@ -169,18 +158,12 @@ describe('windowCells', () => {
 });
 
 describe('the world edge (#1453)', () => {
-  const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
-  it('paints a cell off the world in its own colour, 3:1 from an undiscovered cell, and the edge line 3:1 from both', () => {
+  it('paints a cell off the world in its own colour, and the edge line beside it', () => {
     const { ctx, fills } = fakeContext();
     drawMinimap(ctx, SIZE, data({ cells: [[3, 0, 'void'], [2, 0, 'grass']] }));
     expect(at(fills, COLOURS.void)).toHaveLength(1);
     expect(at(fills, terrainColour('grass'))).toHaveLength(0); // the grass beside the void is the edge line
     expect(at(fills, COLOURS.worldEdge)).toHaveLength(1);
-    const ratio = (a: string, b: string): number => contrastRatio(rgb(a), rgb(b));
-    expect(ratio(COLOURS.void, COLOURS.back)).toBeGreaterThanOrEqual(3);
-    expect(ratio(COLOURS.worldEdge, COLOURS.void)).toBeGreaterThanOrEqual(3);
-    expect(ratio(COLOURS.worldEdge, COLOURS.back)).toBeGreaterThanOrEqual(3);
-    expect(ratio(COLOURS.hero, COLOURS.void)).toBeGreaterThanOrEqual(3);
   });
 
   it('keeps the terrain of a cell that is not next to the void', () => {
@@ -381,10 +364,6 @@ describe('north (#1448, docs/specs/openworld.md section 8)', () => {
     }
   });
 
-  it('reaches 3:1 against the plate under it', () => {
-    const rgb = (c: string): RGB => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as unknown as RGB;
-    expect(contrastRatio(rgb(COLOURS.north), rgb(COLOURS.northPlate))).toBeGreaterThanOrEqual(3);
-  });
 
   it('draws a compass in the top left corner of the map, not of the minimap: an arrow and an N toward the north', () => {
     const { ctx, fills } = fakeContext();
