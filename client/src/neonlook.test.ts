@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { color as tslColor } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { neonShellFor, NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE,neonMarbleRim } from './neonlook';
+import { neonShellFor, NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE, NEON_SHEEN, neonMarbleRim, marbleSheen } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
@@ -113,6 +113,32 @@ describe('the neon look (#1424)', () => {
     expect(NEON_WHITE_SHADE.lit, 'the lit side is below the clip').toBeLessThan(1);    const [x, y] = NEON_WHITE_SHADE.light;
     expect(x, 'the sun stands on the left, as the neon sun does').toBeLessThan(0);
     expect(y, 'the sun stands above the marble, as the neon sun does').toBeGreaterThan(0);
+  });
+
+  it('lights a reflection of the sky on both marbles, under both looks, with no map and no envMap (#1553)', () => {
+    // The arena's envMap is left out under automation and on the low tier, so the black shell was a flat disc there (the report's
+    // captures). The sheen is a colour node of the reflection vector: no texture, no draw call, the same on every tier.
+    const shell = (): THREE.MeshPhysicalMaterial => new THREE.MeshPhysicalMaterial({ color: NEON.blackMarble, roughness: 0.3 });
+    const glass = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: NEON.whiteMarble, emissive: 0x2a2a2a });
+    const emissive = (material: THREE.Material): Node => (material as THREE.Material & { emissiveNode: Node }).emissiveNode;
+    expect(emissive(marbleSheen('black', shell())).isNode).toBe(true);
+    expect(emissive(marbleSheen('white', glass())).isNode).toBe(true);
+    // The marble's own glow and its rim stay under the sheen: it adds, never replaces.
+    const rimmed = neonMarbleRim('black', shell(), true);
+    const rim = emissive(rimmed);
+    const reaches = (node: Node, target: Node, depth = 0): boolean => node === target || (depth < 8 && Object.values(node).some((v) => (v as Node)?.isNode === true && reaches(v as Node, target, depth + 1)));
+    expect(reaches(emissive(marbleSheen('black', rimmed)), rim), 'the rim is kept').toBe(true);
+    const material = shell();
+    expect(marbleSheen('black', material), 'the same material comes back').toBe(material);
+    expect((marbleSheen('black', new THREE.MeshBasicMaterial()) as unknown as { emissiveNode: Node }).emissiveNode.isNode, 'a material with no emissive of its own').toBe(true);
+    // The black shell takes the sky, the white only a hint: the white does not bloom back to flat white.
+    expect(NEON_SHEEN.black.sky).toBeGreaterThan(0);
+    expect(NEON_SHEEN.black.spot).toBeGreaterThan(NEON_SHEEN.white.spot);
+    expect(NEON_SHEEN.white.sky).toBeLessThan(NEON_SHEEN.black.sky);
+    expect(NEON_SHEEN.white.spot, 'the white keeps its shading').toBeLessThan(0.5);
+    const [x, y] = NEON_SHEEN.light;
+    expect(x, 'the sun stands on the left').toBeLessThan(0);
+    expect(y, 'the sun stands above').toBeGreaterThan(0);
   });
 
   it('paints the ground, the lamps and the turn bar, and leaves an unknown node alone', () => {
