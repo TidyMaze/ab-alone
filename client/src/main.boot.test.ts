@@ -355,6 +355,8 @@ describe('the renderer and its textures', () => {
             this.samples = (o as { antialias: boolean }).antialias ? 4 : 0;
           }
           init = async (): Promise<void> => {};
+          hasFeature = (): boolean => true; // the timestamp query, for ?gpustats (#1581)
+          resolveTimestampsAsync = async (): Promise<number> => 4.2;
           setPixelRatio(): void {}
           setSize(): void {}
           getMaxAnisotropy = (): number => 1;
@@ -374,6 +376,14 @@ describe('the renderer and its textures', () => {
       }));
       return { options, draw: () => (loop!(0), scene!) };
     }
+
+    it('reads the GPU time of the drawn frames with ?gpustats (#1581)', async () => {
+      const booting = boot('?bot=off&scene=room&gpustats');
+      const { draw } = renderer();
+      await booting;
+      draw();
+      await vi.waitFor(() => expect(Object.keys((window as unknown as { __gpuCost: { modes: object } }).__gpuCost.modes).length).toBeGreaterThan(0));
+    });
 
     it('keeps the flat look and reports WebGPU', async () => {
       const booting = boot('?bot=off&scene=room');
