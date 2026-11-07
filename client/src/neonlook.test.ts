@@ -6,7 +6,8 @@ import { neonShellFor, NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
-import { DECK_KEY, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, neonSkyOf } from './neonlook';
+import { DECK_KEY, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, neonSkyOf, neonSunPosition } from './neonlook';
+import { BOSS_SPACE } from './bossspace';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -387,5 +388,35 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
     expect(night.sunIntensity).toBeLessThan(day.sunIntensity);
     expect(night.hemiIntensity).toBeGreaterThanOrEqual(1);
     expect([dusk.glow, night.glow]).toEqual([0.4, 1]);
+  });
+  it('lights a boss space with its own sun, colour, place and strength, the hemisphere leaning to its key, and gives the neon light back without one (#1551)', () => {
+    const [sun, hemisphere, plain] = [new THREE.DirectionalLight(), new THREE.HemisphereLight(), new THREE.HemisphereLight()];
+    lightNeon(new THREE.DirectionalLight(), plain);
+    const space = BOSS_SPACE.hull!;
+    lightNeon(sun, hemisphere, space);
+    expect(sun.color.getHex()).toBe(space.sun);
+    expect(sun.intensity).toBeCloseTo(NEON_LIGHT.sunIntensity * space.intensity);
+    expect(sun.position.toArray()).toEqual(neonSunPosition(30, space.elevation, space.azimuth));
+    expect(hemisphere.color.getHex()).not.toBe(plain.color.getHex());
+    lightNeon(sun, hemisphere);
+    expect([sun.color.getHex(), sun.intensity, hemisphere.color.getHex()]).toEqual([NEON_LIGHT.sun, NEON_LIGHT.sunIntensity, plain.color.getHex()]);
+    expect(sun.position.toArray()).toEqual(neonSunPosition());
+  });
+
+  it('gives a boss space its own rim, posts, slab, ground and sky, a run fight keeping its violet rim (#1551)', () => {
+    const glowHex = (hex: number): number => new THREE.Color(hex).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(hex).toArray())).getHex();
+    const colours = (): number[] => neonGlow([new THREE.Vector3(1, 0, 2)], true).children.map((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
+    const ground = (): string => (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.toArray().join();
+    const space = BOSS_SPACE.chaplain!;
+    neonDeckLook('mess');
+    const plainGround = ground();
+    neonDeckLook('chapel', false, space);
+    expect(colours()).toEqual([glowHex(space.key), glowHex(space.accent)]);
+    expect(ground()).not.toBe(plainGround);
+    neonDeckLook('chapel', true, space);
+    expect(colours()[0]).toBe(glowHex(RUN_KEY.key));
+    expect(neonSkyOf('chapel', space).getHex()).toBe(new THREE.Color(NEON.sky).lerp(new THREE.Color(space.key), space.sky).getHex());
+    expect(neonSkyOf('chapel', null).getHex()).toBe(neonSkyOf('chapel').getHex());
+    neonDeckLook('mess');
   });
 });

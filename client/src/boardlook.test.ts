@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
+import { BOARD_LOOKS, TERRACE_LOOK, terraceSpaceLook } from './boardlook';
+import { BOSS_SPACE } from './bossspace';
 import { SUN, TERRACE_EXPOSURE } from './tablezero';
 
 // The three boards of a lair fight (docs/specs/openworld.md section 11, #1496): data only, scene.ts applies them.
@@ -29,5 +30,13 @@ describe('the board looks', () => {
     expect(red(day.sun)).toBeGreaterThan(blue(day.sun)); // warm
     expect(red(dusk.sun)).toBeGreaterThan(blue(dusk.sun));
     expect(blue(night.sun)).toBeGreaterThan(red(night.sun)); // moonlight
+  });
+  it('a boss space on the terrace look takes the arena board and changes its sun, its hemisphere and its sky only (#1551)', () => {
+    const space = BOSS_SPACE.alien!;
+    const look = terraceSpaceLook(space);
+    expect(look).toMatchObject({ sun: space.sun, elevation: space.elevation, azimuth: space.azimuth, exposure: TERRACE_LOOK.exposure, tint: TERRACE_LOOK.tint, cell: TERRACE_LOOK.cell, edge: null });
+    expect(look.sunIntensity).toBeCloseTo(TERRACE_LOOK.sunIntensity * space.intensity);
+    expect(look.sky).not.toBe(TERRACE_LOOK.sky);
+    expect(look.background).not.toBe(TERRACE_LOOK.background);
   });
 });

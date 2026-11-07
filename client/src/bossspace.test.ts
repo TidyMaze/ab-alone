@@ -1,0 +1,67 @@
+// The space of each boss fight (#1551): its own light, surround, rim and scatter, from one table keyed by boss id.
+import { describe, expect, it } from 'vitest';
+import { BOSS_IDS, DECK_PARTICLES } from './deck';
+import { BOSS_SPACE, MESS_SPACE, bossSpaceOf, type BossSpace } from './bossspace';
+import doc from '../../docs/specs/art.md?raw';
+
+const bullet = doc.slice(doc.indexOf('- **Palette'), doc.indexOf('- **Materials'));
+const allowed = new Set((bullet.match(/#[0-9a-f]{6}\b/gi) ?? []).map((h: string) => h.toLowerCase()));
+const hex = (v: number): string => `#${v.toString(16).padStart(6, '0')}`;
+
+/** The ways two spaces can differ at a glance: the rim, the light's colour, where it comes from, how hard it is, how far the surround takes the key, the scatter. */
+function differences(a: BossSpace, b: BossSpace): string[] {
+  const out: string[] = [];
+  if (a.key !== b.key) out.push('key');
+  if (a.sun !== b.sun) out.push('sun');
+  if (Math.abs(a.azimuth - b.azimuth) >= 30) out.push('azimuth');
+  if (Math.abs(a.intensity - b.intensity) >= 0.15) out.push('intensity');
+  if (Math.abs(a.ground - b.ground) >= 0.15) out.push('surround');
+  if (a.scatter.kind !== b.scatter.kind || a.scatter.color !== b.scatter.color) out.push('scatter');
+  return out;
+}
+
+describe('the boss spaces (#1551)', () => {
+  it('has a space for every boss and no other', () => {
+    expect(Object.keys(BOSS_SPACE).sort()).toEqual([...BOSS_IDS].sort());
+    expect(BOSS_IDS).toHaveLength(15);
+  });
+
+  it('finds the space of a boss id, and none for a mode, a missing or an unknown boss', () => {
+    expect(bossSpaceOf('hull')).toBe(BOSS_SPACE.hull);
+    expect(bossSpaceOf(null)).toBeNull();
+    expect(bossSpaceOf(undefined)).toBeNull();
+    expect(bossSpaceOf('nobody')).toBeNull();
+  });
+
+  it('paints only with the palette of art.md', () => {
+    for (const [id, s] of Object.entries(BOSS_SPACE)) {
+      for (const c of [s.key, s.accent, s.sun, s.scatter.color]) expect([id, allowed.has(hex(c))]).toEqual([id, true]);
+    }
+  });
+
+  it('keeps the light where the cells and the marbles read: a sun well off the horizon, in front, not dimmer than 0.6 nor harder than 1.25', () => {
+    for (const [id, s] of Object.entries(BOSS_SPACE)) {
+      expect([id, s.elevation >= 14 && s.elevation <= 62]).toEqual([id, true]);
+      expect([id, Math.abs(s.azimuth) <= 110]).toEqual([id, true]);
+      expect([id, s.intensity >= 0.6 && s.intensity <= 1.25]).toEqual([id, true]);
+      expect([id, s.ground >= 0 && s.ground <= 0.6 && s.sky >= 0 && s.sky <= 0.5]).toEqual([id, true]);
+    }
+  });
+
+  it('keeps its scatter within the particle buffer of the scene, and light on the low tier', () => {
+    const buffer = Math.max(...Object.values(DECK_PARTICLES).map((p) => p.count));
+    for (const [id, s] of Object.entries(BOSS_SPACE)) expect([id, s.scatter.count <= buffer, s.scatter.opacity <= 0.4]).toEqual([id, true, true]);
+  });
+
+  it('tells any two bosses apart in at least three ways, so the fifteen read as fifteen places', () => {
+    const ids = Object.keys(BOSS_SPACE);
+    for (const [i, a] of ids.entries()) {
+      for (const b of ids.slice(i + 1)) expect([a, b, differences(BOSS_SPACE[a]!, BOSS_SPACE[b]!).length >= 3]).toEqual([a, b, true]);
+    }
+  });
+
+  it('never looks like the plain Mess table: each boss differs from it in at least three ways', () => {
+    expect(MESS_SPACE.scatter).toEqual(DECK_PARTICLES.mess);
+    for (const [id, s] of Object.entries(BOSS_SPACE)) expect([id, differences(s, MESS_SPACE).length >= 3]).toEqual([id, true]);
+  });
+});

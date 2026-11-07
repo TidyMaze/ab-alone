@@ -9,8 +9,9 @@ import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
 import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
-import { DECK_KEY, NEON, NEON_GLOW, NEON_LIGHT, neonGlow, neonMaterial, neonSkyOf } from './neonlook';
+import { DECK_KEY, NEON, NEON_GLOW, NEON_LIGHT, neonGlow, neonMaterial, neonSkyOf, neonSunPosition } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
+import { BOSS_SPACE } from './bossspace';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
@@ -698,6 +699,59 @@ describe('SceneRenderer (#632)', () => {
     const terrace = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
     terrace.applyDeck('cargo');
     expect(slab.color.toArray().join()).not.toBe(cargo); // the terrace leaves the slab alone
+  });
+
+  it('gives a boss fight its own sun, sky and rim under the neon look, and the neon light back on the next deck (#1551)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    sr.setTerrace(true);
+    sr.setNeon();
+    const space = BOSS_SPACE.hull!;
+    sr.applyDeck('cargo', false, space);
+    expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([space.sun, NEON_LIGHT.sunIntensity * space.intensity]);
+    expect(sr.sun.position.toArray()).toEqual(neonSunPosition(30, space.elevation, space.azimuth));
+    expect((sr.scene.background as THREE.Color).getHex()).toBe(neonSkyOf('cargo', space).getHex());
+    sr.applyDeck('mess');
+    expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([NEON_LIGHT.sun, NEON_LIGHT.sunIntensity]);
+    expect((sr.scene.background as THREE.Color).getHex()).toBe(neonSkyOf('mess').getHex());
+  });
+
+  it('leaves the sun to its owner while no boss space has been on, as the Open world sets it (#1551)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    sr.sun.intensity = 7;
+    sr.applyDeck('mess');
+    expect(sr.sun.intensity).toBe(7);
+  });
+
+  it('scatters the boss space around the board in place of the deck particles, and the deck ones come back (#1551)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const space = BOSS_SPACE.swarm!;
+    sr.applyDeck('cargo', false, space);
+    sr.updateParticles('high', false, false, false, false, 'cargo');
+    expect([sr.particleMaterial.color.getHex(), sr.particleMaterial.size, sr.particleMaterial.opacity, sr.particleGeometry.drawRange.count]).toEqual([space.scatter.color, space.scatter.size, space.scatter.opacity, space.scatter.count]);
+    sr.animateParticles(1000, 'cargo');
+    sr.animateParticles(1100, 'cargo');
+    expect(sr.particles.visible).toBe(true);
+    sr.applyDeck('cargo');
+    sr.updateParticles('high', false, false, false, false, 'cargo');
+    expect(sr.particleGeometry.drawRange.count).toBe(DECK_PARTICLES.cargo.count);
+  });
+
+  it('gives a boss fight its own sun and sky on the terrace look, a lair look keeping its own, and the arena light back after (#1551)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const space = BOSS_SPACE.alien!;
+    sr.applyDeck('cargo', false, space); // the terrace is not on yet: applied when it comes on
+    sr.setTerrace(true);
+    expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([space.sun, TERRACE_LOOK.sunIntensity * space.intensity]);
+    expect((sr.scene.background as THREE.Color).getHex()).not.toBe(TERRACE_LOOK.background);
+    sr.applyDeck('cargo', false, space); // the same space again: nothing redone
+    sr.applyDeck('mess');
+    expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([TERRACE_LOOK.sun, TERRACE_LOOK.sunIntensity]);
+    expect((sr.scene.background as THREE.Color).getHex()).toBe(TERRACE_LOOK.background);
+    sr.setBoardLook(BOARD_LOOKS.dusk);
+    sr.applyDeck('cargo', false, space);
+    expect(sr.sun.color.getHex()).toBe(BOARD_LOOKS.dusk.sun); // a lair's board is the Open world's
+    sr.setBoardLook(null);
+    expect(sr.sun.color.getHex()).toBe(space.sun); // the lair left: the space under it
   });
 
   it('keeps the key of the deck the page opened on when the neon look turns the terrace on (#1551)', () => {
