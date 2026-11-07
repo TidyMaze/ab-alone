@@ -95,6 +95,20 @@ describe('SceneRenderer (#632)', () => {
     expect(lights.map((l) => l.type).sort()).toEqual(['DirectionalLight', 'HemisphereLight']);
   });
 
+  it('takes the deck maps once they load, the plate and the rim as the look built with them, and leaves them flat without both (#1603)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const albedo = new THREE.Texture();
+    const roughness = new THREE.Texture();
+    const plate = sr.plate.material as THREE.MeshStandardMaterial;
+    const rims = [sr.rim.near, sr.rim.far].map((rim) => rim.material as THREE.MeshStandardMaterial);
+    sr.setDeckMaps(null, roughness);
+    sr.setDeckMaps(albedo, null);
+    expect([plate.map, ...rims.map((m) => m.map)]).toEqual([null, null, null]);
+    sr.setDeckMaps(albedo, roughness);
+    expect([plate.map, plate.roughnessMap, plate.roughness, plate.color.getHex()]).toEqual([albedo, roughness, 1, FRAME_LOOK.plate]);
+    for (const m of rims) expect([m.map, m.roughnessMap, m.roughness, m.color.getHex()]).toEqual([albedo, roughness, 1, FRAME_LOOK.rim]);
+  });
+
   it('draws the plate and the rim as flat tonal materials in the tonal look, whatever maps it is given (#1138)', () => {
     const map = new THREE.Texture();
     const sr = new SceneRenderer({ renderer: createMockRenderer(), plateAlbedo: map, rimAlbedo: map, tonal: true });

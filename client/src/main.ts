@@ -621,6 +621,11 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
   if (!deckNormalMaps.has(name)) deckNormalMaps.set(name, loadTexture(`deck-${name}-normal.ktx2`, false, true));
   return deckNormalMaps.get(name)!;
 };
+// The deck set (#1603, 60 KB): a page that opens in the Open world asks for it at the first board draw (loadBoard), not at the entry;
+// the other pages ask for it at the load, as ever. Until it is asked for, the steel, the plate, the rim and the crack are built flat.
+const deferDeck = bootsInWorld && !keepRoom;
+let deckSetAsked = !deferDeck;
+const atBoot = <T>(load: () => Promise<T | null>): Promise<T | null> => (deferDeck ? Promise.resolve(null) : load());
 // The worn skins' maps (#377, #925) are asked for in this tick, with the first maps: a skin's material is made later, with
 // the scene, and takes these requests. Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of
 // skins.ts and glassskins.ts, ambientCG PBR materials (CC0), opaque and in their own colours. The maps are square and turn
@@ -644,7 +649,7 @@ const skinMap = (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Pro
     }),
   );
 for (const s of [skinById(skin), glassSkinById(glass)]) if (asksSkinMaps(keepRoom, s.id, TERRACE_SKINS)) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
-const [
+let [
   deckAlbedo,
   deckRoughness,
   backdrop,
@@ -660,12 +665,12 @@ const [
   messRoughness,
   plateMetalness,
 ] = await Promise.all([
-  loadTexture('deck-albedo.ktx2', true, true),
-  loadTexture('deck-roughness.ktx2', false, true),
+  atBoot(() => loadTexture('deck-albedo.ktx2', true, true)),
+  atBoot(() => loadTexture('deck-roughness.ktx2', false, true)),
   loadTexture('backdrop.ktx2', true, false),
-  loadTexture('crack-decal.ktx2', false, false),
-  deckMap(deckOf('local')), // a page opens at the Mess
-  deckNormalMap(deckOf('local')),
+  atBoot(() => loadTexture('crack-decal.ktx2', false, false)),
+  atBoot(() => deckMap(deckOf('local'))), // a page opens at the Mess
+  atBoot(() => deckNormalMap(deckOf('local'))),
   // The board plate: brushed aluminium, ambientCG Metal051A (CC0), large swirls.
   loadTexture('pbr/board-albedo.ktx2', true, true),
   loadTexture('pbr/board-roughness.ktx2', false, true),
@@ -674,7 +679,7 @@ const [
   loadTexture('pbr/plate-roughness.ktx2', false, true),
   loadTexture('pbr/plate-normal.ktx2', false, true),
   // Concrete036's own roughness for the Mess cells (the shared one is rougher), Metal051A's metalness for the plate.
-  loadTexture('deck-mess-roughness.ktx2', false, true),
+  atBoot(() => loadTexture('deck-mess-roughness.ktx2', false, true)),
   loadTexture('pbr/board-metalness.ktx2', false, true),
 ]);
 
@@ -1746,6 +1751,7 @@ function applyDeck(next: Deck): void {
   layoutConsole();
   // The deck's texture set (#401, #440) once loaded, the steel when its file did not load; the frame keeps the steel.
   // Only on the textured look: a map added to the flat look would rebuild its pipeline. body[data-deck-set] is read by the e2e.
+  if (!deckSetAsked) return; // the Open world's page: the deck's maps wait for the first board draw (#1603)
   void Promise.all([deckMap(next), deckNormalMap(next)]).then(([map, normal]) => {
     if (deck !== next || !steel.map) return; // another deck started meanwhile, or the flat look
     steel.map = map ?? deckAlbedo;
@@ -4084,13 +4090,42 @@ function needBoard(): void {
   loadBoard();
   if (!terraceReady) veilCanvas();
 }
+/** The deck set (#1603), asked for at the first board draw of a page that opened in the Open world: the steel, the plate, the rim and the
+ * crack take its maps, then the deck in play its own. The terrace waits for it, so the first frame of the board is dressed. */
+function requestDeckSet(): Promise<void> {
+  if (deckSetAsked) return Promise.resolve();
+  deckSetAsked = true;
+  return Promise.all([loadTexture('deck-albedo.ktx2', true, true), loadTexture('deck-roughness.ktx2', false, true), loadTexture('crack-decal.ktx2', false, false), loadTexture('deck-mess-roughness.ktx2', false, true), deckNormalMap(deck)]).then(([albedo, roughness, crack, mess, normal]) => {
+    deckAlbedo = albedo;
+    deckRoughness = roughness;
+    crackDecal = crack;
+    messRoughness = mess;
+    if (crack) {
+      crack.anisotropy = renderer.getMaxAnisotropy();
+      crackMaterial.alphaMap = crack;
+      crackMaterial.needsUpdate = true;
+    }
+    sceneRenderer.setDeckMaps(albedo, roughness);
+    if (albedo && roughness) {
+      // the textured look of the steel, as built at the load: its own colour is white, its roughness the map's
+      steel.color.set(0xffffff);
+      steel.roughness = 1;
+      steel.map = albedo;
+      steel.roughnessMap = cellRoughness(deck);
+      if (normal) steel.normalMap = normal;
+      steel.needsUpdate = true;
+    }
+    applyDeck(deck); // the deck's own maps, and the steel dressed above
+    dirty = CHANGE_DRAWS;
+  });
+}
 /** Asks for the files of the board once: the bay of the room and the terrace. At the load, or for a page that opened in the Open world, when it is left (#1520). */
 function loadBoard(): void {
   if (boardRequested) return;
   boardRequested = true;
   void bayLoad().then(mountBay);
-  void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual'), terraceFile('slab-hub'), terraceFile('slab-royale')])
-  .then(([arena, kit, hint, props, ballast, dual, hubDeck, royaleSlab]) => {
+  void Promise.all([Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual'), terraceFile('slab-hub'), terraceFile('slab-royale')]), requestDeckSet()])
+  .then(([[arena, kit, hint, props, ballast, dual, hubDeck, royaleSlab]]) => {
     const drawn = mergeByMaterial(arena.scene, true, neonLook); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     terraceBoards.arena = drawn.getObjectByName('terrace_board') as THREE.Group;

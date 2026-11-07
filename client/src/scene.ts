@@ -417,6 +417,26 @@ export class SceneRenderer {
     if (this.neon && this.deck) neonDeckLook(this.deck, on);
   }
 
+  /** The deck's albedo and roughness, once their file loads (#1603): the plate and the rim were built flat, as the look without them,
+   * and take the maps as the look with them is built (the same colours and roughness). A null map leaves the flat look. */
+  setDeckMaps(albedo: THREE.Texture | null, roughness: THREE.Texture | null): void {
+    if (!albedo || !roughness) return;
+    const plate = this.plate.material as THREE.MeshStandardMaterial;
+    plate.map = albedo;
+    plate.roughnessMap = roughness;
+    plate.color.set(FRAME_LOOK.plate);
+    plate.roughness = 1;
+    plate.needsUpdate = true;
+    for (const rim of [this.rim.near, this.rim.far]) {
+      const material = rim.material as THREE.MeshStandardMaterial;
+      material.map = albedo;
+      material.roughnessMap = roughness;
+      material.color.set(FRAME_LOOK.rim);
+      material.roughness = 1;
+      material.needsUpdate = true;
+    }
+  }
+
   applyDeck(next: Deck, run = false): void {
     this.deck = next;
     this.runFight = run;

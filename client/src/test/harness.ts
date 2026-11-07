@@ -65,6 +65,8 @@ export interface Game {
   draws(): number;
   /** The model files (`arena.glb`, `openworld.glb`, ...) the page asked for so far, in order (#1520). */
   models(): string[];
+  /** The texture files (`deck-albedo.ktx2`, ...) the page asked for so far, in order (#1603). */
+  textures(): string[];
   /** The tone mapping (three's constant) and the exposure the renderer draws with now (#1520). */
   tone(): { mapping: number; exposure: number };
   /** The other end of the online room once the page goes online (Play online, an invite link), else null. */
@@ -184,6 +186,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   // The KTX2 texture loader (#700): each file under assets/ loads as a texture named after it, but the missing ones. As
   // the real one, it needs the renderer up first.
   const models: string[] = [];
+  const textures: string[] = [];
   const missing = (url: string): boolean => !!options.missing?.includes(url.slice(url.lastIndexOf('/') + 1));
   vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', async () => {
     const { Texture } = await vi.importActual<typeof import('three')>('three');
@@ -198,6 +201,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
         loadAsync = async (url: string): Promise<InstanceType<typeof Texture>> => {
           const name = url.slice(url.lastIndexOf('/') + 1);
           if (!this.ready) throw new Error('THREE.KTX2Loader: Missing initialization with `.detectSupport( renderer )`.');
+          textures.push(name);
           if (missing(url)) throw new Error(`404 ${name}`);
           return Object.assign(new Texture(), { name });
         };
@@ -421,6 +425,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     },
     draws: () => draws,
     models: () => models,
+    textures: () => textures,
     tone: () => ({ mapping: renderer!.toneMapping, exposure: renderer!.toneMappingExposure }),
     peer: () => peer,
     room: () => room,

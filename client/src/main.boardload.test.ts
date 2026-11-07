@@ -16,6 +16,9 @@ const byId = <T extends HTMLElement = HTMLButtonElement>(id: string): T => docum
 const data = () => document.body.dataset;
 const BOARD_FILES = ['spaceship-bay.glb', 'arena.glb', 'kit-arena.glb', 'kit-ring-hint.glb', 'kit-boss.glb', 'slab-ballast.glb', 'slab-dual.glb', 'slab-hub.glb', 'slab-royale.glb'];
 const boardFiles = (game: Game): string[] => game.models().filter((name) => BOARD_FILES.includes(name));
+// The deck set (#1603, 60 KB): the steel, the plate, the rim and the crack take it at the first board draw, not at the entry.
+const DECK_FILES = ['deck-albedo.ktx2', 'deck-roughness.ktx2', 'crack-decal.ktx2', 'deck-mess-roughness.ktx2', 'deck-mess.ktx2', 'deck-mess-normal.ktx2'];
+const deckFiles = (game: Game): string[] => game.textures().filter((name) => DECK_FILES.includes(name));
 const hooks = () => window as unknown as { __openworldFixture: (f: { hero: Axial; troop: Axial[] }) => void };
 /** The first seed with a generated marble within 10 cells of the spawn, and where it starts (as main.wild.test.ts). */
 const { seed, home } = (() => {
@@ -43,6 +46,7 @@ describe('the files of the board (#1520)', () => {
     expect(data().openworldAt).toBe('0,0');
     expect(game.models()).toContain('openworld.glb');
     expect(boardFiles(game)).toEqual([]);
+    expect(deckFiles(game)).toEqual([]);
     expect(data().bay).toBeUndefined();
     expect(byId('loading').hidden).toBe(false);
     game.frame();
@@ -68,6 +72,42 @@ describe('the files of the board (#1520)', () => {
     expect(data().bay).toBe('ready');
   });
 
+  it('a page that does not open in the world fetches the deck set at the load, as before (#1603)', async () => {
+    const game = await boot('?bot=off');
+    await game.settle();
+    expect(deckFiles(game)).toEqual(expect.arrayContaining(DECK_FILES.slice(0, 5)));
+    expect(data().deckSet).toBe('mess');
+  });
+
+  it('the deck set waits for the first board draw, and the board is drawn flat where its files do not load (#1603)', async () => {
+    const game = await boot('?bot=off&openworld=7', { missing: ['crack-decal.ktx2', 'deck-albedo.ktx2', 'deck-mess-normal.ktx2'] });
+    await game.settle();
+    expect(deckFiles(game)).toEqual([]);
+    byId('ship').click(); // the board is asked for: its deck set with it
+    expect(deckFiles(game)).toEqual(expect.arrayContaining(['deck-roughness.ktx2', 'deck-mess-roughness.ktx2', 'deck-mess.ktx2']));
+    await frames(game);
+    expect(data().scene).toBe('table-zero');
+    expect(data().deckSet).toBeUndefined(); // no albedo: the steel stays flat, as it does at the load when the file fails
+  });
+
+  it('on the high tier the deck set brings the normal map of the deck in play, with the first board draw (#1603)', async () => {
+    const game = await boot('?bot=off&openworld=7&quality=high');
+    await game.settle();
+    expect(deckFiles(game)).toEqual([]);
+    byId('ship').click();
+    expect(deckFiles(game)).toEqual(expect.arrayContaining(['deck-mess-normal.ktx2']));
+    await frames(game);
+    expect(data().deckSet).toBe('mess');
+  });
+
+  it('the deck set dresses the steel with its albedo and roughness when the normal map of the deck fails (#1603)', async () => {
+    const game = await boot('?bot=off&openworld=7&quality=high', { missing: ['deck-mess-normal.ktx2'] });
+    await game.settle();
+    byId('ship').click();
+    await frames(game);
+    expect(data().deckSet).toBe('mess');
+  });
+
   it('a page that comes back to a wild fight opens in the world and fetches none either', async () => {
     const game = await boot('?bot=off', { storage: { 'ab-alone.wild': '7' } });
     await game.settle();
@@ -84,6 +124,7 @@ describe('the files of the board (#1520)', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     hooks().__openworldFixture({ hero: neighbours(home)[0]!, troop: [] });
     expect(boardFiles(game).sort()).toEqual([...BOARD_FILES].sort()); // asked for as the wipe closes, half a second before the fight
+    expect(deckFiles(game)).toEqual(expect.arrayContaining(DECK_FILES.slice(0, 4))); // the deck set comes with them (#1603)
     vi.advanceTimersByTime(500);
     vi.useRealTimers();
     await frames(game);
