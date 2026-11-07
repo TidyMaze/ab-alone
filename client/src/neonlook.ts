@@ -3,7 +3,6 @@
 // it is never stored.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { abs, color, dot, float, normalView, positionViewDirection } from 'three/tsl';
 
 /** The approved numbers (mock/mock.js, directions.json). Neon is on edges, lines and lamps, never on a cell top. */
 export const NEON = {
@@ -187,18 +186,6 @@ export function neonMaterial(name: string): THREE.Material {
     );
   }
   return lit.get(kind)!;
-}
-
-/** The rim of the black shell (#1552): a fresnel glow in the cyan ring's colour, so the shell's edge reads on the dark gap
- * it stands over (0x0a0e18, 1.1:1 without it). `strength` scales the glow, `power` narrows it to the silhouette. */
-export const NEON_RIM = { colour: NEON.pedestalRing, strength: 2.2, power: 2 } as const;
-
-/** The black shell takes the rim under the neon look; the white side, and the look off, keep their material as it is. */
-export function neonMarbleRim<M extends THREE.Material>(side: 'black' | 'white', material: M, on: boolean): M {
-  if (side !== 'black' || !on) return material;
-  // A TSL emissive node, not onBeforeCompile: the renderer is WebGPU (its WebGL 2 fallback too), which never runs that hook.
-  const fresnel = float(1).sub(abs(dot(normalView, positionViewDirection)));
-  return Object.assign(material, { emissiveNode: color(NEON_RIM.colour).mul(fresnel.pow(float(NEON_RIM.power))).mul(float(NEON_RIM.strength)) });
 }
 
 /** The thin cyan hexagon of a cell, drawn in its gap: the brightest line of the board. One instance per cell. */
