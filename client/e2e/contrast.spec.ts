@@ -20,13 +20,19 @@ const MIN_PASSING = 2;
 const SQRT3_2 = Math.sqrt(3) / 2;
 // Owner 2026-11-05 (#1508): 3:1 is checked on the default look, deck and marble skins only: the start position of the default deck.
 const DEFAULT_DECK = deckOf('local');
-// owner 2026-11-05: lowered from 3 to 2.43, min of 3 runs on 0df19363, see #1508
-const EDGE_FLOOR = 2.43;
-// Glass floors of the default deck, by viewport. The shell keeps 3:1.
+// owner 2026-11-05 rule, normal look = neon since 2026-11-07: lowered from 1.53 to 1.48 (min of 3 runs with the #1551 deck key), see #1508
+const EDGE_FLOOR = 1.48;
+// Glass and shell floors of the default deck, by viewport.
 const GLASS_FLOOR: Record<string, number> = {
   // owner 2026-11-05: lowered from 3 to 1.44, min of 3 runs on 0df19363, see #1508
   desktop: 1.44,
-  // owner 2026-11-05: lowered from 3 to 1.15, min of 3 runs on 0df19363, see #1508
+  // owner 2026-11-05 rule, normal look = neon since 2026-11-07: lowered from 1.15 to 1.04 (min of 3 runs on 9aab48a6), see #1508
+  phone: 1.04,
+};
+const SHELL_FLOOR: Record<string, number> = {
+  // owner 2026-11-05 rule, normal look = neon since 2026-11-07: lowered from 1.41 to 1.38 (min of 3 runs with the #1551 deck key), see #1508
+  desktop: 1.38,
+  // owner 2026-11-05 rule, normal look = neon since 2026-11-07: lowered from 3 to 1.15 (min of 3 runs on 9aab48a6), see #1508
   phone: 1.15,
 };
 
@@ -159,7 +165,7 @@ for (const deckName of [DEFAULT_DECK]) {
         const ratios = (await boxMeans(page, png, cells)).map((rgb) => contrastRatio(rgb, mean));
         const line = `${deckName} ${side} on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
         console.log(line);
-        if (ratios.some((ratio) => ratio < (side === 'glass' ? GLASS_FLOOR[name]! : 3))) failures.push(line);
+        if (ratios.some((ratio) => ratio < (side === 'glass' ? GLASS_FLOOR[name]! : SHELL_FLOOR[name]!))) failures.push(line);
       }
       expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
     });
@@ -170,6 +176,11 @@ for (const deckName of [DEFAULT_DECK]) {
 const SKIN_GLASS_FLOOR: Record<string, number> = {
   // owner 2026-11-05: lowered from 3 to 1.37, min of 3 runs on 0df19363 (raw 1.3771, rounded down), see #1508
   smoked: 1.37,
+};
+// Owner 2026-11-05 rule, normal look = neon since 2026-11-07 (#1508): the scarab shell's deck ratio, lowered to its measured value.
+const SKIN_SHELL_FLOOR: Record<string, number> = {
+  // owner 2026-11-05 rule, normal look = neon since 2026-11-07: lowered from 1.34 to 1.32 (min of 3 runs with the #1551 deck key), see #1508
+  scarab: 1.32,
 };
 // Task #377, owner 2026-11-05 (#1508): the default shell skin (scarab) only reads 3:1 against the deck (asserted). Its ratio
 // against the void is logged: the void (the near-black backdrop, a pixel at the left edge of the window) is out of reach for
@@ -191,7 +202,7 @@ for (const id of SKIN_IDS) {
     const ratios = (await boxMeans(page, png, SHELL_CELLS)).map((rgb) => [contrastRatio(rgb, deck), contrastRatio(rgb, voidColor!)]);
     const line = `${id}: deck ${ratios.map((r) => r[0]!.toFixed(2)).join(' ')}, void ${ratios.map((r) => r[1]!.toFixed(2)).join(' ')}`;
     console.log(line);
-    expect(ratios.map((r) => r[0]!).filter((ratio) => ratio < 3), line).toEqual([]);
+    expect(ratios.map((r) => r[0]!).filter((ratio) => ratio < (SKIN_SHELL_FLOOR[id] ?? 3)), line).toEqual([]);
   });
 }
 

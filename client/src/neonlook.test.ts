@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, neonMarbleRim } from './neonlook';
+import { NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, neonMarbleRim } from './neonlook';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { contrastRatio } from './contrast';
@@ -19,6 +19,16 @@ const painted = (...hexes: number[]): THREE.BufferGeometry => {
 const at = (g: THREE.BufferGeometry, i: number): THREE.Color => new THREE.Color().fromBufferAttribute(g.attributes.color!, i);
 
 describe('the neon look (#1424)', () => {
+  it('draws the target arrow near-black under the neon look, 3:1 on the slate cell; the terrace keeps the kit arrow (#1508)', () => {
+    const kit = new THREE.MeshStandardMaterial({ color: 0x888888 });
+    const arrow = targetArrowMaterial(true, kit) as THREE.MeshBasicMaterial;
+    expect(arrow).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(arrow.color.getHex()).toBe(NEON.arrow);
+    const srgb = (hex: number) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255] as const;
+    expect(contrastRatio(srgb(NEON.arrow), srgb(NEON.cell)), 'arrow vs cell').toBeGreaterThanOrEqual(3);
+    expect(targetArrowMaterial(false, kit)).toBe(kit);
+  });
+
   it('is the default look: on with no look or ?look=neon, off for ?look=terrace and the board looks (#1424)', () => {
     for (const s of ['', '?bot=off', '?look=neon']) expect(neonLookOn(s)).toBe(true);
     for (const s of ['?look=terrace', '?bot=off&look=terrace', '?look=tonal', '?look=pbr', '?look=']) expect(neonLookOn(s)).toBe(false);

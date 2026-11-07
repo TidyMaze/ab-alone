@@ -28,7 +28,14 @@ export const NEON = {
   boulder: 0x2c2f36,
   blackMarble: 0x14161a,
   whiteMarble: 0xf2f0ea,
+  /** The target arrow (#1508): the terrace's near-black, flat, so it reads 3:1 on the slate cell at phone size. */
+  arrow: 0x0b0d0f,
 } as const;
+
+/** The target arrow's material (#1508): under the neon look, the flat near-black `NEON.arrow` (the kit's grey read 2.0:1 on phone);
+ * the terrace keeps the kit's own arrow. */
+const neonArrowMaterial = new THREE.MeshBasicMaterial({ name: 'neon_target_arrow', color: NEON.arrow });
+export const targetArrowMaterial = (neon: boolean, kit: THREE.Material): THREE.Material => (neon ? neonArrowMaterial : kit);
 
 /** The mock's light: a cold sun low on the left, a violet-tinted hemisphere, ACES at 1.15. */
 export const NEON_LIGHT = { sun: 0xe8f0ff, sunIntensity: 3.2, elevation: 24, azimuth: 50, sky: 0x9a6bff, skyMix: 0xe8eeff, skyAmount: 1, ground: 0x2a3347, hemisphere: 2.9, exposure: 1 } as const;

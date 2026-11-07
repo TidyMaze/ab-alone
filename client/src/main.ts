@@ -202,7 +202,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { neonBreachGeometry, neonEggGeometry, nextToSight, neonLookOn, neonMarbleRim, neonPedestal, neonTells, neonVeil, tellLook, NEON } from './neonlook';
+import { neonBreachGeometry, neonEggGeometry, nextToSight, neonLookOn, neonMarbleRim, neonPedestal, neonTells, neonVeil, tellLook, targetArrowMaterial, NEON } from './neonlook';
 import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, withoutHubStaircase, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_NOTES, DIFFICULTY_PERCENT, TELL_MODE, type Difficulty } from './difficulty';
@@ -4260,6 +4260,7 @@ function refresh(): void {
       if (kit) {
         wearKit(ring, kit.target, 0.078);
         wearKit(arrow, kit.arrow, 0.08);
+        arrow.material = targetArrowMaterial(neonLook, arrow.material) as THREE.MeshBasicMaterial; // the neon look's near-black arrow (#1508)
         arrow.rotation.y = arrowYaw(target.dir);
       }
       marbles.add(ring, arrow);
