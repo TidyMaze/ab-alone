@@ -1289,6 +1289,9 @@ function summaryHtml(map: MapNode[], run: Run): string {
     .join('');
 }
 
+/** The gap of a skipped row a shortcut runs down (#1543): the one nearest `x`, the first of two as near. */
+export const nearestGap = (gaps: readonly number[], x: number): number => gaps.reduce((a, g) => (Math.abs(g - x) < Math.abs(a - x) ? g : a));
+
 /** Tally's closing line of a run over (#1174): the audit reconciled with the army left, or voided; after stage 5 of the story a voided one speaks of the
  * player's own line (#1587). Optional flavour. */
 export const auditLine = (run: Run, stage = 1): string => (run.end === 'won' ? `Reconciled: ${run.army}.` : stage >= 5 ? VOIDED_LINE : 'Run voided. Audit reopened.');
@@ -1681,7 +1684,7 @@ export function mapHtml(map: MapNode[], run: Run, book = '', bosses?: BossRoster
           const mid = map.find((o) => o.act === n.act && o.row === n.row + 1)!;
           const width = map.filter((o) => o.act === n.act && o.row === n.row + 1).length;
           const gaps = Array.from({ length: Math.max(width - 1, 1) }, (_, k) => ((k + 1) / width) * 100); // between two nodes of the row skipped
-          const channel = gaps.reduce((a, g) => (Math.abs(g - (x1 + x2) / 2) < Math.abs(a - (x1 + x2) / 2) ? g : a));
+          const channel = nearestGap(gaps, (x1 + x2) / 2);
           return `<polyline points="${x1},${under(n)} ${channel},${above(mid)} ${channel},${under(mid)} ${x2},${above(m)}"${mark}/>`;
         }),
   );

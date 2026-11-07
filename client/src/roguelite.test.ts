@@ -125,6 +125,7 @@ import {
   type MapNode,
   type Run,
   type RunEvent,
+  nearestGap,
 } from './roguelite';
 import { memoryStore, type KeyStore } from './savegame';
 
@@ -2797,5 +2798,13 @@ describe('the town line of the banked blueprints (#1622)', () => {
 
   it('lists each blueprint the last dungeon banked on its own line, with its type and rule', () => {
     expect(bankedTownLine([1, 6])).toBe(`Banked by the last dungeon:<br>${blueprintText(1)}<br>${blueprintText(6)}`);
+  });
+});
+
+describe('nearestGap (#1543)', () => {
+  it('takes the gap nearest the link, the first of two as near', () => {
+    expect(nearestGap([33, 66], 70)).toBe(66);
+    expect(nearestGap([33, 66], 30)).toBe(33);
+    expect(nearestGap([25, 75], 50)).toBe(25);
   });
 });
