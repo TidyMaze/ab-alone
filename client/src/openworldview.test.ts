@@ -647,6 +647,22 @@ describe('a step moves only the props near the hero (#1054)', () => {
     expect(cellsOf(view, 'prop-mountain')).toContainEqual([-8, 0]); // a plain prop that the grown mesh keeps
     expect(new Set(cellsOf(view, 'prop-mountain').map(String)).size).toBe(view.drawn['prop-mountain']);
   });
+  it('a troop longer than its mesh grows the troop mesh, and the marbles stand on the new cells', () => {
+    const full = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > MAX_REACH || Math.abs(cy) > MAX_REACH) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(full));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const before = mesh(view, 'troop');
+    const troop: Axial[] = Array.from({ length: CAPACITY.troop + 1 }, (_, i) => [i - CAPACITY.troop, 0] as Axial);
+    view.join(troop);
+    isNot(mesh(view, 'troop'), before);
+    expect(mesh(view, 'troop').count).toBe(troop.length);
+  });
 });
 
 describe('the troop and the enemies on screen', () => {

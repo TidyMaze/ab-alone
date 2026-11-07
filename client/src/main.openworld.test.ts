@@ -110,6 +110,16 @@ describe('the Open world mode', () => {
     expect(hooks().__openworldCamera!(performance.now() + 5000).shake).toBe(0); // given a time, it draws the camera at it first (#1436)
   });
 
+  it('reads a scene mesh\'s look through a test hook: an instanced mesh with its colours, a plain one without, #1558', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const mesh = (window as unknown as { __openworldMesh: (name: string) => { count: number; instance: number[] | null } }).__openworldMesh;
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(mesh('enemies').instance).toHaveLength(3); // an instanced mesh: its first colour, r g b
+    expect(mesh('hero').instance).toBeNull(); // the hero is one plain mesh: no instance colours
+  });
+
   it('counts the point lights of the scene it draws: none in the Open world, within the budget (#1234)', async () => {
     const game = await boot('?bot=off&openworld=7&scene=room');
     const cost = () => (window as unknown as { __renderCost: { pointLights: number } }).__renderCost;
