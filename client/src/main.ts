@@ -176,6 +176,7 @@ import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailySeed, dailyTitle, recordDailyResult, utcDay, type Daily } from './daily';
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
+import { lobbyState, lobbyWaitMs, type LobbyMode } from './lobby';
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
 import { hookHost, netHook } from './hooks';
 import { hookTransport, p2pTransport } from './p2p';
@@ -6129,6 +6130,32 @@ inviteCopy.addEventListener('click', async () => {
   inviteBox.select();
   hud(' · invite link selected: copy it by hand');
 });
+// The offer (#1529, lobby.ts): a creator's Play online room that waited 30 s with no peer says nobody joined, and offers the bot
+// (not rated) and the invite link. Ranked, Co-op and a boss duel never offer: they wait for a second player only.
+const lobbyOffer = document.getElementById('lobby-offer')!;
+const lobbyBot = document.getElementById('lobby-bot') as HTMLButtonElement;
+const lobbyCopy = document.getElementById('lobby-copy') as HTMLButtonElement;
+let lobbyOpenedAt = 0; // when the creator's room opened its lobby; 0 with no room waiting
+let lobbyTimer: ReturnType<typeof setTimeout> | undefined;
+const lobbyMode = (): LobbyMode => (fight ? (duel ? 'duel' : 'coop') : rankedMode ? 'ranked' : 'online');
+/** Draws the offer from the room: a peer in hides it, the wait with none shows it. A wait in Play online re-arms its timer. */
+function syncOffer(): void {
+  clearTimeout(lobbyTimer);
+  const session = online;
+  const waitMs = lobbyWaitMs(location.search, navigator.webdriver);
+  const waited = session && lobbyOpenedAt ? Date.now() - lobbyOpenedAt : 0;
+  const state = session && lobbyOpenedAt
+    ? lobbyState(waited, session.presenceOf(3 - session.side) === 'waiting' ? 0 : 1, lobbyMode(), waitMs)
+    : 'joined';
+  lobbyOffer.hidden = state !== 'offer';
+  if (state === 'wait' && lobbyMode() === 'online') lobbyTimer = setTimeout(syncOffer, waitMs - waited);
+}
+lobbyBot.addEventListener('click', () => {
+  leaveMode(); // the room goes with its invite link: nothing of it was published or rated
+  applyDeck(deckOf('local'));
+  newGame();
+});
+lobbyCopy.addEventListener('click', () => inviteCopy.click());
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
 rematchButton.addEventListener('click', () => void online?.rematch());
 // Co-op (docs/specs/coop-boss.md section 3): every page plays the boss reply to each human move itself, from the same
@@ -6205,12 +6232,14 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     onlineLine = duel ? duelStatus(mine, role, opponent, session.isAgent(other)) : coop ? coopStatus(role, opponent, session.isAgent(other)) : onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
     onlineNote = netState;
     hud();
+    syncOffer();
   };
   const keys = await generateKeys();
   roomKeys = keys;
   const key = await fingerprint(keys.pub); // the creator's invite link carries it
   if (side === 1) {
     showInvite(inviteUrl(location.href, room, coop, key, duel), `Invite link: send it to your ${duel ? 'boss player' : coop ? 'partner' : 'opponent'}`);
+    lobbyOpenedAt = Date.now(); // the wait for a peer starts (#1529); note() below draws the offer
     openLobby(); // the link shows open until an opponent connects, no tap on Lobby needed
   }
   online = new OnlineSession({
@@ -6349,6 +6378,9 @@ coopButton.addEventListener('click', () => {
 });
 // Back to the hub from an online table (#522): the room is closed and the page is a local one again.
 function leaveOnline(): void {
+  lobbyOpenedAt = 0; // the wait and its offer end with the room (#1529)
+  clearTimeout(lobbyTimer);
+  lobbyOffer.hidden = true;
   if (!online) return;
   online = null;
   duel = false;

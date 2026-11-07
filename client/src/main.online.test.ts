@@ -157,6 +157,58 @@ describe('Play online', () => {
     expect(presence()).toBe('You are Black. Waiting for an opponent...');
   });
 
+  it('offers the bot and the invite link once the wait has no peer, and a peer joining hides the offer (#1529)', async () => {
+    const game = await boot('?bot=off&lobbywait=80');
+    game.openModes();
+    byId('play-online').click();
+    await until(game, () => data().seat === 'player');
+    await new Promise((done) => setTimeout(done, 150)); // the wait is 80 ms here (?lobbywait)
+    expect(byId('lobby-offer').hidden).toBe(false);
+    expect(byId('lobby-offer').textContent).toContain('Nobody has joined yet');
+    expect(byId('lobby-bot').textContent).toBe('Play the bot (not rated)');
+    expect(byId('lobby-copy').textContent).toBe('Copy invite link');
+    const white = await opponent(game.peer()!, game.room()!, 2);
+    await until(game, () => data().opponent === 'here');
+    expect(byId('lobby-offer').hidden).toBe(true);
+    expect(white.session).toBeDefined();
+  });
+
+  it('Copy invite link in the offer copies the link, as the Copy button does (#1529)', async () => {
+    clipboard(async () => {});
+    const game = await boot('?bot=off&lobbywait=80');
+    game.openModes();
+    byId('play-online').click();
+    await until(game, () => data().seat === 'player');
+    await new Promise((done) => setTimeout(done, 150));
+    byId('lobby-copy').click();
+    await until(game, () => calls() === 1);
+    expect(copied()).toBe(byId<HTMLInputElement>('invite').value);
+  });
+
+  it('Play the bot in the offer leaves the room, unrated and unpublished, and starts a bot game (#1529)', async () => {
+    const game = await boot('?bot=off&lobbywait=80');
+    game.openModes();
+    byId('play-online').click();
+    await until(game, () => data().seat === 'player');
+    await new Promise((done) => setTimeout(done, 150));
+    byId('lobby-bot').click();
+    expect(data().online).toBeUndefined();
+    expect(byId('lobby-offer').hidden).toBe(true);
+    expect(byId('invite').hidden).toBe(true);
+    expect(byId('new-game').hidden).toBe(false);
+    expect(location.hash).toBe('');
+  });
+
+  it('never offers the bot in Ranked, which waits for a second player only (#1529)', async () => {
+    const game = await boot('?bot=off&lobbywait=80');
+    declineBoard();
+    game.openModes();
+    byId('ranked').click();
+    await until(game, () => data().seat === 'player');
+    await new Promise((done) => setTimeout(done, 150));
+    expect(byId('lobby-offer').hidden).toBe(true);
+  });
+
   it('scrolls the button column back to the top, so no button above the link is left out of reach (#839)', async () => {
     const game = await boot('?bot=off');
     game.openModes();
