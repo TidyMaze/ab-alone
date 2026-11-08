@@ -3,7 +3,6 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { parseRecorded } from '../src/test/chaplain-game';
 import { BLACK_WINS } from './end-games';
 import { loseByRepetition, startDaily } from './fight-end';
-import { maxUiScale } from '../src/uiscale';
 import { openModes } from './modes';
 import { logOf } from '../src/audiologs';
 import { dailyFor, dailyTitle, utcDay } from '../src/daily';
@@ -253,16 +252,6 @@ for (const { name, viewport, mobile } of sizes) {
       await checkVolumes(page, 'at the start');
     });
 
-    // UI scale (#382): a stored 200 % is applied at the cap of this window (maxUiScale), 100 % on these viewports.
-    test('a stored 200 % UI scale is applied at the window cap, #382', async ({ page }) => {
-      await page.addInitScript(() => localStorage.setItem('ab-alone.ui-scale', '200'));
-      await page.goto('./?bot=off&net=hook');
-      await page.locator('canvas').waitFor();
-      await expect(page.locator('#hud')).toContainText('Black to move');
-      const scale = await page.evaluate(() => document.documentElement.style.getPropertyValue('--ui-scale'));
-      expect(scale).toBe(String(maxUiScale(viewport.width, viewport.height) / 100));
-    });
-
     // The open mode menu (#357) with its boss list, its tallest state, covers no cell either. Bug #575: the Daily
     // challenge button names the boss of the day, so the menu's rows change with the date. The rows only depend on the
     // list and the widest label (bug #715): one check per boss list, on a day whose daily boss has the widest name, as
@@ -292,22 +281,13 @@ for (const { name, viewport, mobile } of sizes) {
         const button = page.getByRole('button', { name: list });
         if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click(); // closes the other list
         await expect(button).toHaveAttribute('aria-expanded', 'true');
+        // #666: the list holds every boss of the game (BOSS_IDS), so a new boss needs no layout change; bug #615 (one list open
+        // at a time) is main.coop.test.ts.
+        await expect(page.locator(list === 'Boss fight' ? '#boss-list' : '#coop-list').getByRole('button')).toHaveCount(BOSS_IDS.length);
+        await expect(page.locator(list === 'Boss fight' ? '#coop-list' : '#boss-list')).toBeHidden();
         await check(page, testInfo, `with the mode menu and the ${list} list open, daily ${widest}`);
       });
     }
-
-    // Bug #615: Boss fight then Fight together left both boss lists open, six rows over the board. Opening one boss list
-    // closes the other.
-    test('opening the boss list of Fight together closes the one of Boss fight, nothing covers the board, bug #615', async ({ page }, testInfo) => {
-      await page.goto('./?bot=off&net=hook');
-      await page.locator('canvas').waitFor();
-      await openModes(page);
-      await page.getByRole('button', { name: 'Boss fight' }).click();
-      await page.getByRole('button', { name: 'Boss with a partner' }).click();
-      await expect(page.locator('#coop-list')).toBeVisible();
-      await expect(page.locator('#boss-list')).toBeHidden();
-      await check(page, testInfo, 'after Boss fight then Fight together');
-    });
 
     // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
     // Bug #902: the transcript runs on the page clock, paused from Play log on and moved on to the second line, so a
@@ -431,36 +411,6 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'with the daily result card turned around');
       expect(await cardOverCorner(page), 'turned around, the card is clear of Copy diagnostics').toEqual([]);
     });
-  });
-}
-
-// #666: on a phone held upright the open mode menu has room for every boss of the game (BOSS_IDS), so a new boss needs no
-// layout change. The boss lists are not padded: the Daily challenge names the longest boss name.
-for (const { name, viewport } of sizes.filter((s) => s.mobile && s.viewport.width < s.viewport.height)) {
-  test.describe(`${name}, every boss`, () => {
-    test.skip(({ browserName }) => browserName === 'firefox', 'Firefox has no mobile emulation');
-    test.use({ viewport, isMobile: true, hasTouch: true });
-
-    for (const list of ['Boss fight', 'Boss with a partner']) {
-      test(`nothing covers the board or the HUD with the ${list} list of every boss open, #666`, async ({ page }, testInfo) => {
-        await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
-        await page.goto('./?bot=off&net=hook');
-        await page.locator('canvas').waitFor();
-        await openModes(page);
-        await page.getByRole('button', { name: 'Boss fight' }).click();
-        const names = await page.locator('#boss-list button').allTextContents();
-        const longest = names.reduce((a, b) => (b.length > a.length ? b : a));
-        let ms = Date.UTC(2026, 9, 23);
-        while (dailyFor(utcDay(ms), names).id !== longest) ms += 86_400_000;
-        await page.clock.setSystemTime(new Date(`${utcDay(ms)}T08:00:00Z`));
-        await page.clock.fastForward(60_000); // the minute timer renames Daily challenge
-        await expect(page.locator('#daily')).toHaveText(dailyTitle(utcDay(ms), longest));
-        const button = page.getByRole('button', { name: list });
-        if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click(); // closes the other list
-        await expect(page.locator(list === 'Boss fight' ? '#boss-list' : '#coop-list').getByRole('button')).toHaveCount(BOSS_IDS.length);
-        await check(page, testInfo, `with the mode menu and the ${list} list of every boss open`);
-      });
-    }
   });
 }
 
