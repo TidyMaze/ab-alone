@@ -101,9 +101,9 @@ describe('main.ts boss entrance (#1551)', () => {
     const game = await boot('?entrance', { indexedDB });
     fight('The Stalker');
     expect(body().entrance).toBe('drop');
-    game.hook<(deck: string) => void>('__deck')('mess');
-    expect(body().entrance).toBeUndefined();
+    game.hook('__deck', 'mess');
     game.frame(16);
+    expect(body().entrance).toBeUndefined();
     expect(byId('boss-entrance').hidden).toBe(true);
     const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
     game.click(...move.cells[0]!);
@@ -134,6 +134,8 @@ describe('main.ts boss entrance (#1551)', () => {
     await game.hook('__run', state);
     expect(body().entrance).toBeUndefined(); // the map
     byId('run-map').querySelector<HTMLButtonElement>(`button[data-node="${path[path.length - 1]}"]`)!.click();
+    expect(body().run).toBe('bonus'); // the bonus room first (#1473), then the boss
+    byId('run-map').querySelector<HTMLButtonElement>('button[data-bonus]')!.click();
     expect(body().run).toBe('fight');
     expect(byId('boss-entrance').hidden).toBe(false);
     expect(body().entrance).toBeDefined();

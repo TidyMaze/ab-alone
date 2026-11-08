@@ -49,7 +49,7 @@ import { drawBossBar } from './bossbar';
 import { choirChips, drawChoirChips } from './choirchips';
 import { zoomView, boardZoomOn } from './boardzoom';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
-import { PushIn } from './pushin';
+import { Entrance, entranceCard } from './entrance';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
 import { openInEditor } from './editorexport';
@@ -780,8 +780,11 @@ function frameCamera(): void {
 }
 frameCamera();
 let view = resetView();
-// The boss camera's push-in when a lair starts the fight (#1519): eased from a farther pose into `view`, ended by the first press or key.
-const pushIn = new PushIn();
+// The entrance beat of a boss fight (#1551, replaces the lair push-in of #1519): the camera eased from the boss's side into `view`, the light rising from dark,
+// a card with the boss and its deck; ended by its time or the first press or key. A page under automation has none unless it asks with ?entrance (as ?locks).
+const entrance = new Entrance();
+const entranceAsked = !navigator.webdriver || new URLSearchParams(location.search).has('entrance');
+const entranceBox = document.getElementById('boss-entrance')!;
 // The terminal reader (#512): while the player reads the deck console, the view to go back to, else null.
 let reading: View | null = null;
 const consoleDef = spaceshipArchitecture(tier).find((p) => p.id === 'console-screen')!; // in every tier (room.ts)
@@ -797,14 +800,31 @@ let boardZoom = readBoardZoom(store);
 const boardZoomButton = document.getElementById('board-zoom') as HTMLButtonElement;
 const boardZoomHere = (): boolean => booted && !hub && !royale && !openWorld.active && !reading && !['pulsar', 'dual', 'ballast'].includes(fight?.id ?? '') && boardZoomOn(true, innerWidth, innerHeight);
 const boardZoomShown = (): boolean => boardZoom && boardZoomHere();
+/** The beat of boss `id` starts now, for a fight that begins (a fight that comes back from a reload has none); the caller draws the view. */
+function beginEntrance(id: string): void {
+  entrance.start(performance.now(), entranceAsked ? bossSpaceOf(id) : null, reducedMotion());
+  if (!entrance.active) return;
+  const card = entranceCard(boss_name(id)!, deckOf('boss', id));
+  document.getElementById('boss-entrance-name')!.textContent = card.name;
+  document.getElementById('boss-entrance-deck')!.textContent = card.deck;
+}
+/** The light, the card and the marker of the beat at this frame: the beat ends here once its time is over. */
+function syncEntrance(now: number): void {
+  entrance.step(now);
+  sceneRenderer.setEntranceLight(entrance.light(now));
+  entranceBox.hidden = !entrance.active;
+  if (entrance.active) document.body.dataset.entrance = entrance.name; // read by the e2e tests
+  else delete document.body.dataset.entrance;
+}
 function applyView(): void {
   dirty = CHANGE_DRAWS;
+  syncEntrance(performance.now());
   if (freeCam.active) {
     updateFreeCamCamera();
     return;
   }
   sceneRenderer.fogRadius = fogRadius;
-  sceneRenderer.applyView(boardZoomShown() ? zoomView(innerWidth, innerHeight) : (pushIn.frame(view, performance.now()) ?? view), sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
+  sceneRenderer.applyView(boardZoomShown() ? zoomView(innerWidth, innerHeight) : (entrance.frame(view, performance.now()) ?? view), sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
   placeHubLabels();
   boardZoomButton.hidden = !boardZoomHere();
 }
@@ -1765,6 +1785,7 @@ void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fo
 const cellRoughness = (name: Deck): THREE.Texture | null => (name === 'mess' ? (messRoughness ?? deckRoughness) : deckRoughness);
 let spaceBoss: string | null = null; // the boss whose space is on (#1551): a later redraw of the deck keeps it
 function applyDeck(next: Deck, boss: string | null = null): void {
+  if (entrance.snap()) syncEntrance(performance.now()); // a new deck ends the beat on the deck before it (card and marker too); the fight that starts one begins it after
   deck = next;
   spaceBoss = boss;
   sceneRenderer.applyDeck(deck, run !== null, bossSpaceOf(boss)); // a boss fight has its own space (#1551) // a rogue-lite fight's rim is violet (#1554)
@@ -3759,13 +3780,13 @@ function skipEjections(): void {
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
 addEventListener('keydown', skipEjections, { capture: true });
-// A press, a key or a turn of the wheel ends the boss camera's push-in on the final framing at once (#1519): nothing waits for it.
-const snapPushIn = (): void => {
-  if (pushIn.snap()) applyView();
+// A press, a key or a turn of the wheel ends the entrance beat on the final framing and the full light at once (#1551): nothing waits for it.
+const snapEntrance = (): void => {
+  if (entrance.snap()) applyView();
 };
-addEventListener('pointerdown', snapPushIn, { capture: true });
-addEventListener('keydown', snapPushIn, { capture: true });
-addEventListener('wheel', snapPushIn, { capture: true, passive: true });
+addEventListener('pointerdown', snapEntrance, { capture: true });
+addEventListener('keydown', snapEntrance, { capture: true });
+addEventListener('wheel', snapEntrance, { capture: true, passive: true });
 
 let selected: Axial[] = [];
 let keyDir = -1; // the direction picked with Q W E A S D for the selected group, -1 for none (#738)
@@ -5675,7 +5696,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   playCue('boss-intro', 0.12); // after the click on the boss, short so as not to ride on the tally line
   refresh(); // the HUD of the fight first: the view keeps off its plate
   view = fitted = fightView();
-  pushIn.start(performance.now(), { lair: lair !== null, reduced: reducedMotion() }); // a lair's fight pushes in, unless reduced motion (#1519)
+  if (!resumeFrom) beginEntrance(id); // a fight from a reload does not replay it
   applyView();
 }
 /** Whether the boss menu locks the bosses above the Hub's lifts (#1527): a player's browser does, an automated page (every other spec) only with `?locks`.
@@ -6452,6 +6473,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
   const fit = (): void => {
     if (coop) {
       view = fitted = fightView(); // as in a solo fight
+      beginEntrance(coop.boss); // a co-op fight and a duel open as a solo one does (#1551)
       applyView();
     }
   };
@@ -6608,7 +6630,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
   newGameButton.hidden = true;
   run = { map, state };
   void saveRun(gameStore, state);
-  if (resumed) fightRun(resumed);
+  if (resumed) fightRun(resumed, false);
   else {
     showRun();
     refresh();
@@ -6674,7 +6696,7 @@ function placeAt(q: number, r: number): void {
   refresh();
 }
 // A fight of the run: an act's boss plays as from the boss menu, its deck and view (#800); the others on the local deck.
-function fightRun(game: Engine | Encounter): void {
+function fightRun(game: Engine | Encounter, fresh = true): void {
   const boss = actBoss(run!.map, run!.state, boss_ids());
   fight = boss && { id: boss.id, seed: boss.seed };
   if (boss) document.body.dataset.boss = boss.id;
@@ -6692,6 +6714,7 @@ function fightRun(game: Engine | Encounter): void {
   refresh();
   applyDeck(deckOf(boss ? 'boss' : 'local', boss?.id), boss?.id);
   view = fitted = fightView();
+  if (boss && fresh) beginEntrance(boss.id); // a boss the run walks into, not one that comes back from a reload
   applyView();
   void botTurn(); // a fight saved while the bot was thinking
 }
@@ -7714,7 +7737,7 @@ renderer.setAnimationLoop((now) => {
     }
     return;
   }
-  if (pushIn.active) applyView(); // the boss camera's push-in eases each frame until it ends (#1519)
+  if (entrance.active) applyView(); // the entrance beat eases each frame until it ends (#1551)
   const moves = moving(); // before the effects run, so the frame that ends one draws
   const wanted = drawWanted(dirty > 0, moves, drawAsked, navigator.webdriver);
   if (moves) dirty = CHANGE_DRAWS; // its last picture draws twice too, for the bloom

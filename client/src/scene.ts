@@ -442,8 +442,27 @@ export class SceneRenderer {
     }
   }
 
+  /** The sun and the hemisphere of the fight while its entrance beat dims them (#1551), else null. */
+  private lit: { sun: number; hemisphere: number } | null = null;
+
+  /** The entrance beat of a boss fight (#1551) draws `share` of the fight's light, from dark up to 1, which gives the fight its own light back. */
+  setEntranceLight(share: number): void {
+    if (share >= 1) return this.restoreLight();
+    this.lit ??= { sun: this.sun.intensity, hemisphere: this.hemisphere.intensity };
+    this.sun.intensity = this.lit.sun * share;
+    this.hemisphere.intensity = this.lit.hemisphere * share;
+  }
+
+  private restoreLight(): void {
+    if (!this.lit) return;
+    this.sun.intensity = this.lit.sun;
+    this.hemisphere.intensity = this.lit.hemisphere;
+    this.lit = null;
+  }
+
   /** A boss fight passes its space (#1551): its sun, sky, rim and scatter in place of the deck's; null for every other game. */
   applyDeck(next: Deck, run = false, space: BossSpace | null = null): void {
+    this.restoreLight(); // a new deck while the beat dims the light: its own light is set below, not a dim one
     this.deck = next;
     this.runFight = run;
     const light = DECKS[next];
