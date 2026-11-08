@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { abs, clamp, color, dot, float, mix, normalize, normalView, positionViewDirection, pow, reflect, vec3 } from 'three/tsl';
 import type { Deck } from './deck';
-import type { BossSpace } from './bossspace';
+import type { Space } from './bossspace';
 import { mixHex, type Phase, type WorldLook } from './daynight';
 
 /** The approved numbers (mock/mock.js, directions.json). Neon is on edges, lines and lamps, never on a cell top. */
@@ -100,7 +100,7 @@ export function neonSunPosition(distance = 30, elevation: number = NEON_LIGHT.el
 }
 
 /** The sun and the hemisphere of the neon look; a boss space (#1551) changes the sun's colour, place and strength, and leans the hemisphere's sky to its key. */
-export function lightNeon(sun: THREE.DirectionalLight, hemisphere: THREE.HemisphereLight, space: BossSpace | null = null): void {
+export function lightNeon(sun: THREE.DirectionalLight, hemisphere: THREE.HemisphereLight, space: Space | null = null): void {
   sun.color.set(space ? space.sun : NEON_LIGHT.sun);
   sun.intensity = NEON_LIGHT.sunIntensity * (space ? space.intensity : 1);
   sun.position.set(...(space ? neonSunPosition(30, space.elevation, space.azimuth) : neonSunPosition()));
@@ -347,16 +347,16 @@ function glowMaterial(kind: 'rim' | 'post'): THREE.MeshBasicMaterial {
 }
 
 /** The sky of a deck under the neon look: `NEON.sky` with a little of the deck's key (#1551). */
-export const neonSkyOf = (deck: Deck, space: BossSpace | null = null): THREE.Color =>
+export const neonSkyOf = (deck: Deck, space: Space | null = null): THREE.Color =>
   new THREE.Color(NEON.sky).lerp(new THREE.Color(space ? space.surround : DECK_KEY[deck].key), space ? space.sky : SKY_TINT);
 
 /** The deck in play under the neon look (#1551): the slab takes its key over the slate, the rim glows in its key, the posts in its accent. */
-export function neonDeckLook(deck: Deck, run = false, space: BossSpace | null = null): void {
+export function neonDeckLook(deck: Deck, run = false, space: Space | null = null): void {
   const { key, accent } = run ? RUN_KEY : (space ?? DECK_KEY[deck]);
   // The slab's vertex colours run from the gap floor up to the rim: the rim's colour times this is the tinted slate.
   const [slab, top] = [new THREE.Color(NEON.slab).lerp(new THREE.Color(key), SLAB_TINT), new THREE.Color(NEON.rim)];
   (neonMaterial('scene_slab_arena') as THREE.MeshStandardMaterial).color.setRGB(slab.r / top.r, slab.g / top.g, slab.b / top.b);
-  const ground = new THREE.Color(NEON.ground).lerp(new THREE.Color(space && !run ? space.surround : key), space ? space.ground : GROUND_TINT);
+  const ground = new THREE.Color(NEON.ground).lerp(new THREE.Color(space ? space.surround : key), space ? space.ground : GROUND_TINT);
   const base = new THREE.Color(NEON.ground);
   (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.setRGB(ground.r / base.r, ground.g / base.g, ground.b / base.b);
   glowMaterial('rim').color.copy(glowColour(key));

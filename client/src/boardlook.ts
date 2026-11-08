@@ -2,8 +2,10 @@
 // lair at. Data only: scene.ts `setBoardLook` applies one to the terrace; a fight outside the Open world keeps `TERRACE_LOOK`, the board as it was.
 import type { Phase } from './daynight';
 import { SUN, TERRACE_EXPOSURE } from './tablezero';
-import type { BossSpace } from './bossspace';
+import type { Space } from './bossspace';
 import { mixHex } from './daynight';
+import type { Deck } from './deck';
+import { DECK_KEY } from './neonlook';
 
 export interface BoardLook {
   /** The sun by day, the moon by night: colour, strength and place (degrees over the horizon, and round the board). */
@@ -51,16 +53,23 @@ export const BOARD_LOOKS: Readonly<Record<Phase, BoardLook>> = {
   night: { sun: 0xe8f0ff, sunIntensity: 6, elevation: 40, azimuth: -35, sky: 0x7f90d0, ground: 0x2a3250, hemisphere: 1.2, background: 0x070a16, exposure: 1.5, tint: 0xa8b8e8, dome: 0x303a60, cell: 0xcadaff, edge: 0x4fc8ff },
 };
 
-/** The terrace look of a boss fight (#1551): the arena board with the boss space's sun, its hemisphere, the colour beyond the board and the tint of the lit board leaning to its surround. */
-export function terraceSpaceLook(space: BossSpace): BoardLook {
-  return {
-    ...TERRACE_LOOK,
-    sun: space.sun,
-    sunIntensity: TERRACE_LOOK.sunIntensity * space.intensity,
-    elevation: space.elevation,
-    azimuth: space.azimuth,
-    sky: mixHex(TERRACE_LOOK.sky, space.surround, space.sky * 0.2),
-    background: mixHex(TERRACE_LOOK.background, space.surround, space.sky),
-    tint: mixHex(TERRACE_LOOK.tint, space.surround, space.ground * 0.4), // the lit board and its rim lean to the surround, the cells' own multiplier unchanged
-  };
+/** The arena board with the colour beyond it, the sky and the tint of the lit board leaning to `surround`, ground 0 to 0.6 and sky 0 to 0.5 of the way. */
+const leaning = (surround: number, ground: number, sky: number): BoardLook => ({
+  ...TERRACE_LOOK,
+  sky: mixHex(TERRACE_LOOK.sky, surround, sky * 0.2),
+  background: mixHex(TERRACE_LOOK.background, surround, sky),
+  tint: mixHex(TERRACE_LOOK.tint, surround, ground * 0.4), // the lit board and its rim lean to the surround, the cells' own multiplier unchanged
+});
+
+/** The terrace look of a boss fight or an act of a run (#1551): the arena board with the space's sun, its hemisphere, the colour beyond the board and the tint of the lit board leaning to its surround. */
+export function terraceSpaceLook(space: Space): BoardLook {
+  return { ...leaning(space.surround, space.ground, space.sky), sun: space.sun, sunIntensity: TERRACE_LOOK.sunIntensity * space.intensity, elevation: space.elevation, azimuth: space.azimuth };
 }
+
+const DECK_LOOKS: Partial<Record<Deck, BoardLook>> = {
+  mess: leaning(mixHex(DECK_KEY.mess.key, 0xd9822b, 0.5), 0.6, 0.45), // the warm lamp of the laminate: its key with sodium, or the lamp's own off-white would not show
+  cargo: leaning(DECK_KEY.cargo.key, 0.6, 0.45), // the cold slate of the hold
+};
+
+/** The terrace look of a deck's own game (#1551), the surround the neon look gives a deck as its key: the Mess and the Cargo hold, the decks a fight can be played on with no boss space; null for the others. */
+export const terraceDeckLook = (deck: Deck): BoardLook | null => DECK_LOOKS[deck] ?? null;

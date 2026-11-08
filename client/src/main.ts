@@ -233,7 +233,7 @@ import type { Phase } from './daynight';
 import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
-import { bossSpaceOf } from './bossspace';
+import { actSpaceOf, bossSpaceOf } from './bossspace';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
 import { bossEndLine } from './bossends';
@@ -1784,11 +1784,16 @@ void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fo
 // The Mess cells have their own roughness (Concrete036), every other deck the shared one.
 const cellRoughness = (name: Deck): THREE.Texture | null => (name === 'mess' ? (messRoughness ?? deckRoughness) : deckRoughness);
 let spaceBoss: string | null = null; // the boss whose space is on (#1551): a later redraw of the deck keeps it
-function applyDeck(next: Deck, boss: string | null = null): void {
+let spaceAct: string | null = null; // or the biome of the act of the run (#1551)
+function applyDeck(next: Deck, boss: string | null = null, act: string | null = null): void {
   if (entrance.snap()) syncEntrance(performance.now()); // a new deck ends the beat on the deck before it (card and marker too); the fight that starts one begins it after
   deck = next;
   spaceBoss = boss;
-  sceneRenderer.applyDeck(deck, run !== null, bossSpaceOf(boss)); // a boss fight has its own space (#1551) // a rogue-lite fight's rim is violet (#1554)
+  spaceAct = act;
+  const space = bossSpaceOf(boss) ?? actSpaceOf(act); // a boss fight has its own space, a fight of a run the space of its act (#1551)
+  sceneRenderer.applyDeck(deck, run !== null, space); // a rogue-lite fight's rim is violet (#1554)
+  if (space) document.body.dataset.space = boss ?? act!; // read by the e2e tests
+  else delete document.body.dataset.space;
   if (steel.roughnessMap) steel.roughnessMap = cellRoughness(next); // only the textured look has one
   document.body.dataset.deck = deck; // read by the e2e tests
   applyLook();
@@ -4189,7 +4194,7 @@ function requestDeckSet(): Promise<void> {
       if (normal) steel.normalMap = normal;
       steel.needsUpdate = true;
     }
-    applyDeck(deck, spaceBoss); // the deck's own maps, and the steel dressed above
+    applyDeck(deck, spaceBoss, spaceAct); // the deck's own maps, and the steel dressed above
     dirty = CHANGE_DRAWS;
   });
 }
@@ -6715,7 +6720,7 @@ function fightRun(game: Engine | Encounter, fresh = true): void {
   thinking = false; // a bot reply to the last fight is dropped (botTurn)
   showRun();
   refresh();
-  applyDeck(deckOf(boss ? 'boss' : 'local', boss?.id), boss?.id);
+  applyDeck(deckOf(boss ? 'boss' : 'local', boss?.id), boss?.id, BIOMES[currentBiome(run!.map, run!.state)]!.id); // a boss its own space, any other fight its act's
   view = fitted = fightView();
   if (boss && fresh) beginEntrance(boss.id); // a boss the run walks into, not one that comes back from a reload
   applyView();

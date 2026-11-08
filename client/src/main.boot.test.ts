@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type * as THREEWebGPU from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { terraceDeckLook } from './boardlook';
 import { framing } from './camera';
 import { deckOf } from './deck';
 import { neonSkyOf } from './neonlook';
@@ -233,7 +234,7 @@ describe('the renderer and its textures', () => {
     const terrace = scene.getObjectByName('terrace')!;
     expect(terrace.getObjectByName('starfield')).toBeUndefined();
     expect(terrace.getObjectByName('terrace_edges')!.visible).toBe(false); // the lair fight at night lights it (#1496)
-    expect((scene.background as THREE.Color).getHex()).toBe(0x2c3438);
+    expect((scene.background as THREE.Color).getHex()).toBe(terraceDeckLook('mess')!.background); // the Mess's own surround (#1551)
   });
 
   it('reports the WebGL2 backend in the diagnostics', async () => {

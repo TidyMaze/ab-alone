@@ -709,6 +709,9 @@ like and asks, never what a run keeps.
   boss.
 - **Look**: the page tints the map plate and the board (`body[data-biome]`) with the biome's colour while the run is in it; the
   Meadow has none, and the run line names the biome (`act 2 fight · Tundra · Snake`). The summary lists the biomes of the run.
+  The fights of the act are also drawn in the biome's own space (#1551, art.md Decks, `ACT_SPACE`): its light, the colour of the ground and the sky
+  round the board and its scatter, the Meadow's included; the act's boss keeps its own boss space, and the violet rim and posts of a run stay. Nothing
+  is saved for it (a run loads as before and takes the space of its act).
 - **Bridge**: `run_exits(seed, act, from)` gives the codes of the two exits; `run_foes(seed, node, less, biome)` and the plan
   `[count, formation, biome, ...]` that `Engine::with_foes` stands carry the biome (the Open world's codes: `0` Meadow, `1` Forest,
   `2` Tundra, `3` Desert, `4` Badlands, `5` Archipelago). `engine_version` is unchanged (no game of another mode changes).

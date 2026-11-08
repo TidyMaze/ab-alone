@@ -65,11 +65,15 @@ export const DECK_PROPS: Record<Deck, readonly PropPart[]> = {
 };
 
 /** The prop's body: the deck's key lightened by this much of the white marble's token (`NEON.whiteMarble`), so it reads 3:1 on the black sky and on the terrace's
- * background even for the Chapel's dark violet, and still tells its deck. */
+ * background even for the Chapel's dark violet, and still tells its deck (the Mess excepted, below). */
 export const PROP_LIGHT = 0.35;
 
+/** The Mess's prop is dark instead, the black marble's token: its key and the white marble's token read pale on the Mess's pale ground (3:1 there, measured on the render). */
+export const MESS_PROP = NEON.blackMarble;
+
 /** The colour of a deck's prop. */
-export const deckPropColour = (deck: Deck): THREE.Color => new THREE.Color(DECK_KEY[deck].key).lerp(new THREE.Color(NEON.whiteMarble), PROP_LIGHT);
+export const deckPropColour = (deck: Deck): THREE.Color =>
+  deck === 'mess' ? new THREE.Color(MESS_PROP) : new THREE.Color(DECK_KEY[deck].key).lerp(new THREE.Color(NEON.whiteMarble), PROP_LIGHT);
 
 /** Every prop is drawn at this share of the sizes above: the beams stay clear of the window's edge and of the HUD at the camera's distance. */
 export const PROP_SCALE = 0.8;

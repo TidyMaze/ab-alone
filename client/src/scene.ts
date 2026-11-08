@@ -14,8 +14,8 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
-import { type BoardLook, TERRACE_LOOK, terraceSpaceLook } from './boardlook';
-import type { BossSpace } from './bossspace';
+import { type BoardLook, TERRACE_LOOK, terraceDeckLook, terraceSpaceLook } from './boardlook';
+import type { Space } from './bossspace';
 import { NEON, NEON_LIGHT, lightNeon, neonDeckLook, neonSkyOf, neonStars } from './neonlook';
 import { TERRACE_EXPOSURE, addSun, aimSunShadow, sunPosition } from './tablezero';
 
@@ -171,7 +171,7 @@ export class SceneRenderer {
   /** The lair fight's look (#1496), if one is asked for, and the colours the file's materials had before the looks. */
   private boardLook: BoardLook | null = null;
   /** The boss space of the fight on (#1551), its terrace look, and the look the terrace wears (null: the arena's own, never touched). */
-  private space: BossSpace | null = null;
+  private space: Space | null = null;
   private spaceLook: BoardLook | null = null;
   private worn: BoardLook | null = null;
   private readonly paints = new WeakMap<THREE.Material, THREE.Color>();
@@ -469,7 +469,7 @@ export class SceneRenderer {
   }
 
   /** A boss fight passes its space (#1551): its sun, sky, rim and scatter in place of the deck's; null for every other game. */
-  applyDeck(next: Deck, run = false, space: BossSpace | null = null): void {
+  applyDeck(next: Deck, run = false, space: Space | null = null): void {
     this.restoreLight(); // a new deck while the beat dims the light: its own light is set below, not a dim one
     this.deck = next;
     this.runFight = run;
@@ -639,9 +639,9 @@ export class SceneRenderer {
     this.dressTerrace();
   }
 
-  /** The look the terrace should wear: a lair's (the Open world's), else the boss space's, else the arena's. */
+  /** The look the terrace should wear: a lair's (the Open world's), else the space's of a boss or an act, else the deck's own surround (Mess, Cargo), else the arena's. */
   private lookWanted(): BoardLook {
-    return this.boardLook ?? this.spaceLook ?? TERRACE_LOOK;
+    return this.boardLook ?? this.spaceLook ?? (this.deck && terraceDeckLook(this.deck)) ?? TERRACE_LOOK;
   }
 
   private wear(look: BoardLook): void {
