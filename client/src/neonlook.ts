@@ -53,6 +53,22 @@ export const DECK_KEY: Record<Deck, { key: number; accent: number }> = {
 /** The key of a rogue-lite fight (#1554, art.md Decks): the violet of the run's own marks, on any deck, so the rim and the posts
  * tell a run's fight from a plain match on the same Mess arena at a glance. */
 export const RUN_KEY: { key: number; accent: number } = { key: NEON.violet, accent: NEON.violet };
+/** What a run's board says (#1554): its act (0 for the first) and whether an elite is being fought. */
+export interface RunCue {
+  act: number;
+  elite: boolean;
+}
+/** An elite's posts: the palette's hazard sodium (art.md), a second hue on the violet of the run, the harsher fight. */
+export const ELITE_ACCENT = 0xd9822b;
+const DANGER = 0xff6b5a; // the palette's danger red
+/** The run's key for `cue`: the violet leans to the danger red a quarter more each act, three quarters from the fourth act on, so a
+ * later act reads redder and the stakes higher on the rim, the slab edge and the posts. An elite fight is all hazard sodium, rim and
+ * posts, the harsher fight read from across the screen (art-opus, #1554 round 1). */
+export function runKey({ act, elite }: RunCue): { key: number; accent: number } {
+  if (elite) return { key: ELITE_ACCENT, accent: ELITE_ACCENT };
+  const key = new THREE.Color(RUN_KEY.key).lerp(new THREE.Color(DANGER), Math.min(act, 3) / 4).getHex();
+  return { key, accent: key };
+}
 /** The slab takes this much of its deck's key over the slate (`NEON.slab`), and the sky this much over `NEON.sky` (#1551). */
 export const SLAB_TINT = 0.12;
 /** The ground outside the board and the sky take this much of the key (#1551: the deck's identity is the surround). */
@@ -357,8 +373,8 @@ export const neonSkyOf = (deck: Deck, space: Space | null = null): THREE.Color =
   new THREE.Color(NEON.sky).lerp(new THREE.Color(space ? space.surround : DECK_KEY[deck].key), space ? space.sky : SKY_TINT);
 
 /** The deck in play under the neon look (#1551): the slab takes its key over the slate, the rim glows in its key, the posts in its accent. */
-export function neonDeckLook(deck: Deck, run = false, space: Space | null = null): void {
-  const { key, accent } = run ? RUN_KEY : (space ?? DECK_KEY[deck]);
+export function neonDeckLook(deck: Deck, run: RunCue | null = null, space: Space | null = null): void {
+  const { key, accent } = run ? runKey(run) : (space ?? DECK_KEY[deck]);
   // The slab's vertex colours run from the gap floor up to the rim: the rim's colour times this is the tinted slate.
   const [slab, top] = [new THREE.Color(NEON.slab).lerp(new THREE.Color(key), SLAB_TINT), new THREE.Color(NEON.rim)];
   (neonMaterial('scene_slab_arena') as THREE.MeshStandardMaterial).color.setRGB(slab.r / top.r, slab.g / top.g, slab.b / top.b);

@@ -16,7 +16,7 @@ import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAs
 import { ROOM_SURFACE, type StructuralPart } from './room';
 import { type BoardLook, TERRACE_LOOK, terraceDeckLook, terraceSpaceLook } from './boardlook';
 import type { Space } from './bossspace';
-import { NEON, NEON_LIGHT, lightNeon, neonDeckLook, neonSkyOf, neonStars } from './neonlook';
+import { NEON, NEON_LIGHT, lightNeon, neonDeckLook, neonSkyOf, neonStars, type RunCue } from './neonlook';
 import { TERRACE_EXPOSURE, addSun, aimSunShadow, sunPosition } from './tablezero';
 
 export const BONE = 0xd8d4c8;
@@ -421,13 +421,14 @@ export class SceneRenderer {
   /** The deck last applied: the neon sky set later (`setNeon`) takes its key. */
   private deck: Deck | null = null;
 
-  /** Whether the deck on is a rogue-lite fight's (#1554): its rim is violet until `setRunFight(false)`. */
-  private runFight = false;
+  /** The cue of the run on (#1554), its act and whether an elite is fought: the rim is violet until `setRunFight(null)`. */
+  private runFight: RunCue | null = null;
 
-  /** A rogue-lite fight's violet rim and posts (#1554), set at once: leaving a run gives the deck's own key back. */
-  setRunFight(on: boolean): void {
-    this.runFight = on;
-    if (this.neon && this.deck) neonDeckLook(this.deck, on, this.space);
+  /** A run's violet rim and posts (#1554), set at once: on its map too, a later act or an elite changes them, and leaving the run gives
+   * the deck's own key back. */
+  setRunFight(cue: RunCue | null): void {
+    this.runFight = cue;
+    if (this.neon && this.deck) neonDeckLook(this.deck, cue, this.space);
   }
 
   /** The deck's albedo and roughness, once their file loads (#1603): the plate and the rim were built flat, as the look without them,
@@ -469,7 +470,7 @@ export class SceneRenderer {
   }
 
   /** A boss fight passes its space (#1551): its sun, sky, rim and scatter in place of the deck's; null for every other game. */
-  applyDeck(next: Deck, run = false, space: Space | null = null): void {
+  applyDeck(next: Deck, run: RunCue | null = null, space: Space | null = null): void {
     this.restoreLight(); // a new deck while the beat dims the light: its own light is set below, not a dim one
     this.deck = next;
     this.runFight = run;

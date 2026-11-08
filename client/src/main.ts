@@ -354,6 +354,7 @@ import {
   chooseCommander,
   chooseExit,
   currentBiome,
+  runCue,
   exitHtml,
   claim,
   clearRun,
@@ -1796,7 +1797,7 @@ function applyDeck(next: Deck, boss: string | null = null, act: string | null = 
   spaceBoss = boss;
   spaceAct = act;
   const space = bossSpaceOf(boss) ?? actSpaceOf(act); // a boss fight has its own space, a fight of a run the space of its act (#1551)
-  sceneRenderer.applyDeck(deck, run !== null, space); // a rogue-lite fight's rim is violet (#1554)
+  sceneRenderer.applyDeck(deck, run && runCue(run.map, run.state), space); // a run: a violet rim, redder each act, sodium posts in an elite (#1554)
   if (space) document.body.dataset.space = boss ?? act!; // read by the e2e tests
   else delete document.body.dataset.space;
   if (steel.roughnessMap) steel.roughnessMap = cellRoughness(next); // only the textured look has one
@@ -6656,6 +6657,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
 // shop's (#1459), the placement before a fight's first move (in a boss fight when the boss takes the build, #1494), or the map.
 function showRun(): void {
   const { map, state } = run!;
+  sceneRenderer.setRunFight(runCue(map, state)); // its map is the run's board too, violet, an elite's sodium gone (#1554)
   recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
   recordAscension(store, state); // a run won unlocks the next ascension level (#1465)
   recordRunes(store, state.found); // an elite archetype beaten for the first time keeps its rune for good (#1476)
@@ -6800,7 +6802,7 @@ document.getElementById('hud')!.addEventListener('click', (e) => {
 function leaveRun(): void {
   if (!run) return;
   run = null;
-  sceneRenderer.setRunFight(false); // the violet of the run goes at once (#1554)
+  sceneRenderer.setRunFight(null); // the violet of the run goes at once (#1554)
   armed = 0;
   swapping = false;
   delete document.body.dataset.tactics;

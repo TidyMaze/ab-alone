@@ -9,11 +9,13 @@ import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
 import { BOARD_LOOKS, TERRACE_LOOK, terraceDeckLook, terraceSpaceLook } from './boardlook';
-import { DECK_KEY, NEON, NEON_GLOW, NEON_LIGHT, neonGlow, neonMaterial, neonSkyOf, neonSunPosition } from './neonlook';
+import { DECK_KEY, NEON, NEON_GLOW, NEON_LIGHT, neonGlow, neonMaterial, neonSkyOf, neonSunPosition, runKey } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
 import { ACT_SPACE, BOSS_SPACE } from './bossspace';
 import { DECK_PROPS, deckPropColour, deckPropGeometry, deckPropSpot } from './deckprop';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
+
+const ACT1 = { act: 0, elite: false }; // a plain fight of act 1 of a run (#1554)
 
 function createMockRenderer(): THREE.WebGPURenderer {
   const canvas = document.createElement('canvas');
@@ -307,20 +309,22 @@ describe('SceneRenderer (#632)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
     const rimColour = (): number => ((neonGlow([], true).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex();
     const glowHex = (hex: number): number => new THREE.Color(hex).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(hex).toArray())).getHex();
-    sr.applyDeck('mess', true);
+    sr.applyDeck('mess', ACT1);
     expect(rimColour()).toBe(glowHex(NEON.violet));
     sr.applyDeck('mess');
     expect(rimColour()).toBe(glowHex(DECK_KEY.mess.key));
-    sr.applyDeck('mess', true);
-    sr.setRunFight(false); // leaving a run drops the violet at once, without a new applyDeck (#1554)
+    sr.applyDeck('mess', ACT1);
+    sr.setRunFight(null); // leaving a run drops the violet at once, without a new applyDeck (#1554)
     expect(rimColour()).toBe(glowHex(DECK_KEY.mess.key));
+    sr.setRunFight({ act: 3, elite: true }); // the map of a later act, then an elite: the run's cue follows at once
+    expect(rimColour()).toBe(glowHex(runKey({ act: 3, elite: true }).key));
   });
 
   it('a rogue-lite flag before any deck, or off the neon look, changes no rim (#1554)', () => {
     const flat = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
-    expect(() => flat.setRunFight(true)).not.toThrow(); // no neon look: nothing to recolour
+    expect(() => flat.setRunFight(ACT1)).not.toThrow(); // no neon look: nothing to recolour
     const bare = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
-    expect(() => bare.setRunFight(true)).not.toThrow(); // no deck applied yet: nothing to recolour
+    expect(() => bare.setRunFight(ACT1)).not.toThrow(); // no deck applied yet: nothing to recolour
   });
 
   it('draws frame geometry and caches unchanged shapes', () => {
@@ -707,7 +711,7 @@ describe('SceneRenderer (#632)', () => {
     sr.setTerrace(true);
     sr.setNeon();
     const space = BOSS_SPACE.hull!;
-    sr.applyDeck('cargo', false, space);
+    sr.applyDeck('cargo', null, space);
     expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([space.sun, NEON_LIGHT.sunIntensity * space.intensity]);
     expect(sr.sun.position.toArray()).toEqual(neonSunPosition(30, space.elevation, space.azimuth));
     expect((sr.scene.background as THREE.Color).getHex()).toBe(neonSkyOf('cargo', space).getHex());
@@ -720,7 +724,7 @@ describe('SceneRenderer (#632)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
     sr.setTerrace(true);
     sr.setNeon();
-    sr.applyDeck('cargo', false, BOSS_SPACE.hull!);
+    sr.applyDeck('cargo', null, BOSS_SPACE.hull!);
     const [sun, hemisphere] = [sr.sun.intensity, sr.hemisphere.intensity];
     sr.setEntranceLight(0.25);
     expect([sr.sun.intensity, sr.hemisphere.intensity]).toEqual([sun * 0.25, hemisphere * 0.25]);
@@ -747,7 +751,7 @@ describe('SceneRenderer (#632)', () => {
   it('scatters the boss space around the board in place of the deck particles, and the deck ones come back (#1551)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     const space = BOSS_SPACE.swarm!;
-    sr.applyDeck('cargo', false, space);
+    sr.applyDeck('cargo', null, space);
     sr.updateParticles('high', false, false, false, false, 'cargo');
     expect([sr.particleMaterial.color.getHex(), sr.particleMaterial.size, sr.particleMaterial.opacity, sr.particleGeometry.drawRange.count]).toEqual([space.scatter.color, space.scatter.size, space.scatter.opacity, space.scatter.count]);
     sr.animateParticles(1000, 'cargo');
@@ -761,16 +765,16 @@ describe('SceneRenderer (#632)', () => {
   it('gives a boss fight its own sun and sky on the terrace look, a lair look keeping its own, and the arena light back after (#1551)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     const space = BOSS_SPACE.alien!;
-    sr.applyDeck('cargo', false, space); // the terrace is not on yet: applied when it comes on
+    sr.applyDeck('cargo', null, space); // the terrace is not on yet: applied when it comes on
     sr.setTerrace(true);
     expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([space.sun, TERRACE_LOOK.sunIntensity * space.intensity]);
     expect((sr.scene.background as THREE.Color).getHex()).not.toBe(TERRACE_LOOK.background);
-    sr.applyDeck('cargo', false, space); // the same space again: nothing redone
+    sr.applyDeck('cargo', null, space); // the same space again: nothing redone
     sr.applyDeck('mess');
     expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([TERRACE_LOOK.sun, TERRACE_LOOK.sunIntensity]);
     expect((sr.scene.background as THREE.Color).getHex()).toBe(terraceDeckLook('mess')!.background); // the Mess's own surround (#1551)
     sr.setBoardLook(BOARD_LOOKS.dusk);
-    sr.applyDeck('cargo', false, space);
+    sr.applyDeck('cargo', null, space);
     expect(sr.sun.color.getHex()).toBe(BOARD_LOOKS.dusk.sun); // a lair's board is the Open world's
     sr.setBoardLook(null);
     expect(sr.sun.color.getHex()).toBe(space.sun); // the lair left: the space under it
@@ -791,7 +795,7 @@ describe('SceneRenderer (#632)', () => {
     expect(background()).not.toBe(mess);
     sr.applyDeck('furnace');
     expect(background()).toBe(TERRACE_LOOK.background); // a deck with no surround of its own: the arena's
-    sr.applyDeck('mess', true, ACT_SPACE.tundra!); // an act of a run: its own space, not the deck's
+    sr.applyDeck('mess', ACT1, ACT_SPACE.tundra!); // an act of a run: its own space, not the deck's
     expect([sr.sun.color.getHex(), background()]).toEqual([ACT_SPACE.tundra!.sun, terraceSpaceLook(ACT_SPACE.tundra!).background]);
   });
 

@@ -7,8 +7,10 @@ import { mixHex } from './daynight';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
-import { DECK_KEY, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, neonSkyOf, neonSunPosition } from './neonlook';
+import { DECK_KEY, ELITE_ACCENT, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, runKey, neonSkyOf, neonSunPosition } from './neonlook';
 import { ACT_SPACE, BOSS_SPACE } from './bossspace';
+
+const ACT1 = { act: 0, elite: false }; // a plain fight of act 1 of a run (#1554)
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -254,11 +256,29 @@ describe('the neon look (#1424)', () => {
       const [rim, post] = neonGlow([new THREE.Vector3(1, 0, 2)], true).children.map((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
       return [rim!, post!];
     };
-    neonDeckLook('mess', true);
+    neonDeckLook('mess', ACT1);
     expect(colours()).toEqual([glowHex(RUN_KEY.key), glowHex(RUN_KEY.accent)]);
     expect(RUN_KEY.key).toBe(NEON.violet);
     neonDeckLook('mess');
     expect(colours()[0]).toBe(glowHex(DECK_KEY.mess.key));
+  });
+
+  it('leans the violet of a run toward the danger red act by act, the fourth act and later the most, and makes an elite all hazard sodium, rim and posts (#1554)', () => {
+    const glowHex = (hex: number): number => new THREE.Color(hex).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(hex).toArray())).getHex();
+    const redness = (hex: number): number => new THREE.Color(hex).r / new THREE.Color(hex).b;
+    const keys = [0, 1, 2, 3].map((act) => runKey({ act, elite: false }).key);
+    expect(keys[0]).toBe(RUN_KEY.key);
+    expect(new Set(keys.map(glowHex)).size).toBe(4); // still four apart once glowing
+    for (let i = 1; i < 4; i++) expect(redness(keys[i]!)).toBeGreaterThan(redness(keys[i - 1]!));
+    expect(keys[3]).toBe(new THREE.Color(NEON.violet).lerp(new THREE.Color(0xff6b5a), 0.75).getHex()); // three quarters to the danger token
+    expect(runKey({ act: 6, elite: false })).toEqual(runKey({ act: 3, elite: false }));
+    expect(runKey({ act: 0, elite: false }).accent).toBe(RUN_KEY.key); // a plain fight: violet posts
+    expect(runKey({ act: 2, elite: true })).toEqual({ key: ELITE_ACCENT, accent: ELITE_ACCENT });
+    expect(ELITE_ACCENT).toBe(0xd9822b); // the palette's sodium
+    neonDeckLook('mess', { act: 2, elite: true });
+    const [rim, post] = neonGlow([new THREE.Vector3(1, 0, 2)], true).children.map((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
+    expect([rim, post]).toEqual([glowHex(ELITE_ACCENT), glowHex(ELITE_ACCENT)]);
+    neonDeckLook('mess');
   });
 });
 
@@ -421,10 +441,10 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
     const space = BOSS_SPACE.chaplain!;
     neonDeckLook('mess');
     const plainGround = ground();
-    neonDeckLook('chapel', false, space);
+    neonDeckLook('chapel', null, space);
     expect(colours()).toEqual([glowHex(space.key), glowHex(space.accent)]);
     expect(ground()).not.toBe(plainGround);
-    neonDeckLook('chapel', true, space);
+    neonDeckLook('chapel', ACT1, space);
     expect(colours()[0]).toBe(glowHex(RUN_KEY.key));
     expect(neonSkyOf('chapel', space).getHex()).toBe(new THREE.Color(NEON.sky).lerp(new THREE.Color(space.surround), space.sky).getHex());
     expect(neonSkyOf('chapel', null).getHex()).toBe(neonSkyOf('chapel').getHex());
@@ -434,9 +454,9 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
   it('gives a rogue-lite act its own ground and sky on top of the violet rim and posts, which stay (#1551)', () => {
     const ground = (): string => (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.toArray().join();
     const glow = (): number => ((neonGlow([new THREE.Vector3(1, 0, 2)], true).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex();
-    neonDeckLook('mess', true);
+    neonDeckLook('mess', ACT1);
     const [violetGround, violetRim] = [ground(), glow()];
-    const grounds = new Set(Object.values(ACT_SPACE).map((space) => (neonDeckLook('mess', true, space), expect(glow()).toBe(violetRim), ground())));
+    const grounds = new Set(Object.values(ACT_SPACE).map((space) => (neonDeckLook('mess', ACT1, space), expect(glow()).toBe(violetRim), ground())));
     expect(grounds.size).toBe(Object.keys(ACT_SPACE).length); // six acts, six grounds
     expect(grounds.has(violetGround)).toBe(false); // none the run's plain violet one
     neonDeckLook('mess');

@@ -603,6 +603,13 @@ function lastNode(map: MapNode[], run: Run): MapNode | undefined {
   return map[node] && { ...map[node]!, kind: kindOf(map, run, node) };
 }
 
+/** What the run's board says (#1554, neonlook.ts `runKey`): the act of the last node picked (act 1's before the first pick), and an elite
+ * only while it is fought, so the map after it is violet again. */
+export function runCue(map: MapNode[], run: Run): { act: number; elite: boolean } {
+  const node = lastNode(map, run);
+  return { act: node ? node.act : 0, elite: run.fighting && node !== undefined && node.kind === 'elite' };
+}
+
 /** The biome of act `act` (0 for the first) of the run (#1472): `first` in act 1 (the Meadow unless the run began on a gate, #1597), the exit
  * picked before it later, and the Meadow throughout for a run saved before the exits. */
 export const biomeOf = (run: Run, act: number): number => (run.exits ? (act > 0 ? (run.biomes[act - 1] ?? 0) : run.first) : 0);

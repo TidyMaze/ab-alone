@@ -29,6 +29,7 @@ import {
   biomeOf,
   chooseExit,
   currentBiome,
+  runCue,
   exitHtml,
   exitOffers,
   chooseCommander,
@@ -2037,6 +2038,16 @@ describe('roguelite biomes (#1472)', () => {
     expect(currentBiome(THREE, { ...act2, path: [0, 1, 2, 3, 4, 5], biomes: [3, 5], end: 'won' })).toBe(0);
     expect(currentBiome(THREE, { ...act2, path: [0, 1, 2], fighting: true })).toBe(3);
     expect(currentBiome(THREE, { ...act2, exits: false })).toBe(0);
+  });
+
+  it('the run cue of the board follows the act of the last node, and an elite only while it is fought (#1554)', () => {
+    expect(runCue(THREE, fresh())).toEqual({ act: 0, elite: false });
+    expect(runCue(THREE, fresh({ fighting: true }))).toEqual({ act: 0, elite: false }); // no node picked yet
+    expect(runCue(THREE, fresh({ path: [0, 1, 2] }))).toEqual({ act: THREE[2]!.act, elite: false });
+    const elite = THREE.map((n, i) => (i === 2 ? { ...n, kind: 'elite' as const } : n));
+    expect(runCue(elite, fresh({ path: [0, 1, 2], fighting: true }))).toEqual({ act: THREE[2]!.act, elite: true });
+    expect(runCue(elite, fresh({ path: [0, 1, 2] }))).toEqual({ act: THREE[2]!.act, elite: false }); // back on the map
+    expect(THREE[2]!.act).toBe(1);
   });
 
   it('the bot\'s army of a fight is asked in the biome of its act', () => {
