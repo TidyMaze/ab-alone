@@ -7,6 +7,7 @@ use abalone_core::worldstep::{self, Entry};
 use abalone_core::worldwander;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::{Mutex, PoisonError};
 use wasm_bindgen::prelude::*;
 
 /// Bytes per cell: `[height, terrain, biome]`.
@@ -152,6 +153,28 @@ pub fn world_places(seed: u32) -> Vec<i32> {
     places_of(seed)
         .into_iter()
         .flat_map(|(kind, (q, r))| [kind as i32, q, r])
+        .collect()
+}
+
+/// A world's seed and its named landmarks (`world::landmarks`).
+type Landmarks = (u64, Vec<(i32, i32)>);
+
+/// The named landmarks of the last world asked for its cairns: the next chunk of the same world does not look for them again.
+static LANDMARKS: Mutex<Option<Landmarks>> = Mutex::new(None);
+
+/// The cairns of chunk `(cx, cy)` of the world `seed` (#1533, docs/specs/openworld.md section 13): `q, r` pairs, about one a chunk, so no
+/// open cell lies farther than 16 cells from a tower, a teleporter, a log, a place or a cairn. A look only, the hero walks over them.
+#[wasm_bindgen]
+pub fn world_cairns(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
+    let seed = u64::from(seed);
+    let mut known = LANDMARKS.lock().unwrap_or_else(PoisonError::into_inner);
+    if known.as_ref().is_none_or(|(of, _)| *of != seed) {
+        *known = Some((seed, world::landmarks(seed)));
+    }
+    let (_, landmarks) = known.as_ref().expect("just set");
+    world::cairns_in(seed, cx, cy, landmarks)
+        .into_iter()
+        .flat_map(|(q, r)| [q, r])
         .collect()
 }
 
@@ -769,6 +792,23 @@ mod tests {
         );
         assert_eq!(flat[..3], [0, 0, 0], "the spawn town first");
         assert_eq!(flat[3 * world::TOWNS], 1, "then the dungeon gates");
+    }
+
+    #[test]
+    fn the_cairns_are_q_r_pairs_that_match_the_core() {
+        let mut seen = 0;
+        for seed in [7, 8, 7] {
+            for (cx, cy) in [(0, 1), (3, -2)] {
+                let cells = world::cairns_in(seed, cx, cy, &world::landmarks(seed));
+                seen += cells.len();
+                let flat = world_cairns(seed as u32, cx, cy);
+                assert_eq!(
+                    flat,
+                    cells.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
+                );
+            }
+        }
+        assert!(seen > 0);
     }
 
     #[test]

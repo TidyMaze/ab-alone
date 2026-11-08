@@ -72,6 +72,7 @@ function remember<T>(cache: Map<number, T>, key: number, value: T, limit: number
 export class World {
   private readonly chunks = new Map<number, Tile[]>();
   private readonly groups = new Map<number, Axial[]>();
+  private readonly marks = new Map<number, Axial[]>();
   /** The cells the hero has broken, by chunk: applied on top of a chunk each time it is read from the engine (#1147). */
   private readonly smashed = new Map<number, Axial[]>();
   /** How many chunks, and how many enemy lists, are kept at once. */
@@ -80,10 +81,11 @@ export class World {
   get cached(): { chunks: number; enemies: number } {
     return { chunks: this.chunks.size, enemies: this.groups.size };
   }
-  /** `loadEnemies(cx, cy)` gives the enemy marbles that start in a chunk, `q, r` pairs. */
+  /** `loadEnemies(cx, cy)` gives the enemy marbles that start in a chunk, `loadCairns(cx, cy)` its cairns (#1533), `q, r` pairs. */
   constructor(
     private readonly load: (cx: number, cy: number) => Uint8Array,
     private readonly loadEnemies: (cx: number, cy: number) => Int32Array = () => new Int32Array(),
+    private readonly loadCairns: (cx: number, cy: number) => Int32Array = () => new Int32Array(),
   ) {}
 
   /** The chunk `(cx, cy)`, `[]` off the world. */
@@ -127,12 +129,22 @@ export class World {
 
   /** The enemy marbles that start in the chunk `(cx, cy)`. */
   enemies(cx: number, cy: number): readonly Axial[] {
+    return this.cells(this.groups, this.loadEnemies, cx, cy);
+  }
+
+  /** The cairns of the chunk `(cx, cy)` (#1533). */
+  cairns(cx: number, cy: number): readonly Axial[] {
+    return this.cells(this.marks, this.loadCairns, cx, cy);
+  }
+
+  /** The cells `load` gives for the chunk `(cx, cy)`, kept in `cache`. */
+  private cells(cache: Map<number, Axial[]>, load: (cx: number, cy: number) => Int32Array, cx: number, cy: number): readonly Axial[] {
     const key = keyOf(cx, cy);
-    let cells = touch(this.groups, key);
+    let cells = touch(cache, key);
     if (!cells) {
-      const flat = this.loadEnemies(cx, cy);
+      const flat = load(cx, cy);
       cells = Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
-      remember(this.groups, key, cells, this.limit);
+      remember(cache, key, cells, this.limit);
     }
     return cells;
   }

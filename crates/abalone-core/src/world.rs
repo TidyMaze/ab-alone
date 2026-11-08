@@ -913,6 +913,71 @@ fn places_within(seed: u64, avoid: &[(i32, i32)], tries: i32) -> Vec<(PlaceKind,
     found
 }
 
+/// The named landmarks of the world `seed` (#1533): the towers, the teleporters, the lore logs and the places, each kept off the ones before
+/// it as the bridge keeps them. From the seed alone.
+pub fn landmarks(seed: u64) -> Vec<(i32, i32)> {
+    let mut found = towers(seed);
+    found.extend(teleporters(seed, &found.clone()));
+    let logs = logs(seed, &found);
+    found.extend(logs.into_iter().flatten());
+    let places = places(seed, &found);
+    found.extend(places.into_iter().map(|(_, cell)| cell));
+    found
+}
+
+/// The farthest an open cell may lie from a landmark, in cells (#1533): the cairns fill the gaps the named landmarks leave.
+pub const LANDMARK_REACH: i32 = 16;
+/// A landmark this close to the middle of a chunk stands for the chunk's cairn.
+const CAIRN_CLEAR: i32 = 8;
+/// No cairn stands this close to a landmark.
+const CAIRN_SPACE: i32 = 3;
+/// A cairn is drawn at random among the cells this close to the middle of its chunk.
+const CAIRN_CORE: i32 = 3;
+const CAIRN_SALT: u64 = 70;
+
+/// The cairns of chunk `(cx, cy)` of the world `seed` (#1533, docs/specs/openworld.md section 13), given its named `landmarks`: about one a
+/// chunk, so no open cell lies farther than `LANDMARK_REACH` from a landmark. A look only: it changes no cell, so `WORLD_VERSION` does not
+/// move. None off the world or with a landmark within `CAIRN_CLEAR` of the chunk's middle. Else its fit cells
+/// (open ground, no generated enemy on it, no landmark within `CAIRN_SPACE`) are tried at random within `CAIRN_CORE` of the middle, then
+/// ring by ring: the first is a cairn, and so is each next one farther than `LANDMARK_REACH` from them all (a far corner of the chunk, or
+/// another patch of land).
+pub fn cairns_in(seed: u64, cx: i32, cy: i32, landmarks: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    let middle = (cx * CHUNK + CHUNK / 2, cy * CHUNK + CHUNK / 2);
+    if !chunk_in_world(cx, cy)
+        || landmarks
+            .iter()
+            .any(|&l| hex_distance(l, middle) <= CAIRN_CLEAR)
+    {
+        return vec![];
+    }
+    let window = Window::new(seed, cx, cy);
+    let enemies = enemy_groups(seed, cx, cy).concat();
+    let fit = |(q, r): (i32, i32)| {
+        in_world(q, r)
+            && !window.cell(q, r).terrain.blocked()
+            && !enemies.contains(&(q, r))
+            && landmarks
+                .iter()
+                .all(|&l| hex_distance(l, (q, r)) > CAIRN_SPACE)
+    };
+    // The order of the tries is drawn before any cell is read: a chunk of land reads a few cells, not its 256.
+    let mut tries: Vec<(i32, u32, (i32, i32))> = (0..CHUNK)
+        .flat_map(|dr| (0..CHUNK).map(move |dq| (cx * CHUNK + dq, cy * CHUNK + dr)))
+        .map(|at| {
+            let draw = (unit(seed, CAIRN_SALT, at.0, at.1) * f64::from(u32::MAX)) as u32;
+            (hex_distance(at, middle).max(CAIRN_CORE), draw, at)
+        })
+        .collect();
+    tries.sort_unstable();
+    let mut found: Vec<(i32, i32)> = Vec::new();
+    for (_, _, at) in tries {
+        if found.iter().all(|&c| hex_distance(c, at) > LANDMARK_REACH) && fit(at) {
+            found.push(at);
+        }
+    }
+    found
+}
+
 /// The farthest a hero path reaches from its start, in cells (docs/specs/openworld.md section 4).
 pub const PATH_RADIUS: i32 = 40;
 /// The most cells one path search expands before it gives up.
@@ -2758,5 +2823,135 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The largest landmark-free radius of the world `seed` (#1533): the farthest any open cell lies from the nearest of `landmarks`, in
+    /// cells (hex distance, through anything). A breadth-first search from every landmark at once over the cells of the world.
+    fn landmark_gap(seed: u64, landmarks: &[(i32, i32)]) -> i32 {
+        let side = 2 * WORLD_RADIUS + 1;
+        let at = |q: i32, r: i32| ((r + WORLD_RADIUS) * side + q + WORLD_RADIUS) as usize;
+        let mut open = vec![false; (side * side) as usize];
+        let chunks = WORLD_RADIUS / CHUNK + 1;
+        for cy in -chunks..=chunks {
+            for cx in -chunks..=chunks {
+                for (i, c) in chunk(seed, cx, cy).unwrap_or_default().iter().enumerate() {
+                    let (q, r) = (cx * CHUNK + i as i32 % CHUNK, cy * CHUNK + i as i32 / CHUNK);
+                    if c.is_some_and(|c| !c.terrain.blocked()) {
+                        open[at(q, r)] = true;
+                    }
+                }
+            }
+        }
+        let mut seen = vec![-1; (side * side) as usize];
+        let mut queue = std::collections::VecDeque::new();
+        for &(q, r) in landmarks.iter().filter(|&&(q, r)| in_world(q, r)) {
+            seen[at(q, r)] = 0;
+            queue.push_back((q, r));
+        }
+        let mut gap = 0;
+        while let Some((q, r)) = queue.pop_front() {
+            let d = seen[at(q, r)];
+            if open[at(q, r)] {
+                gap = gap.max(d);
+            }
+            for (dq, dr) in STEPS {
+                let (nq, nr) = (q + dq, r + dr);
+                if in_world(nq, nr) && seen[at(nq, nr)] < 0 {
+                    seen[at(nq, nr)] = d + 1;
+                    queue.push_back((nq, nr));
+                }
+            }
+        }
+        gap
+    }
+
+    /// Every cairn of the world `seed`, chunk by chunk.
+    fn cairns(seed: u64, landmarks: &[(i32, i32)]) -> Vec<(i32, i32)> {
+        let chunks = WORLD_RADIUS / CHUNK + 1;
+        (-chunks..=chunks)
+            .flat_map(|cy| (-chunks..=chunks).map(move |cx| (cx, cy)))
+            .flat_map(|(cx, cy)| cairns_in(seed, cx, cy, landmarks))
+            .collect()
+    }
+
+    #[test]
+    fn no_open_cell_lies_farther_than_landmark_reach_from_a_landmark() {
+        for seed in [7, 11, 23] {
+            let named = landmarks(seed);
+            let before = landmark_gap(seed, &named);
+            let mut all = named.clone();
+            all.extend(cairns(seed, &named));
+            let after = landmark_gap(seed, &all);
+            println!("#1533 seed {seed}: largest landmark-free radius {before} cells before cairns, {after} with them");
+            assert!(
+                before > LANDMARK_REACH,
+                "seed {seed}: the named landmarks alone leave {before}"
+            );
+            assert!(
+                after <= LANDMARK_REACH,
+                "seed {seed}: {after} cells from any landmark"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cairn_stands_on_open_ground_off_the_landmarks_and_far_from_its_chunk_twin() {
+        let named = landmarks(7);
+        let cells = cairns(7, &named);
+        assert_eq!(cells, cairns(7, &named), "the same seed, the same cairns");
+        let count = cells.len();
+        assert!(count > 1000, "{count} cairns");
+        let chunk_of = |(q, r): (i32, i32)| (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
+        for (i, &a) in cells.iter().enumerate() {
+            let twin = cells[i + 1..].iter().find(|&&b| chunk_of(b) == chunk_of(a));
+            assert!(
+                twin.is_none_or(|&b| hex_distance(a, b) > LANDMARK_REACH),
+                "{a:?} {twin:?}"
+            );
+        }
+        for &(q, r) in &cells {
+            assert!(cell(7, q, r).is_some_and(|c| !c.terrain.blocked()));
+            assert!(named.iter().all(|&l| hex_distance(l, (q, r)) > CAIRN_SPACE));
+            assert!(!is_enemy(7, q, r));
+        }
+    }
+
+    #[test]
+    fn a_landmark_near_the_middle_of_a_chunk_stands_for_its_cairn() {
+        let (cx, cy) = (0, 0);
+        let middle = (cx * CHUNK + CHUNK / 2, cy * CHUNK + CHUNK / 2);
+        assert!(!cairns_in(7, cx, cy, &[]).is_empty());
+        assert!(cairns_in(7, cx, cy, &[middle]).is_empty());
+        assert!(cairns_in(7, 40, 40, &[]).is_empty(), "off the world");
+    }
+
+    #[test]
+    fn a_chunk_whose_land_lies_in_two_patches_far_apart_holds_a_cairn_on_each() {
+        // Chunk (27, -15) of seed 23: a strip of shore at each end, 22 cells apart.
+        let cells = cairns_in(23, 27, -15, &[]);
+        assert_eq!(cells.len(), 2, "{cells:?}");
+        assert!(hex_distance(cells[0], cells[1]) > LANDMARK_REACH);
+    }
+
+    #[test]
+    fn a_chunk_with_no_open_cell_holds_no_cairn() {
+        // The first chunk of seed 7 with no open cell: deep water or a range of peaks.
+        let blocked = (-27..27)
+            .flat_map(|cy| (-27..27).map(move |cx| (cx, cy)))
+            .filter(|&(cx, cy)| chunk_in_world(cx, cy))
+            .find(|&(cx, cy)| {
+                full_or_none(7, cx, cy)
+                    .is_some_and(|cells| cells.iter().all(|c| c.terrain.blocked()))
+            })
+            .expect("a chunk all blocked");
+        assert!(cairns_in(7, blocked.0, blocked.1, &[]).is_empty());
+    }
+
+    /// The cells of a chunk of the world, `None` when the edge crosses it.
+    fn full_or_none(seed: u64, cx: i32, cy: i32) -> Option<Vec<Cell>> {
+        chunk(seed, cx, cy)
+            .expect("a chunk of the world")
+            .into_iter()
+            .collect()
     }
 }

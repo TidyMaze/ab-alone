@@ -121,6 +121,8 @@
 //!   the lairs (docs/specs/openworld.md section 10).
 //! - Open world places (`world_places(seed)`): the towns then the dungeon gates, `kind, q, r` triples (`kind` `0` a town, `1` a dungeon
 //!   gate), the spawn town first, kept off the lairs, the teleporters and the logs (docs/specs/openworld.md section 13).
+//! - Open world cairns (`world_cairns(seed, cx, cy)`): the cairns of a chunk, `q, r` pairs, about one a chunk, so no open cell lies farther than 16 cells from a
+//!   landmark (#1533, docs/specs/openworld.md section 13).
 //! - Open world push (`world_push(seed, troop, enemies, broken)`): `troop` is the hero's cell then the troop's,
 //!   `enemies` the enemy marbles near the hero, `q, r` pairs. Empty when no push is legal, else
 //!   `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies, ...enemies, dir_q, dir_r]`:
@@ -142,8 +144,8 @@ pub use game::{replay_score, Engine};
 pub use royale::Royale;
 pub use run::{run_exits, run_foes, run_map};
 pub use world::{
-    world_chunk, world_lairs, world_logs, world_places, world_rings, world_teleporters,
-    world_version,
+    world_cairns, world_chunk, world_lairs, world_logs, world_places, world_rings,
+    world_teleporters, world_version,
 };
 
 #[cfg(test)]

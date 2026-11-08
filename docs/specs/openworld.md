@@ -610,6 +610,12 @@ plan as the game.
 - **Marker.** A flat pad on the cell, the teleporter's pad recoloured to the map icons' colours, cyan on a town and sodium on a gate (#1518)
   (`town-pad`, `gate-pad`, `OpenWorldView.setPlaces`), lit at night as the teleporters are. No plate label: lairs have none. Real models are #1518.
 - **Transition** (#1519). Entering a town or a gate, like a tower (section 7), plays the transition of motion.md story 10 over the Hub or the run that starts at once, and "Back to the Open world" plays the matching one over the world.
+- **Cairns** (#1533). No open cell lies more than `LANDMARK_REACH` (16) cells from a landmark: a tower, a teleporter, a log, a place or a
+  cairn. `cairns` of abalone-core puts one near the middle of each chunk (at random within 3 cells of it, on open ground, no enemy, no
+  landmark within 3), none where a landmark lies within 8 of the middle, and a second one on a chunk cell farther than 16 from the first.
+  Largest landmark-free radius before / after: seed 7 118 / 16, seed 11 120 / 15, seed 23 200 / 14 (about 2 400 cairns a world). A look
+  only (`world_cairns`, `OpenWorldView.setCairns`): three slate stones under a glowing sodium cap, walked over like a pad; the world's cells
+  and `WORLD_VERSION` do not change. Boulders, pines and gantry walls are scatter, not landmarks.
 - **Not now**: moving the Hub's stations, 3D models of the places (#1518), the door grammar (#1517).
 
 ## 14. The goal on arrival (#1530)

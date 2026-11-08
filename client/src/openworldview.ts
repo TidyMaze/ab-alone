@@ -441,6 +441,16 @@ function crownGeometry(): THREE.BufferGeometry {
 }
 /** A lore log (#1589): a tall amber stake that glows while unread, a short dull grey one once found (the shape changes, not only the colour). */
 export const LOG_LOOK = { open: 0xffd166, found: 0x8d9792, height: { open: 1, found: 0.45 }, emissive: 0.45, nightGlow: 0.8 };
+/** A cairn (#1533): three stacked dark slate stones, about 2.2 high with a sodium cap that glows so it reads as an amber point from the widest zoom, about one a chunk (abalone-core `cairns`), so no open
+ * cell lies more than 16 cells from a landmark. Each turns and stands taller or shorter by up to `spread` from its cell. */
+export const CAIRN_LOOK = { stone: 0x39466a, cap: SODIUM, stones: [0.34, 0.27, 0.2], step: 0.6, spread: 0.2, emissive: 1.6, nightGlow: 0.6 };
+/** The most cairns the widest loaded square holds: two a chunk at most, 21 chunks across. */
+export const CAIRN_CAPACITY = 2 * (2 * MAX_REACH + 1) ** 2;
+/** A cairn's stones: hexagonal slabs, each narrower than the one under it (36 triangles). */
+function cairnGeometry(): THREE.BufferGeometry {
+  const { stones, step } = CAIRN_LOOK;
+  return mergeGeometries(stones.map((radius, i) => new THREE.CylinderGeometry(radius * 0.8, radius, step, 6).rotateY(i * 0.5).translate(0, step * (i + 0.5), 0).toNonIndexed()))!;
+}
 /** The most logs a world holds, abalone-core `LOGS`. */
 const LOG_CAPACITY = 12;
 /** How much of its painted colour a lair's landmark emits at full glow (#1496). */
@@ -697,6 +707,9 @@ export class OpenWorldView {
   private logsFound: readonly number[] = [];
   private readonly stakes: THREE.InstancedMesh;
   private readonly stakesFound: THREE.InstancedMesh;
+  /** The stones and the caps of the cairns of the loaded chunks (#1533). */
+  private readonly cairnStones: THREE.InstancedMesh;
+  private readonly cairnCaps: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
   private readonly dummy = new THREE.Object3D();
   /** Reused by every instance colour written, so a build allocates none. */
@@ -838,6 +851,10 @@ export class OpenWorldView {
     };
     this.stakes = this.instances('log-stake', LOG_CAPACITY, stake(false), new THREE.MeshStandardMaterial({ color: LOG_LOOK.open, emissive: LOG_LOOK.open, emissiveIntensity: LOG_LOOK.emissive, roughness: 0.5, flatShading: true }));
     this.stakesFound = this.instances('log-stake-found', LOG_CAPACITY, stake(true), new THREE.MeshStandardMaterial({ color: LOG_LOOK.found, roughness: 0.9, flatShading: true }));
+    this.cairnStones = this.instances('cairn', CAIRN_CAPACITY, cairnGeometry(), new THREE.MeshStandardMaterial({ color: CAIRN_LOOK.stone, roughness: 0.9, flatShading: true }));
+    const capAt = CAIRN_LOOK.step * CAIRN_LOOK.stones.length;
+    const cap = new THREE.ConeGeometry(CAIRN_LOOK.stones[2]! * 1.05, 0.42, 6).translate(0, capAt + 0.21, 0);
+    this.cairnCaps = this.instances('cairn-cap', CAIRN_CAPACITY, cap, new THREE.MeshStandardMaterial({ color: CAIRN_LOOK.cap, emissive: CAIRN_LOOK.cap, emissiveIntensity: CAIRN_LOOK.emissive, roughness: 0.5, flatShading: true }));
     this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: MOTE_OPACITY, depthWrite: false }));
     sunDirection(this.sunDirection, this.sky.look.elevation, this.sky.look.azimuth); // the sun's way is the day's at the start, under either look (#1536)
     if (!this.neon) this.applyLook(); // the sky of the time of day, the day's at the start (#1496)
@@ -1516,6 +1533,7 @@ export class OpenWorldView {
     this.shine.value = look.glow;
     for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads, this.townSpires, this.gateArches, this.townWindows]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
     (this.stakes.material as THREE.MeshStandardMaterial).emissiveIntensity = LOG_LOOK.emissive + LOG_LOOK.nightGlow * look.glow;
+    (this.cairnCaps.material as THREE.MeshStandardMaterial).emissiveIntensity = CAIRN_LOOK.emissive + CAIRN_LOOK.nightGlow * look.glow;
   }
 
   /** The sun's soft shadow round the hero, on the high tier (#1364). */
@@ -1871,6 +1889,29 @@ export class OpenWorldView {
     this.placeLogs();
   }
 
+  /** Lays the stones and the cap of each cairn of the loaded chunks (`World.cairns`, #1533) on the top of its cell, turned and sized from
+   * its cell, up to their room. */
+  private placeCairns(cx: number, cy: number, reach: number): void {
+    const { dummy } = this;
+    const cells: Axial[] = [];
+    for (let ky = cy - reach; ky <= cy + reach; ky++) for (let kx = cx - reach; kx <= cx + reach; kx++) cells.push(...this.world.cairns(kx, ky));
+    let n = 0;
+    for (const [q, r] of cells.slice(0, CAIRN_CAPACITY)) {
+      const tile = this.world.tile(q, r)!;
+      const p = axialTo3D(q, r);
+      const v = variety(q, r);
+      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
+      dummy.rotation.set(0, v * Math.PI * 2, 0);
+      dummy.scale.set(1, 1 + CAIRN_LOOK.spread * (2 * v - 1), 1);
+      dummy.updateMatrix();
+      this.cairnStones.setMatrixAt(n, dummy.matrix);
+      this.cairnCaps.setMatrixAt(n++, dummy.matrix);
+    }
+    dummy.rotation.set(0, 0, 0);
+    this.cairnStones.count = this.cairnCaps.count = n;
+    this.cairnStones.instanceMatrix.needsUpdate = this.cairnCaps.instanceMatrix.needsUpdate = true;
+  }
+
   /** Lays a stake on the top of each log of the loaded chunks: the tall amber one while unread, the short grey one once found. */
   private placeLogs(): void {
     const [cx, cy] = this.centre;
@@ -1983,6 +2024,7 @@ export class OpenWorldView {
     if (terrain) this.placeTeleporters();
     if (terrain) this.placePads();
     if (terrain) this.placeLogs();
+    if (terrain) this.placeCairns(cx, cy, reach);
     for (const mesh of this.laid(terrain)) {
       if (grounds.includes(mesh) && !counts.has(mesh)) put(mesh, 0, -100, 0, 1e-4, 0); // a ground out of view keeps one speck: a mesh drawn the first time is a shader to compile
       mesh.count = counts.get(mesh) ?? 0;

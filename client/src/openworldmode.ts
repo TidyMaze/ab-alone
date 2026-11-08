@@ -229,6 +229,8 @@ export class OpenWorldMode {
     private readonly bossName: (id: string) => string = () => '',
     /** Tally's line of the first kind of place reached not filed yet, empty when there is none (#1315, `firstNewLine` of placelines.ts). */
     private readonly placeLine: (kinds: readonly PlaceLineKind[]) => string = () => '',
+    /** The cairns of a chunk of a seed's world: `q, r` pairs (the bridge's `world_cairns`, #1533). */
+    private readonly cairnsOf: (seed: number, cx: number, cy: number) => Int32Array = () => new Int32Array(),
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -318,6 +320,7 @@ export class OpenWorldMode {
     const world = new World(
       (cx, cy) => this.load(seed, cx, cy),
       (cx, cy) => this.loadEnemies(seed, cx, cy),
+      (cx, cy) => this.cairnsOf(seed, cx, cy),
     );
     if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
     const fight = saved ? FightState.fromJSON(saved.fight) : new FightState();

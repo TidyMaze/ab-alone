@@ -1,7 +1,7 @@
 // The Open world as one chunk of the build (#1578): the root of everything only the world needs, loaded by `import()` at the first
 // entry (modechunk.ts, openworldhandle.ts). `wireOpenWorld` makes the mode, its saves and its online layer from the page's `deps`, and
 // binds the world's own HUD controls. The page keeps what it shares with the table: the keys, the pointer, the frame and the fights.
-import { boss_ids, boss_name, world_can_break, world_chunk, world_dungeon, world_enemies, world_is_enemy, world_lairs, world_logs, world_pads, world_path, world_places, world_rings, world_teleporters, world_version } from 'abalone-wasm';
+import { boss_ids, boss_name, world_cairns, world_can_break, world_chunk, world_dungeon, world_enemies, world_is_enemy, world_lairs, world_logs, world_pads, world_path, world_places, world_rings, world_teleporters, world_version } from 'abalone-wasm';
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
 import type { Biome } from './openworld';
@@ -99,6 +99,7 @@ export function wireOpenWorld(deps: OpenWorldDeps): OpenWorldParts {
     (seed) => Int32Array.from(world_pads(seed)), // the pad a tower beaten through the world leaves (#1531)
     (id) => boss_name(id)!, // the title of a tower entered (#1519)
     (kinds) => firstNewLine(store, kinds), // Tally files the first town, gate, tower or biome reached, once per kind (#1315)
+    (seed, cx, cy) => Int32Array.from(world_cairns(seed, cx, cy)), // the cairns of a chunk, so no open cell lies far from a landmark (#1533)
   );
   mode.cue = deps.cue; // the step, the pickup and the time of day (#1570)
   document.getElementById('openworld-dungeon')!.addEventListener('click', () => mode.dungeon());
