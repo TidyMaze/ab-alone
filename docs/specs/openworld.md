@@ -392,6 +392,10 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 - **Seats on file (#1315).** While some lairs are beaten and not all, a world that opens shows "Seats on file: N of total. Slag-glass remembers heat."
   (`ledgerLine` of `client/src/tally.ts`, the lore line of world.md section 2) in `#openworld-tally`, in place of the claim line, which is not asked for.
   From stage 7 of the story (the epilogue, world.md section 12.8) the lore sentence gives way to "Clamp: open." (#1546).
+- **Place lines (#1315).** The first time the hero steps within 3 cells (`PLACE_REACH`) of a town, a dungeon gate or a tower, or onto a biome
+  other than the meadow, `#openworld-tally` shows Tally's line of that kind (`PLACE_LINES` of `client/src/placelines.ts`, eight lines, what
+  world.md section 13 says each place is, no secret word): once per kind for the player, the kinds filed in `ab-alone.placelines` next to
+  `ab-alone.tally0412`. A step reaching two new kinds files the first (town, gate, tower, then the biome); the next step files the other.
 - **Ending (#1175).** When every lair of the world is in `lairs` (beaten), the world counts as beaten: whenever it opens, `#openworld-tally`
   shows "Variance noted. Clamp: open. Crew attached: 6." (the crew is the Trainer's `MARBLES`; "Clamp: locked" while the story is short of stage 7, #1546), in place of the claim line. One line, no
   speech, nothing gated, no new save field (a save from before reads as not over). `__openworldFixture` takes `beaten: [n, ...]` to set the lairs beaten.

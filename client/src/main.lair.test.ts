@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { CLAIM_NOTE } from './openworldgoal';
+import { PLACE_LINES } from './placelines';
 import { boot, type Game } from './test/harness';
 
 // The boss lairs of the Open world (#1170): the hero walks onto a lair and the normal boss fight starts; a win records the medal
@@ -320,5 +321,20 @@ describe("the choice of the Echo's mirror before a tower (#1620)", () => {
     expect(byId('trait').hidden).toBe(true);
     expect(data().boss).toBe('hull');
     expect(localStorage.getItem('ab-alone.medal-trait')).toBe('mirror');
+  });
+});
+
+describe("Tally's place lines (#1315)", () => {
+  it('files the first tower the hero walks up to in the HUD line, once for the player', async () => {
+    localStorage.setItem('ab-alone.tally0412', 'seen');
+    await boot('?bot=off&openworld=7');
+    await settle();
+    const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
+    hooks().__openworldFixture({ hero: [q - 2, r], troop: [], enemies: [] });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
+    expect(data().openworldAt).toBe(`${q - 1},${r}`);
+    expect(byId('openworld-tally').textContent).toBe(PLACE_LINES.tower);
+    expect(localStorage.getItem('ab-alone.placelines')!.split(' ')).toContain('tower');
   });
 });

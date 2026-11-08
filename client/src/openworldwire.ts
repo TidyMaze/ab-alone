@@ -16,6 +16,7 @@ import { OpenWorldMode } from './openworldmode';
 import type { OpenWorldParts } from './openworldhandle';
 import { AMBIENT } from './openworldparticles';
 import { worldSaves } from './openworldsave';
+import { firstNewLine } from './placelines';
 import type { MarbleSkins } from './openworldstripe';
 import { BIOME_LOOK, LAIR_LOOK, LOOK, MARBLE_LOOK as WORLD_MARBLES, PROPS, TELEPORTER_LOOK, WATER, loadModels } from './openworldview';
 import type { Phase } from './daynight';
@@ -97,6 +98,7 @@ export function wireOpenWorld(deps: OpenWorldDeps): OpenWorldParts {
     (seed) => Uint8Array.from(world_rings(seed)), // the ring of each tower and the dungeon tier of each gate (#1532)
     (seed) => Int32Array.from(world_pads(seed)), // the pad a tower beaten through the world leaves (#1531)
     (id) => boss_name(id)!, // the title of a tower entered (#1519)
+    (kinds) => firstNewLine(store, kinds), // Tally files the first town, gate, tower or biome reached, once per kind (#1315)
   );
   mode.cue = deps.cue; // the step, the pickup and the time of day (#1570)
   document.getElementById('openworld-dungeon')!.addEventListener('click', () => mode.dungeon());

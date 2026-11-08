@@ -28,6 +28,7 @@ import type { Source } from './stations';
 import { PlaceTransition, placeTitle, type PlaceKind } from './placetransition';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels } from './openworldview';
 import { twistOf } from './openworldtwist';
+import { placesReached, type PlaceLineKind } from './placelines';
 
 /** The walk of the hero to a far cell, the bridge's `world_path` (docs/specs/openworld.md section 4): the seed, the cell the hero
  * stands on, the cell asked for, the cells it cannot enter (enemies, lairs) and the broken cells (#1154), as `q, r` pairs; its answer
@@ -216,6 +217,8 @@ export class OpenWorldMode {
     private readonly padsOf: (seed: number) => Int32Array = () => new Int32Array(),
     /** The name of a boss by its id, for the title of a tower entered (#1519). */
     private readonly bossName: (id: string) => string = () => '',
+    /** Tally's line of the first kind of place reached not filed yet, empty when there is none (#1315, `firstNewLine` of placelines.ts). */
+    private readonly placeLine: (kinds: readonly PlaceLineKind[]) => string = () => '',
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -1013,7 +1016,20 @@ export class OpenWorldMode {
     this.dirty = true;
     this.persist();
     this.mark(document.body.dataset.openworld!);
+    this.fileReached();
     return true;
+  }
+
+  /** Tally files the first town, gate, tower or remembered biome the hero reaches (#1315) in the HUD's line, once per kind. */
+  private fileReached(): void {
+    const at = this.hero!.at;
+    const sites = [
+      ...this.places.map(({ kind, cell }) => ({ kind: kind === 'town' ? ('town' as const) : ('gate' as const), cell })),
+      ...this.lairs.map((cell) => ({ kind: 'tower' as const, cell })),
+    ];
+    const line = this.placeLine(placesReached(at, sites, this.world!.tile(at[0], at[1])!.biome));
+    const tally = document.getElementById('openworld-tally');
+    if (line && tally) tally.textContent = line;
   }
 
   /** The hero rolled onto the lore log `log` (#1589): its panel opens, it is marked found in the world and read in the archive. It never holds a move. */
