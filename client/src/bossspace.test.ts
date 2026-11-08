@@ -1,6 +1,7 @@
 // The space of each boss fight (#1551): its own light, surround, rim and scatter, from one table keyed by boss id.
 import { describe, expect, it } from 'vitest';
 import { BOSS_IDS, DECK_PARTICLES } from './deck';
+import { BEATS } from './entrance';
 import { BOSS_SPACE, MESS_SPACE, bossSpaceOf, type BossSpace } from './bossspace';
 import { mixHex } from './daynight';
 import doc from '../../docs/specs/art.md?raw';
@@ -68,5 +69,24 @@ describe('the boss spaces (#1551)', () => {
   it('never looks like the plain Mess table: each boss differs from it in at least three ways', () => {
     expect(MESS_SPACE.scatter).toEqual(DECK_PARTICLES.mess);
     for (const [id, s] of Object.entries(BOSS_SPACE)) expect([id, differences(s, MESS_SPACE).length >= 3]).toEqual([id, true]);
+  });
+
+  it('gives each boss its own entrance beat (#1551): a camera move and a side, no two alike, all four moves used', () => {
+    const rows = Object.entries(BOSS_SPACE);
+    for (const [id, s] of rows) {
+      expect([id, BEATS.includes(s.beat), Math.abs(s.side) >= 45 && Math.abs(s.side) <= 90, s.dark >= 0 && s.dark <= 0.3]).toEqual([id, true, true, true]);
+    }
+    const keys = rows.map(([, s]) => `${s.beat}/${s.side}`);
+    expect(new Set(keys).size).toBe(15);
+    expect(new Set(rows.map(([, s]) => s.beat))).toEqual(new Set(BEATS));
+    for (const [i, [a, x]] of rows.entries()) {
+      for (const [b, y] of rows.slice(i + 1)) expect([a, b, x.beat !== y.beat || x.side !== y.side]).toEqual([a, b, true]);
+    }
+  });
+
+  it('puts the camera of the beat on the side the light comes from, for the bosses lit from a side', () => {
+    for (const [id, s] of Object.entries(BOSS_SPACE)) {
+      if (Math.abs(s.azimuth) >= 60) expect([id, Math.sign(s.side)]).toEqual([id, Math.sign(s.azimuth)]);
+    }
   });
 });

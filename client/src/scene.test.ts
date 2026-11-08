@@ -715,6 +715,27 @@ describe('SceneRenderer (#632)', () => {
     expect((sr.scene.background as THREE.Color).getHex()).toBe(neonSkyOf('mess').getHex());
   });
 
+  it('raises the light of a boss entrance from dark and gives the fight light back exactly, on its end or on a new deck (#1551)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    sr.setTerrace(true);
+    sr.setNeon();
+    sr.applyDeck('cargo', false, BOSS_SPACE.hull!);
+    const [sun, hemisphere] = [sr.sun.intensity, sr.hemisphere.intensity];
+    sr.setEntranceLight(0.25);
+    expect([sr.sun.intensity, sr.hemisphere.intensity]).toEqual([sun * 0.25, hemisphere * 0.25]);
+    sr.setEntranceLight(0.5); // from the light the fight has, not from the dimmed one
+    expect([sr.sun.intensity, sr.hemisphere.intensity]).toEqual([sun * 0.5, hemisphere * 0.5]);
+    sr.setEntranceLight(1);
+    expect([sr.sun.intensity, sr.hemisphere.intensity]).toEqual([sun, hemisphere]);
+    sr.setEntranceLight(1); // nothing dimmed: nothing to give back
+    expect(sr.sun.intensity).toBe(sun);
+    sr.setEntranceLight(0.1);
+    sr.applyDeck('mess'); // a new deck while dark: its own light, not a dim one
+    expect([sr.sun.intensity, sr.hemisphere.intensity]).toEqual([NEON_LIGHT.sunIntensity, NEON_LIGHT.hemisphere]);
+    sr.setEntranceLight(1);
+    expect(sr.sun.intensity).toBe(NEON_LIGHT.sunIntensity);
+  });
+
   it('leaves the sun to its owner while no boss space has been on, as the Open world sets it (#1551)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
     sr.sun.intensity = 7;
