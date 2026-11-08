@@ -3,7 +3,8 @@
 // have, driven by a few uniforms the frame sets (one time, two amplitudes, four ripples). The pure functions are the maths of those
 // terms, which the unit tests read.
 import * as THREE from 'three/webgpu';
-import { abs, clamp, cos, float, instanceColor, instanceIndex, length, materialEmissive, normalLocal, positionGeometry, positionLocal, positionWorld, sin, smoothstep, step, uniform, vec3 } from 'three/tsl';
+import { edgeDistanceNode } from './openworldedge';
+import { abs, clamp, color, cos, float, instanceColor, instanceIndex, length, materialEmissive, normalLocal, positionGeometry, positionLocal, positionWorld, sin, smoothstep, step, uniform, vec3 } from 'three/tsl';
 
 /** The ripples at most live at once, how long one lasts, how far it grows in cells and how bright it starts (spec section 3). */
 export const RIPPLES = 4;
@@ -101,10 +102,14 @@ export function writeRipples(pool: RipplePool, u: MotionUniforms): void {
   for (let i = 0; i < RIPPLES; i++) u.ripples[i]!.value.set(pool.x[i]!, pool.z[i]!, Number.isFinite(pool.start[i]!) ? pool.start[i]! : NEVER, 0);
 }
 
+/** The width of the neon look's foam line along the edges of a water cell next to land, in world units (#1656). */
+export const FOAM_LINE = 0.22;
+
 /** The emissive of the water: its own glow, the shore foam on the cells that touch land and the rings of the ripples, on the top face.
  * `shore` and `deep` are the red of a lone water cell and of a cell in the middle of a lake (the instance colour holds a share of
- * land neighbours, so the foam reads it), in the working colour space. */
-export function waterEmissive(u: MotionUniforms, shore: number, deep: number): THREE.Node {
+ * land neighbours, so the foam reads it), in the working colour space. With a `line` colour (the neon look, #1656) the cells next to
+ * land also get a steady line of it along their edges, which marks the coast with the motion off too; the foam's pulse goes over it. */
+export function waterEmissive(u: MotionUniforms, shore: number, deep: number, line?: number): THREE.Node {
   const step1 = (shore - deep) / 6; // one land neighbour's share of the colour
   const foamMask = smoothstep(0.4 * step1, 0.8 * step1, instanceColor.r.sub(deep));
   const phase = positionWorld.x.mul(1.7).add(positionWorld.z.mul(2.3));
@@ -120,7 +125,10 @@ export function waterEmissive(u: MotionUniforms, shore: number, deep: number): T
     glow = glow.add(ring.mul(float(RIPPLE_ALPHA).mul(left)).mul(live));
   }
   const top = step(0.5, normalLocal.y); // the sides of the column keep their glow
-  return materialEmissive.add(vec3(...FOAM_COLOUR).mul(glow).mul(top));
+  const emissive = materialEmissive.add(vec3(...FOAM_COLOUR).mul(glow).mul(top));
+  if (line === undefined) return emissive;
+  const band = float(1).sub(smoothstep(0, FOAM_LINE, edgeDistanceNode()));
+  return emissive.add(color(line).mul(band).mul(foamMask).mul(top));
 }
 
 /** The position of a tree's vertex: it leans sideways by its height (the instance's own index makes the phase), never past 2 degrees.

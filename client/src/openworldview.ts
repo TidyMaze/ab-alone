@@ -20,8 +20,8 @@ import { contactOf, heldClock } from './openworldhit';
 import { SUN, SUN_SHADOW, aimSunShadow, sunDirection } from './tablezero';
 import { Sky, WORLD_LOOKS } from './daynight';
 import { ICON } from './openworldlairicon';
-import { NEON, NEON_WHITE_GLOW, NEON_WORLD_LOOKS, lightNeon, neonMarbleRim, neonStars, neonWorldOn } from './neonlook';
-import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
+import { NEON, NEON_WHITE_GLOW, NEON_WORLD_LOOKS, lightNeon, neonHeroRim, neonMarbleRim, neonStars, neonWorldOn } from './neonlook';
+import { WORLD, WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
 import { GLOW_SHARE, type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 import { wrapPi } from './openworldtwist';
 
@@ -244,7 +244,9 @@ export const BIOME_LOOK: Record<Biome, { ground: number; prop: number }> = {
 export const lowGround = (tile: Tile): boolean => tile.height === 3 || tile.height === 4;
 /** The colour of a cell's ground, per instance: the low grass by its biome, every other ground by `LOOK` (the water's colour
  * comes from `waterColor`). */
-export const groundColour = (tile: Tile, ground: Ground): number => (ground === 'grass' && lowGround(tile) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color);
+export const groundColour = (tile: Tile, ground: Ground): number => (ground === 'grass' && biomeGrass(tile) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color);
+/** Whether a grass cell takes its biome's ground: the low grass, and under the neon look every grass, so no other biome's green shows in one (#1656). */
+export const biomeGrass = (tile: Tile): boolean => lowGround(tile) || neonWorldOn();
 /** The red of a lone water cell and of a cell in the middle of a lake, as the instance colour holds them: the shore foam reads where on
  * that way a cell lies (#1101). */
 const shoreRed = (): number => new THREE.Color(WATER.shore).r; // read when a view is made: the neon look changes the lakes' colours
@@ -252,6 +254,7 @@ const deepRed = (): number => new THREE.Color(WATER.deep).r;
 /** The colour of a water cell: the share of its six neighbours that are water sets how far it lies from the shore. */
 export function waterColor(world: World, q: number, r: number): THREE.Color {
   const wet = neighbours([q, r]).filter(([nq, nr]) => world.tile(nq, nr)?.terrain === 'water').length / 6;
+  if (neonWorldOn()) return new THREE.Color(wet < 1 ? WATER.shore : WATER.deep); // the look: the shallows on every cell next to land, the open water deep (#1656)
   return new THREE.Color(WATER.shore).lerp(new THREE.Color(WATER.deep), wet);
 }
 
@@ -848,7 +851,7 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : this.neon ? WORLD_EDGE_GAIN : EDGE_GAIN.land, neon: traces ? { hero: this.heroXZ, traces, shine: this.shine } : undefined, emissiveNode: water ? waterEmissive(this.uniforms, shoreRed(), deepRed()) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen, detail: this.neon && (ground === 'grass' || ground === 'rock' || ground === 'peak') ? this.surface : undefined }); // the land's striation (#1555)
+      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : this.neon ? WORLD_EDGE_GAIN : EDGE_GAIN.land, neon: traces ? { hero: this.heroXZ, traces } : undefined, emissiveNode: water ? waterEmissive(this.uniforms, shoreRed(), deepRed(), this.neon ? WORLD.foam : undefined) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen, detail: this.neon && (ground === 'grass' || ground === 'rock' || ground === 'peak') ? this.surface : undefined }); // the land's striation (#1555)
       this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, material());
       this.managed.push(this.grounds[ground]);
       this.flats[ground] = this.instances(`terrain-${ground}-flat`, 1, top, material()); // grows on the first low build (`fit`)
@@ -863,7 +866,7 @@ export class OpenWorldView {
       this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.detailed[prop]!);
     }
-    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player, this.shine, this.whiteGlow), this.neon));
+    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), neonHeroRim(neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player, this.shine, this.whiteGlow), this.neon), this.neon)); // the hero's dark line (#1656)
     this.hero.name = 'hero';
     this.hero.castShadow = this.hero.receiveShadow = true;
     this.scene.add(this.hero);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { color as tslColor } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { neonShellFor, NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE, NEON_SHEEN, neonMarbleRim, marbleSheen } from './neonlook';
+import { neonShellFor, NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE, NEON_SHEEN, neonMarbleRim, marbleSheen, NEON_HERO_RIM, neonHeroRim } from './neonlook';
 import { mixHex } from './daynight';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
@@ -48,6 +48,22 @@ describe('the neon look (#1424)', () => {
     const g = painted(0x2a3540, 0xa29e9a, 0xffffff, 0x000000);
     neonPaint('scene_slab_arena', g);
     expect([at(g, 0).getHex(), at(g, 1).getHex(), at(g, 2).getHex(), at(g, 3).getHex()]).toEqual([NEON.gapFloor, NEON.rim, NEON.rim, NEON.gapFloor]);
+  });
+
+  it('outlines the Open world hero in a near black line, 2 px or more at 390 px, under the look only (#1656)', () => {
+    const glass = (): THREE.MeshStandardMaterial => neonMarbleRim('white', new THREE.MeshStandardMaterial({ color: NEON.whiteMarble }), true);
+    const lin = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const lumOf = (hex: number): number => [0.2126, 0.7152, 0.0722].reduce((sum, w, i) => sum + w * lin(((hex >> (16 - 8 * i)) & 255) / 255), 0);
+    expect((lumOf(NEON.whiteMarble) + 0.05) / (lumOf(NEON_HERO_RIM.colour) + 0.05)).toBeGreaterThanOrEqual(7);
+    // the line is dark from a fresnel of `to`: on a sphere `radius` px round it is radius * (1 - sqrt(1 - (1 - to)^2)) px wide; the hero is 15.7 px round at 390 (#1656)
+    expect(15 * (1 - Math.sqrt(1 - (1 - NEON_HERO_RIM.to) ** 2))).toBeGreaterThanOrEqual(2);
+    expect(NEON_HERO_RIM.from).toBeLessThan(NEON_HERO_RIM.to);
+    const plain = glass();
+    expect(neonHeroRim(plain, false)).toBe(plain);
+    expect([plain.outputNode ?? null, plain.userData.heroRim]).toEqual([null, undefined]); // the look off: nothing changes
+    const lined = neonHeroRim(glass(), true);
+    expect(lined.userData.heroRim).toBe(true);
+    expect((lined.outputNode as { isNode?: boolean }).isNode).toBe(true); // the line replaces the lit colour, the gloss and the glow
   });
 
   it('draws the rim on the black shell under the neon look only, the white side too, softer (#1552, #1553)', () => {
@@ -431,7 +447,7 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
     expect([day.horizon, dusk.horizon, night.horizon]).toEqual([1, 2, 0.6]);
     expect(day.water).toBe(0xffffff);
     expect(dusk.water).toBe(mixHex(0xffffff, NEON.violet, 0.35));
-    expect(night.water).toBe(mixHex(0xffffff, NEON.cyan, 0.3));
+    expect(night.water).toBe(mixHex(mixHex(0xffffff, NEON.cyan, 0.3), NEON.sky, 0.5)); // the lakes darker by night: the land reads 1.4:1 over them (#1656)
   });
   it('lights a boss space with its own sun, colour, place and strength, the hemisphere leaning to its key, and gives the neon light back without one (#1551)', () => {
     const [sun, hemisphere, plain] = [new THREE.DirectionalLight(), new THREE.HemisphereLight(), new THREE.HemisphereLight()];

@@ -5,7 +5,7 @@
 import type { Axial } from './board';
 import { type Biome, neighbours, same, type Terrain, type Tile } from './openworld';
 import { dungeonIcon, iconSize, lairIcon, logIcon, portalIcon, townIcon } from './openworldlairicon';
-import { BIOME_LOOK, LOOK, lowGround, PROPS, WATER } from './openworldview';
+import { BIOME_LOOK, biomeGrass, LOOK, PROPS, WATER } from './openworldview';
 import { neonWorldOn } from './neonlook';
 import { mapColour } from './neonworld';
 
@@ -123,7 +123,7 @@ export function windowCells(tile: (q: number, r: number) => Tile | 'void' | unde
       const [q, r] = [hero[0] + dq, hero[1] + dr];
       const found = tile(q, r);
       if (found === 'void') cells.push([q, r, 'void']);
-      else if (found) cells.push([q, r, found.terrain, found.terrain === 'grass' && lowGround(found) ? found.biome : undefined]);
+      else if (found) cells.push([q, r, found.terrain, found.terrain === 'grass' && biomeGrass(found) ? found.biome : undefined]);
     }
   }
   return cells;

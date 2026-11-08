@@ -3,7 +3,7 @@
 // it is never stored.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { abs, clamp, color, dot, float, mix, normalize, normalView, positionViewDirection, pow, reflect, vec3 } from 'three/tsl';
+import { abs, clamp, color, dot, float, mix, normalize, normalView, positionViewDirection, output, pow, reflect, smoothstep, vec3, vec4 } from 'three/tsl';
 import type { Deck } from './deck';
 import type { Space } from './bossspace';
 import { mixHex, type Phase, type WorldLook } from './daynight';
@@ -91,7 +91,7 @@ export const NEON_WHITE_GLOW = 0.8;
 export const NEON_WORLD_LOOKS: Readonly<Record<Phase, WorldLook>> = {
   day: { sky: NEON.sky, sun: NEON_LIGHT.sun, sunIntensity: NEON_LIGHT.sunIntensity, elevation: NEON_LIGHT.elevation, azimuth: NEON_LIGHT.azimuth, hemiSky: NEON_LIGHT.skyMix, hemiGround: NEON_LIGHT.ground, hemiIntensity: NEON_LIGHT.hemisphere, water: 0xffffff, glow: 0, stars: 1, horizon: 1 },
   dusk: { sky: mixHex(NEON.sky, NEON.violet, 0.35), sun: mixHex(NEON_LIGHT.sun, NEON.violet, 0.45), sunIntensity: 2.4, elevation: 14, azimuth: 62, hemiSky: mixHex(NEON_LIGHT.skyMix, NEON.violet, 0.4), hemiGround: NEON.ground, hemiIntensity: 2.2, water: mixHex(0xffffff, NEON.violet, 0.35), glow: 0.4, stars: 0.5, horizon: 2 },
-  night: { sky: NEON.sky, sun: NEON.pedestalRing, sunIntensity: 1.3, elevation: 38, azimuth: -30, hemiSky: NEON.rimLight, hemiGround: NEON.groundFar, hemiIntensity: 1.6, water: mixHex(0xffffff, NEON.cyan, 0.3), glow: 1, stars: 1.8, horizon: 0.6 },
+  night: { sky: NEON.sky, sun: NEON.pedestalRing, sunIntensity: 1.7, elevation: 38, azimuth: -30, hemiSky: NEON.rimLight, hemiGround: NEON.groundFar, hemiIntensity: 2.2, water: mixHex(mixHex(0xffffff, NEON.cyan, 0.3), NEON.sky, 0.5), glow: 1, stars: 1.8, horizon: 0.6 }, // the land 1.4:1 over the lakes (#1656)
 };
 
 /** The dishes are drawn this much smaller across: the gap between two cells (1 - the flat-to-flat of a 0.5 hexagon, 0.134) grows by 40 %, so the cyan line keeps its width and its dark floor at 390 px. */
@@ -276,6 +276,20 @@ export const NEON_WHITE_SHADE = { floor: 0.5, lit: 0.85, light: [-0.5, 0.7, 0.5]
  * black shell or white glass, with its rim); a skin the player chose, or the look off, is worn as it is. */
 export function neonShellFor<M>(neon: boolean, defaultSkin: boolean, terrace: M, worn: M): M {
   return neon && defaultSkin ? terrace : worn;
+}
+
+/** The dark line round the Open world's hero under the look (#1656): near black where the fresnel passes `from`, full from `to` (2.6 px
+ * on the 15.7 px hero at 390 px), so the white reads on the brightest grounds, where it fell to 3.9:1. */
+export const NEON_HERO_RIM = { colour: 0x0b0f18, from: 0.38, to: 0.45 } as const;
+
+/** Draws `NEON_HERO_RIM` on a marble's silhouette, in place of what the light, the gloss and the glow give there: the line stays near
+ * black in every light. The look off, nothing changes. */
+export function neonHeroRim<M extends THREE.Material & { outputNode?: unknown }>(material: M, on: boolean): M {
+  if (!on) return material;
+  const edge = smoothstep(NEON_HERO_RIM.from, NEON_HERO_RIM.to, float(1).sub(abs(dot(normalView, positionViewDirection))));
+  material.outputNode = mix(output, vec4(color(NEON_HERO_RIM.colour), output.a), edge);
+  material.userData.heroRim = true;
+  return material;
 }
 
 /** The marbles under the neon look (#1552, #1553): a fresnel rim on both colours (cyan on the black shell, a soft pale edge on the

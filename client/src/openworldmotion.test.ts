@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import {
   FOAM_GAIN,
+  FOAM_LINE,
   FOAM_MS,
   motionUniforms,
   RIPPLE_ALPHA,
@@ -16,8 +17,10 @@ import {
   SWAY_DEG,
   SWAY_MS,
   swayLean,
+  waterEmissive,
   writeRipples,
 } from './openworldmotion';
+import { EDGE_WIDTH, HEX_APOTHEM } from './openworldedge';
 
 describe('the water and prop motion of the Open world (#1101, #1102, docs/specs/openworld-animation.md sections 3 and 4)', () => {
   it('keeps the spec numbers: 4 ripples of 600 ms to 1.2 cells at 0.5, foam 3200 ms at 0.25, sway 4000 ms at 2 degrees', () => {
@@ -81,6 +84,22 @@ describe('the water and prop motion of the Open world (#1101, #1102, docs/specs/
       writeRipples(pool, u);
       expect(u.ripples[0]!.value.toArray()).toEqual([3, 4, 120, 0]);
     });
+  });
+
+  it('draws the neon foam line along the edges of a cell next to land: wider than the seam, the shallows still show inside (#1656)', () => {
+    expect(FOAM_LINE).toBeGreaterThan(EDGE_WIDTH);
+    expect(FOAM_LINE).toBeLessThan(HEX_APOTHEM / 2);
+    const u = motionUniforms();
+    // the last term added, then its first factor down the products: the line's own colour (colour x band x next to land x top face)
+    type Part = { node?: Part; aNode?: Part; bNode?: Part; value?: unknown };
+    const inner = (n: Part): Part => n.node ?? n;
+    const lastColour = (emissive: unknown): unknown => {
+      let n = inner(inner(emissive as Part).bNode!);
+      while (n.value === undefined) n = inner(n.aNode!);
+      return n.value;
+    };
+    expect(lastColour(waterEmissive(u, 0.5, 0.1, 0x5f87a3))).toEqual(new THREE.Color(0x5f87a3));
+    expect(lastColour(waterEmissive(u, 0.5, 0.1))).not.toEqual(new THREE.Color(0x5f87a3)); // without the look: the foam's pulse is the last term
   });
 
   it('builds one set of uniforms, off until a frame sets them', () => {

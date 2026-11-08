@@ -2,11 +2,11 @@ import './test/openworldwasm';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { NEON, neonSunPosition, neonWorldOn } from './neonlook';
-import { WORLD, WORLD_EDGE_GAIN, WORLD_SHADOW, applyNeonWorld, mapColour, neonProp, neonTraces } from './neonworld';
+import { NEON_BIOME, WORLD, WORLD_EDGE_GAIN, WORLD_SHADOW, applyNeonWorld, mapColour, neonProp, neonTraces } from './neonworld';
 import { AMBIENT } from './openworldparticles';
-import { CHUNK, World } from './openworld';
+import { BIOMES, CHUNK, neighbours, World } from './openworld';
 import { terrainColour } from './openworldminimap';
-import { BIOME_LOOK, LAIR_LOOK, LOOK, MARBLE_LOOK, OpenWorldView, PROPS, TELEPORTER_LOOK, WATER } from './openworldview';
+import { BIOME_LOOK, LAIR_LOOK, LOOK, MARBLE_LOOK, OpenWorldView, PROPS, TELEPORTER_LOOK, WATER, groundColour, waterColor } from './openworldview';
 
 const palette = { LOOK, WATER, BIOME_LOOK, PROPS, MARBLE_LOOK, LAIR_LOOK, TELEPORTER_LOOK, AMBIENT };
 const bytes = (): Uint8Array => {
@@ -29,14 +29,15 @@ const colourAt = (g: THREE.BufferGeometry, i: number): THREE.Color => new THREE.
 afterEach(() => applyNeonWorld(false, palette));
 
 describe('the neon palette of the Open world (#1424)', () => {
-  it('puts the three ground tones on the biomes, and gives the game its own back', () => {
-    const [grass, sand, mountain] = [LOOK.grass.color, LOOK.sand.color, PROPS.mountain.color];
+  it('puts one ground and one accent on each biome, the three waters and the beach, and gives the game its own back (#1656)', () => {
+    const [grass, sand, mountain, biomes, water] = [LOOK.grass.color, LOOK.sand.color, PROPS.mountain.color, JSON.stringify(BIOME_LOOK), { ...WATER }];
     const geometry = PROPS.tree.geometry;
     applyNeonWorld(true, palette);
     expect(neonWorldOn()).toBe(true);
-    expect([LOOK.grass.color, LOOK.sand.color, LOOK.rock.color, LOOK.peak.color]).toEqual([WORLD.meadow, WORLD.mesa, WORLD.rock, WORLD.rock]);
-    expect([BIOME_LOOK.meadow.ground, BIOME_LOOK.forest.ground, BIOME_LOOK.desert.ground, BIOME_LOOK.badlands.ground, BIOME_LOOK.archipelago.ground]).toEqual([WORLD.meadow, WORLD.meadow, WORLD.mesa, WORLD.mesa, WORLD.meadow]);
-    expect(Object.values(BIOME_LOOK).every((b) => b.prop === 0xffffff)).toBe(true);
+    expect([LOOK.grass.color, LOOK.sand.color, LOOK.rock.color, LOOK.peak.color]).toEqual([NEON_BIOME.meadow.ground, WORLD.sand, WORLD.rock, WORLD.rock]);
+    for (const biome of BIOMES) expect(BIOME_LOOK[biome]).toEqual(NEON_BIOME[biome]);
+    expect(WATER).toEqual({ shore: WORLD.shallow, deep: WORLD.deep });
+    expect(MARBLE_LOOK.troop.base).toBe(WORLD.troop); // the lit troop reads 4.5:1 on the brightest ground (#1656)
     expect([LAIR_LOOK.open, LAIR_LOOK.beaten]).toEqual([NEON.violet, NEON.cyan]);
     expect(PROPS.boulder.color).toBe(WORLD.boulder);
     expect(PROPS.boulder.rim).toBe(NEON.rimLight); // a dark shell with a slate rim, cyan is the marbles' (#1557)
@@ -45,11 +46,37 @@ describe('the neon palette of the Open world (#1424)', () => {
     applyNeonWorld(false, palette);
     expect(neonWorldOn()).toBe(false);
     expect([LOOK.grass.color, LOOK.sand.color, PROPS.mountain.color]).toEqual([grass, sand, mountain]);
+    expect([JSON.stringify(BIOME_LOOK), WATER]).toEqual([biomes, water]); // the terrace's own, byte for byte
     expect(PROPS.boulder.rim).toBe(0);
     applyNeonWorld(false, palette); // nothing to give back: still the game's
     expect(LOOK.grass.color).toBe(grass);
   });
 
+
+  it('paints every grass cell in its own biome, the low ground and the high alike, only with the look (#1656)', () => {
+    const high = { height: 5, terrain: 'grass', biome: 'tundra' } as const;
+    expect(groundColour(high, 'grass')).toBe(LOOK.grass.color);
+    applyNeonWorld(true, palette);
+    expect(groundColour(high, 'grass')).toBe(NEON_BIOME.tundra.ground);
+    expect(groundColour({ ...high, terrain: 'rock' }, 'rock')).toBe(WORLD.rock);
+  });
+
+  it('puts the shallows on every water cell next to land and the deep on the open water, only with the look (#1656)', () => {
+    const coast = new Set(['0,0', ...neighbours([0, 0]).slice(1).map(([q, r]) => `${q},${r}`)]); // one land neighbour
+    const lake = (wet: (q: number, r: number) => boolean): World =>
+      new World((cx, cy) => {
+        const out = new Uint8Array(CHUNK * CHUNK * 3);
+        for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, wet(cx * CHUNK + (i % CHUNK), cy * CHUNK + Math.floor(i / CHUNK)) ? 0 : 2, 0], i * 3);
+        return out;
+      });
+    const world = lake((q, r) => coast.has(`${q},${r}`));
+    const terrace = waterColor(world, 0, 0).getHex();
+    applyNeonWorld(true, palette);
+    expect(waterColor(world, 0, 0).getHex()).toBe(WORLD.shallow);
+    expect(waterColor(lake(() => true), 0, 0).getHex()).toBe(WORLD.deep);
+    applyNeonWorld(false, palette);
+    expect(waterColor(world, 0, 0).getHex()).toBe(terrace); // the terrace keeps its gradient
+  });
 
   it('lifts the map colours only with the look', () => {
     const rock = terrainColour('rock');
@@ -100,6 +127,8 @@ describe('the Open world view with the look (#1424)', () => {
     expect(colourAt(geometry, 1).getHex()).toBe(NEON.pedestalRing); // the ridge line (#1557)
     view.setLairs([[0, 0]], []);
     expect(view.scene.getObjectByName('lair-0')).toBeDefined();
+    expect(((view.scene.getObjectByName('hero') as THREE.Mesh).material as THREE.Material).userData.heroRim).toBe(true); // the hero's dark line (#1656), not the troop's
+    expect(((view.scene.getObjectByName('troop') as THREE.Mesh).material as THREE.Material).userData.heroRim).toBeUndefined();
   });
 
   it('stands its cold sun back with the zoom, so the shadow keeps covering what the camera sees (#1478)', () => {
@@ -121,6 +150,7 @@ describe('the Open world view with the look (#1424)', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([0, 0]);
     expect(view.scene.getObjectByName('starfield')).toBeUndefined();
+    expect(((view.scene.getObjectByName('hero') as THREE.Mesh).material as THREE.Material).userData.heroRim).toBeUndefined(); // the terrace's hero has no dark line (#1656)
     expect((view.scene.background as THREE.Color).getHex()).not.toBe(NEON.sky);
     let sun!: THREE.DirectionalLight;
     view.scene.traverse((o) => void ((o as THREE.DirectionalLight).isDirectionalLight && (sun = o as THREE.DirectionalLight)));

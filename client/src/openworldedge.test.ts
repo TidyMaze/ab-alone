@@ -73,7 +73,7 @@ describe('the hex edge of an Open world ground (#1138)', () => {
 
   it('draws the neon grid and traces in the shader, with no extra node when the look is off (#1424)', () => {
     const look = { emissive: 0, roughness: 0.2, gain: -0.7 };
-    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1), shine: uniform(0) };
+    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1) };
     const plain = edgeMaterial(look);
     const lit = edgeMaterial({ ...look, neon });
     expect(plain.emissiveNode).toBeNull();
@@ -81,7 +81,8 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect(lit.colorNode).not.toBe(plain.colorNode);
     const water = float(2);
     expect(edgeMaterial({ ...look, emissiveNode: water, neon }).emissiveNode).not.toBe(water); // the foam keeps its term, the grid is added
-    expect(NEON_GRID.width).toBeLessThan(0.1); // a thin line, never a cell top (#1535: the arena's width)
+    // no line colour of its own: the traces are a share of the cell's own colour, the cyan line is the arena's alone (#1656)
+    expect((lit.emissiveNode as unknown as { node: { value: THREE.Color } }).node.value.toArray()).toEqual(new THREE.Color(...NEON_GRID.floor).toArray());
     expect(NEON_GRID.near).toBeLessThan(NEON_GRID.far);
     // the floor of light keeps the darkest ground off the sky's colour (#04050c) in the screenshot, and stays a hint of colour (#1424)
     expect(Math.max(...NEON_GRID.floor)).toBeLessThan(0.01);
@@ -105,7 +106,7 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect(edgeMaterial(look).colorNode).not.toBeNull();
     // under the neon look the light bands glow too, a share of the cell's own colour: no new hue (#1555)
     expect(SURFACE_DETAIL.glow).toBeGreaterThan(0);
-    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1), shine: uniform(0) };
+    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1) };
     expect(edgeMaterial({ ...look, detail: surfaceUniforms(), neon }).emissiveNode).not.toBeNull();
   });
 
@@ -133,10 +134,7 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect([u.amplitude.value, u.frequency.value, u.warp.value]).toEqual([SURFACE_DETAIL.amplitude, SURFACE_DETAIL.frequency, SURFACE_DETAIL.warp]);
   });
 
-  it('reads its line weight, glow and colour from the arena\'s grid line, one shared constant (#1535)', () => {
-    expect(NEON_GRID.width).toBe(NEON_LINE.width);
-    expect(NEON_GRID.glow).toBe(NEON_LINE.glow);
-    expect(NEON_GRID.colour).toBe(NEON_LINE.colour);
+  it('keeps the arena\'s grid line its weight, glow and colour (#1535); the Open world draws none (#1656)', () => {
     const arena = neonEdgeMaterial().color;
     expect(arena.getHex()).toBe(new THREE.Color(NEON_LINE.colour).multiplyScalar(NEON_LINE.glow).getHex());
     const p = neonEdgeGeometry().attributes.position!.array as Float32Array;

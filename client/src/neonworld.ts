@@ -3,9 +3,21 @@
 // are the game's. The palette changes the very constants the 3D view and the minimap read, so the map follows it.
 import * as THREE from 'three';
 import { NEON, setNeonWorldOn } from './neonlook';
+import type { Biome } from './openworld';
 
-/** The three ground tones of the three biomes (the mockup's `tones`): the meadow, the mesa and the rock. */
-export const WORLD = { meadow: 0x1f283a, mesa: 0x28243c, rock: 0x131824, shore: 0x234a66, deep: 0x142b44, wall: 0x171c2b, boulder: 0x14161a, mountain: 0x2a3347 } as const;
+/** The world's own tones under the look (#1656): the beach and the rock of every biome; the water in three, the shallows on the cells
+ * next to land, darker than any ground, the deep open water darker still, and the foam line on the coast's edge; the troop's marble, light enough to read 4.5:1 on the brightest lit ground. */
+export const WORLD = { sand: 0x4a4232, rock: 0x2e333c, shallow: 0x0e2a40, deep: 0x06142a, foam: 0x5f87a3, wall: 0x171c2b, boulder: 0x14161a, mountain: 0x2a3347, troop: 0xeef4fa } as const;
+/** Each biome's ground (its grass at every height) and the accent its trees and boulders take (#1656): six dark grounds told apart by
+ * luminance or by a hue a colour-blind player keeps (the art director's pair rule, neonworld.palette.test.ts). */
+export const NEON_BIOME: Record<Biome, { ground: number; prop: number }> = {
+  meadow: { ground: 0x3a7448, prop: 0x6dffa8 },
+  forest: { ground: 0x1e4a3e, prop: 0xc8ff3f },
+  tundra: { ground: 0x4b6c83, prop: 0xffffff },
+  desert: { ground: 0x4f3f22, prop: 0xffcf6b },
+  badlands: { ground: 0x863c4d, prop: 0xffb0a0 },
+  archipelago: { ground: 0x6456b3, prop: 0xff9ae6 },
+};
 /** The ambient motes of the Open world: a very dim cool grey-blue (half the brightness of the first slate). */
 const MOTE = 0x2b3648;
 /** The dark seam between the ground cells with the look: the band along an edge keeps 30 % of the colour (the game's own is 78 %). */
@@ -83,18 +95,18 @@ export function applyNeonWorld(on: boolean, p: WorldPalette): void {
 /** The game's palette with the neon one on top. */
 function neonPalette(base: WorldPalette): WorldPalette {
   const out = JSON.parse(JSON.stringify(base)) as WorldPalette;
-  Object.assign(out.LOOK.sand!, { color: WORLD.mesa });
-  Object.assign(out.LOOK.grass!, { color: WORLD.meadow });
+  Object.assign(out.LOOK.sand!, { color: WORLD.sand });
+  Object.assign(out.LOOK.grass!, { color: NEON_BIOME.meadow.ground }); // a grass cell takes its own biome's ground (groundColour)
   Object.assign(out.LOOK.rock!, { color: WORLD.rock });
   Object.assign(out.LOOK.peak!, { color: WORLD.rock });
-  out.WATER = { shore: WORLD.shore, deep: WORLD.deep };
-  for (const [biome, ground] of Object.entries({ meadow: WORLD.meadow, forest: WORLD.meadow, tundra: WORLD.meadow, desert: WORLD.mesa, badlands: WORLD.mesa, archipelago: WORLD.meadow })) out.BIOME_LOOK[biome] = { ground, prop: 0xffffff };
+  out.WATER = { shore: WORLD.shallow, deep: WORLD.deep };
+  for (const [biome, look] of Object.entries(NEON_BIOME)) out.BIOME_LOOK[biome] = { ...look };
   Object.assign(out.PROPS.mountain!, { color: WORLD.mountain, emissive: 0 });
   Object.assign(out.PROPS.tree!, { color: NEON.crystal, emissive: 0 }); // calm: the quietest violet of the map
   Object.assign(out.PROPS.boulder!, { color: WORLD.boulder, emissive: 0, rim: NEON.rimLight }); // a dark shell with a slate rim: cyan stays the marbles' (#1557 art round 3)
   Object.assign(out.PROPS.wall!, { color: WORLD.wall, emissive: 0 }); // the cap keeps the sodium seam
   Object.assign(out.MARBLE_LOOK.hero!, { base: NEON.whiteMarble, stripe: NEON.pedestalRing });
-  Object.assign(out.MARBLE_LOOK.troop!, { base: 0xdfe8f5, stripe: NEON.pedestalRing });
+  Object.assign(out.MARBLE_LOOK.troop!, { base: WORLD.troop, stripe: NEON.pedestalRing });
   Object.assign(out.MARBLE_LOOK.foes!, { base: NEON.blackMarble });
   Object.assign(out.LAIR_LOOK, { open: NEON.violet, beaten: NEON.cyan });
   Object.assign(out.TELEPORTER_LOOK, { colour: NEON.crystal }); // a pad is quieter than a marble
@@ -102,12 +114,12 @@ function neonPalette(base: WorldPalette): WorldPalette {
   return out;
 }
 
-/** The map is read on the ship's black, not in the 3D light: the dark terrain of the look is lifted (x14 in linear light) so the darkest, the rock, stays 3:1 over the map's back. */
+/** The map is read on the ship's black, not in the 3D light: the dark terrain of the look is lifted (x14 in linear light) so the darkest, the rock, stays 3:1 over the map's back.
+ * A brighter colour is lifted less, just to its brightest channel's full, so no channel clips and each ground keeps its hue (#1656). */
 export const MAP_LIFT = 14;
 export function mapColour(hex: number): number {
   const c = new THREE.Color(hex);
-  c.setRGB(Math.min(1, c.r * MAP_LIFT), Math.min(1, c.g * MAP_LIFT), Math.min(1, c.b * MAP_LIFT));
-  return c.getHex();
+  return c.multiplyScalar(Math.min(MAP_LIFT, 1 / Math.max(c.r, c.g, c.b))).getHex();
 }
 
 const luma = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
