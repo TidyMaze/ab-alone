@@ -76,7 +76,7 @@ function roomsFor(deck: Deck, i: number): Room[] {
     { cell: [-1, -1], door: { kind: 'hotseat' } },
     { cell: [-2, 0], door: { kind: 'bot' } },
     { cell: [-2, 1], door: { kind: 'online' } },
-    { cell: [-2, 2], door: { kind: 'royale' } }, // the battle royale lobby (#522, #593)
+    { cell: [-3, 2], door: { kind: 'royale' } }, // the battle royale lobby (#522, #593), on the rim: a floor cell between it and the lift down, so their plates never overlap (#1640)
   ];
   if (deck === 'mess') rooms.push({ cell: [0, 2], door: { kind: 'medals' } });
   rooms.push(...GALLERY[deck].map((door, k) => ({ cell: GALLERY_SLOTS[k]!, door })));

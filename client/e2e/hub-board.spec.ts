@@ -55,6 +55,10 @@ for (const [name, viewport, touch] of [
       expect(quiet.length).toBeGreaterThan(5);
       for (const { opacity } of quiet) expect(Number(opacity)).toBeLessThan(0.9);
       expect(Number((await style('#hub-labels .hub-label[data-goal]'))[0]!.opacity)).toBe(1);
+      // #1638: its words are the dark ink on the amber plate, the neon look's violet boss name too
+      const ink = await goal.evaluate((el) => [...el.querySelectorAll('b, small, .short')].filter((t) => t.getClientRects().length > 0).map((t) => getComputedStyle(t).color));
+      expect(ink.length).toBeGreaterThan(0);
+      expect(new Set(ink)).toEqual(new Set(['rgb(26, 19, 0)']));
       expect(new Set(quiet.map(({ border }) => border)).size, 'border colours of the quiet plates').toBeLessThanOrEqual(3);
       await shot(page, { path: `test-results/hub-board-quiet-${kind}.png` });
     });

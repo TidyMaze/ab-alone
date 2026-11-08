@@ -64,7 +64,7 @@ describe('the hub HUD plate', () => {
     expect(at([-1, -1])).toContain('<small>Crew table · 2 players, one screen</small>');
     expect(at([-2, 0])).toContain("<small>House table · play the ship's bot</small>");
     expect(at([-2, 1])).toContain('<small>Comms desk · 1v1 online match</small>');
-    expect(at([-2, 2])).toContain('<small>Arena · battle royale</small>'); // #522, #593
+    expect(at([-3, 2])).toContain('<small>Arena · battle royale</small>'); // #522, #593
     expect(at([1, -2])).toContain('<small>Lift to Cargo</small>');
     expect(at([-1, 2], 'bridge')).toContain('<small>Lift to Chapel</small>');
   });
@@ -114,7 +114,7 @@ describe('hub target inspection and reachability (#628)', () => {
     expect(reachabilityText([0, 0], [1, 0])).toBe('Click to move');
     expect(reachabilityText([0, 0], [-1, 1])).toBe('Click to move');
     expect(reachabilityText([0, 0], [2, 0])).toBe('Out of reach (roll closer)');
-    expect(reachabilityText([0, 0], [-2, 2])).toBe('Out of reach (roll closer)');
+    expect(reachabilityText([0, 0], [-3, 2])).toBe('Out of reach (roll closer)');
   });
 
   it('inspects all room kinds with descriptive names and mode subtitles', () => {
@@ -148,7 +148,7 @@ describe('hub target inspection and reachability (#628)', () => {
       desc: 'Peer-to-peer 1v1 match',
       reach: 'Out of reach (roll closer)',
     });
-    expect(hubTargetText(at, [-2, 2])).toEqual({
+    expect(hubTargetText(at, [-3, 2])).toEqual({
       name: 'Arena',
       desc: 'Multi-player battle royale',
       reach: 'Out of reach (roll closer)',

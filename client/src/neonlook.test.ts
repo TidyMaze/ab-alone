@@ -7,7 +7,7 @@ import { mixHex } from './daynight';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
-import { DECK_KEY, ELITE_ACCENT, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, runKey, neonSkyOf, neonSunPosition } from './neonlook';
+import { DECK_KEY, ELITE_ACCENT, GROUND_TINT, HUB_GROUND_TINT, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, runKey, neonSkyOf, neonSunPosition } from './neonlook';
 import { ACT_SPACE, BOSS_SPACE } from './bossspace';
 
 const ACT1 = { act: 0, elite: false }; // a plain fight of act 1 of a run (#1554)
@@ -237,6 +237,19 @@ describe('the neon look (#1424)', () => {
     });
     expect(new Set(grounds).size).toBe(DECK_NAMES.length); // the ground outside the board too (#1551)
     expect(new Set(DECK_NAMES.map((d) => neonSkyOf(d).getHexString())).size).toBe(DECK_NAMES.length); // the sky too (#1551)
+    neonDeckLook('mess');
+  });
+
+  it('lays the Hub on the dark neon ground of art.md 1, not the pale surround of a fight (#1639)', () => {
+    const groundOf = (): THREE.Color => new THREE.Color(NEON.ground).multiply((neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color);
+    for (const d of DECK_NAMES) {
+      neonDeckLook(d, null, null, true);
+      const hub = groundOf();
+      expect(hub.getHex()).toBe(new THREE.Color(NEON.ground).lerp(new THREE.Color(DECK_KEY[d].key), HUB_GROUND_TINT).getHex());
+      expect(hub.getHex(), d).toBe(NEON.ground); // #1d2433, not the pale grey of #1639
+      neonDeckLook(d);
+      expect(groundOf().getHex()).toBe(new THREE.Color(NEON.ground).lerp(new THREE.Color(DECK_KEY[d].key), GROUND_TINT).getHex());
+    }
     neonDeckLook('mess');
   });
 

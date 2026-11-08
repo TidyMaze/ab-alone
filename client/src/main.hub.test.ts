@@ -291,9 +291,13 @@ describe('main.ts, walking the hub (#521)', () => {
     localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'cargo', cell: [0, 0], beaten: ['echo'] }));
     ship(game);
     expect(document.body.dataset.deck).toBe('cargo');
+    const { NEON, neonMaterial } = await import('./neonlook'); // the page's own module, loaded by boot
+    const ground = (): number => new THREE.Color(NEON.ground).multiply((neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color).getHex();
+    expect(ground()).toBe(NEON.ground); // the Hub's floor is the dark neon ground (#1639)
     byId('new-game').click();
     expect(hub()).toBeUndefined();
     expect(document.body.dataset.deck).toBe('mess');
+    expect(ground()).not.toBe(NEON.ground); // a fight's surround leans to its deck again
     expect(drawn(scene()).discs).toBe(61);
     expect(game.hook('__frame')).toMatchObject({ radius: 4 });
 
@@ -559,12 +563,12 @@ const END_ROYALE = {
   it('the battle royale door starts battle royale; Back to the hub lands on the door (#593)', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
-    shipAt(game, [-1, 1]);
+    shipAt(game, [-2, 2]);
     expect(drawn(scene()).bars).toHaveLength(1); // the locked lift to Cargo only (#523)
     const bar = drawn(scene()).bars[0]!;
     const barX = bar.parent instanceof THREE.Group ? bar.parent.position.x : bar.position.x;
-    expect(barX).not.toBeCloseTo(axialTo3D(-2, 2).x); // no bar over the lobby
-    game.click(-2, 2);
+    expect(barX).not.toBeCloseTo(axialTo3D(-3, 2).x); // no bar over the lobby
+    game.click(-3, 2);
     expect(hub()).toBeUndefined();
     expect(data().royale).toBe('1');
     expect(back().hidden).toBe(false); // the way out is there while the game is on (#1517)
@@ -572,7 +576,7 @@ const END_ROYALE = {
     expect(data().over).toBe('win');
     expect(back().hidden).toBe(false);
     back().click();
-    expect(hub()).toBe('mess -2,2');
+    expect(hub()).toBe('mess -3,2');
     expect(game.hud()).toBe("Hub · MessArena · battle royale");
     expect(data().royale).toBeUndefined();
   });
@@ -906,7 +910,7 @@ describe('main.ts, the deck plan (#1249)', () => {
   it('frames the deck closer than a board, and a game started from it frames its whole board again', async () => {
     const game = await boot('?bot=off');
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
-    shipAt(game, [-1, 1]);
+    shipAt(game, [-2, 2]);
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.6).distance);
     byId('reset-view').click(); // Reset view in the hub frames the deck
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.6).distance);
@@ -915,7 +919,7 @@ describe('main.ts, the deck plan (#1249)', () => {
     window.dispatchEvent(new Event('resize'));
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.4).distance);
     vi.unstubAllGlobals();
-    game.click(-2, 2); // the battle royale
+    game.click(-3, 2); // the battle royale
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
   });
 });

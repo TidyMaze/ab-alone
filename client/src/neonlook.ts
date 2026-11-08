@@ -73,6 +73,8 @@ export function runKey({ act, elite }: RunCue): { key: number; accent: number } 
 export const SLAB_TINT = 0.12;
 /** The ground outside the board and the sky take this much of the key (#1551: the deck's identity is the surround). */
 export const GROUND_TINT = 0.4;
+/** The Hub's ground takes none (#1639): 0.4 of a pale key read pale grey round its deck, not the dark ground of art.md 1; its rim, posts, slab and sky still say the deck. */
+export const HUB_GROUND_TINT = 0;
 export const SKY_TINT = 0.25;
 /** The brightest channel of the rim and the posts' glow: above 1, unlit (the rim read dim at 1.2). */
 export const NEON_GLOW = 2.2;
@@ -372,13 +374,13 @@ function glowMaterial(kind: 'rim' | 'post'): THREE.MeshBasicMaterial {
 export const neonSkyOf = (deck: Deck, space: Space | null = null): THREE.Color =>
   new THREE.Color(NEON.sky).lerp(new THREE.Color(space ? space.surround : DECK_KEY[deck].key), space ? space.sky : SKY_TINT);
 
-/** The deck in play under the neon look (#1551): the slab takes its key over the slate, the rim glows in its key, the posts in its accent. */
-export function neonDeckLook(deck: Deck, run: RunCue | null = null, space: Space | null = null): void {
+/** The deck in play under the neon look (#1551): the slab takes its key over the slate, the rim glows in its key, the posts in its accent. The Hub (`hub`) keeps its ground dark (#1639). */
+export function neonDeckLook(deck: Deck, run: RunCue | null = null, space: Space | null = null, hub = false): void {
   const { key, accent } = run ? runKey(run) : (space ?? DECK_KEY[deck]);
   // The slab's vertex colours run from the gap floor up to the rim: the rim's colour times this is the tinted slate.
   const [slab, top] = [new THREE.Color(NEON.slab).lerp(new THREE.Color(key), SLAB_TINT), new THREE.Color(NEON.rim)];
   (neonMaterial('scene_slab_arena') as THREE.MeshStandardMaterial).color.setRGB(slab.r / top.r, slab.g / top.g, slab.b / top.b);
-  const ground = new THREE.Color(NEON.ground).lerp(new THREE.Color(space ? space.surround : key), space ? space.ground : GROUND_TINT);
+  const ground = new THREE.Color(NEON.ground).lerp(new THREE.Color(space ? space.surround : key), hub ? HUB_GROUND_TINT : space ? space.ground : GROUND_TINT);
   const base = new THREE.Color(NEON.ground);
   (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.setRGB(ground.r / base.r, ground.g / base.g, ground.b / base.b);
   glowMaterial('rim').color.copy(glowColour(key));

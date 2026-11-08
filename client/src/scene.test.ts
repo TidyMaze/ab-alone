@@ -320,6 +320,27 @@ describe('SceneRenderer (#632)', () => {
     expect(rimColour()).toBe(glowHex(runKey({ act: 3, elite: true }).key));
   });
 
+  it('lays the Hub floor on the dark neon ground while it is on, the deck surround again after, through a new deck too (#1639)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    const ground = (): number => new THREE.Color(NEON.ground).multiply((neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color).getHex();
+    sr.applyDeck('bridge');
+    const fight = ground();
+    sr.setHubFloor(true);
+    const hub = ground();
+    expect(hub).not.toBe(fight);
+    sr.applyDeck('mess');
+    sr.applyDeck('bridge'); // a lift ride keeps the Hub floor
+    expect(ground()).toBe(hub);
+    sr.setRunFight(null);
+    expect(ground()).toBe(hub);
+    sr.setHubFloor(false);
+    expect(ground()).toBe(fight);
+    const flat = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
+    expect(() => flat.setHubFloor(true)).not.toThrow(); // no neon look: nothing to recolour
+    const bare = new SceneRenderer({ renderer: createMockRenderer(), neon: true, devicePixelRatio: 1, webdriver: false });
+    expect(() => bare.setHubFloor(true)).not.toThrow(); // no deck applied yet
+  });
+
   it('a rogue-lite flag before any deck, or off the neon look, changes no rim (#1554)', () => {
     const flat = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
     expect(() => flat.setRunFight(ACT1)).not.toThrow(); // no neon look: nothing to recolour

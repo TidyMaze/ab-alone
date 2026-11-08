@@ -5887,6 +5887,7 @@ function enterHub(at: HubSpot): void {
   applyView();
   evalBar.hidden = hintButton.hidden = exportButton.hidden = importButton.hidden = true; // no game on in the hub: a new game shows them again (#583, #589)
   analyst.stop();
+  sceneRenderer.setHubFloor(true); // the dark neon ground round the deck (#1639)
   applyDeck(at.deck);
   refresh();
 }
@@ -6084,6 +6085,7 @@ function leaveHub(): void {
   cancelHubWalk();
   hub.exit();
   hub = null;
+  sceneRenderer.setHubFloor(false); // the fight's surround leans to its deck again (#1639)
   hubPlan.hidden = true;
   view = fitted = resetView(4); // a board again, as at the start: the game started from the hub frames its own (#1249)
   applyView();

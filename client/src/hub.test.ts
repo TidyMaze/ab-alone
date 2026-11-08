@@ -79,10 +79,10 @@ describe('hub map (game-design.md section 3.5)', () => {
     expect(roomAt('bridge', [3, -2])).toEqual({ kind: 'boss', boss: 'pulsar' });
   });
 
-  it('no gallery room has a room next to it in its row, so the plates never overlap (#1249)', () => {
+  it('no room has a room next to it in its row, so the plates never overlap: the lift down is clear of the Arena (#1249, #1640)', () => {
     for (const deck of DECK_NAMES) {
       const rooms = roomsOf(deck);
-      for (const { cell: [q, r] } of rooms.filter(({ cell }) => ring(cell) === 3)) {
+      for (const { cell: [q, r] } of rooms) {
         const row = rooms.filter(({ cell }) => cell[1] === r && Math.abs(cell[0] - q) === 1);
         expect(row, `${deck} ${q},${r}`).toEqual([]);
       }
@@ -104,7 +104,7 @@ describe('hub map (game-design.md section 3.5)', () => {
   });
 
   it('every deck has the battle royale lobby at the south-west corner, next to the online table (#522)', () => {
-    for (const deck of DECK_NAMES) expect(roomAt(deck, [-2, 2])).toEqual({ kind: 'royale' });
+    for (const deck of DECK_NAMES) expect(roomAt(deck, [-3, 2])).toEqual({ kind: 'royale' });
   });
 
   it('the Mess has the Medal room at the south cell, no other deck has one (#812)', () => {

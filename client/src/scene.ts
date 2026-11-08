@@ -428,7 +428,16 @@ export class SceneRenderer {
    * the deck's own key back. */
   setRunFight(cue: RunCue | null): void {
     this.runFight = cue;
-    if (this.neon && this.deck) neonDeckLook(this.deck, cue, this.space);
+    if (this.neon && this.deck) neonDeckLook(this.deck, cue, this.space, this.hubFloor);
+  }
+
+  /** Whether the Hub is on (#1639): its ground stays the dark neon ground, a fight's leans to its deck. */
+  private hubFloor = false;
+
+  /** The Hub's dark floor, set at once and kept through its lift rides; leaving the Hub gives the deck's surround back. */
+  setHubFloor(on: boolean): void {
+    this.hubFloor = on;
+    if (this.neon && this.deck) neonDeckLook(this.deck, this.runFight, this.space, on);
   }
 
   /** The deck's albedo and roughness, once their file loads (#1603): the plate and the rim were built flat, as the look without them,
@@ -480,7 +489,7 @@ export class SceneRenderer {
     const spaced = this.space !== null; // the sun is only touched while a space is on or just left: the Open world sets its own
     this.space = space;
     if (this.neon) {
-      neonDeckLook(next, run, space); // the slab, the rim and the posts take the deck's key (#1551), violet in a rogue-lite fight (#1554)
+      neonDeckLook(next, run, space, this.hubFloor); // the slab, the rim and the posts take the deck's key (#1551), violet in a rogue-lite fight (#1554)
       if (space || spaced) lightNeon(this.sun, this.hemisphere, space);
       // the sky takes the deck's key, but a backdrop texture in the room stays (#1551 fix-forward: main.boot)
       if (!(this.scene.background as THREE.Texture | null)?.isTexture) this.scene.background = neonSkyOf(next, space);

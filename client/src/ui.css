@@ -1284,7 +1284,9 @@ body[data-look='neon'] .hub-label[data-kind='boss'] { --k: #b79cff; }
 .hub-label[data-here] { box-shadow: 0 0 0 2px #ffb000; }
 /* The next goal (#1521, #1524): the room it points to (The Echo's door, then the Rogue-lite room, then the next boss's door) is the one solid amber plate, and the rail
    row of its deck is ringed in amber, the glow breathing (reduced motion zeroes the animation: the ring stays). The line of the rail says it in words, also on a phone. */
-.hub-label[data-goal] { --k: #1a1300; color: #1a1300; background: #ffb000; box-shadow: 0 0 0 3px #ffb000, 0 0 14px 5px rgba(255, 176, 0, 0.65); animation: goal-glow 1.2s ease-in-out infinite alternate; }
+.hub-label[data-goal], body[data-look='neon'] .hub-label[data-goal] { --k: #1a1300; color: #1a1300; background: #ffb000; box-shadow: 0 0 0 3px #ffb000, 0 0 14px 5px rgba(255, 176, 0, 0.65); animation: goal-glow 1.2s ease-in-out infinite alternate; }
+/* #1638: the words of the goal plate stay the dark ink, over the neon look's violet boss name and a locked lift's grey line. */
+.hub-label[data-goal] small { color: inherit; }
 @keyframes goal-glow { to { box-shadow: 0 0 0 3px #ffb000, 0 0 5px 1px rgba(255, 176, 0, 0.3); } }
 .hub-label.you { --k: #ffb000; color: var(--k); border-color: transparent; font: 600 0.625rem/1.2 var(--display); letter-spacing: 0.12em; text-transform: uppercase; }
 #hub-rail, #hub-pips {

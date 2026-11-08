@@ -178,9 +178,9 @@ test('the online table opens a room with its invite link, as Play online does, #
 });
 
 test('the battle royale door starts battle royale, and Back to the hub lands on the door, #593', async ({ page }, testInfo) => {
-  await shipAt(page, './?bot=off', [-1, 1]);
+  await shipAt(page, './?bot=off', [-2, 2]);
   const body = page.locator('body');
-  await hookClick(page, -2, 2);
+  await hookClick(page, -3, 2);
   await expect(body).not.toHaveAttribute('data-hub');
   await expect(body).toHaveAttribute('data-royale', '1');
   await expect(page.locator('#hud')).toContainText('Battle royale');
@@ -206,7 +206,7 @@ test('the battle royale door starts battle royale, and Back to the hub lands on 
   const back = page.getByRole('button', { name: 'Back to the hub' });
   await expect(back).toBeVisible();
   await back.click();
-  await expect(body).toHaveAttribute('data-hub', 'mess -2,2');
+  await expect(body).toHaveAttribute('data-hub', 'mess -3,2');
   await expect(page.locator('#hud')).toContainText('Arena · battle royale');
   await shot(page, { path: testInfo.outputPath('royale-after.png') });
 });

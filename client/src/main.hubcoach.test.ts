@@ -122,7 +122,7 @@ describe('a tap on a plate', () => {
     let at = hub();
     walkFor(10);
     expect(hub()).toBe(at);
-    plate('-2,2').click();
+    plate('-3,2').click();
     press('ArrowLeft');
     at = hub();
     walkFor(10);
@@ -137,7 +137,7 @@ describe('a tap on a plate', () => {
   it('restarts toward the plate tapped last', async () => {
     await firstHub(entered);
     fakeTimers();
-    plate('-2,2').click();
+    plate('-3,2').click();
     plate('2,-1').click(); // a terminal on the other side
     walkFor(8);
     expect(document.body.dataset.reading).toBeDefined();
