@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACT_PERCENT } from './roguelite';
+import { ACT_PERCENT, COMMANDERS, Relic, SPECIAL_LOOKS } from './roguelite';
 
 // #1537: the run simulator (crates/abalone-core/examples/run_sim.rs) plays the act bosses at the page's strengths, and
 // keeps its own copy of them, as the engine has none. The test reads the example's source with node:fs, imported untyped:
@@ -12,5 +12,17 @@ describe('the run simulator', () => {
   it('plays the act bosses at the strengths of ACT_PERCENT (#1537)', () => {
     const copy = /^const ACT_PERCENT: \[u32; 3\] = \[([\d, ]+)\];$/m.exec(source)!;
     expect(copy[1]!.split(',').map(Number)).toEqual(ACT_PERCENT.slice(0, 3));
+  });
+
+  // #1632: the simulator's copy of the four commanders (name, relic, special marbles) is the page's.
+  it('starts the commanders as the page does (#1632)', () => {
+    const rows = [...source.matchAll(/^ {4}\("([^"]+)", Relic::(\w+), (?:None|Some\(\(Special::(\w+), (\d+)\)\))\),$/gm)];
+    const relics = new Map(Object.entries(Relic));
+    const copy = rows.map((r) => ({
+      name: r[1]!,
+      relic: relics.get(r[2]!),
+      specials: SPECIAL_LOOKS.map((l) => (l.name === r[3] ? Number(r[4]) : 0)),
+    }));
+    expect(copy).toEqual(COMMANDERS.map((c) => ({ name: c.name, relic: c.relic, specials: c.specials })));
   });
 });

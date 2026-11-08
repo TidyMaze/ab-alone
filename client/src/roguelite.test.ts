@@ -309,6 +309,9 @@ describe('roguelite', () => {
     await saveRun(store, picked);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual(picked);
     expect(picked).toMatchObject({ commander: 2, relics: [Relic.Detonator], specials: [0, 0, 2, 0, 0, 0, 0, 0, 0, 0] });
+    const juggernaut = { ...picked, commander: 3, relics: [Relic.Bunks], specials: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0] }; // saved before #1632, with its two Heavies
+    await saveRun(store, juggernaut);
+    expect((await loadRun(store, mapOf, engine))!.state).toEqual(juggernaut);
     await saveRun(store, at(newRun(1, 3, LEGACY_UNLOCKED), 0));
     expect(await loadRun(store, mapOf, engine)).toMatchObject({ engine: null });
     await saveRun(store, { ...newRun(1, 3, LEGACY_UNLOCKED), end: 'won' });
@@ -864,7 +867,7 @@ describe('roguelite', () => {
     expect(COMMANDERS.map((c) => c.name)).toEqual(['The Captain', 'The Warden', 'The Saboteur', 'The Juggernaut']);
     expect(COMMANDERS.map((c) => c.acts)).toEqual([0, 1, 2, 3]);
     expect(COMMANDERS.map((c) => c.relic)).toEqual([Relic.Gyroscope, Relic.HullPlating, Relic.Detonator, Relic.Bunks]);
-    expect(COMMANDERS.map((c) => c.specials)).toEqual([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 2, 0, 0, 0, 0, 0, 0, 0], [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]]);
+    expect(COMMANDERS.map((c) => c.specials)).toEqual([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 2, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]); // the Juggernaut starts plain: its Bunks make the Heavies (#1632)
     expect(new Set(COMMANDERS.map((c) => c.icon)).size).toBe(4); // a portrait each
     expect(COMMANDERS.every((c) => c.line.length > 10 && !/[<>&"]/.test(c.line))).toBe(true);
     expect(KIND_ACTS).toEqual([0, 1, 2, 0, 0, 0, 3, 1, 3, 2]); // Heavy from the start, Anchor and Shield after 1 act won, Spark and Medic after 2, Magnet and Bomb after a run won (#1461)

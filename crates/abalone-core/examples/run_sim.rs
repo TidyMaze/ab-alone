@@ -35,12 +35,13 @@ const ACT_PERCENT: [u32; 3] = [50, 120, 200];
 const FIGHT_LOSS: u8 = 1;
 const ELITE_LOSS: u8 = 2;
 
-/// The four commanders of section 17: name, starting relic and the kind of their two special marbles, if any.
-const COMMANDERS: [(&str, Relic, Option<Special>); 4] = [
+/// The four commanders of section 17: name, starting relic, and the kind and number of their special marbles, if any
+/// (a test, `client/src/runsim.test.ts`, keeps them equal to the page's `COMMANDERS`).
+const COMMANDERS: [(&str, Relic, Option<(Special, usize)>); 4] = [
     ("The Captain", Relic::Gyroscope, None),
-    ("The Warden", Relic::HullPlating, Some(Special::Anchor)),
-    ("The Saboteur", Relic::Detonator, Some(Special::Spark)),
-    ("The Juggernaut", Relic::Bunks, Some(Special::Heavy)),
+    ("The Warden", Relic::HullPlating, Some((Special::Anchor, 2))),
+    ("The Saboteur", Relic::Detonator, Some((Special::Spark, 2))),
+    ("The Juggernaut", Relic::Bunks, Some((Special::Heavy, 2))),
 ];
 
 /// splitmix64, as the engine's.
@@ -139,7 +140,11 @@ fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
     let rest_to = FULL_ARMY - 2 * u8::from(level >= 2);
     let mut army = FULL_ARMY - 2 * u8::from(level >= 6);
     let biomes = biomes(seed);
-    let mut specials: Vec<Special> = COMMANDERS[c].2.into_iter().flat_map(|k| [k, k]).collect();
+    let mut specials: Vec<Special> = COMMANDERS[c]
+        .2
+        .into_iter()
+        .flat_map(|(k, n)| vec![k; n])
+        .collect();
     let mut emerald = false;
     let mut at = None;
     let mut cleared = 0;
