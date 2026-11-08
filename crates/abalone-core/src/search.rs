@@ -147,8 +147,27 @@ fn threatened(board: &Board) -> [i32; 2] {
 
 /// Own marbles lined up behind a marble of the other colour on the rim, along a line that ends off the board, for Black
 /// and for White: up to 2 per foe marble and edge direction. The push that ejects needs 2 behind 1 (or 3 behind 2).
-fn pressures(_board: &Board) -> [i32; 2] {
-    [0, 0]
+fn pressures(board: &Board) -> [i32; 2] {
+    let mut out = [0, 0];
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
+            let (side, own) = match board.get(q, r) {
+                Some(Cell::White) => (0, Cell::Black),
+                Some(Cell::Black) => (1, Cell::White),
+                _ => continue,
+            };
+            for &(dq, dr) in &NEIGHBOURS {
+                if board.get(q + dq, r + dr).is_some() {
+                    continue;
+                }
+                out[side] += (1..=2)
+                    .take_while(|&k| board.get(q - k * dq, r - k * dr) == Some(own))
+                    .count() as i32;
+            }
+        }
+    }
+    out
 }
 
 /// Charges on the marbles of Black and of White (`Board::unstable`, The Unstable Core's).

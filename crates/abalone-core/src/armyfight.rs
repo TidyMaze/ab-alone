@@ -9,9 +9,10 @@ use crate::moves::{Move, Player};
 use crate::run::{army_game_formed, FoePlan, Relic};
 use crate::search::{avoiding_repeats, best_move, search_with, Weights};
 
-/// The army's evaluation: material and ejections as the plain bot's, the foes' distance from the centre counted more than the
-/// plain bot's and the army's own cohesion not at all, and a push the army has lined up toward the rim counted. A cohesive,
-/// centred army with a lead shuffles; this one pushes, and takes the last marbles that huddle on the rim.
+/// The army's evaluation: the plain bot's material, ejections and centre, the army's own cohesion not counted, and a push the army
+/// has lined up toward the rim counted (`Weights::pressure`). A cohesive army with a lead shuffles into the 100 plies without an ejection
+/// that draw the fight (the plain bot wins 1 of 16 against a foe of 250 positions at 500 or 2000); this one pushes the last marbles, which
+/// huddle on the rim, off it.
 pub const FIGHT_WEIGHTS: Weights = Weights {
     marbles: 100,
     ejected: 50,
@@ -20,11 +21,11 @@ pub const FIGHT_WEIGHTS: Weights = Weights {
     threat: 0,
     egg: 0,
     charges: 0,
-    pressure: 0,
+    pressure: 30,
 };
 
-/// The positions a foe bot searches in a fight or an elite of a run (client/src/roguelite.ts `runNodes` and `fightBudget`, #1611, which a
-/// test of the client keeps equal): `peak` times a share that grows geometrically from 25 % at the run's first fight to 100 % on the
+/// The positions a foe bot searches in a fight or an elite of a run (client/src/roguelite.ts `runNodes` and `fightBudget`, #1611; the page's
+/// `runPercent` gives the 29 %, 40 % and 86 % the test pins, and the page is the reference if the two drift): `peak` times a share that grows geometrically from 25 % at the run's first fight to 100 % on the
 /// fourth act, by the node's `act`, its `row` and the `rows` of its act; an elite (`Some`, whether it is marked with a key) searches 2
 /// times that, one more from ascension level 1 and one more when marked; a quarter more from level 10.
 pub fn foe_budget(
@@ -35,8 +36,12 @@ pub fn foe_budget(
     elite: Option<bool>,
     level: u32,
 ) -> u32 {
-    let _ = (act, row, rows, elite, level);
-    peak
+    let t = ((act as f64 + row as f64 / rows as f64) / 3.0).clamp(0.0, 1.0);
+    let percent = (25.0 * 4.0_f64.powf(t)).round();
+    let nodes = (f64::from(peak) * percent / 100.0).round().max(1.0);
+    let times = elite.map_or(1, |marked| 2 + u32::from(level >= 1) + u32::from(marked));
+    let factor = if level >= 10 { 1.25 } else { 1.0 };
+    (nodes * f64::from(times) * factor).round() as u32
 }
 
 /// The army's move: the best of [`FIGHT_WEIGHTS`] searched to `budget` positions that does not repeat the game into a draw
@@ -64,7 +69,8 @@ pub struct FightResult {
 }
 
 /// The fight of an army of `army` marbles against the foes of `plan`, its `specials` on the front of the army (the last
-/// cells of the standard layout, one marble each, as many as the army has) and its `relics` held.
+/// cells of the standard layout, one marble each, as many as the army has) and its `relics` held. Refused when a special marble of
+/// the foes' plan sits on a cell with no marble.
 pub fn army_fight(
     army: u8,
     plan: &FoePlan,
@@ -72,14 +78,16 @@ pub fn army_fight(
     relics: &[Relic],
 ) -> Result<Game, PlaceError> {
     let mut game = army_game_formed(army, plan)?;
-    game.set_relics(relics)?;
+    game.set_relics(relics)
+        .expect("a rogue-lite fight that has not started");
     let cells: Vec<_> = STANDARD_BLACK
         .iter()
         .rev()
         .filter(|&&(q, r)| game.board().get(q, r) == Some(Cell::Black))
         .collect();
     for (&&cell, &kind) in cells.iter().zip(specials) {
-        game.place_special(cell, kind)?;
+        game.place_special(cell, kind)
+            .expect("a marble of the army");
     }
     Ok(game)
 }

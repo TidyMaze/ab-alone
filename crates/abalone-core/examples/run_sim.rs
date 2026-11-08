@@ -1,7 +1,8 @@
-//! The rogue-lite run simulator (#1537, docs/specs/roguelite.md section 30): `cargo run --release --example run_sim`.
-//! A bot plays whole runs on the engine's map and exits against the engine's act bosses, and prints a markdown table:
-//! how many runs of each commander and ascension level clear each act. What the bot does, and what is left out, is
-//! stated in the spec.
+//! The rogue-lite run simulator (#1537, #1598, docs/specs/roguelite.md section 30): `cargo run --release --example run_sim`.
+//! A bot plays whole runs on the engine's map and exits: the act bosses with the ladder's bot, and the fights and elites
+//! with the army's special marbles against the foes' formations at the run's search budgets (`armyfight`). It prints a
+//! markdown table: how many runs of each commander and ascension level clear each act, and where the others end. What the
+//! bot does, and what is left out, is stated in the spec.
 //!
 //! Environment (every one optional): `RUN_SIM_RUNS=40` runs per commander and level (seeds 0 to N - 1, the same for
 //! every cell), `RUN_SIM_LEVELS=0,5,10` the ascension levels, `RUN_SIM_THREADS` the runs played at once,
@@ -10,11 +11,17 @@
 //! `RUN_SIM_MAP=0` the map of the runs saved before the pacing (#1543) in place of the current one, `RUN_SIM_JSONL=<file>` one JSON line per run, `RUN_SIM_POOL=1` to play every act's boss for every seed, whatever the
 //! run before it did, and print how many it won per act (the tuning sample). Arguments are the commanders to play, by index (0 to 3), none
 //! for all four. The progress goes to stderr.
+//!
+//! The fights (#1598): `RUN_SIM_FIGHTS=0` counts every fight and elite as won again, at a flat cost (the table of before),
+//! `RUN_SIM_PEAK=2000` the foes' search at the end of the run (the page's `runNodes` peak: 2000 is the bot of about 6 medals, 20000 the plain bot), `RUN_SIM_ARMY=5000` the army bot's
+//! search in a fight, `RUN_SIM_FIGHT_PLIES=400` the plies after which a fight is a loss.
 
+use abalone_core::armyfight::{army_fight, foe_budget, play_out, FightResult};
+use abalone_core::board::Special;
 use abalone_core::encounter::ladder::{play_act_boss, LadderBoss, PLY_CAP};
 use abalone_core::encounter::telemetry::AttemptResult;
 use abalone_core::run::{
-    exits, run_map_v, Node, NodeKind, Relic, ACTS, FULL_ARMY, MAP_VERSION, MIN_ARMY,
+    exits, foe_plan_v, run_map_v, Node, NodeKind, Relic, ACTS, FULL_ARMY, MAP_VERSION, MIN_ARMY,
 };
 use abalone_core::world::Biome;
 use std::collections::HashMap;
@@ -24,16 +31,16 @@ use std::sync::{Arc, Mutex, OnceLock};
 /// The act bosses' strength by act, as the page's `ACT_PERCENT` (client/src/roguelite.ts, a test keeps the two
 /// equal); the fourth act is not played.
 const ACT_PERCENT: [u32; 3] = [50, 120, 200];
-/// What a fight node and an elite cost the army, in marbles (not measured, section 30): the bot wins them.
+/// What a fight node and an elite cost the army, in marbles, with `RUN_SIM_FIGHTS=0`: the bot wins them.
 const FIGHT_LOSS: u8 = 1;
 const ELITE_LOSS: u8 = 2;
 
-/// The four commanders of section 17: name and starting relic. Only the Warden's relic is played here.
-const COMMANDERS: [(&str, Relic); 4] = [
-    ("The Captain", Relic::Gyroscope),
-    ("The Warden", Relic::HullPlating),
-    ("The Saboteur", Relic::Detonator),
-    ("The Juggernaut", Relic::Bunks),
+/// The four commanders of section 17: name, starting relic and the kind of their two special marbles, if any.
+const COMMANDERS: [(&str, Relic, Option<Special>); 4] = [
+    ("The Captain", Relic::Gyroscope, None),
+    ("The Warden", Relic::HullPlating, Some(Special::Anchor)),
+    ("The Saboteur", Relic::Detonator, Some(Special::Spark)),
+    ("The Juggernaut", Relic::Bunks, Some(Special::Heavy)),
 ];
 
 /// splitmix64, as the engine's.
@@ -48,10 +55,20 @@ fn mix(mut x: u64) -> u64 {
 /// is played once per boss, seed and strength, and shared: whether it was won and the marbles the boss ejected.
 type BossFights = Mutex<HashMap<(&'static str, u64, u32), Arc<OnceLock<(bool, u8)>>>>;
 
+/// A fight or an elite is the same for every run that brings the same army, special marbles and relic to the same node
+/// against the same foes: played once, then shared (the levels 0 and 5, and the commanders without a relic that acts).
+type Fights = Mutex<HashMap<String, Arc<OnceLock<FightResult>>>>;
+
 struct Settings {
     percents: [u32; 3],
     boss_x: f64,
     bosses: BossFights,
+    /// Play the fights and the elites (the default), or count them won at a flat cost.
+    fights: bool,
+    peak: u32,
+    army_nodes: u32,
+    fight_plies: u32,
+    played: Fights,
 }
 
 /// The roster boss of the biome of an act (section 18); the Meadow's act 1 boss is dealt from the whole roster.
@@ -122,6 +139,8 @@ fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
     let rest_to = FULL_ARMY - 2 * u8::from(level >= 2);
     let mut army = FULL_ARMY - 2 * u8::from(level >= 6);
     let biomes = biomes(seed);
+    let mut specials: Vec<Special> = COMMANDERS[c].2.into_iter().flat_map(|k| [k, k]).collect();
+    let mut emerald = false;
     let mut at = None;
     let mut cleared = 0;
     loop {
@@ -142,7 +161,64 @@ fn play_run(seed: u64, c: usize, level: u32, set: &Settings) -> Ended {
         let lost = match node.kind {
             NodeKind::Rest => {
                 army = army.max(rest_to);
+                // The Juggernaut's Bunks: a Heavy more at each rest, while it fits the army.
+                if relic == Relic::Bunks && specials.len() < usize::from(army) {
+                    specials.push(Special::Heavy);
+                }
                 continue;
+            }
+            NodeKind::Fight | NodeKind::Elite if set.fights => {
+                let elite = node.kind == NodeKind::Elite;
+                // The first elite of an act holds a key while the run has no Emerald (the page's `bearsKey`).
+                let marked = elite
+                    && !emerald
+                    && map
+                        .iter()
+                        .position(|n| n.act == node.act && n.kind == NodeKind::Elite)
+                        == Some(i);
+                let rows = map
+                    .iter()
+                    .filter(|n| n.act == node.act)
+                    .map(|n| n.row)
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
+                let foes = foe_budget(
+                    set.peak,
+                    node.act,
+                    node.row,
+                    rows,
+                    elite.then_some(marked),
+                    level,
+                );
+                let more = u8::from(level >= 3) + u8::from(level >= 8);
+                let plan = foe_plan_v(seed, i, 0, biomes[node.act], more, map_version());
+                let brought = army.min(FULL_ARMY);
+                let key = format!(
+                    "{seed}/{i}/{brought}/{:?}/{:?}/{foes}/{more}",
+                    &specials[..specials.len().min(usize::from(brought))],
+                    relic
+                );
+                let shared = set.played.lock().unwrap().entry(key).or_default().clone();
+                let fought = shared.get_or_init(|| {
+                    let held = &specials[..specials.len().min(usize::from(brought))];
+                    let game = army_fight(brought, &plan, held, &[relic]).expect("a fight");
+                    play_out(game, set.army_nodes, foes, set.fight_plies)
+                });
+                if !fought.won {
+                    return Ended {
+                        cleared,
+                        end: format!(
+                            "act {} {}",
+                            node.act + 1,
+                            if elite { "elite" } else { "fight" }
+                        ),
+                    };
+                }
+                emerald |= marked;
+                // The marbles the army kept, one more saved by the Hull plating, and the special marbles it kept.
+                specials = fought.specials.clone();
+                army.saturating_sub(fought.left).saturating_sub(hull)
             }
             NodeKind::Fight => FIGHT_LOSS.saturating_sub(hull),
             NodeKind::Elite => ELITE_LOSS.saturating_sub(hull),
@@ -277,6 +353,11 @@ fn main() {
             .and_then(|x| x.parse().ok())
             .unwrap_or(3.0),
         bosses: Mutex::default(),
+        fights: setting("RUN_SIM_FIGHTS", 1) != 0,
+        peak: setting("RUN_SIM_PEAK", 2000),
+        army_nodes: setting("RUN_SIM_ARMY", 5000),
+        fight_plies: setting("RUN_SIM_FIGHT_PLIES", 400),
+        played: Mutex::default(),
     };
     let runs = u64::from(setting("RUN_SIM_RUNS", 40));
     let levels = list("RUN_SIM_LEVELS", "0,5,10");
@@ -312,14 +393,19 @@ fn main() {
         out
     });
     let mut jsonl = String::new();
-    println!("| commander | level | runs | act 1 | act 2 | act 3 = the run |");
-    println!("|---|---|---|---|---|---|");
+    println!("| commander | level | runs | act 1 | act 2 | act 3 = the run | the runs lost to |");
+    println!("|---|---|---|---|---|---|---|");
     let share = |n: usize, d: usize| {
         if d == 0 {
             0.0
         } else {
             100.0 * n as f64 / d as f64
         }
+    };
+    // One standard error of a share, in points: sqrt(p (1 - p) / n).
+    let error = |n: usize, d: usize| {
+        let p = share(n, d) / 100.0;
+        100.0 * (p * (1.0 - p) / d.max(1) as f64).sqrt()
     };
     for &c in &commanders {
         for &l in &levels {
@@ -328,23 +414,30 @@ fn main() {
                 .zip(done.iter())
                 .filter(|(j, _)| j.0 == c && j.1 == l)
                 .collect();
-            // Act `k` cleared: of the runs that reached it, and of all the runs.
+            // Act `k` cleared: of the runs that reached it, and of all the runs (its error).
             let cell = |k: usize| {
                 let reached = outs.iter().filter(|o| o.1.cleared + 1 >= k).count();
                 let won = outs.iter().filter(|o| o.1.cleared >= k).count();
                 format!(
-                    "{won}/{reached} ({:.0} %), {:.0} % of runs",
+                    "{won}/{reached} ({:.0} %), {:.0} % of runs (+/- {:.0})",
                     share(won, reached),
-                    share(won, outs.len())
+                    share(won, outs.len()),
+                    error(won, outs.len())
                 )
             };
+            // Where the lost runs ended: a fight, an elite, a boss or the army under its minimum.
+            let ended = |what: &str| outs.iter().filter(|o| o.1.end.contains(what)).count();
             println!(
-                "| {} | {l} | {} | {} | {} | {} |",
+                "| {} | {l} | {} | {} | {} | {} | fight {}, elite {}, boss {}, army {} |",
                 COMMANDERS[c].0,
                 outs.len(),
                 cell(1),
                 cell(2),
-                cell(3)
+                cell(3),
+                ended("fight"),
+                ended("elite"),
+                ended("boss"),
+                ended("army")
             );
             for (j, o) in &outs {
                 jsonl.push_str(&format!(
