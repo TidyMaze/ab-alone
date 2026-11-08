@@ -199,7 +199,7 @@ describe('co-op: the encounter judges the room', () => {
     expect(game.turn()).toBe('White to move'); // the boss reply is being computed
     spy.mockRestore();
     held.pop()!();
-    await until(game, () => game.hook('__plies') === 2);
+    await until(game, () => game.hook('__plies') === 2 && two.history.length === 2); // the partner heard our move: its turn starts there
     expect(game.turn()).toBe("Partner's turn");
     await two.send(encodeMove(forward(two.legal())));
     await until(game, () => game.hook('__plies') === 4);
@@ -320,7 +320,7 @@ describe('co-op: the end of the fight', () => {
     const { Encounter } = await import('abalone-wasm');
     vi.spyOn(Encounter.prototype, 'boss_move').mockReturnValue(Int32Array.from(encodeMove({ cells: [[0, -1]], dir: 0 })));
     play(game, up);
-    await until(game, () => game.hook('__plies') === 2);
+    await until(game, () => game.hook('__plies') === 2 && two.history.length === 2); // the partner heard our move before it plays its own
     await two.send(encodeMove(free)); // the partner's turn: its free move first, no boss reply
     await until(game, () => game.hook('__plies') === 3);
     await two.send(encodeMove(east));
@@ -333,6 +333,7 @@ describe('co-op: the end of the fight', () => {
   it('ends on both engines at once: a position a third time is a draw by repetition, a Defeat against the boss', async () => {
     const { game, two } = await hosted();
     await defeat(game, two);
+    await until(game, () => game.turn() === 'Defeat'); // the end is judged after the last move
     expect(game.hook('__history')).toEqual(two.history);
     expect(game.turn()).toBe('Defeat');
     expect(data().over).toBe('loss');
@@ -434,7 +435,7 @@ describe('boss duel: the joiner plays the boss (#1316)', () => {
     expect(presence()).toBe('You are the boss. The hero is here.');
     expect(game.turn()).toBe("Hero's turn");
     await hero.send(encodeMove(forward(hero.legal())));
-    await until(game, () => game.hook<number>('__plies') >= 1);
+    await until(game, () => game.hook<number>('__plies') >= 1 && game.turn() === 'Your turn'); // the turn line follows the move
     expect(game.hook('__plies')).toBe(1); // the boss seat answers: no reply was computed for it (the helper's own engine did, its page does not)
     expect(game.turn()).toBe('Your turn');
     expect(byId('rematch').hidden).toBe(true);
