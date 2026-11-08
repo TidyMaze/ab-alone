@@ -177,7 +177,7 @@ the hour, reached and left the way a boss lair is (section 7). No new rule.
 
 ## 4. The hero and the troop
 
-- **Hero**: one glass marble (#1176: in the skin the player wears on the ship, as the troop; the enemies wear the worn shell skin, and the stripe ring is the only team cue), moved one cell at a time (click a neighbour, or the arrow keys, as
+- **Hero**: one glass marble (#1176: in the skin the player wears on the ship, as the troop; the enemies wear the worn shell skin, and the stripe ring is the only team cue; under the neon look with the default skins, the arena's own finish, the black shell with its cyan rim and the white glass, #1558: GPU ?gpustats, two runs each, no measurable change, 1280x720 7.96 and 7.97 ms before, 7.95 and 7.97 after, 390x844 7.40 and 7.38 before, 7.39 and 7.39 after), moved one cell at a time (click a neighbour, or the arrow keys, as
   in the hub, section 3.5 of `game-design.md`). A held arrow keeps walking: the first cell is taken on the
   keydown, then one cell per glide (140 ms) while the arrow is held, whatever the system's key repeat (#1059).
 - **Gamepad** (#1252, `game-design.md` section 2 item 7): the left stick or the D-pad walks the hero as the touch stick does,
