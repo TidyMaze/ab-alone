@@ -446,6 +446,7 @@ describe('Play online', () => {
   it('a seat that did not join sends no seal and takes none: nothing is signed (#1287)', async () => {
     for (const [joined, whiteJoins] of [[true, false], [false, true]] as const) {
       const { game, heard, relays } = await sealedDraw(joined, whiteJoins);
+      await until(game, () => heard.length === (joined ? 1 : 0)); // the intro reached the opponent
       await game.settle();
       expect(relays).toEqual([]); // nothing is published unless both seats joined
       expect(game.hook('__sealed')).toBeNull();
@@ -926,7 +927,8 @@ describe('the cues of an online game (#1570)', () => {
     await until(game, () => white.session.signedLog.length === 1);
     expect(count(game, 'turn-start')).toBe(0);
     await white.play([0, -2], [0, -1]);
-    await until(game, () => game.hook('__plies') === 2);
-    expect(count(game, 'turn-start')).toBe(1);
+    await until(game, () => game.hook('__plies') === 2 && count(game, 'turn-start') === 1); // the cue follows the move
+    await game.settle();
+    expect(count(game, 'turn-start')).toBe(1); // and stays one
   });
 });
