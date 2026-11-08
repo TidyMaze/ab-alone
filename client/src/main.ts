@@ -4136,6 +4136,9 @@ const syncDishes = (): void => {
 /** Shows the board of the fight, hides the others. */
 const showBoard = (): void => {
   for (const [name, board] of Object.entries(terraceBoards)) if (board) board.visible = name === boardOf();
+  const wearsProp = boardOf() !== 'hub'; // the deck's silhouette prop stands by every board but the hub's (#1551)
+  sceneRenderer.showDeckProp(wearsProp, frame?.radius ?? RADIUS, innerWidth < innerHeight);
+  document.body.dataset.deckProp = String(wearsProp); // read by the e2e tests
 };
 /** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
 let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;

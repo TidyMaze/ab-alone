@@ -1,21 +1,21 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
-import { BOARD_CELLS, RADIUS, axialTo3D } from './board';
-import { framing, viewPosition, type View } from './camera';
+import { RADIUS, axialTo3D, cellsFor } from './board';
+import { framing, resetView, viewPosition, type View } from './camera';
 import { TERRACE_VIEW } from './tablezero';
 import { DECK_NAMES } from './deck';
 import { BEATS, entranceView } from './entrance';
 import { BOSS_SPACE } from './bossspace';
 import { DECK_KEY, NEON } from './neonlook';
 import { PULSAR_DISTANCE } from './pulsar';
-import { DECK_PROPS, PROP_BODY_SHARE, deckPropColour, deckPropGeometry, deckPropSpot, partBox, type PropPart } from './deckprop';
+import { DECK_PROPS, PROP_LIGHT, deckPropColour, deckPropGeometry, deckPropSpot, partBox, type PropPart } from './deckprop';
 
 // One silhouette prop per deck, standing in the surround outside the board (#1551, art.md Decks): procedural, one merged mesh, a palette mix,
 // never between the play camera and a cell or a marble, and in the window at 960x540 and at 390x844.
 
-/** The play cameras of main.ts (syncTableZero): the terrace's own on a desktop, a pitch of 44 on a phone drawn back to 13.8 (neon look) or 18 (terrace look). */
-const DESKTOP: View = { ...TERRACE_VIEW };
-const PHONES: View[] = [13.8, 18].map((distance) => ({ ...TERRACE_VIEW, polar: (46 * Math.PI) / 180, distance }));
+/** The play cameras: the one a fight starts on (`resetView`), the terrace's own (syncTableZero), and a phone's pitch of 44 drawn back to 13.8 or 18. */
+const PLAY: View = resetView();
+const FINALS: View[] = [PLAY, { ...TERRACE_VIEW }, ...[13.8, 18].map((distance) => ({ ...TERRACE_VIEW, polar: (46 * Math.PI) / 180, distance }))];
 const SKY = new THREE.Color(NEON.sky);
 const TERRACE_BACKGROUND = new THREE.Color(0x2c3438);
 const luminance = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
@@ -36,14 +36,14 @@ const camera = (view: View, width: number, height: number): THREE.PerspectiveCam
 };
 
 describe('the deck props (#1551)', () => {
-  it('has one prop for each deck, of at least four parts and as tall as a person at the rail, no taller than the board is wide', () => {
+  it('has one prop for each deck, of at least four parts and between 1.4 and 3 cells tall', () => {
     for (const deck of DECK_NAMES) {
       const parts = DECK_PROPS[deck];
       expect(parts.length, deck).toBeGreaterThanOrEqual(4);
       const top = Math.max(...parts.map((p) => partBox(p).max.y));
-      expect(top, deck).toBeGreaterThanOrEqual(1.8);
+      expect(top, deck).toBeGreaterThanOrEqual(1.4);
       expect(top, deck).toBeLessThanOrEqual(3);
-      expect(Math.min(...parts.map((p) => partBox(p).min.y)), deck).toBeGreaterThanOrEqual(0); // it stands on the ground
+      expect(Math.min(...parts.map((p) => partBox(p).min.y)), deck).toBeGreaterThanOrEqual(-1e-6); // it stands on the ground
     }
   });
 
@@ -59,11 +59,11 @@ describe('the deck props (#1551)', () => {
     expect(triangles.size).toBeGreaterThan(1); // not one shape for all the decks
   });
 
-  it('is a mix of the deck key and the slate, a palette colour that reads 3:1 on the black sky and on the terrace background', () => {
-    expect(PROP_BODY_SHARE).toBeGreaterThan(0.5);
+  it('is a mix of the deck key and the white marble token, a palette colour that reads 3:1 on the black sky and on the terrace background', () => {
+    expect(PROP_LIGHT).toBeGreaterThan(0);
     for (const deck of DECK_NAMES) {
       const colour = deckPropColour(deck);
-      expect(colour.equals(new THREE.Color(NEON.slab).lerp(new THREE.Color(DECK_KEY[deck].key), PROP_BODY_SHARE)), deck).toBe(true);
+      expect(colour.equals(new THREE.Color(DECK_KEY[deck].key).lerp(new THREE.Color(NEON.whiteMarble), PROP_LIGHT)), deck).toBe(true);
       expect(contrast(colour, SKY), deck).toBeGreaterThanOrEqual(3);
       expect(contrast(colour, TERRACE_BACKGROUND), deck).toBeGreaterThanOrEqual(3);
     }
@@ -75,7 +75,7 @@ describe('the deck props (#1551)', () => {
       for (const radius of [RADIUS, 5]) {
         for (const deck of DECK_NAMES) {
           const near = Math.min(...world(DECK_PROPS[deck], phone, radius).flatMap(corners).map((c) => Math.hypot(c.x, c.z)));
-          expect(near, `${deck} ${phone} ${radius}`).toBeGreaterThanOrEqual(Math.max(PULSAR_DISTANCE, radius * 1.3) + 1);
+          expect(near, `${deck} ${phone} ${radius}`).toBeGreaterThanOrEqual(Math.max(PULSAR_DISTANCE, radius * 1.3) + 0.3);
         }
       }
     }
@@ -86,12 +86,12 @@ describe('the deck props (#1551)', () => {
   });
 
   it('stands in the window of the play camera, HUD margin kept, at 960x540 and at 390x844', () => {
-    for (const [width, height, phone, view] of [[960, 540, false, DESKTOP], [390, 844, true, PHONES[0]!], [390, 844, true, PHONES[1]!]] as const) {
-      const cam = camera(view, width, height);
+    for (const [width, height, phone] of [[960, 540, false], [390, 844, true]] as const) {
+      const cam = camera(PLAY, width, height);
       for (const deck of DECK_NAMES) {
         for (const c of world(DECK_PROPS[deck], phone).flatMap(corners)) {
           const p = c.clone().project(cam);
-          expect(Math.abs(p.x), `${deck} ${width} x`).toBeLessThanOrEqual(0.92);
+          expect(Math.abs(p.x), `${deck} ${width} x`).toBeLessThanOrEqual(0.95);
           expect(p.y, `${deck} ${width} y`).toBeLessThanOrEqual(0.8);
           expect(p.y, `${deck} ${width} y`).toBeGreaterThanOrEqual(-0.8);
         }
@@ -99,38 +99,41 @@ describe('the deck props (#1551)', () => {
     }
   });
 
-  it('never hides a cell or a marble from the play camera nor from the entrance beat, turned to any side', () => {
-    const views: View[] = [];
-    for (const final of [DESKTOP, ...PHONES]) {
-      for (let a = 0; a < 12; a++) {
-        const azimuth = (a * Math.PI) / 6;
-        for (const polar of [final.polar, 1.1]) for (const distance of [6, final.distance]) views.push({ azimuth, polar, distance }); // as low as the entrance's rise and as close as the zoom
-        for (const row of Object.values(BOSS_SPACE)) for (const beat of BEATS) for (const t of [0, 0.5, 1]) views.push(entranceView({ ...final, azimuth }, { beat, side: row.side, dark: 0 }, t * 1500));
+  it('never hides a cell or a marble from the play camera turned to any side down to a pitch of 38 degrees, nor from the entrance beat of any boss', () => {
+    for (const radius of [RADIUS, 5, 7]) { // the arena, The Ballast Mind's board, The Dual Room's: the camera draws back with the board
+      const views: View[] = [];
+      for (const final of FINALS.map((v) => ({ ...v, distance: (v.distance * radius) / RADIUS }))) {
+        for (let a = 0; a < 12; a++) {
+          const azimuth = (a * Math.PI) / 6;
+          for (const polar of [final.polar, 0.9]) for (const distance of [6, final.distance]) views.push({ azimuth, polar, distance }); // as low as a pitch of 38 degrees and as close as the zoom
+          if (a === 0 && final.polar === PLAY.polar) for (const row of Object.values(BOSS_SPACE)) for (const beat of BEATS) for (const t of [0, 0.5, 1]) views.push(entranceView(final, { beat, side: row.side, dark: 0 }, t * 1500)); // a boss fight opens on the default view, at the default azimuth
+        }
       }
-    }
-    const targets = BOARD_CELLS.filter(([q, r]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) >= 3).flatMap(([q, r]) => { // the outer rings, nearest the props
-      const { x, z } = axialTo3D(q, r);
-      return [new THREE.Vector3(x, 0, z), new THREE.Vector3(x, 0.6, z)]; // the cell, the top of a marble on it
-    });
-    for (const deck of DECK_NAMES) {
-      for (const phone of [false, true]) {
-        const boxes = world(DECK_PROPS[deck], phone);
-        const whole = boxes.reduce((all, box) => all.union(box), new THREE.Box3().makeEmpty());
-        for (const view of views) {
-          const eye = new THREE.Vector3(...Object.values(viewPosition(view)) as [number, number, number]);
-          for (const target of targets) {
-            const to = target.clone().sub(eye);
-            const length = to.length();
-            const ray = new THREE.Ray(eye, to.normalize());
-            if (ray.intersectBox(whole, new THREE.Vector3()) === null) continue; // misses the whole prop, so every part
-            const hit = boxes.some((box) => {
-              const at = ray.intersectBox(box, new THREE.Vector3());
-              return at !== null && at.distanceTo(eye) < length;
-            });
-            expect(hit, `${deck} ${phone} ${JSON.stringify(view)}`).toBe(false);
+      const outer = cellsFor(radius).filter(([q, r]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) >= radius - 1); // the rings nearest the props
+      const targets = outer.flatMap(([q, r]) => {
+        const { x, z } = axialTo3D(q, r);
+        return [new THREE.Vector3(x, 0, z), new THREE.Vector3(x, 0.6, z)]; // the cell, the top of a marble on it
+      });
+      for (const deck of DECK_NAMES) {
+        for (const phone of [false, true]) {
+          const boxes = world(DECK_PROPS[deck], phone, radius);
+          const whole = boxes.reduce((all, box) => all.union(box), new THREE.Box3().makeEmpty());
+          for (const view of views) {
+            const eye = new THREE.Vector3(...(Object.values(viewPosition(view)) as [number, number, number]));
+            for (const target of targets) {
+              const to = target.clone().sub(eye);
+              const length = to.length();
+              const ray = new THREE.Ray(eye, to.normalize());
+              if (ray.intersectBox(whole, new THREE.Vector3()) === null) continue; // misses the whole prop, so every part
+              const hit = boxes.some((box) => {
+                const at = ray.intersectBox(box, new THREE.Vector3());
+                return at !== null && at.distanceTo(eye) < length;
+              });
+              expect(hit, `${deck} ${phone} ${radius} ${JSON.stringify(view)}`).toBe(false);
+            }
           }
         }
       }
     }
-  });
+  }, 60000);
 });

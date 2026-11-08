@@ -18,6 +18,8 @@ function catchScene(): () => THREE.Scene {
   onTestFinished(() => spy.mockRestore());
   return () => scene!;
 }
+/** The positions of a prop's mesh: the page has its own copy of the module, so the geometry is compared by its points. */
+const shape = (mesh: THREE.Mesh): number[] => [...mesh.geometry.attributes.position!.array];
 const prop = (scene: THREE.Scene): THREE.Mesh => scene.getObjectByName('deck-prop') as THREE.Mesh;
 const fight = (name: string): void => {
   byId('boss-fight').click();
@@ -29,12 +31,12 @@ describe('main.ts deck props (#1551)', () => {
     const scene = catchScene();
     const game = await boot('?bot=off', { reducedMotion: true });
     await vi.waitFor(() => expect(prop(scene()).visible).toBe(true));
-    expect(prop(scene()).geometry).toBe(deckPropGeometry('mess'));
+    expect(shape(prop(scene()))).toEqual([...deckPropGeometry('mess').attributes.position!.array]);
+    expect(document.body.dataset.deckProp).toBe('true');
     game.openModes();
     fight('The Hull');
-    await vi.waitFor(() => expect(document.body.dataset.deck).toBe('cargo'));
+    await vi.waitFor(() => expect(shape(prop(scene()))).toEqual([...deckPropGeometry('cargo').attributes.position!.array]));
     expect(prop(scene()).visible).toBe(true);
-    expect(prop(scene()).geometry).toBe(deckPropGeometry('cargo'));
   });
 
   it('draws none in the room', async () => {

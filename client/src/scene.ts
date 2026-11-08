@@ -8,6 +8,7 @@ import { FOV, framing, screenView, viewPosition, type View } from './camera';
 import { DECKS, LIGHT } from './light';
 import { TONAL, flat as flatTone } from './look';
 import { DECK_PARTICLES, type Deck } from './deck';
+import { deckPropColour, deckPropGeometry, deckPropSpot } from './deckprop';
 import { fogSettings, hasParticles, renderPixelRatio, smoothEdges, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
@@ -158,6 +159,9 @@ export class SceneRenderer {
   };
   readonly roomDeck: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   readonly propsGroup: THREE.Group;
+  /** The silhouette prop of the deck in play (#1551): one mesh, one flat material, its shape and colour changed with the deck; shown on the arena's terrace, not in the room nor at the hub. */
+  readonly deckProp: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+  private propShown = true;
   /** The terrace (#1314): the arena's glTF and its sun, shown in place of the room and of the plate and rim in a 1v1 game. */
   readonly terrace: THREE.Group;
   terraceOn = false;
@@ -291,6 +295,9 @@ export class SceneRenderer {
     this.roomDeck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_SURFACE.width, 0.4, ROOM_SURFACE.depth), roomMaterial);
     this.roomDeck.position.set(0, ROOM_SURFACE.y - 0.2, 0);
     this.propsGroup = new THREE.Group();
+    this.deckProp = new THREE.Mesh(deckPropGeometry('mess'), new THREE.MeshStandardMaterial({ name: 'deck_prop', color: deckPropColour('mess'), roughness: 0.8, metalness: 0, fog: false }));
+    this.deckProp.name = 'deck-prop';
+    this.deckProp.visible = false;
     this.terrace = new THREE.Group();
     this.terrace.name = 'terrace';
     this.terrace.visible = false;
@@ -313,6 +320,7 @@ export class SceneRenderer {
       this.particles,
       this.roomDeck,
       this.propsGroup,
+      this.deckProp,
       this.terrace,
       this.plate,
       this.rim.near,
@@ -478,6 +486,16 @@ export class SceneRenderer {
     }
     this.dressTerrace();
     if (this.currentBay) applyDeckAtmosphere(this.currentBay, next as DeckId);
+    this.deckProp.geometry = deckPropGeometry(next);
+    this.deckProp.material.color.copy(deckPropColour(next));
+  }
+
+  /** The deck's prop stands beside a board of `radius` cells, on the side a phone or a desktop has room for, or is hidden (the hub's board has none). Drawn only with the terrace. */
+  showDeckProp(shown: boolean, radius: number, phone: boolean): void {
+    this.propShown = shown;
+    const { x, z } = deckPropSpot(radius, phone);
+    this.deckProp.position.set(x, 0, z);
+    this.deckProp.visible = shown && this.terraceOn;
   }
 
   drawFrame(board: ArrayLike<number>): FrameShape | null {
@@ -576,6 +594,7 @@ export class SceneRenderer {
     if (on === this.terraceOn) return;
     this.terraceOn = on;
     this.terrace.visible = on;
+    this.deckProp.visible = on && this.propShown;
     this.propsGroup.visible = !on;
     this.roomDeck.visible = !on && !this.currentBay;
     this.plate.visible = this.rim.near.visible = this.rim.far.visible = !on;
