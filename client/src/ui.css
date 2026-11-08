@@ -1537,6 +1537,15 @@ body[data-firstrun] #hud .tally { animation: none; } /* the line stays while the
 @keyframes screen-out-b { from { opacity: 1; } }
 body[data-place-transition] #screen-exit { display: none; }
 
+/* The board zoom (#1567): a 44 px button at the right, first of the stack over the dock (#support, with the score bar), on a phone held
+   upright only (main.ts shows it where it applies). The stack steps aside for a sheet over the dock, and so does the button. */
+#support #board-zoom {
+  box-sizing: border-box; min-width: 44px; height: 44px; padding: 0 12px; color: var(--text); background: var(--panel);
+  border: 1px solid var(--edge); border-radius: var(--r-button); font: 500 0.75rem/1 var(--ui); cursor: pointer;
+}
+#support #board-zoom[hidden], body:has(#dock-wrap :is(#lore, #goal-sheet, #trainer-card):not([hidden]), #settings-menu:not([hidden])) #board-zoom { display: none; } /* a sheet over the dock, or the open settings menu, covers its place */
+#support #board-zoom[aria-pressed='true'] { background: var(--active-fill); color: var(--active-ink); }
+#support #board-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Screen transitions (#1099, docs/specs/motion.md story 9): entering or leaving the Open world cross-fades the canvas in on --motion-base. The
    rule that stops matching swaps the animation for the other keyframes (the same name would not restart), so each change replays the fade. Opacity only: nothing waits, the game takes input from the first frame.
    A game that is over (the loss dim, end-dim) keeps its own animation. Reduced motion: the tokens are 0ms, a hard cut. */

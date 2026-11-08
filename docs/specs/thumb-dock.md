@@ -37,6 +37,7 @@ Dock = the bottom bar (one row, 44 px buttons). Sheet = a panel above the dock (
 
 Notes:
 - Settings (cog) is the only control at the right edge of the top band in every state, so the thumb never has to reach it except to open it. It stays 44×44. Wider than tall it is top right (16 px from the top and the right). Held upright it is at the right of the first row under the HUD plate, not in the plate's row (the plate takes 305 of the 358 px of a 360 px window and its fold button is in its corner), and at the top right when there is no plate (the Open world, #1566).
+- The board zoom (`#board-zoom`, #1567, ui.md section 5.1) is not a dock button: a 44 px button at the right of the dock band, 8 px over the dock, shown on a phone held upright on a 61-cell board only. It steps aside while a dock sheet is open. The dock keeps its buttons.
 - Clipboard (`#copy-diagnostics`) leaves the bottom-right corner (open question 1).
 - `#support` (the support container with the replay bar and clipboard) is emptied: the replay bar goes to the dock and the top band (replay review), the clipboard moves (open question 1).
 

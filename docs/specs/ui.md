@@ -805,6 +805,27 @@ from transparent at 65 % to near-black (`#0b0d0f` at 75 % opacity) at 100 %, the
 frame is drawn around the canvas, the 3D deck is the frame. The rim is removed with clear-board
 mode once that toggle exists (#32), and it has no motion.
 
+### 5.1 Board zoom on a phone held upright (#1567)
+
+A phone held upright (window taller than wide, at most 600 px wide) has one more control, `#board-zoom` (aria label "Zoom the board",
+`aria-pressed`), a 44 px button at the right edge of the dock band, 8 px over the dock (thumb-dock.md section 1). One tap toggles
+between the whole board with its rim, as above, and a closer view; the choice is saved per device (`ab-alone.board-zoom`) and stays
+until it is toggled off.
+
+- **The closer view** is a fixed camera in front of the board, almost straight down (0.15 rad from the vertical), drawn as close as keeps
+  all 61 cells, discs included, on the window (3 % margin, `zoomView` in `client/src/boardzoom.ts`). The frame's corners and the rim may be
+  cropped, no cell is. The orbit, the pinch and the wheel do not move it; the whole view comes back with the toggle.
+- **Marble width** (0.92 of the cell spacing, projected through the camera, held by `boardzoom.test.ts` and `e2e/board-zoom.spec.ts`):
+  at 390x844 the narrowest marble goes from 30.3 px to 37.1 px (middle cell 35.7 to 38.6); at 360x800 from 27.9 px to 34.2 px (middle cell
+  33.0 to 35.6). The test holds every marble of the closer view at 34 px or more at both sizes.
+- **It never blocks a move.** The camera is the picking camera: a tap on a marble selects it in both states. The HUD plate, the dock and the
+  button cover no cell at 390x844 and 360x800 in the closer view (`phone-layout`).
+- **Where it applies.** The boards of 61 cells (the game, a bot game, the boss and rogue-lite fights). Not the Hub, the
+  Battle royale, the Open world, the terminal reader, nor the Pulsar, Dual Room and Ballast Mind fights, whose props or radius lie off a
+  61-cell view: the button is hidden there. Desktop and landscape never show it and are unchanged.
+- **Open (#1567).** A mis-tap check on a real device (how often a finger lands on the neighbour of the marble it aims at, whole and closer)
+  has not been done: it needs a phone in hand. The widths above are a proxy, not that check.
+
 ## 6. Motion
 
 - HUD changes fade in over 160 ms (opacity only, ease-out). Nothing moves, nothing slides.

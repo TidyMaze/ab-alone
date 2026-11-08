@@ -37,6 +37,7 @@ const MOTION_KEY = 'ab-alone.reduced-motion';
 const FLAT_KEY = 'ab-alone.flat-hud';
 const FOLD_KEY = 'ab-alone.hud-folded';
 const TRANSCRIPT_KEY = 'ab-alone.transcript';
+const BOARD_ZOOM_KEY = 'ab-alone.board-zoom';
 const STEERING_KEY = 'ab-alone.steering';
 
 // The point lights the Open world may draw, on every tier (#849, #1234): its scene is lit by a hemisphere and a sun only. The
@@ -154,6 +155,9 @@ export const writeFlatHud = (store: Store, on: boolean): void => write(store, FL
 // The left HUD panel folded to a tab (#957): unfolded unless the player folded it.
 export const readHudFolded = (store: Store): boolean => read(store, FOLD_KEY) === 'on';
 export const writeHudFolded = (store: Store, on: boolean): void => write(store, FOLD_KEY, on ? 'on' : 'off');
+// The closer board view of a phone held upright (#1567): the whole board unless the player turned it on, per device.
+export const readBoardZoom = (store: Store): boolean => read(store, BOARD_ZOOM_KEY) === 'on';
+export const writeBoardZoom = (store: Store, on: boolean): void => write(store, BOARD_ZOOM_KEY, on ? 'on' : 'off');
 // The audio log transcript (#516): on unless the player turned it off.
 export const readTranscript = (store: Store): boolean => read(store, TRANSCRIPT_KEY) !== 'off';
 export const writeTranscript = (store: Store, on: boolean): void => write(store, TRANSCRIPT_KEY, on ? 'on' : 'off');

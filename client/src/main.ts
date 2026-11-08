@@ -47,6 +47,7 @@ import { bossHtml, goalShown } from './bosshud';
 import { goalCardHtml } from './goalcard';
 import { drawBossBar } from './bossbar';
 import { choirChips, drawChoirChips } from './choirchips';
+import { zoomView, boardZoomOn } from './boardzoom';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { PushIn } from './pushin';
 import { FreeCameraController } from './freecam';
@@ -260,6 +261,8 @@ import {
   readClearBoard,
   readFlatHud,
   readHudFolded,
+  readBoardZoom,
+  writeBoardZoom,
   readFps,
   readReducedMotion,
   readGlassSkin,
@@ -786,6 +789,12 @@ function updateFog(): void {
   sceneRenderer.updateFog(tier, clear, view, fogRadius, deck);
 }
 
+// The closer board view of a phone held upright (#1567), a one-tap choice kept per device: a fixed camera over the board, on the
+// boards of 61 cells only. The hub, the royale, the Open world, the reader and the fights with props off the board keep their views.
+let boardZoom = readBoardZoom(store);
+const boardZoomButton = document.getElementById('board-zoom') as HTMLButtonElement;
+const boardZoomHere = (): boolean => booted && !hub && !royale && !openWorld.active && !reading && !['pulsar', 'dual', 'ballast'].includes(fight?.id ?? '') && boardZoomOn(true, innerWidth, innerHeight);
+const boardZoomShown = (): boolean => boardZoom && boardZoomHere();
 function applyView(): void {
   dirty = CHANGE_DRAWS;
   if (freeCam.active) {
@@ -793,8 +802,9 @@ function applyView(): void {
     return;
   }
   sceneRenderer.fogRadius = fogRadius;
-  sceneRenderer.applyView(pushIn.frame(view, performance.now()) ?? view, sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
+  sceneRenderer.applyView(boardZoomShown() ? zoomView(innerWidth, innerHeight) : (pushIn.frame(view, performance.now()) ?? view), sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
   placeHubLabels();
+  boardZoomButton.hidden = !boardZoomHere();
 }
 // The hub's deck plan (#1249): the label plates over the rooms, the lift-shaft rail and the boss pips, shown in the hub only.
 const hubPlan = document.getElementById('hub-plan')!;
@@ -5246,6 +5256,13 @@ hudFold.addEventListener('click', () => {
   applyView();
 });
 hudFold.disabled = false;
+boardZoomButton.setAttribute('aria-pressed', String(boardZoom));
+boardZoomButton.addEventListener('click', () => {
+  boardZoom = !boardZoom;
+  writeBoardZoom(store, boardZoom);
+  boardZoomButton.setAttribute('aria-pressed', String(boardZoom));
+  applyView();
+});
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
@@ -7614,6 +7631,7 @@ let draws = 0;
 let drawAsked = false;
 booted = true; // every top-level let is declared: the page's callbacks may refresh from here (#1628)
 refresh();
+applyView(); // the stored closer board view (#1567)
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 // Until the terrace is drawn the room would show (#1389): the canvas stays hidden on a plain dark page, and shows after a terrace frame.
