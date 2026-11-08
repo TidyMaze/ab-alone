@@ -16,7 +16,7 @@ const CLOCK_SLACK_S = 600;
 export const LIMIT = 200;
 const TIMEOUT_MS = 8000;
 const SUB = 'ab-board';
-export const TAG = 'ab-alone-ranked';
+export const TAG = 'ab-alone-ranked'; // kept after the rename to Edgefall: the published results stay on the board (#1651)
 export const MAX_PLIES = 1000;
 /** The plies replayed in one read at most, whatever the relays send: a stranger cannot make the page replay for long. */
 export const REPLAY_BUDGET = 20_000;

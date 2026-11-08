@@ -38,6 +38,13 @@ describe('p2pTransport', () => {
     expect(RELAY_URLS).toEqual(['wss://relay.piazza.today', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud']); // the shortlist of #1287
   });
 
+  it('keeps the app id ab-alone after the rename to Edgefall, so an old and a new client find each other in one room (#1651)', () => {
+    p2pTransport('r');
+    expect(joined.config?.appId).toBe('ab-alone');
+    p2pPeers('w');
+    expect(joined.config?.appId).toBe('ab-alone');
+  });
+
 
   it('knows its own peer id, which a Hello signs', () => {
     expect(p2pTransport('r').self).toBe('my-peer-id');

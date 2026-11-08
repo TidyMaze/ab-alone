@@ -1,6 +1,8 @@
-// Signs client/src/bannedkeys.json with the owner key (docs/specs/multiplayer.md section 7) and writes client/src/bannedkeys.sig.json.
+// Signs Edgefall's ban list, client/src/bannedkeys.json, with the owner key (docs/specs/multiplayer.md section 7) and writes
+// client/src/bannedkeys.sig.json.
 // Run on the owner's Mac: `cd client && bun ../scripts/sign-banlist.ts`. The private key is read from the macOS keychain
-// (service ab-alone-banlist-signing, account owner) and is never printed, logged or written to a file.
+// (service ab-alone-banlist-signing, account owner) and is never printed, logged or written to a file. The service keeps the
+// pre-Edgefall name: internal, never shown, and renaming it would mean moving the key in the owner's keychain (#1651).
 // The new signature is checked with the same verifier the game uses before anything is written; a failure exits non-zero.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';

@@ -125,7 +125,7 @@ hosted. Build it once, and again after pulling `main`:
 Then add it to your MCP client, with the absolute path of your checkout. Claude Code:
 
 ```bash
-claude mcp add ab-alone -- bun /path/to/ab-alone/mcp/src/main.ts
+claude mcp add edgefall -- bun /path/to/ab-alone/mcp/src/main.ts
 ```
 
 Other clients (Claude Desktop, Cursor, ...) take the same command in their JSON config. If the
@@ -134,7 +134,7 @@ client does not find `bun`, give its full path (`which bun`).
 ```json
 {
   "mcpServers": {
-    "ab-alone": { "command": "bun", "args": ["/path/to/ab-alone/mcp/src/main.ts"] }
+    "edgefall": { "command": "bun", "args": ["/path/to/ab-alone/mcp/src/main.ts"] }
   }
 }
 ```

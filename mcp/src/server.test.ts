@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, test } from 'vitest';
 import { localPair } from '../../client/src/transport';
 import { newEncounter, newEngine } from './engine';
@@ -218,6 +219,18 @@ describe('a server with no peer transport (#1365)', () => {
 });
 
 describe('the MCP server', () => {
+  test('is Edgefall (#1651): its server name, its package, the walker config, and no tool says Abalone or ab-alone', async () => {
+    const host = await connect();
+    expect(host.getServerVersion()).toMatchObject({ name: 'edgefall' });
+    const { tools } = await host.listTools();
+    for (const tool of tools) expect(tool.description).not.toMatch(/abalone|ab-alone/i);
+    const file = (name: string) => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
+    expect(JSON.parse(file('package.json')).name).toBe('edgefall-mcp');
+    expect(Object.keys(JSON.parse(file('walker.mcp.json')).mcpServers)).toEqual(['edgefall']); // its tools are mcp__edgefall__*
+    expect(file('walker-prompt.md')).toContain('Use only the edgefall tools');
+    expect(file('walker-prompt.md')).not.toMatch(/abalone|ab-alone/i);
+  });
+
   test('lists the tools of a local game and of an online room, with their input schemas', async () => {
     const { tools } = await (await connect()).listTools();
     expect(tools.map((tool) => tool.name)).toEqual([

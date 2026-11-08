@@ -4,7 +4,7 @@ import { joinRoom, selfId } from 'trystero/nostr';
 import type { Wire } from './moverecord';
 import type { ConnectionState, Transport } from './transport';
 
-const APP_ID = 'ab-alone';
+const APP_ID = 'ab-alone'; // the rooms' namespace on the relays: kept after the rename to Edgefall, so old and new clients meet (#1651)
 
 /** The relay shortlist (docs/specs/multiplayer.md section 7, #1338), instead of Trystero's defaults (`relayConfig.urls` in trystero 0.26, the issue says `relayUrls`). */
 export const RELAY_URLS = ['wss://relay.piazza.today', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud']; // multiplayer.md 7 (#1287)

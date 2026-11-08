@@ -14,6 +14,14 @@ describe('invite links', () => {
     expect(roomFromHash(new URL(url).hash)).toBe('abc_DEF-123');
   });
 
+  it('keeps the page the invite was made on, old or new Pages path, and the same room in its hash (#1651)', () => {
+    for (const page of ['https://tidymaze.github.io/ab-alone/', 'https://tidymaze.github.io/edgefall/']) {
+      expect(inviteUrl(`${page}?net=p2p#old`, 'r1')).toBe(`${page}?net=p2p#room=r1`);
+      expect(royaleUrl(page, 'r1', 'ungWv48B')).toBe(`${page}#royale=r1&key=ungWv48B`);
+      expect(roomFromHash(new URL(inviteUrl(page, 'r1')).hash)).toBe('r1');
+    }
+  });
+
   it('finds no room when the hash is empty, foreign or malformed', () => {
     expect(roomFromHash('')).toBeNull();
     expect(roomFromHash('#other=1')).toBeNull();

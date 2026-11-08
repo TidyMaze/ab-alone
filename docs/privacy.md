@@ -1,8 +1,8 @@
-# Privacy notice (online play)
+# Edgefall privacy notice (online play)
 
 Best effort by the project's owners. Not reviewed by a lawyer.
 
-**Who is responsible.** The owners of the GitHub project [TidyMaze/ab-alone](https://github.com/TidyMaze/ab-alone). There is no company and no postal address. Contact: open an issue on that repository (do not put personal data in it).
+**Who is responsible.** The owners of Edgefall, the GitHub project [TidyMaze/ab-alone](https://github.com/TidyMaze/ab-alone). There is no company and no postal address. Contact: open an issue on that repository (do not put personal data in it).
 
 **Solo play** stays on your device. Nothing is sent. Saves live in your browser (localStorage). We run no game server, no account system and no analytics.
 

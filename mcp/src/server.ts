@@ -52,13 +52,13 @@ export function createServer(
   worldRoom: WorldRoom = new WorldRoom(world, worldRules(), refusePeers),
   rogue: RogueRun = new RogueRun(runRules(), session, bossIds),
 ): McpServer {
-  const server = new McpServer({ name: 'ab-alone', version: '0.1.0' });
+  const server = new McpServer({ name: 'edgefall', version: '0.1.0' });
 
   server.registerTool(
     'new_game',
     {
       description:
-        'Start a local game of Abalone against the bot, or a boss fight, and drop any game in progress. You are ' +
+        'Start a local game of Edgefall against the bot, or a boss fight, and drop any game in progress. You are ' +
         'Black and move first. Returns the game state (see get_state).',
       inputSchema: z.strictObject({
         boss: z

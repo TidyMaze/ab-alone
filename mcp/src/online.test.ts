@@ -283,6 +283,19 @@ describe('join_room', () => {
     await vi.waitFor(() => expect(human.engine.to_move()).toBe(1));
   });
 
+  // The room is in the link's hash, never its path: a link copied on the old Pages path and one on the new path open the same room
+  // during the rename overlap (#1651, #1650).
+  test.each(['https://tidymaze.github.io/ab-alone/', 'https://tidymaze.github.io/edgefall/'])(
+    'joins the room of a link on %s, with its creator fingerprint',
+    async (page) => {
+      const { session, theirs, rooms } = agent();
+      const human = await peer(theirs, 'renamed-room', 1);
+      const link = inviteUrl(page, 'renamed-room', undefined, await fingerprint(human.keys.pub));
+      expect(value(await session.joinRoom({ room: link }))).toMatchObject({ room: 'renamed-room', you: 'white' });
+      expect(rooms).toEqual(['renamed-room']);
+    },
+  );
+
   test('a link with the creator fingerprint seats the agent when the creator key matches', async () => {
     const { session, theirs } = agent();
     const human = await peer(theirs, 'keyed-room', 1);
@@ -349,6 +362,7 @@ describe('join_room', () => {
       code: 'room_not_found',
       message: expect.stringContaining('#daily'),
     });
+    expect(failure(await session.joinRoom({ room: 'https://tidymaze.github.io/edgefall/#daily' })).code).toBe('room_not_found');
     expect(failure(await session.joinRoom({ room: '' })).code).toBe('room_not_found');
     expect(rooms).toEqual([]);
   });
