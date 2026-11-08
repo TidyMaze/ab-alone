@@ -417,6 +417,9 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .pips { display: flex; justify-content: space-between; margin: 0.5rem 0; }
 #hud .pips span { display: flex; gap: 0.25rem; }
 #hud .pip { width: 3px; height: 0.9rem; background: var(--accent); }
+/* #1568: the count as a number beside the pips, held upright only: there the score line is hidden (below), elsewhere it says it. */
+#hud .pips .count { display: none; font: 600 0.75rem/0.9rem var(--ui); color: var(--muted); padding-inline: 0.25rem; }
+@media (orientation: portrait) { #hud .pips .count { display: inline; } }
 /* #1038: each side's pips are its marble colour, the same in both themes like the marbles; a rim keeps each on its panel. */
 #hud .dark .pip:not(.out) { background: #15191c; box-shadow: 0 0 0 1px var(--muted); }
 #hud .pale .pip:not(.out) { background: #d8d4c8; box-shadow: 0 0 0 1px var(--edge); }

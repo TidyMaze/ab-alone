@@ -3884,7 +3884,7 @@ function drawHud(extra = ''): void {
   sawLines(flavour); // the line of the story at the start of a match (#1585), kept in the ledger whatever the plate shows
   // The plate's subtitle: a match says who plays and the goal (#1568); a boss fight and the first run keep Tally's line.
   const scripted = firstRun === 'open' || firstRun === 'fight'; // the first run keeps Tally's line, its coach note explains it (#1521)
-  const tally = opening && !fight && !scripted ? matchLine({ mode: online ? 'online' : worker ? 'bot' : 'local', win: win[0] }) : flavour;
+  const tally = opening && !fight && !scripted ? matchLine({ mode: online ? 'online' : run ? 'run' : trainer ? 'trainer' : worker ? 'bot' : 'local', win: win[0] }) : flavour;
   const moves = run?.state.fighting ? movesLine(run.map, run.state) : ''; // the budget and the count of the act in a fight (#1473), the map has its own
   // End banner (#282): body[data-over] carries the animation id for the CSS and the e2e tests.
   const end = endBanner({

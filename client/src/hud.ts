@@ -33,6 +33,9 @@ const marble = (side: number, glass: number): string => (side === glass ? 'pale'
 const pips = (out: number, slots: number, was = out): string =>
   Array.from({ length: Math.max(slots, out) }, (_, i) => `<span class="pip${i < out ? ' out' : ''}${i >= was && i < out ? ' fresh' : ''}"></span>`).join('');
 
+/** A side's ejected count as a number at the outer end of its pips (#1568): a phone held upright shows the pips alone. */
+const count = (out: number, win: number): string => `<b class="count">${outOf(out, win)}</b>`;
+
 export function hudHtml({ side, status, glass, score, runScore, ejected, win, note, rating = '', online, rematch, end, tally = '', tallyNote = '', turn: ply, was }: HudState): string {
   const over = status !== 0;
   const turn = end ? end.title : over ? (status === 3 ? 'Draw' : `${sideName(status, glass)} wins`) : (ply ?? `${sideName(side, glass)} to move`);
@@ -47,7 +50,7 @@ export function hudHtml({ side, status, glass, score, runScore, ejected, win, no
     (online ? `<div class="presence ${online.tone}">${online.text}</div>` : '') +
     (rematch ? `<div class="rematch">${rematch}</div>` : '') +
     (runScore === undefined ? `<div class="score">${score}</div>` : `<div class="score run">${runScore}</div>`) +
-    `<div class="pipline"><div class="pips" aria-hidden="true"><span class="${marble(1, glass)}">${pips(ejected[0], win[0], was?.[0])}</span><span class="${marble(2, glass)}">${pips(ejected[1], win[1], was?.[1])}</span></div>${rating}</div>` +
+    `<div class="pipline"><div class="pips" aria-hidden="true"><span class="${marble(1, glass)}">${pips(ejected[0], win[0], was?.[0])}${count(ejected[0], win[0])}</span><span class="${marble(2, glass)}">${count(ejected[1], win[1])}${pips(ejected[1], win[1], was?.[1])}</span></div>${rating}</div>` +
     `<small>${note}</small>`
   );
 }

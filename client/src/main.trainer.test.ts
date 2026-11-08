@@ -44,6 +44,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     expect(document.body.dataset.trainer).toBe('1');
     expect(game.hud()).toContain('Trainer · wave 1 · best 0 · Marbles left 6/6');
     expect(game.hud()).toContain('Drill: wave 1. Opponents: one. Seated.');
+    expect(game.hud()).toMatch(/Trainer vs Bot\. Eject \d+ to win\./); // the plate names the mode (#1568)
     expect(whites(game)).toBe(1);
     expect(game.hook<number[]>('__board').filter((c) => c === 1)).toHaveLength(14);
     expect(byId('new-game').hidden).toBe(true);

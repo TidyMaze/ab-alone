@@ -159,6 +159,13 @@ describe('hudHtml', () => {
     expect(html.match(/class="pip out"/g)).toHaveLength(8);
   });
 
+  it('carries the ejected count of each side as a number at the outer end of its pips (#1568)', () => {
+    const html = hudHtml({ ...base, ejected: [2, 0] });
+    expect(html).toContain('<span class="pip out"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><b class="count">2/6</b></span>');
+    expect(html).toContain('<span class="pale"><b class="count">0/6</b><span class="pip">');
+    expect(hudHtml({ ...base, win: [0, 2], ejected: [3, 0] })).toContain('<b class="count">3</b>'); // a side that does not win by ejections: the count alone
+  });
+
   it("colours each side's pips as its marble: dark for Black, pale for White, #1038", () => {
     const rows = (glass: number) => [...hudHtml({ ...base, glass }).matchAll(/<span class="(dark|pale)">/g)].map((m) => m[1]);
     expect(rows(2)).toEqual(['dark', 'pale']); // Black is side 1, the enemy shell
@@ -174,7 +181,7 @@ describe('hudHtml', () => {
 
   it('draws one pip per ejection a side needs: 10 for Black against the Choir, Decision #131', () => {
     const html = hudHtml({ ...base, win: [10, 6], ejected: [3, 1] });
-    const [black, white] = html.match(/<span class="(?:dark|pale)">(<span class="pip[^"]*"><\/span>)+<\/span>/g)!; // the rows carry their marble colour (#1038)
+    const [black, white] = html.match(/<span class="(?:dark|pale)">.*?<\/b>(?:<span class="pip[^"]*"><\/span>)*<\/span>/g)!; // the rows carry their marble colour (#1038)
     expect(black!.match(/class="pip/g)).toHaveLength(10);
     expect(white!.match(/class="pip/g)).toHaveLength(6);
     expect(html.match(/class="pip out"/g)).toHaveLength(4);

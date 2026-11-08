@@ -7,8 +7,16 @@ describe('matchLine', () => {
     expect(matchLine({ mode: 'local', win: 6 })).toBe('Two players, one board. Eject 6 to win.');
   });
 
-  it('the bot table says you play the bot', () => {
+  it('the bot table says you play the bot, its level left to the rating (#1611)', () => {
     expect(matchLine({ mode: 'bot', win: 6 })).toBe('You vs Bot. Eject 6 to win.');
+  });
+
+  it('a rogue-lite fight says so, its strength is the act strength, not the setting', () => {
+    expect(matchLine({ mode: 'run', win: 6 })).toBe('Rogue-lite fight vs Bot. Eject 6 to win.');
+  });
+
+  it('the Trainer says so', () => {
+    expect(matchLine({ mode: 'trainer', win: 4 })).toBe('Trainer vs Bot. Eject 4 to win.');
   });
 
   it('an online table says you play your opponent online', () => {

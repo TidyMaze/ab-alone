@@ -96,6 +96,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(map().hidden).toBe(true);
     expect(document.body.dataset.run).toBe('fight');
     expect(game.hud()).toContain('Rogue-lite run · act 1 fight'); // its formation too, from a random seed
+    expect(game.hud()).toMatch(/Rogue-lite fight vs Bot\. Eject \d+ to win\./); // the plate names the mode (#1568)
     playMove(game);
     await game.settle(); // the bot's reply, and the save
     game.frame(1000); // the bot's move waits for the slide of the player's

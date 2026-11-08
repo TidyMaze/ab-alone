@@ -48,4 +48,9 @@ describe('The page controls', () => {
   it('put Copy beside the invite link', () => {
     expect(children('invite-row')).toEqual(['invite', 'invite-copy']);
   });
+
+  it('gives each game mode of the Modes sheet a one-line plain description, its title (#1568); the Daily sets its own', () => {
+    const modes = ['play-online', 'fight-together', 'boss-duel', 'battle-royale', 'ranked', 'boss-fight', 'roguelite', 'trainer', 'openworld', 'ship'];
+    for (const id of modes) expect(doc.getElementById(id)!.title, id).toMatch(/^[A-Z][^.]{10,80}\.$/);
+  });
 });
