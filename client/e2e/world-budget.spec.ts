@@ -4,7 +4,7 @@ import { expect, test, type CDPSession, type Page } from '@playwright/test';
 // not a gate (tag @budget): every run is a fresh page on `?openworld=7`, and the last test prints the median and the range
 // of RUNS runs, since a loaded machine moves the long tasks. It measures, for the world: the triangles and draw calls of a frame, the
 // JS heap once collected, the longest task from the load to the first drawn world, the longest task from a wild fight's touch to its
-// arena (the first fight of the page, then a second), the heap once collected after the first fight, back in the world, against the heap
+// arena (the first fight of the page, then a second), the heap once collected after the first fight, back in the world at the spawn, against the heap
 // before it (`margin`: the board files the fight loaded stay), and after the second against the first (`leak`: what a fight leaves behind).
 const RUNS = 5;
 const SEED = 3; // a marble stands within the hero's sight of the spawn (openworld-wild.spec.ts)
@@ -19,6 +19,29 @@ async function heap(cdp: CDPSession): Promise<number> {
   const { usedSize } = await cdp.send('Runtime.getHeapUsage');
   return usedSize / 1e6;
 }
+
+/**
+ * Back from a fight, the hero stands beside the marble it fled, which fights again once the world's calm ends, 5 s after its first draw
+ * (FLEE_GRACE_MS, #1511): on a loaded machine the settle and the heap's collections outlast it, a fight starts and the next fixture finds
+ * no world (#1642). The hero steps back to the spawn in the same task the world comes back in (`openworldAt` is written with its view),
+ * so no frame runs in between: no fight starts until the next fixture puts the hero beside the marble again.
+ */
+const stepAway = (page: Page, from: string) =>
+  page.evaluate(
+    (from) =>
+      new Promise<void>((done) => {
+        const away = () => {
+          if (document.body.dataset.openworldAt !== from) return false;
+          (window as unknown as Hooks).__openworldFixture({ hero: [0, 0], troop: [] });
+          done();
+          return true;
+        };
+        if (away()) return;
+        const watch = new MutationObserver(() => away() && watch.disconnect());
+        watch.observe(document.body, { attributes: true, attributeFilter: ['data-openworld-at'] });
+      }),
+    from,
+  );
 
 /** The longest main-thread task since the last call, in ms. */
 const longest = (page: Page) =>
@@ -56,7 +79,8 @@ for (let run = 1; run <= RUNS; run++) {
       await page.waitForTimeout(1000);
       const long = await longest(page);
       await page.getByRole('button', { name: 'Flee' }).click();
-      await expect.poll(() => data(page, 'openworldAt')).toBe(beside.join(','));
+      await stepAway(page, beside.join(','));
+      await expect.poll(() => data(page, 'openworldAt')).toBe('0,0');
       await page.waitForTimeout(1000);
       fights.push({ long, heapAfter: await heap(cdp) });
     }
