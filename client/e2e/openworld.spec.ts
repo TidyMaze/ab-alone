@@ -239,7 +239,9 @@ test('the Open world is in the mode menu without the flag, and a click enters a 
 
 // #967: the troop pushes the enemy in front of it after a step. The fixture puts the hero on (0, 0) with two troop marbles
 // behind it and one enemy on (2, 0): one Right press rolls the hero onto (1, 0), the line of three pushes the enemy on to
-// (3, 0) and the hero along with it, to (2, 0). The state is final at once; the push is drawn as an animation of 0.7 s.
+// (3, 0) and the hero along with it, to (2, 0). The state is final at once; the push is drawn as an animation of about 0.6 s.
+// The page's clock is paused (frameclock.ts): on flowing time a loaded machine draws a frame every 0.8 s (load 53), so the first frame after
+// the keydown could already be past the push, take the mark down, and the first look saw no animation (#1660).
 shared('the troop pushes the enemy in front of it after a step, and the enemy moves on, #967', async ({ world: page }) => {
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   await page.evaluate(() =>
@@ -249,15 +251,21 @@ shared('the troop pushes the enemy in front of it after a step, and the enemy mo
       enemies: [[2, 0]],
     }),
   );
-  await page.keyboard.press('ArrowRight');
-  // The push is drawn as an animation at once (the state was final before it): the mark is up until its lunge, slide and fall are over.
-  expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBe('1');
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldPush)).toBe('1');
-  expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('2,0');
-  expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0'); // the two troop marbles trail the hero on (2,0): the line of three pushed forward one cell each, no third marble
-  expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
-  expect(await page.evaluate(() => document.body.dataset.openworldBeaten)).toBe('0');
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined(); // within the expect timeout: a loaded page draws the end of the animation late
+  const anim = () => page.evaluate(() => document.body.dataset.openworldAnim);
+  await paused(page, async (frame) => {
+    await page.keyboard.press('ArrowRight');
+    // The push is drawn as an animation at once (the state was final before it): the mark is up until its lunge, slide and fall are over.
+    expect(await anim()).toBe('1'); // from the keydown, before any frame
+    expect(await page.evaluate(() => document.body.dataset.openworldPush)).toBe('1');
+    expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('2,0');
+    expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0'); // the two troop marbles trail the hero on (2,0): the line of three pushed forward one cell each, no third marble
+    expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
+    expect(await page.evaluate(() => document.body.dataset.openworldBeaten)).toBe('0');
+    await frame(300); // the step has landed (140 ms), the lunge is under way
+    expect(await anim()).toBe('1');
+    await frame(400); // 700 ms after the keydown: the push is over (its end, 600 ms, is the unit test's, openworldmode.test.ts)
+    expect(await anim()).toBeUndefined();
+  });
 });
 
 // #967: with reduced motion the push is not drawn in between: the marbles jump to their cells, as before.
