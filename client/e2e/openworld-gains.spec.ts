@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { lowTierOnCi } from './modes';
+import { lowTierOnCi, showHud } from './modes';
 import { shot } from './shot';
 
 lowTierOnCi();
@@ -28,6 +28,7 @@ for (const { name, viewport, touch } of sizes) {
       await expect(page.locator('body')).toHaveAttribute('data-openworld-beaten', '1');
       await expect(page.locator('body')).toHaveAttribute('data-openworld-recruits', '1');
       expect((await page.evaluate(() => document.body.dataset.openworldTroop))!.split(' ')).toHaveLength(1);
+      await showHud(page, '#openworld-recruits'); // a phone held upright keeps it behind the chip of its bar (#1657)
       const line = page.locator('#openworld-recruits');
       await expect(line).toHaveText('A marble joins the troop. Recruits 1 / 5');
       await expect(page.locator('body')).not.toHaveAttribute('data-openworld-anim', '1'); // the push has landed

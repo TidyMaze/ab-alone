@@ -961,11 +961,33 @@ body[data-openworld] #openworld-hud { display: block; }
 body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #openworld-chip:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
 #openworld-chip:active { border-color: var(--plate-accent); }
+#openworld-chip .chip-more { display: none; }
 /* The minimap (#1410): top right, under the settings cog (16px from the top, 2.75rem high), over nothing else; the settings menu opens above it. The mode adds the canvas when a world opens and removes it when it is left. */
 #openworld-minimap { position: fixed; z-index: 0; top: calc(16px + 2.75rem + 0.5rem); right: 16px; width: 9rem; height: 9rem; pointer-events: none; zoom: var(--ui-scale); }
 /* Held upright the plate spans the width: it stands above the dock's exit (62 px high, 16 px up), not under it (#1517), and in the lower half, the hero
    stands at the middle: a plate taller than that scrolls, the online row last. */
 @media (orientation: portrait) { #openworld-hud { bottom: 5.5rem; box-sizing: border-box; max-height: calc((50dvh - 5.5rem) / var(--ui-scale, 1)); } }
+/* On a phone held upright (#1657, foldsAtEntry in openworldfold.ts) the folded plate is a bar: the goal, the bearing and the medals, a fifth
+   of the window at most, and the world starts with it. Taps go through it to the world; its chip, under the bar, opens the rest. */
+@media (orientation: portrait) and (max-width: 600px) {
+  #openworld-hud[data-folded] { opacity: 1; transform: none; visibility: visible; transition: none; padding: 0.5rem 0.75rem; }
+  #openworld-hud[data-folded] > :not(#openworld-live, #openworld-goal, #openworld-bearing, :has(> #openworld-medals)) { display: none; }
+  #openworld-hud[data-folded] p { margin-bottom: 0.25rem; }
+  #openworld-hud[data-folded] > :has(> #openworld-medals) { margin-bottom: 0; }
+  /* The chip is the one way to the buttons here: it says More (#1657). Opened, the claim (two lines of text, nothing to focus) goes under the
+     buttons, before the online row, so the buttons come higher, on one row with a closer padding; every control keeps its HTML order, so Tab
+     follows the screen (WCAG 2.4.3). The panel keeps to the lower half; on a short window it may rise towards the Map button (its top 16px +
+     2.75rem + 0.5rem + 9rem + 0.5rem, its target), 17.25rem at most, so a 640 px window shows it whole. What does not fit scrolls. */
+  #openworld-chip { padding: 0 1rem; font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+  #openworld-chip .chip-i { display: none; }
+  #openworld-chip .chip-more { display: inline; }
+  #openworld-hud { padding: 0.5rem 0.75rem; max-height: calc(max(50dvh - 5.5rem, min(17.25rem, 100dvh - 5.5rem - 16px - 12.75rem - var(--target) - 0.5rem)) / var(--ui-scale, 1)); }
+  body[data-openworld] #openworld-hud:not([data-folded]) { display: flex; flex-wrap: wrap; align-content: flex-start; }
+  #openworld-hud:not([data-folded]) > * { flex: 0 0 100%; }
+  #openworld-hud:not([data-folded]) > #openworld-tally { order: 1; }
+  #openworld-hud:not([data-folded]) > #openworld-online { order: 2; }
+  #openworld-hud:not([data-folded]) > button { flex: 0 1 auto; padding: 0 0.75rem; } /* over the plate buttons' rule, later in this file */
+}
 /* The map (#1411, openworldmap.ts): full screen over the world, its HUD and the minimap. The box takes the drag, the wheel and the pinch;
    its canvas ignores the pointer, as the touch stick takes a press on a canvas. It covers #chrome (z-index 1); the Map button under the
    minimap is out of #chrome, over the map, to close it. */

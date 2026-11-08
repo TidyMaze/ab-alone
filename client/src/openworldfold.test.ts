@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { bindHudFold, HUD_FOLD_MS, HUD_FOLD_STEPS, shouldFold } from './openworldfold';
+import { bindHudFold, foldsAtEntry, HUD_FOLD_MS, HUD_FOLD_STEPS, shouldFold } from './openworldfold';
 
 describe('the fold rule of the Open world HUD plate (#1138)', () => {
   it('folds after 3 steps or after 8 s from the entry, whichever comes first', () => {
@@ -11,6 +11,15 @@ describe('the fold rule of the Open world HUD plate (#1138)', () => {
     expect(shouldFold(3, 100)).toBe(true);
     expect(shouldFold(0, 8000)).toBe(true);
     expect(shouldFold(1, 9000)).toBe(true);
+  });
+});
+
+describe('the plate of a phone held upright (#1657)', () => {
+  it('enters folded to its bar on a phone held upright, 600 px wide at most, as the media query of ui.css', () => {
+    const upright: [number, number][] = [[360, 640], [390, 844], [430, 932], [600, 900], [390, 390]];
+    const not: [number, number][] = [[1280, 800], [844, 390], [932, 430], [601, 900], [768, 1024]];
+    for (const [w, h] of upright) expect(foldsAtEntry(w, h), `${w}x${h}`).toBe(true);
+    for (const [w, h] of not) expect(foldsAtEntry(w, h), `${w}x${h}`).toBe(false);
   });
 });
 
@@ -113,6 +122,52 @@ describe('the plate and its chip', () => {
     await settle();
     expect(folded()).toBe(false);
     expect(chip.hidden).toBe(true);
+  });
+
+  describe('on a phone held upright (#1657)', () => {
+    const size = (width: number, height: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+    };
+    beforeEach(() => size(390, 844));
+    afterEach(() => size(1024, 768));
+
+    it('enters folded to its bar, the chip shown, and opens with the chip until the next 3 steps', async () => {
+      await enter();
+      expect(folded()).toBe(true);
+      expect(chip.hidden).toBe(false);
+      expect(chip.getAttribute('aria-expanded')).toBe('false');
+      await walk('0,0');
+      chip.click();
+      expect(folded()).toBe(false);
+      await vi.advanceTimersByTimeAsync(2 * HUD_FOLD_MS);
+      expect(folded()).toBe(false); // no clock on a plate the player asked for
+      for (const cell of ['1,0', '2,0', '3,0']) await walk(cell);
+      expect(folded()).toBe(true);
+    });
+
+    it('enters open while the one lesson of the roll shows (#1604), and folds on the clock as before', async () => {
+      hud.innerHTML = '<p id="openworld-lesson"></p>';
+      await enter();
+      expect(folded()).toBe(false);
+      await vi.advanceTimersByTimeAsync(HUD_FOLD_MS);
+      expect(folded()).toBe(true);
+      delete document.body.dataset.openworld;
+      await settle();
+      hud.querySelector('p')!.hidden = true; // the lesson is done
+      await enter();
+      expect(folded()).toBe(true);
+    });
+
+    it('enters open again on a window that is not a phone held upright', async () => {
+      await enter();
+      delete document.body.dataset.openworld;
+      await settle();
+      size(844, 390);
+      await enter('9');
+      expect(folded()).toBe(false);
+      expect(chip.hidden).toBe(true);
+    });
   });
 
   it('ignores the marks of a world that is already entered (the same seed again)', async () => {

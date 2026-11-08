@@ -641,7 +641,12 @@ The panel (`#openworld-hud`) opens on what to do, not on the keys.
 - **Claim.** The first-visit line stays, once per player, with its stage rule (`Claim: unworked.` before stage 5, "Claim 0412: unworked." from it), and
   is followed by "A claim is a case on Tally's ledger. Unworked means no tower is beaten."
 - **Phone.** On a window 500 px high or under the panel is a column of 17 rem at the left, so the hero in the middle is clear of it, and its own
-  height is bounded (`max-height`, it scrolls) so the open controls never leave the top of the screen.
+  height is bounded (`max-height`, it scrolls) so the open controls never leave the top of the screen. On a phone held upright (portrait, 600 px
+  wide at most, `foldsAtEntry`, #1657) the folded panel is a bar, the goal, the bearing and the medals, 104 px high from 360x640 to 430x932 (a fifth
+  of the window at most), and the world starts with it; taps go through it, and its chip (`#openworld-chip`, 48 px high), which says More there (the
+  one way to the buttons), opens the whole panel until the next 3 steps. Opened there, its two buttons stand on one row and the claim goes under them
+  (text only: every control keeps its HTML order, so Tab follows the screen), and on a short window the panel may rise towards the Map button
+  (17.25rem at most): at 360x640 it shows whole, the buttons' bottom at 492 px. The first-run lesson of the roll still enters with the whole panel.
 
 ## 15. Rings: the nearest tower is the easiest (#1532)
 

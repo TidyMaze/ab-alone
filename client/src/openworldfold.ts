@@ -8,6 +8,11 @@
 export const HUD_FOLD_STEPS = 3;
 export const HUD_FOLD_MS = 8000;
 
+/** Whether the plate enters folded (#1657): on a phone held upright (portrait, 600 px wide at most, the media query of ui.css) the folded
+ * plate is a bar with the goal, the bearing and the medals, so the world starts with it and its chip opens the rest; the first-run lesson
+ * of the roll still enters with the whole plate (bindHudFold). */
+export const foldsAtEntry = (width: number, height: number): boolean => height >= width && width <= 600;
+
 /** Whether the plate folds, after `steps` steps taken and `elapsed` ms from the entry: whichever limit comes first. */
 export const shouldFold = (steps: number, elapsed: number): boolean => steps >= HUD_FOLD_STEPS || elapsed >= HUD_FOLD_MS;
 
@@ -35,7 +40,10 @@ export function bindHudFold(root: Document): void {
   };
   const begin = (): void => {
     reset();
-    clock = setTimeout(() => show(false), HUD_FOLD_MS);
+    const { innerWidth, innerHeight } = root.defaultView!;
+    const lesson = root.getElementById('openworld-lesson')?.hidden === false; // the first-run lesson of the roll (#1604) keeps the whole plate
+    if (foldsAtEntry(innerWidth, innerHeight) && !lesson) show(false);
+    else clock = setTimeout(() => show(false), HUD_FOLD_MS);
   };
 
   chip.addEventListener('click', () => {

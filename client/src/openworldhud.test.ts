@@ -50,6 +50,16 @@ describe('the Open world HUD plate (#1138)', () => {
     expect(css).toContain('body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }');
   });
 
+  it('names the chip in words on a phone held upright, where it is the one way to the buttons (#1657): More, its name says it too', () => {
+    const chip = html.match(/<button id="openworld-chip"[^>]*>(.*?)<\/button>/)!;
+    expect(chip[0]).toMatch(/aria-label="More[^"]*"/); // the name holds the word shown (label in name)
+    expect(chip[1]).toContain('<span class="chip-i" aria-hidden="true">i</span><span class="chip-more" aria-hidden="true">More</span>');
+    expect(css).toContain('#openworld-chip .chip-more { display: none; }');
+    const phone = css.slice(css.indexOf('@media (orientation: portrait) and (max-width: 600px) {\n  #openworld-hud[data-folded]'));
+    expect(phone.slice(0, phone.indexOf('\n}'))).toContain('#openworld-chip .chip-i { display: none; }');
+    expect(phone.slice(0, phone.indexOf('\n}'))).toContain('#openworld-chip .chip-more { display: inline; }');
+  });
+
   it('styles the plate buttons like the redesigned ones: dark steel, light ink, 48 px, 6 px radius, uppercase, amber focus and press', () => {
     const button = rule('#openworld-hud button');
     expect(button).toContain('min-height: var(--target)');

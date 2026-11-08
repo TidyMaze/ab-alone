@@ -319,6 +319,7 @@ test('on a phone the name field and Hide are 44 px high and the plate leaves the
     w.__netPeerIn([2, 2, 0, 0, 0, 0, 0], 'p'); // on our own cell
   });
   await expect(page.locator('.peer-tag')).toHaveText('Bob');
+  await showHud(page, '#openworld-name'); // a phone held upright enters with the bar: its chip opens the online row (#1657)
   const field = (await page.locator('#openworld-name').boundingBox())!;
   const hide = (await page.locator('#openworld-hide').boundingBox())!;
   expect(field.height).toBeGreaterThanOrEqual(44);

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { pauseClock } from './clock';
 import { lowTierOnCi, showHud } from './modes';
 import { shot } from './shot';
 
@@ -7,10 +8,13 @@ lowTierOnCi();
 // #1530: the Open world says its goal on arrival, one sentence and the bearing to the nearest tower, and keeps the controls behind a
 // collapsed hint (one tap on its summary, or H). The plate must not cover the hero on a phone, upright or on its side.
 
-const enter = async (page: import('@playwright/test').Page): Promise<void> => {
+// `hold` (#1658): the page's clock is paused once the world is entered, so the plate does not fold under the test.
+const enter = async (page: import('@playwright/test').Page, hold = false): Promise<void> => {
+  if (hold) await page.clock.install(); // before the load: the page's times are the clock's from the start (frameclock.ts)
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
+  if (hold) await pauseClock(page);
   await showHud(page, '#openworld-goal'); // the plate folds 8 s after the entry, before a slow runner gets here (#1436)
 };
 
@@ -58,28 +62,102 @@ test('the bearing follows the ring to beat: a tower of the next ring next to the
   await expect(page.locator('#openworld-bearing')).toHaveText(/^Nearest tower: 1 cell, /);
 });
 
-for (const [name, viewport] of [['upright 390 by 844', { width: 390, height: 844 }], ['landscape 844 by 390', { width: 844, height: 390 }]] as const) {
-  test.describe(name, () => {
-    test.use({ viewport, isMobile: true, hasTouch: true });
+// Upright, the plate enters as a bar (#1657, below). #1658: the plate folds 8 s after the entry; on a slow page that clock fired between the
+// plate shown and the tap on its summary, so the page's clock is paused once the world is entered (`enter(page, true)`).
+test.describe('landscape 844 by 390', () => {
+  test.use({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
 
-    test('the plate on arrival fits the screen and leaves the hero in the middle uncovered', async ({ page }, testInfo) => {
-      await enter(page);
-      const box = (await page.locator('#openworld-hud').boundingBox())!;
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-      expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
-      const [cx, cy] = [viewport.width / 2, viewport.height / 2];
-      const covers = box.x < cx + 40 && box.x + box.width > cx - 40 && box.y < cy + 40 && box.y + box.height > cy - 40;
-      expect(covers, `the plate ${JSON.stringify(box)} covers the hero at ${cx},${cy}`).toBe(false);
-      await expect(page.locator('#openworld-controls .tap-hint')).toBeHidden();
-      await shot(page, { path: testInfo.outputPath(`1530-world-${viewport.width}.png`) });
-      await page.locator('#openworld-controls summary').tap();
-      await expect(page.locator('#openworld-controls .tap-hint')).toBeVisible();
-      await shot(page, { path: testInfo.outputPath(`1530-world-${viewport.width}-controls.png`) });
-    });
+  test('the plate on arrival fits the screen and leaves the hero in the middle uncovered', async ({ page }, testInfo) => {
+    await enter(page, true);
+    const box = (await page.locator('#openworld-hud').boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(844);
+    expect(box.y + box.height).toBeLessThanOrEqual(390);
+    const covers = box.x < 422 + 40 && box.x + box.width > 422 - 40 && box.y < 195 + 40 && box.y + box.height > 195 - 40;
+    expect(covers, `the plate ${JSON.stringify(box)} covers the hero at 422,195`).toBe(false);
+    await expect(page.locator('#openworld-controls .tap-hint')).toBeHidden();
+    await shot(page, { path: testInfo.outputPath('1530-world-844.png') });
+    await page.locator('#openworld-controls summary').tap();
+    await expect(page.locator('#openworld-controls .tap-hint')).toBeVisible();
+    await shot(page, { path: testInfo.outputPath('1530-world-844-controls.png') });
   });
-}
+});
+
+// #1657: a phone held upright enters with the plate folded to a bar, the goal, the bearing and the medals: a fifth of the window at most,
+// under the hero, the goal 12 px at least. Its chip says More, a 44 px target clear of the Hub exit, and opens the rest: under the hero at
+// 390x844, its two buttons inside the window at 360x640 (the same page, made smaller). One boot; the rects are read in one call. The page's
+// clock is paused at the entry (the goal needs no frame): the first frames build the world's programs, and a read of the rects waited
+// 7.8 s on them at load 25 to 40; no frame is needed to read the DOM.
+type Rect = { x: number; y: number; w: number; h: number; bottom: number };
+const rects = (page: import('@playwright/test').Page) =>
+  page.evaluate(() => {
+    const rect = (id: string): Rect => {
+      const b = document.getElementById(id)!.getBoundingClientRect();
+      return { x: b.x, y: b.y, w: b.width, h: b.height, bottom: b.bottom };
+    };
+    const goal = document.getElementById('openworld-goal')!;
+    return {
+      hud: rect('openworld-hud'), chip: rect('openworld-chip'), exit: rect('exit'), dungeon: rect('openworld-dungeon'), quick: rect('openworld-quick'),
+      goalPx: parseFloat(getComputedStyle(goal).fontSize), chipText: document.getElementById('openworld-chip')!.innerText,
+    };
+  });
+
+test.describe('upright 390 by 844, the bar', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('the plate enters as a bar of a fifth of the window at most, its More chip opens the rest, its buttons on screen down to 360x640 (#1657)', async ({ page }, testInfo) => {
+    await page.clock.install();
+    await page.goto('./?bot=off&openworld=7');
+    await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
+    await pauseClock(page);
+    const hud = page.locator('#openworld-hud');
+    await expect(page.locator('#openworld-goal')).toHaveText(/^Goal: /);
+    await expect(hud).toHaveAttribute('data-folded', '1');
+    const bar = await rects(page);
+    expect(bar.hud.h, JSON.stringify(bar.hud)).toBeLessThanOrEqual(844 * 0.2);
+    expect(bar.hud.y, JSON.stringify(bar.hud)).toBeGreaterThan(844 / 2 + 40); // the hero stands at the middle
+    expect(bar.hud.bottom).toBeLessThanOrEqual(844);
+    expect(bar.goalPx).toBeGreaterThanOrEqual(12);
+    expect(bar.dungeon.h).toBe(0); // behind the chip
+    expect(bar.chipText).toBe('MORE');
+    expect(Math.min(bar.chip.w, bar.chip.h)).toBeGreaterThanOrEqual(44);
+    expect(bar.chip.x + bar.chip.w <= bar.exit.x || bar.chip.bottom <= bar.exit.y, 'the chip is clear of the Hub exit').toBe(true);
+    await shot(page, { path: testInfo.outputPath('1657-bar-390.png') });
+    await page.locator('#openworld-chip').tap();
+    await expect(hud).not.toHaveAttribute('data-folded', '1');
+    const open = await rects(page);
+    expect(open.hud.y, JSON.stringify(open.hud)).toBeGreaterThan(844 / 2 + 40);
+    expect(open.quick.bottom).toBeLessThanOrEqual(open.hud.bottom);
+    // Tab follows the screen (WCAG 2.4.3): the plate's controls, top to bottom then left to right, are the ones Tab walks from the first.
+    const shown = await page.evaluate(() =>
+      [...document.querySelectorAll('#openworld-hud :is(summary, button, input)')]
+        .filter((e) => e.checkVisibility())
+        .map((e) => ({ id: e.id || e.tagName.toLowerCase(), y: Math.round(e.getBoundingClientRect().y), x: e.getBoundingClientRect().x }))
+        .sort((a, b) => a.y - b.y || a.x - b.x)
+        .map((e) => e.id),
+    );
+    expect(shown).toEqual(['summary', 'openworld-dungeon', 'openworld-quick']);
+    await page.locator('#openworld-controls summary').focus();
+    const tabbed = ['summary'];
+    for (const _ of shown.slice(1)) {
+      await page.keyboard.press('Tab');
+      tabbed.push(await page.evaluate(() => document.activeElement!.id || document.activeElement!.tagName.toLowerCase()));
+    }
+    expect(tabbed).toEqual(shown);
+    await page.setViewportSize({ width: 360, height: 640 });
+    await expect.poll(async () => (await rects(page)).hud.bottom).toBe(640 - 88); // laid out at the new size, 5.5rem over the bottom
+    const small = await rects(page);
+    for (const button of [small.dungeon, small.quick]) {
+      expect(button.y, JSON.stringify(small)).toBeGreaterThanOrEqual(small.hud.y);
+      expect(button.bottom, JSON.stringify(small)).toBeLessThanOrEqual(Math.min(632, small.hud.bottom)); // inside the plate, none scrolled off
+    }
+    await shot(page, { path: testInfo.outputPath('1657-open-360.png') });
+    await expect(page.locator('#openworld-controls .tap-hint')).toBeHidden();
+    await page.locator('#openworld-controls summary').tap();
+    await expect(page.locator('#openworld-controls .tap-hint')).toBeVisible();
+  });
+});
 
 test('the one lesson of the roll shows on the first entry with the controls open (#1604; the roll and never back: openworldlesson.test.ts)', async ({ page }, testInfo) => {
   await page.goto('./?bot=off&openworld=7&firstrun'); // a player's first launch: the lesson is on (the automated page keeps it off)
