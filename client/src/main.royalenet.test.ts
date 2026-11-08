@@ -141,6 +141,11 @@ describe('Battle royale online (#504)', () => {
     game.click(-4, 8); // no order before the start
     expect(game.hook('__rings')).toEqual([]);
     expect(game.hook('__targets')).toEqual([]);
+    for (const [type, [q, r]] of [['pointerdown', [-4, 8]], ['pointermove', [-4, 7]]] as const) {
+      const { x, y } = game.hook<{ x: number; y: number }>('__cellToScreen', q, r);
+      document.querySelector('canvas')!.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true }));
+    }
+    expect(game.hook('__rings')).toEqual([]); // nor by a drag (#1646)
     await player(game.peer()!, room, 2);
     await until(game, () => presence() === '2 players in. Start: bots take the empty seats');
     expect(items('.initiative li')[1]).toBe('Player 2');

@@ -5022,7 +5022,11 @@ function groundAt(e: PointerEvent): THREE.Vector3 | null {
   aim(e);
   return raycaster.ray.intersectPlane(ground, new THREE.Vector3());
 }
-const ours = (cell: Axial | null): cell is Axial => !!cell && engine.board()[cellIndex(cell[0], cell[1])] === engine.to_move();
+// A marble of the player: the side to move on the board, the player's seat on the arena (#1646).
+const ours = (cell: Axial | null): cell is Axial =>
+  !!cell && (royale ? seatAt(royale.board()[cellIndex(cell[0], cell[1], ARENA)]!) === me() : engine.board()[cellIndex(cell[0], cell[1])] === engine.to_move());
+// No drag play now: the arena once the game is over or while the round waits for no order, the board as `blocked` says.
+const dragBlocked = (): boolean => (royale ? royale.placement().length > 0 || !canOrder() : blocked(() => {}));
 function onProp(e: PointerEvent, prop: THREE.Mesh): boolean {
   aim(e);
   return raycaster.intersectObject(prop).length > 0;
@@ -5056,8 +5060,8 @@ canvas.addEventListener('pointerdown', (e) => {
   if (pointers.size === 1) {
     press = { x: e.clientX, y: e.clientY, drag: false };
     // A press on one of our marbles starts a selection by drag, anywhere else it is the orbit (#794).
-    const cell = hub || royale || reading || freeCam.active ? null : cellAt(e);
-    marbleDrag = ours(cell) && !blocked(() => {}) ? [cell] : null;
+    const cell = hub || reading || freeCam.active ? null : cellAt(e); // the arena too, as the board (#1646)
+    marbleDrag = ours(cell) && !dragBlocked() ? [cell] : null;
   } else {
     press!.drag = true; // a second finger never selects (press is set while any pointer is down)
     marbleDrag = null;
@@ -5141,10 +5145,11 @@ function release(e: PointerEvent): void {
 }
 // The release of a drag over our marbles plays the move of the group toward the nearest direction; no legal move: nothing.
 function dropMarbles(e: PointerEvent): void {
-  const at = groundAt(e);
+  const at = groundAt(e)?.divideScalar(royale ? ARENA_SCALE : 1); // the arena's cells stand at half spacing
   const dir = at ? releaseDir(selected, at.x, at.z) : null;
-  const mv = dir === null ? null : moveFor(legalMoves(), selected, dir);
+  const mv = dir === null ? null : moveFor(royale ? parseMoves(royale.legal_orders(me())) : legalMoves(), selected, dir);
   if (!mv) return;
+  if (royale) return playRound(encodeMove(mv)); // the player's order: the round resolves (#1646)
   play(mv);
   refresh();
   void botTurn();

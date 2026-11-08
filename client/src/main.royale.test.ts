@@ -93,6 +93,52 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(game.hook<Axial[]>('__rings')).toEqual([]);
   });
 
+  // A drag on the arena plays as on the board (#1646): it selects the player's marbles in line and pushes them.
+  const drag = (game: Game, type: string, q: number, r: number): void => {
+    const { x, y } = game.hook<{ x: number; y: number }>('__cellToScreen', q, r);
+    canvas().dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true }));
+  };
+  it('a drag from a marble of the player selects the column it passes over, never orbits, and pushes it where it is released (#1646)', async () => {
+    const game = await royale();
+    const corner = game.hook<{ x: number; y: number }>('__cellToScreen', 8, -8);
+    drag(game, 'pointerdown', -4, 8);
+    drag(game, 'pointermove', -4, 7);
+    drag(game, 'pointermove', -6, 3); // a marble of Bot 1: not taken
+    drag(game, 'pointermove', -4, 6);
+    expect(game.hook<Axial[]>('__rings')).toEqual([[-4, 8], [-4, 7], [-4, 6]]);
+    expect(game.hook<{ x: number; y: number }>('__cellToScreen', 8, -8)).toEqual(corner); // the camera stays
+    drag(game, 'pointerup', -4, 7); // released on the column: no order, the selection stays
+    expect(game.hook<Axial[]>('__rings')).toHaveLength(3);
+    expect(turn()).toBe('Battle royale · Round 1');
+    drag(game, 'pointerdown', -4, 8);
+    drag(game, 'pointermove', -4, 7);
+    drag(game, 'pointermove', -4, 6);
+    drag(game, 'pointerup', -4, 4); // two steps NW of (-4, 6): the column moves NW
+    game.frame(10_000);
+    expect(turn()).toBe('Battle royale · Round 2');
+    expect(items('.reveal li')[0]).toBe('You: moved');
+  });
+
+  it('a drag released toward a blocked direction orders nothing, and a drag from an empty cell or a bot marble orbits (#1646)', async () => {
+    const game = await royale();
+    drag(game, 'pointerdown', -4, 8);
+    drag(game, 'pointermove', -4, 7);
+    drag(game, 'pointerup', -4, 10); // SE of (-4, 8): off the arena, no legal order
+    expect(game.hook<Axial[]>('__rings')).toEqual([[-4, 8], [-4, 7]]);
+    expect(turn()).toBe('Battle royale · Round 1');
+    for (const [q, r] of [[0, 0], [-6, 3]] as Axial[]) {
+      const corner = game.hook<{ x: number; y: number }>('__cellToScreen', 8, -8);
+      const at = game.hook<{ x: number; y: number }>('__cellToScreen', q, r);
+      for (const [type, dx] of [['pointerdown', 0], ['pointermove', 40], ['pointerup', 40]] as const)
+        canvas().dispatchEvent(new PointerEvent(type, { clientX: at.x + dx, clientY: at.y, pointerId: 1, bubbles: true }));
+      expect(game.hook<{ x: number; y: number }>('__cellToScreen', 8, -8)).not.toEqual(corner);
+    }
+    game.hook('__royale', END); // over: a drag from the player's marble selects nothing
+    drag(game, 'pointerdown', -4, 4);
+    drag(game, 'pointermove', -4, 3);
+    expect(game.hook<Axial[]>('__rings')).toEqual([]);
+  });
+
   it("each seat's marbles on the arena wear the seat's glyph, a picked one too (#558)", async () => {
     const game = await royale();
     expect(game.hook<number[]>('__seatGlyphs')).toEqual([10, 10, 10, 10, 10, 10]);
@@ -229,6 +275,10 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(document.body.dataset.royale).toBeUndefined();
     expect(document.body.dataset.hub).toBeDefined();
     expect(button('royale-hold').hidden).toBe(true);
+    drag(game, 'pointerdown', -4, 8); // the hub takes no drag play
+    drag(game, 'pointermove', -4, 7);
+    drag(game, 'pointerup', -4, 7);
+    expect(game.hook<Axial[]>('__rings')).toEqual([]);
     game.openModes();
     button('battle-royale').click();
     expect(document.body.dataset.hub).toBeUndefined();

@@ -102,6 +102,26 @@ test('Battle royale in the mode menu: a target press on the arena locks the orde
   await expect(hud.locator('.reveal li').last()).toHaveText('You: held');
 });
 
+test('a drag from the player\'s marble over its column and out NW pushes the column, the camera stays (#1646)', async ({ page }) => {
+  await ready(page);
+  await page.evaluate(() => (window as any).__royale({ seed: 7, rounds: [] }));
+  const hud = page.locator('#hud');
+  await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 1');
+  const at = (q: number, r: number) => page.evaluate(([a, b]) => (window as any).__cellToScreen(a, b) as { x: number; y: number }, [q, r]);
+  const corner = await at(8, -8);
+  const [first, second, third, out] = [await at(-4, 8), await at(-4, 7), await at(-4, 6), await at(-4, 4)];
+  await page.mouse.move(first.x, first.y);
+  await page.mouse.down();
+  await page.mouse.move(second.x, second.y, { steps: 4 });
+  await page.mouse.move(third.x, third.y, { steps: 4 });
+  expect(await page.evaluate(() => (window as any).__rings())).toEqual([[-4, 8], [-4, 7], [-4, 6]]);
+  expect(await at(8, -8)).toEqual(corner);
+  await page.mouse.move(out.x, out.y, { steps: 4 });
+  await page.mouse.up();
+  await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 2');
+  await expect(hud.locator('.reveal li').first()).toHaveText('You: moved');
+});
+
 test('each seat wears its own glyph on its marbles and beside its name on the plate (#558)', async ({ page }) => {
   await ready(page);
   await page.evaluate(() => (window as any).__royale({ seed: 7, rounds: [] }));
