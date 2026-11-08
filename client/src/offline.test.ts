@@ -28,9 +28,9 @@ const BUILD = [
 describe('precacheFiles', () => {
   it('keeps every file of the build but the service worker itself and the source maps, sorted', () => {
     expect(precacheFiles(BUILD)).toEqual([
-      'assets/edgefall_wasm_bg-B78a8gHf.wasm',
       'assets/bot.worker-DeRlMK1Y.js',
       'assets/deck-albedo.png',
+      'assets/edgefall_wasm_bg-B78a8gHf.wasm',
       'assets/index-BHv8FDIG.js',
       'assets/index-CrwhyS3g.css',
       'icons/icon-192.png',
