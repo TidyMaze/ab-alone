@@ -377,7 +377,54 @@ export const TELEPORTER_LOOK = { colour: 0xb36bff, ring: 1.1, emissive: 0.5, nig
 export const PLACE_LOOK = {
   spire: { height: 3.6, radius: 0.32, colour: ICON.town },
   arch: { radius: 0.6, tube: 0.09, colour: ICON.dungeon },
+  /** The gate's mouth going down: treads under the arch, from rim light at the front to the gap floor at the back. */
+  mouth: { treads: ['#39466a', '#171c2b', '#0a0e18', '#020307'], floor: '#020307' },
+  /** The town's huts: six slate huts on the corners round the pad, a cyan window front and back. */
+  hut: { colour: '#5d6a82', width: 0.36, height: 0.3, roof: 0.24, plinth: 0.3 },
 };
+
+/** The mouth of a dungeon gate (#1518), flat on its pad under the arch: four treads narrowing toward the back, each shading from its tone
+ * at the front to the next one's at the back, from rim light down to the gap floor, so the opening reads as a pit going down (8
+ * triangles, vertex colours). */
+function mouthGeometry(): THREE.BufferGeometry {
+  const tones = PLACE_LOOK.mouth.treads.map((tone) => new THREE.Color(tone));
+  const parts = tones.map((near, i) => {
+    const far = tones[Math.min(i + 1, tones.length - 1)]!;
+    const front = 0.22 - i * 0.13;
+    const half = 0.36 - i * 0.04;
+    const plane = new THREE.PlaneGeometry(half * 2, 0.13).rotateX(-Math.PI / 2).translate(0, 0.09, front - 0.065);
+    // the plane's first two vertices are its back edge once turned flat, the last two its front one
+    plane.setAttribute('color', new THREE.Float32BufferAttribute([far, far, near, near].flatMap((c) => [c.r, c.g, c.b]), 3));
+    return plane.toNonIndexed();
+  });
+  const mouth = mergeGeometries(parts)!;
+  mouth.computeVertexNormals();
+  return mouth;
+}
+
+/** A town's hut (#1518): a slate box on a plinth sunk into lower ground, under a four-sided roof, its +z face toward the spire. */
+function hutGeometry(): THREE.BufferGeometry {
+  const { width, height, roof, plinth } = PLACE_LOOK.hut;
+  const body = new THREE.BoxGeometry(width, height + plinth, width).translate(0, (height - plinth) / 2, 0);
+  const top = new THREE.ConeGeometry(width * 0.75, roof, 4, 1, true).rotateY(Math.PI / 4).translate(0, height + roof / 2, 0);
+  return mergeGeometries([body, top].map((part) => part.toNonIndexed()))!;
+}
+
+/** The lit windows of a hut (#1518): one on its front face, one on its back, so it reads lit from either side. */
+function hutWindowGeometry(): THREE.BufferGeometry {
+  const { width, height } = PLACE_LOOK.hut;
+  const pane = (): THREE.BufferGeometry => new THREE.PlaneGeometry(width * 0.4, height * 0.45).translate(0, height * 0.5, 0);
+  const front = pane().translate(0, 0, width / 2 + 0.005);
+  const back = pane().rotateY(Math.PI).translate(0, 0, -width / 2 - 0.005);
+  return mergeGeometries([front, back].map((part) => part.toNonIndexed()))!;
+}
+
+/** The six corners round a town's pad where its huts stand (#1518), as the three cells meeting there: two next to the town and one beyond. */
+const RING: readonly Axial[] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const HUT_CORNERS: readonly (readonly Axial[])[] = RING.map((a, k) => {
+  const b = RING[(k + 1) % 6]!;
+  return [a, b, [a[0] + b[0], a[1] + b[1]]];
+});
 /** The crown of an unbeaten boss tower (#1518): the crenellated top of its map icon, `merlons` blocks on a collar of `radius` ringing the
  * spire at `height`, in the lamp's colour, so a tower reads apart from a town's spire from far away. A beaten tower has none. */
 export const TOWER_CROWN = { height: 4, radius: 0.55, merlons: 6, glow: 0.8 };
@@ -641,6 +688,10 @@ export class OpenWorldView {
   /** The silhouettes of the places (#1518): a spire over each town's pad, an arch over each gate's, so they read from far away. */
   private readonly townSpires: THREE.InstancedMesh;
   private readonly gateArches: THREE.InstancedMesh;
+  /** The town view and the gate's stair down (#1518): six huts and their windows round each town, a mouth under each gate's arch. */
+  private readonly townHuts: THREE.InstancedMesh;
+  private readonly townWindows: THREE.InstancedMesh;
+  private readonly gateMouths: THREE.InstancedMesh;
   /** The lore logs of the world (#1589), the numbers of the ones found, and their stakes, laid for the ones in the loaded chunks. */
   private logCells: readonly Axial[] = [];
   private logsFound: readonly number[] = [];
@@ -776,6 +827,10 @@ export class OpenWorldView {
     this.townSpires = this.instances('town-spire', PLACE_CAPACITY, spire, glow(new THREE.Color(PLACE_LOOK.spire.colour).getHex()));
     const arch = new THREE.TorusGeometry(PLACE_LOOK.arch.radius, PLACE_LOOK.arch.tube, 6, 16, Math.PI).translate(0, PLACE_LOOK.arch.tube + 0.08, 0);
     this.gateArches = this.instances('gate-arch', PLACE_CAPACITY, arch, glow(new THREE.Color(PLACE_LOOK.arch.colour).getHex()));
+    this.gateMouths = this.instances('gate-mouth', PLACE_CAPACITY, mouthGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
+    this.gateMouths.castShadow = false; // flat on the pad
+    this.townHuts = this.instances('town-hut', PLACE_CAPACITY * 6, hutGeometry(), new THREE.MeshStandardMaterial({ color: PLACE_LOOK.hut.colour, roughness: 0.8, flatShading: true }));
+    this.townWindows = this.instances('town-window', PLACE_CAPACITY * 6, hutWindowGeometry(), glow(new THREE.Color(PLACE_LOOK.spire.colour).getHex()));
     this.rings = this.instances('teleporter-ring', TELEPORTER_CAPACITY, new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0), glow());
     const stake = (found: boolean): THREE.BufferGeometry => {
       const height = found ? LOG_LOOK.height.found : LOG_LOOK.height.open;
@@ -1459,7 +1514,7 @@ export class OpenWorldView {
       (this.sparks.material as THREE.MeshBasicMaterial).opacity = MOTE_OPACITY * this.moteScale;
     }
     this.shine.value = look.glow;
-    for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads, this.townSpires, this.gateArches]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
+    for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads, this.townSpires, this.gateArches, this.townWindows]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
     (this.stakes.material as THREE.MeshStandardMaterial).emissiveIntensity = LOG_LOOK.emissive + LOG_LOOK.nightGlow * look.glow;
   }
 
@@ -1778,10 +1833,34 @@ export class OpenWorldView {
       const n = counts[kind]++;
       pad.setMatrixAt(n, dummy.matrix);
       mark.setMatrixAt(n, dummy.matrix);
+      if (kind === 'dungeon') this.gateMouths.setMatrixAt(n, dummy.matrix);
+      else this.placeHuts(n, [q, r], p);
     }
-    for (const mesh of [this.townPads, this.townSpires, this.gatePads, this.gateArches]) mesh.instanceMatrix.needsUpdate = true;
+    for (const mesh of [this.townPads, this.townSpires, this.gatePads, this.gateArches, this.gateMouths, this.townHuts, this.townWindows]) mesh.instanceMatrix.needsUpdate = true;
     this.townPads.count = this.townSpires.count = counts.town;
-    this.gatePads.count = this.gateArches.count = counts.dungeon;
+    this.townHuts.count = this.townWindows.count = counts.town * 6;
+    this.gatePads.count = this.gateArches.count = this.gateMouths.count = counts.dungeon;
+  }
+
+  /** Stands the six huts of the `n`-th town, at `cell` (centre `p`), on the corners round its pad, each on the highest of the three cells
+   * meeting there and facing the spire (#1518). The dummy is left unturned. */
+  private placeHuts(n: number, [q, r]: Axial, p: { x: number; z: number }): void {
+    const { dummy } = this;
+    HUT_CORNERS.forEach((cells, k) => {
+      const a = ((30 + 60 * k) * Math.PI) / 180;
+      const x = p.x + (Math.cos(a) * 2) / Math.sqrt(3);
+      const z = p.z + (Math.sin(a) * 2) / Math.sqrt(3);
+      const y = Math.max(...cells.map(([dq, dr]) => {
+        const tile = this.world.tile(q + dq, r + dr)!;
+        return topOf(GROUND[tile.terrain], tile.height, q + dq, r + dr);
+      }));
+      dummy.position.set(x, y, z);
+      dummy.rotation.set(0, Math.atan2(p.x - x, p.z - z), 0);
+      dummy.updateMatrix();
+      this.townHuts.setMatrixAt(n * 6 + k, dummy.matrix);
+      this.townWindows.setMatrixAt(n * 6 + k, dummy.matrix);
+    });
+    dummy.rotation.set(0, 0, 0);
   }
 
   /** The lore logs of the world (#1589) and the numbers (places in `cells`) of the ones found: the ones in the loaded chunks are drawn, and
