@@ -722,7 +722,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
     await route.continue();
   });
 
-  await a.goto('./?bot=off&net=hook&quality=low'); // './' keeps the /ab-alone/ path of E2E_BASE_URL, '/' is the Pages host root (404)
+  await a.goto('./?bot=off&net=hook&quality=low'); // './' keeps the /edgefall/ path of E2E_BASE_URL, '/' is the Pages host root (404)
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await openModes(a);

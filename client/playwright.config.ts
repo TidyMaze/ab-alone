@@ -19,7 +19,7 @@ const baseURL = process.env.E2E_BASE_URL;
 // its own random port. The workers read the port and the URL from the environment set here.
 process.env.E2E_PREVIEW_PORT ??= String(20_000 + Math.floor(Math.random() * 40_000));
 const previewPort = process.env.E2E_PREVIEW_PORT;
-process.env.E2E_PREVIEW_URL ??= baseURL ?? `http://localhost:${previewPort}/ab-alone/`;
+process.env.E2E_PREVIEW_URL ??= baseURL ?? `http://localhost:${previewPort}/edgefall/`;
 
 // The Chromium options, shared by the chromium project and chromium-serial (#1391).
 const chromiumUse = {
@@ -62,7 +62,7 @@ export default defineConfig({
   // On CI the page draws with software WebGL, a frame costs by its pixels and every click waits for one (#216): a 960x540
   // window draws 44 % fewer pixels than the 1280x720 default, and stays above the 768 px width of the low quality tier (#258).
   use: {
-    baseURL: baseURL ?? (onDev ? `http://localhost:${port}` : `http://localhost:${e2ePort}/ab-alone/`),
+    baseURL: baseURL ?? (onDev ? `http://localhost:${port}` : `http://localhost:${e2ePort}/edgefall/`),
     trace: 'on-first-retry',
     serviceWorkers: 'block',
     ...(process.env.CI ? { viewport: { width: 960, height: 540 } } : {}),
@@ -109,7 +109,7 @@ export default defineConfig({
               {
                 // Its own outDir: the production build below empties dist/.
                 command: `bunx vite build --mode e2e --outDir dist-e2e --logLevel warn && bunx vite preview --mode e2e --outDir dist-e2e --port ${e2ePort} --strictPort`,
-                url: `http://localhost:${e2ePort}/ab-alone/`,
+                url: `http://localhost:${e2ePort}/edgefall/`,
                 reuseExistingServer: false,
                 timeout: 120_000,
               },

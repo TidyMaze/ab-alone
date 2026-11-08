@@ -28,7 +28,7 @@ function built(): { plugin: ReturnType<typeof offlineApp>; outDir: string } {
   writeFileSync(join(outDir, 'assets', 'app-1.js.map'), '{}');
   writeFileSync(join(outDir, 'sw.js'), 'old');
   const plugin = offlineApp();
-  plugin.configResolved({ root, base: '/ab-alone/', build: { outDir: 'dist' } });
+  plugin.configResolved({ root, base: '/edgefall/', build: { outDir: 'dist' } });
   return { plugin, outDir };
 }
 
@@ -48,8 +48,8 @@ describe('offlineApp', () => {
       build: { outDir: string; emptyOutDir: boolean; lib: { entry: string; formats: string[]; fileName: () => string } };
     };
     const sha = (data: string): string => createHash('sha256').update(data).digest('hex');
-    expect(options).toMatchObject({ configFile: false, root, base: '/ab-alone/', publicDir: false });
-    expect(JSON.parse(options.define.__PRECACHE__!)).toEqual(['/ab-alone/assets/app-1.js', '/ab-alone/']);
+    expect(options).toMatchObject({ configFile: false, root, base: '/edgefall/', publicDir: false });
+    expect(JSON.parse(options.define.__PRECACHE__!)).toEqual(['/edgefall/assets/app-1.js', '/edgefall/']);
     expect(JSON.parse(options.define.__CACHE_NAME__!)).toBe(cacheName({ 'assets/app-1.js': sha('app'), 'index.html': sha(`<link rel="stylesheet" href="${SHEET}">`) }, sha));
     expect(JSON.parse(options.define.__FONT_STYLESHEETS__!)).toEqual([SHEET.replace('&amp;', '&')]);
     expect(options.build).toMatchObject({ outDir, emptyOutDir: false, lib: { entry: join(root, 'src/sw.ts'), formats: ['iife'] } });

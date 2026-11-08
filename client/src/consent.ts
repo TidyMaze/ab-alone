@@ -11,7 +11,7 @@ export const CONSENT_TEXT =
   'Your public name, a random key and your moves or position are visible to the players in your room. ' +
   'Anything other players already received cannot be taken back. I am 16 or older.';
 
-export const PRIVACY_URL = 'https://github.com/TidyMaze/ab-alone/blob/main/docs/privacy.md';
+export const PRIVACY_URL = 'https://github.com/TidyMaze/edgefall/blob/main/docs/privacy.md';
 
 export const consentGiven = (store: Store): boolean => read(store, CONSENT_KEY) === 'accepted';
 export const writeConsent = (store: Store): void => write(store, CONSENT_KEY, 'accepted');

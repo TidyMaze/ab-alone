@@ -247,7 +247,7 @@ a PR when CI is green.
    **A change to the UI MUST have a screenshot** in that comment (before and after when it changes
    an existing screen). Take it with Playwright (`page.screenshot`) or in Chrome. Push the image to
    the `pr-screenshots` branch (`pr-screenshots/<issue>-<name>.png`) and link it:
-   `![after](https://raw.githubusercontent.com/TidyMaze/ab-alone/pr-screenshots/<issue>-<name>.png)`.
+   `![after](https://raw.githubusercontent.com/TidyMaze/edgefall/pr-screenshots/<issue>-<name>.png)`.
    No UI change: write "no UI change". No screenshot, no push.
    The e2e specs save their pictures (`test-results/*.png`, `MODE_SWITCH_SHOT`...) only when `E2E_SHOTS=1`
    is set, as each one costs a frame of software WebGL on the CI runner (`client/e2e/shot.ts`).
@@ -418,6 +418,9 @@ forks keep it even after a revert).
 - Agents: never print a secret in an issue, PR, log or test fixture.
 
 ## 13. Local setup and checks
+
+**A clone made before the rename to Edgefall (#1650)** points its remote at the new name once:
+`git remote set-url origin git@github.com:TidyMaze/edgefall.git`. GitHub redirects the old name meanwhile.
 
 **Before every push to `main`:** run `scripts/verify.sh` from the repo root when Rust changed, except
 for a push that only rebases on `main` without conflict (section 6.4). It runs the CI checks locally:

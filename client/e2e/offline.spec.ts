@@ -45,7 +45,7 @@ test('after one visit the game loads offline and the bot answers', async ({ page
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
   const root = new URL(page.url()).pathname;
   const cached = await page.evaluate(async () => {
-    const names = (await caches.keys()).filter((n) => n.startsWith('ab-alone-'));
+    const names = (await caches.keys()).filter((n) => n.startsWith('edgefall-'));
     const requests = await (await caches.open(names[0]!)).keys();
     return { names, paths: requests.map((r) => new URL(r.url).pathname), hosts: requests.map((r) => new URL(r.url).host) };
   });

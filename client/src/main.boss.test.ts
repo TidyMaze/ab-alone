@@ -618,7 +618,7 @@ describe('main.ts daily challenge', () => {
     loseByRepetition(game);
     expect(card.hidden).toBe(false);
     expect(text.value).toBe(
-      'Edgefall daily 2027-03-30: The Echo\nDefeat in 7 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
+      'Edgefall daily 2027-03-30: The Echo\nDefeat in 7 plies on attempt 1\nhttps://tidymaze.github.io/edgefall/',
     );
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

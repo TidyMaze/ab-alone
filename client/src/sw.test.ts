@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // The service worker (sw.ts) on a hand-made scope: the test fires its install, activate and fetch events, with an
 // in-memory CacheStorage and a fake network. The build defines of scripts/offline-app.mjs are globals here.
 const ORIGIN = 'https://tidymaze.test';
-const SCOPE = `${ORIGIN}/ab-alone/`;
-const CURRENT = 'ab-alone-new';
+const SCOPE = `${ORIGIN}/edgefall/`;
+const CURRENT = 'edgefall-new';
 const SHEET = 'https://fonts.googleapis.com/css2?family=Rajdhani';
 const FONT = 'https://fonts.gstatic.com/s/rajdhani/r.woff2';
 const APP = `${SCOPE}assets/app.js`;
@@ -22,7 +22,7 @@ vi.stubGlobal('self', {
   skipWaiting: scope.skipWaiting,
   addEventListener: (type: string, listener: Listener) => scope.listeners.set(type, listener),
 });
-vi.stubGlobal('__PRECACHE__', ['/ab-alone/', '/ab-alone/assets/app.js']);
+vi.stubGlobal('__PRECACHE__', ['/edgefall/', '/edgefall/assets/app.js']);
 vi.stubGlobal('__CACHE_NAME__', CURRENT);
 vi.stubGlobal('__FONT_STYLESHEETS__', [SHEET]);
 
@@ -136,10 +136,16 @@ describe('install', () => {
 
 describe('activate', () => {
   it('drops the older caches of the app but the newest, never another site, and controls the open pages', async () => {
+    for (const name of ['other-site', 'edgefall-a', 'edgefall-b', CURRENT]) stores.set(name, new Map());
+    await fire('activate');
+    expect([...stores.keys()]).toEqual(['other-site', 'edgefall-b', CURRENT]);
+    expect(scope.claim).toHaveBeenCalledOnce();
+  });
+
+  it('drops once the caches the app wrote under its old name ab-alone (#1650)', async () => {
     for (const name of ['other-site', 'ab-alone-a', 'ab-alone-b', CURRENT]) stores.set(name, new Map());
     await fire('activate');
-    expect([...stores.keys()]).toEqual(['other-site', 'ab-alone-b', CURRENT]);
-    expect(scope.claim).toHaveBeenCalledOnce();
+    expect([...stores.keys()]).toEqual(['other-site', CURRENT]);
   });
 });
 
@@ -157,8 +163,8 @@ describe('fetch', () => {
 
   it('answers another file of the scope from the older caches, newest first, else from the network', async () => {
     const old = `${SCOPE}assets/old.js`;
-    cacheOf('ab-alone-a').entries.set(old, new Response('oldest'));
-    cacheOf('ab-alone-b').entries.set(old, new Response('older'));
+    cacheOf('edgefall-a').entries.set(old, new Response('oldest'));
+    cacheOf('edgefall-b').entries.set(old, new Response('older'));
     cacheOf(CURRENT);
     expect(await (await request(old))!.text()).toBe('older');
     network.set(`${SCOPE}assets/new.js`, ok('network'));
@@ -166,7 +172,7 @@ describe('fetch', () => {
   });
 
   it('answers a UI font from any cache of the app, else from the network, kept for the next offline load', async () => {
-    cacheOf('ab-alone-a').entries.set(SHEET, new Response('old sheet'));
+    cacheOf('edgefall-a').entries.set(SHEET, new Response('old sheet'));
     expect(await (await request(SHEET))!.text()).toBe('old sheet');
     expect(await (await request(FONT))!.text()).toBe('font');
     expect(stores.get(CURRENT)!.has(FONT)).toBe(true);

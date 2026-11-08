@@ -144,16 +144,16 @@ describe('attempts of the day', () => {
 describe('result card', () => {
   const fight = { day: '2026-10-25', boss: 'The Echo', plies: 41, attempt: 3 };
   it('links to the site', () => {
-    expect(SITE).toBe('https://tidymaze.github.io/ab-alone/');
+    expect(SITE).toBe('https://tidymaze.github.io/edgefall/');
   });
   it('gives the date, the boss, the win, the plies and the attempt, then the link', () => {
     expect(dailyCard({ ...fight, result: 1 })).toBe(
-      'Edgefall daily 2026-10-25: The Echo\nVictory in 41 plies on attempt 3\nhttps://tidymaze.github.io/ab-alone/',
+      'Edgefall daily 2026-10-25: The Echo\nVictory in 41 plies on attempt 3\nhttps://tidymaze.github.io/edgefall/',
     );
   });
   it('gives a loss as a defeat (a draw is a loss)', () => {
     expect(dailyCard({ ...fight, result: 2, plies: 8, attempt: 1 })).toBe(
-      'Edgefall daily 2026-10-25: The Echo\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
+      'Edgefall daily 2026-10-25: The Echo\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/edgefall/',
     );
   });
   it('says one ply, not one plies', () => {

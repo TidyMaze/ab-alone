@@ -122,7 +122,7 @@ export function dailyStreak(store: Store, today: string): number {
 }
 
 /** The site the result card links to: the daily challenge button is on its page. */
-export const SITE = 'https://tidymaze.github.io/ab-alone/';
+export const SITE = 'https://tidymaze.github.io/edgefall/';
 
 export interface DailyResult {
   day: string; // UTC date, YYYY-MM-DD

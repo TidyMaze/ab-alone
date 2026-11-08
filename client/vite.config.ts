@@ -12,9 +12,9 @@ import { offlineApp } from './scripts/offline-app.mjs';
 import { sceneOverrides } from './scripts/sceneoverrides.mjs';
 
 export default defineConfig(({ command, mode, isPreview }) => ({
-  // The production build is served by GitHub Pages under /ab-alone/, and so is its preview (the offline e2e test).
-  // Dev and e2e stay at /.
-  base: command === 'build' || isPreview ? '/ab-alone/' : '/',
+  // The production build is served by GitHub Pages under /edgefall/ (#1650), and so is its preview (the offline e2e
+  // test). Dev and e2e stay at /.
+  base: command === 'build' || isPreview ? '/edgefall/' : '/',
   // The commit the page was built from, for the Copy diagnostics export (#220). GitHub Actions sets GITHUB_SHA.
   define: { __BUILD__: JSON.stringify((loadEnv(mode, '.', '').GITHUB_SHA ?? 'dev').slice(0, 12)) },
   resolve: {

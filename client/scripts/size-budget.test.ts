@@ -64,9 +64,9 @@ describe('measure', () => {
 
 describe('pageScripts', () => {
   it('lists the module script and the preloaded chunks of the page, not its styles or what a script loads later', () => {
-    const html = `<script type="module" crossorigin src="/ab-alone/assets/index-DNrUl8Ct.js"></script>
-      <link rel="modulepreload" crossorigin href="/ab-alone/assets/story-Ch3T6zbf.js">
-      <link rel="stylesheet" crossorigin href="/ab-alone/assets/index-CPcrYfAe.css"><link rel="icon" href="/ab-alone/icons/icon-192.png">
+    const html = `<script type="module" crossorigin src="/edgefall/assets/index-DNrUl8Ct.js"></script>
+      <link rel="modulepreload" crossorigin href="/edgefall/assets/story-Ch3T6zbf.js">
+      <link rel="stylesheet" crossorigin href="/edgefall/assets/index-CPcrYfAe.css"><link rel="icon" href="/edgefall/icons/icon-192.png">
       <script>inline()</script>`;
     expect(pageScripts(html)).toEqual(['assets/index-DNrUl8Ct.js', 'assets/story-Ch3T6zbf.js']);
     expect(pageScripts('<p>no scripts</p>')).toEqual([]);
@@ -134,7 +134,7 @@ describe('main', () => {
   });
 
   it('counts the chunks the page preloads in the first screen', () => {
-    const page = '<script type="module" src="/ab-alone/assets/index-1.js"></script><link rel="modulepreload" href="/ab-alone/assets/shared-2.js">';
+    const page = '<script type="module" src="/edgefall/assets/index-1.js"></script><link rel="modulepreload" href="/edgefall/assets/shared-2.js">';
     const { out } = build({ 'index.html': page, 'assets/index-1.js': 'entry', 'assets/shared-2.js': 'shared', 'assets/world-3.js': 'a mode, loaded at its first entry' });
     main(dir);
     const sizes = Object.fromEntries(

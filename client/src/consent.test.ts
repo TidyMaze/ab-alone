@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONSENT_TEXT, consentGiven, consentNeeded, writeConsent } from './consent';
+import { CONSENT_TEXT, PRIVACY_URL, consentGiven, consentNeeded, writeConsent } from './consent';
 
 const memory = (): Storage => {
   const m = new Map<string, string>();
@@ -7,6 +7,10 @@ const memory = (): Storage => {
 };
 
 describe('online consent (#1338)', () => {
+  it('links the privacy notice of the repository renamed edgefall (#1650)', () => {
+    expect(PRIVACY_URL).toBe('https://github.com/TidyMaze/edgefall/blob/main/docs/privacy.md');
+  });
+
   it('is needed until the player accepts, then never again', () => {
     const store = memory();
     expect(consentGiven(store)).toBe(false);

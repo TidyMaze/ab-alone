@@ -596,7 +596,7 @@ visit. No dependency: a hand-written service worker and a build step that lists 
 
 - **Manifest:** `client/public/manifest.webmanifest`. Name, `display: standalone`, theme and
   background colour `#0b0d0f` (world spec section 5), every path relative to the manifest so it
-  works under the Pages base path `/ab-alone/`. Icons 192 and 512 px (the 512 one also maskable)
+  works under the Pages base path `/edgefall/`. Icons 192 and 512 px (the 512 one also maskable)
   are drawn by `client/scripts/gen-icons.mjs` and committed; a test keeps them equal to the
   generator output.
 - **Build:** after `vite build`, the plugin `client/scripts/offline-app.mjs` lists every built file
@@ -641,7 +641,7 @@ visit. No dependency: a hand-written service worker and a build step that lists 
 - **Not in dev or tests:** only the production build registers the worker
   (`import.meta.env.PROD`). The e2e suite blocks service workers (`serviceWorkers: 'block'`),
   except `client/e2e/offline.spec.ts`: it runs on `vite build` + `vite preview` (random port,
-  under `/ab-alone/`, started and stopped by `playwright.config.ts`), or on the live site with
+  under `/edgefall/`, started and stopped by `playwright.config.ts`), or on the live site with
   `E2E_BASE_URL`. It loads once, checks the fonts are cached, empties the browser's HTTP cache (it
   keeps the stylesheet a day at most), goes offline, reloads, checks the UI fonts are loaded and
   plays a bot move. The two font hosts answer from the spec (a stylesheet of the two families on a

@@ -5,7 +5,10 @@
 // the service worker caches them and the font files they point to (fontFiles).
 
 /** Every cache of the app starts with this. The GitHub Pages origin is shared with other sites: never touch theirs. */
-export const CACHE_PREFIX = 'ab-alone-';
+export const CACHE_PREFIX = 'edgefall-';
+
+/** The prefix of the caches before the rename to Edgefall (#1650): never read, dropped when a build activates. */
+export const LEGACY_CACHE_PREFIX = 'ab-alone-';
 
 /** The only other sites the service worker caches: the Google Fonts stylesheets and their font files. */
 const FONT_STYLESHEETS = 'https://fonts.googleapis.com/';
@@ -70,9 +73,9 @@ export function olderCaches(names: readonly string[], current: string): string[]
   return names.filter((n) => n.startsWith(CACHE_PREFIX) && n !== current).reverse();
 }
 
-/** The caches to delete when a new build activates: the older ones but the newest of them. */
+/** The caches to delete when a new build activates: the older ones but the newest of them, and the pre-rename ones. */
 export function staleCaches(names: readonly string[], current: string): string[] {
-  return olderCaches(names, current).slice(1);
+  return [...olderCaches(names, current).slice(1), ...names.filter((n) => n.startsWith(LEGACY_CACHE_PREFIX))];
 }
 
 const attribute = (tag: string, name: string): string | undefined => new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1];

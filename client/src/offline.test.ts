@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import page from '../index.html?raw';
 import {
   CACHE_PREFIX,
+  LEGACY_CACHE_PREFIX,
   cacheName,
   fontFiles,
   fontStylesheets,
@@ -46,12 +47,12 @@ describe('precacheFiles', () => {
 
 describe('precacheUrl', () => {
   it('puts the file under the base path', () => {
-    expect(precacheUrl('assets/deck-albedo.png', '/ab-alone/')).toBe('/ab-alone/assets/deck-albedo.png');
+    expect(precacheUrl('assets/deck-albedo.png', '/edgefall/')).toBe('/edgefall/assets/deck-albedo.png');
     expect(precacheUrl('assets/deck-albedo.png', '/')).toBe('/assets/deck-albedo.png');
   });
 
   it('caches index.html as the app root, the URL the page is opened at', () => {
-    expect(precacheUrl('index.html', '/ab-alone/')).toBe('/ab-alone/');
+    expect(precacheUrl('index.html', '/edgefall/')).toBe('/edgefall/');
   });
 });
 
@@ -68,7 +69,7 @@ describe('cacheName', () => {
     const name = cacheName(hashes, digest);
     expect(name.startsWith(CACHE_PREFIX)).toBe(true);
     expect(name).toHaveLength(CACHE_PREFIX.length + 16);
-    expect(CACHE_PREFIX).toBe('ab-alone-');
+    expect(CACHE_PREFIX).toBe('edgefall-');
   });
 
   it('does not depend on the order the files are listed in', () => {
@@ -91,17 +92,17 @@ describe('cacheName', () => {
 });
 
 describe('route', () => {
-  const scope = 'https://tidymaze.github.io/ab-alone/';
+  const scope = 'https://tidymaze.github.io/edgefall/';
   const precache = new Set([
-    'https://tidymaze.github.io/ab-alone/',
-    'https://tidymaze.github.io/ab-alone/assets/edgefall_wasm_bg-B78a8gHf.wasm',
-    'https://tidymaze.github.io/ab-alone/assets/deck-albedo.png',
+    'https://tidymaze.github.io/edgefall/',
+    'https://tidymaze.github.io/edgefall/assets/edgefall_wasm_bg-B78a8gHf.wasm',
+    'https://tidymaze.github.io/edgefall/assets/deck-albedo.png',
   ]);
   const get = (url: string, mode = 'cors') => route({ method: 'GET', url, mode }, scope, precache);
 
   it('answers a precached file from the cache', () => {
-    expect(get('https://tidymaze.github.io/ab-alone/assets/edgefall_wasm_bg-B78a8gHf.wasm')).toEqual({
-      key: 'https://tidymaze.github.io/ab-alone/assets/edgefall_wasm_bg-B78a8gHf.wasm',
+    expect(get('https://tidymaze.github.io/edgefall/assets/edgefall_wasm_bg-B78a8gHf.wasm')).toEqual({
+      key: 'https://tidymaze.github.io/edgefall/assets/edgefall_wasm_bg-B78a8gHf.wasm',
       precached: true,
     });
   });
@@ -133,7 +134,7 @@ describe('route', () => {
     expect(route({ method: 'POST', url: `${scope}assets/deck-albedo.png`, mode: 'cors' }, scope, precache)).toBeNull();
     expect(get('https://relay.example.org/announce')).toBeNull();
     expect(get('https://tidymaze.github.io/other-game/')).toBeNull();
-    expect(get('https://tidymaze.github.io/ab-alone-next/assets/deck-albedo.png')).toBeNull();
+    expect(get('https://tidymaze.github.io/edgefall-next/assets/deck-albedo.png')).toBeNull();
   });
 
   const sheet = 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=IBM+Plex+Sans:wght@400;500&display=swap';
@@ -171,7 +172,7 @@ describe('fontStylesheets', () => {
     const html = `
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch&amp;display=swap" />
-      <link rel="stylesheet" href="/ab-alone/assets/index-ClyGjfYk.css">
+      <link rel="stylesheet" href="/edgefall/assets/index-ClyGjfYk.css">
       <link rel="stylesheet" href="https://example.org/fonts.css">
       <link rel="stylesheet">
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans" rel="stylesheet">
@@ -201,7 +202,7 @@ describe('fontFiles', () => {
 @font-face {
   font-family: 'Chakra Petch';
   src: local('Chakra Petch'), url("https://fonts.gstatic.com/s/chakrapetch/v13/latin.woff2") format('woff2'),
-    url( 'https://example.org/chakra.woff2' ), url(/ab-alone/assets/chakra.woff2);
+    url( 'https://example.org/chakra.woff2' ), url(/edgefall/assets/chakra.woff2);
 }`;
     expect(fontFiles(css)).toEqual([
       'https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDNF5zAA.woff2',
@@ -216,15 +217,22 @@ describe('fontFiles', () => {
 
 describe('older and stale caches', () => {
   // CacheStorage.keys() lists the caches in the order they were created.
-  const names = ['other-app', 'ab-alone-1111', 'ab-alone-2222', 'ab-alone-3333'];
+  const names = ['other-app', 'edgefall-1111', 'edgefall-2222', 'edgefall-3333'];
 
   it('lists the older caches of the app, newest first, never the current one or another app', () => {
-    expect(olderCaches(names, 'ab-alone-3333')).toEqual(['ab-alone-2222', 'ab-alone-1111']);
+    expect(olderCaches(names, 'edgefall-3333')).toEqual(['edgefall-2222', 'edgefall-1111']);
   });
 
   it('deletes the older caches but the newest one, kept for a page that loaded before the update', () => {
-    expect(staleCaches(names, 'ab-alone-3333')).toEqual(['ab-alone-1111']);
-    expect(staleCaches(['ab-alone-1111', 'ab-alone-2222'], 'ab-alone-2222')).toEqual([]);
-    expect(staleCaches(['ab-alone-1111'], 'ab-alone-1111')).toEqual([]);
+    expect(staleCaches(names, 'edgefall-3333')).toEqual(['edgefall-1111']);
+    expect(staleCaches(['edgefall-1111', 'edgefall-2222'], 'edgefall-2222')).toEqual([]);
+    expect(staleCaches(['edgefall-1111'], 'edgefall-1111')).toEqual([]);
+  });
+
+  it('deletes every cache of the app from before the rename to Edgefall (#1650), never serves from them', () => {
+    const renamed = ['other-app', 'ab-alone-1111', 'ab-alone-2222', 'edgefall-3333', 'edgefall-4444'];
+    expect(LEGACY_CACHE_PREFIX).toBe('ab-alone-');
+    expect(staleCaches(renamed, 'edgefall-4444')).toEqual(['ab-alone-1111', 'ab-alone-2222']);
+    expect(olderCaches(renamed, 'edgefall-4444')).toEqual(['edgefall-3333']);
   });
 });

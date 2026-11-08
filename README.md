@@ -4,10 +4,10 @@
 
 **You are alone. They are shelled. Push them into the void.**
 
-[![CI](https://github.com/TidyMaze/ab-alone/actions/workflows/ci.yml/badge.svg)](https://github.com/TidyMaze/ab-alone/actions/workflows/ci.yml)
-[![Pages](https://github.com/TidyMaze/ab-alone/actions/workflows/pages.yml/badge.svg)](https://tidymaze.github.io/ab-alone/)
+[![CI](https://github.com/TidyMaze/edgefall/actions/workflows/ci.yml/badge.svg)](https://github.com/TidyMaze/edgefall/actions/workflows/ci.yml)
+[![Pages](https://github.com/TidyMaze/edgefall/actions/workflows/pages.yml/badge.svg)](https://tidymaze.github.io/edgefall/)
 
-### [▶ Play in your browser](https://tidymaze.github.io/ab-alone/)
+### [▶ Play in your browser](https://tidymaze.github.io/edgefall/)
 
 <img src="docs/screenshots/boss-pulsar.webp" alt="A boss fight against The Pulsar: a hexagonal board of 61 cells with pale and black marbles, the boss bar on top and a warning that the next pulse comes in 2 turns" width="800">
 
@@ -125,7 +125,7 @@ hosted. Build it once, and again after pulling `main`:
 Then add it to your MCP client, with the absolute path of your checkout. Claude Code:
 
 ```bash
-claude mcp add edgefall -- bun /path/to/ab-alone/mcp/src/main.ts
+claude mcp add edgefall -- bun /path/to/edgefall/mcp/src/main.ts
 ```
 
 Other clients (Claude Desktop, Cursor, ...) take the same command in their JSON config. If the
@@ -134,7 +134,7 @@ client does not find `bun`, give its full path (`which bun`).
 ```json
 {
   "mcpServers": {
-    "edgefall": { "command": "bun", "args": ["/path/to/ab-alone/mcp/src/main.ts"] }
+    "edgefall": { "command": "bun", "args": ["/path/to/edgefall/mcp/src/main.ts"] }
   }
 }
 ```
@@ -165,11 +165,12 @@ How the game and the network work: [docs/architecture.md](docs/architecture.md).
 - How we work, strictly, issues first: [CONTRIBUTING.md](CONTRIBUTING.md)
   (AI agents: [AGENTS.md](AGENTS.md))
 - Backlog: [project board](https://github.com/users/TidyMaze/projects/1)
-- Ideas and votes: [Discussions](https://github.com/TidyMaze/ab-alone/discussions)
+- Ideas and votes: [Discussions](https://github.com/TidyMaze/edgefall/discussions)
 
 > This repo is public. Never commit a secret.
 
-<sub>Edgefall was called ab-alone until 2026-11-08 (#1616). Earlier lives of this board: [Abalone](https://github.com/TidyMaze/Abalone) (Java),
+<sub>Edgefall was called ab-alone until 2026-11-08 (#1616). Edgefall moved from tidymaze.github.io/ab-alone/ to
+tidymaze.github.io/edgefall/ on 2026-11-08; old links no longer open (#1650). Earlier lives of this board: [Abalone](https://github.com/TidyMaze/Abalone) (Java),
 [abalone-go](https://github.com/TidyMaze/abalone-go) (Go).</sub>
 
 ## Name
