@@ -19,7 +19,7 @@ of it.
 
 | Option | Cost | Verdict |
 |---|---|---|
-| **A. Rust `Encounter`** (`encounter/stalker.rs`, a `BOSSES` line in `abalone-wasm/src/encounter.rs`) | Port `visibleCells`, `seenBoard`, `seenMoves` and the blocker test of `client/src/stalker.ts` (97 lines) to Rust; an engine version bump; one ladder row | **Chosen** |
+| **A. Rust `Encounter`** (`encounter/stalker.rs`, a `BOSSES` line in `edgefall-wasm/src/encounter.rs`) | Port `visibleCells`, `seenBoard`, `seenMoves` and the blocker test of `client/src/stalker.ts` (97 lines) to Rust; an engine version bump; one ladder row | **Chosen** |
 | B. Plain engine under the client fog, shown as a boss | Every list that reads `boss_ids()` needs a client special case: the Boss fight and Fight together lists, the daily pick (section 7.6), the medal room, the goal sheet, the ladder, the MCP; the fog stays outside the position, so a peer or an agent cannot check it | Rejected |
 
 Reasons for A: a boss in this repo is what `boss_ids()` lists, so the list, the daily, the medal, the boss bar, the
@@ -122,7 +122,7 @@ Each: unit tests first with 100 % coverage (lines and regions for Rust), e2e und
 creates the issues after this spec merges.
 
 1. **Core.** As a player I fight a Stalker boss whose fog the engine knows, because the fog must be the same for every
-   peer and for the AI. *Context:* `crates/abalone-core/src/encounter/stalker.rs`: `sight(phase)`, `visible`,
+   peer and for the AI. *Context:* `crates/edgefall-core/src/encounter/stalker.rs`: `sight(phase)`, `visible`,
    `seen_board`, `seen_moves`, `blockers(board, mv)`, `stalker_boss()` (phase ejections 3 and 5, budget 3000, no hook),
    and `play` refusing a hidden blocker without changing the state. *Expected:* the edge cases of section 3 pass; the
    boss reply equals the plain search of the same budget.

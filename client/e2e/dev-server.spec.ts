@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 // rewrites its files even when nothing changed. A dev server that watches them reloads every page it serves: a
 // second run, a dev server or a wasm build in the same checkout reloaded the pages of a run in progress, and a
 // click on a page being reloaded failed with "Execution context was destroyed".
-const pkg = ['abalone_wasm.js', 'abalone_wasm_bg.wasm'].map((file) => new URL(`../../crates/abalone-wasm/pkg/${file}`, import.meta.url));
+const pkg = ['edgefall_wasm.js', 'edgefall_wasm_bg.wasm'].map((file) => new URL(`../../crates/edgefall-wasm/pkg/${file}`, import.meta.url));
 
 test('rewriting the wasm package during a run does not reload the page under test, bug #185', async ({ page }) => {
   test.skip(!!process.env.E2E_BASE_URL, 'the live site has no dev server and no local wasm package');

@@ -4,7 +4,7 @@
 // onto its cell; the room out of turn dimmed until the bridge (#992). Pure helpers over the bridge's records.
 import { cellsFor, type Axial } from './board';
 
-/** The centres of the two rooms, south then north (crates/abalone-core encounter/dual.rs). */
+/** The centres of the two rooms, south then north (crates/edgefall-core encounter/dual.rs). */
 export const ROOMS: readonly Axial[] = [
   [-2, 4],
   [2, -4],

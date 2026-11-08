@@ -659,7 +659,7 @@ copied from any existing game:
 - **Its section's two terminals** (`LORE`, section 4): a deck has two, shared by every tower on it. A tower has no terminals of its own: a
   third entry per tower would need a new Hub room (a UI change), and the win entry already stands for it.
 
-**Goal cards.** The goal of the ten later bosses (`goal` of `BOSSES` in `crates/abalone-wasm/src/encounter.rs`) opens in the boss's register
+**Goal cards.** The goal of the ten later bosses (`goal` of `BOSSES` in `crates/edgefall-wasm/src/encounter.rs`) opens in the boss's register
 ("The watch counts every core.", "From the fog the stalker sees your whole army.") and then states the rule exactly as before, ending on the win and loss
 sentence. Clarity first: a rule never gives way to flavour. The Echo's card is rebuilt separately (#1524) and is not touched here.
 

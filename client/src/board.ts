@@ -1,5 +1,5 @@
 // Pure board logic for the client: no DOM, no three.js, no WASM. Encodings come from the header of
-// crates/abalone-wasm/src/lib.rs.
+// crates/edgefall-wasm/src/lib.rs.
 
 export type Axial = readonly [q: number, r: number];
 

@@ -265,7 +265,7 @@ async function joinAsWhite(game: Game) {
   slowKeys();
   document.getElementById('play-online')!.click();
   await game.online();
-  const { Engine, engine_version } = await import('abalone-wasm');
+  const { Engine, engine_version } = await import('edgefall-wasm');
   let engine = new Engine();
   const received: number[][] = [];
   const session = new OnlineSession({
@@ -386,7 +386,7 @@ describe('a click', () => {
     const creator = new OnlineSession({
       game: game.room()!,
       side: 1,
-      engine: (await import('abalone-wasm')).engine_version(),
+      engine: (await import('edgefall-wasm')).engine_version(),
       keys,
       transport: game.peer()!,
       judge: { to_move: () => 1, play: () => {}, status: () => 0, restart: () => {} },

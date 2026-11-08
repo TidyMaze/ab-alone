@@ -4,7 +4,7 @@ import { openModes } from './modes';
 import { shot } from './shot';
 
 // The Overseer (#635, game-design.md section 7.11) from the fixture of the core tests
-// (crates/abalone-core/src/encounter/overseer.rs) and ?bot=off, so the test plays both sides through the click hook:
+// (crates/edgefall-core/src/encounter/overseer.rs) and ?bot=off, so the test plays both sides through the click hook:
 // the player pushes the core (1, 1) next to the vent (3, 1) at ply 5, which pulls it in and burns it (#1241), then
 // (-2, 1) next to (-4, 1); the boss walks 3 marbles onto (4, -1), where they burn, then pushes the core (2, -1) next to
 // it itself at ply 22: the player's 6th ejection. Each ply: the cells to click, the moved marbles then the target. The

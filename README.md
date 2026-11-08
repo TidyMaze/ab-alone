@@ -81,9 +81,9 @@ setting (cog menu) drops the fog.
 ## Under the hull
 
 ```
-crates/abalone-core   Rust rules engine: moves, sumito, draws, bot search, boss encounters, battle royale
-crates/abalone-wasm   the same engine compiled to WebAssembly for the browser
-crates/abalone-cli    play in a terminal (debug tool)
+crates/edgefall-core   Rust rules engine: moves, sumito, draws, bot search, boss encounters, battle royale
+crates/edgefall-wasm   the same engine compiled to WebAssembly for the browser
+crates/edgefall-cli    play in a terminal (debug tool)
 client/               TypeScript + Three.js (WebGPU, WebGL2 fallback), Vite
 mcp/                  MCP server: an AI agent plays the bot or a boss over stdio
 ```
@@ -141,7 +141,7 @@ client does not find `bun`, give its full path (`which bun`).
 
 The agent is Black and moves first: `new_game`, then `legal_moves` and `play_move` (the bot
 replies in the same call) until the game is over, or `resign`. `get_state` shows the board. Moves
-use the notation of `abalone-cli`, for example `(1,3)>NE`. Tools, fields and error codes:
+use the notation of `edgefall-cli`, for example `(1,3)>NE`. Tools, fields and error codes:
 [docs/specs/mcp.md](docs/specs/mcp.md). `new_game` with `boss` (one of the ids in its input schema) and
 an optional `seed` starts a boss fight: `get_state` then shows the boss phase, tell and marks.
 

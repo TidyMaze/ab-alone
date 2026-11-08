@@ -8,8 +8,8 @@ import { shot } from './shot';
 
 // #1589: a boss win shows that boss's entry of the story under the banner (a sheet over the dock that lets every press through), files it in
 // the log archive, and never blocks Retry. The recorded win of The Swarm (fight seed 0) is played by the __playMoves hook.
-const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
-const hullPlies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
+const plies = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
+const hullPlies = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
 const swarm = BOSS_LORE.find((e) => e.boss === 'swarm')!;
 const sizes = [
   { name: 'desktop 1280 by 720', viewport: { width: 1280, height: 720 }, touch: false },

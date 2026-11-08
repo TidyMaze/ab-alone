@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import init, { Engine } from 'abalone-wasm';
+import init, { Engine } from 'edgefall-wasm';
 import { cellIndex } from './board';
 import { SPECIAL_LOOKS } from './roguelite';
 import { SECRETS } from './story';
@@ -9,7 +9,7 @@ import { cardText, GIST, Legend, legendHtml, marksOn, RULES } from './specialhel
 // for each kind on the board that the player has not met, and a card with the rule of a marble hovered or tapped.
 const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
-await init({ module_or_path: await readFile(new URL('../../crates/abalone-wasm/pkg/abalone_wasm_bg.wasm', import.meta.url)) });
+await init({ module_or_path: await readFile(new URL('../../crates/edgefall-wasm/pkg/edgefall_wasm_bg.wasm', import.meta.url)) });
 
 const memoryStorage = () => {
   const data = new Map<string, string>();

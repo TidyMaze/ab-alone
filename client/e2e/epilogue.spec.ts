@@ -9,8 +9,8 @@ import { shot } from './shot';
 // #1546, #1588: each boss has its own victory line, and the win that reaches stage 7 plays a short epilogue once. There is no recorded win of The
 // Ballast Mind, so the story is loaded at the end state through its save: the moments 2, 3, 5, 6 and 7 are held, and the recorded win of The Hull
 // (fight seed 0) is the one that completes the run to stage 7, as it does for a player who beat the Ballast Mind first (story.ts).
-const hullPlies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
-const swarmPlies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
+const hullPlies = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
+const swarmPlies = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
 const line = (boss: string, kind: 'win' | 'loss'): string => BOSS_ENDS.find((e) => e.boss === boss && e.kind === kind && e.stage === 1)!.line;
 const sizes = [
   { name: 'desktop 1280 by 720', viewport: { width: 1280, height: 720 }, touch: false },

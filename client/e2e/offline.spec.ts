@@ -59,7 +59,7 @@ test('after one visit the game loads offline and the bot answers', async ({ page
   expect(cached.paths).toEqual(expect.arrayContaining([root, `${root}manifest.webmanifest`, ...assets]));
   // KTX2Loader's transcoder too, to read the textures offline (#700).
   const transcoder = [/assets\/basis_transcoder-[\w-]+\.js$/, /assets\/basis_transcoder-[\w-]+\.wasm$/];
-  for (const built of [/assets\/index-[\w-]+\.js$/, /assets\/bot\.worker-[\w-]+\.js$/, /assets\/abalone_wasm_bg-[\w-]+\.wasm$/, ...transcoder]) {
+  for (const built of [/assets\/index-[\w-]+\.js$/, /assets\/bot\.worker-[\w-]+\.js$/, /assets\/edgefall_wasm_bg-[\w-]+\.wasm$/, ...transcoder]) {
     expect(cached.paths.some((p) => built.test(p))).toBe(true);
   }
   // The UI fonts (#221): the Google Fonts stylesheet and its font files are in the same cache after this one visit.

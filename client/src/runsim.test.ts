@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ACT_ONE_LEAVES, ACT_PERCENT, ACT_TWO_GUEST_ODDS, COMMANDERS, Relic, SPECIAL_LOOKS } from './roguelite';
 
-// #1537: the run simulator (crates/abalone-core/examples/run_sim.rs) plays the act bosses at the page's strengths, and
+// #1537: the run simulator (crates/edgefall-core/examples/run_sim.rs) plays the act bosses at the page's strengths, and
 // keeps its own copy of them, as the engine has none. The test reads the example's source with node:fs, imported untyped:
 // the client has no Node types (readme.test.ts).
 const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
-const source = new TextDecoder().decode(await readFile(new URL('../../crates/abalone-core/examples/run_sim.rs', import.meta.url)));
+const source = new TextDecoder().decode(await readFile(new URL('../../crates/edgefall-core/examples/run_sim.rs', import.meta.url)));
 
-const ladder = new TextDecoder().decode(await readFile(new URL('../../crates/abalone-core/src/encounter/ladder.rs', import.meta.url)));
+const ladder = new TextDecoder().decode(await readFile(new URL('../../crates/edgefall-core/src/encounter/ladder.rs', import.meta.url)));
 
 describe('the run simulator', () => {
   it('leaves act 1 the same bosses as the page (#1599, ACT_ONE_LEAVES of ladder.rs)', () => {

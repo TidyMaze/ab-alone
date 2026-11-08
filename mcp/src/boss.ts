@@ -3,7 +3,7 @@
 
 import { BOARD_CELLS } from './board';
 
-/** What the boss state reads of `Encounter` in abalone-wasm. */
+/** What the boss state reads of `Encounter` in edgefall-wasm. */
 export interface BossLike {
   name(): string;
   phase(): number;
@@ -87,7 +87,7 @@ export function resultName(code: number): BossResult {
   return RESULTS[code]!;
 }
 
-/** Records of `size` integers back to back, as abalone-wasm returns them. */
+/** Records of `size` integers back to back, as edgefall-wasm returns them. */
 function records(flat: Int32Array, size: number): number[][] {
   return Array.from({ length: flat.length / size }, (_, i) => Array.from(flat.subarray(i * size, (i + 1) * size)));
 }

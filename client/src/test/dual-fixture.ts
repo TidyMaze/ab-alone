@@ -1,4 +1,4 @@
-import text from '../../../crates/abalone-core/tests/fixtures/dual.txt?raw';
+import text from '../../../crates/edgefall-core/tests/fixtures/dual.txt?raw';
 import { parseRecorded } from './chaplain-game';
 
 /** The plies of the recorded Dual Room fight of the wasm tests (see dual-game.ts). */

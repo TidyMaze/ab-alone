@@ -24,13 +24,13 @@ Phase 0 starts.
 
 Decision [#36](https://github.com/TidyMaze/ab-alone/issues/36): everything is static on GitHub
 Pages, no game server, multiplayer is peer to peer (WebRTC data channels). Every peer runs the
-same deterministic `abalone-core` WASM and validates every move.
+same deterministic `edgefall-core` WASM and validates every move.
 
 ```mermaid
 flowchart LR
   subgraph A[Browser A, static from GitHub Pages]
     UIA[Three.js renderer]
-    WA[Web Worker: abalone-wasm\nrules + AI + log verify]
+    WA[Web Worker: edgefall-wasm\nrules + AI + log verify]
     NA[Net layer: WebRTC + signing]
     UIA <--> WA
     WA <--> NA
@@ -38,22 +38,22 @@ flowchart LR
     WA --> DBA
   end
   subgraph B[Browser B, same code]
-    NB[Net layer] <--> WB[Worker: abalone-wasm] <--> UIB[Renderer]
+    NB[Net layer] <--> WB[Worker: edgefall-wasm] <--> UIB[Renderer]
   end
   NA <== "WebRTC data channels\nsigned move log" ==> NB
   NA -. "SDP/ICE exchange only" .-> SIG{{Signaling:\nNostr / BitTorrent relays\nor manual link / QR}}
   NB -. SDP/ICE .-> SIG
   NA -. NAT discovery .-> STUN[(Public STUN)]
-  Core[[abalone-core\nno_std Rust]] -. compiled into .-> WA
+  Core[[edgefall-core\nno_std Rust]] -. compiled into .-> WA
   Core -. compiled into .-> WB
 ```
 
-Repo layout (when code starts, not now): `crates/abalone-core`, `crates/abalone-wasm`,
-`crates/abalone-cli`, `client/` (Vite + TypeScript), `docs/`. One Cargo workspace, one `client/`
+Repo layout (when code starts, not now): `crates/edgefall-core`, `crates/edgefall-wasm`,
+`crates/edgefall-cli`, `client/` (Vite + TypeScript), `docs/`. One Cargo workspace, one `client/`
 package. No server crate. Anything that needs a trusted server (accounts, ranking, global
 leaderboard) is out of scope, see section 13.
 
-## 3. Rust crate `abalone-core`
+## 3. Rust crate `edgefall-core`
 
 `no_std` friendly (`alloc` optional), no I/O, no clock, no global RNG, no threads. Fully
 deterministic: same state plus same move gives the same state on every target. That property is
@@ -85,7 +85,7 @@ zero wasm dependencies.
 
 ## 4. WASM build and JS bridge
 
-- Crate `abalone-wasm` wraps the core with `wasm-bindgen`, built by `wasm-pack` (or plain
+- Crate `edgefall-wasm` wraps the core with `wasm-bindgen`, built by `wasm-pack` (or plain
   `cargo build --target wasm32-unknown-unknown` plus `wasm-bindgen` CLI in CI). Latest seen:
   wasm-bindgen 0.2.129 and wasm-pack 0.15.0, both **unverified** (distro trackers, see
   [Debian tracker](https://tracker.debian.org/pkg/wasm-bindgen),
@@ -353,7 +353,7 @@ answer: only a `Sync` does.
    validated at its turn, an invalid order becomes a pass (game design #53, option C). Pure, so
    all peers reach the same state, checked by hash. Bots: orders are a pure function of
    (round-start state, seed), computed before reveal.
-   Built in #494 and #495 (`crates/abalone-core/src/royale/`):
+   Built in #494 and #495 (`crates/edgefall-core/src/royale/`):
    `royale::start(seats)` gives the start position, `resolve_round(state, orders)` takes one
    `(seat, Move | Hold)` per seat in any order and returns the next state and the round log;
    `Royale::hash` is the state hash the peers compare. Since #496 each round ends with the hull
@@ -364,7 +364,7 @@ answer: only a `Sync` does.
    `cargo run --release --example royale_sim` runs the anti-kingmaking check of rules.md 10.4.
    Since #499 the wasm bridge exposes it as `Royale` (`new(seats, seed)`, `board`, `resolve`,
    `round_log`, `cracks`, `state_hash`, `bot_order`, `placement`, and since #502 `legal_orders`),
-   encodings in the module docs of `crates/abalone-wasm/src/lib.rs`. The offline battle royale
+   encodings in the module docs of `crates/edgefall-wasm/src/lib.rs`. The offline battle royale
    (#502, `client/src/royale.ts`) plays the player against 5 bots on it, with no commit-reveal.
 - **Who arbitrates?** Nobody has authority over the outcome, the pure function does. A
   **coordinator** (the host peer) exists only for liveness: it announces round start, collects
@@ -458,7 +458,7 @@ the same everywhere. Network latency only affects when the opponent sees it.
 
 ## 7. AI and bosses
 
-All AI lives in `abalone-core` or a sibling crate `abalone-ai`, runs as WASM in a Web Worker (and natively in
+All AI lives in `edgefall-core` or a sibling crate `edgefall-ai`, runs as WASM in a Web Worker (and natively in
 the CLI and in CI for self-play).
 
 - **Alpha-beta** (negamax, iterative deepening, Zobrist transposition table, killer and history
@@ -501,7 +501,7 @@ No database server. Everything is client-side.
   ```
 
   `moves` holds the move records of the WASM bridge in play order, Black first: 8 integers
-  `[n, dir, q0, r0, q1, r1, q2, r2]` (encodings in the header of crates/abalone-wasm/src/lib.rs).
+  `[n, dir, q0, r0, q1, r1, q2, r2]` (encodings in the header of crates/edgefall-wasm/src/lib.rs).
   A new layout (Belgian daisy, #69) or mode gets its own `layout` or `mode` value, a change of
   meaning a new `version`.
 - **Export/import:** a game or the whole save as a JSON file (also the bug report format and the
@@ -557,7 +557,7 @@ No database server. Everything is client-side.
 - Versioning: the wire protocol and the engine carry a version number in `Hello`. Peers on
   different engine versions refuse to play (a desync otherwise). Old tabs are told to reload.
   **Engine version (#526):** `engine_version()` of the wasm, a number set by hand in
-  `crates/abalone-wasm/src/lib.rs` and bumped with any change that makes the same moves give another
+  `crates/edgefall-wasm/src/lib.rs` and bumped with any change that makes the same moves give another
   game (a rule, a boss reply, a layout). The crate version is not used: it is never bumped. Every
   `Hello` carries it in a signed `engine` field. A session refuses a `Hello` from another version,
   or from an older peer that sends none (it predates the check, so its engine may differ): no seat,
@@ -746,7 +746,7 @@ Issues #33, #34, #35, #39 were rewritten for P2P after #36.
 
 | Issue | Area |
 |---|---|
-| #23 abalone-core: board, move generation, validation, sumito | engine |
+| #23 edgefall-core: board, move generation, validation, sumito | engine |
 | #25 Engine test harness: property tests and perft | engine |
 | #27 WASM build and JS bridge | engine |
 | #29 AI: alpha-beta with hand-tuned eval, in a Web Worker | engine |

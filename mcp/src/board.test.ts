@@ -12,7 +12,7 @@ function bytes91(marks: Record<string, number>): Uint8Array {
   return Uint8Array.from(BOARD_CELLS.slice(0, 91), ([q, r]) => marks[`${q},${r}`] ?? 0);
 }
 
-describe('the 61 cells, in abalone-wasm board order', () => {
+describe('the 61 cells, in edgefall-wasm board order', () => {
   test('row by row from r = -4 to r = 4, q ascending inside a row', () => {
     expect(CELLS).toHaveLength(61);
     expect(CELLS[0]).toEqual([0, -4]);
@@ -47,7 +47,7 @@ describe('boardText', () => {
   });
 });
 
-describe('ascii, as printed by render in abalone-cli', () => {
+describe('ascii, as printed by render in edgefall-cli', () => {
   test('renders the standard start', () => {
     const expected = [
       '  1 2 3 4 5 6 7 8 9',

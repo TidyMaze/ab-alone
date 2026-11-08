@@ -128,7 +128,7 @@ describe('main.ts tonal look (#1138)', () => {
   it('rings a revealed Stalker marble in amber and the last move in cyan, in the pbr look too', async () => {
     const scene = catchScene();
     const game = await boot('/');
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     byId('boss-fight').click();
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Stalker')!.click();
     vi.spyOn(Encounter.prototype, 'play').mockImplementationOnce(() => {

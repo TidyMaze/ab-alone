@@ -20,7 +20,7 @@ function catchScene(): () => THREE.Scene {
   let scene: THREE.Scene | null = null;
   const add = THREE.Object3D.prototype.add;
   const spy = vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
-    if (this instanceof THREE.Scene && this.name === 'abalone-scene') scene = this;
+    if (this instanceof THREE.Scene && this.name === 'edgefall-scene') scene = this;
     return add.apply(this, objects);
   });
   onTestFinished(() => spy.mockRestore());
@@ -118,7 +118,7 @@ async function repeat(game: Game, white?: Play): Promise<void> {
 /** The White player of the page's online room: a session with its own engine, which plays once Black's move is in. */
 async function opponent(game: Game) {
   const [transport, room] = [game.peer()!, game.room()!];
-  const { Engine, engine_version } = await import('abalone-wasm');
+  const { Engine, engine_version } = await import('edgefall-wasm');
   const engine = new Engine();
   const session = new OnlineSession({
     game: room,
@@ -776,7 +776,7 @@ describe('main.ts, the lift gate (#523)', () => {
     shipAt(game, [1, 0]);
     game.click(2, 0); // the boss door: the Echo
     expect(document.body.dataset.boss).toBe('echo');
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const win = vi.spyOn(Encounter.prototype, 'result').mockReturnValue(1); // a win, without playing six ejections
     game.click(0, 2); // a selection redraws the plate, which records the win
     win.mockRestore();

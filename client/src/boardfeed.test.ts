@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import init, { Engine, replay_score } from 'abalone-wasm';
+import init, { Engine, replay_score } from 'edgefall-wasm';
 import banned from './bannedkeys.json';
 import { retireTimes, BANNED, banSet, JUNK_BUDGET, LIMIT, MAX_FAILS_PER_KEY, MIN_GAMES, MIN_OPPONENTS, RAMP_GAMES, capPairs, REPLAY_BUDGET, RELAYS, WINDOW_S, bothSigned, deriveBoard, parseResult, readBoard, readRelay, sharedHtml, signResult, verifiedResults, type SharedResult, type Socket } from './boardfeed';
 import { boardKeys, joinBoard, leaveBoard, signRetire, type RetireEvent } from './shareboard';
 import { generateKeys, type Keys } from './moverecord';
 
-// The replay is the real rules engine (crates/abalone-wasm replay_score), as antistalling.test.ts: Node's fetch cannot read a file:// URL.
+// The replay is the real rules engine (crates/edgefall-wasm replay_score), as antistalling.test.ts: Node's fetch cannot read a file:// URL.
 const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
-await init({ module_or_path: await readFile(new URL('../../crates/abalone-wasm/pkg/abalone_wasm_bg.wasm', import.meta.url)) });
+await init({ module_or_path: await readFile(new URL('../../crates/edgefall-wasm/pkg/edgefall_wasm_bg.wasm', import.meta.url)) });
 
 const play = (plies: number): { moves: number[][]; status: number; ejected: [number, number] } => {
   const engine = new Engine();

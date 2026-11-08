@@ -27,7 +27,7 @@ async function until(game: Game, ok: () => boolean): Promise<void> {
 
 /** The other player: a session of the room's 6 seats and its rounds, with its own engine, on `transport`. */
 async function player(transport: Transport, room: string, side: number) {
-  const { Royale, engine_version } = await import('abalone-wasm');
+  const { Royale, engine_version } = await import('edgefall-wasm');
   const keys = await generateKeys();
   const royale = new Royale(6, seedOf(room));
   const session: OnlineSession = new OnlineSession({

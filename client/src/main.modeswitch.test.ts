@@ -4,7 +4,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
 import css from './ui.css?raw';
-import { boss_ids } from 'abalone-wasm';
+import { boss_ids } from 'edgefall-wasm';
 import './test/openworldwasm'; // inits the wasm at collection, the mode list reads it
 
 // One mode at a time (#1275, docs/specs/ui.md): a mode left for another leaves nothing behind, not a HUD block, a body data
@@ -21,7 +21,7 @@ function catchScene(): () => THREE.Scene {
   let scene: THREE.Scene | null = null;
   const add = THREE.Object3D.prototype.add;
   const spy = vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
-    if (this instanceof THREE.Scene && this.name === 'abalone-scene') scene = this;
+    if (this instanceof THREE.Scene && this.name === 'edgefall-scene') scene = this;
     return add.apply(this, objects);
   });
   onTestFinished(() => spy.mockRestore());
@@ -97,7 +97,7 @@ function pick(game: Game, id: string): void {
 
 /** The fight ends at the next move, won (1) or lost (2), and plays that move. A win would mark the boss beaten in the hub. */
 async function endFight(game: Game, result: number): Promise<void> {
-  const { Encounter } = await import('abalone-wasm');
+  const { Encounter } = await import('edgefall-wasm');
   const over = (): number => (game.hook<number>('__plies') > 0 ? result : 0);
   vi.spyOn(Encounter.prototype, 'result').mockImplementation(over);
   vi.spyOn(Encounter.prototype, 'status').mockImplementation(over);

@@ -116,7 +116,7 @@ describe('main.ts boss entrance (#1551)', () => {
   });
 
   it('plays when a run walks into its act boss, not when the run is loaded in the fight', async () => {
-    const { boss_ids, run_map } = await import('abalone-wasm');
+    const { boss_ids, run_map } = await import('edgefall-wasm');
     const game = await boot('?bot=off&entrance&nodes=50');
     let nodes: MapNode[] = [];
     let path: number[] = [];

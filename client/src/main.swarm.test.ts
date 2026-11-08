@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import text from '../../crates/abalone-core/tests/fixtures/swarm.txt?raw';
+import text from '../../crates/edgefall-core/tests/fixtures/swarm.txt?raw';
 import { EVAC_MS } from './swarm';
 import { parseRecorded } from './test/chaplain-game';
 import { boot, type Game } from './test/harness';

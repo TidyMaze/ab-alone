@@ -18,7 +18,7 @@ async function start(url = '?bot=off'): Promise<Game> {
 /** A game on `Engine.trainer(wave, left)` played out till it ends as `want`: Black moves at random, White as the bot or at
  * random. A 'draw' ends in Black's win with a draw reason (idle plies or repetition). */
 async function playOut(wave: number, left: number, want: 'win' | 'loss' | 'draw', white: 'bot' | 'random'): Promise<number[][]> {
-  const { Engine } = await import('abalone-wasm');
+  const { Engine } = await import('edgefall-wasm');
   for (let seed = 1; seed < 300; seed++) {
     let s = seed;
     const rnd = (): number => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 2 ** 32);

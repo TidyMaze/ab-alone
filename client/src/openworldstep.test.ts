@@ -8,7 +8,7 @@ import { DEFAULT_YAW, restYaw, TURN_STEP } from './openworldmode';
 import { flock, heroStep } from './openworldstep';
 import { OpenWorldView } from './openworldview';
 
-// The rules of the step are tested in Rust (abalone-core worldstep); this file tests what the client adds: the packing of the keys,
+// The rules of the step are tested in Rust (edgefall-core worldstep); this file tests what the client adds: the packing of the keys,
 // the free cells and the answer, and the camera's yaw against what the screen shows.
 const open = () => true;
 // Grass at height 1 in the chunks round the origin.

@@ -491,7 +491,7 @@ function crownGeometry(): THREE.BufferGeometry {
 }
 /** A lore log (#1589): a tall amber stake that glows while unread, a short dull grey one once found (the shape changes, not only the colour). */
 export const LOG_LOOK = { open: 0xffd166, found: 0x8d9792, height: { open: 1, found: 0.45 }, emissive: 0.45, nightGlow: 0.8 };
-/** A cairn (#1533): three stacked dark slate stones, about 2.2 high with a sodium cap that glows so it reads as an amber point from the widest zoom, about one a chunk (abalone-core `cairns`), so no open
+/** A cairn (#1533): three stacked dark slate stones, about 2.2 high with a sodium cap that glows so it reads as an amber point from the widest zoom, about one a chunk (edgefall-core `cairns`), so no open
  * cell lies more than 16 cells from a landmark. Each turns and stands taller or shorter by up to `spread` from its cell. */
 export const CAIRN_LOOK = { stone: 0x39466a, cap: SODIUM, stones: [0.34, 0.27, 0.2], step: 0.6, spread: 0.2, emissive: 1.6, nightGlow: 0.6 };
 /** The most cairns the widest loaded square holds: two a chunk at most, 21 chunks across. */
@@ -501,13 +501,13 @@ function cairnGeometry(): THREE.BufferGeometry {
   const { stones, step } = CAIRN_LOOK;
   return mergeGeometries(stones.map((radius, i) => new THREE.CylinderGeometry(radius * 0.8, radius, step, 6).rotateY(i * 0.5).translate(0, step * (i + 0.5), 0).toNonIndexed()))!;
 }
-/** The most logs a world holds, abalone-core `LOGS`. */
+/** The most logs a world holds, edgefall-core `LOGS`. */
 const LOG_CAPACITY = 12;
 /** How much of its painted colour a lair's landmark emits at full glow (#1496). */
 const LAIR_GLOW = 0.5;
-/** The most teleporters the widest loaded square holds: one a square of 4 x 4 chunks (abalone-core `TELEPORT_BLOCK`), 21 chunks across. */
+/** The most teleporters the widest loaded square holds: one a square of 4 x 4 chunks (edgefall-core `TELEPORT_BLOCK`), 21 chunks across. */
 const TELEPORTER_CAPACITY = (Math.ceil((2 * MAX_REACH + 1) / 4) + 1) ** 2;
-/** The most towns, and the most gates, a world holds: five each (abalone-core `places`, #1514). */
+/** The most towns, and the most gates, a world holds: five each (edgefall-core `places`, #1514). */
 const PLACE_CAPACITY = 5;
 /** The looks of the marbles (#1138): glossy, with the ring colours of the interface, cyan on the hero and the troop (the last move), amber
  * on the foes (revealed). The stripe is the ring that shows the roll. */

@@ -13,15 +13,15 @@ function error(input: string): string {
   return result.message;
 }
 
-// The messages of `ParseError` in crates/abalone-cli/src/lib.rs, word for word (docs/specs/mcp.md section 3.1).
+// The messages of `ParseError` in crates/edgefall-cli/src/lib.rs, word for word (docs/specs/mcp.md section 3.1).
 const EMPTY = 'empty input';
 const MISSING_ARROW = "missing '>' before the direction";
 const NO_CELL = "no cell before '>'";
 const BAD_CELL = 'cell must look like (q,r), for example (0,0)';
 const BAD_DIRECTION = 'direction must be E, W, NE, SW, NW or SE';
 
-describe('parseMove, the notation of abalone-cli', () => {
-  test('the direction codes are the abalone-wasm order', () => {
+describe('parseMove, the notation of edgefall-cli', () => {
+  test('the direction codes are the edgefall-wasm order', () => {
     expect(DIRECTIONS).toEqual(['E', 'W', 'NE', 'SW', 'NW', 'SE']);
   });
 
@@ -89,7 +89,7 @@ describe('formatMove', () => {
   });
 });
 
-describe('move records of abalone-wasm', () => {
+describe('move records of edgefall-wasm', () => {
   test('a move is 8 integers [n, dir, q0, r0, q1, r1, q2, r2], unused coordinates are 0', () => {
     expect(Array.from(toRecord(parsed('(0,0)>SE')))).toEqual([1, 5, 0, 0, 0, 0, 0, 0]);
     expect(Array.from(toRecord(parsed('(-1,2)(0,2)>E')))).toEqual([2, 0, -1, 2, 0, 2, 0, 0]);

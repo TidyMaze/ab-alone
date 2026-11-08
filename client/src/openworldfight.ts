@@ -1,7 +1,7 @@
 // The enemy marbles of the Open world fight (docs/specs/openworld.md section 3): the generated enemies of the seed, with the
 // pushes of the troop on top. The generated ones never change: a push removes the ones it moved away (`removed`, by cell) and
 // adds the ones that now stand where no generated enemy starts (`added`). The state is plain data, saved as `toJSON`.
-import { WorldFight } from 'abalone-wasm';
+import { WorldFight } from 'edgefall-wasm';
 import type { Axial } from './board';
 import { chunkOf, type World } from './openworld';
 import type { Played } from './openworldview';
@@ -57,7 +57,7 @@ const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat
 const cellsOf = (list: ArrayLike<number>): Axial[] => Array.from({ length: list.length / 2 }, (_, i): Axial => [list[2 * i]!, list[2 * i + 1]!]);
 
 /** The enemies of a fight, on top of the generated ones of a seed's world. What the pushes changed lives in the engine
- * (`WorldFight`, abalone-core `worldoverlay`), which holds the rule; this reads the generated enemies of the world for it. */
+ * (`WorldFight`, edgefall-core `worldoverlay`), which holds the rule; this reads the generated enemies of the world for it. */
 export class FightState {
   private fight = new WorldFight();
 
@@ -66,7 +66,7 @@ export class FightState {
     return this.fight.beaten();
   }
 
-  /** The length of a tick of the wandering clock in ms (abalone-core `worldwander`): the marbles take one step each (#1511). */
+  /** The length of a tick of the wandering clock in ms (edgefall-core `worldwander`): the marbles take one step each (#1511). */
   static get tickMs(): number {
     return WorldFight.tick_ms();
   }
@@ -124,7 +124,7 @@ export class FightState {
     return this.enemiesAround(world, cell, WorldFight.push_reach());
   }
 
-  /** The troop's attack (`WorldFight.troop_push`, abalone-core `worldoverlay`): the best legal push of `troop` (the hero's cell first) in
+  /** The troop's attack (`WorldFight.troop_push`, edgefall-core `worldoverlay`): the best legal push of `troop` (the hero's cell first) in
    * the world `seed`, with the `broken` cells and the hero's step `tick` (a single marble also shoves a foe into the water, #1504), played on the fight. The push as it was played, from the cells before it; `null` when none
    * is legal. */
   troopPush(world: World, seed: number, troop: readonly Axial[], broken: readonly Axial[], tick: number): Played | null {

@@ -6,7 +6,7 @@ import { NEON_LIGHT } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
 import { neighbours } from './openworld';
 import './test/openworldwasm';
-import { world_enemies } from 'abalone-wasm';
+import { world_enemies } from 'edgefall-wasm';
 import { boot, type Game } from './test/harness';
 
 // #1520, docs/specs/openworld.md section 17: a page that opens in the Open world fetches none of the files that only the board needs (the

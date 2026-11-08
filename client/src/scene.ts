@@ -213,7 +213,7 @@ export class SceneRenderer {
     this.backend = b ? 'WebGPU' : 'WebGL2';
 
     this.scene = new DrawnScene();
-    this.scene.name = 'abalone-scene';
+    this.scene.name = 'edgefall-scene';
     this.scene.background = options.backdrop ?? new THREE.Color(COLORS.base);
     this.scene.environmentIntensity = LIGHT.environment.intensity;
 

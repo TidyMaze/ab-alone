@@ -1,6 +1,6 @@
 // The reveal of a battle royale round played out (#612, docs/specs/ui.md): each seat's turn in initiative order, its
 // order sliding and pushing as in a normal game, then the breach. Pure: main.ts draws it. The boards are the wasm arena
-// codes (crates/abalone-wasm/src/lib.rs); the round log gives each turn's outcome, the orders its move.
+// codes (crates/edgefall-wasm/src/lib.rs); the round log gives each turn's outcome, the orders its move.
 import { DIRECTIONS, MOVE_STRIDE, VANISHED, axialTo3D, cellIndex, parseMoves, type Axial, type Move } from './board';
 import { EJECT_MS } from './eject';
 import { ARENA, seatAt, type Outcome, type RoundLog } from './royale';

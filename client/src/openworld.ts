@@ -198,7 +198,7 @@ export const startTroop = (standable: (cell: Axial) => boolean): Axial[] => ring
 /** The hero: one marble that rolls one cell at a time over the open cells of the world, and the troop that flocks round it. */
 export class Hero {
   at: Axial = SPAWN;
-  /** The troop starts round the spawn, on the open ground, nearest first; after a step it flocks (`flock`, abalone-core `worldstep`). */
+  /** The troop starts round the spawn, on the open ground, nearest first; after a step it flocks (`flock`, edgefall-core `worldstep`). */
   troop: Axial[];
   /** The obstacle the last step broke (#1147), `null` when it broke none. */
   smashed: Terrain | null = null;
@@ -219,7 +219,7 @@ export class Hero {
     return terrain !== undefined && (WALKABLE.has(terrain) || (sailing && terrain === 'water')) && !this.fight.occupied(this.world, cell[0], cell[1]);
   }
 
-  /** Rolls to `to` when the engine allows the step (`enter`, abalone-core `worldstep`: a neighbour that is on the world, free of enemies and
+  /** Rolls to `to` when the engine allows the step (`enter`, edgefall-core `worldstep`: a neighbour that is on the world, free of enemies and
    * either open or an obstacle it breaks, #1147); reports whether it moved. */
   step(to: Axial): boolean {
     this.smashed = null;

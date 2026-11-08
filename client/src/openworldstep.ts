@@ -1,6 +1,6 @@
 // The hero's step of the Open world (docs/specs/openworld.md section 4): the held arrows, the camera's yaw and the cells the hero
-// can enter go to the bridge's `world_step` (abalone-core `worldstep`), which holds the rule; this module only packs them.
-import { world_enter, world_step, world_flock } from 'abalone-wasm';
+// can enter go to the bridge's `world_step` (edgefall-core `worldstep`), which holds the rule; this module only packs them.
+import { world_enter, world_step, world_flock } from 'edgefall-wasm';
 import { DIRECTIONS, type Axial } from './board';
 import type { FightState, Goal } from './openworldfight';
 import { TERRAINS, type World } from './openworld';
@@ -24,7 +24,7 @@ export function heroStep(at: Axial, held: Iterable<string>, yaw: number, steerin
 export type Entry = 'refused' | 'rolls' | 'breaks';
 const ENTRIES: readonly Entry[] = ['refused', 'rolls', 'breaks'];
 
-/** What the step of the hero from `at` to `to` does (`world_enter`, abalone-core `worldstep`): the rule is in the engine; this reads the
+/** What the step of the hero from `at` to `to` does (`world_enter`, edgefall-core `worldstep`): the rule is in the engine; this reads the
  * terrain of the cell and whether an enemy stands on it. */
 export function enter(world: World, fight: FightState, at: Axial, to: Axial): Entry {
   const terrain = world.tile(to[0], to[1])?.terrain;
@@ -32,7 +32,7 @@ export function enter(world: World, fight: FightState, at: Axial, to: Axial): En
   return ENTRIES[world_enter(at[0], at[1], to[0], to[1], terrain === undefined ? -1 : TERRAINS.indexOf(terrain), occupied)]!;
 }
 
-/** The troop after the hero steps from `at` to `to` (`world_flock`, the flock of abalone-core `worldstep`): the same marbles in the same order,
+/** The troop after the hero steps from `at` to `to` (`world_flock`, the flock of edgefall-core `worldstep`): the same marbles in the same order,
  * each on one of `ground` (or the cell the hero left), none on `to`. `seed` and `tick` fix every tie, so peers agree. `goals` are the cells
  * the herd sends followers to (#1506, `FightState.herdGoals`). */
 export function flock(seed: number, tick: number, troop: readonly Axial[], at: Axial, to: Axial, ground: readonly Axial[], goals: readonly Goal[] = []): Axial[] {

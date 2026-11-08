@@ -34,10 +34,10 @@ Every game mode below is built on this rules engine. Modes add rules, they never
 
 | Layer | Choice | Why |
 |---|---|---|
-| Rules engine | Rust crate `abalone-core`, `no_std` friendly | One source of truth, fast, testable |
-| Client logic | `abalone-core` compiled to WASM (`wasm-bindgen`, `wasm-pack`) | Same rules on every peer |
+| Rules engine | Rust crate `edgefall-core`, `no_std` friendly | One source of truth, fast, testable |
+| Client logic | `edgefall-core` compiled to WASM (`wasm-bindgen`, `wasm-pack`) | Same rules on every peer |
 | Rendering | Three.js (TypeScript, Vite) | Asked for. WebGPU renderer when stable enough |
-| Multiplayer | Peer to peer, WebRTC data channels, serverless signaling (Trystero / manual link), every peer runs `abalone-core` WASM and validates every move, signed hash-chained move log | No server to host or pay for, cheating is detectable ([#36](https://github.com/TidyMaze/ab-alone/issues/36), [tech spec](docs/specs/tech.md)) |
+| Multiplayer | Peer to peer, WebRTC data channels, serverless signaling (Trystero / manual link), every peer runs `edgefall-core` WASM and validates every move, signed hash-chained move log | No server to host or pay for, cheating is detectable ([#36](https://github.com/TidyMaze/ab-alone/issues/36), [tech spec](docs/specs/tech.md)) |
 | AI / bosses | Rust, alpha-beta first, MCTS later, in a Web Worker via WASM | Runs offline, in the browser |
 | Hosting | Everything static on GitHub Pages, no game server, no VM, no paid host | Free, decided in [#36](https://github.com/TidyMaze/ab-alone/issues/36) |
 | CI | GitHub Actions: `cargo test`, `clippy`, `wasm-pack build`, client build | Green main |
@@ -49,7 +49,7 @@ Rule: no peer is trusted. Every peer re-validates every move with the same deter
 Each phase is a GitHub milestone. A phase starts only when the previous one is playable.
 
 ### Phase 0: Core engine
-- `abalone-core`: board, move generation, move validation, sumito, win detection.
+- `edgefall-core`: board, move generation, move validation, sumito, win detection.
 - Property tests: no move creates or destroys marbles except an ejection, every generated move is
   valid, perft-style move counts on the start position.
 - CLI to play a game in the terminal (debug tool, not a product).

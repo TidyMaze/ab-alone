@@ -5,7 +5,7 @@ import type { Axial } from './board';
 import { FightState } from './openworldfight';
 import { neighbours } from './openworld';
 import './test/openworldwasm';
-import { world_enemies } from 'abalone-wasm';
+import { world_enemies } from 'edgefall-wasm';
 import { BOT_NODES, WILD_NODES } from './bot';
 import { boot, type Game } from './test/harness';
 
@@ -138,7 +138,7 @@ describe('a wild fight (#1511)', () => {
     const game = await met();
     vi.advanceTimersByTime(1000);
     vi.useRealTimers();
-    const { Engine } = await import('abalone-wasm');
+    const { Engine } = await import('edgefall-wasm');
     const won = (): number => (game.hook<number>('__plies') > 0 ? 1 : 0);
     vi.spyOn(Engine.prototype, 'status').mockImplementation(won);
     const move = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4))!;
@@ -250,7 +250,7 @@ describe('a wild fight (#1511)', () => {
   it('the bot of a wild fight searches a modest fixed budget, never more than the test budget', async () => {
     for (const [nodes, expected] of [[50_000, WILD_NODES], [300, 300]] as const) {
       const game = await boot(`?nodes=${nodes}&openworld=${seed}`, { reducedMotion: true });
-      const search = vi.spyOn((await import('abalone-wasm')).Engine.prototype, 'best_move');
+      const search = vi.spyOn((await import('edgefall-wasm')).Engine.prototype, 'best_move');
       await openWorld(game);
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       hooks().__openworldFixture({ hero: beside, troop: [] });

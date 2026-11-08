@@ -4,7 +4,7 @@
 
 export type TallyMode = 'local' | 'bot' | 'online' | 'boss';
 
-/** The bosses of the roster, in play order (boss_ids() in crates/abalone-wasm). */
+/** The bosses of the roster, in play order (boss_ids() in crates/edgefall-wasm). */
 export const BOSS_IDS = ['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker', 'swarm'] as const;
 
 const MODE_LINES: Record<'local' | 'bot' | 'online', string> = {

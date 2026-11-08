@@ -1,5 +1,5 @@
 /target
-/crates/abalone-wasm/pkg
+/crates/edgefall-wasm/pkg
 .playwright-mcp/
 *.blend
 *.blend1

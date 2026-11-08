@@ -661,7 +661,7 @@ Remainder of #826 (reply time, 10x cell, `spares_eggs`), nothing tuned, no code 
   `encounter/alien.rs`, where `old_move` rebuilds the pre-#826 search as the baseline of the test
   `the_alien_crushes_its_own_egg_to_save_a_marble_the_old_filter_left_to_die`, and `quiet` uses it
   to play a move that crushes no egg. It stays: removing it would remove the test's baseline.
-- 10x cell, `ALIEN_X=10 ALIEN_SEEDS=20 cargo run --release -p abalone-core --example alien_sim`,
+- 10x cell, `ALIEN_X=10 ALIEN_SEEDS=20 cargo run --release -p edgefall-core --example alien_sim`,
   seeds 0 to 19, one run of about 15 minutes (the 15 minute kill in #1130 was too early): the player
   wins 20/20, median 72 plies, median eggs crushed 1, median hatched 18.5, median Alien peak 20.5,
   count only goes up in 0/20. The pre-#826 10x row (50 seeds, #667) is 50/50, 75 plies, 2 crushed,
@@ -964,8 +964,8 @@ bridge).
 
 ## 4. Recorded wins
 
-`crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
-`crates/abalone-core/tests/boss_fixtures.rs` through `Fixture::replay` (the `Encounter` API, and
+`crates/edgefall-core/tests/fixtures/<boss>.txt`, replayed by
+`crates/edgefall-core/tests/boss_fixtures.rs` through `Fixture::replay` (the `Encounter` API, and
 the `Choir` API for the Choir), asserting a player win. Format: boss id, seed, the budgets it was
 recorded with, then one move per line (cells `q,r` joined by `;`, a space, the direction), both
 sides in order. The replay does not search, so it is deterministic and fast.
@@ -1066,7 +1066,7 @@ boss replies with `Encounter::boss_search` (plain search, it sees everything). T
 under the same fog: its random opening moves come from the offered moves (`seen_moves`), its search runs on the seen
 board (hidden boss marbles read as empty cells, ejection counts kept), and when the engine refuses a move for a hidden
 blocker the blockers are revealed and it searches again on the board as it now sees it (a refusal costs no ply). It
-keeps the repetition check of the other rows. Command: `LADDER_X=10 cargo run --release -p abalone-core --example
+keeps the repetition check of the other rows. Command: `LADDER_X=10 cargo run --release -p edgefall-core --example
 ladder stalker`, 10 seeds, run alone on one machine (8 min 45 s wall).
 
 | Player budget | Wins /10 | Median plies | Highest phase | Deaths |
@@ -1566,7 +1566,7 @@ to 20 % slower, the maximum stays under 400 ms.
 
 Checked on `main` at a01ff8c (2026-11-01). Test = a position where the move with the rule differs from the move
 without it (the "without" is the pre-fix search rebuilt in the test, or a plain search); the 15 tests run for this check pass
-(`cargo test -p abalone-core --lib`, by name). "Ladder" = `LADDER_X=<1|10> LADDER_SEEDS=20`, wins /20, 1x / 10x,
+(`cargo test -p edgefall-core --lib`, by name). "Ladder" = `LADDER_X=<1|10> LADDER_SEEDS=20`, wins /20, 1x / 10x,
 see the section named. `LadderBoss::ALL` (`encounter/ladder.rs:66`) holds all 12 (and Dual, Stalker, Swarm).
 Node budgets are the `*_NODE_BUDGET` constants of `encounter/<boss>.rs`. Not redone today: the red-by-revert of each
 test (done in each task's PR), and the ladder rows (taken from the sections below).

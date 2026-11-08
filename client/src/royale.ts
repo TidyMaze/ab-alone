@@ -1,6 +1,6 @@
 // The offline battle royale (docs/specs/rules.md section 10.4, #502): 1 player against 5 bots on the radius 8 arena.
 // Pure: the game is the wasm `Royale`, passed in; main.ts draws the arena and wires the buttons. Codes and records are
-// the wasm encodings (crates/abalone-wasm/src/lib.rs).
+// the wasm encodings (crates/edgefall-wasm/src/lib.rs).
 import { cellsFor, type Axial } from './board';
 import { ordinal, royaleBanner } from './endbanner';
 import type { Crack } from './hull';

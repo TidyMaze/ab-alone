@@ -5,7 +5,7 @@ status: draft
 title: "MCP server spec (#251, from #163)"
 parent: architecture
 depends-on:
-  - abalone-wasm
+  - edgefall-wasm
   - client
 ---
 
@@ -22,7 +22,7 @@ Status: spec, no code. Lets an AI agent play AB-ALONE through the Model Context 
 
 ## 2. The engine is the only judge
 
-- The server holds no rules. Every legal move, every result and every bot or boss reply comes from `abalone-wasm` (`Engine` and `Encounter`), which wraps `abalone-core`.
+- The server holds no rules. Every legal move, every result and every bot or boss reply comes from `edgefall-wasm` (`Engine` and `Encounter`), which wraps `edgefall-core`.
 - The agent never sends a state. It sends a move. The server asks the engine to play it. If the engine says no, the state does not change and the tool returns the engine's reason.
 - `legal_moves` is the list the engine returns. A move that is not in it is illegal, whatever the agent believes.
 - Online, the server also checks every move it receives with the engine (rules.md section 10.2, tech.md section 6). A peer that sends an illegal move is dropped.
@@ -32,23 +32,23 @@ Status: spec, no code. Lets an AI agent play AB-ALONE through the Model Context 
 
 ### 3.1 Cells and moves
 
-Same notation as `abalone-cli` (`parse_move` in `crates/abalone-cli/src/lib.rs`) and rules.md section 1.
+Same notation as `edgefall-cli` (`parse_move` in `crates/edgefall-cli/src/lib.rs`) and rules.md section 1.
 
 - A cell is `(q,r)`, no space, for example `(-3,2)`. The board has 61 cells with `max(|q|,|r|,|q+r|) <= 4`.
 - A move is the selected cells, then `>`, then the direction: `(-1,2)(0,2)>E`. One marble: `(0,0)>SE`.
 - Directions: `E`, `W`, `NE`, `SW`, `NW`, `SE`. Upper case only.
 - Cell order inside a move is kept as written.
-- Parse errors reuse the `ParseError` messages of `abalone-cli`: `empty input`, `missing '>' before the direction`, `no cell before '>'`, `cell must look like (q,r), for example (0,0)`, `direction must be E, W, NE, SW, NW or SE`.
+- Parse errors reuse the `ParseError` messages of `edgefall-cli`: `empty input`, `missing '>' before the direction`, `no cell before '>'`, `cell must look like (q,r), for example (0,0)`, `direction must be E, W, NE, SW, NW or SE`.
 
 ### 3.2 Bridge to the engine
 
-`abalone-wasm` takes a move as 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]` (`MOVE_STRIDE`). `n` is 1 to 3 marbles, unused coordinates are `0`. `dir` is the index in `E, W, NE, SW, NW, SE` (0 to 5). The MCP server converts between the string and this record at the edge. Nothing else converts.
+`edgefall-wasm` takes a move as 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]` (`MOVE_STRIDE`). `n` is 1 to 3 marbles, unused coordinates are `0`. `dir` is the index in `E, W, NE, SW, NW, SE` (0 to 5). The MCP server converts between the string and this record at the edge. Nothing else converts.
 
 ### 3.3 Other codes
 
-Use the codes of the `abalone-wasm` module doc, mapped to words in the tool output:
+Use the codes of the `edgefall-wasm` module doc, mapped to words in the tool output:
 
-| Field | `abalone-wasm` code | MCP value |
+| Field | `edgefall-wasm` code | MCP value |
 |---|---|---|
 | side (`to_move`) | `1`, `2` | `"black"`, `"white"` |
 | status | `0` running, `1` Black won, `2` White won, `3` draw | `"running"`, `"black_won"`, `"white_won"`, `"draw"` |
@@ -87,7 +87,7 @@ A draw against a boss is a loss (rules.md section 10.3).
 ```
 
 - `ejected` is `Engine.ejected(side)`: marbles that side has pushed out. `win_ejections` is `Engine.win_ejections(side)`.
-- `ascii` is the board as printed by `render` in `abalone-cli`: header `  1 2 3 4 5 6 7 8 9`, rows `a` to `i`, `B`, `W`, `.`. On a radius 5 board (The Ballast Mind), `ascii` has header `  0 1 2 3 4 5 6 7 8 9 A` and 11 rows `a` to `k` (`r = -5` to `5`).
+- `ascii` is the board as printed by `render` in `edgefall-cli`: header `  1 2 3 4 5 6 7 8 9`, rows `a` to `i`, `B`, `W`, `.`. On a radius 5 board (The Ballast Mind), `ascii` has header `  0 1 2 3 4 5 6 7 8 9 A` and 11 rows `a` to `k` (`r = -5` to `5`).
 - `board` is the cells in `Engine.board()` order, one character per cell: row by row from `r = -4` to `r = 4`, `q` ascending inside a row (61 cells). On a radius 5 board (The Ballast Mind), `board` has 91 characters: the 61 of the standard board first, then ring 5 in board order (rows from `r = -5` to `5`, `q` ascending). The Dual Room's board has 169: the same 91, then rings 6 and 7 in turn, each row by row; every cell off its two rooms is `x` (the void's row `r = 0` too, until the bridge's 5 cells turn `.` in P3), and `ascii` shows it with columns `0` to `E` and rows `a` to `o`. `.` empty, `B` Black, `W` White, `x` vanished (`3` in the engine), `c` a core and `O` the Overseer (The Overseer).
 - `last_moves` is the last 6 plies in the notation of section 3.1, oldest first, boss and bot moves included.
 - `resigned` is `true` after `resign`. It is the only field the engine does not own.
@@ -295,7 +295,7 @@ Output: the `get_state` object. Errors: `no_game`, `game_over`, `not_supported`.
 
 ### Open world tools (#1292)
 
-An agent walks the Open world (`openworld.md`) with six tools. Every rule is the Rust core's (`abalone-wasm`), called in the client's order (`OpenWorldMode.roll`): the map, the enemies, the lairs, the teleporters and the path (`world_chunk`, `world_enemies`, `world_lairs`, `world_teleporters`, `world_path`), the step (`world_enter`, `world_trail`) and the troop's push (`WorldFight`). So the same seed and the same moves give the client's result; the server only holds the hero, the troop, the broken cells, the fight and the lairs beaten. The enemy marbles of the browser wander on a wall clock and meet the hero in a wild fight (`openworld.md` sections 3b and 3c): the server has no real time and no board fight to start, so its `WorldFight` never sets a clock, every marble stays where it starts, and no step meets a wild fight. Nothing of its tools or its saves changes (#1511). The world is separate from the game of `new_game`: both can be open at once. Cells are written `(q,r)` as in section 3.
+An agent walks the Open world (`openworld.md`) with six tools. Every rule is the Rust core's (`edgefall-wasm`), called in the client's order (`OpenWorldMode.roll`): the map, the enemies, the lairs, the teleporters and the path (`world_chunk`, `world_enemies`, `world_lairs`, `world_teleporters`, `world_path`), the step (`world_enter`, `world_trail`) and the troop's push (`WorldFight`). So the same seed and the same moves give the client's result; the server only holds the hero, the troop, the broken cells, the fight and the lairs beaten. The enemy marbles of the browser wander on a wall clock and meet the hero in a wild fight (`openworld.md` sections 3b and 3c): the server has no real time and no board fight to start, so its `WorldFight` never sets a clock, every marble stays where it starts, and no step meets a wild fight. Nothing of its tools or its saves changes (#1511). The world is separate from the game of `new_game`: both can be open at once. Cells are written `(q,r)` as in section 3.
 
 | Tool | Input | Output |
 |---|---|---|
@@ -439,5 +439,5 @@ Order: local game against the bot and bosses first, online rooms second, agent f
 ## 10. Open items for the owners
 
 - Online resign needs a decision (rules.md OPEN-12) and a signed message. Not decided here.
-- The server code lives in the `mcp/` package (#252): bun, the official TypeScript MCP SDK, the Node build of `abalone-wasm`. How to run it: README, "Let an AI agent play".
+- The server code lives in the `mcp/` package (#252): bun, the official TypeScript MCP SDK, the Node build of `edgefall-wasm`. How to run it: README, "Let an AI agent play".
 - Spectating is not part of v1.

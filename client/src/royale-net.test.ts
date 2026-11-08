@@ -6,8 +6,8 @@ import { commitOrder, signReveal } from './royale-round';
 
 // Issue #504, docs/specs/tech.md section 6: the rounds of an online battle royale between peers on the real engine.
 // No test waits for a time: `t` is the clock every peer reads, the test moves it and ticks.
-vi.mock('abalone-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
-const { default: init, Royale } = await import('abalone-wasm');
+vi.mock('edgefall-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
+const { default: init, Royale } = await import('edgefall-wasm');
 await init();
 
 const MS = 1000; // the round deadline of these tests

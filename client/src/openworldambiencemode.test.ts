@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './test/openworldwasm';
-import { world_chunk } from 'abalone-wasm';
+import { world_chunk } from 'edgefall-wasm';
 import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';

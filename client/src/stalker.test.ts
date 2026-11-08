@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import init, { Engine } from 'abalone-wasm';
+import init, { Engine } from 'edgefall-wasm';
 import { CELLS, cellIndex, type Axial } from './board';
 import { hexDistance, visibleCells } from './stalker';
 
@@ -7,7 +7,7 @@ import { hexDistance, visibleCells } from './stalker';
 // as it is seen. The judge of seenMoves is the real rules engine: with nothing hidden, it offers the engine's moves.
 const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
-await init({ module_or_path: await readFile(new URL('../../crates/abalone-wasm/pkg/abalone_wasm_bg.wasm', import.meta.url)) });
+await init({ module_or_path: await readFile(new URL('../../crates/edgefall-wasm/pkg/edgefall_wasm_bg.wasm', import.meta.url)) });
 
 /** A board of 61 cells holding only these marbles. */
 const boardOf = (marbles: [Axial, number][]): number[] => {

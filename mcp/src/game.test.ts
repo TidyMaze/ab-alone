@@ -85,12 +85,12 @@ const START_ASCII = [
 ].join('\n');
 const START_BOARD = `${'W'.repeat(11)}..WWW..${'.'.repeat(25)}..BBB..${'B'.repeat(11)}`;
 
-// A threefold repetition: Black and White each move one marble out and back (crates/abalone-cli tests). The start
+// A threefold repetition: Black and White each move one marble out and back (crates/edgefall-cli tests). The start
 // position comes back for the third time on the bot's fourth move.
 const AGENT_LOOP = ['(1,3)>NE', '(2,2)>SW', '(1,3)>NE', '(2,2)>SW'];
 const BOT_LOOP = ['(2,-2)>SE', '(2,-1)>NW', '(2,-2)>SE', '(2,-1)>NW'];
 
-describe('codes of abalone-wasm, as words (docs/specs/mcp.md section 3.3)', () => {
+describe('codes of edgefall-wasm, as words (docs/specs/mcp.md section 3.3)', () => {
   test('sides', () => {
     expect(sideName(1)).toBe('black');
     expect(sideName(2)).toBe('white');
@@ -235,7 +235,7 @@ describe('play_move', () => {
     expect(value(game.playMove({ move: ' (+1,03)>NE\n' })).played).toBe('(1,3)>NE');
   });
 
-  test('bad_move carries the ParseError text of abalone-cli, the state is unchanged', () => {
+  test('bad_move carries the ParseError text of edgefall-cli, the state is unchanged', () => {
     const game = session();
     const before = value(game.newGame({}));
     const cases: [string, string][] = [
@@ -453,7 +453,7 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
 
 describe('a side with no legal move passes its turn (#1301, rules.md section 7)', () => {
   test('the bot walled in passes: no reply, the agent is to move again and the state says who passed', () => {
-    const { Engine } = createRequire(import.meta.url)('../engine/abalone_wasm.js') as typeof import('../engine/abalone_wasm');
+    const { Engine } = createRequire(import.meta.url)('../engine/edgefall_wasm.js') as typeof import('../engine/edgefall_wasm');
     const plies = WALLED_IN.map((r) => formatMove(fromRecord(r)));
     const agent = plies.filter((_, i) => i % 2 === 0);
     const bot = plies.filter((_, i) => i % 2 === 1);

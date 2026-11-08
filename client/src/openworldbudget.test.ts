@@ -4,7 +4,7 @@ import './test/openworldwasm';
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { world_cairns, world_chunk, world_enemies, world_lairs, world_logs, world_pads, world_places, world_rings, world_teleporters } from 'abalone-wasm';
+import { world_cairns, world_chunk, world_enemies, world_lairs, world_logs, world_pads, world_places, world_rings, world_teleporters } from 'edgefall-wasm';
 import { OpenWorldMode } from './openworldmode';
 import { loadModels } from './openworldview';
 import { worldSaves } from './openworldsave';

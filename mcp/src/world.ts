@@ -12,7 +12,7 @@ import { endingLine } from '../../client/src/tally';
 import { DIRECTIONS } from './notation';
 import type { ErrorCode, Result } from './game';
 
-/** What the Open world uses of abalone-wasm. */
+/** What the Open world uses of edgefall-wasm. */
 export interface WorldRules {
   /** `[height, terrain, biome]` bytes per cell of a 16 x 16 chunk, empty off the world. */
   world_chunk(seed: number, cx: number, cy: number): Uint8Array;
@@ -36,7 +36,7 @@ export interface WorldRules {
   WorldFight: { new (): Fight; restore(removed: Int32Array, added: Int32Array, beaten: number): Fight; push_reach(): number };
 }
 
-/** What the Open world uses of the bridge's `WorldFight` (abalone-core `worldoverlay`). */
+/** What the Open world uses of the bridge's `WorldFight` (edgefall-core `worldoverlay`). */
 export interface Fight {
   occupied(generated: Int32Array, q: number, r: number): boolean;
   around(chunks: Int32Array, q: number, r: number, radius: number): Int32Array;

@@ -55,7 +55,7 @@ function toBoss(nodes: MapNode[], act = 0): number[] {
   return path;
 }
 async function bossRun(id: string): Promise<{ state: Run; nodes: MapNode[] }> {
-  const { boss_ids, run_map } = await import('abalone-wasm');
+  const { boss_ids, run_map } = await import('edgefall-wasm');
   // The Echo, the Hull, the Chaplain and the Choir leave act 1 (#1599): theirs is an act 2 boss, in a run of no exits (the Meadow's).
   const act = ACT_ONE_LEAVES.includes(id) ? 1 : 0;
   for (let seed = 0; seed < 500; seed++) {
@@ -638,7 +638,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('the army fights with its relics on its board, the bot too, and the bar stays in the HUD', async () => {
     const game = await boot('?nodes=50');
-    const { Engine } = await import('abalone-wasm');
+    const { Engine } = await import('edgefall-wasm');
     const taken = vi.spyOn(Engine.prototype, 'set_relics');
     await game.hook('__run', pick({ ...plainRun(3, 3), relics: [Relic.Gyroscope, Relic.Detonator] }, 0));
     expect(document.body.dataset.run).toBe('fight');
@@ -656,7 +656,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('the act boss is a roster boss picked by the seed, at the act strength, with its deck, resumed on a reload', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?nodes=50', { indexedDB });
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const strength = vi.spyOn(Encounter.prototype, 'scale_node_budget');
     const { state } = await bossRun('stalker');
     await game.hook('__run', state);
@@ -954,7 +954,7 @@ describe('main.ts the rogue-lite tactics (#1460)', () => {
 describe('main.ts, the varied enemy armies of a run (#1462)', () => {
   /** The act 1 nodes of `seed`'s map of the `kind` with the path that walks to each, by the first link back. */
   async function nodesOf(seed: number, kind: string): Promise<{ nodes: MapNode[]; found: { index: number; path: number[] }[] }> {
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     const nodes = parseMap(run_map(seed));
     const found = nodes.flatMap((n, index) => {
       if (n.kind !== kind || n.act !== 0) return [];
@@ -971,7 +971,7 @@ describe('main.ts, the varied enemy armies of a run (#1462)', () => {
   const whites = (game: Game): number => game.hook<number[]>('__board').filter((c) => c === 2).length;
   /** The plan the bridge deals for a node as the board dataset lists its special marbles: `q,r,kind`, cell by cell. */
   async function listed(seed: number, index: number): Promise<string> {
-    const { run_foes } = await import('abalone-wasm');
+    const { run_foes } = await import('edgefall-wasm');
     const plan = Array.from(run_foes(seed, index, 0, 0)).slice(3);
     const marks = Array.from({ length: plan.length / 3 }, (_, i) => plan.slice(3 * i, 3 * i + 3));
     return marks.sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!).map((m) => m.join(',')).join(' ');
@@ -1023,7 +1023,7 @@ describe('main.ts, the Collector between acts (#1470)', () => {
   const KEY = 'ab-alone.roguelite.blueprints';
   /** A run of seed 1 at its act 1 boss beaten, in the Collector with `cells` and the blueprints `carried`. */
   async function inCollector(game: Game, cells: number, carried: number[]): Promise<void> {
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     const path = toBoss(parseMap(run_map(1)));
     await game.hook('__run', { ...plainRun(1, 3), path, collector: true, cells, carried });
   }
@@ -1077,7 +1077,7 @@ describe('main.ts, the scroll of power between acts (#1471)', () => {
   const chips = (): string[] => [...document.querySelectorAll<HTMLElement>('#hud .affinities .affinity')].map((c) => c.title);
 
   it('waits after the act boss, saved; a scroll grows its affinity, joins the bar next to the relics, and the map goes on', async () => {
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
     await game.hook('__run', { ...plainRun(1, 3), path: toBoss(parseMap(run_map(1))), scroll: true, relics: [Relic.Jammer] });
@@ -1100,7 +1100,7 @@ describe('main.ts, the scroll of power between acts (#1471)', () => {
   });
 
   it('comes before the Collector', async () => {
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     const game = await boot('?bot=off');
     await game.hook('__run', { ...plainRun(1, 3), path: toBoss(parseMap(run_map(1))), scroll: true, collector: true, cells: 12, carried: [0] });
     expect(document.body.dataset.run).toBe('scroll');
@@ -1112,7 +1112,7 @@ describe('main.ts, the scroll of power between acts (#1471)', () => {
 describe('main.ts, the biome exits between acts (#1472)', () => {
   /** The path of the run of seed 1 from the first node of act `act` (0 or 1) to its boss, by first links. */
   async function actPath(act: number): Promise<{ nodes: MapNode[]; path: number[] }> {
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     const nodes = parseMap(run_map(1));
     const path = [nodes.findIndex((n) => n.act === act && n.row === 0)];
     for (let n = nodes[path[path.length - 1]!]!; n.kind !== 'boss'; ) {
@@ -1130,7 +1130,7 @@ describe('main.ts, the biome exits between acts (#1472)', () => {
   it('shows the two exits after the act boss; a pick tints the map, names the biome, is saved, and opens the biome\'s holes in the next fights', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    const { run_exits } = await import('abalone-wasm');
+    const { run_exits } = await import('edgefall-wasm');
     await atExits(game);
     expect(document.body.dataset.run).toBe('exit');
     expect(document.body.dataset.biome).toBeUndefined(); // act 1 is the Meadow
@@ -1284,7 +1284,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
     expect([...map().querySelectorAll<HTMLButtonElement>('button[data-commander]')].every((b) => !b.disabled)).toBe(true); // everything unlocked, for everyone
     expect(dailyButton().textContent).toBe(`Daily run ${today()} · tried today, back tomorrow`); // one try a day
     expect(dailyButton().disabled).toBe(true);
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     const expected = parseMap(run_map(dailySeed(today()), 0, MAP_VERSION)).filter((n) => n.act === 0 && n.row === 0).map((n) => `Act 1, ${n.kind}`);
     expect(open().map((b) => b.getAttribute('aria-label'))).toEqual(expected); // the map of the seed of the day
     expect(localStorage.getItem('ab-alone.roguelite.daily')).toBe(JSON.stringify({ day: today(), score: null }));
@@ -1344,7 +1344,7 @@ describe('main.ts the rogue-lite score, daily run, history and compendium (#1466
 describe('main.ts, the bonus room before an act boss (#1473)', () => {
   /** The run of seed 1 at the last node before its act 1 boss, with `spent` moves counted in the act, and the boss node. */
   async function beforeBoss(game: Game, spent: number[]): Promise<number> {
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     const path = toBoss(parseMap(run_map(1)));
     await game.hook('__run', { ...plainRun(1, 3), path: path.slice(0, -1), spent });
     return path[path.length - 1]!;
@@ -1435,7 +1435,7 @@ describe('main.ts, the runes (#1476)', () => {
 
   it('the rune of the exit adds a secret third exit to the screen, and its biome can be taken', async () => {
     const game = await boot('?bot=off');
-    const { run_exits, run_map } = await import('abalone-wasm');
+    const { run_exits, run_map } = await import('edgefall-wasm');
     const nodes = parseMap(run_map(1));
     const boss = nodes.findIndex((n) => n.act === 0 && n.kind === 'boss');
     const path = [nodes.findIndex((n) => n.act === 0 && n.row === 0)];
@@ -1488,7 +1488,7 @@ describe('main.ts, an act boss fight carries the army build (#1494)', () => {
 
   it('the relics and the special marbles reach the boss fight, in the page and in the bot worker', async () => {
     const game = await boot('?nodes=50');
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const relics = vi.spyOn(Encounter.prototype, 'set_relics');
     const placed = vi.spyOn(Encounter.prototype, 'place_special');
     await game.hook('__run', { ...(await armed('hull')), relics: [0, 4], placed: [[0, 4, 1]] });
@@ -1684,7 +1684,7 @@ describe('main.ts, the HUD of a run fight (#1540, #1541)', () => {
     const game = await boot('?bot=off');
     let seed = 1;
     for (; ; seed++) {
-      const { run_map } = await import('abalone-wasm');
+      const { run_map } = await import('edgefall-wasm');
       const nodes = parseMap(run_map(seed));
       const index = nodes.findIndex((n) => n.act === 0 && n.row === 1 && n.kind === 'fight' && n.formation > 0);
       if (index < 0) continue;
@@ -1719,7 +1719,7 @@ describe('main.ts, the HUD of a run fight (#1540, #1541)', () => {
 describe('main.ts, the paced map and the map of a run saved before (#1543)', () => {
   const kinds = (): (string | undefined)[] => [...map().querySelectorAll<HTMLElement>('button[data-node]')].filter((b) => b.getAttribute('aria-label')!.startsWith('Act 1')).map((b) => b.dataset.nodeKind);
   const act1 = async (seed: number, version: number): Promise<string[]> => {
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     return parseMap(run_map(seed, 0, version)).filter((n) => n.act === 0).map((n) => n.kind);
   };
   /** The first seed whose act 1 is not the same on the paced map and on the map of before. */
@@ -1754,7 +1754,7 @@ describe('main.ts, the paced map and the map of a run saved before (#1543)', () 
     await game.settle();
     await boot('?bot=off', { indexedDB });
     expect(kinds()).toEqual(await act1(seed, MAP_VERSION));
-    const { run_map } = await import('abalone-wasm');
+    const { run_map } = await import('edgefall-wasm');
     let node = -1;
     for (let s = seed; node < 0; s++) {
       const [a, b] = [parseMap(run_map(s, 0, 0)), parseMap(run_map(s, 0, MAP_VERSION))];

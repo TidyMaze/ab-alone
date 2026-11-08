@@ -21,7 +21,7 @@ function catchScene(): () => THREE.Scene {
   let scene: THREE.Scene | null = null;
   const add = THREE.Object3D.prototype.add;
   const spy = vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
-    if (this instanceof THREE.Scene && this.name === 'abalone-scene') scene = this;
+    if (this instanceof THREE.Scene && this.name === 'edgefall-scene') scene = this;
     else if (this instanceof THREE.Scene && !scene) scene = this;
     return add.apply(this, objects);
   });
@@ -514,7 +514,7 @@ describe('main.ts board and HUD', () => {
     await until(game, () => document.body.dataset.seat === 'player');
     expect(game.hud()).toContain('You vs your opponent, online. Eject 6 to win.');
     // The opponent: a second session on the other end of the room, with its own engine.
-    const { Engine, engine_version } = await import('abalone-wasm');
+    const { Engine, engine_version } = await import('edgefall-wasm');
     const theirs = new Engine();
     const them = new OnlineSession({
       game: game.room()!,

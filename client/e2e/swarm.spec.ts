@@ -8,7 +8,7 @@ import { shot } from './shot';
 // the state is loaded by the __playMoves hook. The player starts in the centre, the first wave is announced on a ring, it
 // lands there after the player's move, and the evac comes once its 40-turn clock runs out, lighting the whole board.
 
-const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
+const plies = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
 const play = (page: Page, from: number, to: number) => page.evaluate((records) => (window as any).__playMoves(records), plies.slice(from, to));
 const swarm = (page: Page) => page.evaluate(() => (window as any).__swarm()) as Promise<{ left: number; cells: [number, number][]; evac: boolean }>;
 

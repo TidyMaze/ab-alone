@@ -130,7 +130,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.doUnmock('three/webgpu');
-    vi.doUnmock('abalone-wasm');
+    vi.doUnmock('edgefall-wasm');
     vi.doUnmock('../p2p');
     vi.doUnmock('three/examples/jsm/geometries/RoundedBoxGeometry.js');
     vi.doUnmock('three/examples/jsm/loaders/KTX2Loader.js');
@@ -216,7 +216,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   let renderer: { toneMapping: number; toneMappingExposure: number; info: { autoReset: boolean; reset(): void } } | null = null;
   let draws = 0;
   vi.resetModules();
-  vi.doMock('abalone-wasm', async (importOriginal) => {
+  vi.doMock('edgefall-wasm', async (importOriginal) => {
     const wasm = await (await import('./wasm')).nodeWasm(importOriginal as never);
     return options.fails === 'wasm' ? { ...wasm, default: () => Promise.reject(new Error('wasm fetch failed')) } : wasm;
   });
@@ -374,7 +374,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   });
 
   // The bot workers answer in-process, on the next task, with the page's own engine.
-  const wasm = await import('abalone-wasm');
+  const wasm = await import('edgefall-wasm');
   const { answer, engineFor } = await import('../bot');
   vi.stubGlobal(
     'Worker',

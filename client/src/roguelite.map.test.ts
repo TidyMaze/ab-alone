@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { dailyRun, loadRun, MAP_VERSION, newRun, saveRun, type MapNode } from './roguelite';
 import { memoryStore } from './savegame';
-import rust from '../../crates/abalone-core/src/run.rs?raw';
+import rust from '../../crates/edgefall-core/src/run.rs?raw';
 
 const MAP: MapNode[] = [{ act: 0, row: 0, col: 0, kind: 'boss', links: [], skips: [], formation: 0, elite: 0 }];
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import init, { Engine, engine_version } from 'abalone-wasm';
+import init, { Engine, engine_version } from 'edgefall-wasm';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { localPair, type Transport } from './transport';
@@ -10,9 +10,9 @@ import { localPair, type Transport } from './transport';
 // no Node types.
 const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
-await init({ module_or_path: await readFile(new URL('../../crates/abalone-wasm/pkg/abalone_wasm_bg.wasm', import.meta.url)) });
+await init({ module_or_path: await readFile(new URL('../../crates/edgefall-wasm/pkg/edgefall_wasm_bg.wasm', import.meta.url)) });
 
-const STRIDE = 8; // integers per move record, crates/abalone-wasm/src/lib.rs
+const STRIDE = 8; // integers per move record, crates/edgefall-wasm/src/lib.rs
 
 // One marble each, there and back twice: the start position comes back a third time at ply 8.
 const THERE_AND_BACK = [

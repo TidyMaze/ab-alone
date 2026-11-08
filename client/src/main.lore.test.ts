@@ -17,7 +17,7 @@ const rows = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButton
 
 /** Starts the fight of the boss named `name` from the boss list, and ends it with the status `status` (1 a win, 2 a loss) at the first move. */
 async function fight(game: Game, name: string, status: 1 | 2): Promise<void> {
-  const { Encounter } = await import('abalone-wasm');
+  const { Encounter } = await import('edgefall-wasm');
   game.openModes();
   byId('boss-fight').click();
   [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.includes(name))!.click();

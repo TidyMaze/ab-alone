@@ -1,11 +1,11 @@
 {
-  "name": "abalone-client",
+  "name": "edgefall-client",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "packageManager": "bun@1.3.11",
   "scripts": {
-    "wasm": "wasm-pack build ../crates/abalone-wasm --target web",
+    "wasm": "wasm-pack build ../crates/edgefall-wasm --target web",
     "dev": "bun run wasm && vite",
     "test": "vitest run --coverage",
     "test:unit": "vitest run",

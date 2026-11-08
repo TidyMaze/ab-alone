@@ -1,7 +1,7 @@
 // The bot's estimated rating and level (#1611, docs/specs/roguelite.md section 32), and how its strength grows: with the bosses beaten
 // in a plain game, and along a rogue-lite run. Pure: the page asks it for numbers.
 //
-// The rating comes from self-play between search budgets (crates/abalone-core/examples/bot_rating.rs): a doubling of the budget is
+// The rating comes from self-play between search budgets (crates/edgefall-core/examples/bot_rating.rs): a doubling of the budget is
 // worth RATING_PER_DOUBLING points. Only that difference is measured. The absolute number is a decision: the plain bot at BOT_NODES
 // (bot.ts) is ANCHOR_RATING, the starting rating of Board Game Arena, where no Abalone average is published. So every rating is an
 // estimate, and not comparable with the Ranked rating (elo.ts), which has its own scale.

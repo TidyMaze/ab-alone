@@ -455,11 +455,11 @@ for a push that only rebases on `main` without conflict (section 6.4). It runs t
   cancelled CI run never loses a deploy; the `pages` concurrency group keeps the newest (#1267). To redeploy the head of `main` by hand (for
   example after a failed run): `gh workflow run pages.yml --ref main`.
 
-**WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
+**WASM build:** the client loads the engine from `crates/edgefall-wasm/pkg`, which is git-ignored.
 After pulling main, rebuild it from the repo root:
 
 ```
-wasm-pack build crates/abalone-wasm --target web
+wasm-pack build crates/edgefall-wasm --target web
 ```
 
 `bun run dev` runs the same build first (`bun run wasm`, in `client/`). Run it yourself when you

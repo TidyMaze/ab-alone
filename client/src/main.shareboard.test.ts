@@ -212,7 +212,7 @@ describe('shared board opt-in', () => {
     FakeSocket.all = [];
     vi.stubGlobal('WebSocket', FakeSocket);
     const game = await boot('?bot=off&board&net=hook');
-    const { Engine } = await import('abalone-wasm');
+    const { Engine } = await import('edgefall-wasm');
     const engine = new Engine();
     const moves: number[][] = [];
     for (let i = 0; i < 400 && engine.status() === 0; i++) {

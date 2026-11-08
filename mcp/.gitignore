@@ -1,4 +1,4 @@
 node_modules
 coverage
-# The Node build of abalone-wasm (bun run wasm).
+# The Node build of edgefall-wasm (bun run wasm).
 engine

@@ -313,7 +313,7 @@ describe('main.ts, browser Back (#1564)', () => {
 
   it('Back once the fight of a boss lair is won goes back to the world, as its button does', async () => {
     const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     await pick(game, 'openworld');
     const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as unknown as Axial;
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] });
@@ -335,7 +335,7 @@ describe('main.ts, browser Back (#1564)', () => {
   });
 
   it('Back in a wild fight of the Open world is Flee: the hero is back in the world', async () => {
-    const { world_enemies } = await import('abalone-wasm');
+    const { world_enemies } = await import('edgefall-wasm');
     const world = (() => {
       for (let n = 1; n < 100; n++) {
         for (const [cx, cy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]] as Axial[]) {

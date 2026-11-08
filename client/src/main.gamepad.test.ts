@@ -135,7 +135,7 @@ describe('the gamepad in the Open world', () => {
     await openWorldOn(game);
     const fixture = (hero: Axial): void => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero, troop: [], enemies: [] });
     expect(data().openworldTeleporters).toBe('2,-1'); // only the spawn's is discovered
-    const [q, r] = (await import('abalone-wasm')).world_teleporters(7).slice(2, 4);
+    const [q, r] = (await import('edgefall-wasm')).world_teleporters(7).slice(2, 4);
     const target: Axial = [q!, r!];
     fixture(target); // the hero goes there: it is discovered
     fixture([2, -1]); // and back on the spawn's
@@ -164,7 +164,7 @@ describe('the gamepad in the Open world', () => {
 
   it('the stick walks onto a lair, the pad plays the fight, and Back to the Open world is reached and pressed with the pad', async () => {
     const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const pad = plugPad(game);
     await openWorldOn(game);
     const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as [number, number];

@@ -91,7 +91,7 @@ import type { Session, State } from './game';
 /** The bot's search in the run's fight: the peak `nodes` along the run's curve (#1611), then the elite and relic factors, as the page's. */
 const budgetOf = (map: MapNode[], state: Run, nodes: number): number => fightBudget(map, state, runNodes(map, state, nodes));
 
-/** What a run uses of the army's `Engine` in abalone-wasm: a game against the bot and the special marbles still on its board. */
+/** What a run uses of the army's `Engine` in edgefall-wasm: a game against the bot and the special marbles still on its board. */
 export interface RunEngine extends EngineLike {
   specials(): Int32Array;
 }
@@ -102,7 +102,7 @@ export interface RunBoss extends EncounterLike {
   specials(): Int32Array;
 }
 
-/** What a run uses of abalone-wasm. */
+/** What a run uses of edgefall-wasm. */
 export interface RunRules {
   /** The map of a run seed of a player who owns the runes `runes` (default none): records of `[act, row, col, kind, links, formation, elite]`. */
   run_map(seed: number, runes?: number, version?: number): Int32Array;

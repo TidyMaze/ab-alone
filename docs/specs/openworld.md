@@ -31,7 +31,7 @@ A-light Explore (#720 to #725), which it does not touch.
 - **Cells**: the axial hex grid, cut into **chunks** of 16 x 16 cells (a parallelogram tiles the
   axial grid with no gap). The world is a regular hexagon of cells centred on the spawn `(0, 0)` (#1440): a cell is in the
   world when its hex distance to the spawn is at most `WORLD_RADIUS` = 448, 603 457 cells (the square world before it,
-  64 x 64 chunks, held 1 048 576). `in_world` in `crates/abalone-core/src/world.rs` is the one test of the edge, for the
+  64 x 64 chunks, held 1 048 576). `in_world` in `crates/edgefall-core/src/world.rs` is the one test of the edge, for the
   cells, the chunks, the enemies, the lairs and the teleporters. The chunks stay the storage unit: a chunk wholly past
   the edge is off the world (empty on the bridge), and in a chunk the edge crosses the cells past it are off the world
   (`[0, 255, 0]` on the bridge, a hole in the client's chunk), so the edge reads as today's: a cliff into the void in 3D,
@@ -98,7 +98,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 ## 3b. The wandering marbles (#1511)
 
 The generated marbles of a chunk walk a short way from where they start and back, slowly, as one group. The rule is pure and lives in
-Rust (`crates/abalone-core/src/worldwander.rs`, `offset`), integers only, so every peer sees the same marbles in the same places.
+Rust (`crates/edgefall-core/src/worldwander.rs`, `offset`), integers only, so every peer sees the same marbles in the same places.
 
 - **Clock.** The world's tick: the wall clock in ticks of `TICK_MS` = 1200 ms (`FightState.tickMs`, `Math.floor(Date.now() / 1200)`), the
   same on every peer to within their clocks. A marble steps one cell a tick, 0.83 cells a second against the hero's 7. The page hands the
@@ -241,7 +241,7 @@ the hour, reached and left the way a boss lair is (section 7). No new rule.
   otherwise every enemy of the run shifts one cell. Several pushes can be legal: the one that
   ejects the most enemies, then the lowest `(r, q)` of the back marble of the pushing line, then
   the lowest direction index (E, W, NE, SW, NW, SE), so the result is deterministic and testable.
-  The rule is built in `crates/abalone-core/src/worldfight.rs` (`best_push`, `apply_push`).
+  The rule is built in `crates/edgefall-core/src/worldfight.rs` (`best_push`, `apply_push`).
 - **Client state** (`client/src/openworldfight.ts`): the enemies are the generated ones of the seed
   with an overlay. `removed` holds the cells of generated enemies a push moved away or ejected, `added`
   the cells of enemies that now stand where no generated one starts, `beaten` counts the ejected ones.
@@ -249,8 +249,8 @@ the hour, reached and left the way a boss lair is (section 7). No new rule.
   blocked by the current enemies (not by the generated ones of its own chunk), the view draws them,
   and a push redraws them. The overlay is plain data: `toJSON` and `FightState.fromJSON` (the save).
   A new entry starts a fresh overlay.
-- **Bridge**: `WorldFight.troop_push(seed, troop, chunks, broken)` (`crates/abalone-wasm/src/world.rs`, rule in
-  `Overlay::troop_push`, `crates/abalone-core/src/worldoverlay.rs`) plays the push after each step on the hero,
+- **Bridge**: `WorldFight.troop_push(seed, troop, chunks, broken)` (`crates/edgefall-wasm/src/world.rs`, rule in
+  `Overlay::troop_push`, `crates/edgefall-core/src/worldoverlay.rs`) plays the push after each step on the hero,
   the troop and the overlay, with the enemies within `WorldFight.push_reach()` (10) cells of the hero. It
   gives the troop, the enemies before and after, the ejected one and the direction, or nothing when no push
   is legal.
@@ -281,7 +281,7 @@ the hour, reached and left the way a boss lair is (section 7). No new rule.
 
 ## 4b. The flock (#1504)
 
-The troop moves like a flock of birds. The rule is `worldstep::flock` (abalone-core), exported as `world_flock(seed, tick, troop, step, ground)` with `step` = `[from q, from r, to q, to r]`;
+The troop moves like a flock of birds. The rule is `worldstep::flock` (edgefall-core), exported as `world_flock(seed, tick, troop, step, ground)` with `step` = `[from q, from r, to q, to r]`;
 the client only passes the cells and draws. After the hero steps from `at` to `to`, every follower moves once (a follower more than 3 cells
 from the hero, the leash, moves twice, so strays catch up), the nearest to the hero first. It takes the best of its own cell and its six
 neighbours that is in `ground`, is not `to` and holds no other marble (the cell `at` the hero left is always allowed), by this cost, in 1/n
@@ -302,7 +302,7 @@ to 15 offsets (33 bytes). A new world starts the troop the same way in the clien
 
 ## 4c. The herd (#1506)
 
-The troop also herds a foe or neutral marble to the water over several hero steps, even when the water is far. The rule is `worldherd` (abalone-core); it is **stateless**: each step it is derived again from the seed, the cells and the generated world, so nothing is saved and nothing travels (the wire does not change), and peers agree. Integers only, no hash-map order.
+The troop also herds a foe or neutral marble to the water over several hero steps, even when the water is far. The rule is `worldherd` (edgefall-core); it is **stateless**: each step it is derived again from the seed, the cells and the generated world, so nothing is saved and nothing travels (the wire does not change), and peers agree. Integers only, no hash-map order.
 
 - **Target** (`worldherd::herd`): among the foes within **6** cells of the hero (about what the hero sees, and inside the push reach of 10), the one whose shortest walk over open ground (no other foe on it) to a water cell or off the world is the shortest, at most **10** cells (the search is bounded to 331 cells). Ties by the SplitMix64 hash of the world seed and the foe's cell (not the tick: a tie must not flip each step). The walk's first direction `d` is the first in the order of `DIRECTIONS` that starts a shortest walk and whose cell behind the foe (`foe - d`) is open ground. The troop's cells are not obstacles of the walk, so the target does not depend on where the followers are.
 - **Roles** (`worldherd::goals`, before the flock): the follower nearest to the cell behind the foe (within 8, lowest index first) is the pusher, up to two more take the cells beside the foe, behind it on either side (`foe` plus the directions 120 and 240 degrees from `d`). They are the only ones the herd moves: each hops twice and adds a pull of 64 per cell to its goal to the flock cost (`worldstep::flock`, its last argument), so they keep the flock's separation and jitter; the others flock as in section 4b. The hero never gets a goal. No follower in reach of the push cell: no goals.
@@ -344,7 +344,7 @@ the time of day (section 11): a record before it loads at the start of day; a `t
 
 ## 6. Tests
 
-Engine (`abalone-core`): the same seed gives the same chunk in any order; the spawn clearing is
+Engine (`edgefall-core`): the same seed gives the same chunk in any order; the spawn clearing is
 connected; a chunk has no marble on an obstacle; the troop's attack is a legal push and the choice
 is deterministic. Client: unit tests at 100 %, and an e2e that walks a few cells, meets a group,
 watches the troop push, reloads and is still there (under 15 s). Every slice is checked in Chrome
@@ -611,7 +611,7 @@ plan as the game.
   (`town-pad`, `gate-pad`, `OpenWorldView.setPlaces`), lit at night as the teleporters are. No plate label: lairs have none. Real models are #1518.
 - **Transition** (#1519). Entering a town or a gate, like a tower (section 7), plays the transition of motion.md story 10 over the Hub or the run that starts at once, and "Back to the Open world" plays the matching one over the world.
 - **Cairns** (#1533). No open cell lies more than `LANDMARK_REACH` (16) cells from a landmark: a tower, a teleporter, a log, a place or a
-  cairn. `cairns` of abalone-core puts one near the middle of each chunk (at random within 3 cells of it, on open ground, no enemy, no
+  cairn. `cairns` of edgefall-core puts one near the middle of each chunk (at random within 3 cells of it, on open ground, no enemy, no
   landmark within 3), none where a landmark lies within 8 of the middle, and a second one on a chunk cell farther than 16 from the first.
   Largest landmark-free radius before / after: seed 7 118 / 16, seed 11 120 / 15, seed 23 200 / 14 (about 2 400 cairns a world). A look
   only (`world_cairns`, `OpenWorldView.setCairns`): three slate stones under a glowing sodium cap, walked over like a pad; the world's cells

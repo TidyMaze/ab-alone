@@ -49,7 +49,7 @@ describe('the scene of the music, per mode (#1571)', () => {
   it('names the boss, its own pulse, and speeds the pulse up when the phase moves', async () => {
     const game = await boot('?bot=off', { reducedMotion: true, audio: true, storage: LOUD });
     gesture();
-    const wasm = await import('abalone-wasm');
+    const wasm = await import('edgefall-wasm');
     let phase = 0;
     vi.spyOn(wasm.Encounter.prototype, 'phase').mockImplementation(() => phase);
     start(game, 'The Echo');

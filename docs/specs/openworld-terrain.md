@@ -20,7 +20,7 @@ Four tasks change the same lines and every world of every seed, so they go **one
 
 ## 1. Today
 
-- `cell(seed, q, r)` in `crates/abalone-core/src/world.rs`: height 0 to 3 from
+- `cell(seed, q, r)` in `crates/edgefall-core/src/world.rs`: height 0 to 3 from
   `0.65 * noise(.., 12) + 0.35 * noise(.., 5)` (thresholds 0.32, 0.50, 0.64), a `dry` noise (scale 9) picks sand
   or rock over grass, forests are `noise(.., 7) > 0.55` and half their grass is a tree, a boulder stands on
   6 % of the open cells, a wall segment per 24-cell square. `noise` is value noise with a smooth blend
@@ -58,7 +58,7 @@ so any order of visit gives the same world:
   obstacles, so the macro and meso levels must make them come in masses, not in dust.
 - **Cost**: each lattice node is hashed once per chunk and each cell interpolates from the chunk's tables, as
   #981 did for the old noise. Budget: one chunk at most 20 us native, the 4096 chunks at most 3 times the
-  figure #981 reports (about 27 ms), measured in the PR with the timing example that #981 adds (`crates/abalone-core/examples/world_timing.rs`).
+  figure #981 reports (about 27 ms), measured in the PR with the timing example that #981 adds (`crates/edgefall-core/examples/world_timing.rs`).
 - **Client**: until #988 the visible column must not change, so `topOf` maps the eight levels onto today's
   scale (`0.2 + 0.2 * level * 3 / 7`) in #983. #988 replaces it.
 
@@ -167,10 +167,10 @@ Client only, after #983 (it needs the eight heights).
 - **Spawn**: radius 3 open grass, reachable, no enemy within 8 (`openworld.md` section 2).
 - **World version**: each task changes every world. Once the save of #968 stores a seed, it also stores a
   `WORLD_VERSION` (a constant bumped by each terrain task), so an old save is told apart, not misread.
-  As built (#968): `WORLD_VERSION` is in `crates/abalone-core/src/world.rs`, with a comment above it (`1` until #1024,
+  As built (#968): `WORLD_VERSION` is in `crates/edgefall-core/src/world.rs`, with a comment above it (`1` until #1024,
   `2` until #1440, `3` since). The digest test asserts `(WORLD_VERSION, world_digest())` against `(3, <digest>)` on one line, so a change of the generator forces an edit
   of that line: bump the version and repin the digest in the same commit. The bridge exports it as `world_version()`
-  (`crates/abalone-wasm/src/world.rs`), and the client saves it with each world (`openworld.md` section 5): a save of another
+  (`crates/edgefall-wasm/src/world.rs`), and the client saves it with each world (`openworld.md` section 5): a save of another
   version is not loaded.
 - **Memory and speed** follow #981: bounded chunk caches (512 chunks, radius 10), no per-frame allocation, a
   rebuild under about 40 ms at the widest zoom.
@@ -184,7 +184,7 @@ One task at a time, each branched from `main` after the previous merged (CONTRIB
 | 1 | #987 fewer obstacles | the constants of `cell`, `world.rs` tests, the digest |
 | 2 | #983 noise levels, eight heights | `cell` (the elevation and thresholds), a `field` helper, `topOf` mapping, the digest |
 | 3 | #988 relief | `topOf`, `pick`, the camera follow in `openworldview.ts`; no engine file |
-| 4 | #984 biomes | `cell`, the chunk bytes (`world.rs`, `abalone-wasm/src/world.rs`, `parseChunk`, `Tile`), instance colours in `OpenWorldView.build` |
+| 4 | #984 biomes | `cell`, the chunk bytes (`world.rs`, `edgefall-wasm/src/world.rs`, `parseChunk`, `Tile`), instance colours in `OpenWorldView.build` |
 
 #988 can run beside #983 only if it waits for the eight heights, so it is kept after it. Nothing here runs
 beside the zoom group (#976 to #981) while that group is open: it touches `openworldview.ts` and `world.rs`.

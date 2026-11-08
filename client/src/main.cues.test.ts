@@ -25,7 +25,7 @@ function start(game: Game, name: string): void {
 }
 /** The engine's answers once a ply was played, with `over` as its status: 0 running, 1 Black wins, 2 White wins, 3 draw. */
 async function judge(game: Game, kind: 'Encounter' | 'Engine', over: { status: number }): Promise<void> {
-  const wasm = await import('abalone-wasm');
+  const wasm = await import('edgefall-wasm');
   const status = (): number => (game.hook<number>('__plies') > 0 ? over.status : 0);
   if (kind === 'Encounter') vi.spyOn(wasm.Encounter.prototype, 'result').mockImplementation(status);
   vi.spyOn(wasm[kind].prototype, 'status').mockImplementation(status);
@@ -165,7 +165,7 @@ describe('the boss phase change (#1570)', () => {
   it('sounds once when the phase moves, not on the first sight of the fight nor on a redraw', async () => {
     const game = await boot('?bot=off', { reducedMotion: true, audio: true });
     gesture();
-    const wasm = await import('abalone-wasm');
+    const wasm = await import('edgefall-wasm');
     let phase = 0;
     vi.spyOn(wasm.Encounter.prototype, 'phase').mockImplementation(() => phase);
     start(game, 'The Echo');
@@ -181,7 +181,7 @@ describe('the boss phase change (#1570)', () => {
   it('does not sound while the Replay is open', async () => {
     const game = await boot('?bot=off', { reducedMotion: true, audio: true });
     gesture();
-    const wasm = await import('abalone-wasm');
+    const wasm = await import('edgefall-wasm');
     let phase = 0;
     vi.spyOn(wasm.Encounter.prototype, 'phase').mockImplementation(() => phase);
     start(game, 'The Echo');

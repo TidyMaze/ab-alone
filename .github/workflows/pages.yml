@@ -29,8 +29,8 @@ jobs:
       - id: wasm-cache
         uses: actions/cache@v4
         with:
-          path: crates/abalone-wasm/pkg
-          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
+          path: crates/edgefall-wasm/pkg
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/edgefall-wasm/**', 'crates/edgefall-core/**') }}
       - if: steps.wasm-cache.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -45,7 +45,7 @@ jobs:
       - if: steps.wasm-cache.outputs.cache-hit != 'true'
         uses: ./.github/actions/wasm-opt
       - if: steps.wasm-cache.outputs.cache-hit != 'true'
-        run: wasm-pack build crates/abalone-wasm --target web
+        run: wasm-pack build crates/edgefall-wasm --target web
       - uses: actions/setup-node@v4
         with:
           node-version: 22

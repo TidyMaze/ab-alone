@@ -1,8 +1,8 @@
 import { encodeMove } from '../board';
 
-// The recorded Chaplain win of the core tests (crates/abalone-core/tests/fixtures/chaplain.txt, #748), as the move records
+// The recorded Chaplain win of the core tests (crates/edgefall-core/tests/fixtures/chaplain.txt, #748), as the move records
 // of `Engine.play`: both sides' plies, played by the `__playMoves` hook. The fight seed, and the plies after which the
-// first marble is converted, the martyr is announced and the martyr exploded (checked in crates/abalone-wasm).
+// first marble is converted, the martyr is announced and the martyr exploded (checked in crates/edgefall-wasm).
 export const SEED = 10040;
 export const CONVERTED_AT = 24;
 export const ANNOUNCED_AT = 52;

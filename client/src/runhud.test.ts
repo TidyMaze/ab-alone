@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import init, { Engine } from 'abalone-wasm';
+import init, { Engine } from 'edgefall-wasm';
 import { MIN_ARMY } from './roguelite';
 import { armyOnBoard, runScoreHtml } from './runhud';
 
@@ -7,7 +7,7 @@ import { armyOnBoard, runScoreHtml } from './runhud';
 // run ends, the marbles lost this fight in red and the bot's ejections, all read from the engine's own counts.
 const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
-await init({ module_or_path: await readFile(new URL('../../crates/abalone-wasm/pkg/abalone_wasm_bg.wasm', import.meta.url)) });
+await init({ module_or_path: await readFile(new URL('../../crates/edgefall-wasm/pkg/edgefall_wasm_bg.wasm', import.meta.url)) });
 
 const text = (html: string): string => html.replace(/<[^>]+>/g, '');
 
@@ -40,7 +40,7 @@ describe('runScoreHtml', () => {
     for (let army = MIN_ARMY; army <= 14; army++) {
       const game = Engine.with_army(army, 10);
       const html = text(runScoreHtml(game.board(), [0, 0], [game.win_ejections(1), game.win_ejections(2)]));
-      const below = army <= MIN_ARMY + 5 ? MIN_ARMY : army - 5; // the rule of crates/abalone-core/src/run.rs, `army_game_against`
+      const below = army <= MIN_ARMY + 5 ? MIN_ARMY : army - 5; // the rule of crates/edgefall-core/src/run.rs, `army_game_against`
       expect(html, `army ${army}`).toContain(`Army ${army} (run ends below ${below})`);
     }
   });

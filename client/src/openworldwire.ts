@@ -1,7 +1,7 @@
 // The Open world as one chunk of the build (#1578): the root of everything only the world needs, loaded by `import()` at the first
 // entry (modechunk.ts, openworldhandle.ts). `wireOpenWorld` makes the mode, its saves and its online layer from the page's `deps`, and
 // binds the world's own HUD controls. The page keeps what it shares with the table: the keys, the pointer, the frame and the fights.
-import { boss_ids, boss_name, world_cairns, world_can_break, world_chunk, world_dungeon, world_enemies, world_is_enemy, world_lairs, world_logs, world_pads, world_path, world_places, world_rings, world_teleporters, world_version } from 'abalone-wasm';
+import { boss_ids, boss_name, world_cairns, world_can_break, world_chunk, world_dungeon, world_enemies, world_is_enemy, world_lairs, world_logs, world_pads, world_path, world_places, world_rings, world_teleporters, world_version } from 'edgefall-wasm';
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
 import type { Biome } from './openworld';

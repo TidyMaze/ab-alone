@@ -1,4 +1,4 @@
-import init, { Encounter, Engine } from 'abalone-wasm';
+import init, { Encounter, Engine } from 'edgefall-wasm';
 import { answer, encounterFor, engineFor, type BotRequest } from './bot';
 
 // Thin glue (bot.worker.test.ts): loads wasm once, answers each request. A failure, of the start or of the search,

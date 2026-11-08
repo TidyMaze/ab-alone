@@ -4,7 +4,7 @@ type: module-design
 status: draft
 title: "client: browser game"
 parent: architecture
-depends-on: [abalone-wasm]
+depends-on: [edgefall-wasm]
 references: [ui, art, game-design]
 ---
 
@@ -22,7 +22,7 @@ in [architecture](../docs/specs/tech.md) sections 5 to 9.
 
 ## Boundary
 
-- Asks `abalone-wasm` for every rule decision: legal moves, the result of a move, boss turns,
+- Asks `edgefall-wasm` for every rule decision: legal moves, the result of a move, boss turns,
   outcomes. The client never decides a rule itself.
 - The bot search runs in a Web Worker (`bot.worker.ts`), so the render loop never waits on it.
   *Unconfirmed: the main thread also holds an engine instance for rule checks; tech.md section 4

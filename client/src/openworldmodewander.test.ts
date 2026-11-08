@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import './test/openworldwasm';
-import { world_chunk, world_enemies } from 'abalone-wasm';
+import { world_chunk, world_enemies } from 'edgefall-wasm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { FLEE_GRACE_MS, OpenWorldMode } from './openworldmode';

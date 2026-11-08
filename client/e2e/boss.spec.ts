@@ -171,7 +171,7 @@ const startChaplain = async (page: Page, { reduced = true } = {}) => {
 
 /** Plays the recorded plies `from` to `to` (excluded). */
 const recordedGame = () =>
-  parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/chaplain.txt', import.meta.url), 'utf8'));
+  parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/chaplain.txt', import.meta.url), 'utf8'));
 const playRecorded = (page: Page, from: number, to: number) =>
   page.evaluate((records) => (window as any).__playMoves(records), recordedGame().slice(from, to));
 

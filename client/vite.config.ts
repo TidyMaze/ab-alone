@@ -19,7 +19,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   define: { __BUILD__: JSON.stringify((loadEnv(mode, '.', '').GITHUB_SHA ?? 'dev').slice(0, 12)) },
   resolve: {
     alias: {
-      'abalone-wasm': new URL('../crates/abalone-wasm/pkg/abalone_wasm.js', import.meta.url).pathname,
+      'edgefall-wasm': new URL('../crates/edgefall-wasm/pkg/edgefall_wasm.js', import.meta.url).pathname,
     },
   },
   server: {

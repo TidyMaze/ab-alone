@@ -77,7 +77,7 @@ describe('main.ts, the bot rating, #1611', () => {
 
   it('a boss of a run reads its act percent: the first act boss searches half', async () => {
     const game = await boot('?real=1', { indexedDB: new IDBFactory() });
-    const { boss_ids, run_map } = await import('abalone-wasm');
+    const { boss_ids, run_map } = await import('edgefall-wasm');
     const { actBoss, parseMap, pick, newRun } = await import('./roguelite');
     const { LEGACY_UNLOCKED } = await import('./collector');
     const nodes = parseMap(run_map(3));
@@ -91,7 +91,7 @@ describe('main.ts, the bot rating, #1611', () => {
     await game.hook('__run', state);
     const boss = actBoss(nodes, state, boss_ids())!;
     expect(boss.percent).toBe(50);
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const nodesOf = new Encounter(boss.id, 0).node_budget(boss.percent);
     const { ratingOfBudget } = await import('./botrating');
     expect(badge()!.textContent).toMatch(new RegExp(`^Boss ~${ratingOfBudget(nodesOf)} · `));

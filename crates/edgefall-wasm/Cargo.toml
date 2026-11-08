@@ -1,0 +1,13 @@
+[package]
+name = "edgefall-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Thin wasm-bindgen bridge over edgefall-core"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+edgefall-core = { path = "../edgefall-core" }
+wasm-bindgen = "=0.2.129"

@@ -13,7 +13,7 @@ import { replay, type KeyStore, type ReplayEngine } from './savegame';
 export const START_ARMY = 14;
 /** Below this many marbles the run is over. */
 export const MIN_ARMY = 4;
-/** Integers per node of the bridge's map (crates/abalone-wasm/src/lib.rs). */
+/** Integers per node of the bridge's map (crates/edgefall-wasm/src/lib.rs). */
 const NODE_STRIDE = 7;
 /** Key of the run in the game store, next to the local game (savegame.ts). */
 export const RUN_KEY = 'run';
@@ -154,7 +154,7 @@ export const MAP_VERSION = 1;
 /** At most this many special marbles of each type on the board of a fight (#961). */
 export const FIGHT_CAP = 3;
 
-/** The relics (#1457, docs/specs/roguelite.md section 9) by their code on the bridge (crates/abalone-core run::Relic). */
+/** The relics (#1457, docs/specs/roguelite.md section 9) by their code on the bridge (crates/edgefall-core run::Relic). */
 export const Relic = {
   Gyroscope: 0,
   HullPlating: 1,
@@ -173,7 +173,7 @@ export const Relic = {
   StaticShroud: 14,
   BossBreaker: 15,
 } as const;
-/** The affinities (#1471, docs/specs/roguelite.md section 23) by their code on the bridge (crates/abalone-core run::Affinity): their name, the
+/** The affinities (#1471, docs/specs/roguelite.md section 23) by their code on the bridge (crates/edgefall-core run::Affinity): their name, the
  * special marbles they grow, the rule each level adds on the army's marbles in the engine, and their glyph, a line drawing on the 24 grid. */
 export const AFFINITIES: readonly { name: string; kinds: string; levels: readonly string[]; icon: string }[] = [
   { name: 'Force', kinds: 'Heavy, Heavy+', levels: ['Heavy and Heavy+ weigh 1 more in a push', 'Heavy and Heavy+ weigh 2 more in a push'], icon: 'M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10' },
@@ -693,7 +693,7 @@ export function runNodes(map: MapNode[], run: Run, nodes: number): number {
 }
 
 /** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, then 120 % (#1537), then hard, then
- * 300 % for the fourth act's. The run simulator (crates/abalone-core/examples/run_sim.rs) keeps a copy of the first three. */
+ * 300 % for the fourth act's. The run simulator (crates/edgefall-core/examples/run_sim.rs) keeps a copy of the first three. */
 export const ACT_PERCENT = [50, 120, 200, 300];
 
 /** The roster bosses the Meadow's act 1 never deals (#1599, `ACT_ONE_LEAVES` of ladder.rs): they leave act 1 for acts 2 and 3. */

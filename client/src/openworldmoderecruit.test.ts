@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './test/openworldwasm';
-import { world_chunk } from 'abalone-wasm';
+import { world_chunk } from 'edgefall-wasm';
 import type { Axial } from './board';
 import { CHUNK } from './openworld';
 import { FightState } from './openworldfight';

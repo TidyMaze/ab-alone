@@ -17,7 +17,7 @@ const freshDraw = async (page: Page) => {
   await page.waitForFunction((n) => (window as any).__draws() > n, asked);
 };
 
-const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/dual.txt', import.meta.url), 'utf8'));
+const plies = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/dual.txt', import.meta.url), 'utf8'));
 const play = (page: Page, from: number, to: number) => page.evaluate((records) => (window as any).__playMoves(records), plies.slice(from, to));
 const dual = (page: Page) => page.evaluate(() => (window as any).__dual()) as Promise<{ mark: [number, number] | null }>;
 const marbleAt = (page: Page, [q, r]: [number, number]) => page.evaluate(([cq, cr]) => (window as any).__marbleTurn(cq, cr) !== null, [q, r]);

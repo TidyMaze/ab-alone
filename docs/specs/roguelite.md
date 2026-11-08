@@ -37,7 +37,7 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 
 ## 2. The map
 
-Generated in the engine from the seed (`abalone-core` `run::run_map`, `run_map` on the bridge).
+Generated in the engine from the seed (`edgefall-core` `run::run_map`, `run_map` on the bridge).
 A row has 2 to 4 nodes, the boss row one. The first row of an act is fights; each node of the
 two rows after it is a fight, an elite, an unknown, a treasure, a rest or a shop (1 chance in 6 each), its own draw from the seed and its index in the map, apart from the links: the map's shape is the
 one of slice 1, so a run saved before the kinds still walks its map. The treasure (#1457) took the
@@ -504,7 +504,7 @@ pure function of the run seed and the node (its index in the map), as the reward
 reload stands the same army. The army still stands on the standard layout whatever the bot does, and every rule of
 the special marbles is the engine's, played by the bot's search like the army's.
 
-- **Formations**: `Formation` in `abalone-core::run`, its code on the bridge. Drawn for each fight and elite, equally
+- **Formations**: `Formation` in `edgefall-core::run`, its code on the bridge. Drawn for each fight and elite, equally
   likely, from its own draw apart from the map's shape and kinds (`run::foes_of`). A bot with fewer marbles than the
   formation holds (10 against a fight, 8 in the first one, one fewer with the Saboteur) loses the marbles nearest the centre first (the
   standard layout, its front row first as before).
@@ -1138,7 +1138,7 @@ Captain`, `Ascension 2` when picked), then **Start** and **More** on one row, 44
 ## 30. The difficulty curve, measured (#1537, #1598, #1633)
 
 The run was stacked (ten ascension levels, relics, runes) without knowing how often a player gets through it. `run_sim`
-(`crates/abalone-core/examples/run_sim.rs`) plays seeded runs with a bot (the act bosses with the ladder's bot, the fights and the elites with the army's fight bot of #1598) and counts the
+(`crates/edgefall-core/examples/run_sim.rs`) plays seeded runs with a bot (the act bosses with the ladder's bot, the fights and the elites with the army's fight bot of #1598) and counts the
 acts cleared. These are **bot numbers, not human ones**: a person who reads the tells, takes the elites and builds a deck does better or worse in ways the bot
 cannot say. The table is a measure of the curve (act against act, boss against boss) and of what the constants do to it.
 
@@ -1477,7 +1477,7 @@ the marbles on the board do. Every number is the engine's own count, never a rul
 The bot is a search budget in positions (`BOT_NODES`, 20000 on the plain bot at Normal). The player sees a rating and a level for it,
 and meets a weaker one at the start that grows with the game. `client/src/botrating.ts` holds the numbers, pure and tested.
 
-- **The measure** (`crates/abalone-core/examples/bot_rating.rs`, `cargo run --release --example bot_rating`): self-play between adjacent
+- **The measure** (`crates/edgefall-core/examples/bot_rating.rs`, `cargo run --release --example bot_rating`): self-play between adjacent
   budgets, half of the games with each colour, from the same random opening of 8 plies for a pair of games (so a deterministic search does
   not play one game 30 times), 300 plies at most (an unfinished game is a draw). It prints each budget's score against the one below, the rating
   difference that score means (Elo, `400 log10(s / (1 - s))`) and its standard error. `BOT_RATING_LADDER=nodes:noise,...`,

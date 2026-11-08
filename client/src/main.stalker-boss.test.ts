@@ -37,7 +37,7 @@ describe('main.ts The Stalker boss (#1111)', () => {
 
   it('draws the marbles a refused move revealed, from the engine, and the player plays again', async () => {
     const game = await boot('/');
-    const { Encounter } = await import('abalone-wasm'); // the harness's instance
+    const { Encounter } = await import('edgefall-wasm'); // the harness's instance
     pickStalker();
     const play = vi.spyOn(Encounter.prototype, 'play').mockImplementationOnce(() => {
       throw 'Hidden';
@@ -56,7 +56,7 @@ describe('main.ts The Stalker boss (#1111)', () => {
 
   it('reads the last phase as Sight 1 with nothing left to narrow', async () => {
     const game = await boot('/');
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     vi.spyOn(Encounter.prototype, 'stalker').mockReturnValue(Int32Array.from([1, -1]));
     pickStalker();
     expect(game.hud()).toContain('Sight 1');
@@ -83,7 +83,7 @@ describe('main.ts The Stalker boss (#1111)', () => {
 
   it('lets any other error of a move through', async () => {
     const game = await boot('/?bot=off');
-    const { Engine } = await import('abalone-wasm');
+    const { Engine } = await import('edgefall-wasm');
     vi.spyOn(Engine.prototype, 'play').mockImplementation(() => {
       throw new Error('broken');
     });

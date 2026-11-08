@@ -12,7 +12,7 @@ import { COLOURS, terrainColour } from './openworldminimap';
 import { SIGHT } from './openworlddiscovered';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
-import { world_chunk } from 'abalone-wasm';
+import { world_chunk } from 'edgefall-wasm';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
 import { CRUISE_MS, GLIDE_MS, NUDGE_MS, stepMs } from './openworldglide';
 import { stopLeftIntervalsAfterEach } from './test/intervals';
@@ -366,7 +366,7 @@ describe('a frame frees what it replaced only after its render (#1017)', () => {
   });
 });
 
-// The troop's push is the engine's (abalone-core `worldoverlay`): these tests play it on the seed 1, whose spawn is a clearing, with the
+// The troop's push is the engine's (edgefall-core `worldoverlay`): these tests play it on the seed 1, whose spawn is a clearing, with the
 // generated enemy (2,0) of the loader below.
 const enemyAt2 = (_seed: number, cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array());
 /** The terrain code of a cell of the world `seed` (`-1` off the world). */

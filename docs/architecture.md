@@ -9,10 +9,10 @@ One Rust core is compiled for every place that needs the rules: the browser, the
 ```mermaid
 flowchart TB
   subgraph Build["Build, GitHub Actions"]
-    core["abalone-core<br/>rules, bosses, AI, world"]
-    wasm["abalone-wasm<br/>WASM bridge"]
+    core["edgefall-core<br/>rules, bosses, AI, world"]
+    wasm["edgefall-wasm<br/>WASM bridge"]
     core --> wasm
-    core --> cli["abalone-cli"]
+    core --> cli["edgefall-cli"]
   end
   wasm --> pages["GitHub Pages<br/>static files only"]
   wasm --> mcp["MCP server, mcp/<br/>an AI agent plays through it"]
@@ -20,7 +20,7 @@ flowchart TB
   subgraph browser["Each player's browser"]
     ts["client/, TypeScript<br/>input, HUD, session"]
     three["three.js<br/>draws the scene"]
-    rules["abalone-wasm<br/>legal moves, results"]
+    rules["edgefall-wasm<br/>legal moves, results"]
     bot["Web Worker<br/>bot search"]
     sw["Service worker<br/>offline copy of the files"]
     ts --> three

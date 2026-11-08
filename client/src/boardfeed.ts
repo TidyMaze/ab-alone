@@ -1,5 +1,5 @@
 // The read side of the shared ranked board (#1287, docs/specs/multiplayer.md section 7). It only reads: one REQ per relay, never an EVENT.
-// A result is shown only if the Rust rules replay its move log to the same status and ejections (`replay_score`, crates/abalone-wasm);
+// A result is shown only if the Rust rules replay its move log to the same status and ejections (`replay_score`, crates/edgefall-wasm);
 // ratings are derived from the valid results, never read. A result also needs the signature of BOTH seats over the game (#1317),
 // proved with the seats' keys: the Nostr signature of the event proves nothing about who played, so it is not checked.
 import banned from './bannedkeys.json';
@@ -33,7 +33,7 @@ export const BANNED: Promise<ReadonlySet<string>> = verifyBanList(banned, banSig
  * results one key may have before its events are no longer replayed. */
 export const JUNK_BUDGET = 20_000;
 export const MAX_FAILS_PER_KEY = 2;
-const STRIDE = 8; // integers per move record, crates/abalone-wasm/src/lib.rs
+const STRIDE = 8; // integers per move record, crates/edgefall-wasm/src/lib.rs
 
 export interface Side {
   readonly pub: string;

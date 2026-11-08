@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, boss_takes_mirror, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, boss_takes_build, boss_takes_mirror, engine_version, replay_score, run_exits, run_foes, run_map, world_can_break, world_is_enemy, world_lairs, world_logs, world_pads, world_places, world_teleporters, world_version } from 'edgefall-wasm';
 import {
   BOARD_CELLS,
   CELLS,

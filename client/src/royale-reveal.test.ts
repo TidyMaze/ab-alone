@@ -8,8 +8,8 @@ import { SLIDE_MS } from './slide';
 
 // The reveal of a battle royale round played out (#612): each order in initiative order, then the breach. Checked by
 // hand on small arenas, then against the real engine through its wasm binding.
-vi.mock('abalone-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
-const { default: init, Royale } = await import('abalone-wasm');
+vi.mock('edgefall-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
+const { default: init, Royale } = await import('edgefall-wasm');
 await init();
 
 const CRACKED = 8;

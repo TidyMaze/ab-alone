@@ -27,7 +27,7 @@ async function until(game: Game, ok: () => boolean): Promise<void> {
 /** The other player: a session with its own engine on `transport`, which plays a move by its cells. `version` is
  * added to the engine version its Hello carries, so it can run another one (#526). */
 async function opponent(transport: Transport, room: string, side: number, version = 0, onOther?: (m: Wire, key: string) => void | Promise<void>) {
-  const { Engine, engine_version } = await import('abalone-wasm');
+  const { Engine, engine_version } = await import('edgefall-wasm');
   let engine = new Engine();
   const keys = await generateKeys();
   const reports: Report[] = []; // the page's match reports (#1317)
@@ -276,7 +276,7 @@ describe('Play online', () => {
   });
 
   it('as a joiner from a link with a fingerprint, takes Black only from a Hello of that key (#1323)', async () => {
-    const { engine_version } = await import('abalone-wasm');
+    const { engine_version } = await import('edgefall-wasm');
     const creator = await generateKeys();
     const rival = await generateKeys();
     const game = await boot(`?net=hook#room=the-room&key=${await fingerprint(creator.pub)}`);
@@ -481,7 +481,7 @@ describe('Play online', () => {
     byId('ranked').click();
     expect(byId('hud').querySelector('.rank-badge')?.textContent).toContain('Silver');
     // Load a finished royale state via __royale hook while in ranked royale mode
-    const { Royale } = await import('abalone-wasm');
+    const { Royale } = await import('edgefall-wasm');
     const r = new Royale(6, 7);
     const rounds: number[][] = [];
     while (r.placement().length === 0) {
@@ -500,7 +500,7 @@ describe('Play online', () => {
     declineBoard();
     game.openModes();
     byId('ranked').click();
-    const { Royale } = await import('abalone-wasm');
+    const { Royale } = await import('edgefall-wasm');
     const r = new Royale(6, 7);
     const rounds: number[][] = [];
     while (r.placement().length === 0) {
@@ -597,7 +597,7 @@ describe('The invite link', () => {
     const game = await boot('?net=hook#room=full-room');
     await until(game, () => data().seat === 'pending');
     const [creator, other] = [await generateKeys(), await generateKeys()];
-    const hello = await signHello(creator, { game: 'full-room', seat: 1, roster: [creator.pub, other.pub], engine: (await import('abalone-wasm')).engine_version() });
+    const hello = await signHello(creator, { game: 'full-room', seat: 1, roster: [creator.pub, other.pub], engine: (await import('edgefall-wasm')).engine_version() });
     (window as unknown as Record<string, (m: Wire, peer: string) => void>).__netIn!(hello, 'creator');
     await until(game, () => data().seat === 'spectator');
     expect(data().online).toBe('Spectator');

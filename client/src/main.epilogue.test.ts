@@ -20,7 +20,7 @@ const line = (boss: string, kind: 'win' | 'loss', stage = 1): string => BOSS_END
 
 /** Starts the fight of `boss` and ends it with `status` (1 a win, 2 a loss, 3 a draw) at the first move. */
 async function fight(game: Game, boss: string, status: 1 | 2 | 3): Promise<void> {
-  const wasm = await import('abalone-wasm');
+  const wasm = await import('edgefall-wasm');
   const over = (): number => (game.hook<number>('__plies') > 0 ? status : 0);
   vi.spyOn(wasm.Encounter.prototype, 'result').mockImplementation(over);
   vi.spyOn(wasm.Encounter.prototype, 'status').mockImplementation(over);

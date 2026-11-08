@@ -23,7 +23,7 @@ function playMove(game: Game): Move {
 
 /** The game where both sides play their first legal move: a draw by repetition on Black's move, ply 17. */
 async function firstMoveGame(): Promise<number[][]> {
-  const { Engine } = await import('abalone-wasm');
+  const { Engine } = await import('edgefall-wasm');
   const engine = new Engine();
   const moves: number[][] = [];
   while (engine.status() === 0) {

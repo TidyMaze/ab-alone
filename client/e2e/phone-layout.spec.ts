@@ -377,7 +377,7 @@ for (const { name, viewport, mobile } of sizes) {
     // The lore of a boss win (#1589) sits in the plate under the banner: the plate still covers no cell and no button. The recorded win of The
     // Swarm (fight seed 0) is played by the __playMoves hook.
     test('the lore of a boss win covers neither a cell nor a button, #1589', async ({}, testInfo) => {
-      const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
+      const plies = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
       await page.evaluate(() => {
         crypto.getRandomValues = ((a: Uint32Array) => a.fill(0)) as typeof crypto.getRandomValues; // the fight seed
         localStorage.setItem('ab-alone.story', JSON.stringify({ moments: [2, 3], wins: 0 })); // stage 3 reaches The Swarm's entry (#1584)

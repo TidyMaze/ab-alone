@@ -1,14 +1,14 @@
-// Loads the Node build of abalone-wasm (`bun run wasm`, in engine/), the only judge of the game.
+// Loads the Node build of edgefall-wasm (`bun run wasm`, in engine/), the only judge of the game.
 import { createRequire } from 'node:module';
 import { encounterFor, engineFor } from '../../client/src/bot';
 import type { EncounterLike, EngineLike } from './game';
 import type { RunRules } from './run';
 import type { WorldRules } from './world';
 
-type Wasm = typeof import('../engine/abalone_wasm');
+type Wasm = typeof import('../engine/edgefall_wasm');
 
 // The Node build is CommonJS: it is required, so Bun and vitest load it the same way.
-const wasm = createRequire(import.meta.url)('../engine/abalone_wasm.js') as Wasm;
+const wasm = createRequire(import.meta.url)('../engine/edgefall_wasm.js') as Wasm;
 
 /** A new game in the engine: standard layout, Black to move. */
 export function newEngine(): EngineLike {

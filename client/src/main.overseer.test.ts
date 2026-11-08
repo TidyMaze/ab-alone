@@ -8,7 +8,7 @@ import { boot, type Game } from './test/harness';
 
 // The Overseer on the harness (#635, game-design.md section 7.11): the Overseer, its 6 cores and 6 vents drawn, the
 // slag fill line, a core pushed next to a vent that slides there then rolls into it and sinks (#1241), and the win.
-// ?bot=off plays both sides from the fixture of the core tests (crates/abalone-core/src/encounter/overseer.rs): the
+// ?bot=off plays both sides from the fixture of the core tests (crates/edgefall-core/src/encounter/overseer.rs): the
 // player pushes the core (1, 1) next to (3, 1) at ply 5, which pulls it in, then (-2, 1) next to (-4, 1); the boss walks
 // 3 marbles onto (4, -1), where they burn, then pushes the core (2, -1) next to it itself at ply 22: the player's 6th
 // ejection. Each ply: the cells to click, the moved marbles then the target.

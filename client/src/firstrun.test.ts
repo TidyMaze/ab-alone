@@ -1,5 +1,5 @@
 import './test/openworldwasm';
-import { Engine } from 'abalone-wasm';
+import { Engine } from 'edgefall-wasm';
 import { describe, expect, it } from 'vitest';
 import { cellIndex, encodeMove } from './board';
 import { COACH, COLD_OPEN, FIRST_FIGHT, FIRST_PUSH, firstRunDone, firstRunDue, markFirstRunDone } from './firstrun';

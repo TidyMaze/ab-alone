@@ -15,7 +15,7 @@ import type { Outcome } from './world';
 import { formatMove, fromRecord, fromRecords, parseMove, toRecord } from './notation';
 import { Room, type RoomEvent } from './online';
 
-/** What the session uses of both `Engine` and `Encounter` in abalone-wasm. */
+/** What the session uses of both `Engine` and `Encounter` in edgefall-wasm. */
 interface Playable {
   to_move(): number;
   legal_moves(): Int32Array;
@@ -61,7 +61,7 @@ export type DrawReason = null | 'repetition' | 'no_ejection_cap' | 'blocked';
 const STATUSES: Status[] = ['running', 'black_won', 'white_won', 'draw'];
 const DRAW_REASONS: DrawReason[] = [null, 'repetition', 'no_ejection_cap', 'blocked'];
 
-/** Side code of abalone-wasm: `1` Black, anything else White, as the engine reads it. */
+/** Side code of edgefall-wasm: `1` Black, anything else White, as the engine reads it. */
 export function sideName(code: number): Side {
   return code === BLACK ? 'black' : 'white';
 }

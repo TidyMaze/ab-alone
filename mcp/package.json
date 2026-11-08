@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "bun@1.3.11",
   "scripts": {
-    "wasm": "wasm-pack build ../crates/abalone-wasm --target nodejs --out-dir ../../mcp/engine",
+    "wasm": "wasm-pack build ../crates/edgefall-wasm --target nodejs --out-dir ../../mcp/engine",
     "start": "bun src/main.ts",
     "test": "bun run wasm && vitest run --coverage",
     "e2e": "bun run wasm && vitest run --config vitest.e2e.config.ts"

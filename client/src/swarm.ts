@@ -2,7 +2,7 @@
 // clock (2 off per swarm marble the player ejects), and the evac that lights the whole board once the clock runs out.
 import type { Axial } from './board';
 
-/** The evac clock (SWARM_TURNS in crates/abalone-core/src/encounter/swarm.rs). */
+/** The evac clock (SWARM_TURNS in crates/edgefall-core/src/encounter/swarm.rs). */
 export const SWARM_TURNS = 40;
 /** How long the evac light takes to come up, and how high it lifts the surviving marbles. */
 export const EVAC_MS = 1200;

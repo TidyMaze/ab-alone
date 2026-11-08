@@ -8,9 +8,9 @@ const scope = vi.hoisted(() => ({
 }));
 vi.stubGlobal('self', scope);
 afterAll(() => void vi.unstubAllGlobals());
-vi.mock('abalone-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
+vi.mock('edgefall-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
 await import('./bot.worker');
-const { Encounter, Engine, boss_ids } = await import('abalone-wasm');
+const { Encounter, Engine, boss_ids } = await import('edgefall-wasm');
 
 const ask = async (req: BotRequest): Promise<BotResponse> => {
   scope.postMessage.mockClear();
@@ -23,7 +23,7 @@ describe('bot.worker', () => {
   it("answers a move request with the engine's move record, under the request's id", async () => {
     const reply = await ask({ id: 7, history: [], nodes: 50 });
     expect(reply).toMatchObject({ id: 7 });
-    expect((reply as { move: number[] }).move).toHaveLength(8); // one move record, crates/abalone-wasm/src/lib.rs
+    expect((reply as { move: number[] }).move).toHaveLength(8); // one move record, crates/edgefall-wasm/src/lib.rs
   });
 
   it("plays a rogue-lite fight on its army's engine, #798", async () => {
@@ -83,14 +83,14 @@ describe('bot.worker', () => {
 describe('bot.worker when the wasm fails to start, #736', () => {
   it('answers every request with the error of the start', async () => {
     vi.resetModules();
-    vi.doMock('abalone-wasm', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('abalone-wasm')>()),
+    vi.doMock('edgefall-wasm', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('edgefall-wasm')>()),
       default: () => Promise.reject(new Error('wasm fetch failed')),
     }));
     await import('./bot.worker');
     scope.postMessage.mockClear();
     await scope.onmessage!({ data: { id: 11, history: [], nodes: 50 } });
     expect(scope.postMessage).toHaveBeenCalledWith({ id: 11, error: 'Error: wasm fetch failed' });
-    vi.doUnmock('abalone-wasm');
+    vi.doUnmock('edgefall-wasm');
   });
 });

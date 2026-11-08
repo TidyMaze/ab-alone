@@ -1,11 +1,11 @@
-// The move notation of abalone-cli (`parse_move` in crates/abalone-cli/src/lib.rs, docs/specs/mcp.md section 3):
+// The move notation of edgefall-cli (`parse_move` in crates/edgefall-cli/src/lib.rs, docs/specs/mcp.md section 3):
 // the selected cells, then `>`, then the direction, `(-1,2)(0,2)>E`. Converted to the 8-integer move record of
-// abalone-wasm at the edge, nothing else converts. The engine judges the move, this only reads it.
+// edgefall-wasm at the edge, nothing else converts. The engine judges the move, this only reads it.
 
-/** Direction names, the index is the abalone-wasm direction code. */
+/** Direction names, the index is the edgefall-wasm direction code. */
 export const DIRECTIONS = ['E', 'W', 'NE', 'SW', 'NW', 'SE'] as const;
 
-/** Integers per move record, `MOVE_STRIDE` of abalone-wasm. */
+/** Integers per move record, `MOVE_STRIDE` of edgefall-wasm. */
 export const MOVE_STRIDE = 8;
 
 export type Cell = [q: number, r: number];
@@ -18,7 +18,7 @@ export interface Move {
 
 export type Parsed = { ok: true; move: Move } | { ok: false; message: string };
 
-/** The `ParseError` messages of abalone-cli, word for word. */
+/** The `ParseError` messages of edgefall-cli, word for word. */
 const EMPTY = 'empty input';
 const MISSING_ARROW = "missing '>' before the direction";
 const NO_CELL = "no cell before '>'";
@@ -27,7 +27,7 @@ const BAD_DIRECTION = 'direction must be E, W, NE, SW, NW or SE';
 
 const fail = (message: string): Parsed => ({ ok: false, message });
 
-/** Parses `(q,r)(q,r)>E`, with the checks of abalone-cli in the same order. */
+/** Parses `(q,r)(q,r)>E`, with the checks of edgefall-cli in the same order. */
 export function parseMove(input: string): Parsed {
   const text = input.trim();
   if (text === '') return fail(EMPTY);

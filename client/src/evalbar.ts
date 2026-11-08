@@ -3,7 +3,7 @@
 // centi-marbles for the side to move.
 import { sideName } from './glass';
 
-/** A won game scores this, minus the plies to the win (`abalone_core::search::WIN`). */
+/** A won game scores this, minus the plies to the win (`edgefall_core::search::WIN`). */
 export const WIN_SCORE = 1_000_000;
 /** Beyond this, a score is a won or lost game, not a material count. */
 const DECIDED = WIN_SCORE / 2;

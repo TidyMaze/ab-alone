@@ -7,7 +7,7 @@ import { dailyFor, dailyTitle, utcDay } from './daily';
 import { CONVERTED_AT, EXPLODED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
 import { parseRecorded } from './test/chaplain-game';
-import echoWin from '../../crates/abalone-core/tests/fixtures/echo.txt?raw';
+import echoWin from '../../crates/edgefall-core/tests/fixtures/echo.txt?raw';
 import { BOSS_BLURBS } from './lorelogs';
 import { SLIDE_MS } from './slide';
 import { boot, slowKeys, type Game } from './test/harness';
@@ -283,7 +283,7 @@ describe('main.ts boss fights', () => {
     fightBoss(game, 'The Echo');
     loseByRepetition(game);
     expect(beaten()).toBeUndefined();
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     fightBoss(game, 'The Hull');
     vi.spyOn(Encounter.prototype, 'result').mockReturnValue(1); // a win, without playing six ejections
     play(game, forward(game));
@@ -294,7 +294,7 @@ describe('main.ts boss fights', () => {
     const medals = (): unknown => JSON.parse(localStorage.getItem('ab-alone.medals') ?? '{}');
     /** Wins a fight against The Hull in one player turn: the engine says Black won, without six ejections. */
     async function winHull(game: Game): Promise<void> {
-      const { Encounter } = await import('abalone-wasm');
+      const { Encounter } = await import('edgefall-wasm');
       fightBoss(game, 'The Hull');
       const won = (): number => (game.hook<number>('__plies') > 0 ? 1 : 0); // won once the first move is played
       vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
@@ -365,7 +365,7 @@ describe('main.ts boss fights', () => {
       fightBoss(game, 'The Echo');
       loseByRepetition(game);
       expect(tally()).toEqual({ echo: { wins: 0, attempts: 1 } });
-      const { Encounter } = await import('abalone-wasm');
+      const { Encounter } = await import('edgefall-wasm');
       fightBoss(game, 'The Hull');
       const won = (): number => (game.hook<number>('__plies') > 0 ? 1 : 0);
       vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
@@ -776,7 +776,7 @@ describe('main.ts boss tells', () => {
 
   it('The Choir sinks the army it removed after the push, a marble at a time (#747)', async () => {
     const game = await boot('?bot=off');
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     fightBoss(game, 'The Choir');
     const single = (): Move => game.hook<Move[]>('__legal').find((m) => m.cells.length === 1)!;
     play(game, single()); // the player's move removes no army
@@ -936,7 +936,7 @@ describe('main.ts boss tells', () => {
     hover(game, [q + dq, r + dr]);
     expect(Number(body().ghosts)).toBe(1);
 
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const echoRecord = new Int32Array([1, 5, 2, -3, 0, 0, 0, 0]);
     vi.spyOn(Encounter.prototype, 'tell_move').mockReturnValue(echoRecord);
     hover(game, null);

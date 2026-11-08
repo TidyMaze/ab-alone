@@ -66,7 +66,7 @@ describe('SceneRenderer (#632)', () => {
     });
 
     expect(sr.scene).toBeInstanceOf(THREE.Scene);
-    expect(sr.scene.name).toBe('abalone-scene');
+    expect(sr.scene.name).toBe('edgefall-scene');
     expect(sr.camera).toBeInstanceOf(THREE.PerspectiveCamera);
     expect(sr.renderer).toBe(renderer);
     expect(sr.backend).toBe('WebGL2');

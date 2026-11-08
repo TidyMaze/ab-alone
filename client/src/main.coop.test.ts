@@ -40,7 +40,7 @@ function play(game: Game, mv: Move): void {
 /** The partner: a session on `transport` with its own encounter, which plays the boss reply to every human move at
  * once, as every peer does. `fight` is the boss and seed it believes the room has, and a Retry restarts it. */
 async function partner(transport: Transport, room: string, side: number, fight = ECHO) {
-  const { Encounter, engine_version } = await import('abalone-wasm');
+  const { Encounter, engine_version } = await import('edgefall-wasm');
   let encounter = new Encounter(fight.boss, fight.seed);
   const history: number[][] = [];
   const apply = (mv: ArrayLike<number>): void => {
@@ -263,7 +263,7 @@ describe('co-op: the encounter judges the room', () => {
 
   it('asks no boss reply after a human move that ends the fight', async () => {
     const { game } = await hosted();
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const { play: played, status } = Encounter.prototype;
     let over = false;
     vi.spyOn(Encounter.prototype, 'play').mockImplementation(function (this: InstanceType<typeof Encounter>, mv) {
@@ -317,7 +317,7 @@ describe('co-op: the end of the fight', () => {
   const free = { cells: [[0, 1]] as Axial[], dir: 1 };
   const east = { cells: [[-1, 1]] as Axial[], dir: 0 };
   async function defeat(game: Game, two: Awaited<ReturnType<typeof partner>>): Promise<void> {
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     vi.spyOn(Encounter.prototype, 'boss_move').mockReturnValue(Int32Array.from(encodeMove({ cells: [[0, -1]], dir: 0 })));
     play(game, up);
     await until(game, () => game.hook('__plies') === 2 && two.history.length === 2); // the partner heard our move before it plays its own

@@ -170,7 +170,7 @@ describe('a dungeon gate of the Open world (#1593)', () => {
     byId('openworld').click();
     await settle();
     const gates = data().openworldPlaces!.split(' ').filter((p) => p.startsWith('dungeon:')).map((p) => p.slice(8).split(',').map(Number) as unknown as Axial);
-    const { world_chunk } = await import('abalone-wasm');
+    const { world_chunk } = await import('edgefall-wasm');
     const biomeAt = ([q, r]: Axial): number => {
       const [cx, cy] = [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
       return world_chunk(7, cx, cy)[((r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)) * 3 + 2]!;

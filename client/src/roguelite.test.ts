@@ -134,7 +134,7 @@ import {
 } from './roguelite';
 import { memoryStore, type KeyStore } from './savegame';
 
-// A small map in the bridge's encoding (crates/abalone-wasm/src/lib.rs): 2 acts of one fight row of 2 nodes, then a
+// A small map in the bridge's encoding (crates/edgefall-wasm/src/lib.rs): 2 acts of one fight row of 2 nodes, then a
 // boss. Act 1: node 0 leads to the boss, node 1 too. Act 2 the same. Indices: 0, 1 fights, 2 boss, 3, 4 fights, 5 boss.
 const FLAT = [0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0];
 const MAP = parseMap(FLAT);

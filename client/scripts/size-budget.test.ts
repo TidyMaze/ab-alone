@@ -14,7 +14,7 @@ const BUILD: Record<string, number> = {
   'index.html': 1,
   'assets/index-C-lWdAi6.js': 2,
   'assets/index-CJ7x67H-.css': 4,
-  'assets/abalone_wasm_bg-eZ6LyWCB.wasm': 8,
+  'assets/edgefall_wasm_bg-eZ6LyWCB.wasm': 8,
   'icons/icon-192.png': 16,
   'assets/backdrop.ktx2': 32, // shared texture
   'assets/deck-albedo.ktx2': 64, // shared texture, not a deck

@@ -22,8 +22,8 @@ import {
 
 // The offline battle royale (#502, rules.md section 10.4): 1 player against 5 bots on the radius 8 arena, on the real
 // engine through its wasm binding, and the HUD plate read back under jsdom.
-vi.mock('abalone-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
-const { default: init, Royale } = await import('abalone-wasm');
+vi.mock('edgefall-wasm', async (importOriginal) => (await import('./test/wasm')).nodeWasm(importOriginal));
+const { default: init, Royale } = await import('edgefall-wasm');
 await init();
 
 const make = (seats: number, seed: number) => new Royale(seats, seed);

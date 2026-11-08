@@ -19,7 +19,7 @@ const lore = (boss: string) => BOSS_LORE.find((e) => e.boss === boss)!;
 
 /** Plays one move of the hot-seat or fight game, with the engine's status mocked to `status` once a ply was played. */
 async function finish(game: Game, kind: 'Encounter' | 'Engine', status: 1 | 2): Promise<void> {
-  const wasm = await import('abalone-wasm');
+  const wasm = await import('edgefall-wasm');
   const over = (): number => (game.hook<number>('__plies') > 0 ? status : 0);
   if (kind === 'Encounter') vi.spyOn(wasm.Encounter.prototype, 'result').mockImplementation(over);
   vi.spyOn(wasm[kind].prototype, 'status').mockImplementation(over);

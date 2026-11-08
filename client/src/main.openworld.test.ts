@@ -8,7 +8,7 @@ import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import { NEON_OPEN_WORLD_POINT_LIGHTS } from './neonfx';
 import { SLIDE_MS } from './slide';
 import './test/openworldwasm';
-import { world_can_break } from 'abalone-wasm';
+import { world_can_break } from 'edgefall-wasm';
 import { boot, type Game } from './test/harness';
 import { signBeaten, signBreak, signLair } from './worldevents';
 import { generateKeys } from './moverecord';

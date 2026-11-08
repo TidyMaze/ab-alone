@@ -1,5 +1,5 @@
 // Score line of the HUD, built from the engine's ejected counts, win thresholds, status and draw
-// reason (see the header of crates/abalone-wasm/src/lib.rs). The win rule is the engine's: 6
+// reason (see the header of crates/edgefall-wasm/src/lib.rs). The win rule is the engine's: 6
 // ejections.
 
 import { sideName } from './glass';

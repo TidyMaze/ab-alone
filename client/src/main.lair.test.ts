@@ -37,7 +37,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     game.openModes();
     byId('openworld').click();
     await settle();
-    expect(data().openworldLairs!.split(' ')).toHaveLength((await import('abalone-wasm')).boss_ids().length); // one lair per boss of the roster (#1171)
+    expect(data().openworldLairs!.split(' ')).toHaveLength((await import('edgefall-wasm')).boss_ids().length); // one lair per boss of the roster (#1171)
     expect(data().openworldLairsBeaten).toBe('');
     await walkOnto(game, 0);
     expect(data().openworld).toBeUndefined();
@@ -53,7 +53,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
 
   it('a win records the medal and the lair, and Back to the Open world shows it beaten with the hero on the entrance', async () => {
     const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const entrance = await walkOnto(game, 0);
     const won = (): number => (game.hook<number>('__plies') > 0 ? 1 : 0);
     vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
@@ -70,13 +70,13 @@ describe('the boss lairs of the Open world (#1170)', () => {
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(data().openworldLairsBeaten).toBe('0');
-    expect(byId('openworld-medals').textContent).toBe(`Medals 1 / ${(await import('abalone-wasm')).boss_ids().length}`); // the HUD reads the shared medal store (#1171)
+    expect(byId('openworld-medals').textContent).toBe(`Medals 1 / ${(await import('edgefall-wasm')).boss_ids().length}`); // the HUD reads the shared medal store (#1171)
     expect(JSON.parse(localStorage.getItem('ab-alone.medals')!)).toEqual({ [Object.keys(JSON.parse(localStorage.getItem('ab-alone.medals')!))[0]!]: 1 });
   });
 
   it('a lost fight sends Back to the Open world with the lair unbeaten, and Retry keeps the fight the lair\'s', async () => {
     const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     const entrance = await walkOnto(game, 2);
     byId('boss-retry').click();
     expect(byId('exit').textContent).toBe('Back to the Open world');
@@ -93,7 +93,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     expect(game.hook<number>('__plies')).toBe(0); // the table beneath the world is the saved game again, not the lost fight's board (#1517)
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(data().openworldLairsBeaten).toBe('');
-    expect(byId('openworld-medals').textContent).toBe(`Medals 0 / ${(await import('abalone-wasm')).boss_ids().length}`);
+    expect(byId('openworld-medals').textContent).toBe(`Medals 0 / ${(await import('edgefall-wasm')).boss_ids().length}`);
   });
 
   it('a boss picked from the menu is no lair\'s: its way out is the Hub, not the world', async () => {
@@ -102,7 +102,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     game.openModes();
     byId('boss-fight').click();
     (byId('boss-list').querySelector('button') as HTMLButtonElement).click();
-    vi.spyOn((await import('abalone-wasm')).Encounter.prototype, 'status').mockImplementation(() => 2);
+    vi.spyOn((await import('edgefall-wasm')).Encounter.prototype, 'status').mockImplementation(() => 2);
     byId('boss-goal').click();
     expect(byId('exit').hidden).toBe(false);
     expect(byId('exit').dataset.label).toBe('Hub');
@@ -136,7 +136,7 @@ describe('the day and the night of the Open world (#1496)', () => {
     expect(data().fightBoard).toBe('night');
     byId('boss-retry').click();
     expect(data().fightBoard).toBe('night');
-    const { Encounter } = await import('abalone-wasm');
+    const { Encounter } = await import('edgefall-wasm');
     vi.spyOn(Encounter.prototype, 'status').mockImplementation(() => 2);
     vi.spyOn(Encounter.prototype, 'result').mockImplementation(() => 2);
     const move = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4))!;
@@ -292,7 +292,7 @@ describe('the goal of the Open world on arrival (#1530)', () => {
   it('says the objective with the count of towers and the bearing to the nearest, keeps the controls collapsed, and H opens them', async () => {
     await boot('?bot=off&openworld=7');
     await settle();
-    const count = (await import('abalone-wasm')).boss_ids().length;
+    const count = (await import('edgefall-wasm')).boss_ids().length;
     expect(byId('openworld-goal').textContent).toBe(`Goal: beat the ${count} towers of Hollow. One medal each.`);
     expect(byId('openworld-bearing').textContent).toMatch(/^Nearest tower: \d+ cells?, (to the |straight )(upper |lower )?\w+\.$/);
     expect(byId('openworld-medals').textContent).toBe(`Medals 0 / ${count}`);

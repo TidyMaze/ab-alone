@@ -76,10 +76,10 @@ test('The Ballast Mind needs 12 ejections, 12 fragments, #788', async ({ page })
   await expect(page.locator('#boss-bar .frag')).toHaveCount(12);
 });
 
-// The recorded Hull win (crates/abalone-core/tests/fixtures/hull.txt): every fragment is empty once it is won.
+// The recorded Hull win (crates/edgefall-core/tests/fixtures/hull.txt): every fragment is empty once it is won.
 test('the fragments empty as the player ejects, all gone at the win, #788', async ({ page }) => {
   await fight(page, 'The Hull');
-  const records = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
+  const records = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
   const empty = page.locator('#boss-bar .frag.empty');
   await expect(empty).toHaveCount(0);
   await page.evaluate((r) => (window as any).__playMoves(r), records.slice(0, 70));
@@ -89,11 +89,11 @@ test('the fragments empty as the player ejects, all gone at the win, #788', asyn
   await expect(empty).toHaveCount(6);
 });
 
-// The recorded Chaplain win (crates/abalone-core/tests/fixtures/chaplain.txt): at ply CONVERTED_AT the boss converts a player
+// The recorded Chaplain win (crates/edgefall-core/tests/fixtures/chaplain.txt): at ply CONVERTED_AT the boss converts a player
 // marble, which heals it by one fragment (#810).
 test('a player marble converted to the Chaplain fills a fragment back, #810', async ({ page }, testInfo) => {
   await fight(page, 'The Chaplain', SEED);
-  const records = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/chaplain.txt', import.meta.url), 'utf8'));
+  const records = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/chaplain.txt', import.meta.url), 'utf8'));
   const play = (from: number, to: number) => page.evaluate((r) => (window as any).__playMoves(r), records.slice(from, to));
   const empty = page.locator('#boss-bar .frag.empty');
   await play(0, CONVERTED_AT - 1);
@@ -112,9 +112,9 @@ test('a player marble converted to the Chaplain fills a fragment back, #810', as
   await shot(page, { path: testInfo.outputPath('refill-after.png') });
 });
 
-// The Choir's army chips (#816), from the recorded Choir win (crates/abalone-core/tests/fixtures/choir.txt): the chips in play
+// The Choir's army chips (#816), from the recorded Choir win (crates/edgefall-core/tests/fixtures/choir.txt): the chips in play
 // order with the marbles left, the next army highlighted, a removed army gone, the last one reading "×2".
-const choirPlies = () => parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/choir.txt', import.meta.url), 'utf8'));
+const choirPlies = () => parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/choir.txt', import.meta.url), 'utf8'));
 const chipTexts = (page: Page) => page.locator('#boss-bar .chip').allInnerTexts();
 const choirFight = async (page: Page) => {
   await fight(page, 'The Choir');
@@ -197,7 +197,7 @@ for (const { name, viewport, scale, mobile } of stackSizes) {
 // #1096: the fragment that breaks gets one burst class, which ends with its animation.
 test('a fragment that breaks bursts once, #1096', async ({ page }, testInfo) => {
   await fight(page, 'The Hull');
-  const records = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
+  const records = parseRecorded(readFileSync(new URL('../../crates/edgefall-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
   await page.evaluate(() => {
     (window as any).__broke = 0;
     new MutationObserver(() => {

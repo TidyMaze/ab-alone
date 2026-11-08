@@ -20,7 +20,7 @@ const BUILD = [
   'assets/index-BHv8FDIG.js',
   'assets/index-BHv8FDIG.js.map',
   'assets/bot.worker-DeRlMK1Y.js',
-  'assets/abalone_wasm_bg-B78a8gHf.wasm',
+  'assets/edgefall_wasm_bg-B78a8gHf.wasm',
   'assets/index-CrwhyS3g.css',
   'assets/deck-albedo.png',
 ];
@@ -28,7 +28,7 @@ const BUILD = [
 describe('precacheFiles', () => {
   it('keeps every file of the build but the service worker itself and the source maps, sorted', () => {
     expect(precacheFiles(BUILD)).toEqual([
-      'assets/abalone_wasm_bg-B78a8gHf.wasm',
+      'assets/edgefall_wasm_bg-B78a8gHf.wasm',
       'assets/bot.worker-DeRlMK1Y.js',
       'assets/deck-albedo.png',
       'assets/index-BHv8FDIG.js',
@@ -94,14 +94,14 @@ describe('route', () => {
   const scope = 'https://tidymaze.github.io/ab-alone/';
   const precache = new Set([
     'https://tidymaze.github.io/ab-alone/',
-    'https://tidymaze.github.io/ab-alone/assets/abalone_wasm_bg-B78a8gHf.wasm',
+    'https://tidymaze.github.io/ab-alone/assets/edgefall_wasm_bg-B78a8gHf.wasm',
     'https://tidymaze.github.io/ab-alone/assets/deck-albedo.png',
   ]);
   const get = (url: string, mode = 'cors') => route({ method: 'GET', url, mode }, scope, precache);
 
   it('answers a precached file from the cache', () => {
-    expect(get('https://tidymaze.github.io/ab-alone/assets/abalone_wasm_bg-B78a8gHf.wasm')).toEqual({
-      key: 'https://tidymaze.github.io/ab-alone/assets/abalone_wasm_bg-B78a8gHf.wasm',
+    expect(get('https://tidymaze.github.io/ab-alone/assets/edgefall_wasm_bg-B78a8gHf.wasm')).toEqual({
+      key: 'https://tidymaze.github.io/ab-alone/assets/edgefall_wasm_bg-B78a8gHf.wasm',
       precached: true,
     });
   });
