@@ -12,6 +12,7 @@ import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
 import { DECK_KEY, NEON, NEON_GLOW, NEON_LIGHT, neonGlow, neonMaterial, neonSkyOf, neonSunPosition } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
 import { BOSS_SPACE } from './bossspace';
+import { DECK_PROPS, deckPropColour, deckPropGeometry, deckPropSpot } from './deckprop';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
@@ -807,5 +808,45 @@ describe('SceneRenderer (#632)', () => {
     expect([black!.visible, white!.visible]).toEqual([false, true]);
     sr.lightRim(null);
     expect([black!.visible, white!.visible]).toEqual([false, false]);
+  });
+});
+
+describe('the deck prop of the scene (#1551)', () => {
+  const make = (): SceneRenderer => new SceneRenderer({ renderer: createMockRenderer(), innerWidth: 1000, innerHeight: 800 });
+  const prop = (sr: SceneRenderer): THREE.Mesh => sr.scene.getObjectByName('deck-prop') as THREE.Mesh;
+
+  it('is one mesh of the scene, one material, hidden until the terrace is on and the board shown', () => {
+    const sr = make();
+    expect(sr.scene.getObjectsByProperty('name', 'deck-prop')).toHaveLength(1);
+    expect(prop(sr).visible).toBe(false); // the room has its own props
+    sr.setTerrace(true);
+    expect(prop(sr).visible).toBe(true);
+    sr.showDeckProp(false, RADIUS, false); // the hub's board
+    expect(prop(sr).visible).toBe(false);
+    sr.showDeckProp(true, RADIUS, false);
+    expect(prop(sr).visible).toBe(true);
+    sr.setTerrace(false);
+    expect(prop(sr).visible).toBe(false);
+  });
+
+  it('takes the shape and the colour of the deck applied, one mesh for all of them', () => {
+    const sr = make();
+    sr.setTerrace(true);
+    for (const deck of ['mess', 'cargo', 'furnace', 'chapel', 'bridge'] as const) {
+      sr.applyDeck(deck);
+      expect(prop(sr).geometry).toBe(deckPropGeometry(deck));
+      expect((prop(sr).material as THREE.MeshBasicMaterial).color.equals(deckPropColour(deck))).toBe(true);
+    }
+    expect(DECK_PROPS.mess.length).toBeGreaterThan(0);
+    expect(sr.scene.getObjectsByProperty('name', 'deck-prop')).toHaveLength(1);
+  });
+
+  it('stands at the spot of the board radius and of the window shape', () => {
+    const sr = make();
+    sr.showDeckProp(true, 5, true);
+    const spot = deckPropSpot(5, true);
+    expect([prop(sr).position.x, prop(sr).position.z]).toEqual([spot.x, spot.z]);
+    sr.showDeckProp(true, RADIUS, false);
+    expect(prop(sr).position.x).toBe(deckPropSpot(RADIUS, false).x);
   });
 });
