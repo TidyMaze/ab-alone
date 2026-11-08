@@ -2,7 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import { cellIndex, type Axial, type Move } from './board';
-import { actBoss, BIOMES, ELITES, FORMATIONS, BONUS_SCRAP, MAP_VERSION, MOVE_BUDGET, newRun, parseMap, pick, Relic, RELICS, relicText, visit, type MapNode, type Run } from './roguelite';
+import { ACT_ONE_LEAVES, actBoss, BIOMES, ELITES, FORMATIONS, BONUS_SCRAP, MAP_VERSION, MOVE_BUDGET, newRun, parseMap, pick, Relic, RELICS, relicText, visit, type MapNode, type Run } from './roguelite';
 import { AUTO_DELAY_MS } from './autoplay';
 import { LEGACY_UNLOCKED } from './collector';
 import type { View } from './camera';
@@ -44,10 +44,10 @@ function play(game: Game, cells: Axial[], target: Axial): void {
   game.frame(1000); // then the Echo's bonus slide (#958)
 }
 
-/** The path of the run `seed` from the act 1 first row, by first links, to the act 1 boss. */
-function toBoss(nodes: MapNode[]): number[] {
-  const path = [0];
-  for (let n = nodes[0]!; n.kind !== 'boss'; ) {
+/** The path of the run `seed` from the act 1 first row, by first links, to the boss of act `act` (act 1 by default). */
+function toBoss(nodes: MapNode[], act = 0): number[] {
+  const path = [...(act ? toBoss(nodes, act - 1) : []), nodes.findIndex((m) => m.act === act && m.row === 0)];
+  for (let n = nodes[path[path.length - 1]!]!; n.kind !== 'boss'; ) {
     const i = nodes.findIndex((m) => m.act === n.act && m.row === n.row + 1 && m.col === n.links[0]);
     path.push(i);
     n = nodes[i]!;
@@ -56,12 +56,15 @@ function toBoss(nodes: MapNode[]): number[] {
 }
 async function bossRun(id: string): Promise<{ state: Run; nodes: MapNode[] }> {
   const { boss_ids, run_map } = await import('abalone-wasm');
-  for (let seed = 0; ; seed++) {
+  // The Echo, the Hull, the Chaplain and the Choir leave act 1 (#1599): theirs is an act 2 boss, in a run of no exits (the Meadow's).
+  const act = ACT_ONE_LEAVES.includes(id) ? 1 : 0;
+  for (let seed = 0; seed < 500; seed++) {
     const nodes = parseMap(run_map(seed));
-    const path = toBoss(nodes);
-    const state = pick({ ...plainRun(seed, 3), path: path.slice(0, -1) }, path[path.length - 1]!);
+    const path = toBoss(nodes, act);
+    const state = pick({ ...plainRun(seed, 3), exits: act === 0, path: path.slice(0, -1) }, path[path.length - 1]!);
     if (actBoss(nodes, state, boss_ids())?.id === id) return { state, nodes };
   }
+  throw new Error(`no run deals ${id}`); // a bound, not a hang of the shard (#1599)
 }
 
 describe('main.ts, the rogue-lite run (#798)', () => {
@@ -654,10 +657,10 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     const game = await boot('?nodes=50', { indexedDB });
     const { Encounter } = await import('abalone-wasm');
     const strength = vi.spyOn(Encounter.prototype, 'scale_node_budget');
-    const { state } = await bossRun('hull');
+    const { state } = await bossRun('stalker');
     await game.hook('__run', state);
     expect(document.body.dataset.run).toBe('fight');
-    expect(document.body.dataset.boss).toBe('hull');
+    expect(document.body.dataset.boss).toBe('stalker');
     expect(document.body.dataset.deck).not.toBe('mess');
     expect(game.hud()).toContain('Rogue-lite run · act 1 boss');
     playMove(game);
@@ -667,7 +670,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(game.hook('__plies')).toBe(2); // the boss answered
     expect(strength).toHaveBeenCalledWith(50); // act 1: the easy budget, whatever the difficulty setting
     await boot('?nodes=50', { indexedDB });
-    expect(document.body.dataset.boss).toBe('hull');
+    expect(document.body.dataset.boss).toBe('stalker');
   });
 
   it('a lost act boss loses the run, and the next run fights on the local deck', async () => {
@@ -1111,7 +1114,7 @@ describe('main.ts, the biome exits between acts (#1472)', () => {
     const { run_map } = await import('abalone-wasm');
     const nodes = parseMap(run_map(1));
     const path = [nodes.findIndex((n) => n.act === act && n.row === 0)];
-    for (let n = nodes[path[0]!]!; n.kind !== 'boss'; ) {
+    for (let n = nodes[path[path.length - 1]!]!; n.kind !== 'boss'; ) {
       path.push(nodes.findIndex((m) => m.act === act && m.row === n.row + 1 && m.col === n.links[0]));
       n = nodes[path[path.length - 1]!]!;
     }
@@ -1435,7 +1438,7 @@ describe('main.ts, the runes (#1476)', () => {
     const nodes = parseMap(run_map(1));
     const boss = nodes.findIndex((n) => n.act === 0 && n.kind === 'boss');
     const path = [nodes.findIndex((n) => n.act === 0 && n.row === 0)];
-    for (let n = nodes[path[0]!]!; n.kind !== 'boss'; ) {
+    for (let n = nodes[path[path.length - 1]!]!; n.kind !== 'boss'; ) {
       path.push(nodes.findIndex((m) => m.act === 0 && m.row === n.row + 1 && m.col === n.links[0]));
       n = nodes[path[path.length - 1]!]!;
     }
