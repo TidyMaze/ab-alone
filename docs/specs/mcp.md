@@ -11,7 +11,7 @@ depends-on:
 
 # MCP server spec (#251, from #163)
 
-Status: spec, no code. Lets an AI agent play AB-ALONE through the Model Context Protocol (MCP): a game against the bot, a boss fight, or an online room.
+Status: spec, no code. Lets an AI agent play Edgefall through the Model Context Protocol (MCP): a game against the bot, a boss fight, or an online room.
 
 ## 1. Decisions (from the last comment of #163)
 

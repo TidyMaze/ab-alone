@@ -43,7 +43,8 @@ Written as facts the player can piece together, not as a story told in order.
 - **Why the game of pushing.** The crew played Abalone in the mess for years. After the first
   hardening, the captain ordered all disputes settled on a board "so nobody else gets hurt". The
   ship mind enforced it. Pushing a marble off the board is the old airlock cycle in miniature:
-  whoever is ejected is gone for good. The mind kept the rule when the captain stopped
+  whoever is ejected is gone for good. The crew says such a marble has *fallen over the edge*, and
+  Tally enters each one the same way: "Another one over the edge." (#1649, the game's name, Edgefall). The mind kept the rule when the captain stopped
   answering.
 - **The ship mind: TALLY.** The ledger intelligence that counted cargo, rations and crew. It does
   not hate you. It counts. It wants the books to balance: 14 and 14, six out, a winner. It

@@ -11,7 +11,7 @@ const at = (page: Page) => page.evaluate(() => document.body.dataset.openworldAt
 test('the hero and the troop sail onto the water, each marble on a boat, #1441', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' }); // the marbles jump: the drawn boats are published with the step
   await page.goto('./?bot=off&openworld=1');
-  await page.locator('canvas[aria-label="Abalone board"]').waitFor();
+  await page.locator('canvas[aria-label="Edgefall board"]').waitFor();
   await expect.poll(() => at(page)).toBe('0,0');
   await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [14, -27], troop: [[14, -26]], enemies: [] }));
   await expect.poll(() => at(page)).toBe('14,-27');

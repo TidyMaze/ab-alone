@@ -286,7 +286,7 @@ describe('main.ts, export and import', () => {
     });
     vi.useFakeTimers({ toFake: ['setTimeout'] });
     byId('setting-export-game').click();
-    expect(downloads).toEqual([expect.stringMatching(/^ab-alone-\d{4}-\d\d-\d\d\.json blob:game$/)]);
+    expect(downloads).toEqual([expect.stringMatching(/^edgefall-\d{4}-\d\d-\d\d\.json blob:game$/)]);
     expect(blobs[0]!.type).toBe('application/json');
     expect(JSON.parse(await blobs[0]!.text())).toEqual({ version: 1, mode: 'local', layout: 'standard', bot: false, moves: [encodeMove(mv)] });
     expect(revoked).not.toHaveBeenCalled(); // the download may still be reading it

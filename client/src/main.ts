@@ -5163,7 +5163,7 @@ canvas.addEventListener('contextmenu', (e) => {
 // Keyboard play (#738), only while the canvas has focus: Tab and Shift+Tab walk the legal groups (past the ends the
 // focus moves on), Q W E A S D pick the direction, Enter plays it, Escape backs out one step.
 canvas.tabIndex = 0;
-canvas.setAttribute('aria-label', 'Abalone board');
+canvas.setAttribute('aria-label', 'Edgefall board');
 canvas.addEventListener('keydown', (e) => {
   if (openWorld.active || hub || royale || reading || e.altKey || e.ctrlKey || e.metaKey || blocked(() => {})) return; // the Open world has the canvas (#1063)
   const dir = KEY_DIRS[e.key.toLowerCase()];

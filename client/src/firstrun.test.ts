@@ -74,6 +74,10 @@ describe('the cold open (#1523)', () => {
     expect(tallyLine({ mode: 'bot' })).toMatch(/seat/);
     expect(COACH.tally).toMatch(/ledger.*seat is yours.*bot/);
   });
+
+  it('ends the fight on Tally\'s eject line, the lore\'s words for a marble pushed off: over the edge (#1649)', () => {
+    expect(COACH.done).toContain('Tally: "Another one over the edge."');
+  });
 });
 
 describe('the scripted fight (#1521)', () => {

@@ -508,7 +508,7 @@ No database server. Everything is client-side.
   backup, because browsers can clear storage). `navigator.storage.persist()` is requested once per
   page view, at the first saved move; a refusal changes nothing.
 - **Game file** (#219, client/src/gamefile.ts): Export game downloads the current local game, in
-  progress or finished, as `ab-alone-2026-10-24.json` (the player's local date), in the save
+  progress or finished, as `edgefall-2026-10-24.json` (the player's local date), in the save
   format above on one line. Import game opens the browser's file picker. The file (1 MiB at most)
   is decoded and replayed through the engine, the only judge. A good file replaces the local game,
   shows it at its last ply and is saved like a game played here: a finished game shows its result

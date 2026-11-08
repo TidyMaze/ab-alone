@@ -24,7 +24,7 @@ test('the fold button folds the plate to a 44 px tab and unfolds it, #957', asyn
 
 test('the Open world mode hides the fold tab with the plate, #957', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.getByLabel('Abalone board').waitFor(); // the minimap is a canvas too
+  await page.getByLabel('Edgefall board').waitFor(); // the minimap is a canvas too
   await expect(page.locator('#openworld-hud')).toBeVisible();
   await expect(page.locator('#hud-fold')).toBeHidden();
 });

@@ -24,7 +24,7 @@ describe('the keyboard on the board', () => {
   it('makes the canvas a tab stop with a name', async () => {
     await boot('?bot=off');
     expect(canvas().tabIndex).toBe(0);
-    expect(canvas().getAttribute('aria-label')).toBe('Abalone board');
+    expect(canvas().getAttribute('aria-label')).toBe('Edgefall board');
   });
 
   it('Tab selects the groups one by one and announces them, Shift+Tab goes back', async () => {

@@ -1,6 +1,6 @@
 <div align="center">
 
-# AB-ALONE
+# Edgefall
 
 **You are alone. They are shelled. Push them into the void.**
 
@@ -32,7 +32,7 @@ You are the last one with a clear visor. Six of them over the edge, and you walk
 
 ## The game
 
-Real Abalone underneath: 61 cells, 14 marbles each, push 1 to 3 in a line, out-number to shove.
+Classic push-marble rules underneath: 61 cells, 14 marbles each, push 1 to 3 in a line, out-number to shove.
 First to eject 6 wins. On top of it, the ship:
 
 - **Play alone or together**: hot-seat on one screen, versus TALLY's bot (alpha-beta, in a Web Worker, with its estimated rating and level on the HUD, a boss's too from its own search, growing with the bosses beaten and along a rogue-lite run),
@@ -169,7 +169,7 @@ How the game and the network work: [docs/architecture.md](docs/architecture.md).
 
 > This repo is public. Never commit a secret.
 
-<sub>Earlier lives of this board: [Abalone](https://github.com/TidyMaze/Abalone) (Java),
+<sub>Edgefall was called ab-alone until 2026-11-08 (#1616). Earlier lives of this board: [Abalone](https://github.com/TidyMaze/Abalone) (Java),
 [abalone-go](https://github.com/TidyMaze/abalone-go) (Go).</sub>
 
 ## Name

@@ -123,7 +123,7 @@ test('a game exported to a file comes back on a new game, replayed and saved', a
   const before = await snapshot(page);
 
   const file = await exportGame(page, testInfo.outputDir);
-  expect(file.name).toBe('ab-alone-2026-10-24.json');
+  expect(file.name).toBe('edgefall-2026-10-24.json');
   expect(file.content).toEqual(save(false, [A, B]));
 
   // A new game: the save cleared and the page reloaded.

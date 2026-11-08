@@ -15,9 +15,9 @@ export const REFUSED = {
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
-/** `ab-alone-2026-10-24.json`, with the local date of `now`. */
+/** `edgefall-2026-10-24.json`, with the local date of `now`. */
 export function gameFileName(now: Date): string {
-  return `ab-alone-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
+  return `edgefall-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
 }
 
 /** The content of the exported file. */

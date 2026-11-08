@@ -28,7 +28,7 @@ export const COLD_OPEN = {
 export const COACH = {
   push: 'Roll your three White marbles into the lone Black marble on the rim. Three push one, and it goes over the edge.',
   tally: 'Tally is the ship\'s ledger. It counts every match: one seat is yours, the other is the bot\'s.',
-  done: 'White ejected 1/6: Tally enters it. Six win a match. The Echo, the first boss, waits in the Hub.',
+  done: 'White ejected 1/6. Tally: "Another one over the edge." Six win a match. The Echo, the first boss, waits in the Hub.',
 } as const;
 
 const row = (cells: [number, number][], dir: number): Move => ({ cells, dir });

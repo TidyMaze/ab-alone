@@ -7,7 +7,7 @@ lowTierOnCi();
 // the hero beside it pushes it along the sand, hero step after step, until the shove of #1504 drops it. The state comes from the test hook.
 test('a foe three cells from the water is herded in within a few hero steps, #1506', async ({ page }) => {
   await page.goto('./?bot=off&openworld=1');
-  await page.locator('canvas[aria-label="Abalone board"]').waitFor();
+  await page.locator('canvas[aria-label="Edgefall board"]').waitFor();
   const data = (key: string) => page.evaluate((k) => document.body.dataset[k], key);
   const enemies = () => page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies());
   await expect.poll(() => data('openworldAt')).toBe('0,0');

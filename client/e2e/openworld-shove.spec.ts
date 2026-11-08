@@ -8,7 +8,7 @@ lowTierOnCi();
 // on (12,-30) has water on (13,-30) behind it (east), so it is ejected and the hero takes its cell. The state comes from the test hook.
 test('a foe next to water is shoved in by one marble, #1504', async ({ page }) => {
   await page.goto('./?bot=off&openworld=1');
-  await page.locator('canvas[aria-label="Abalone board"]').waitFor();
+  await page.locator('canvas[aria-label="Edgefall board"]').waitFor();
   const data = (key: string) => page.evaluate((k) => document.body.dataset[k], key);
   await expect.poll(() => data('openworldAt')).toBe('0,0');
   await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [11, -29], troop: [], enemies: [[12, -30]] }));

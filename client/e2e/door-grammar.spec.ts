@@ -176,7 +176,7 @@ test('a lair fight with a ply played asks for a second press, labelled Sure?, as
 
 test('a wild fight is left by the first slot too: Flee, and the hero is back in the world, #1517', async ({ page }) => {
   await page.goto('./?openworld=3&nodes=200');
-  await page.locator('canvas[aria-label="Abalone board"]').waitFor();
+  await page.locator('canvas[aria-label="Edgefall board"]').waitFor();
   await expect(body(page)).toHaveAttribute('data-openworld-at', '0,0');
   const [q, r] = (await page.evaluate(() => (window as unknown as Hooks).__openworldEnemies()))[0]!;
   await page.evaluate((h) => (window as unknown as Hooks).__openworldFixture({ hero: h, troop: [] }), [q + 1, r]);

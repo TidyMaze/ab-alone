@@ -37,8 +37,8 @@ const file = (text: string): GameFile & { reads: number } => {
 
 describe('gameFileName', () => {
   it('names the file with the local date', () => {
-    expect(gameFileName(new Date(2026, 9, 24, 23, 59))).toBe('ab-alone-2026-10-24.json');
-    expect(gameFileName(new Date(2026, 0, 5, 0, 0))).toBe('ab-alone-2026-01-05.json');
+    expect(gameFileName(new Date(2026, 9, 24, 23, 59))).toBe('edgefall-2026-10-24.json');
+    expect(gameFileName(new Date(2026, 0, 5, 0, 0))).toBe('edgefall-2026-01-05.json');
   });
 });
 

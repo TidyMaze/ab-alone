@@ -1,7 +1,7 @@
 {
-  "name": "AB-ALONE",
-  "short_name": "AB-ALONE",
-  "description": "Abalone on a derelict ship: hot-seat, bot and bosses, playable offline.",
+  "name": "Edgefall",
+  "short_name": "Edgefall",
+  "description": "Push marbles over the edge on a derelict ship: hot-seat, bot and bosses, playable offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

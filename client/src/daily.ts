@@ -139,5 +139,5 @@ const OUTCOME = ['', 'Victory in', 'Defeat in'];
 export function dailyCard({ day, boss, result, plies, attempt }: DailyResult): string {
   if (result === 0) return '';
   const count = `${plies} ${plies === 1 ? 'ply' : 'plies'}`;
-  return `AB-ALONE daily ${day}: ${boss}\n${OUTCOME[result]} ${count} on attempt ${attempt}\n${SITE}`;
+  return `Edgefall daily ${day}: ${boss}\n${OUTCOME[result]} ${count} on attempt ${attempt}\n${SITE}`;
 }

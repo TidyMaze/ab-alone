@@ -1,4 +1,4 @@
-# AB-ALONE: spec
+# Edgefall: spec
 
 > Abalone, rebuilt with the most over-the-top stack we can justify. Dead Space mood, souls-like
 > bosses, online multiplayer, battle royale. The core game stays real Abalone.

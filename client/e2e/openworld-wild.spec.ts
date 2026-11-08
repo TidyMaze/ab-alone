@@ -16,7 +16,7 @@ const data = (page: Page, key: string) => page.evaluate((k) => document.body.dat
 
 async function opened(page: Page): Promise<[number, number]> {
   await page.goto('./?openworld=3&nodes=200');
-  await page.locator('canvas[aria-label="Abalone board"]').waitFor();
+  await page.locator('canvas[aria-label="Edgefall board"]').waitFor();
   await expect.poll(() => data(page, 'openworldAt')).toBe('0,0');
   const [marble] = await hooks(page).enemies();
   return marble!;

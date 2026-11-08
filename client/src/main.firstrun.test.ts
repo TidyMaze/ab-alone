@@ -136,6 +136,7 @@ describe('the scripted fight', () => {
     expect(game.hook('__plies')).toBe(FIRST_FIGHT.length + 1); // the bot never answered
     expect(run()).toBe('done');
     expect(byId('coach-step').textContent).toBe(COACH.done);
+    expect(byId('coach-step').textContent).toContain('Another one over the edge.'); // Tally's eject line (#1649)
     expect(byId('hud').querySelector('.tally-note')).toBeNull();
     expect(byId('coach-hub').hidden).toBe(false);
     expect(byId('coach-skip').hidden).toBe(true);
