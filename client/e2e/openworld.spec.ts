@@ -126,19 +126,23 @@ shared('two held arrows roll the hero on the diagonal, #977', async ({ world: pa
 // #1059: a held arrow walks the hero on its own, with no key repeat: the keydown steps at once, the frames step while it is held, and
 // the keyup stops it. The spawn's clearing is open to 3 cells on every seed, so 3 cells are walked with no obstacle in the way, and the
 // walk stops once the arrow is let go. No enemy: a wandering marble that met the hero started a wild fight, the world left (#1511, #1643).
+// The page's clock is paused (frameclock.ts): on flowing time the frames walked on before the first look, 317 ms after the keydown on a
+// loaded CI runner, which saw 3,0 and never 1,0 (#1659). Each frame of 140 ms (GLIDE_MS) is one step; the pace is the unit test's (openworldmode.test.ts).
 shared('a held arrow walks the Open world on its own and stops on keyup, #1059', async ({ world: page }) => {
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [], enemies: [] }));
-  await page.keyboard.down('ArrowRight');
-  await expect.poll(at).toBe('1,0'); // the keydown's own step
-  // The frames walk on: no key repeat is sent for a key held down (the walk speeds up, #1290: a poll may skip cell 3). The pace, a cell per
-  // 140 ms, is the unit test's (openworldmode.test.ts, #1059): a loaded machine's software-GL frame takes up to 1.4 s, and the walk steps once a frame (#1643).
-  await expect.poll(async () => Number((await at())!.split(',')[0])).toBeGreaterThanOrEqual(3);
-  await page.keyboard.up('ArrowRight');
-  const stopped = await at();
-  await page.evaluate(() => new Promise((done) => setTimeout(done, 400)));
-  expect(await at()).toBe(stopped); // let go: no more steps
+  await paused(page, async (frame) => {
+    await page.keyboard.down('ArrowRight');
+    expect(await at()).toBe('1,0'); // the keydown's own step, before any frame
+    await frame(140); // no key repeat is sent for a key held down: the frames walk on
+    await frame(140);
+    expect(await at()).toBe('3,0');
+    await page.keyboard.up('ArrowRight');
+    await frame(400);
+    await frame(400);
+    expect(await at()).toBe('3,0'); // let go: no more steps
+  });
 });
 
 // #976: the wheel zooms the Open world camera out far and back, and the hero still rolls from the far zoom.
