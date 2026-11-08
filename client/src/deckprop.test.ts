@@ -8,7 +8,7 @@ import { BEATS, entranceView } from './entrance';
 import { BOSS_SPACE } from './bossspace';
 import { DECK_KEY, NEON } from './neonlook';
 import { PULSAR_DISTANCE } from './pulsar';
-import { DECK_PROPS, PROP_LIGHT, deckPropColour, deckPropGeometry, deckPropSpot, partBox, type PropPart } from './deckprop';
+import { DECK_PROPS, MESS_PROP_DARK, PROP_LIGHT, deckPropColour, deckPropGeometry, deckPropSpot, partBox, type PropPart } from './deckprop';
 
 // One silhouette prop per deck, standing in the surround outside the board (#1551, art.md Decks): procedural, one merged mesh, a palette mix,
 // never between the play camera and a cell or a marble, and in the window at 960x540 and at 390x844.
@@ -59,15 +59,24 @@ describe('the deck props (#1551)', () => {
     expect(triangles.size).toBeGreaterThan(1); // not one shape for all the decks
   });
 
-  it('is a mix of the deck key and the white marble token, a palette colour that reads 3:1 on the black sky and on the terrace background', () => {
+  it('is a mix of the deck key and the white marble token, a palette colour that reads 3:1 on the black sky and on the terrace background, the Mess excepted', () => {
     expect(PROP_LIGHT).toBeGreaterThan(0);
-    for (const deck of DECK_NAMES) {
+    for (const deck of DECK_NAMES.filter((d) => d !== 'mess')) {
       const colour = deckPropColour(deck);
       expect(colour.equals(new THREE.Color(DECK_KEY[deck].key).lerp(new THREE.Color(NEON.whiteMarble), PROP_LIGHT)), deck).toBe(true);
       expect(contrast(colour, SKY), deck).toBeGreaterThanOrEqual(3);
       expect(contrast(colour, TERRACE_BACKGROUND), deck).toBeGreaterThanOrEqual(3);
     }
     expect(new Set(DECK_NAMES.map((d) => deckPropColour(d).getHex())).size).toBe(DECK_NAMES.length);
+  });
+
+  it('draws the Mess prop dark, the key darkened by the black marble token, 3:1 on the pale ground of the Mess (#1551)', () => {
+    // The pale ground round the prop, measured on the render at 960x540: the neon look's (#97a0a2) and the terrace look's brightest tiles (#857f5c).
+    const GROUNDS = [0x97a0a2, 0x857f5c].map((c) => new THREE.Color(c));
+    const colour = deckPropColour('mess');
+    expect(MESS_PROP_DARK).toBeGreaterThan(0.5);
+    expect(colour.equals(new THREE.Color(DECK_KEY.mess.key).lerp(new THREE.Color(NEON.blackMarble), MESS_PROP_DARK))).toBe(true);
+    for (const ground of GROUNDS) expect(contrast(colour, ground)).toBeGreaterThanOrEqual(3);
   });
 
   it('stands outside the board and its posts and beacons, off the south-east where the boss kit piece stands, on a phone and on a desktop', () => {

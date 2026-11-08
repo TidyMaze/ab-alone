@@ -2,7 +2,9 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { boot } from './test/harness';
-import { BOSS_SPACE } from './bossspace';
+import { ACT_SPACE, BOSS_SPACE } from './bossspace';
+import { LEGACY_UNLOCKED } from './collector';
+import { newRun } from './roguelite';
 import { NEON_LIGHT } from './neonlook';
 import { TERRACE_LOOK } from './boardlook';
 
@@ -37,4 +39,27 @@ describe('main.ts boss spaces (#1551)', () => {
       expect(sun(scene()).color.getHex()).toBe(BOSS_SPACE.hull!.sun);
     });
   }
+
+  // Seed 3: boss 9 ends act 1 (nodes 0, 2, 6 lead to it) and node 10 is the first fight of act 2 (roguelite-biomes.spec.ts).
+  const run = (path: number[], extra: object = {}) => ({ ...newRun(3, 3, LEGACY_UNLOCKED), enemies: true, exits: true, path, fighting: true, ...extra });
+
+  it('lights a fight of a run with the space of its act, a boss of the run with its own, and the page with the arena light before and after (#1551)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    expect(sun(scene()).color.getHex()).toBe(NEON_LIGHT.sun);
+    await game.hook('__run', run([0, 2, 6, 9, 10], { biomes: [1] })); // act 2, the Forest
+    expect(document.body.dataset.space).toBe('forest');
+    expect(sun(scene()).color.getHex()).toBe(ACT_SPACE.forest!.sun);
+    await game.hook('__run', run([0, 2, 6, 9, 10], { biomes: [4] })); // saved in another biome: reloaded as that one
+    expect(sun(scene()).color.getHex()).toBe(ACT_SPACE.badlands!.sun);
+    await game.hook('__run', run([0, 2, 6], { exits: false })); // a run saved before the exits: act 1, the Meadow
+    expect(document.body.dataset.space).toBe('meadow');
+    expect(sun(scene()).color.getHex()).toBe(ACT_SPACE.meadow!.sun);
+    await game.hook('__run', run([0, 2, 6, 9])); // the boss of act 1
+    expect(document.body.dataset.space).toBe(document.body.dataset.boss);
+    expect(sun(scene()).color.getHex()).toBe(BOSS_SPACE[document.body.dataset.boss!]!.sun);
+    game.hook('__deck', 'mess'); // a game that is not a run's
+    expect(document.body.dataset.space).toBeUndefined();
+    expect(sun(scene()).color.getHex()).toBe(NEON_LIGHT.sun);
+  });
 });

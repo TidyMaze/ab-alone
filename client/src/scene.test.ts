@@ -8,10 +8,10 @@ import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { TONAL } from './look';
-import { BOARD_LOOKS, TERRACE_LOOK } from './boardlook';
+import { BOARD_LOOKS, TERRACE_LOOK, terraceDeckLook, terraceSpaceLook } from './boardlook';
 import { DECK_KEY, NEON, NEON_GLOW, NEON_LIGHT, neonGlow, neonMaterial, neonSkyOf, neonSunPosition } from './neonlook';
 import { TERRACE_EXPOSURE } from './tablezero';
-import { BOSS_SPACE } from './bossspace';
+import { ACT_SPACE, BOSS_SPACE } from './bossspace';
 import { DECK_PROPS, deckPropColour, deckPropGeometry, deckPropSpot } from './deckprop';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, TERRACE_CONTRAST, type NotchRow } from './scene';
 
@@ -768,7 +768,7 @@ describe('SceneRenderer (#632)', () => {
     sr.applyDeck('cargo', false, space); // the same space again: nothing redone
     sr.applyDeck('mess');
     expect([sr.sun.color.getHex(), sr.sun.intensity]).toEqual([TERRACE_LOOK.sun, TERRACE_LOOK.sunIntensity]);
-    expect((sr.scene.background as THREE.Color).getHex()).toBe(TERRACE_LOOK.background);
+    expect((sr.scene.background as THREE.Color).getHex()).toBe(terraceDeckLook('mess')!.background); // the Mess's own surround (#1551)
     sr.setBoardLook(BOARD_LOOKS.dusk);
     sr.applyDeck('cargo', false, space);
     expect(sr.sun.color.getHex()).toBe(BOARD_LOOKS.dusk.sun); // a lair's board is the Open world's
@@ -778,6 +778,21 @@ describe('SceneRenderer (#632)', () => {
     sr.applyDeck('mess');
     sr.setTerrace(true); // back on the terrace with no space: the arena light, not the last space's
     expect(sr.sun.color.getHex()).toBe(TERRACE_LOOK.sun);
+  });
+
+  it('dresses the terrace of the Mess and of the Cargo hold in their own surround, the other decks and the act spaces as they were (#1551)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    sr.setTerrace(true);
+    const background = (): number => (sr.scene.background as THREE.Color).getHex();
+    sr.applyDeck('mess');
+    const mess = background();
+    sr.applyDeck('cargo');
+    expect([background(), mess]).toEqual([terraceDeckLook('cargo')!.background, terraceDeckLook('mess')!.background]);
+    expect(background()).not.toBe(mess);
+    sr.applyDeck('furnace');
+    expect(background()).toBe(TERRACE_LOOK.background); // a deck with no surround of its own: the arena's
+    sr.applyDeck('mess', true, ACT_SPACE.tundra!); // an act of a run: its own space, not the deck's
+    expect([sr.sun.color.getHex(), background()]).toEqual([ACT_SPACE.tundra!.sun, terraceSpaceLook(ACT_SPACE.tundra!).background]);
   });
 
   it('keeps the key of the deck the page opened on when the neon look turns the terrace on (#1551)', () => {

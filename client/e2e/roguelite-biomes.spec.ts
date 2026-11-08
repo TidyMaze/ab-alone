@@ -30,6 +30,7 @@ test('the biome exits: two exits after the act 1 boss, a tinted map, a fight wit
   await hook(run({ path: [0, 2, 6, 9, 10], fighting: true, biomes: [code] }));
   await expect(page.locator('body')).toHaveAttribute('data-run', 'fight');
   await expect(page.locator('body')).toHaveAttribute('data-biome', id!);
+  await expect(page.locator('body')).toHaveAttribute('data-space', id!); // the fight is drawn in the space of its act (#1551)
   const holes = await page.evaluate(() => (window as any).__board().filter((c: number) => c === 3).length); // 3: a vanished cell
   expect(holes).toBeGreaterThan(0);
   await shot(page, { path: testInfo.outputPath('roguelite-biome-fight.png') });

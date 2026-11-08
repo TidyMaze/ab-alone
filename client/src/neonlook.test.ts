@@ -7,7 +7,7 @@ import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
 import { DECK_KEY, NEON_GLOW, NEON_WORLD_LOOKS, RUN_KEY, neonDeckLook, neonSkyOf, neonSunPosition } from './neonlook';
-import { BOSS_SPACE } from './bossspace';
+import { ACT_SPACE, BOSS_SPACE } from './bossspace';
 
 const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 /** A geometry whose vertex colours go from `dark` to `light` (hex, as the file's linear values). */
@@ -417,6 +417,17 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
     expect(colours()[0]).toBe(glowHex(RUN_KEY.key));
     expect(neonSkyOf('chapel', space).getHex()).toBe(new THREE.Color(NEON.sky).lerp(new THREE.Color(space.surround), space.sky).getHex());
     expect(neonSkyOf('chapel', null).getHex()).toBe(neonSkyOf('chapel').getHex());
+    neonDeckLook('mess');
+  });
+
+  it('gives a rogue-lite act its own ground and sky on top of the violet rim and posts, which stay (#1551)', () => {
+    const ground = (): string => (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.toArray().join();
+    const glow = (): number => ((neonGlow([new THREE.Vector3(1, 0, 2)], true).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex();
+    neonDeckLook('mess', true);
+    const [violetGround, violetRim] = [ground(), glow()];
+    const grounds = new Set(Object.values(ACT_SPACE).map((space) => (neonDeckLook('mess', true, space), expect(glow()).toBe(violetRim), ground())));
+    expect(grounds.size).toBe(Object.keys(ACT_SPACE).length); // six acts, six grounds
+    expect(grounds.has(violetGround)).toBe(false); // none the run's plain violet one
     neonDeckLook('mess');
   });
 });

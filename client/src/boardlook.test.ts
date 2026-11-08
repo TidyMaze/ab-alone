@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD_LOOKS, TERRACE_LOOK, terraceSpaceLook } from './boardlook';
+import { BOARD_LOOKS, TERRACE_LOOK, terraceDeckLook, terraceSpaceLook } from './boardlook';
 import { BOSS_SPACE } from './bossspace';
 import { SUN, TERRACE_EXPOSURE } from './tablezero';
 
@@ -39,5 +39,20 @@ describe('the board looks', () => {
     expect(look.sunIntensity).toBeCloseTo(TERRACE_LOOK.sunIntensity * space.intensity);
     expect(look.sky).not.toBe(TERRACE_LOOK.sky);
     expect(look.background).not.toBe(TERRACE_LOOK.background);
+  });
+  it('the Mess and the Cargo hold have their own surround on the terrace look, leaning to their key as the neon look does, told apart from each other and from the other decks (#1551)', () => {
+    const [mess, cargo] = [terraceDeckLook('mess')!, terraceDeckLook('cargo')!];
+    for (const look of [mess, cargo]) {
+      expect(look).toMatchObject({ sun: TERRACE_LOOK.sun, sunIntensity: TERRACE_LOOK.sunIntensity, exposure: TERRACE_LOOK.exposure, cell: TERRACE_LOOK.cell, edge: null });
+      expect(look.background).not.toBe(TERRACE_LOOK.background);
+      expect(look.tint).not.toBe(TERRACE_LOOK.tint);
+    }
+    expect(mess.background).not.toBe(cargo.background);
+    expect(mess.tint).not.toBe(cargo.tint);
+    const channel = (hex: number, shift: number): number => (hex >> shift) & 0xff;
+    expect(channel(mess.background, 16) - channel(cargo.background, 16)).toBeGreaterThanOrEqual(24); // the Mess leans warm, the Cargo hold cold
+    expect(channel(cargo.background, 0) - channel(cargo.background, 16)).toBeGreaterThanOrEqual(24);
+    expect(terraceDeckLook('mess')).toBe(mess); // one look per deck: the scene wears it once
+    for (const other of ['furnace', 'chapel', 'bridge'] as const) expect(terraceDeckLook(other)).toBeNull(); // their bosses have the space
   });
 });
