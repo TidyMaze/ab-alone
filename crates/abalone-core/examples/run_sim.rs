@@ -73,8 +73,18 @@ struct Settings {
     played: Fights,
 }
 
-/// The roster boss of the biome of an act (section 18); the Meadow's act 1 boss is dealt from the act 1 pool (#1599).
+/// The roster boss of the biome of an act (section 18); the Meadow's act 1 boss is dealt from the act 1 pool (#1599), and
+/// act 2 deals one of the four that leave it one seed in `ACT_TWO_GUEST_ODDS` (#1635).
 fn boss_of(seed: u64, act: usize, biome: Biome) -> LadderBoss {
+    let own = biome_boss(seed, act, biome);
+    if act == 1 {
+        LadderBoss::act_two(own, mix(seed ^ mix(1635 | 5 << 32)))
+    } else {
+        own
+    }
+}
+
+fn biome_boss(seed: u64, act: usize, biome: Biome) -> LadderBoss {
     match biome {
         Biome::Forest => LadderBoss::Alien,
         Biome::Tundra => LadderBoss::Hull,

@@ -65,6 +65,10 @@ pub enum LadderBoss {
 /// The roster bosses the Meadow's act 1 never deals (#1599): they leave act 1 for acts 2 and 3 (client/src/roguelite.ts).
 pub const ACT_ONE_LEAVES: [&str; 4] = ["echo", "hull", "chaplain", "choir"];
 
+/// Act 2 deals one of `ACT_ONE_LEAVES` in place of its biome's boss one run in this many (#1635): the biome keeps its own
+/// boss 2 runs in 3, and each of the four still comes up about one run in 12.
+pub const ACT_TWO_GUEST_ODDS: u64 = 3;
+
 impl LadderBoss {
     /// The bosses the Meadow's act 1 deals, in `ALL`'s order: the roster less `ACT_ONE_LEAVES`.
     pub fn act_one() -> Vec<LadderBoss> {
@@ -72,6 +76,16 @@ impl LadderBoss {
             .into_iter()
             .filter(|b| !ACT_ONE_LEAVES.contains(&b.id()))
             .collect()
+    }
+
+    /// The boss of act 2 for the seed's `roll` (#1635): one of `ACT_ONE_LEAVES`, one roll in `ACT_TWO_GUEST_ODDS`, else
+    /// `own`, the biome's boss (the page's `actTwoGuest`, client/src/roguelite.ts).
+    pub fn act_two(own: LadderBoss, roll: u64) -> LadderBoss {
+        if !roll.is_multiple_of(ACT_TWO_GUEST_ODDS) {
+            return own;
+        }
+        let id = ACT_ONE_LEAVES[(roll / ACT_TWO_GUEST_ODDS % 4) as usize];
+        LadderBoss::from_id(id).expect("a roster id")
     }
 
     pub const ALL: [LadderBoss; 15] = [
@@ -532,6 +546,18 @@ mod tests {
             .iter()
             .all(|b| act_one.contains(&b.id()) || ACT_ONE_LEAVES.contains(&b.id())));
         assert_eq!(ACT_ONE_LEAVES, ["echo", "hull", "chaplain", "choir"]);
+    }
+
+    #[test]
+    fn act_two_deals_one_of_the_four_one_roll_in_three_else_the_biome_boss() {
+        assert_eq!(ACT_TWO_GUEST_ODDS, 3);
+        let own = LadderBoss::Alien;
+        let dealt: Vec<_> = (0..12)
+            .map(|roll| LadderBoss::act_two(own, roll).id())
+            .collect();
+        let guests: Vec<_> = dealt.iter().copied().filter(|id| *id != "alien").collect();
+        assert_eq!(guests, ["echo", "hull", "chaplain", "choir"]); // rolls 0, 3, 6, 9: each of the four once
+        assert_eq!(LadderBoss::act_two(own, 1), own);
     }
     use crate::board::{Belts, Board, Cell};
     use crate::encounter::assembly::assembly_boss;

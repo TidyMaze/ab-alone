@@ -7,7 +7,10 @@ import { GLASS, SHELL } from './marbles';
 import {
   ACT_ONE_LEAVES,
   ACT_PERCENT,
+  ACT_TWO_GUEST_ODDS,
   actBoss,
+  actTwoGuest,
+  bossOfAct,
   BONUS_SCRAP,
   bonusHtml,
   bonusRelic,
@@ -847,6 +850,21 @@ describe('roguelite', () => {
     expect(ACT_ONE_LEAVES).toEqual(['echo', 'hull', 'chaplain', 'choir']);
     expect([...first].sort()).toEqual(ids.filter((id) => !ACT_ONE_LEAVES.includes(id)).sort()); // the 11 others, each one dealt
     expect(ACT_ONE_LEAVES).toContain(actBoss(MAP, pick(at(newRun(1, 3, LEGACY_UNLOCKED), 0), 2), ['echo', 'hull', 'choir', 'chaplain'])!.id); // a roster of the four only: it is kept
+  });
+
+  it("act 2 deals the Echo, Hull, Chaplain or Choir 1 run in ACT_TWO_GUEST_ODDS, else its biome's boss; act 3 keeps its biome's (#1635)", () => {
+    const ids = ['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'overseer', 'dual', 'railyard', 'stalker', 'swarm', 'magnetizer', 'pulsar', 'assembly', 'core'];
+    const runs = Array.from({ length: 600 }, (_, seed) => ({ ...newRun(seed + 1, 3, LEGACY_UNLOCKED), biomes: [1, 3] })); // Forest (alien), then Desert (pulsar)
+    const second = runs.map((run) => bossOfAct(run, 1, ids));
+    const guests = second.filter((id) => id !== 'alien');
+    expect(ACT_TWO_GUEST_ODDS).toBe(3);
+    expect([...new Set(guests)].sort()).toEqual([...ACT_ONE_LEAVES].sort()); // each of the four reaches a run, nothing else
+    expect(guests.length).toBe(210); // 35 %, near 1 in 3
+    expect(runs.every((run) => bossOfAct(run, 2, ids) === 'pulsar')).toBe(true);
+    expect(second.map((id) => (id === 'alien' ? undefined : id))).toEqual(runs.map((run) => actTwoGuest(run, ids)));
+    expect(actTwoGuest(runs[5]!, ids)).toBe('echo'); // seed 6
+    expect(actTwoGuest(runs[5]!, ['alien'])).toBeUndefined(); // a roster without the four: the biome's boss
+    expect(bossOfAct(runs[5]!, 1, ['alien'])).toBe('alien');
   });
 
   it('a boss node is a roster boss picked by the run seed, at the act strength, a new one each act', () => {
@@ -2095,6 +2113,8 @@ describe('roguelite biomes (#1472)', () => {
     expect(buttons[1]!.textContent).toContain('boss: PULSAR');
     expect(buttons.every((b) => !b.disabled)).toBe(true);
     expect(doc.querySelector('.run-help')!.textContent).toContain('hole');
+    const guest = parse(exitHtml(THREE, fresh({ seed: 6, path: [0, 1], exit: true }), exitsOf, (id) => id.toUpperCase())); // seed 6 deals act 2 the Echo (#1635)
+    expect([...guest.querySelectorAll<HTMLButtonElement>('button[data-exit]')].map((b) => b.textContent!.split('boss: ')[1])).toEqual(['ECHO', 'ECHO']);
     const unknown = parse(exitHtml(THREE, fresh({ path: [0, 1], exit: true }), exitsOf, () => undefined));
     expect(unknown.querySelector('button[data-exit]')!.textContent).toContain('boss: unknown');
     const second = parse(exitHtml(THREE, fresh({ path: [0, 1, 2, 3], exit: true, biomes: [4] }), exitsOf, String));

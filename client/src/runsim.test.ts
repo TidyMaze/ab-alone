@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACT_ONE_LEAVES, ACT_PERCENT, COMMANDERS, Relic, SPECIAL_LOOKS } from './roguelite';
+import { ACT_ONE_LEAVES, ACT_PERCENT, ACT_TWO_GUEST_ODDS, COMMANDERS, Relic, SPECIAL_LOOKS } from './roguelite';
 
 // #1537: the run simulator (crates/abalone-core/examples/run_sim.rs) plays the act bosses at the page's strengths, and
 // keeps its own copy of them, as the engine has none. The test reads the example's source with node:fs, imported untyped:
@@ -14,6 +14,10 @@ describe('the run simulator', () => {
   it('leaves act 1 the same bosses as the page (#1599, ACT_ONE_LEAVES of ladder.rs)', () => {
     const copy = /^pub const ACT_ONE_LEAVES: \[&str; 4\] = \[([^\]]+)\];$/m.exec(ladder)!;
     expect(copy[1]!.split(',').map((id) => id.trim().replace(/"/g, ''))).toEqual(ACT_ONE_LEAVES);
+  });
+
+  it('deals act 2 one of those four at the odds of the page (#1635, ACT_TWO_GUEST_ODDS of ladder.rs)', () => {
+    expect(Number(/^pub const ACT_TWO_GUEST_ODDS: u64 = (\d+);$/m.exec(ladder)![1])).toBe(ACT_TWO_GUEST_ODDS);
   });
 
   it('plays the act bosses at the strengths of ACT_PERCENT (#1537)', () => {

@@ -699,6 +699,17 @@ export const ACT_PERCENT = [50, 120, 200, 300];
 /** The roster bosses the Meadow's act 1 never deals (#1599, `ACT_ONE_LEAVES` of ladder.rs): they leave act 1 for acts 2 and 3. */
 export const ACT_ONE_LEAVES = ['echo', 'hull', 'chaplain', 'choir'];
 
+/** Act 2 deals one of `ACT_ONE_LEAVES` in place of its biome's boss one run in this many (#1635, `ACT_TWO_GUEST_ODDS` of ladder.rs):
+ * the biome keeps its own boss 2 runs in 3, and each of the four still comes up about one run in 12. */
+export const ACT_TWO_GUEST_ODDS = 3;
+
+/** The one of `ACT_ONE_LEAVES` in `ids` that the run seed deals act 2 in place of its biome's boss (#1635), or none. */
+export function actTwoGuest(run: Run, ids: string[]): string | undefined {
+  const four = ACT_ONE_LEAVES.filter((id) => ids.includes(id));
+  const roll = hash(run.seed, 1635);
+  return roll % ACT_TWO_GUEST_ODDS === 0 ? four[Math.floor(roll / ACT_TWO_GUEST_ODDS) % four.length] : undefined;
+}
+
 /** The roster boss that ends act `act` of the run (#800), one of `ids` (the bridge's boss_ids): the run seed deals them, a new one
  * each act, the Meadow's act 1 without `ACT_ONE_LEAVES`. The boss of an act in a biome is the biome's (#1472), when the roster has it; the fourth act's is FINAL_BOSS (#1467). */
 export function bossOfAct(run: Run, act: number, ids: string[]): string {
@@ -708,7 +719,8 @@ export function bossOfAct(run: Run, act: number, ids: string[]): string {
     const j = hash(run.seed, i) % (i + 1);
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
   }
-  const own = act === FINAL_ACT ? FINAL_BOSS : BIOMES[biomeOf(run, act)]!.boss;
+  const guest = act === 1 ? actTwoGuest(run, ids) : undefined;
+  const own = act === FINAL_ACT ? FINAL_BOSS : (guest ?? BIOMES[biomeOf(run, act)]!.boss);
   return ids.includes(own) ? own : dealt[act % dealt.length]!;
 }
 
@@ -1502,10 +1514,11 @@ export function collectorHtml(run: Run): string {
  * hold and the boss that ends its act (`bossName` is the bridge's boss_name; unknown when it has none), each wearing its tint. */
 export function exitHtml(map: MapNode[], run: Run, exitsOf: (act: number, from: number) => ArrayLike<number>, bossName: (id: string) => string | undefined): string {
   const act = lastNode(map, run)!.act + 1;
+  const guest = act === 1 ? actTwoGuest(run, ACT_ONE_LEAVES) : undefined; // whatever the exit, act 2's guest boss (#1635)
   const buttons = exitOffers(map, run, exitsOf).map((code, i) => {
     const biome = BIOMES[code]!;
     const secret = i === 2; // the third exit is the rune of the exit's (#1476)
-    return `<button type="button" data-exit="${code}" data-biome="${biome.id}"${secret ? ' data-secret' : ''}>${secret ? 'Secret exit · ' : ''}${biome.name} · ${biome.hazard} · foes: ${biome.foes} · boss: ${bossName(biome.boss) ?? 'unknown'}</button>`;
+    return `<button type="button" data-exit="${code}" data-biome="${biome.id}"${secret ? ' data-secret' : ''}>${secret ? 'Secret exit · ' : ''}${biome.name} · ${biome.hazard} · foes: ${biome.foes} · boss: ${bossName(guest ?? biome.boss) ?? 'unknown'}</button>`;
   });
   return (
     `<p class="run-line">Act ${act} done · pick the exit to act ${act + 1}</p>` +

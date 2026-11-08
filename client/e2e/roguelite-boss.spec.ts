@@ -3,15 +3,15 @@ import { shot } from './shot';
 
 // An act boss fight carries the army's build (#1494, docs/specs/roguelite.md section 28), loaded through the test hook: the
 // special marbles are placed on The Hull's board, play with their marks, and Fall back gives a turn back; The Echo takes none.
-// Both left act 1 (#1599): seed 9 deals The Hull as the act 2 boss, by the nodes 0, 3, 6, 10, 11, 14, 18 and 21; seed 25 The Echo,
-// by 0, 2, 4, 6, 7, 10, 12 and 14.
+// Both left act 1 (#1599): seed 9 deals The Hull as the act 2 boss, by the nodes 0, 3, 6, 10, 11, 14, 18 and 21; seed 6 The Echo
+// (its act 2 guest, #1635), by 0, 4, 6, 10, 11, 14, 16 and 18.
 // Waits for a draw that began after this call (#435), so a screenshot shows the board as it stands.
 const freshDraw = async (page: Page) => {
   const asked = await page.evaluate(() => (window as any).__drawNext() as number);
   await page.waitForFunction((n) => (window as any).__draws() > n, asked);
 };
 const HULL = [0, 3, 6, 10, 11, 14, 18, 21];
-const ECHO = [0, 2, 4, 6, 7, 10, 12, 14];
+const ECHO = [0, 4, 6, 10, 11, 14, 16, 18];
 const run = (state: object) => ({ seed: 9, army: 14, path: HULL, fighting: true, moves: [], end: '', specials: [2, 1, 1], placed: [], reward: false, ...state });
 
 test('an act boss fight places the special marbles on its board, fights with them and falls back, #1494', async ({ page }) => {
@@ -58,7 +58,7 @@ test('an act boss fight places the special marbles on its board, fights with the
 test('an act boss that takes no build starts its fight at once, #1494', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.waitForFunction(() => (window as any).__run);
-  await page.evaluate((state) => (window as any).__run(state), run({ seed: 25, path: ECHO }));
+  await page.evaluate((state) => (window as any).__run(state), run({ seed: 6, path: ECHO }));
   await expect(page.locator('body')).toHaveAttribute('data-boss', 'echo');
   await expect(page.locator('body')).toHaveAttribute('data-run', 'fight');
   expect(await page.evaluate(() => document.body.dataset.specials)).toBe('');
@@ -104,5 +104,5 @@ test('the map says before the fight whether the boss takes the build, #1495', as
   await boss.focus(); // the tip shows on focus too
   await freshDraw(page);
   await shot(page, { path: 'test-results/roguelite-boss-tip.png' });
-  expect(await tip(run({ seed: 25, fighting: false, path: ECHO.slice(0, -1) }))).toContain('Boss: The Echo · fights without your build');
+  expect(await tip(run({ seed: 6, fighting: false, path: ECHO.slice(0, -1) }))).toContain('Boss: The Echo · fights without your build');
 });

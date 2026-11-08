@@ -1152,7 +1152,7 @@ cannot say. The table is a measure of the curve (act against act, boss against b
 - **The map and the route**: the engine's (`run::run_map_v` at the current `MAP_VERSION`, since the paced map of section 2, #1543; `RUN_SIM_MAP=0` plays the map of before; a run seed per row of the table). The bot takes a rest when the army is
   under its ceiling (14, 12 from level 2), else a fight or the boss, else a node with nothing to play (an event, a "?", a
   treasure, a shop, a secret room: left at once), an elite last. At the end of an act it takes the first exit offered
-  (`run::exits`), so acts 2 and 3 are the biome's boss (section 18); act 1 deals one of the 11 bosses of its pool (`LadderBoss::act_one`, #1599: the roster less The Echo, The Hull, The Chaplain and The Choir) from the seed
+  (`run::exits`), so acts 2 and 3 are the biome's boss (section 18), act 2 one of the four of `ACT_ONE_LEAVES` one seed in 3 (`LadderBoss::act_two`, #1635); act 1 deals one of the 11 bosses of its pool (`LadderBoss::act_one`, #1599: the roster less The Echo, The Hull, The Chaplain and The Choir) from the seed
   (the engine's splitmix64, not the page's hash: the same spread, not the same boss for a seed).
 - **The act boss fight is the engine's**: `play_act_boss` (the ladder's bot of `boss-balance.md`, which plays two random first moves, never
   repeats a position and reads the tells and hooks) at the boss's own node budget times **3** against the boss at `ACT_PERCENT` of its
@@ -1383,6 +1383,11 @@ acts 2 and 3 that take them are a separate decision, not made here. Bot numbers,
 | 3 at 200 % | 21/40 (52 %) | 21/40 (52 %) |
 
 Act 1 did not reach the 85 % target: 78 %, one fight in 40 fewer won. Not run: the whole-run table (`RUN_SIM` without `RUN_SIM_POOL`), not measured here.
+
+**Decision #1635, act 2 deals the four.** One run in 3 (`ACT_TWO_GUEST_ODDS`, the same in `roguelite.ts` and `ladder.rs`, a test keeps them
+equal), the run seed deals act 2 The Echo, The Hull, The Chaplain or The Choir in place of the biome's boss, the same one whatever the exit
+(the exit screen and the map name it): the biome keeps its own boss 2 runs in 3, and each of the four comes up about one run in 12. Act 1
+keeps its 11, act 3 its biome's boss.
 
 ## 31. The HUD of an army fight, and reading the special marbles (#1540, #1541)
 
