@@ -194,6 +194,29 @@ P2P heartbeats, round deadlines and audio scheduling must not rely on main-threa
 Run net timers in a worker and use `visibilitychange` to tell peers "away" instead of looking
 dropped. WebGPU-only compute extras stay off the fog and bloom path.
 
+### 5.6 GPU budget per mode (#1581)
+
+`?gpustats` (dev) times every drawn frame on the GPU (timestamp queries) per mode, the scene family (`gpucost.ts`), and puts
+it in `window.__renderCost.gpu` (also `window.__gpuCost`). Capture: play each mode a few seconds with `?gpustats`, then
+`copy(JSON.stringify(__renderCost.gpu))` into `capture.json`; `bun run scripts/gpu-budget.ts capture.json` (in `client/`)
+checks it against this table and exits 1 naming each mode over its average or p95 budget, or with no row. A backend
+with no timestamp query (SwiftShader, so the CI runners) has nothing to check. Budget = the measure plus about 30 %.
+Measured once, 2026-11-08, on the owner's Mac (Apple GPU, headless Chromium channel `chromium`, WebGPU, 1280x720,
+ratio 1) **under a load average of 36 to 50**, so the numbers are high; a remeasure on an idle machine should lower the
+budgets. The board modes cost 23 ms, over the 10 ms target of 5.5: the gap is the open finding. WebGL (ANGLE on Metal)
+read 4.1 to 4.4 ms on the same board modes, the timer query of that backend does not see the same work: the budgets
+are for WebGPU.
+
+| Mode | Avg budget (ms) | p95 budget (ms) | Measured WebGPU avg / p95 (ms) |
+|---|---|---|---|
+| bot | 30 | 40 | 23.7 / 30.8 |
+| hub | 30 | 40 | 23.0 / 28.2 |
+| run-fight | 30 | 40 | 22.7 / 29.7 |
+| run-map | 30 | 40 | not measured, the bot's budget |
+| royale | 30 | 40 | not measured, the bot's budget |
+| boss | 30 | 40 | 23.0 / 28.9 |
+| world | 10 | 12 | 7.8 / 8.1 |
+
 ### 5.x Renderer support per browser (#85)
 
 `bun run e2e:all` runs the 13 e2e specs on Chromium, Firefox and WebKit (Playwright 1.63.0, base

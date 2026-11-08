@@ -7617,7 +7617,8 @@ const renderCost = (): RenderCost => {
   const { render, memory } = renderer.info;
   return { calls: render.drawCalls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
 };
-Object.defineProperty(window, '__renderCost', { configurable: true, get: () => ({ ...renderCost(), text: renderCostText(renderCost()) }) });
+// With ?gpustats the GPU time per mode is in it too (#1581), the capture docs/specs/tech.md section 5.6 checks.
+Object.defineProperty(window, '__renderCost', { configurable: true, get: () => ({ ...renderCost(), text: renderCostText(renderCost()), gpu: gpu.snapshot() }) });
 copyButton.addEventListener('click', async () => {
   const text = diag.text({
     renderCost: renderCostText(renderCost()),

@@ -384,6 +384,8 @@ describe('the renderer and its textures', () => {
       await booting;
       draw();
       await vi.waitFor(() => expect(Object.keys((window as unknown as { __gpuCost: { modes: object } }).__gpuCost.modes).length).toBeGreaterThan(0));
+      const w = window as unknown as { __gpuCost: object; __renderCost: { gpu: object } };
+      expect(w.__renderCost.gpu).toEqual(w.__gpuCost); // the GPU time is in the render cost too
     });
 
     it('keeps the flat look and reports WebGPU', async () => {
