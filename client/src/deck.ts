@@ -46,6 +46,9 @@ const BOSS_DECK: Record<string, Deck> = {
   stalker: 'chapel', // the Chapel's night watch (stalker.md section 2)
 };
 
+/** The ids of the bosses the client knows (bossspace.ts has a space for each). */
+export const BOSS_IDS: readonly string[] = Object.keys(BOSS_DECK);
+
 /** The deck of a mode, or of a boss fight: the Mess for a boss the client does not know. */
 export function deckOf(mode: Mode, boss?: string): Deck {
   return mode === 'boss' ? (BOSS_DECK[boss ?? ''] ?? 'mess') : MODE_DECK[mode];

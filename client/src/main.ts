@@ -232,6 +232,7 @@ import type { Phase } from './daynight';
 import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
+import { bossSpaceOf } from './bossspace';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
 import { bossEndLine } from './bossends';
@@ -1750,9 +1751,11 @@ void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fo
   });
 // The Mess cells have their own roughness (Concrete036), every other deck the shared one.
 const cellRoughness = (name: Deck): THREE.Texture | null => (name === 'mess' ? (messRoughness ?? deckRoughness) : deckRoughness);
-function applyDeck(next: Deck): void {
+let spaceBoss: string | null = null; // the boss whose space is on (#1551): a later redraw of the deck keeps it
+function applyDeck(next: Deck, boss: string | null = null): void {
   deck = next;
-  sceneRenderer.applyDeck(deck, run !== null); // a rogue-lite fight's rim is violet (#1554)
+  spaceBoss = boss;
+  sceneRenderer.applyDeck(deck, run !== null, bossSpaceOf(boss)); // a boss fight has its own space (#1551) // a rogue-lite fight's rim is violet (#1554)
   if (steel.roughnessMap) steel.roughnessMap = cellRoughness(next); // only the textured look has one
   document.body.dataset.deck = deck; // read by the e2e tests
   applyLook();
@@ -4150,7 +4153,7 @@ function requestDeckSet(): Promise<void> {
       if (normal) steel.normalMap = normal;
       steel.needsUpdate = true;
     }
-    applyDeck(deck); // the deck's own maps, and the steel dressed above
+    applyDeck(deck, spaceBoss); // the deck's own maps, and the steel dressed above
     dirty = CHANGE_DRAWS;
   });
 }
@@ -5649,7 +5652,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   retryButton.hidden = false;
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
-  applyDeck(deckOf('boss', id));
+  applyDeck(deckOf('boss', id), id);
   playCue('boss-intro', 0.12); // after the click on the boss, short so as not to ride on the tally line
   refresh(); // the HUD of the fight first: the view keeps off its plate
   view = fitted = fightView();
@@ -6668,7 +6671,7 @@ function fightRun(game: Engine | Encounter): void {
   thinking = false; // a bot reply to the last fight is dropped (botTurn)
   showRun();
   refresh();
-  applyDeck(deckOf(boss ? 'boss' : 'local', boss?.id));
+  applyDeck(deckOf(boss ? 'boss' : 'local', boss?.id), boss?.id);
   view = fitted = fightView();
   applyView();
   void botTurn(); // a fight saved while the bot was thinking

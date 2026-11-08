@@ -752,6 +752,10 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.sun.color.getHex()).toBe(BOARD_LOOKS.dusk.sun); // a lair's board is the Open world's
     sr.setBoardLook(null);
     expect(sr.sun.color.getHex()).toBe(space.sun); // the lair left: the space under it
+    sr.setTerrace(false);
+    sr.applyDeck('mess');
+    sr.setTerrace(true); // back on the terrace with no space: the arena light, not the last space's
+    expect(sr.sun.color.getHex()).toBe(TERRACE_LOOK.sun);
   });
 
   it('keeps the key of the deck the page opened on when the neon look turns the terrace on (#1551)', () => {

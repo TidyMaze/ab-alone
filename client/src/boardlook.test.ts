@@ -31,10 +31,11 @@ describe('the board looks', () => {
     expect(red(dusk.sun)).toBeGreaterThan(blue(dusk.sun));
     expect(blue(night.sun)).toBeGreaterThan(red(night.sun)); // moonlight
   });
-  it('a boss space on the terrace look takes the arena board and changes its sun, its hemisphere and its sky only (#1551)', () => {
+  it('a boss space on the terrace look takes the arena board and changes its sun, its hemisphere, its sky and the tint of the lit board only (#1551)', () => {
     const space = BOSS_SPACE.alien!;
     const look = terraceSpaceLook(space);
-    expect(look).toMatchObject({ sun: space.sun, elevation: space.elevation, azimuth: space.azimuth, exposure: TERRACE_LOOK.exposure, tint: TERRACE_LOOK.tint, cell: TERRACE_LOOK.cell, edge: null });
+    expect(look).toMatchObject({ sun: space.sun, elevation: space.elevation, azimuth: space.azimuth, exposure: TERRACE_LOOK.exposure, cell: TERRACE_LOOK.cell, edge: null });
+    expect(look.tint).not.toBe(TERRACE_LOOK.tint);
     expect(look.sunIntensity).toBeCloseTo(TERRACE_LOOK.sunIntensity * space.intensity);
     expect(look.sky).not.toBe(TERRACE_LOOK.sky);
     expect(look.background).not.toBe(TERRACE_LOOK.background);

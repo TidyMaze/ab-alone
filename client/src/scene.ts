@@ -13,7 +13,8 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
-import { type BoardLook, TERRACE_LOOK } from './boardlook';
+import { type BoardLook, TERRACE_LOOK, terraceSpaceLook } from './boardlook';
+import type { BossSpace } from './bossspace';
 import { NEON, NEON_LIGHT, lightNeon, neonDeckLook, neonSkyOf, neonStars } from './neonlook';
 import { TERRACE_EXPOSURE, addSun, aimSunShadow, sunPosition } from './tablezero';
 
@@ -165,6 +166,10 @@ export class SceneRenderer {
   readonly hemisphere: THREE.HemisphereLight;
   /** The lair fight's look (#1496), if one is asked for, and the colours the file's materials had before the looks. */
   private boardLook: BoardLook | null = null;
+  /** The boss space of the fight on (#1551), its terrace look, and the look the terrace wears (null: the arena's own, never touched). */
+  private space: BossSpace | null = null;
+  private spaceLook: BoardLook | null = null;
+  private worn: BoardLook | null = null;
   private readonly paints = new WeakMap<THREE.Material, THREE.Color>();
   private readonly neon: boolean;
   private roomBackground: THREE.Color | THREE.Texture | null = null;
@@ -372,7 +377,7 @@ export class SceneRenderer {
   }
 
   updateParticles(tier: Tier, clear: boolean, reducedMotion: boolean, webdriver: boolean, forceParticles: boolean, deck: Deck): void {
-    const conf = DECK_PARTICLES[deck];
+    const conf = this.space?.scatter ?? DECK_PARTICLES[deck];
     const enabled = hasParticles(tier, clear, reducedMotion, webdriver, forceParticles) && conf.count > 0;
     this.particles.visible = enabled;
     if (!enabled) return;
@@ -389,7 +394,7 @@ export class SceneRenderer {
     }
     const dt = this.lastParticleNow ? Math.min(0.08, (now - this.lastParticleNow) / 1000) : 0.016;
     this.lastParticleNow = now;
-    const conf = DECK_PARTICLES[deck];
+    const conf = this.space?.scatter ?? DECK_PARTICLES[deck];
     for (let i = 0; i < conf.count; i++) {
       const o = i * 3;
       this.particlePositions[o]! += conf.drift[0] * dt * 10;
@@ -414,7 +419,7 @@ export class SceneRenderer {
   /** A rogue-lite fight's violet rim and posts (#1554), set at once: leaving a run gives the deck's own key back. */
   setRunFight(on: boolean): void {
     this.runFight = on;
-    if (this.neon && this.deck) neonDeckLook(this.deck, on);
+    if (this.neon && this.deck) neonDeckLook(this.deck, on, this.space);
   }
 
   /** The deck's albedo and roughness, once their file loads (#1603): the plate and the rim were built flat, as the look without them,
@@ -437,16 +442,22 @@ export class SceneRenderer {
     }
   }
 
-  applyDeck(next: Deck, run = false): void {
+  /** A boss fight passes its space (#1551): its sun, sky, rim and scatter in place of the deck's; null for every other game. */
+  applyDeck(next: Deck, run = false, space: BossSpace | null = null): void {
     this.deck = next;
     this.runFight = run;
     const light = DECKS[next];
     this.renderer.toneMappingExposure = light.exposure;
+    if (space !== this.space) this.spaceLook = space && terraceSpaceLook(space);
+    const spaced = this.space !== null; // the sun is only touched while a space is on or just left: the Open world sets its own
+    this.space = space;
     if (this.neon) {
-      neonDeckLook(next, run); // the slab, the rim and the posts take the deck's key (#1551), violet in a rogue-lite fight (#1554)
+      neonDeckLook(next, run, space); // the slab, the rim and the posts take the deck's key (#1551), violet in a rogue-lite fight (#1554)
+      if (space || spaced) lightNeon(this.sun, this.hemisphere, space);
       // the sky takes the deck's key, but a backdrop texture in the room stays (#1551 fix-forward: main.boot)
-      if (!(this.scene.background as THREE.Texture | null)?.isTexture) this.scene.background = neonSkyOf(next);
+      if (!(this.scene.background as THREE.Texture | null)?.isTexture) this.scene.background = neonSkyOf(next, space);
     }
+    this.dressTerrace();
     if (this.currentBay) applyDeckAtmosphere(this.currentBay, next as DeckId);
   }
 
@@ -558,7 +569,8 @@ export class SceneRenderer {
     this.camera.far = on ? 300 : 100;
     this.camera.updateProjectionMatrix();
     this.setShadows(on && shadows);
-    if (on && this.boardLook && !this.neon) this.applyBoardLook(this.boardLook); // a lair fight asked for its look before the terrace was in (#1496)
+    // a lair fight asked for its look before the terrace was in (#1496), or a boss fight for its space (#1551); the arena's own back after one
+    if (on && !this.neon && (this.lookWanted() !== TERRACE_LOOK || this.worn)) this.wear(this.lookWanted());
   }
 
   /** The tone mapping and the exposure the Open world is drawn with: the terrace's (none in the neon look), which the world took from the renderer when the terrace was in
@@ -570,9 +582,9 @@ export class SceneRenderer {
 
   /** The neon look (#1424, `?look=neon`): black sky with fine stars, a cold sun, ACES, in place of the terrace's own light. Asked once, after `setTerrace`. */
   setNeon(): void {
-    lightNeon(this.sun, this.hemisphere);
+    lightNeon(this.sun, this.hemisphere, this.space);
     // the sky of the deck already on (applyDeck can run before the terrace, at the boot): its key, not the plain sky (#1551)
-    this.scene.background = this.deck ? neonSkyOf(this.deck) : new THREE.Color(NEON.sky);
+    this.scene.background = this.deck ? neonSkyOf(this.deck, this.space) : new THREE.Color(NEON.sky);
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = NEON_LIGHT.exposure;
     if (!this.terrace.getObjectByName('starfield')) this.terrace.add(neonStars());
@@ -586,7 +598,23 @@ export class SceneRenderer {
   setBoardLook(look: BoardLook | null): void {
     if (look === this.boardLook) return; // every mode start asks for the ordinary board
     this.boardLook = look;
-    if (this.terraceOn && !this.neon) this.applyBoardLook(look ?? TERRACE_LOOK);
+    this.dressTerrace();
+  }
+
+  /** The look the terrace should wear: a lair's (the Open world's), else the boss space's, else the arena's. */
+  private lookWanted(): BoardLook {
+    return this.boardLook ?? this.spaceLook ?? TERRACE_LOOK;
+  }
+
+  private wear(look: BoardLook): void {
+    this.worn = look;
+    this.applyBoardLook(look);
+  }
+
+  /** Puts the wanted look on the terrace when it is on, off the neon look, and not yet worn. */
+  private dressTerrace(): void {
+    const look = this.lookWanted();
+    if (this.terraceOn && !this.neon && look !== (this.worn ?? TERRACE_LOOK)) this.wear(look);
   }
 
   private applyBoardLook(look: BoardLook): void {

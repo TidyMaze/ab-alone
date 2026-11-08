@@ -2,6 +2,8 @@
 // lair at. Data only: scene.ts `setBoardLook` applies one to the terrace; a fight outside the Open world keeps `TERRACE_LOOK`, the board as it was.
 import type { Phase } from './daynight';
 import { SUN, TERRACE_EXPOSURE } from './tablezero';
+import type { BossSpace } from './bossspace';
+import { mixHex } from './daynight';
 
 export interface BoardLook {
   /** The sun by day, the moon by night: colour, strength and place (degrees over the horizon, and round the board). */
@@ -48,3 +50,17 @@ export const BOARD_LOOKS: Readonly<Record<Phase, BoardLook>> = {
   dusk: { sun: 0xffd0a0, sunIntensity: 12, elevation: 18, azimuth: 35, sky: 0xb8a0e8, ground: 0x805868, hemisphere: 1.8, background: 0x3a2a4a, exposure: 1.3, tint: 0xd8d0e8, dome: 0xd0a090, cell: 0xffffff, edge: null },
   night: { sun: 0xe8f0ff, sunIntensity: 6, elevation: 40, azimuth: -35, sky: 0x7f90d0, ground: 0x2a3250, hemisphere: 1.2, background: 0x070a16, exposure: 1.5, tint: 0xa8b8e8, dome: 0x303a60, cell: 0xcadaff, edge: 0x4fc8ff },
 };
+
+/** The terrace look of a boss fight (#1551): the arena board with the boss space's sun, its hemisphere, the colour beyond the board and the tint of the lit board leaning to its surround. */
+export function terraceSpaceLook(space: BossSpace): BoardLook {
+  return {
+    ...TERRACE_LOOK,
+    sun: space.sun,
+    sunIntensity: TERRACE_LOOK.sunIntensity * space.intensity,
+    elevation: space.elevation,
+    azimuth: space.azimuth,
+    sky: mixHex(TERRACE_LOOK.sky, space.surround, space.sky * 0.2),
+    background: mixHex(TERRACE_LOOK.background, space.surround, space.sky),
+    tint: mixHex(TERRACE_LOOK.tint, space.surround, space.ground * 0.4), // the lit board and its rim lean to the surround, the cells' own multiplier unchanged
+  };
+}

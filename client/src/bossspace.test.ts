@@ -2,11 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_IDS, DECK_PARTICLES } from './deck';
 import { BOSS_SPACE, MESS_SPACE, bossSpaceOf, type BossSpace } from './bossspace';
+import { mixHex } from './daynight';
 import doc from '../../docs/specs/art.md?raw';
 
 const bullet = doc.slice(doc.indexOf('- **Palette'), doc.indexOf('- **Materials'));
 const allowed = new Set((bullet.match(/#[0-9a-f]{6}\b/gi) ?? []).map((h: string) => h.toLowerCase()));
 const hex = (v: number): string => `#${v.toString(16).padStart(6, '0')}`;
+const tokens = [...allowed].map((h) => parseInt(h.slice(1), 16));
+/** A palette token, or an even mix of two (art.md: only tokens, and mixes of them). */
+const fromPalette = (c: number): boolean => allowed.has(hex(c)) || tokens.some((a) => tokens.some((b) => mixHex(a, b, 0.5) === c));
 
 /** The ways two spaces can differ at a glance: the rim, the light's colour, where it comes from, how hard it is, how far the surround takes the key, the scatter. */
 function differences(a: BossSpace, b: BossSpace): string[] {
@@ -15,7 +19,7 @@ function differences(a: BossSpace, b: BossSpace): string[] {
   if (a.sun !== b.sun) out.push('sun');
   if (Math.abs(a.azimuth - b.azimuth) >= 30) out.push('azimuth');
   if (Math.abs(a.intensity - b.intensity) >= 0.15) out.push('intensity');
-  if (Math.abs(a.ground - b.ground) >= 0.15) out.push('surround');
+  if (a.surround !== b.surround || Math.abs(a.ground - b.ground) >= 0.15) out.push('surround');
   if (a.scatter.kind !== b.scatter.kind || a.scatter.color !== b.scatter.color) out.push('scatter');
   return out;
 }
@@ -36,6 +40,7 @@ describe('the boss spaces (#1551)', () => {
   it('paints only with the palette of art.md', () => {
     for (const [id, s] of Object.entries(BOSS_SPACE)) {
       for (const c of [s.key, s.accent, s.sun, s.scatter.color]) expect([id, allowed.has(hex(c))]).toEqual([id, true]);
+      expect([id, fromPalette(s.surround)]).toEqual([id, true]); // the surround may be a mix of two tokens
     }
   });
 

@@ -405,7 +405,7 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
 
   it('gives a boss space its own rim, posts, slab, ground and sky, a run fight keeping its violet rim (#1551)', () => {
     const glowHex = (hex: number): number => new THREE.Color(hex).multiplyScalar(NEON_GLOW / Math.max(...new THREE.Color(hex).toArray())).getHex();
-    const colours = (): number[] => neonGlow([new THREE.Vector3(1, 0, 2)], true).children.map((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
+    const colours = (): number[] => neonGlow([new THREE.Vector3(1, 0, 2)], true).children.slice(0, 2).map((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
     const ground = (): string => (neonMaterial('scene_col_map_b') as THREE.MeshStandardMaterial).color.toArray().join();
     const space = BOSS_SPACE.chaplain!;
     neonDeckLook('mess');
@@ -415,7 +415,7 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
     expect(ground()).not.toBe(plainGround);
     neonDeckLook('chapel', true, space);
     expect(colours()[0]).toBe(glowHex(RUN_KEY.key));
-    expect(neonSkyOf('chapel', space).getHex()).toBe(new THREE.Color(NEON.sky).lerp(new THREE.Color(space.key), space.sky).getHex());
+    expect(neonSkyOf('chapel', space).getHex()).toBe(new THREE.Color(NEON.sky).lerp(new THREE.Color(space.surround), space.sky).getHex());
     expect(neonSkyOf('chapel', null).getHex()).toBe(neonSkyOf('chapel').getHex());
     neonDeckLook('mess');
   });
