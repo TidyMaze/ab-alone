@@ -41,6 +41,9 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
+      # wasm-opt from the Actions cache, so a GitHub release outage cannot fail wasm-pack (#1648).
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/wasm-opt
       - if: steps.wasm-cache.outputs.cache-hit != 'true'
         run: wasm-pack build crates/abalone-wasm --target web
       - uses: actions/setup-node@v4

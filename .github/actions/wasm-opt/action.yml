@@ -1,0 +1,59 @@
+# Puts binaryen's wasm-opt on PATH before `wasm-pack build` (#1648). wasm-pack looks wasm-opt up on PATH first and
+# only downloads binaryen from GitHub releases when it is missing; that download, fresh on every run without a retry,
+# turned main red while the release URL answered 504. Here the archive is kept in the Actions cache (the repo's tool
+# convention, like the Playwright browsers and the ktx2 textures; nothing is vendored in git), keyed on the exact
+# version and runner, so only the first run after a cache miss downloads it, with 3 retries and a clear error.
+# Usage, after actions/checkout: `- uses: ./.github/actions/wasm-opt`
+name: wasm-opt
+description: Restore or download a pinned binaryen release and put its wasm-opt on PATH.
+inputs:
+  version:
+    description: binaryen release number, pinned to the one wasm-pack fetches itself (version_130).
+    default: '130'
+runs:
+  using: composite
+  steps:
+    - id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/binaryen-version_${{ inputs.version }}
+        key: binaryen-version_${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+    - if: steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        RUNNER_PLATFORM: ${{ runner.os }}-${{ runner.arch }}
+      run: |
+        if [ "$RUNNER_PLATFORM" != "Linux-X64" ]; then
+          echo "::error::wasm-opt action only knows the x86_64-linux binaryen archive, not $RUNNER_PLATFORM"
+          exit 1
+        fi
+        url="https://github.com/WebAssembly/binaryen/releases/download/version_${VERSION}/binaryen-version_${VERSION}-x86_64-linux.tar.gz"
+        archive="$RUNNER_TEMP/binaryen.tar.gz"
+        # 1 try + 3 retries, waiting 15, 30 then 60 s.
+        for wait in 15 30 60 0; do
+          if curl --fail --location --silent --show-error --max-time 120 -o "$archive" "$url"; then
+            break
+          fi
+          if [ "$wait" = 0 ]; then
+            echo "::error::binaryen download failed after 3 retries: $url (GitHub releases outage? rerun once it answers)"
+            exit 1
+          fi
+          echo "binaryen download failed, retrying in ${wait} s: $url"
+          sleep "$wait"
+        done
+        mkdir -p ~/.cache
+        tar -xzf "$archive" -C ~/.cache
+        test -x ~/.cache/binaryen-version_${VERSION}/bin/wasm-opt
+    # Saved right away, not in a post step, so a later failing test step does not lose the download.
+    - if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/binaryen-version_${{ inputs.version }}
+        key: binaryen-version_${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+    - shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        echo "$HOME/.cache/binaryen-version_${VERSION}/bin" >> "$GITHUB_PATH"
+        "$HOME/.cache/binaryen-version_${VERSION}/bin/wasm-opt" --version
