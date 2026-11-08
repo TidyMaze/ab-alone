@@ -79,8 +79,8 @@ describe('web app manifest', () => {
   const html = read('../index.html');
 
   it('names the app and opens it standalone', () => {
-    expect(manifest.name).toBe('AB-ALONE');
-    expect(manifest.short_name).toBe('AB-ALONE');
+    expect(manifest.name).toBe('Edgefall');
+    expect(manifest.short_name).toBe('Edgefall');
     expect(manifest.display).toBe('standalone');
   });
 
