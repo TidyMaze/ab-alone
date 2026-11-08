@@ -332,7 +332,7 @@ export const COMMANDERS: readonly { name: string; line: string; relic: number; s
   { name: 'The Captain', line: 'Keeps a steady hand on the bridge and a plain army behind it.', relic: Relic.Gyroscope, specials: noSpecials(), acts: 0, icon: 'M4 17h16M5 17l-1-9 5 4 3-6 3 6 5-4-1 9' },
   { name: 'The Warden', line: 'Holds the line with Anchors and mends what the fight takes.', relic: Relic.HullPlating, specials: only(2, 2), acts: 1, icon: 'M5 21V9l2-2V4h3v3h4V4h3v3l2 2v12zM10 21v-5h4v5' },
   { name: 'The Saboteur', line: 'Packs Sparks and wants every burst to reach further.', relic: Relic.Detonator, specials: only(3, 2), acts: 2, icon: 'M11 9a6 6 0 1 0 0 12a6 6 0 1 0 0-12M15 9l3-3M17 4l3 2' },
-  { name: 'The Juggernaut', line: 'Leads Heavies and turns every rest into more weight.', relic: Relic.Bunks, specials: only(1, 2), acts: 3, icon: 'M4 6h16v6H4zM8 12v8M16 12v8M6 20h4M14 20h4' },
+  { name: 'The Juggernaut', line: 'Starts plain and turns every rest into more weight.', relic: Relic.Bunks, specials: noSpecials(), acts: 3, icon: 'M4 6h16v6H4zM8 12v8M16 12v8M6 20h4M14 20h4' },
 ];
 /** The most ascension level. */
 export const MAX_ASCENSION = 10;

@@ -37,11 +37,12 @@ const ELITE_LOSS: u8 = 2;
 
 /// The four commanders of section 17: name, starting relic, and the kind and number of their special marbles, if any
 /// (a test, `client/src/runsim.test.ts`, keeps them equal to the page's `COMMANDERS`).
-const COMMANDERS: [(&str, Relic, Option<(Special, usize)>); 4] = [
+type Commander = (&'static str, Relic, Option<(Special, usize)>);
+const COMMANDERS: [Commander; 4] = [
     ("The Captain", Relic::Gyroscope, None),
     ("The Warden", Relic::HullPlating, Some((Special::Anchor, 2))),
     ("The Saboteur", Relic::Detonator, Some((Special::Spark, 2))),
-    ("The Juggernaut", Relic::Bunks, Some((Special::Heavy, 2))),
+    ("The Juggernaut", Relic::Bunks, None),
 ];
 
 /// splitmix64, as the engine's.

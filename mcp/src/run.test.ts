@@ -222,9 +222,9 @@ describe('new_run', () => {
   test('the commander is the Captain, or another one unlocked by best: its special marbles and its relic', async () => {
     const { run } = setup();
     expect(value(await run.newRun({ seed: 0, best: 1, commander: 1 }))).toMatchObject({ specials: { Anchor: 2 }, relics: ['Hull plating'] });
-    expect(value(await run.newRun({ seed: 0, best: 3, commander: 3 }))).toMatchObject({ specials: { Heavy: 2 }, relics: ['Bunks'] });
+    expect(value(await run.newRun({ seed: 0, best: 3, commander: 3 }))).toMatchObject({ specials: {}, relics: ['Bunks'] });
     expect(failure(await run.newRun({ seed: 0, best: 0, commander: 1 })).code).toBe('bad_choice');
-    expect(value(run.state({})).specials).toEqual({ Heavy: 2 }); // the run in progress is kept
+    expect(value(run.state({})).specials).toEqual({}); // the run in progress is kept
   });
 
   test('state with map lists every node, its kind and the nodes it leads to', async () => {

@@ -233,7 +233,7 @@ marbles, and an unlock only widens what a run may hold.
   | 0 | Heavy | The Captain (14 plain) |
   | 1 | Anchor, Shield | The Warden (12 plain, 2 Anchors) |
   | 2 | Spark, Medic | The Saboteur (12 plain, 2 Sparks) |
-  | 3 (a run won) | Magnet, Bomb | The Juggernaut (12 plain, 2 Heavies) |
+  | 3 (a run won) | Magnet, Bomb | The Juggernaut (14 plain, Bunks) |
 
   A locked type is never a reward offer, and an event that gains it is never dealt.
 - **Start**: before the first pick, the map shows the types in the rewards (the locked ones with
@@ -643,7 +643,7 @@ events, one trade each.
 
 The starting armies of section 8 become **commanders**: a run starts with one, picked on the map before the first node.
 A commander is a different start, not a stronger one (Decision #934): all four have 14 marbles, **a starting relic**
-(one of section 9's first six, which every run has in its pools) and a **style**, at most 2 special marbles. Each has a
+(one of section 9's first six, which every run has in its pools) and a **style**, at most 2 special marbles (the Captain and the Juggernaut start with none). Each has a
 portrait (a line icon) and a line. Only variety carries over between runs, never power.
 
 | Commander | Unlocked at (acts won in one run, section 8) | Style | Starting relic |
@@ -651,8 +651,13 @@ portrait (a line icon) and a line. Only variety carries over between runs, never
 | The Captain | 0 | 14 plain marbles | Gyroscope |
 | The Warden | 1 | 2 Anchors | Hull plating |
 | The Saboteur | 2 | 2 Sparks | Detonator |
-| The Juggernaut | 3 (a run won) | 2 Heavies | Bunks |
+| The Juggernaut | 3 (a run won) | 14 plain marbles, the Heavies come from its Bunks | Bunks |
 
+- **Tuned (#1632)**: the Juggernaut started with 2 Heavies and cleared act 1 in 52 % of the simulator's level 0 runs (section 30),
+  against 28 to 45 % for the others, and 32 % at level 10 against 2 to 5 %: a stronger start. One Heavy did not move level 0 (52 %, 15 % at level 10);
+  none did (40 % at level 0, 2 % at level 10), so it starts plain and its Bunks, a Heavy at each rest, are its style (its line: "Starts plain and
+  turns every rest into more weight."). The simulator keeps its own copy of the four starts (`COMMANDERS` in `run_sim.rs`) and
+  `client/src/runsim.test.ts` checks it equals the page's. A run saved as the Juggernaut before keeps the two Heavies it was saved with.
 - **Pick**: the start screen has a button per commander (portrait, name, style and relic; a locked one is disabled with what
   unlocks it), the one picked pressed, and under them its line and what its relic does. A new run starts with the Captain
   picked. Picking another replaces the first one's marbles and relic: nothing of it stays. After the first node, or once the
@@ -1156,7 +1161,7 @@ cannot say. The table is a measure of the curve (act against act, boss against b
   of before). The army (Black) brings its marbles and its commander's special marbles to the foes of `run::foe_plan_v` for that node: its formation,
   its special marbles (a fight holds act + 1 of them, one more at level 3 and another at level 8, section 20; an elite its archetype's) and the biome's
   holes. The army's special marbles stand on the front of its army, in the order of the standard layout (the Warden's two Anchors, the
-  Saboteur's two Sparks, the Juggernaut's two Heavies, the Captain none; the page lets the player place them, so this is a
+  Saboteur's two Sparks, the Captain and the Juggernaut none; the page lets the player place them, so this is a
   choice of the bot), the commander's relic is held in the engine (Gyroscope, Hull plating, Detonator, Bunks), and the Juggernaut's Bunks add a Heavy
   at each rest it takes while the army can hold it. A special marble that is thrown off is gone for the rest of the run. The army's marbles
   after the fight are the ones left on the board, one more saved by the Hull plating; a fight not won (a draw, 400 plies, or the army down to 3
@@ -1247,11 +1252,25 @@ fight or an elite not won, an act boss not won, the army under 4 marbles):
 | The Saboteur | 0 | 40 | 18/40 (45 %), 45 % of runs (+/- 8) | 0/18 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 33, elite 2, boss 5, army 0 |
 | The Saboteur | 5 | 40 | 4/40 (10 %), 10 % of runs (+/- 5) | 0/4 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 37, elite 1, boss 2, army 0 |
 | The Saboteur | 10 | 40 | 1/40 (2 %), 2 % of runs (+/- 2) | 0/1 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 40, elite 0, boss 0, army 0 |
-| The Juggernaut | 0 | 40 | 21/40 (52 %), 52 % of runs (+/- 8) | 6/21 (29 %), 15 % of runs (+/- 6) | 2/6 (33 %), 5 % of runs (+/- 3) | fight 23, elite 2, boss 13, army 0 |
-| The Juggernaut | 5 | 40 | 16/40 (40 %), 40 % of runs (+/- 8) | 5/16 (31 %), 12 % of runs (+/- 5) | 0/5 (0 %), 0 % of runs (+/- 0) | fight 25, elite 3, boss 12, army 0 |
-| The Juggernaut | 10 | 40 | 13/40 (32 %), 32 % of runs (+/- 7) | 5/13 (38 %), 12 % of runs (+/- 5) | 2/5 (40 %), 5 % of runs (+/- 3) | fight 33, elite 1, boss 4, army 0 |
+| The Juggernaut | 0 | 40 | 16/40 (40 %), 40 % of runs (+/- 8) | 1/16 (6 %), 2 % of runs (+/- 2) | 0/1 (0 %), 0 % of runs (+/- 0) | fight 31, elite 2, boss 7, army 0 |
+| The Juggernaut | 5 | 40 | 4/40 (10 %), 10 % of runs (+/- 5) | 1/4 (25 %), 2 % of runs (+/- 2) | 0/1 (0 %), 0 % of runs (+/- 0) | fight 35, elite 2, boss 3, army 0 |
+| The Juggernaut | 10 | 40 | 1/40 (2 %), 2 % of runs (+/- 2) | 0/1 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 40, elite 0, boss 0, army 0 |
 
-**The same with the army's bot at 500 positions** (`RUN_SIM_ARMY=500`, 2 plies, 20 minutes on 8 threads, 4180 CPU seconds, 9 CPU seconds a run), to show what the bot's strength does:
+**The Juggernaut tuned (#1632)**: the Juggernaut rows of the table above are the tuned ones (it starts with no Heavy, its Bunks make them); the other
+nine rows are unchanged, as the same command gives the same runs. The Juggernaut before, and the candidates, act 1 cleared of 40 seeds (`RUN_SIM_THREADS=8 RUN_SIM_LEVELS=0 cargo run --release --example run_sim 3`
+for one commander and a level, about 6 minutes on 8 threads, bot-only numbers):
+
+| Juggernaut's start | level 0 | level 5 | level 10 |
+|---|---|---|---|
+| 2 Heavies and Bunks (before) | 21/40 (52 %, +/- 8) | 16/40 (40 %, +/- 8) | 13/40 (32 %, +/- 7) |
+| 1 Heavy and Bunks | 21/40 (52 %, +/- 8) | not measured | 6/40 (15 %, +/- 6) |
+| **no Heavy and Bunks (kept)** | **16/40 (40 %, +/- 8)** | **4/40 (10 %, +/- 5)** | **1/40 (2 %, +/- 2)** |
+| the Captain, Warden, Saboteur | 28, 30 and 45 % (+/- 7, 7, 8) | 15, 10 and 10 % | 2, 5 and 2 % |
+
+At level 0 the four are 28, 30, 40 and 45 % (the Juggernaut is 12 points over the Captain, 1.1 standard errors of the difference, and under the Saboteur), at level 5
+10 to 15 % and at level 10 2 to 5 %: inside the error of each other, which the bot's act 1 sample cannot split further.
+
+**The same with the army's bot at 500 positions** (before #1632, the Juggernaut with its two Heavies; `RUN_SIM_ARMY=500`, 2 plies, 20 minutes on 8 threads, 4180 CPU seconds, 9 CPU seconds a run), to show what the bot's strength does:
 
 | commander | level | runs | act 1 | act 2 | act 3 = the run | the runs lost to |
 |---|---|---|---|---|---|---|
@@ -1289,6 +1308,8 @@ Error: 40 runs, so a cell at 50 % is known to about 8 points (one standard error
 act 1 count few runs (the Captain's act 2 is 4 runs). The boss fights are shared between the rows that reach them, so the rows are not independent samples either.
 
 **Reading the table with the fights** (bot-only; every number is of the first table above unless said, an error of 5 to 8 points on the rates):
+
+- **Written before #1632**: the bullets below read the table with the Juggernaut's two Heavies (52, 40 and 32 %); its tuned rows are above and the three other commanders' are unchanged.
 
 - **The fights end the runs.** 33 to 40 of the 40 runs of every row but the Juggernaut's end at a fight (23, 25 and 33 for the Juggernaut), 0 to 3 at an elite and 0 to 5 at an act
   boss (the Juggernaut's 13, 12 and 4), and none under 4 marbles. The bot clears act 1 in **28 %** of the Captain's level 0 runs where it counted every fight won and cleared **80 %** (the table of before): more
