@@ -896,7 +896,7 @@ describe('main.ts, the deck plan (#1249)', () => {
     shipAt(game, [1, -1]);
     const marbleGroup = scene().children.find((c) => c.children.some((k) => k.name === 'door-boss'))!;
     const boss = marbleGroup.getObjectByName('door-boss')!;
-    expect(boss.children.map((c) => c.name)).toEqual(['scene_hub_prop_door', 'scene_hub_ring_door']); // the file's, no procedural parts
+    expect(boss.children.map((c) => c.name)).toEqual(['scene_hub_prop_door', 'scene_hub_ring_door', 'seat-lamp']); // the file's, and the seat boss's lamp (#1556)
     expect(boss.position.y).toBeCloseTo(-0.11); // on the board plane: the marbles' group is 0.11 up
     const lift = marbleGroup.getObjectByName('door-lift')!;
     expect(lift.children.map((c) => c.name)).toEqual(['scene_hub_prop_lift', '', 'locked-bar']); // the cage, the arrow, the bar of a locked lift
