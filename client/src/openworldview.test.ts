@@ -29,6 +29,7 @@ import {
   MAX_ZOOM,
   MOST,
   OpenWorldView,
+  PROPS,
   reachAt,
   reachFor,
   STEP,
@@ -1256,22 +1257,66 @@ describe('the water (docs/specs/openworld.md section 2): depth, a glossy surface
     expect('glow' in view).toBe(false);
   });
 
-  it('draws a boulder as a black 20-triangle shell sphere, with no glow (#1315)', () => {
+  it('draws a boulder as a broken shell half sunk in the ground, a low jagged dome and a shard, never a ball like a marble (#1315, #1557)', () => {
     const view = new OpenWorldView(new World(terrain(() => GRASS_CODE)));
     const boulder = mesh(view, 'prop-boulder');
     const position = boulder.geometry.getAttribute('position');
-    expect((boulder.geometry.index?.count ?? position.count) / 3).toBe(20);
+    expect((boulder.geometry.index?.count ?? position.count) / 3).toBe(24);
     const material = boulder.material as THREE.MeshStandardMaterial;
     expect(material.emissive.getHex()).toBe(0x000000);
     expect(material.color.getHex()).toBe(0x3a3631); // warm charcoal: shows on slate, never a black marble
     expect(material.roughness).toBe(1); // matte
     expect(material.vertexColors).toBe(true);
+    const points = Array.from({ length: position.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(position, i));
+    const [xs, ys, zs] = [points.map((p) => p.x), points.map((p) => p.y), points.map((p) => p.z)];
+    const extent = (v: number[]) => Math.max(...v) - Math.min(...v);
+    expect(Math.min(...ys)).toBeCloseTo(-0.25, 5); // laid 0.2 over the ground at 0.8 high: its foot on the ground
+    expect(Math.min(extent(xs), extent(zs)) / (extent(ys) * 0.8)).toBeGreaterThan(1.6); // squat: a marble is as tall as it is wide
+    const foot = points.filter((p) => p.y < -0.249).map((p) => Math.hypot(p.x, p.z));
+    expect(Math.max(...foot) / Math.min(...foot)).toBeGreaterThan(1.25); // a jagged rim, not a circle
     const shade = boulder.geometry.getAttribute('color');
     const normal = boulder.geometry.getAttribute('normal');
     const ups = Array.from({ length: shade.count }, (_, i) => [normal.getY(i) > 0.5, shade.getX(i)] as const);
     expect(ups.some(([up]) => up)).toBe(true);
     for (const [up, value] of ups) expect(value).toBeCloseTo(up ? 1.15 : 1); // the top faces are 15 % lighter
+    for (let f = 0; f < position.count; f += 3) {
+      const n = new THREE.Vector3().fromBufferAttribute(normal, f);
+      expect(n.length()).toBeCloseTo(1, 5);
+      expect(n.y).toBeGreaterThan(-0.01); // nothing faces the ground it sits in
+    }
     expect(mesh(view, 'prop-boulder-hi').geometry.getAttribute('position').count).toBe(position.count); // near the hero it is the same shell
+  });
+
+  it("rims a boulder in the look's rim colour, a fresnel on its edge, when the look gives one (#1557)", () => {
+    const plain = mesh(new OpenWorldView(new World(terrain(() => GRASS_CODE))), 'prop-boulder').material as THREE.MeshStandardNodeMaterial;
+    expect(plain.emissiveNode ?? null).toBeNull();
+    Object.assign(PROPS.boulder, { rim: 0x7fd6e8 });
+    try {
+      const rimmed = mesh(new OpenWorldView(new World(terrain(() => GRASS_CODE))), 'prop-boulder').material as THREE.MeshStandardNodeMaterial;
+      expect(rimmed.emissiveNode).toBeTruthy();
+      expect(rimmed.vertexColors).toBe(true);
+    } finally {
+      Object.assign(PROPS.boulder, { rim: 0 });
+    }
+  });
+
+  it("rings a wall's walkway with the sodium edge, a hex ring the merlons stand in, under their tops (#1173, #1557)", () => {
+    const world = new World(terrain((q, r) => (q === 2 && r === 0 ? 7 : GRASS_CODE)));
+    const view = new OpenWorldView(world);
+    view.show([0, 0]);
+    const cap = mesh(view, 'prop-cap');
+    const position = cap.geometry.getAttribute('position');
+    const radii = Array.from({ length: position.count }, (_, i) => Math.hypot(position.getX(i), position.getZ(i)));
+    expect(Math.min(...radii)).toBeGreaterThan(0.29); // a hole the merlons stand in
+    expect(Math.max(...radii)).toBeCloseTo(0.54, 5); // a rim past the wall's side
+    expect((cap.geometry.index?.count ?? position.count) / 3).toBeLessThanOrEqual(24);
+    const [m, rim] = [new THREE.Matrix4(), new THREE.Vector3()];
+    cap.getMatrixAt(0, m);
+    m.decompose(rim, new THREE.Quaternion(), new THREE.Vector3());
+    const [q, r] = cellsOf(view, 'prop-cap')[0]!;
+    const above = rim.y - topOf('rock', world.tile(q, r)!.height, q, r);
+    expect(above).toBeGreaterThan(0.5); // over the walkway
+    expect(above).toBeLessThan(0.9); // under the merlons' tops, the wall's 0.9
   });
 
   it('draws a tree as a matte teal outcrop, emissive off, as the world spec allows no glow on a prop (#1315)', () => {

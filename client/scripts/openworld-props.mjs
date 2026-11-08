@@ -1,6 +1,6 @@
 // The Open world's mountain and tree (#1557), generated: a two-level faceted peak and a three-tier pine, so that from far away they
 // read apart from each other and from the crystal they were (both were cones). Each replaces the mesh of its node (`ow_mountain`,
-// `ow_tree`, and the `_hi` nodes) in the two prop models; the boulder and the wall keep their own bytes. Same input, same bytes: the
+// `ow_tree`, and the `_hi` nodes) in the two prop models; the wall is a generated battlement too (#1557); the boulder keeps its bytes. Same input, same bytes: the
 // committed models are what this writes, and writing them again changes nothing. Run from client/, then pack the served copy:
 //   node -e "import('./scripts/openworld-props.mjs').then((m) => m.regenerate(m.MODELS))" && bun run scripts/pack-models.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -14,18 +14,27 @@ const sub = (a, b) => a.map((v, i) => v - b[i]);
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 /** The flat geometry of triangles, each point `[x, y, z, tone]` (tone 0 is the base, 1 the peak). A face's normal points away from
- * the axis: the sign of its radial part is kept. Positions and normals are floats, the colours normalised unsigned shorts (RGBA). */
-function flat(triangles, base, peak) {
+ * the axis: the sign of its radial part is kept. With `outs`, a face is turned (its winding and its normal) toward its own outside
+ * direction instead. Positions and normals are floats, the colours normalised unsigned shorts (RGBA). */
+function flat(triangles, base, peak, outs) {
   const positions = [];
   const normals = [];
   const colours = [];
-  for (const tri of triangles) {
-    const [p0, p1, p2] = tri;
-    const n = cross(sub(p1, p0), sub(p2, p0));
-    const cx = (p0[0] + p1[0] + p2[0]) / 3;
-    const cz = (p0[2] + p1[2] + p2[2]) / 3;
+  triangles.forEach((given, index) => {
+    let tri = given;
+    let n = cross(sub(tri[1], tri[0]), sub(tri[2], tri[0]));
+    let sign;
+    if (outs) {
+      const out = outs[index];
+      if (n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0) tri = [tri[0], tri[2], tri[1]];
+      n = cross(sub(tri[1], tri[0]), sub(tri[2], tri[0]));
+      sign = 1;
+    } else {
+      const cx = (tri[0][0] + tri[1][0] + tri[2][0]) / 3;
+      const cz = (tri[0][2] + tri[1][2] + tri[2][2]) / 3;
+      sign = Math.sign(n[0] * cx + n[2] * cz);
+    }
     const length = Math.hypot(...n);
-    const sign = Math.sign(n[0] * cx + n[2] * cz);
     for (const p of tri) {
       positions.push(p[0], p[1], p[2]);
       normals.push(...n.map((v) => (sign * v) / length));
@@ -33,7 +42,7 @@ function flat(triangles, base, peak) {
       for (let c = 0; c < 3; c++) colours.push(Math.round((base[c] + (peak[c] - base[c]) * t) * 65535));
       colours.push(65535);
     }
-  }
+  });
   const count = triangles.length * 3;
   return {
     positions: new Float32Array(positions),
@@ -47,6 +56,7 @@ function flat(triangles, base, peak) {
  * tree's dark skirt and bright tip). */
 const TONES = {
   mountain: { base: [0.07, 0.09, 0.13], peak: [0.79, 0.87, 1] },
+  wall: { base: [0.02, 0.03, 0.04], peak: [0.16, 0.19, 0.25] }, // a dark foot, a slate walkway, pale merlon tops (#1557)
   tree: { base: [0x5d / 255, 0x6a / 255, 0x82 / 255], peak: [0x7f / 255, 0xd6 / 255, 0xe8 / 255] }, // the palette's cell slate and pedestal ring (#1557 art round 1)
 };
 
@@ -87,7 +97,46 @@ export function tree(sides) {
   return flat(triangles, TONES.tree.base, TONES.tree.peak);
 }
 
-/** A glTF's bytes with the mountain and the tree (the nodes `ow_mountain`, `ow_tree`, with `_hi` in the detailed file) remade with
+/** The wall: a hex column (corners at 30 + 60 k degrees, radius 0.5, as the old wall) up to a walkway at 0.125, and three merlons on
+ * alternate edges up to 0.5, 0.375 high and 0.2 deep: from above a dark hex with three pale teeth, from the side a battlement. 12 side, 4
+ * walkway and 3 x 10 merlon triangles: 46. */
+export function wall() {
+  const FOOT = -0.5;
+  const WALK = 0.125;
+  const TOP = 0.5;
+  const corner = (i, radius, y, t) => {
+    const a = ((30 + 60 * i) * Math.PI) / 180;
+    return [radius * Math.cos(a), y, radius * Math.sin(a), t];
+  };
+  const triangles = [];
+  const outs = [];
+  const face = (a, b, c, out) => {
+    triangles.push([a, b, c]);
+    outs.push(out);
+  };
+  const quad = (a, b, c, d, out) => {
+    face(a, b, c, out);
+    face(a, c, d, out);
+  };
+  const UP = [0, 1, 0];
+  const mid = (i) => [Math.cos(((60 + 60 * i) * Math.PI) / 180), 0, Math.sin(((60 + 60 * i) * Math.PI) / 180)];
+  for (let i = 0; i < 6; i++) quad(corner(i, 0.5, FOOT, 0), corner(i + 1, 0.5, FOOT, 0), corner(i + 1, 0.5, WALK, 0.5), corner(i, 0.5, WALK, 0.5), mid(i));
+  for (let i = 1; i < 5; i++) face(corner(0, 0.5, WALK, 0.5), corner(i, 0.5, WALK, 0.5), corner(i + 1, 0.5, WALK, 0.5), UP);
+  for (let i = 0; i < 6; i += 2) {
+    const [o0, o1, i0, i1] = [corner(i, 0.5, WALK, 0.5), corner(i + 1, 0.5, WALK, 0.5), corner(i, 0.3, WALK, 0.5), corner(i + 1, 0.3, WALK, 0.5)];
+    const up = (p) => [p[0], TOP, p[2], 1];
+    const out = mid(i);
+    const side = (p, q) => sub(q, p); // along the edge, out of the merlon's end
+    quad(o0, o1, up(o1), up(o0), out);
+    quad(i0, i1, up(i1), up(i0), out.map((v) => -v));
+    quad(o0, i0, up(i0), up(o0), side(o1, o0));
+    quad(o1, i1, up(i1), up(o1), side(o0, o1));
+    quad(up(o0), up(o1), up(i1), up(i0), UP);
+  }
+  return flat(triangles, TONES.wall.base, TONES.wall.peak, outs);
+}
+
+/** A glTF's bytes with the mountain, the tree and the wall (the nodes `ow_mountain`, `ow_tree`, `ow_wall`, with `_hi` in the detailed file) remade with
  * `sides.tree` sides. Every other accessor is copied as it is. */
 export function withProps(glb, sides) {
   const headerLength = glb.readUInt32LE(12);
@@ -95,7 +144,7 @@ export function withProps(glb, sides) {
   const bin = glb.subarray(28 + headerLength, 28 + headerLength + glb.readUInt32LE(20 + headerLength));
   const propOfMesh = {};
   for (const node of doc.nodes) {
-    const match = /^ow_(mountain|tree)(_hi)?$/.exec(node.name);
+    const match = /^ow_(mountain|tree|wall)(_hi)?$/.exec(node.name);
     if (match) propOfMesh[node.mesh] = match[1];
   }
   const views = [];
@@ -130,7 +179,7 @@ export function withProps(glb, sides) {
         primitive.indices = copy(primitive.indices);
         return;
       }
-      const g = prop === 'tree' ? tree(sides.tree) : mountain();
+      const g = prop === 'tree' ? tree(sides.tree) : prop === 'wall' ? wall() : mountain();
       const axis = (c) => Array.from({ length: g.positions.length / 3 }, (_, i) => g.positions[i * 3 + c]);
       const min = [0, 1, 2].map((c) => Math.min(...axis(c)));
       const max = [0, 1, 2].map((c) => Math.max(...axis(c)));

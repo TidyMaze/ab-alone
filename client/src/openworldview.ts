@@ -4,7 +4,7 @@
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import { accentLights, neonSkyGlow } from './neonfx';
 import * as THREE from 'three/webgpu';
-import { uniform, vertexColor } from 'three/tsl';
+import { abs, color as tslColor, dot, float, normalView, positionViewDirection, pow, uniform, vertexColor } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
@@ -255,9 +255,54 @@ export function waterColor(world: World, q: number, r: number): THREE.Color {
   return new THREE.Color(WATER.shore).lerp(new THREE.Color(WATER.deep), wet);
 }
 
-/** The frozen crew's shell: a 20-triangle sphere whose top faces are 15 % lighter than the rest (vertex colours, a ratio of the material colour). */
+/** A flat hex ring, `outer` to `inner` round, 1 high, corners where the wall's are: its top and its outer side, 24 triangles (#1557). */
+function hexRing(outer: number, inner: number): THREE.BufferGeometry {
+  const corner = (i: number, radius: number, y: number) => new THREE.Vector3(radius * Math.sin((i * Math.PI) / 3), y, radius * Math.cos((i * Math.PI) / 3));
+  const triangles: THREE.Vector3[][] = [];
+  for (let i = 0; i < 6; i++) {
+    const [o0, o1, i0, i1] = [corner(i, outer, 0.5), corner(i + 1, outer, 0.5), corner(i, inner, 0.5), corner(i + 1, inner, 0.5)];
+    const [b0, b1] = [corner(i, outer, -0.5), corner(i + 1, outer, -0.5)];
+    triangles.push([o0, o1, i1], [o0, i1, i0], [b0, b1, o1], [b0, o1, o0]);
+  }
+  return faceted(triangles, (tri) => (tri[0]!.y === tri[1]!.y && tri[1]!.y === tri[2]!.y ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(0, 0, 0)));
+}
+
+/** A flat-shaded geometry of triangles, each turned to face away from `inside` (its winding and its normal). */
+function faceted(triangles: readonly (readonly THREE.Vector3[])[], inside: (tri: readonly THREE.Vector3[]) => THREE.Vector3): THREE.BufferGeometry {
+  const points = triangles.flatMap((tri) => {
+    const [a, b, c] = tri as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+    const n = new THREE.Vector3().crossVectors(b.clone().sub(a), c.clone().sub(a));
+    const centre = a.clone().add(b).add(c).divideScalar(3);
+    return n.dot(centre.sub(inside(tri))) < 0 ? [a, c, b] : [a, b, c];
+  });
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  geometry.computeVertexNormals(); // no index: each face its own normal
+  return geometry;
+}
+
+/** The frozen crew's shell, broken and half sunk (#1557): a low dome of 7 jagged facets round, 2 rings and an off-centre crown, and a
+ * shard of it leaning at its foot. 24 triangles, wider than tall, so it never reads as a marble. Its foot is at -0.25 (laid 0.2 over the
+ * ground, 0.8 high). Its top faces are 15 % lighter than the rest (vertex colours, a ratio of the material colour). */
 function shell(): THREE.BufferGeometry {
-  const geometry = new THREE.IcosahedronGeometry(0.34);
+  const FOOT = -0.25;
+  const ring = (radius: number, y: number, offset: number, jag: readonly number[]) =>
+    jag.map((j, i) => {
+      const a = ((i + offset) * 2 * Math.PI) / jag.length;
+      return new THREE.Vector3(radius * j * Math.cos(a), y, radius * j * Math.sin(a));
+    });
+  const low = ring(0.44, FOOT, 0, [1, 0.78, 0.96, 1.08, 0.82, 1, 0.9]);
+  const mid = ring(0.28, 0.0, 0.5, [1, 0.86, 1.1, 0.9, 1.04, 0.8, 1]);
+  const crown = new THREE.Vector3(0.05, 0.14, -0.03);
+  const dome: THREE.Vector3[][] = [];
+  for (let i = 0; i < 7; i++) {
+    const j = (i + 1) % 7;
+    dome.push([low[i]!, low[j]!, mid[i]!], [mid[i]!, low[j]!, mid[j]!], [mid[i]!, mid[j]!, crown]);
+  }
+  const shard = [new THREE.Vector3(0.26, FOOT, 0.36), new THREE.Vector3(0.54, FOOT, 0), new THREE.Vector3(0.1, FOOT, 0)];
+  const tip = new THREE.Vector3(0.32, 0.2, 0.14);
+  const shardBase = shard[0]!.clone().add(shard[1]!).add(shard[2]!).divideScalar(3);
+  const shardFaces = shard.map((p, i) => [p, shard[(i + 1) % 3]!, tip]);
+  const geometry = faceted([...dome, ...shardFaces], (tri) => (dome.includes(tri as THREE.Vector3[]) ? new THREE.Vector3(0, FOOT, 0) : shardBase));
   const normal = geometry.getAttribute('normal');
   const shade = new Float32Array(normal.count * 3);
   for (let i = 0; i < normal.count; i++) shade.fill(normal.getY(i) > 0.5 ? 1.15 : 1, i * 3, i * 3 + 3);
@@ -269,9 +314,9 @@ function shell(): THREE.BufferGeometry {
 export const PROPS = {
   mountain: { geometry: new THREE.ConeGeometry(0.62, 1, 6), color: 0x5d6978, emissive: 0x2a1f0c, flat: true },
   tree: { geometry: new THREE.ConeGeometry(0.34, 1, 5), color: 0x2fb5a0, emissive: 0x000000, flat: true }, // a slag-glass outcrop, matte: no glow on a prop (#1315)
-  boulder: { geometry: shell(), color: 0x3a3631, emissive: 0x000000, flat: true }, // a frozen crew's shell: 20 triangles, warm charcoal, matte (#1315)
+  boulder: { geometry: shell(), color: 0x3a3631, emissive: 0x000000, flat: true, rim: 0x000000 }, // a frozen crew's shell: 20 triangles, warm charcoal, matte (#1315)
   wall: { geometry: new THREE.CylinderGeometry(0.5, 0.5, 1, 6), color: 0x14171b, emissive: 0x000000, flat: false },
-  cap: { geometry: new THREE.CylinderGeometry(0.52, 0.52, 1, 6), color: SODIUM, emissive: 0x6c4115, flat: false },
+  cap: { geometry: hexRing(0.54, 0.3), color: SODIUM, emissive: 0x6c4115, flat: false },
 } as const;
 type Prop = keyof typeof PROPS;
 const PROP_NAMES = Object.keys(PROPS) as Prop[];
@@ -366,6 +411,8 @@ export const MARBLE_LOOK = {
 } as const;
 const WALL = 0.9;
 const CAP = 0.07;
+/** The walkway of a wall, between its merlons (the wall model of `scripts/openworld-props.mjs`): 3/8 of its height under its top. */
+const WALKWAY = WALL * 0.625;
 
 /** The height of one level of the relief: a cell of level `h` stands `0.2 + STEP * h` high, a peak (level 7) `0.2 + 7 * STEP`.
  * Kept by looking at the screenshots of #988 (openworld-terrain.md section 5). */
@@ -399,10 +446,17 @@ const chase = (spring: Spring, goal: number, dt: number, instant: boolean): bool
 /** A stable 0 to 1 draw per cell, so the mountains and the trees differ in height but never change between draws. */
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
 
+/** The strength of a boulder's rim, when the look gives it one (`PROPS.boulder.rim`, #1557). */
+export const BOULDER_RIM = 1.6;
 /** The material of a prop's mesh: its look, the same for its low-poly and its detailed mesh. */
 const propMaterial = (prop: Prop, sway: THREE.Node): THREE.Material => {
   const { color, emissive, flat } = PROPS[prop];
   const look = { color, emissive, roughness: prop === 'boulder' ? 1 : 0.8, flatShading: flat, vertexColors: prop === 'boulder' };
+  if (prop === 'boulder' && PROPS.boulder.rim !== 0) {
+    const shell = new THREE.MeshStandardNodeMaterial(look); // the shell's edge in the look's rim colour, a fresnel (#1557 art round 1)
+    shell.emissiveNode = tslColor(PROPS.boulder.rim).mul(pow(float(1).sub(abs(dot(normalView, positionViewDirection))), 2).mul(BOULDER_RIM));
+    return shell;
+  }
   if (prop !== 'tree') return new THREE.MeshStandardMaterial(look);
   const material = new THREE.MeshStandardNodeMaterial(look); // the trees lean in the wind with a term of their vertex shader (#1102)
   material.positionNode = sway;
@@ -1987,7 +2041,7 @@ export class OpenWorldView {
     else if (tile.terrain === 'boulder') lay('boulder', near, p.x, top + 0.2, p.z, 0.8, tint);
     else if (tile.terrain === 'wall') {
       lay('wall', near, p.x, top + WALL / 2, p.z, WALL, WHITE);
-      lay('cap', false, p.x, top + WALL + CAP / 2, p.z, CAP, WHITE);
+      lay('cap', false, p.x, top + WALKWAY + CAP / 2, p.z, CAP, WHITE); // the sodium ring round the walkway, the merlons through it (#1557)
     }
   }
 }

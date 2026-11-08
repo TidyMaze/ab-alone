@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain Node script, no type declarations
-import { mountain, regenerate, tree, withProps } from './openworld-props.mjs';
+import { mountain, regenerate, tree, wall, withProps } from './openworld-props.mjs';
 
 // The Open world's mountain and tree (#1557): generated shapes that read apart from far away, written into the two prop models.
 const read = (file: string) => readFileSync(fileURLToPath(new URL(`../models/${file}`, import.meta.url)));
@@ -64,13 +64,54 @@ describe('the tree', () => {
   });
 });
 
+describe('the wall', () => {
+  const g = wall();
+  const normal = (f: number) => Array.from(g.normals.subarray(f * 9, f * 9 + 3)) as [number, number, number];
+  const centre = (f: number) => [0, 1, 2].map((c) => (g.positions[f * 9 + c]! + g.positions[f * 9 + 3 + c]! + g.positions[f * 9 + 6 + c]!) / 3) as [number, number, number];
+
+  it('is a battlement: a hex column with three merlons, 46 triangles, in the box of the old wall, base at -0.5 and merlons at 0.5', () => {
+    expect(faces(g)).toBe(46);
+    expect(Math.min(...ys(g))).toBeCloseTo(-0.5, 5);
+    expect(Math.max(...ys(g))).toBeCloseTo(0.5, 5);
+    const xs = Array.from({ length: g.positions.length / 3 }, (_, i) => g.positions[i * 3]!);
+    const zs = Array.from({ length: g.positions.length / 3 }, (_, i) => g.positions[i * 3 + 2]!);
+    expect(Math.max(...xs.map(Math.abs))).toBeLessThanOrEqual(0.434);
+    expect(Math.max(...zs.map(Math.abs))).toBeLessThanOrEqual(0.5);
+  });
+
+  it('notches its top: the merlons stand on alternate edges above the walkway, so the crown reads as teeth', () => {
+    const tops = Array.from({ length: faces(g) }, (_, f) => f).filter((f) => normal(f)[1] > 0.99);
+    const heights = new Set(tops.map((f) => centre(f)[1].toFixed(2)));
+    expect([...heights].sort()).toEqual(['0.13', '0.50']); // merlons 0.375 high (#1557 art round 1)
+    const merlons = tops.filter((f) => centre(f)[1] > 0.4).map((f) => Math.round(((Math.atan2(centre(f)[2], centre(f)[0]) * 180) / Math.PI + 360) % 360));
+    expect(merlons.length).toBe(6);
+    expect(new Set(merlons.map((a) => (Math.round((a - 60) / 120) + 3) % 3)).size).toBe(3); // three merlons, 120 degrees apart
+  });
+
+  it('turns every face outward: the sides away from the solid, the tops up, none down', () => {
+    let inner = 0;
+    for (let f = 0; f < faces(g); f++) {
+      const [nx, ny, nz] = normal(f);
+      expect(Math.hypot(nx, ny, nz)).toBeCloseTo(1, 5);
+      expect(ny).toBeGreaterThan(-0.01);
+      const [x, , z] = centre(f);
+      if (Math.abs(ny) < 0.01 && nx * x + nz * z < -0.01) inner++;
+    }
+    expect(inner).toBe(6); // the inner face of each merlon looks at the walkway
+  });
+
+  it('is painted in three flat tones: dark foot, slate walkway, pale merlon tops', () => {
+    expect(tones(g)).toBe(3);
+  });
+});
+
 describe('the generated models', () => {
   const low = read('openworld.glb');
 
-  it('keep the boulder and the wall byte for byte, and redo only the mountain and the tree', () => {
+  it('keep the boulder byte for byte, and redo only the mountain, the tree and the wall', () => {
     const out = withProps(low, { mountain: 6, tree: 6 });
     expect(out.subarray(0, 4).toString()).toBe('glTF');
-    // the first and the last mesh (the boulder and the wall) read the same vertex and index bytes in both files
+    // the boulder reads the same vertex and index bytes in both files, the wall the same whatever the tree's sides
     const bytes = (glb: Buffer, mesh: number) => {
       const headerLen = glb.readUInt32LE(12);
       const doc = JSON.parse(glb.subarray(20, 20 + headerLen).toString());
@@ -85,7 +126,7 @@ describe('the generated models', () => {
       });
     };
     expect(bytes(out, 0)).toEqual(bytes(low, 0));
-    expect(bytes(out, 3)).toEqual(bytes(low, 3));
+    expect(bytes(out, 3)).toEqual(bytes(withProps(low, { mountain: 6, tree: 8 }), 3)); // the wall does not depend on the sides
     expect(withProps(out, { mountain: 6, tree: 6 })).toEqual(out);
   });
 

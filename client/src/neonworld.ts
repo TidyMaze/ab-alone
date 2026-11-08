@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { NEON, setNeonWorldOn } from './neonlook';
 
 /** The three ground tones of the three biomes (the mockup's `tones`): the meadow, the mesa and the rock. */
-export const WORLD = { meadow: 0x1f283a, mesa: 0x28243c, rock: 0x131824, shore: 0x234a66, deep: 0x142b44, wall: 0x171c2b, boulder: 0x2c3138, mountain: 0x2a3347 } as const;
+export const WORLD = { meadow: 0x1f283a, mesa: 0x28243c, rock: 0x131824, shore: 0x234a66, deep: 0x142b44, wall: 0x171c2b, boulder: 0x14161a, mountain: 0x2a3347 } as const;
 /** The ambient motes of the Open world: a very dim cool grey-blue (half the brightness of the first slate). */
 const MOTE = 0x2b3648;
 /** The dark seam between the ground cells with the look: the band along an edge keeps 30 % of the colour (the game's own is 78 %). */
@@ -53,7 +53,7 @@ export interface WorldPalette {
   LOOK: Record<string, { color: number; emissive: number }>;
   WATER: Colours;
   BIOME_LOOK: Record<string, { ground: number; prop: number }>;
-  PROPS: Record<string, { color: number; emissive: number }>;
+  PROPS: Record<string, { color: number; emissive: number; rim?: number }>;
   MARBLE_LOOK: Record<string, { base: number; stripe: number; roughness: number }>;
   LAIR_LOOK: { open: number; beaten: number; height: number };
   TELEPORTER_LOOK: { colour: number; ring: number };
@@ -65,8 +65,9 @@ const snapshot = new WeakMap<WorldPalette['LOOK'], string>();
 
 /** Puts the palette on, or gives the game's own back (what was there when it was first put on). */
 export function applyNeonWorld(on: boolean, p: WorldPalette): void {
-  // Only the colours are copied and written back: a prop's geometry stays the view's own.
-  const colours = (props: WorldPalette['PROPS']): WorldPalette['PROPS'] => Object.fromEntries(Object.entries(props).map(([name, { color, emissive }]) => [name, { color, emissive }]));
+  // Only the colours (and a boulder's rim) are copied and written back: a prop's geometry stays the view's own.
+  const colours = (props: WorldPalette['PROPS']): WorldPalette['PROPS'] =>
+    Object.fromEntries(Object.entries(props).map(([name, { color, emissive, rim }]) => [name, rim === undefined ? { color, emissive } : { color, emissive, rim }]));
   const motes = (a: WorldPalette['AMBIENT']): WorldPalette['AMBIENT'] => Object.fromEntries(Object.entries(a).map(([name, look]) => [name, { colour: look!.colour }]));
   if (!snapshot.has(p.LOOK)) snapshot.set(p.LOOK, JSON.stringify({ ...p, PROPS: colours(p.PROPS), AMBIENT: motes(p.AMBIENT) }));
   const base = JSON.parse(snapshot.get(p.LOOK)!) as WorldPalette;
@@ -90,7 +91,7 @@ function neonPalette(base: WorldPalette): WorldPalette {
   for (const [biome, ground] of Object.entries({ meadow: WORLD.meadow, forest: WORLD.meadow, tundra: WORLD.meadow, desert: WORLD.mesa, badlands: WORLD.mesa, archipelago: WORLD.meadow })) out.BIOME_LOOK[biome] = { ground, prop: 0xffffff };
   Object.assign(out.PROPS.mountain!, { color: WORLD.mountain, emissive: 0 });
   Object.assign(out.PROPS.tree!, { color: NEON.crystal, emissive: 0 }); // calm: the quietest violet of the map
-  Object.assign(out.PROPS.boulder!, { color: WORLD.boulder, emissive: 0 }); // no neon on a boulder
+  Object.assign(out.PROPS.boulder!, { color: WORLD.boulder, emissive: 0, rim: NEON.rimLight }); // a dark shell with a slate rim: cyan stays the marbles' (#1557 art round 3)
   Object.assign(out.PROPS.wall!, { color: WORLD.wall, emissive: 0 }); // the cap keeps the sodium seam
   Object.assign(out.MARBLE_LOOK.hero!, { base: NEON.whiteMarble, stripe: NEON.pedestalRing });
   Object.assign(out.MARBLE_LOOK.troop!, { base: 0xdfe8f5, stripe: NEON.pedestalRing });
@@ -128,7 +129,7 @@ const between = (dark: number, light: number, t: number): THREE.Color => linear(
 /** The model of a prop in the neon look: the file's light and shade in slate, the tree a calm violet crystal, the wall's sodium seam and the lair's lamp kept as lamps. */
 export function neonProp(prop: string, geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   if (!geometry.hasAttribute('color')) return geometry;
-  if (prop === 'mountain') return repaint(geometry, (_, t) => between(0x1b2233, 0x3a4560, t));
+  if (prop === 'mountain') return repaint(geometry, (_, t) => (t > 0.5 ? between(0x39466a, NEON.pedestalRing, t * 2 - 1) : between(0x1b2233, 0x39466a, t * 2))); // a cyan line on the ridges (#1557)
   if (prop === 'tree') return repaint(geometry, (_, t) => between(0x2b2650, NEON.crystal, t));
   if (prop === 'wall') return repaint(geometry, (c, t) => (t > 0.5 ? c : between(0x0f1320, 0x2a3347, t * 2)));
   const gem = prop === 'lair_beaten' ? NEON.cyan : NEON.violet; // the lair's lamp: lit more than the slate it stands on

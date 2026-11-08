@@ -39,11 +39,13 @@ describe('the neon palette of the Open world (#1424)', () => {
     expect(Object.values(BIOME_LOOK).every((b) => b.prop === 0xffffff)).toBe(true);
     expect([LAIR_LOOK.open, LAIR_LOOK.beaten]).toEqual([NEON.violet, NEON.cyan]);
     expect(PROPS.boulder.color).toBe(WORLD.boulder);
+    expect(PROPS.boulder.rim).toBe(NEON.rimLight); // a dark shell with a slate rim, cyan is the marbles' (#1557)
     expect(PROPS.tree.geometry).toBe(geometry); // only colours are touched
     expect(Object.values(AMBIENT).every((a) => a!.colour === 0x2b3648)).toBe(true);
     applyNeonWorld(false, palette);
     expect(neonWorldOn()).toBe(false);
     expect([LOOK.grass.color, LOOK.sand.color, PROPS.mountain.color]).toEqual([grass, sand, mountain]);
+    expect(PROPS.boulder.rim).toBe(0);
     applyNeonWorld(false, palette); // nothing to give back: still the game's
     expect(LOOK.grass.color).toBe(grass);
   });
@@ -61,7 +63,7 @@ describe('the neon palette of the Open world (#1424)', () => {
   it('paints the models: slate mountains, calm crystals, a wall that keeps its sodium seam, a lair lamp violet then cyan', () => {
     const mountain = neonProp('mountain', painted(0x4d5566, 0xe6f0ff));
     expect(colourAt(mountain, 0).getHex()).toBe(0x1b2233);
-    expect(colourAt(mountain, 1).getHex()).toBe(0x3a4560);
+    expect(colourAt(mountain, 1).getHex()).toBe(NEON.pedestalRing); // the cyan ridge line (#1557)
     expect(colourAt(neonProp('tree', painted(0x1c2a1c, 0x70e0c8)), 1).getHex()).toBe(NEON.crystal);
     const wall = neonProp('wall', painted(0x16160d, 0xd9803b));
     expect(colourAt(wall, 1).getHex()).toBe(0xd9803b);
@@ -70,7 +72,7 @@ describe('the neon palette of the Open world (#1424)', () => {
     expect(colourAt(open, 1).b).toBeGreaterThan(colourAt(open, 1).g);
     const beaten = neonProp('lair_beaten', painted(0x2a2e38, 0x66c77a));
     expect(colourAt(beaten, 1).g).toBeGreaterThan(colourAt(beaten, 1).r);
-    expect(colourAt(neonProp('mountain', painted(0x808080, 0x808080)), 0).getHex()).toBe(0x3a4560); // a model of one colour
+    expect(colourAt(neonProp('mountain', painted(0x808080, 0x808080)), 0).getHex()).toBe(NEON.pedestalRing); // a model of one colour
     const plain = new THREE.BoxGeometry();
     expect(neonProp('mountain', plain)).toBe(plain); // no vertex colours, nothing to paint
   });
@@ -95,7 +97,7 @@ describe('the Open world view with the look (#1424)', () => {
     const mountain = painted(0x4d5566, 0xe6f0ff);
     view.useModels({ low: { mountain, lair: painted(0x2a2e0d, 0xff9e7a), lair_beaten: painted(0x2a2e38, 0x66c77a) }, high: { mountain } });
     const geometry = (view.scene.getObjectByName('prop-mountain') as THREE.InstancedMesh).geometry;
-    expect(colourAt(geometry, 1).getHex()).toBe(0x3a4560);
+    expect(colourAt(geometry, 1).getHex()).toBe(NEON.pedestalRing); // the ridge line (#1557)
     view.setLairs([[0, 0]], []);
     expect(view.scene.getObjectByName('lair-0')).toBeDefined();
   });
