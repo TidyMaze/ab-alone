@@ -43,6 +43,8 @@ describe('cleanName', () => {
     expect(cleanName('a'.repeat(40))).toBe('a'.repeat(16));
     expect(cleanName('\u{1F600}'.repeat(20))).toBe('\u{1F600}'.repeat(16)); // characters, not bytes
     expect(cleanName('')).toBe('');
+    expect(cleanName('Edging King')).toBe(''); // a filtered pun (#1652) is anonymous, sent or received
+    expect(cleanName('Edgefall')).toBe('Edgefall');
   });
 
   it('a Hello with a name cut or dirty on the wire is cleaned when decoded', () => {

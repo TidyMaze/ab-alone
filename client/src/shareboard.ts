@@ -4,6 +4,7 @@
 import { b64, ED, signedBy, type Keys } from './moverecord';
 import { read, write, type Store } from './quality';
 import { storedKeys } from './worldevents';
+import { filtered } from './namefilter';
 
 const CHOICE_KEY = 'ab-alone.board-consent';
 const BOARD_KEY = 'ab-alone.board-key';
@@ -90,7 +91,8 @@ export function readRetires(store: Store): RetireEvent[] {
 
 /** Joins: the choice, the name and a key. A key that was retired is never reused: the board would ignore it. */
 export async function joinBoard(store: Store, name: string): Promise<string> {
-  write(store, NAME_KEY, cleanName(name));
+  const clean = cleanName(name);
+  write(store, NAME_KEY, filtered(clean) ? '' : clean); // a filtered pun (#1652) joins with no name
   const keys = await boardKeys(store);
   const pub = readRetires(store).some((e) => e.pub === keys.pub) ? (await freshKey(store)).pub : keys.pub;
   writeChoice(store, 'joined');

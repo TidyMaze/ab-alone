@@ -171,3 +171,9 @@ How the game and the network work: [docs/architecture.md](docs/architecture.md).
 
 <sub>Earlier lives of this board: [Abalone](https://github.com/TidyMaze/Abalone) (Java),
 [abalone-go](https://github.com/TidyMaze/abalone-go) (Go).</sub>
+
+## Name
+
+- The official short form is "Edgefall", never "Edge" (#1616). Public names with the "edging" puns are
+  refused: `client/src/namefilter.ts`.
+- The name is never translated, in any language. French players say it "edj-fol".

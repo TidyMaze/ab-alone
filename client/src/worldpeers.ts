@@ -4,6 +4,7 @@
 import type { Axial } from './board';
 import { b64, unb64 } from './moverecord';
 import { read, write, type Store } from './quality';
+import { filtered } from './namefilter';
 
 /** The seed of the one public world every player lands in by default (lead decision on #1305). New world stays private. */
 export const PUBLIC_SEED = 1305;
@@ -70,8 +71,11 @@ const MAX_TABLE = MAX_PEERS * 4;
 /** The most characters of a public name. */
 export const MAX_NAME = 16;
 
-/** A public name as shown: control and format characters (bidi overrides included) dropped, trimmed, cut at MAX_NAME characters. */
-export const cleanName = (name: string): string => [...name.replace(/[\p{Cc}\p{Cf}]/gu, '').trim()].slice(0, MAX_NAME).join('');
+/** A public name as shown: control and format characters (bidi overrides included) dropped, trimmed, cut at MAX_NAME characters; empty when filtered. */
+export const cleanName = (name: string): string => {
+  const clean = [...name.replace(/[\p{Cc}\p{Cf}]/gu, '').trim()].slice(0, MAX_NAME).join('');
+  return filtered(clean) ? '' : clean; // a filtered pun (#1652) is anonymous, sent or received
+};
 
 const NAME_KEY = 'ab-alone.public-name';
 /** The player's public name from the store, cleaned: empty (anonymous) when none was chosen. */

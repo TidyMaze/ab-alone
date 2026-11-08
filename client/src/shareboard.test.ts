@@ -78,6 +78,8 @@ describe('the board opt-in (#1287)', () => {
     const pub = await joinBoard(store, 'Ada  Lovelace the very first');
     expect(readChoice(store)).toBe('joined');
     expect(readBoardName(store)).toHaveLength(16);
+    await joinBoard(store, 'Mr Edging');
+    expect(readBoardName(store)).toBe(''); // a filtered pun (#1652) joins with no name
     expect(readRetires(store)).toEqual([]);
     const retire = await leaveBoard(store, 1_800_000_000_999);
     expect(retire.pub).toBe(pub);
