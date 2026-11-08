@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { parseRecorded } from '../src/test/chaplain-game';
 import { BLACK_WINS } from './end-games';
-import { loseByRepetition, startDaily } from './fight-end';
+import { loseByRepetition } from './fight-end';
 import { openModes } from './modes';
 import { logOf } from '../src/audiologs';
 import { dailyFor, dailyTitle, utcDay } from '../src/daily';
@@ -235,21 +235,62 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 640 }
   });
 }
 
+// One page per window (#1481): a page boot is most of a test's time on the GPU-less runner, so the states below are reached one after the
+// other on the same page, in this order, each by the game's own controls or a test hook, and each is still its own test. The group runs
+// serially in one worker and on one CI shard (tag @one-page, scripts/shard-reporter.ts); a failure retries the whole group on a new page.
 for (const { name, viewport, mobile } of sizes) {
-  test.describe(name, () => {
+  test.describe(name, { tag: '@one-page' }, () => {
     test.skip(({ browserName }) => mobile && browserName === 'firefox', 'Firefox has no mobile emulation');
-    test.use({ viewport, isMobile: mobile, hasTouch: mobile });
+    test.describe.configure({ mode: 'serial' });
+    let page: Page;
+    const turnAround = () => page.setViewportSize({ width: viewport.height, height: viewport.width });
+    const turnBack = () => page.setViewportSize(viewport);
+    const openBossList = async () => {
+      await openModes(page);
+      const fights = page.getByRole('button', { name: 'Boss fight' });
+      if ((await fights.getAttribute('aria-expanded')) !== 'true') await fights.click();
+    };
 
-    // One test per state (#349): each is one page load and its checks, not the whole walk through the states.
-    test('nothing covers the board or the HUD at the start, bugs #227 #234', async ({ page }, testInfo) => {
-      const hud = page.locator('#hud');
+    // The page clock is installed at the boot (page.clock, as in newgame.spec.ts): the mode menu tests move it to a day and the audio
+    // log pauses it, as on a page booted with it.
+    test.beforeAll(async ({ browser }, testInfo) => {
+      const context = await browser.newContext({ ...testInfo.project.use, viewport, isMobile: mobile, hasTouch: mobile });
+      page = await context.newPage();
+      await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
+    });
+    test.afterAll(async () => {
+      await page.context().close();
+    });
+
+    test('nothing covers the board or the HUD at the start, bugs #227 #234', async ({}, testInfo) => {
+      const hud = page.locator('#hud');
       await expect(hud).toContainText('Black to move');
       // The plate stays top-left, 16 px from the edges (docs/specs/ui.md section 4).
       expect(await hud.boundingBox()).toMatchObject({ x: 16, y: 16 });
       await check(page, testInfo, 'at the start');
       await checkVolumes(page, 'at the start');
+    });
+
+    // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
+    // Bug #902: the transcript runs on the page clock, paused from Play log on and moved on to the second line, so a
+    // slow frame loop never misses it; the clock flows again for the checks.
+    test('nothing covers the board or the HUD while an audio log plays, #516 #902', async ({}, testInfo) => {
+      await expect(page.locator('body')).toHaveAttribute('data-console', /^mess-house-rule /);
+      await page.keyboard.press('t');
+      const play = page.getByRole('button', { name: 'Play log' });
+      await expect(play).toBeVisible();
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000)); // a short jump: few frames to draw
+      await play.click();
+      await page.keyboard.press('Escape');
+      const second = logOf('mess').lines[1]!;
+      await page.clock.fastForward(second.at * 1000); // one frame paints the line due then
+      await expect(page.locator('#transcript')).toHaveText(second.text);
+      await page.clock.resume();
+      await check(page, testInfo, 'while an audio log plays');
+      await page.getByRole('button', { name: 'Skip log' }).click();
+      await expect(page.locator('#transcript')).toBeHidden();
     });
 
     // The open mode menu (#357) with its boss list, its tallest state, covers no cell either. Bug #575: the Daily
@@ -259,12 +300,8 @@ for (const { name, viewport, mobile } of sizes) {
     // of Fight together (#530) is checked too. The page clock moves to that day and the minute timer of the open page
     // renames the button, as it does at 00:00 UTC (bug #629).
     for (const list of ['Boss fight', 'Boss with a partner']) {
-      test(`nothing covers the board or the HUD with the mode menu and the ${list} list open, widest daily boss, bugs #227 #234 #357 #575 #603 #715`, async ({ page }, testInfo) => {
-        await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
-        await page.goto('./?bot=off&net=hook');
-        await page.locator('canvas').waitFor();
-        await openModes(page);
-        await page.getByRole('button', { name: 'Boss fight' }).click();
+      test(`nothing covers the board or the HUD with the mode menu and the ${list} list open, widest daily boss, bugs #227 #234 #357 #575 #603 #715`, async ({}, testInfo) => {
+        await openBossList();
         const names = await page.locator('#boss-list button').allTextContents(); // in the order of boss_ids()
         const widest = await page.evaluate(async (all) => {
           await document.fonts.ready;
@@ -289,41 +326,30 @@ for (const { name, viewport, mobile } of sizes) {
       });
     }
 
-    // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
-    // Bug #902: the transcript runs on the page clock, paused from Play log on and moved on to the second line, so a
-    // slow frame loop never misses it (page.clock, as in newgame.spec.ts); the clock flows again for the checks.
-    test('nothing covers the board or the HUD while an audio log plays, #516 #902', async ({ page }, testInfo) => {
-      await page.clock.install();
-      await page.goto('./?bot=off&net=hook');
-      await page.locator('canvas').waitFor();
-      await expect(page.locator('body')).toHaveAttribute('data-console', /^mess-house-rule /);
-      await page.keyboard.press('t');
-      const play = page.getByRole('button', { name: 'Play log' });
-      await expect(play).toBeVisible();
-      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000)); // a short jump: few frames to draw
-      await play.click();
-      await page.keyboard.press('Escape');
-      const second = logOf('mess').lines[1]!;
-      await page.clock.fastForward(second.at * 1000); // one frame paints the line due then
-      await expect(page.locator('#transcript')).toHaveText(second.text);
-      await page.clock.resume();
-      await check(page, testInfo, 'while an audio log plays');
-    });
-
-    test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({ page }, testInfo) => {
-      const hud = page.locator('#hud');
-      await page.goto('./?bot=off&net=hook');
-      await page.locator('canvas').waitFor();
-      await openModes(page);
-      await page.getByRole('button', { name: 'Boss fight' }).click();
+    test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({}, testInfo) => {
+      await openBossList();
       await page.locator('#boss-list button').first().click();
-      await expect(hud).toContainText('P1');
+      await expect(page.locator('#hud')).toContainText('P1');
       await check(page, testInfo, 'in a boss fight');
     });
 
-    test('nothing covers the board or the HUD in a rogue-lite fight with its legend and a card, #1540 #1541', async ({ page }, testInfo) => {
-      await page.goto('./?bot=off&net=hook');
-      await page.waitForFunction(() => (window as any).__run);
+    // The lore of a boss win (#1589) sits in the plate under the banner: the plate still covers no cell and no button. The recorded win of The
+    // Swarm (fight seed 0) is played by the __playMoves hook.
+    test('the lore of a boss win covers neither a cell nor a button, #1589', async ({}, testInfo) => {
+      const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
+      await page.evaluate(() => {
+        crypto.getRandomValues = ((a: Uint32Array) => a.fill(0)) as typeof crypto.getRandomValues; // the fight seed
+        localStorage.setItem('ab-alone.story', JSON.stringify({ moments: [2, 3], wins: 0 })); // stage 3 reaches The Swarm's entry (#1584)
+      });
+      await openBossList();
+      await page.locator('#boss-list').getByRole('button', { name: 'The Swarm' }).click();
+      await page.evaluate((records) => (window as any).__playMoves(records), plies);
+      await expect(page.locator('#lore')).toBeVisible();
+      await expect(page.locator('body')).toHaveAttribute('data-lore', 'boss-swarm');
+      await check(page, testInfo, 'with the lore of a boss win');
+    });
+
+    test('nothing covers the board or the HUD in a rogue-lite fight with its legend and a card, #1540 #1541', async ({}, testInfo) => {
       const moves = [[1, 2, -4, 3, 0, 0, 0, 0], [2, 5, 0, -4, 1, -4, 0, 0]]; // no placement screen over the board
       await page.evaluate((m) => (window as any).__run({ seed: 3, army: 14, path: [0], fighting: true, moves: m, end: '', specials: [0, 0, 1, 0, 0, 0, 0, 0, 1, 0], placed: [[-4, 4, 3], [0, 4, 9]], reward: false }), moves);
       await expect(page.locator('#hud button.special')).toHaveCount(2);
@@ -332,9 +358,43 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'in a rogue-lite fight with its legend');
     });
 
-    test('nothing covers the board or the HUD waiting for an opponent, turned around, bugs #227 #234', async ({ page }, testInfo) => {
+    // Upright, then turned around: the turn is a resize of the same page.
+    test('the end banner covers neither a cell nor a button, nor turned around, #282', async ({}, testInfo) => {
+      await page.locator('#import-file').setInputFiles({
+        name: 'game.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: true, moves: BLACK_WINS })),
+      });
+      await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
+      await expect(page.locator('#hud .end')).toContainText('The books balance');
+      await check(page, testInfo, 'with the end banner');
+      await turnAround();
+      await check(page, testInfo, 'with the end banner turned around');
+      await turnBack();
+    });
+
+    // The same defeat as the plate check of bug #271 (the plate and the buttons cover no cell after a daily defeat): the daily of
+    // 2027-03-30 (e2e/fight-end.ts), the card checked upright, then the page turned around (a resize, no second fight).
+    test('the daily result card covers neither the HUD nor the board, nor turned around, #196 #271', async ({}, testInfo) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' }); // the 7 moves of the defeat slide in no time: the layout is the same
+      await page.clock.setSystemTime(new Date('2027-03-30T08:00:00Z'));
+      await page.clock.fastForward(60_000); // the minute timer names the day's boss
+      await openModes(page);
+      await page.locator('#daily').click();
+      await expect(page.locator('#hud')).toContainText('Daily challenge 2027-03-30 · attempt 1');
+      await loseByRepetition(page);
+      await expect(page.locator('#daily-card')).toBeVisible();
+      await check(page, testInfo, 'with the daily result card');
+      expect(await cardOverCorner(page), 'the card is clear of Copy diagnostics').toEqual([]);
+      await turnAround();
+      await check(page, testInfo, 'with the daily result card turned around');
+      expect(await cardOverCorner(page), 'turned around, the card is clear of Copy diagnostics').toEqual([]);
+      await turnBack();
+    });
+
+    // Last: the page stays in the online room.
+    test('nothing covers the board or the HUD waiting for an opponent, turned around, bugs #227 #234', async ({}, testInfo) => {
       const hud = page.locator('#hud');
-      await page.goto('./?bot=off&net=hook');
       await openModes(page);
       await page.getByRole('button', { name: 'Play online' }).click();
       await expect(hud).toContainText('Waiting for an opponent');
@@ -355,61 +415,8 @@ for (const { name, viewport, mobile } of sizes) {
       await expect(page.locator('#invite')).toBeVisible();
 
       // Turning the device around keeps the layout right.
-      await page.setViewportSize({ width: viewport.height, height: viewport.width });
+      await turnAround();
       await check(page, testInfo, 'turned around');
-    });
-
-    const importBlackWins = async (page: Page) => {
-      await page.goto('./?net=hook');
-      await page.locator('canvas').waitFor();
-      await page.locator('#import-file').setInputFiles({
-        name: 'game.json',
-        mimeType: 'application/json',
-        buffer: Buffer.from(JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: true, moves: BLACK_WINS })),
-      });
-      await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
-      await expect(page.locator('#hud .end')).toContainText('The books balance');
-    };
-
-    // Upright, then turned around, in one page load: the turn is a resize of the same page (one boot instead of two).
-    test('the end banner covers neither a cell nor a button, nor turned around, #282', async ({ page }, testInfo) => {
-      await importBlackWins(page);
-      await check(page, testInfo, 'with the end banner');
-      await page.setViewportSize({ width: viewport.height, height: viewport.width });
-      await check(page, testInfo, 'with the end banner turned around');
-    });
-
-    // The lore of a boss win (#1589) sits in the plate under the banner: the plate still covers no cell and no button. The recorded win of The
-    // Swarm (fight seed 0) is played by the __playMoves hook.
-    test('the lore of a boss win covers neither a cell nor a button, #1589', async ({ page }, testInfo) => {
-      const plies = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/swarm.txt', import.meta.url), 'utf8'));
-      await page.addInitScript(() => {
-        crypto.getRandomValues = ((a: Uint32Array) => a.fill(0)) as typeof crypto.getRandomValues; // the fight seed
-        localStorage.setItem('ab-alone.story', JSON.stringify({ moments: [2, 3], wins: 0 })); // stage 3 reaches The Swarm's entry (#1584)
-      });
-      await page.goto('./?bot=off&net=hook');
-      await page.locator('canvas').waitFor();
-      await openModes(page);
-      await page.getByRole('button', { name: 'Boss fight' }).click();
-      await page.locator('#boss-list').getByRole('button', { name: 'The Swarm' }).click();
-      await page.evaluate((records) => (window as any).__playMoves(records), plies);
-      await expect(page.locator('#lore')).toBeVisible();
-      await expect(page.locator('body')).toHaveAttribute('data-lore', 'boss-swarm');
-      await check(page, testInfo, 'with the lore of a boss win');
-    });
-
-    // The same defeat as the plate check of bug #271 (the plate and the buttons cover no cell after a daily defeat): one
-    // page load and one fight per window, the card checked upright, then the page turned around (a resize, no second fight).
-    test('the daily result card covers neither the HUD nor the board, nor turned around, #196 #271', async ({ page }, testInfo) => {
-      await page.emulateMedia({ reducedMotion: 'reduce' }); // the 7 moves of the defeat slide in no time: the layout is the same
-      await startDaily(page);
-      await loseByRepetition(page);
-      await expect(page.locator('#daily-card')).toBeVisible();
-      await check(page, testInfo, 'with the daily result card');
-      expect(await cardOverCorner(page), 'the card is clear of Copy diagnostics').toEqual([]);
-      await page.setViewportSize({ width: viewport.height, height: viewport.width });
-      await check(page, testInfo, 'with the daily result card turned around');
-      expect(await cardOverCorner(page), 'turned around, the card is clear of Copy diagnostics').toEqual([]);
     });
   });
 }

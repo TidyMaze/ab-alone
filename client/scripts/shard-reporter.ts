@@ -14,9 +14,13 @@ export default class ShardReporter implements Reporter {
     const { shard } = config;
     if (!shard) return;
     testRun.skipSharding();
-    suite.allTests().forEach((test, i) => {
-      if (shardOf(i, shard.total) !== shard.current) testRun.exclude(test);
-    });
+    // A group tagged @one-page shares one page across its tests (a serial describe, #1481): it is one card, all on one shard.
+    const cards = new Map<unknown, number>();
+    for (const test of suite.allTests()) {
+      const key = test.tags?.includes('@one-page') ? test.parent : test;
+      if (!cards.has(key)) cards.set(key, cards.size);
+      if (shardOf(cards.get(key)!, shard.total) !== shard.current) testRun.exclude(test);
+    }
   }
 
   printsToStdio() {

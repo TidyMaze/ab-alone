@@ -52,6 +52,22 @@ describe('ShardReporter', () => {
     expect(kept.map((test) => test.title).sort()).toEqual(tests.map((test) => test.title).sort());
   });
 
+  it('deals a one-page group (tag @one-page) to one shard as one card, its tests in order', () => {
+    const group = { title: 'a phone' } as Suite;
+    const grouped = (title: string) => ({ title, tags: ['@one-page'], parent: group }) as unknown as TestCase;
+    const all = [tests[0]!, grouped('start'), grouped('boss fight'), grouped('online'), tests[1]!, tests[2]!];
+    const kept = [1, 2].map((current) => {
+      const testRun = { skipSharding: vi.fn(), exclude: vi.fn() };
+      void new ShardReporter().preprocess({
+        config: { shard: { current, total: 2 } } as FullConfig,
+        suite: { allTests: () => all } as Suite,
+        testRun: testRun as unknown as TestRun,
+      });
+      return all.filter((test) => !testRun.exclude.mock.calls.some(([excluded]) => excluded === test)).map((test) => test.title);
+    });
+    expect(kept).toEqual([['test 0', 'test 2'], ['start', 'boss fight', 'online', 'test 1']]);
+  });
+
   it('prints nothing itself', () => {
     expect(new ShardReporter().printsToStdio()).toBe(false);
   });
