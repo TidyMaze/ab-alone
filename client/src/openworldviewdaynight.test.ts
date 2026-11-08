@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { CHUNK, World } from './openworld';
 import { BLEND_MS, WORLD_LOOKS } from './daynight';
 import { NEON, NEON_WHITE_GLOW, NEON_WORLD_LOOKS, setNeonWorldOn } from './neonlook';
-import { OpenWorldView } from './openworldview';
+import { CAIRN_LOOK, OpenWorldView } from './openworldview';
 import { GLOW_SHARE, stripedMaterial, stripeFadeNode } from './openworldstripe';
 import { sunPosition } from './tablezero';
 
@@ -93,7 +93,8 @@ describe('the sky of the Open world view', () => {
     expect(glow('town-pad')).toBeGreaterThan(dayPlace);
     expect(glow('gate-pad')).toBeGreaterThan(dayPlace);
     expect(glow('teleporter-pad')).toBeGreaterThan(day);
-    expect(glow('teleporter-ring')).toBeGreaterThan(day);
+    expect(glow('town-hut')).toBeGreaterThan(dayPlace); // the huts' windows
+    expect(glow('cairn')).toBeGreaterThan(CAIRN_LOOK.emissive); // the caps
     expect(glow('log-stake')).toBeGreaterThan(dayLog);
     expect(view.shine.value).toBe(1);
     view.setTime(MIN, true);

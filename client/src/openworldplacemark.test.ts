@@ -4,7 +4,23 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, World } from './openworld';
 import { ICON } from './openworldlairicon';
-import { GROUND, OpenWorldView, PLACE_LOOK, topOf } from './openworldview';
+import { GROUND, OpenWorldView, PLACE_LOOK, TELEPORTER_LOOK, topOf } from './openworldview';
+
+/** The part `name` of a landmark drawn in one call (`mergedParts` of openworldview.ts, #1647), as a geometry of its positions. */
+function landmarkShape(geometry: THREE.BufferGeometry, name: string): THREE.BufferGeometry {
+  const [start, count] = (geometry.userData.parts as Record<string, [number, number]>)[name]!;
+  const position = geometry.attributes.position!.array as Float32Array;
+  return new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(position.slice(start * 3, (start + count) * 3), 3));
+}
+
+/** The part `name` of a landmark of several colours (`landmarkGeometry`): its shape, and the colour, glow and roughness written on its
+ * first vertex (the same on all of its vertices). */
+function landmarkPart(geometry: THREE.BufferGeometry, name: string): { geometry: THREE.BufferGeometry; colour: THREE.Color; glow: THREE.Color; roughness: number } {
+  const [start] = (geometry.userData.parts as Record<string, [number, number]>)[name]!;
+  const colour = new THREE.Color().fromBufferAttribute(geometry.attributes.color as THREE.BufferAttribute, start);
+  const glow = new THREE.Color().fromBufferAttribute(geometry.attributes.glow as THREE.BufferAttribute, start);
+  return { geometry: landmarkShape(geometry, name), colour, glow, roughness: geometry.attributes.roughness!.getX(start) };
+}
 
 // Grass everywhere in the square -12..12 of chunks, at level 2, and level 5 on (3, 0).
 function grass(cx: number, cy: number): Uint8Array {
@@ -61,8 +77,8 @@ describe('the marker of a town and a dungeon gate (#1593)', () => {
 // The silhouette of a town and a gate from far away (#1518): a tall green spire on each town, a wide orange arch on each gate.
 describe('the silhouette of a town and a gate from far away (#1518)', () => {
   const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
-  const size = (view: OpenWorldView, name: string): THREE.Vector3 => {
-    const geometry = mesh(view, name).geometry;
+  const size = (view: OpenWorldView, name: string, part: string): THREE.Vector3 => {
+    const geometry = landmarkShape(mesh(view, name).geometry, part);
     geometry.computeBoundingBox();
     return geometry.boundingBox!.getSize(new THREE.Vector3());
   };
@@ -74,28 +90,23 @@ describe('the silhouette of a town and a gate from far away (#1518)', () => {
       { kind: 'town', cell: [3, 0] },
       { kind: 'dungeon', cell: [-2, 1] },
     ]);
-    expect(mesh(view, 'town-spire').count).toBe(1);
-    expect(mesh(view, 'gate-arch').count).toBe(1);
-    const pad = new THREE.Matrix4();
-    const spire = new THREE.Matrix4();
-    const arch = new THREE.Matrix4();
-    mesh(view, 'town-pad').getMatrixAt(0, pad);
-    mesh(view, 'town-spire').getMatrixAt(0, spire);
-    expect(spire.elements).toEqual(pad.elements);
-    mesh(view, 'gate-pad').getMatrixAt(0, pad);
-    mesh(view, 'gate-arch').getMatrixAt(0, arch);
-    expect(arch.elements).toEqual(pad.elements);
+    // the spire and the arch are parts of their pad's mesh, drawn with it in one call (#1647)
+    expect(view.scene.getObjectByName('town-spire') ?? view.scene.getObjectByName('gate-arch')).toBeUndefined();
+    expect([mesh(view, 'town-pad').count, mesh(view, 'gate-pad').count]).toEqual([1, 1]);
+    expect(size(view, 'town-pad', 'spire').y).toBeGreaterThan(size(view, 'town-pad', 'pad').y * 10);
+    expect(size(view, 'gate-pad', 'arch').y).toBeGreaterThan(size(view, 'gate-pad', 'pad').y * 5);
   });
 
   it('the spire is tall and narrow, the arch wide and low, and both glow in the colour of their kind', () => {
     const view = new OpenWorldView(new World(grass));
-    const spire = size(view, 'town-spire');
-    const arch = size(view, 'gate-arch');
+    const spire = size(view, 'town-pad', 'spire');
+    const arch = size(view, 'gate-pad', 'arch');
     expect(spire.y).toBeGreaterThanOrEqual(2);
     expect(spire.y).toBeGreaterThan(spire.x * 3);
     expect(arch.x).toBeGreaterThan(arch.y * 1.5);
-    expect((mesh(view, 'town-spire').material as THREE.MeshStandardMaterial).emissive.getStyle()).toBe(new THREE.Color(PLACE_LOOK.spire.colour).getStyle());
-    expect((mesh(view, 'gate-arch').material as THREE.MeshStandardMaterial).emissive.getStyle()).toBe(new THREE.Color(PLACE_LOOK.arch.colour).getStyle());
+    expect((mesh(view, 'town-pad').material as THREE.MeshStandardMaterial).emissive.getStyle()).toBe(new THREE.Color(PLACE_LOOK.spire.colour).getStyle());
+    expect((mesh(view, 'gate-pad').material as THREE.MeshStandardMaterial).emissive.getStyle()).toBe(new THREE.Color(PLACE_LOOK.arch.colour).getStyle());
+    expect([PLACE_LOOK.spire.colour, PLACE_LOOK.arch.colour]).toEqual([ICON.town, ICON.dungeon]); // the colours of their pads: one material each
     expect(PLACE_LOOK.spire.colour).toBe('#19e6ff'); // the art spec's neon cyan (docs/specs/art.md section 1)
     expect(PLACE_LOOK.arch.colour).toBe('#d9822b'); // the art spec's sodium hazard (docs/specs/art.md section 1)
   });
@@ -164,9 +175,8 @@ describe('the huts of a town (#1518)', () => {
       { kind: 'town', cell: [(view.reach + 1) * CHUNK, 0] },
     ]);
     const huts = mesh(view, 'town-hut');
-    const windows = mesh(view, 'town-window');
     expect(huts.count).toBe(12);
-    expect(windows.count).toBe(12);
+    expect(view.scene.getObjectByName('town-window')).toBeUndefined(); // the windows are parts of the huts' mesh (#1647)
     const centre = axialTo3D(2, 0);
     const top = ([q, r]: Axial): number => topOf(GROUND.grass, q === 3 && r === 0 ? 5 : 2, q, r);
     // the three cells at each corner, counterclockwise from the east: (3, 0), next to the town, stands at level 5 and lifts two huts
@@ -181,7 +191,6 @@ describe('the huts of a town (#1518)', () => {
     const heights: number[] = [];
     for (let i = 0; i < 6; i++) {
       const m = matrix(huts, i);
-      expect(matrix(windows, i).elements).toEqual(m.elements);
       const p = new THREE.Vector3().setFromMatrixPosition(m);
       expect(Math.hypot(p.x - centre.x, p.z - centre.z)).toBeCloseTo(2 / Math.sqrt(3), 5);
       expect(p.y).toBeCloseTo(Math.max(...corners[i]!.map(top)), 5);
@@ -196,20 +205,22 @@ describe('the huts of a town (#1518)', () => {
   it('is a slate hut with a pyramid roof and a lit cyan window front and back, the window the only light, few triangles', () => {
     const view = new OpenWorldView(new World(grass));
     const hut = mesh(view, 'town-hut');
-    const window = mesh(view, 'town-window');
     const tris = (g: THREE.BufferGeometry): number => g.attributes.position!.count / 3;
-    expect(tris(hut.geometry) + tris(window.geometry)).toBeLessThanOrEqual(40);
-    hut.geometry.computeBoundingBox();
-    const box = hut.geometry.boundingBox!;
+    expect(tris(hut.geometry)).toBeLessThanOrEqual(40); // the hut and its windows, in one mesh (#1647)
+    const [body, window] = ['hut', 'window'].map((name) => landmarkPart(hut.geometry, name));
+    body!.geometry.computeBoundingBox();
+    const box = body!.geometry.boundingBox!;
     expect(Math.max(box.max.x - box.min.x, box.max.z - box.min.z)).toBeLessThanOrEqual(0.4); // clear of the marbles round it (0.58 away, 0.3 round)
     expect(box.min.y).toBeLessThan(-0.2); // a plinth into the lower ground, so it never floats
-    const body = hut.material as THREE.MeshStandardMaterial;
-    expect(body.emissive.getHex()).toBe(0);
-    expect(body.color.getStyle()).toBe(new THREE.Color(PLACE_LOOK.hut.colour).getStyle());
+    expect([body!.glow.getHex(), body!.roughness]).toEqual([0, expect.closeTo(0.8)]);
+    expect(body!.colour.getStyle()).toBe(new THREE.Color(PLACE_LOOK.hut.colour).getStyle());
     expect(PLACE_LOOK.hut.colour).toBe('#5d6a82'); // the art spec's cell slate
-    expect((window.material as THREE.MeshStandardMaterial).emissive.getStyle()).toBe(new THREE.Color(PLACE_LOOK.spire.colour).getStyle());
-    window.geometry.computeBoundingBox();
-    expect(window.geometry.boundingBox!.max.z).toBeGreaterThan(PLACE_LOOK.hut.width / 2); // on the hut's front face
-    expect(window.geometry.boundingBox!.min.z).toBeLessThan(-PLACE_LOOK.hut.width / 2); // and its back one
+    expect(window!.glow.getStyle()).toBe(new THREE.Color(PLACE_LOOK.spire.colour).getStyle());
+    expect(window!.colour.getStyle()).toBe(new THREE.Color(PLACE_LOOK.spire.colour).getStyle());
+    expect(window!.roughness).toBeCloseTo(0.4);
+    expect((hut.material as THREE.MeshStandardMaterial).emissiveIntensity).toBe(TELEPORTER_LOOK.emissive); // the windows glow as the pads do
+    window!.geometry.computeBoundingBox();
+    expect(window!.geometry.boundingBox!.max.z).toBeGreaterThan(PLACE_LOOK.hut.width / 2); // on the hut's front face
+    expect(window!.geometry.boundingBox!.min.z).toBeLessThan(-PLACE_LOOK.hut.width / 2); // and its back one
   });
 });

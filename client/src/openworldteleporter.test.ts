@@ -37,7 +37,10 @@ describe('the look of a teleporter (#1412)', () => {
     expect(pads[0]!.x).toBeCloseTo(p.x);
     expect(pads[0]!.y).toBeCloseTo(topOf(GROUND.grass, 5, 3, 0)); // on the lifted ground (#1418)
     expect(pads[0]!.z).toBeCloseTo(p.z);
-    expect(placed(view, 'teleporter-ring')).toEqual(pads);
+    expect(view.scene.getObjectByName('teleporter-ring')).toBeUndefined(); // the ring is drawn with its pad, in one call (#1647)
+    const shape = mesh(view, 'teleporter-pad').geometry;
+    shape.computeBoundingBox();
+    expect(shape.boundingBox!.max.y).toBeGreaterThan(TELEPORTER_LOOK.ring); // the ring over the pad
     const look = mesh(view, 'teleporter-pad').material as THREE.MeshStandardMaterial;
     expect(look.emissive.getHex()).toBe(TELEPORTER_LOOK.colour);
     expect(mesh(view, 'teleporter-pad').castShadow).toBe(true);

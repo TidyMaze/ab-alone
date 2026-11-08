@@ -4,7 +4,7 @@
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import { accentLights, neonSkyGlow } from './neonfx';
 import * as THREE from 'three/webgpu';
-import { abs, color as tslColor, dot, float, normalView, positionViewDirection, pow, uniform, vertexColor } from 'three/tsl';
+import { abs, attribute, color as tslColor, dot, float, materialEmissive, normalView, positionViewDirection, pow, uniform, vertexColor } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
@@ -419,6 +419,56 @@ function hutWindowGeometry(): THREE.BufferGeometry {
   return mergeGeometries([front, back].map((part) => part.toNonIndexed()))!;
 }
 
+/** A part of a landmark drawn in one call with the others (#1647): its geometry, colour, roughness and whether it glows. */
+type LandmarkPart = { name: string; geometry: THREE.BufferGeometry; colour: THREE.ColorRepresentation; roughness: number; glows: boolean };
+
+/** The parts of a landmark, by name, as one geometry (#1647), so the landmark is one draw call and one shadow call in place of one each
+ * a part; each part's range of vertices is in `userData.parts` by its name. */
+function mergedParts(parts: readonly (readonly [string, THREE.BufferGeometry])[]): THREE.BufferGeometry {
+  const ranges: Record<string, [number, number]> = {};
+  let start = 0;
+  for (const [name, geometry] of parts) {
+    const n = geometry.attributes.position!.count;
+    ranges[name] = [start, n];
+    start += n;
+  }
+  const merged = mergeGeometries(parts.map(([, geometry]) => geometry))!;
+  merged.userData.parts = ranges;
+  return merged;
+}
+
+/** The parts of a landmark of several colours as one geometry (`mergedParts`): each part's colour (`color`), glow (`glow`, its colour
+ * where it glows, black where not) and roughness (`roughness`) are on its vertices, which `landmarkMaterial` reads. */
+function landmarkGeometry(parts: readonly LandmarkPart[]): THREE.BufferGeometry {
+  const colour = new THREE.Color();
+  return mergedParts(
+    parts.map(({ name, geometry, colour: tone, roughness, glows }) => {
+      const part = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+      const n = part.attributes.position!.count;
+      colour.set(tone);
+      const rgb = new Float32Array(n * 3);
+      const glow = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        colour.toArray(rgb, i * 3);
+        if (glows) colour.toArray(glow, i * 3);
+      }
+      part.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+      part.setAttribute('glow', new THREE.BufferAttribute(glow, 3));
+      part.setAttribute('roughness', new THREE.BufferAttribute(new Float32Array(n).fill(roughness), 1));
+      return [name, part] as const;
+    }),
+  );
+}
+
+/** The material of a `landmarkGeometry`: its parts' colours, roughness and glow from their vertices, flat shaded; the glowing parts emit
+ * their colour times `emissiveIntensity`, which the time of day sets as on a material of one colour. */
+function landmarkMaterial(emissiveIntensity: number): THREE.MeshStandardNodeMaterial {
+  const material = new THREE.MeshStandardNodeMaterial({ vertexColors: true, flatShading: true, emissive: 0xffffff, emissiveIntensity });
+  material.roughnessNode = attribute('roughness', 'float');
+  material.emissiveNode = attribute('glow', 'vec3').mul(materialEmissive);
+  return material;
+}
+
 /** The six corners round a town's pad where its huts stand (#1518), as the three cells meeting there: two next to the town and one beyond. */
 const RING: readonly Axial[] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
 const HUT_CORNERS: readonly (readonly Axial[])[] = RING.map((a, k) => {
@@ -687,20 +737,16 @@ export class OpenWorldView {
   private readonly sun: THREE.DirectionalLight;
   private readonly sunAway = new THREE.Vector3();
   private foes: THREE.InstancedMesh;
-  /** The teleporters of the world (#1412), and their pads and rings, laid for the ones in the loaded chunks. */
+  /** The teleporters of the world (#1412), and their pads, each with its ring, laid for the ones in the loaded chunks. */
   private teleporterCells: readonly Axial[] = [];
   private readonly pads: THREE.InstancedMesh;
-  private readonly rings: THREE.InstancedMesh;
-  /** The towns and dungeon gates of the world (#1593), and their pads: the teleporter's, green on a town and orange on a gate. */
+  /** The towns and dungeon gates of the world (#1593), and their pads: the teleporter's, green on a town and orange on a gate,
+   * with their silhouettes (#1518): a spire over each town's pad, an arch over each gate's, so they read from far away. */
   private placeList: readonly { kind: 'town' | 'dungeon'; cell: Axial }[] = [];
   private readonly townPads: THREE.InstancedMesh;
   private readonly gatePads: THREE.InstancedMesh;
-  /** The silhouettes of the places (#1518): a spire over each town's pad, an arch over each gate's, so they read from far away. */
-  private readonly townSpires: THREE.InstancedMesh;
-  private readonly gateArches: THREE.InstancedMesh;
   /** The town view and the gate's stair down (#1518): six huts and their windows round each town, a mouth under each gate's arch. */
   private readonly townHuts: THREE.InstancedMesh;
-  private readonly townWindows: THREE.InstancedMesh;
   private readonly gateMouths: THREE.InstancedMesh;
   /** The lore logs of the world (#1589), the numbers of the ones found, and their stakes, laid for the ones in the loaded chunks. */
   private logCells: readonly Axial[] = [];
@@ -709,7 +755,6 @@ export class OpenWorldView {
   private readonly stakesFound: THREE.InstancedMesh;
   /** The stones and the caps of the cairns of the loaded chunks (#1533). */
   private readonly cairnStones: THREE.InstancedMesh;
-  private readonly cairnCaps: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
   private readonly dummy = new THREE.Object3D();
   /** Reused by every instance colour written, so a build allocates none. */
@@ -833,28 +878,35 @@ export class OpenWorldView {
     this.scene.add(this.ejected);
     const glow = (colour = TELEPORTER_LOOK.colour): THREE.Material => new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: TELEPORTER_LOOK.emissive, roughness: 0.4, flatShading: true });
     const pad = new THREE.CylinderGeometry(0.5, 0.56, 0.08, 6).translate(0, 0.04, 0);
-    this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, pad, glow());
-    this.townPads = this.instances('town-pad', PLACE_CAPACITY, pad, glow(new THREE.Color(ICON.town).getHex()));
-    this.gatePads = this.instances('gate-pad', PLACE_CAPACITY, pad, glow(new THREE.Color(ICON.dungeon).getHex()));
+    // A landmark whose parts glow in one colour is one geometry, drawn in one call (#1647): a teleporter's pad and ring, a town's pad and
+    // spire (both ICON.town), a gate's pad and arch (both ICON.dungeon).
+    const ring = new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0);
+    this.pads = this.instances('teleporter-pad', TELEPORTER_CAPACITY, mergedParts([['pad', pad], ['ring', ring]]), glow());
     const spire = new THREE.ConeGeometry(PLACE_LOOK.spire.radius, PLACE_LOOK.spire.height, 6).translate(0, PLACE_LOOK.spire.height / 2 + 0.08, 0);
-    this.townSpires = this.instances('town-spire', PLACE_CAPACITY, spire, glow(new THREE.Color(PLACE_LOOK.spire.colour).getHex()));
+    this.townPads = this.instances('town-pad', PLACE_CAPACITY, mergedParts([['pad', pad], ['spire', spire]]), glow(new THREE.Color(PLACE_LOOK.spire.colour).getHex()));
     const arch = new THREE.TorusGeometry(PLACE_LOOK.arch.radius, PLACE_LOOK.arch.tube, 6, 16, Math.PI).translate(0, PLACE_LOOK.arch.tube + 0.08, 0);
-    this.gateArches = this.instances('gate-arch', PLACE_CAPACITY, arch, glow(new THREE.Color(PLACE_LOOK.arch.colour).getHex()));
+    this.gatePads = this.instances('gate-pad', PLACE_CAPACITY, mergedParts([['pad', pad], ['arch', arch]]), glow(new THREE.Color(PLACE_LOOK.arch.colour).getHex()));
     this.gateMouths = this.instances('gate-mouth', PLACE_CAPACITY, mouthGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
     this.gateMouths.castShadow = false; // flat on the pad
-    this.townHuts = this.instances('town-hut', PLACE_CAPACITY * 6, hutGeometry(), new THREE.MeshStandardMaterial({ color: PLACE_LOOK.hut.colour, roughness: 0.8, flatShading: true }));
-    this.townWindows = this.instances('town-window', PLACE_CAPACITY * 6, hutWindowGeometry(), glow(new THREE.Color(PLACE_LOOK.spire.colour).getHex()));
-    this.rings = this.instances('teleporter-ring', TELEPORTER_CAPACITY, new THREE.TorusGeometry(0.36, 0.05, 6, 24).rotateX(Math.PI / 2).translate(0, TELEPORTER_LOOK.ring, 0), glow());
+    // A hut and its lit windows, a cairn's stones and its glowing cap: one geometry each, the colours on the vertices (#1647)
+    const hut = landmarkGeometry([
+      { name: 'hut', geometry: hutGeometry(), colour: PLACE_LOOK.hut.colour, roughness: 0.8, glows: false },
+      { name: 'window', geometry: hutWindowGeometry(), colour: PLACE_LOOK.spire.colour, roughness: 0.4, glows: true },
+    ]);
+    this.townHuts = this.instances('town-hut', PLACE_CAPACITY * 6, hut, landmarkMaterial(TELEPORTER_LOOK.emissive));
     const stake = (found: boolean): THREE.BufferGeometry => {
       const height = found ? LOG_LOOK.height.found : LOG_LOOK.height.open;
       return new THREE.CylinderGeometry(0.07, 0.1, height, 5).translate(0, height / 2, 0);
     };
     this.stakes = this.instances('log-stake', LOG_CAPACITY, stake(false), new THREE.MeshStandardMaterial({ color: LOG_LOOK.open, emissive: LOG_LOOK.open, emissiveIntensity: LOG_LOOK.emissive, roughness: 0.5, flatShading: true }));
     this.stakesFound = this.instances('log-stake-found', LOG_CAPACITY, stake(true), new THREE.MeshStandardMaterial({ color: LOG_LOOK.found, roughness: 0.9, flatShading: true }));
-    this.cairnStones = this.instances('cairn', CAIRN_CAPACITY, cairnGeometry(), new THREE.MeshStandardMaterial({ color: CAIRN_LOOK.stone, roughness: 0.9, flatShading: true }));
     const capAt = CAIRN_LOOK.step * CAIRN_LOOK.stones.length;
     const cap = new THREE.ConeGeometry(CAIRN_LOOK.stones[2]! * 1.05, 0.42, 6).translate(0, capAt + 0.21, 0);
-    this.cairnCaps = this.instances('cairn-cap', CAIRN_CAPACITY, cap, new THREE.MeshStandardMaterial({ color: CAIRN_LOOK.cap, emissive: CAIRN_LOOK.cap, emissiveIntensity: CAIRN_LOOK.emissive, roughness: 0.5, flatShading: true }));
+    const cairn = landmarkGeometry([
+      { name: 'stones', geometry: cairnGeometry(), colour: CAIRN_LOOK.stone, roughness: 0.9, glows: false },
+      { name: 'cap', geometry: cap, colour: CAIRN_LOOK.cap, roughness: 0.5, glows: true },
+    ]);
+    this.cairnStones = this.instances('cairn', CAIRN_CAPACITY, cairn, landmarkMaterial(CAIRN_LOOK.emissive));
     this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: MOTE_OPACITY, depthWrite: false }));
     sunDirection(this.sunDirection, this.sky.look.elevation, this.sky.look.azimuth); // the sun's way is the day's at the start, under either look (#1536)
     if (!this.neon) this.applyLook(); // the sky of the time of day, the day's at the start (#1496)
@@ -1531,9 +1583,9 @@ export class OpenWorldView {
       (this.sparks.material as THREE.MeshBasicMaterial).opacity = MOTE_OPACITY * this.moteScale;
     }
     this.shine.value = look.glow;
-    for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads, this.townSpires, this.gateArches, this.townWindows]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
+    for (const mesh of [this.pads, this.townPads, this.gatePads, this.townHuts]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
     (this.stakes.material as THREE.MeshStandardMaterial).emissiveIntensity = LOG_LOOK.emissive + LOG_LOOK.nightGlow * look.glow;
-    (this.cairnCaps.material as THREE.MeshStandardMaterial).emissiveIntensity = CAIRN_LOOK.emissive + CAIRN_LOOK.nightGlow * look.glow;
+    (this.cairnStones.material as THREE.MeshStandardMaterial).emissiveIntensity = CAIRN_LOOK.emissive + CAIRN_LOOK.nightGlow * look.glow;
   }
 
   /** The sun's soft shadow round the hero, on the high tier (#1364). */
@@ -1820,11 +1872,10 @@ export class OpenWorldView {
       const p = axialTo3D(q, r);
       dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
       dummy.updateMatrix();
-      this.pads.setMatrixAt(n, dummy.matrix);
-      this.rings.setMatrixAt(n++, dummy.matrix);
+      this.pads.setMatrixAt(n++, dummy.matrix);
     }
-    this.pads.count = this.rings.count = n;
-    this.pads.instanceMatrix.needsUpdate = this.rings.instanceMatrix.needsUpdate = true;
+    this.pads.count = n;
+    this.pads.instanceMatrix.needsUpdate = true;
   }
 
   /** The towns and dungeon gates of the world (#1593): a pad on each one in the loaded chunks, the others when the chunks get to them. */
@@ -1847,17 +1898,16 @@ export class OpenWorldView {
       const p = axialTo3D(q, r);
       dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
       dummy.updateMatrix();
-      const [pad, mark] = kind === 'town' ? [this.townPads, this.townSpires] : [this.gatePads, this.gateArches];
+      const pad = kind === 'town' ? this.townPads : this.gatePads;
       const n = counts[kind]++;
       pad.setMatrixAt(n, dummy.matrix);
-      mark.setMatrixAt(n, dummy.matrix);
       if (kind === 'dungeon') this.gateMouths.setMatrixAt(n, dummy.matrix);
       else this.placeHuts(n, [q, r], p);
     }
-    for (const mesh of [this.townPads, this.townSpires, this.gatePads, this.gateArches, this.gateMouths, this.townHuts, this.townWindows]) mesh.instanceMatrix.needsUpdate = true;
-    this.townPads.count = this.townSpires.count = counts.town;
-    this.townHuts.count = this.townWindows.count = counts.town * 6;
-    this.gatePads.count = this.gateArches.count = this.gateMouths.count = counts.dungeon;
+    for (const mesh of [this.townPads, this.gatePads, this.gateMouths, this.townHuts]) mesh.instanceMatrix.needsUpdate = true;
+    this.townPads.count = counts.town;
+    this.townHuts.count = counts.town * 6;
+    this.gatePads.count = this.gateMouths.count = counts.dungeon;
   }
 
   /** Stands the six huts of the `n`-th town, at `cell` (centre `p`), on the corners round its pad, each on the highest of the three cells
@@ -1876,7 +1926,6 @@ export class OpenWorldView {
       dummy.rotation.set(0, Math.atan2(p.x - x, p.z - z), 0);
       dummy.updateMatrix();
       this.townHuts.setMatrixAt(n * 6 + k, dummy.matrix);
-      this.townWindows.setMatrixAt(n * 6 + k, dummy.matrix);
     });
     dummy.rotation.set(0, 0, 0);
   }
@@ -1904,12 +1953,11 @@ export class OpenWorldView {
       dummy.rotation.set(0, v * Math.PI * 2, 0);
       dummy.scale.set(1, 1 + CAIRN_LOOK.spread * (2 * v - 1), 1);
       dummy.updateMatrix();
-      this.cairnStones.setMatrixAt(n, dummy.matrix);
-      this.cairnCaps.setMatrixAt(n++, dummy.matrix);
+      this.cairnStones.setMatrixAt(n++, dummy.matrix);
     }
     dummy.rotation.set(0, 0, 0);
-    this.cairnStones.count = this.cairnCaps.count = n;
-    this.cairnStones.instanceMatrix.needsUpdate = this.cairnCaps.instanceMatrix.needsUpdate = true;
+    this.cairnStones.count = n;
+    this.cairnStones.instanceMatrix.needsUpdate = true;
   }
 
   /** Lays a stake on the top of each log of the loaded chunks: the tall amber one while unread, the short grey one once found. */

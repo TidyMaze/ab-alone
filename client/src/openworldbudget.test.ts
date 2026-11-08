@@ -26,13 +26,15 @@ const files = {
 
 /** The geometry of one view of `scene` through `camera` (docs/specs/openworld.md section 17): every visible mesh whose bounds meet the
  * camera's frustum, as three culls it, is one draw call and its triangles times its instances. The shadow pass and the full-screen pass
- * are not counted: they draw the same scene again. */
-function sceneCost(scene: THREE.Scene, camera: THREE.Camera): { calls: number; triangles: number } {
+ * are not counted in them: they draw the same scene again; `casters` is how many of those calls the shadow pass draws again (the meshes
+ * that cast the sun's shadow, high tier). */
+function sceneCost(scene: THREE.Scene, camera: THREE.Camera): { calls: number; triangles: number; casters: number } {
   scene.updateMatrixWorld(true);
   camera.updateMatrixWorld(true);
   const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   let calls = 0;
   let triangles = 0;
+  let casters = 0;
   scene.traverseVisible((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -42,9 +44,10 @@ function sceneCost(scene: THREE.Scene, camera: THREE.Camera): { calls: number; t
     const g = mesh.geometry;
     const count = Math.min(g.index ? g.index.count : g.attributes.position!.count, g.drawRange.count);
     calls++;
+    if (mesh.castShadow) casters++;
     triangles += Math.floor(count / 3) * instances;
   });
-  return { calls, triangles };
+  return { calls, triangles, casters };
 }
 
 const mode = () =>
@@ -78,11 +81,17 @@ const mode = () =>
   );
 
 // The regression caps of section 17 (about 5 % over the scene measured on 2026-11-08, not the frame budget of 750 000 triangles and 45 calls) on the scene of one view at 1280x720, on the high tier: the budget view (the spawn of seed 3, the closest zoom) and the
-// widest zoom a player reaches there. Measured 353 010 triangles in 23 calls and 3 254 456 in 23 (#1481); the renderer's frame draws the
-// shadow casters a second time (708 519 triangles, 52 calls at the budget view).
+// widest zoom a player reaches there. Measured 353 010 triangles in 23 calls and 3 254 456 in 23 (#1481), 19 calls each once a landmark's
+// parts are one mesh (#1647); the renderer's frame draws the shadow casters a second time (708 519 triangles, 52 calls at the budget view
+// before #1647, 44 after).
 const SPAWN_TRIANGLES_CAP = 370_000;
 const WIDEST_TRIANGLES_CAP = 3_400_000;
 const CALLS_CAP = 25;
+// The frame's budget of draw calls (section 17) and what the frame draws beside the scene and its shadow pass, read on `window.__renderCost`
+// at the budget view on an Apple M4 (#1647): 52 calls for 23 in the scene and 18 casters, so 11 (the sky, the full-screen passes).
+const FRAME_CALLS = 45;
+const FRAME_PASSES = 11;
+const frameCalls = ({ calls, casters }: { calls: number; casters: number }): number => calls + casters + FRAME_PASSES;
 
 describe('the Open world scene geometry regression caps (docs/specs/openworld.md section 17)', () => {
   it('keeps the scene of the budget view and of the widest zoom under its regression caps on triangles and draw calls, with the real chunks and models', async () => {
@@ -97,12 +106,14 @@ describe('the Open world scene geometry regression caps (docs/specs/openworld.md
     expect(spawn.triangles).toBeGreaterThan(SPAWN_TRIANGLES_CAP / 2); // the whole view is counted, not a part of it
     expect(spawn.triangles).toBeLessThanOrEqual(SPAWN_TRIANGLES_CAP);
     expect(spawn.calls).toBeLessThanOrEqual(CALLS_CAP);
+    expect(frameCalls(spawn)).toBeLessThanOrEqual(FRAME_CALLS);
     m.zoom(Number.MAX_VALUE); // held at the widest zoom of the window
     for (let t = 1; t <= 60; t++) m.frame(() => {}, t0 + t * 100); // the drawn zoom follows the zoom asked for
     const widest = sceneCost(m.scene!, camera!);
     expect(widest.triangles).toBeGreaterThan(spawn.triangles * 4); // the zoom was reached: the view holds many more cells
     expect(widest.triangles).toBeLessThanOrEqual(WIDEST_TRIANGLES_CAP);
     expect(widest.calls).toBeLessThanOrEqual(CALLS_CAP);
+    expect(frameCalls(widest)).toBeLessThanOrEqual(FRAME_CALLS);
     m.leave();
     delete document.body.dataset.tier;
   });
