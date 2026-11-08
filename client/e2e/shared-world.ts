@@ -11,6 +11,7 @@ async function boot(browser: Browser, baseURL: string | undefined, viewport: { w
   const context = await browser.newContext({ baseURL, viewport, serviceWorkers: 'block' });
   if (process.env.CI) await context.addInitScript(() => localStorage.setItem('ab-alone.tier', 'low')); // as lowTierOnCi (modes.ts)
   const page = await context.newPage();
+  await page.clock.install(); // the time flows as usual; a test pauses it to draw a glide frame by frame (frameclock.ts, #1643)
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas:not(#openworld-minimap)').waitFor();
   return page;
@@ -24,8 +25,11 @@ export const test = base.extend<{ world: Page }>({
       delete (window as unknown as { __openworldSlow?: number }).__openworldSlow; // the slow factor a glide test set (openworldglide.ts)
       return (window as unknown as { __openworldFresh: () => Promise<void> }).__openworldFresh();
     });
-    await page.keyboard.up('Shift'); // no key is left held by the test before
+    // no key is left held by the test before: a test that timed out mid-press can leave an arrow down, and the next one walks (#1643)
+    for (const key of ['Shift', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) await page.keyboard.up(key);
     await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
+    // the world's frames run: its first entry builds the programs behind the veil, where no frame walks or glides (#1582, #1643)
+    await expect.poll(() => page.evaluate(() => document.body.dataset.veil)).toBeUndefined();
     await use(page);
   },
 });

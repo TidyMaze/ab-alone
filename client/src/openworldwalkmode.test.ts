@@ -216,3 +216,28 @@ describe('the frame reports whether it drew, #1064', () => {
     expect(m.frame(vi.fn(), 0)).toBe(false);
   });
 });
+
+// #1333, the bound of the e2e check moved here (#1643): on a loaded machine's software GL a frame took up to 1.4 s and the browser saw too few.
+describe('the camera follows a walk with no step in its speed, from its start to its stop, #1333', () => {
+  it('changes its speed by under 300 units/s/s a frame: a held arrow from rest, let go at 1.2 s, frames at 60 Hz to 1.8 s', () => {
+    setClock();
+    const m = make(false);
+    m.frame(vi.fn(), 0);
+    const samples: { t: number; eye: number[] }[] = [];
+    m.key('ArrowRight');
+    for (let t = FRAME; t <= 1800; t += FRAME) {
+      clock = t;
+      if (t > 1200 && t - FRAME <= 1200) m.release('ArrowRight');
+      m.frame(vi.fn(), t);
+      samples.push({ t, eye: m.camera().eye });
+    }
+    const velocity = (i: number) => samples[i]!.eye.map((x, k) => (x - samples[i - 1]!.eye[k]!) / ((samples[i]!.t - samples[i - 1]!.t) / 1000));
+    let worst = 0;
+    for (let i = 2; i < samples.length; i++) {
+      const [a, b] = [velocity(i), velocity(i - 1)];
+      worst = Math.max(worst, Math.hypot(...a.map((x, k) => x - b[k]!)) / ((samples[i]!.t - samples[i - 2]!.t) / 2000));
+    }
+    expect(Math.hypot(...samples.at(-1)!.eye.map((x, k) => x - samples[0]!.eye[k]!))).toBeGreaterThan(5); // it walked
+    expect(worst).toBeLessThan(300); // units/s/s: about 100, and about 1000 when the camera was on the hero itself (before #1333)
+  });
+});
