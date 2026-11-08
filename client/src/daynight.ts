@@ -49,13 +49,16 @@ export interface WorldLook {
   water: number;
   /** How much the hero, the troop, the lairs and the teleporters shine of their own, 0 (not at all) to 1. */
   glow: number;
+  /** The brightness of the neon sky's stars and of its horizon glow, 1 as the look ships them (#1536); the terrace has neither. */
+  stars: number;
+  horizon: number;
 }
 
 /** The three looks. Night stays readable: the moon is a real key light, the ambient is not black, and the things that matter glow. */
 export const WORLD_LOOKS: Readonly<Record<Phase, WorldLook>> = {
-  day: { sky: 0x93b5d9, sun: SUN.colour, sunIntensity: 3.2, elevation: SUN.elevation, azimuth: SUN.azimuth, hemiSky: 0xcfe0ff, hemiGround: 0x2a2418, hemiIntensity: 0.9, water: 0xffffff, glow: 0 },
-  dusk: { sky: 0x9a5f7a, sun: 0xff9a50, sunIntensity: 3.6, elevation: 14, azimuth: 62, hemiSky: 0xc8a0d0, hemiGround: 0x5a3a40, hemiIntensity: 1.2, water: 0xf0b0b8, glow: 0.4 },
-  night: { sky: 0x060a1c, sun: 0x9db8ff, sunIntensity: 1.3, elevation: 38, azimuth: -30, hemiSky: 0x6a82c8, hemiGround: 0x141a2c, hemiIntensity: 0.65, water: 0x8aa4e0, glow: 1 },
+  day: { sky: 0x93b5d9, sun: SUN.colour, sunIntensity: 3.2, elevation: SUN.elevation, azimuth: SUN.azimuth, hemiSky: 0xcfe0ff, hemiGround: 0x2a2418, hemiIntensity: 0.9, water: 0xffffff, glow: 0, stars: 1, horizon: 1 },
+  dusk: { sky: 0x9a5f7a, sun: 0xff9a50, sunIntensity: 3.6, elevation: 14, azimuth: 62, hemiSky: 0xc8a0d0, hemiGround: 0x5a3a40, hemiIntensity: 1.2, water: 0xf0b0b8, glow: 0.4, stars: 1, horizon: 1 },
+  night: { sky: 0x060a1c, sun: 0x9db8ff, sunIntensity: 1.3, elevation: 38, azimuth: -30, hemiSky: 0x6a82c8, hemiGround: 0x141a2c, hemiIntensity: 0.65, water: 0x8aa4e0, glow: 1, stars: 1, horizon: 1 },
 };
 
 const mixNumber = (a: number, b: number, k: number): number => a + (b - a) * k;
@@ -105,6 +108,8 @@ export class Sky {
     look.hemiIntensity = mixNumber(from.hemiIntensity, to.hemiIntensity, k);
     look.water = mixHex(from.water, to.water, k);
     look.glow = mixNumber(from.glow, to.glow, k);
+    look.stars = mixNumber(from.stars, to.stars, k);
+    look.horizon = mixNumber(from.horizon, to.horizon, k);
     return true;
   }
 }

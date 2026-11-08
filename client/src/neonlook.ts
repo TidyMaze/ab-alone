@@ -62,12 +62,18 @@ export const SKY_TINT = 0.25;
 export const NEON_GLOW = 2.2;
 
 /** The Open world's day, dusk and night under the neon look (#1536, the clock of daynight.ts). Day is the look above, as shipped. Dusk: the
- * sky takes a fifth of the violet over the black, the light is violet too: no warm wash on the white marbles (art-1518). Night: the sky stays black, the moon is the pedestal
- * ring's cyan, and the glow of the lairs, the marbles and the grid is full. Only palette tokens, and mixes of them (art.md, section 1). */
+ * sky takes a third of the violet over the black, the sun and the ambient lean violet too (no warm wash on the white marbles, art-1518),
+ * the stars fade to half and the horizon glow doubles, the lakes take the violet. Night: the sky stays black, the moon is the pedestal
+ * ring's cyan, the stars come out at 1.8, the horizon dims, the lakes go cyan, and the glow of the lairs, the marbles and the grid is
+ * full. Only palette tokens, and mixes of them (art.md, section 1). */
+/** The share of its colour a white marble of the Open world shines with at full glow under the neon look (the terrace's is 0.35): the
+ * hero reads at #e0ded8 or above under the cyan moon (#1536 art, measured #e4f2f3 at 390). */
+export const NEON_WHITE_GLOW = 0.8;
+
 export const NEON_WORLD_LOOKS: Readonly<Record<Phase, WorldLook>> = {
-  day: { sky: NEON.sky, sun: NEON_LIGHT.sun, sunIntensity: NEON_LIGHT.sunIntensity, elevation: NEON_LIGHT.elevation, azimuth: NEON_LIGHT.azimuth, hemiSky: NEON_LIGHT.skyMix, hemiGround: NEON_LIGHT.ground, hemiIntensity: NEON_LIGHT.hemisphere, water: 0xffffff, glow: 0 },
-  dusk: { sky: mixHex(NEON.sky, NEON.violet, 0.2), sun: NEON_LIGHT.sun, sunIntensity: 2.4, elevation: 14, azimuth: 62, hemiSky: NEON_LIGHT.skyMix, hemiGround: NEON.ground, hemiIntensity: 2.2, water: 0xffffff, glow: 0.4 },
-  night: { sky: NEON.sky, sun: NEON.pedestalRing, sunIntensity: 1.3, elevation: 38, azimuth: -30, hemiSky: NEON.rimLight, hemiGround: NEON.groundFar, hemiIntensity: 1.6, water: 0xffffff, glow: 1 },
+  day: { sky: NEON.sky, sun: NEON_LIGHT.sun, sunIntensity: NEON_LIGHT.sunIntensity, elevation: NEON_LIGHT.elevation, azimuth: NEON_LIGHT.azimuth, hemiSky: NEON_LIGHT.skyMix, hemiGround: NEON_LIGHT.ground, hemiIntensity: NEON_LIGHT.hemisphere, water: 0xffffff, glow: 0, stars: 1, horizon: 1 },
+  dusk: { sky: mixHex(NEON.sky, NEON.violet, 0.35), sun: mixHex(NEON_LIGHT.sun, NEON.violet, 0.45), sunIntensity: 2.4, elevation: 14, azimuth: 62, hemiSky: mixHex(NEON_LIGHT.skyMix, NEON.violet, 0.4), hemiGround: NEON.ground, hemiIntensity: 2.2, water: mixHex(0xffffff, NEON.violet, 0.35), glow: 0.4, stars: 0.5, horizon: 2 },
+  night: { sky: NEON.sky, sun: NEON.pedestalRing, sunIntensity: 1.3, elevation: 38, azimuth: -30, hemiSky: NEON.rimLight, hemiGround: NEON.groundFar, hemiIntensity: 1.6, water: mixHex(0xffffff, NEON.cyan, 0.3), glow: 1, stars: 1.8, horizon: 0.6 },
 };
 
 /** The dishes are drawn this much smaller across: the gap between two cells (1 - the flat-to-flat of a 0.5 hexagon, 0.134) grows by 40 %, so the cyan line keeps its width and its dark floor at 390 px. */

@@ -12,7 +12,7 @@ export const stripeFadeNode = () => uniform(1);
 type Fade = ReturnType<typeof stripeFadeNode>;
 
 /** How much of its colour a marble emits at full glow. */
-const GLOW_SHARE = 0.35;
+export const GLOW_SHARE = 0.35;
 
 /** The half width of the stripe, in radians of arc: the stripe is 0.16 rad wide (about 9 degrees). */
 export const STRIPE_HALF_WIDTH = 0.08;
@@ -45,8 +45,8 @@ export interface MarbleSkins {
 /** A marble material with the stripe of `look`, its strength read from the `fade` uniform (see `stripeStrength`). Its colour is
  * the base, mixed toward the stripe colour across the band of the great circle. With a `skin` (#1176) the material wears its
  * colour, maps and finish, so the stripe is the one cue of the team. With a `glow` (0 to 1, a uniform node of the view, #1496) the marble
- * shines with its own colour in proportion to it: the hero and the troop stay readable at night. */
-export function stripedMaterial(look: MarbleLook, fade: Fade, skin?: THREE.MeshStandardMaterial, glow?: Fade): THREE.MeshStandardNodeMaterial {
+ * shines with `share` of its own colour in proportion to it: the hero and the troop stay readable at night. */
+export function stripedMaterial(look: MarbleLook, fade: Fade, skin?: THREE.MeshStandardMaterial, glow?: Fade, share = GLOW_SHARE): THREE.MeshStandardNodeMaterial {
   const material = new THREE.MeshStandardNodeMaterial({ color: look.base, roughness: look.roughness });
   if (skin) {
     const { color, roughness, metalness, emissive, emissiveIntensity, map, normalMap, roughnessMap, metalnessMap, aoMap, emissiveMap } = skin;
@@ -64,6 +64,7 @@ export function stripedMaterial(look: MarbleLook, fade: Fade, skin?: THREE.MeshS
   const band = float(1).sub(smoothstep(edge.sub(soft), edge.add(soft), off));
   const colour = mix(materialColor, stripe, band.mul(fade));
   material.colorNode = colour;
-  if (glow) material.emissiveNode = colour.mul(glow).mul(GLOW_SHARE);
+  if (glow) material.emissiveNode = colour.mul(glow).mul(share);
+  material.userData.glowShare = glow ? share : 0;
   return material;
 }

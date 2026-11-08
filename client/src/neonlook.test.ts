@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { color as tslColor } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { neonShellFor, NEON, NEON_CELL_SCALE, NEON_HIDDEN, NEON_LIGHT, lightNeon, targetArrowMaterial, neonEdgeGeometry, neonGlow, neonEdgeMaterial, neonLookOn, neonMaterial, neonPaint, neonPedestal, neonStars, NEON_TELL, nextToSight, neonBreachGeometry, neonEggGeometry, neonVoidGeometry, neonVoidMaterial, neonCrackMap, neonFogGeometry, neonTells, neonVeil, tellLook, NEON_RIM, NEON_GLOSS, NEON_WHITE_RIM, NEON_WHITE_SHADE, NEON_SHEEN, neonMarbleRim, marbleSheen } from './neonlook';
+import { mixHex } from './daynight';
 import { mergeByMaterial } from './tablezero';
 import { scalePower } from './lightpanel';
 import { DECK_NAMES } from './deck';
@@ -381,13 +382,23 @@ describe('the Open world under the neon look: day, dusk and night (#1536)', () =
 
   it('dusk takes the violet sky and violet light, and night the pedestal ring moon, in readable light', () => {
     const { day, dusk, night } = NEON_WORLD_LOOKS;
-    expect(dusk.sky).not.toBe(day.sky);
-    expect(dusk.sun).toBe(NEON_LIGHT.sun);
+    expect(dusk.sky).toBe(mixHex(NEON.sky, NEON.violet, 0.35)); // a third of the violet: dusk read weakly at a fifth (#1536 art)
+    expect(dusk.sun).toBe(mixHex(NEON_LIGHT.sun, NEON.violet, 0.45));
+    expect(dusk.hemiSky).toBe(mixHex(NEON_LIGHT.skyMix, NEON.violet, 0.4));
     expect(night.sky).toBe(NEON.sky);
     expect(night.sun).toBe(NEON.pedestalRing);
     expect(night.sunIntensity).toBeLessThan(day.sunIntensity);
     expect(night.hemiIntensity).toBeGreaterThanOrEqual(1);
     expect([dusk.glow, night.glow]).toEqual([0.4, 1]);
+  });
+
+  it('phases the sky and the lakes with the clock: the stars out at night, the horizon glowing at dusk, the lakes violet then cyan (#1536)', () => {
+    const { day, dusk, night } = NEON_WORLD_LOOKS;
+    expect([day.stars, dusk.stars, night.stars]).toEqual([1, 0.5, 1.8]);
+    expect([day.horizon, dusk.horizon, night.horizon]).toEqual([1, 2, 0.6]);
+    expect(day.water).toBe(0xffffff);
+    expect(dusk.water).toBe(mixHex(0xffffff, NEON.violet, 0.35));
+    expect(night.water).toBe(mixHex(0xffffff, NEON.cyan, 0.3));
   });
   it('lights a boss space with its own sun, colour, place and strength, the hemisphere leaning to its key, and gives the neon light back without one (#1551)', () => {
     const [sun, hemisphere, plain] = [new THREE.DirectionalLight(), new THREE.HemisphereLight(), new THREE.HemisphereLight()];

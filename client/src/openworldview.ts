@@ -20,9 +20,9 @@ import { contactOf, heldClock } from './openworldhit';
 import { SUN, SUN_SHADOW, aimSunShadow, sunDirection } from './tablezero';
 import { Sky, WORLD_LOOKS } from './daynight';
 import { ICON } from './openworldlairicon';
-import { NEON, NEON_WORLD_LOOKS, lightNeon, neonMarbleRim, neonStars, neonWorldOn } from './neonlook';
+import { NEON, NEON_WHITE_GLOW, NEON_WORLD_LOOKS, lightNeon, neonMarbleRim, neonStars, neonWorldOn } from './neonlook';
 import { WORLD_EDGE_GAIN, WORLD_SHADOW, neonProp, neonTraces } from './neonworld';
-import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
+import { GLOW_SHARE, type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 import { wrapPi } from './openworldtwist';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
@@ -409,6 +409,9 @@ export const MARBLE_LOOK = {
   troop: { base: 0x8fc4f5, stripe: 0x6fa8dc, roughness: 0.12 },
   foes: { base: 0x15171c, stripe: 0xffb000, roughness: 0.15 },
 } as const;
+/** The opacity of the particles, and the share of their size and opacity the neon night takes away (#1536 art: half). */
+export const MOTE_OPACITY = 0.8;
+export const MOTE_NIGHT_CUT = 0.5;
 const WALL = 0.9;
 const CAP = 0.07;
 /** The walkway of a wall, between its merlons (the wall model of `scripts/openworld-props.mjs`): 3/8 of its height under its top. */
@@ -547,7 +550,11 @@ const CULLED_ROOM = 1600;
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
-  private readonly neon = neonWorldOn(); // `?look=neon` (#1424): a black sky with stars, a cold sun, soft shadows at 55 %
+  private readonly neon = neonWorldOn();
+  /** The size of the particles against their own, 1 by day, cut at night under the neon look (`MOTE_NIGHT_CUT`). */
+  private moteScale = 1;
+  /** The share of their own colour the hero and the troop shine with at full glow: the neon night's cyan moon left the white hero at #a5bbc0, it stays at #e0ded8 or above (#1536 art). */
+  private readonly whiteGlow = this.neon ? NEON_WHITE_GLOW : GLOW_SHARE; // `?look=neon` (#1424): a black sky with stars, a cold sun, soft shadows at 55 %
   private readonly fog = new THREE.Fog(neonWorldOn() ? NEON.sky : WORLD_LOOKS.day.sky);
   private stars: THREE.Mesh | null = null;
   /** Where the hero stands (x, z) for the ground's shader: the neon grid is clear round it, quiet further out (#1424). */
@@ -740,12 +747,12 @@ export class OpenWorldView {
       this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.detailed[prop]!);
     }
-    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player, this.shine), this.neon));
+    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player, this.shine, this.whiteGlow), this.neon));
     this.hero.name = 'hero';
     this.hero.castShadow = this.hero.receiveShadow = true;
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
-    this.troop = this.instances('troop', CAPACITY.troop, marble, neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player, this.shine), this.neon));
+    this.troop = this.instances('troop', CAPACITY.troop, marble, neonMarbleRim('white', stripedMaterial(MARBLE_LOOK.troop, this.stripe, skins?.player, this.shine, this.whiteGlow), this.neon));
     this.foes = this.instances('enemies', CAPACITY.enemies, marble, neonMarbleRim('black', stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell), this.neon));
     this.boats = this.instances('boats', 1 + CAPACITY.troop, boatGeometry(MARBLE), boatMaterial());
     this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), neonMarbleRim('black', stripedMaterial(MARBLE_LOOK.foes, this.stripe, skins?.shell), this.neon));
@@ -769,7 +776,7 @@ export class OpenWorldView {
     };
     this.stakes = this.instances('log-stake', LOG_CAPACITY, stake(false), new THREE.MeshStandardMaterial({ color: LOG_LOOK.open, emissive: LOG_LOOK.open, emissiveIntensity: LOG_LOOK.emissive, roughness: 0.5, flatShading: true }));
     this.stakesFound = this.instances('log-stake-found', LOG_CAPACITY, stake(true), new THREE.MeshStandardMaterial({ color: LOG_LOOK.found, roughness: 0.9, flatShading: true }));
-    this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
+    this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: MOTE_OPACITY, depthWrite: false }));
     sunDirection(this.sunDirection, this.sky.look.elevation, this.sky.look.azimuth); // the sun's way is the day's at the start, under either look (#1536)
     if (!this.neon) this.applyLook(); // the sky of the time of day, the day's at the start (#1496)
   }
@@ -905,7 +912,7 @@ export class OpenWorldView {
     for (let i = 0; i < particles.cap; i++) {
       if (!particles.pose(i, now, sparkLook)) continue;
       sparkPose.position.set(sparkLook.x, sparkLook.y, sparkLook.z);
-      sparkPose.scale.setScalar(sparkLook.s);
+      sparkPose.scale.setScalar(sparkLook.s * this.moteScale);
       sparkPose.updateMatrix();
       sparks.setMatrixAt(n, sparkPose.matrix);
       sparks.setColorAt(n, this.colour.setHex(sparkLook.colour));
@@ -1432,6 +1439,14 @@ export class OpenWorldView {
     this.hemisphere.groundColor.setHex(look.hemiGround);
     this.hemisphere.intensity = look.hemiIntensity;
     for (const material of this.waterTint) (material as THREE.MeshStandardMaterial).color.setHex(look.water);
+    if (this.stars) {
+      // the neon sky with the clock (#1536): the stars come out at night, the horizon glows at dusk
+      (this.stars.material as THREE.MeshBasicMaterial).color.setScalar(look.stars);
+      ((this.skyGlow as THREE.Mesh).material as THREE.MeshBasicMaterial).color.setScalar(look.horizon);
+      // the motes shrink and fade to half at night: on the dark ground they read as snow (#1536 art)
+      this.moteScale = 1 - MOTE_NIGHT_CUT * look.glow;
+      (this.sparks.material as THREE.MeshBasicMaterial).opacity = MOTE_OPACITY * this.moteScale;
+    }
     this.shine.value = look.glow;
     for (const mesh of [this.pads, this.rings, this.townPads, this.gatePads, this.townSpires, this.gateArches]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = TELEPORTER_LOOK.emissive + TELEPORTER_LOOK.nightGlow * look.glow;
     (this.stakes.material as THREE.MeshStandardMaterial).emissiveIntensity = LOG_LOOK.emissive + LOG_LOOK.nightGlow * look.glow;

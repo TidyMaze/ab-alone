@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { CHUNK, World } from './openworld';
 import { BLEND_MS, WORLD_LOOKS } from './daynight';
-import { NEON, NEON_WORLD_LOOKS, setNeonWorldOn } from './neonlook';
+import { NEON, NEON_WHITE_GLOW, NEON_WORLD_LOOKS, setNeonWorldOn } from './neonlook';
 import { OpenWorldView } from './openworldview';
-import { stripedMaterial, stripeFadeNode } from './openworldstripe';
+import { GLOW_SHARE, stripedMaterial, stripeFadeNode } from './openworldstripe';
 import { sunPosition } from './tablezero';
 
 // The sky of the Open world follows the time of day (docs/specs/openworld.md section 11, #1496).
@@ -128,13 +128,31 @@ describe('the sky of the Open world under the neon look (#1536)', () => {
     expect([sun.color.getHex(), sun.intensity]).toEqual([dusk.sun, dusk.sunIntensity]);
     expect(hemisphere.color.getHex()).toBe(dusk.hemiSky);
     expect(view.shine.value).toBe(dusk.glow);
+    const tint = (name: string) => ((view.scene.getObjectByName(name) as THREE.Mesh).material as THREE.MeshBasicMaterial).color.r;
+    expect([tint('starfield'), tint('sky-glow'), tint('terrain-water')]).toEqual([dusk.stars, dusk.horizon, new THREE.Color(dusk.water).r]);
     expect(view.setTime(9 * MIN, true)).toBe(true);
     const night = NEON_WORLD_LOOKS.night;
+    expect([tint('starfield'), tint('sky-glow'), tint('terrain-water')]).toEqual([night.stars, night.horizon, new THREE.Color(night.water).r]);
+    const motes = (view.scene.getObjectByName('particles') as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    expect(motes.opacity).toBeCloseTo(0.4); // half at night: no snow on the dark ground
+    view.sparkle(1000, false);
     expect((view.scene.background as THREE.Color).getHex()).toBe(night.sky);
     expect([sun.color.getHex(), sun.intensity]).toEqual([night.sun, night.sunIntensity]);
     expect([hemisphere.color.getHex(), hemisphere.groundColor.getHex(), hemisphere.intensity]).toEqual([night.hemiSky, night.hemiGround, night.hemiIntensity]);
     expect(view.shine.value).toBe(1);
     expect(view.setTime(9.5 * MIN, true)).toBe(false); // the same look: nothing to draw
+  });
+
+  it('lights the white hero and troop more of their own at night than the terrace does, so the hero stays near white under the cyan moon', () => {
+    setNeonWorldOn(true);
+    const neon = made();
+    setNeonWorldOn(false);
+    const terrace = made();
+    const share = (view: OpenWorldView, name: string) => (view.scene.getObjectByName(name) as THREE.Mesh).material as THREE.Material;
+    expect(share(neon, 'hero').userData.glowShare).toBe(NEON_WHITE_GLOW);
+    expect(share(neon, 'troop').userData.glowShare).toBe(NEON_WHITE_GLOW);
+    expect(share(terrace, 'hero').userData.glowShare).toBe(GLOW_SHARE);
+    expect(share(neon, 'enemies').userData.glowShare).toBe(0); // the foes do not shine
   });
 
   it('puts the neon sun where the night says, and keeps it there as the hero moves', () => {
