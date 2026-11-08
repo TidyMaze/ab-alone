@@ -53,7 +53,7 @@ export const BOSS_SPACE: Record<string, BossSpace> = {
   // the beacons: space, a hard side light, cyan stardust
   pulsar: { key: 0x19e6ff, accent: 0xe8f0ff, sun: 0xe8f0ff, elevation: 20, azimuth: 100, intensity: 1.2, surround: 0x39466a, ground: 0.1, sky: 0.4, scatter: flecks('dust', 160, [0, 0, 0.1], 0x19e6ff, 0.05, 0.3), beat: 'pull', side: 90, dark: 0 },
   // the watch chamber: a pale light from above, thin smoke
-  overseer: { key: 0x6a609f, accent: 0x7fd6e8, sun: 0x7fd6e8, elevation: 62, azimuth: -5, intensity: 0.85, surround: mixHex(0x6a609f, 0x7fd6e8, 0.5), ground: 0.35, sky: 0.2, scatter: flecks('smoke', 90, [0, 0.04, 0], 0x7fd6e8, 0.09, 0.22), beat: 'drop', side: 50, dark: 0.15 },
+  overseer: { key: 0x6a609f, accent: 0x7fd6e8, sun: 0x7fd6e8, elevation: 62, azimuth: -5, intensity: 0.85, surround: mixHex(0x6a609f, 0x7fd6e8, 0.5), ground: 0.5, sky: 0.2, scatter: flecks('smoke', 90, [0, 0.04, 0], 0x7fd6e8, 0.09, 0.22), beat: 'drop', side: 50, dark: 0.15 },
   // the conveyor floor: a work light from the left, weld sparks climbing
   assembly: { key: 0x7fd6e8, accent: 0xd9822b, sun: 0xd8d4c8, elevation: 36, azimuth: 70, intensity: 1.1, surround: 0xd8d4c8, ground: 0.3, sky: 0.1, scatter: flecks('ore', 140, [0, 0.1, 0], 0xf2f0ea, 0.06, 0.4), beat: 'orbit', side: 50, dark: 0.1 },
   // the reactor: a hot light from the right, embers
@@ -61,7 +61,7 @@ export const BOSS_SPACE: Record<string, BossSpace> = {
   // two galleys, one cold and one warm, a flat front light
   dual: { key: 0x5fd0e6, accent: 0xd9822b, sun: 0xf2f0ea, elevation: 35, azimuth: 0, intensity: 0.95, surround: 0x5fd0e6, ground: 0.25, sky: 0.2, scatter: flecks('dust', 120, [0.02, 0.01, 0], 0xd8d4c8, 0.06, 0.3), beat: 'orbit', side: -90, dark: 0.2 },
   // the vermin: a dim light from the far left, a thick drift of dark flecks
-  swarm: { key: 0x39466a, accent: 0xd9822b, sun: 0xd8d4c8, elevation: 22, azimuth: 110, intensity: 0.75, surround: mixHex(0xd9822b, 0x6a609f, 0.5), ground: 0.4, sky: 0.25, scatter: flecks('smoke', 240, [-0.05, 0.02, 0.03], 0x39466a, 0.07, 0.4), beat: 'rise', side: 50, dark: 0.05 },
+  swarm: { key: 0x39466a, accent: 0xd9822b, sun: 0xd8d4c8, elevation: 22, azimuth: 110, intensity: 0.75, surround: 0xd9822b, ground: 0.4, sky: 0.25, scatter: flecks('smoke', 240, [-0.05, 0.02, 0.03], 0x39466a, 0.07, 0.4), beat: 'rise', side: 50, dark: 0.05 },
   // the night watch: one dim cold lamp from the right, violet dark
   stalker: { key: 0x9a6bff, accent: 0xf2f0ea, sun: 0x7fd6e8, elevation: 50, azimuth: -30, intensity: 0.6, surround: mixHex(0x6a609f, 0x39466a, 0.5), ground: 0.5, sky: 0.4, scatter: flecks('smoke', 150, [0, 0.03, 0], 0x9a6bff, 0.1, 0.25), beat: 'drop', side: -90, dark: 0 },
 };
