@@ -3,7 +3,7 @@
 // marbles, a podium, a globe, a target dummy), ringed in its own contrast-safe colour.
 import * as THREE from 'three';
 import type { Axial } from './board';
-import { LECTERN_TERMINALS, type Door } from './hub';
+import { LECTERN_TERMINALS, SEAT_BOSSES, type Door } from './hub';
 import type { HubKit } from './tablezero';
 
 export const GLYPH_COLORS = {
@@ -63,8 +63,16 @@ const medalGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.03, 20);
 const cagePostGeo = new THREE.BoxGeometry(0.04, 0.34, 0.04);
 const lecternBaseGeo = new THREE.BoxGeometry(0.46, 0.04, 0.34);
 const lecternPostGeo = new THREE.BoxGeometry(0.1, 0.5, 0.1);
-const lecternScreenGeo = new THREE.BoxGeometry(0.5, 0.34, 0.04);
+const lecternScreenGeo = new THREE.BoxGeometry(0.84, 0.6, 0.04);
 const lecternScreen = new THREE.MeshBasicMaterial({ color: 0x19e6ff }); // the neon cyan of the palette (art.md 1)
+// The props of their own of the stations that share a prop of the file (#1556), in the palette (art.md 1): one draw each, no texture.
+const seatLampGeo = new THREE.SphereGeometry(0.24, 12, 8);
+const seatLamp = new THREE.MeshBasicMaterial({ color: 0xd9822b }); // sodium, the hazard: the deck's seat boss
+const chevronGeo = new THREE.TorusGeometry(0.34, 0.06, 4, 3, Math.PI / 1.5); // an open triangle: a rank's chevron
+const rankViolet = new THREE.MeshBasicMaterial({ color: 0x9a6bff });
+const targetGeo = [new THREE.TorusGeometry(0.4, 0.06, 6, 24), new THREE.TorusGeometry(0.17, 0.06, 6, 16)];
+/** How far the seat lamp floats over the top of the file's boss door. */
+const LAMP_GAP = 0.26;
 const arrowShape = new THREE.Shape(
   [[0.26, 0], [0.04, 0.18], [0.04, 0.07], [-0.2, 0.07], [-0.2, -0.07], [0.04, -0.07], [0.04, -0.18]].map(
     ([x, y]) => new THREE.Vector2(x, y),
@@ -274,18 +282,43 @@ export const KIT_PROP: Record<Door['kind'], string> = {
 function lectern(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'lectern';
-  group.add(part(lecternBaseGeo, plate, [0, 0.015, 0]), part(lecternPostGeo, plate, [0, 0.27, 0]), part(lecternScreenGeo, lecternScreen, [0, 0.66, 0.08], 0.4));
+  // the screen leans back to face the hub's camera from above: tilted toward it, it read as a sliver at the boss door's foot at 390 px
+  group.add(part(lecternBaseGeo, plate, [0, 0.015, 0]), part(lecternPostGeo, plate, [0, 0.27, 0]), part(lecternScreenGeo, lecternScreen, [0, 0.7, 0.06], -0.9));
   return group;
+}
+
+/** The top of the file's prop `name` (its box), 0 when the file has none. */
+function propTop(kit: HubKit, name: string): number {
+  const piece = kit.parts[name]?.[0];
+  return piece ? new THREE.Box3().setFromObject(piece).max.y : 0;
+}
+
+/** The prop of its own of a station that shares the file's prop (#1556), or none: a sodium lamp over the deck's seat boss door, violet
+ * rank chevrons over the Ranked podium, a cyan target by the Trainer's dummy. */
+function ownProp(kit: HubKit, door: Door): THREE.Object3D | null {
+  if (door.kind === 'boss' && SEAT_BOSSES.has(door.boss)) {
+    const lamp = part(seatLampGeo, seatLamp, [0, propTop(kit, 'door') + LAMP_GAP, 0]);
+    lamp.name = 'seat-lamp';
+    return lamp;
+  }
+  if (door.kind === 'ranked') {
+    const chevrons = new THREE.Group();
+    chevrons.name = 'rank-chevrons';
+    const top = propTop(kit, 'podium');
+    for (let k = 0; k < 3; k++) chevrons.add(part(chevronGeo, rankViolet, [0, top + 0.26 + k * 0.2, 0.05], 0, Math.PI / 2 + Math.PI / 6));
+    return chevrons;
+  }
+  if (door.kind === 'trainer') {
+    const target = new THREE.Group();
+    target.name = 'trainer-target';
+    for (const geometry of targetGeo) target.add(part(geometry, lecternScreen, [0.4, 0.55, 0]));
+    return target;
+  }
+  return null;
 }
 
 /** A small gap over the top of the file's lift cage, so the arrow lies on top of it, in view (#523, #1374). */
 const ARROW_GAP = 0.02;
-
-/** The top of the file's lift cage (its box), where the lift's arrow lies. */
-function cageTop(kit: HubKit): number {
-  const cage = kit.parts.lift?.[0];
-  return cage ? new THREE.Box3().setFromObject(cage).max.y : 0;
-}
 
 /** Where a beaten door's gold seal hangs over the file's door: in front of its frame, at its middle. */
 const KIT_SEAL: [number, number, number] = [0, 0.5, 0.06];
@@ -300,13 +333,15 @@ export function createKitGlyph(kit: HubKit, door: Door, options: GlyphOptions = 
   group.name = `door-${door.kind}`;
   if (door.kind === 'terminal' && LECTERN_TERMINALS.has(door.lore)) group.add(lectern());
   else for (const piece of kit.parts[KIT_PROP[door.kind]] ?? []) group.add(piece.clone());
+  const own = ownProp(kit, door);
+  if (own) group.add(own);
   if (options.beaten) {
     const seal = part(sealGeo, materials.medals, KIT_SEAL, Math.PI / 2);
     seal.name = 'beaten-seal';
     group.add(seal);
   }
   // the file's cage has none: the arrow says which way it goes, on top of the cage, in bone white to read against the cage (#1374)
-  if (door.kind === 'lift') group.add(liftArrow(options.cell, cageTop(kit) + ARROW_GAP, materials.lift));
+  if (door.kind === 'lift') group.add(liftArrow(options.cell, propTop(kit, 'lift') + ARROW_GAP, materials.lift));
   if (door.kind === 'lift' && options.open === false && kit.lockbar) {
     const bar = kit.lockbar.clone();
     bar.name = 'locked-bar';

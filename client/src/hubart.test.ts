@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import type { Door } from './hub';
+import { SEAT_BOSSES, type Door } from './hub';
 import { createDoorGlyph, createKitGlyph, GLYPH_COLORS, KIT_PROP } from './hubart';
 import type { HubKit } from './tablezero';
 
@@ -204,7 +204,7 @@ describe('the hub props of the Blender file on the rooms of the game (#1374)', (
   });
 
   it('puts a copy of the parts of the kind in a group named as the procedural glyph is', () => {
-    const glyph = createKitGlyph(kit, { kind: 'boss', boss: 'echo' });
+    const glyph = createKitGlyph(kit, { kind: 'boss', boss: 'dual' }); // a gallery boss: the seat's has its lamp too
     expect(glyph.name).toBe('door-boss');
     expect(glyph.children.map((c) => c.name)).toEqual(['prop', 'ring']);
     expect(glyph.children[0]).not.toBe(kit.parts.door![0]); // a copy: the kit's parts stay where they are
@@ -225,6 +225,36 @@ describe('the hub props of the Blender file on the rooms of the game (#1374)', (
     expect(lectern).toBeInstanceOf(THREE.Group);
     const colors = lectern.children.map((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color?.getHex());
     expect(colors).toContain(0x19e6ff); // its screen is the palette's neon cyan (art.md 1)
+    // its screen leans back to face the hub's camera from above, so it reads as a lit face, not a sliver at the boss door's foot (390 px)
+    const screen = lectern.children.find((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color?.getHex() === 0x19e6ff)!;
+    expect(screen.rotation.x).toBeLessThan(-0.6);
+  });
+
+  // #1556: the stations that share a prop of the file each get one of their own, so a screenshot with no label names them
+  const colourOf = (o: THREE.Object3D) => ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex();
+  it('lights a sodium lamp over the deck seat boss door, none over the gallery bosses', () => {
+    expect(SEAT_BOSSES.has('echo')).toBe(true);
+    expect(SEAT_BOSSES.has('dual')).toBe(false);
+    const seat = createKitGlyph(kit, { kind: 'boss', boss: 'echo' });
+    const lamp = seat.getObjectByName('seat-lamp')!;
+    expect(colourOf(lamp)).toBe(0xd9822b); // the palette's sodium, the hazard (art.md 1)
+    expect(lamp.position.y).toBeGreaterThan(new THREE.Box3().setFromObject(kit.parts.door![0]!).max.y); // over the frame: it reads above it
+    expect(createKitGlyph(kit, { kind: 'boss', boss: 'dual' }).getObjectByName('seat-lamp')).toBeUndefined();
+    expect(createKitGlyph({ ...kit, parts: {} }, { kind: 'boss', boss: 'echo' }).getObjectByName('seat-lamp')!.position.y).toBeGreaterThan(0); // no file door: on the floor's top
+  });
+
+  it('crowns the Ranked podium with violet rank chevrons, the Medal wall keeps the plain podium', () => {
+    const withPodium: HubKit = { ...kit, parts: { ...kit.parts, podium: [mesh('podium')] } };
+    const chevrons = createKitGlyph(withPodium, { kind: 'ranked' }).getObjectByName('rank-chevrons')!;
+    expect(chevrons.children.length).toBe(3);
+    expect(chevrons.children.map(colourOf)).toEqual([0x9a6bff, 0x9a6bff, 0x9a6bff]);
+    expect(createKitGlyph(withPodium, { kind: 'medals' }).getObjectByName('rank-chevrons')).toBeUndefined();
+  });
+
+  it('stands a cyan target by the Trainer dummy, Together keeps the plain dummy', () => {
+    const target = createKitGlyph(kit, { kind: 'trainer' }).getObjectByName('trainer-target')!;
+    expect(target.children.map(colourOf)).toEqual([0x19e6ff, 0x19e6ff]);
+    expect(createKitGlyph(kit, { kind: 'together' }).getObjectByName('trainer-target')).toBeUndefined();
   });
 
   it('shows a gold seal on a beaten boss door, and none on a shut one', () => {

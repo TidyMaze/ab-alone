@@ -36,6 +36,8 @@ const BOSS: Record<Deck, string> = {
   chapel: 'chaplain',
   bridge: 'ballast',
 };
+/** The seat boss of each deck, at its boss door (#1556): the hub lights a lamp over its door, the gallery bosses have none. */
+export const SEAT_BOSSES: ReadonlySet<string> = new Set(Object.values(BOSS));
 // The two lore entries of each deck (lore.ts).
 const TERMINALS: Record<Deck, readonly [string, string]> = {
   mess: ['mess-house-rule', 'mess-corner-table'],
