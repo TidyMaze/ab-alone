@@ -176,18 +176,38 @@ const sizes = [
   { name: 'a window 1024 by 600', viewport: { width: 1024, height: 600 }, mobile: false },
 ];
 
-// #1387: a phone held upright shows the board at the middle of the window, clear of the thumb dock.
-test.describe('a phone 390 by 844 held upright', () => {
-  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  test('the board is vertically centred above the dock, #1387', async ({ page }) => {
+// One page for the tests of a serial group tagged @one-page (#1481): booted once in its window, with `stored` in its localStorage.
+const sharedPage = (viewport: { width: number; height: number }, mobile: boolean, stored: Record<string, string> = {}): (() => Page) => {
+  let page: Page;
+  test.describe.configure({ mode: 'serial' });
+  test.beforeAll(async ({ browser }, testInfo) => {
+    page = await (await browser.newContext({ ...testInfo.project.use, viewport, isMobile: mobile, hasTouch: mobile })).newPage();
+    await page.addInitScript((s) => Object.entries(s).forEach(([k, v]) => localStorage.setItem(k, v)), stored);
     await page.goto('./?bot=off&net=hook');
     await page.locator('canvas').waitFor();
+  });
+  test.afterAll(async () => {
+    await page.context().close();
+  });
+  return () => page;
+};
+
+// A phone 390 by 844 held upright, one page (#1481): the board at boot (#1387), then the Hub (#1388).
+test.describe('a phone 390 by 844 held upright', { tag: '@one-page' }, () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'Firefox has no mobile emulation');
+  const shared = sharedPage({ width: 390, height: 844 }, true);
+  // #1387: a phone held upright shows the board at the middle of the window, clear of the thumb dock.
+  test('the board is vertically centred above the dock, #1387', async () => {
+    const page = shared();
     const seen = await page.evaluate(() => {
       const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { y: number };
       return { centre: toScreen(0, 0).y, bottom: toScreen(0, 4).y, dock: document.getElementById('dock')!.getBoundingClientRect().top, height: innerHeight };
     });
     expect(Math.abs(seen.centre - seen.height / 2)).toBeLessThan(0.05 * seen.height);
     expect(seen.bottom).toBeLessThan(seen.dock);
+  });
+  test('the rail and the Bosses strip sit under the cog and above the board, #1388', async () => {
+    await hubUnderCog(shared(), { width: 390, height: 844 });
   });
 });
 
@@ -208,31 +228,35 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 800 }
 }
 
 // #1388: on the Hub, held upright, the five-section rail and the Bosses strip sit just under the plate and the cog, clear of the board.
-for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 640 }]) {
+// The 390 by 844 phone runs it on its shared page, above.
+for (const viewport of [{ width: 360, height: 640 }]) {
   test.describe(`the Hub on a phone ${viewport.width} by ${viewport.height} held upright`, () => {
     test.use({ viewport, isMobile: true, hasTouch: true });
     test('the rail and the Bosses strip sit under the cog and above the board, #1388', async ({ page }) => {
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
-      await openModes(page);
-      await page.getByRole('button', { name: 'Hub' }).click();
-      await expect(page.locator('body')).toHaveAttribute('data-hub', /^\w+ /);
-      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-      const seen = await page.evaluate(() => {
-        const box = (id: string) => document.getElementById(id)!.getBoundingClientRect();
-        const toScreen = (window as any).__cellToScreen as (q: number, r: number) => { y: number };
-        let board = Infinity;
-        for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) if (Math.abs(q + r) <= 3) board = Math.min(board, toScreen(q, r).y);
-        return { cog: box('chrome').bottom, pips: box('hub-pips').top, pipsBottom: box('hub-pips').bottom, rail: box('hub-rail').top, railBottom: box('hub-rail').bottom, board };
-      });
-      console.log(`1388 ${viewport.width}x${viewport.height}`, JSON.stringify(seen));
-      expect(seen.pips).toBeGreaterThanOrEqual(seen.cog); // under the plate and the cog,
-      expect(seen.pips - seen.cog).toBeLessThan(24); // right under them,
-      expect(seen.rail).toBeGreaterThanOrEqual(seen.pipsBottom); // the rail under the strip
-      expect(seen.board).toBeGreaterThan(seen.railBottom);
-      expect(seen.board).toBeGreaterThan(seen.pipsBottom);
+      await hubUnderCog(page, viewport);
     });
   });
+}
+async function hubUnderCog(page: Page, viewport: { width: number; height: number }): Promise<void> {
+  await openModes(page);
+  await page.getByRole('button', { name: 'Hub' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-hub', /^\w+ /);
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  const seen = await page.evaluate(() => {
+    const box = (id: string) => document.getElementById(id)!.getBoundingClientRect();
+    const toScreen = (window as any).__cellToScreen as (q: number, r: number) => { y: number };
+    let board = Infinity;
+    for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) if (Math.abs(q + r) <= 3) board = Math.min(board, toScreen(q, r).y);
+    return { cog: box('chrome').bottom, pips: box('hub-pips').top, pipsBottom: box('hub-pips').bottom, rail: box('hub-rail').top, railBottom: box('hub-rail').bottom, board };
+  });
+  console.log(`1388 ${viewport.width}x${viewport.height}`, JSON.stringify(seen));
+  expect(seen.pips).toBeGreaterThanOrEqual(seen.cog); // under the plate and the cog,
+  expect(seen.pips - seen.cog).toBeLessThan(24); // right under them,
+  expect(seen.rail).toBeGreaterThanOrEqual(seen.pipsBottom); // the rail under the strip
+  expect(seen.board).toBeGreaterThan(seen.railBottom);
+  expect(seen.board).toBeGreaterThan(seen.pipsBottom);
 }
 
 // One page per window (#1481): a page boot is most of a test's time on the GPU-less runner, so the states below are reached one after the
@@ -272,6 +296,23 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'at the start');
       await checkVolumes(page, 'at the start');
     });
+
+    // #1032 (rewrites the #227 column): on a desktop the cog stays top right, and the main controls are a centred bar at
+    // the bottom of the window, one row, the bar's bottom 16 px above the window's. A desktop window: CI's 960x540 is under the
+    // short-window layout (#1436).
+    if (!mobile && viewport.width === 1280 && viewport.height === 720)
+      test('on a desktop the cog is top right and the controls form a centred bar at the bottom, bugs #227 #1032', async () => {
+        await expect(page.locator('#hud')).toContainText('Black to move');
+        const { width, height } = viewport;
+        const cog = await page.getByRole('button', { name: 'Settings' }).boundingBox();
+        expect(cog!.y).toBe(16);
+        expect(cog!.x + cog!.width).toBeCloseTo(width - 16, 0);
+        const boxes = await Promise.all(['New game', 'Hint', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()));
+        for (const box of boxes) expect(box!.y + box!.height).toBeCloseTo(height - 16 - 8 - 1, 0); // the bar's content row
+        const centre = boxes.reduce((a, b) => a + b!.x + b!.width / 2, 0) / boxes.length;
+        expect(centre).toBeGreaterThan(width / 2 - 200);
+        expect(centre).toBeLessThan(width / 2 + 200);
+      });
 
     // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
     // Bug #902: the transcript runs on the page clock, paused from Play log on and moved on to the second line, so a
@@ -423,22 +464,24 @@ for (const { name, viewport, mobile } of sizes) {
 
 // On a desktop the column stays where it was: top right, one button under the other.
 // UI scale 200 % (#382): only a large desktop window has room for the HUD at 200 % (maxUiScale).
-test.describe('a large desktop window at a 200 % UI scale', () => {
-  test.use({ viewport: { width: 1920, height: 1080 } });
+// One page (#1481): its settings rows (#427) are checked on it next.
+test.describe('a large desktop window at a 200 % UI scale', { tag: '@one-page' }, () => {
+  const shared = sharedPage({ width: 1920, height: 1080 }, false, { 'ab-alone.ui-scale': '200' });
 
-  test('nothing covers the board or the HUD at a 200 % UI scale, #382', async ({ page }, testInfo) => {
-    await page.addInitScript(() => localStorage.setItem('ab-alone.ui-scale', '200'));
-    await page.goto('./?bot=off&net=hook');
-    await page.locator('canvas').waitFor();
+  test('nothing covers the board or the HUD at a 200 % UI scale, #382', async ({}, testInfo) => {
+    const page = shared();
     await expect(page.locator('#hud')).toContainText('Black to move');
     await check(page, testInfo, 'at 200 % UI scale, large desktop');
+  });
+  test('every settings row is on screen and reachable, a large desktop window at 200 % UI scale, bug #427', async () => {
+    await settingsReachable(shared());
   });
 });
 
 // Bug #427: the open settings menu was clipped by the column it sits in at a 200 % UI scale (landscape), so Skin, Export
 // game and Import game were hidden and the board took the click. Every row must be on screen and receive a click at its centre.
+// The large desktop window at 200 % runs it on its shared page, above.
 for (const { name, viewport, scale } of [
-  { name: 'a large desktop window at 200 % UI scale', viewport: { width: 1920, height: 1080 }, scale: '200' },
   { name: 'a large desktop window at 100 % UI scale', viewport: { width: 1920, height: 1080 }, scale: '100' },
   { name: 'a phone held sideways at 100 % UI scale', viewport: { width: 844, height: 390 }, scale: '100' },
   { name: 'a phone held upright at 100 % UI scale', viewport: { width: 390, height: 844 }, scale: '100' },
@@ -448,41 +491,25 @@ for (const { name, viewport, scale } of [
     await page.addInitScript((s) => localStorage.setItem('ab-alone.ui-scale', s), scale);
     await page.goto('./?bot=off&net=hook');
     await page.locator('canvas').waitFor();
-    await expect(page.locator('#settings')).toBeEnabled();
-    await page.locator('#settings').click();
-    await openAdvanced(page); // the developer tools are shut under Advanced (#1566)
-    await expect(page.locator('#settings-menu button')).toHaveCount(21); // Ledger shares Import with Logs (#1585), Guide shares Steering (#1293), Steering (#1137), Copy diagnostics (#1032, the last row), Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
-    const rows = await page.evaluate(() =>
-      [...document.querySelectorAll('#settings-menu button')].map((el) => {
-        el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // the menu scrolls where it is shorter than its rows (#382, #904)
-        const r = el.getBoundingClientRect();
-        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        const onScreen = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
-        return { name: el.textContent, reachable: el.contains(hit) && onScreen };
-      }),
-    );
-    expect(rows.filter((row) => !row.reachable).map((row) => row.name), 'rows covered or off screen').toEqual([]);
+    await settingsReachable(page);
   });
 }
-
-// #1032 (rewrites the #227 column): on a desktop the cog stays top right, and the main controls are a centred bar at
-// the bottom of the window, one row, the bar's bottom 16 px above the window's.
-test('on a desktop the cog is top right and the controls form a centred bar at the bottom, bugs #227 #1032', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 }); // a desktop window: CI's 960x540 is under the short-window layout (#1436)
-  await page.goto('./?bot=off');
-  await expect(page.locator('#hud')).toContainText('Black to move');
-  const { width, height } = page.viewportSize()!;
-  const cog = await page.getByRole('button', { name: 'Settings' }).boundingBox();
-  expect(cog!.y).toBe(16);
-  expect(cog!.x + cog!.width).toBeCloseTo(width - 16, 0);
-  const boxes = await Promise.all(
-    ['New game', 'Hint', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
+async function settingsReachable(page: Page): Promise<void> {
+  await expect(page.locator('#settings')).toBeEnabled();
+  await page.locator('#settings').click();
+  await openAdvanced(page); // the developer tools are shut under Advanced (#1566)
+  await expect(page.locator('#settings-menu button')).toHaveCount(21); // Ledger shares Import with Logs (#1585), Guide shares Steering (#1293), Steering (#1137), Copy diagnostics (#1032, the last row), Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll('#settings-menu button')].map((el) => {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // the menu scrolls where it is shorter than its rows (#382, #904)
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const onScreen = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+      return { name: el.textContent, reachable: el.contains(hit) && onScreen };
+    }),
   );
-  for (const box of boxes) expect(box!.y + box!.height).toBeCloseTo(height - 16 - 8 - 1, 0); // the bar's content row
-  const centre = boxes.reduce((a, b) => a + b!.x + b!.width / 2, 0) / boxes.length;
-  expect(centre).toBeGreaterThan(width / 2 - 200);
-  expect(centre).toBeLessThan(width / 2 + 200);
-});
+  expect(rows.filter((row) => !row.reachable).map((row) => row.name), 'rows covered or off screen').toEqual([]);
+}
 
 // Bug #271: at the end of a daily fight the plate gains the daily, result and score lines, and grew over the board
 // or pushed the button rows onto it. Same check as above, played to the end: a draw by threefold repetition. The windows
