@@ -749,7 +749,10 @@ are of a quiet moment (load average 4 on 10 cores), Chromium on the GPU of an Ap
 | Measure | Median (range of 5) | Budget |
 |---|---|---|
 | Triangles in one frame | 712 511 (712 491 to 712 511) | 750 000 |
-| Draw calls in one frame | 40 (40 to 40) | 45 |
+| Draw calls in one frame | 40 (40 to 40); currently 52, tracked by #1647 | 45 |
+| Triangles of the scene, budget view (unit test, regression cap) | 353 010 | 370 000 |
+| Triangles of the scene, widest zoom (unit test, regression cap) | 3 254 456 | 3 400 000 |
+| Draw calls of the scene, either view (unit test, regression cap) | 23 | 25 |
 | JS heap after load, collected | 16.3 MB (16.2 to 16.3) | 20 MB |
 | Longest task, load to the first world frame and 1.5 s after | 309 ms (305 to 353) | 500 ms |
 | Longest task, touch of a marble to its arena and 1.5 s after | 84 ms (83 to 98) | 200 ms |
@@ -757,6 +760,11 @@ are of a quiet moment (load average 4 on 10 cores), Chromium on the GPU of an Ap
 | JS heap after the first fight, back in the world, collected, against before it | +9.8 MB (+9.7 to +9.9) | +12 MB |
 | Growth of that heap for each further round trip (fight and Flee) | +0.8 MB (+0.8 to +0.9) | 1 MB |
 
+- **Scene geometry, a regression gate (#1481).** The frame's 750 000 triangles and 45 draw calls stay the budget. Beside them, regression caps (about
+  5 % over the scene of 2026-11-08) hold the scene geometry, the part a unit test can build: each visible mesh in the camera's frustum counts once,
+  its triangles times its instances, at 1280x720 on the high tier, seed 3, at the spawn (the closest zoom) and at the widest zoom of that window. `openworldbudget.test.ts`
+  builds it in node with the real chunks, places and models and fails over a cap, so every push checks it. The renderer's frame draws the shadow casters a second time and
+  adds its full-screen passes: 708 519 triangles and 52 calls at the budget view, read by hand on `window.__renderCost`; the 52 calls breach the frame's 45 (#1647).
 - **What the first fight adds.** A page that opens in the world has not asked for the files of the board, so the first fight loads them: the bay of the room and the
   terrace, 622 KB over 9 files. That is 5.6 MB of the +9.8 MB (the heap after load fell from 21.9 to 16.3 MB): the heap after the first fight, 26.0 MB, is the heap the board always had after a fight; it moved from the load
   (21.9 MB before this section) to the first fight. The rest of the margin is the arena's own state (its marbles, materials and shader programs).
