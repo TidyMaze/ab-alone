@@ -347,7 +347,20 @@ describe('the renderer and its textures', () => {
         ...(await importOriginal<typeof import('three/webgpu')>()),
         WebGPURenderer: class {
           domElement = document.createElement('canvas');
-          backend = { isWebGPUBackend: true };
+          // A render pool as three's WebGPU backend makes it for ?gpustats (#1645): one frame of two passes, 4.2 ms long.
+          backend = {
+            isWebGPUBackend: true,
+            timestampQueryPool: {
+              render: {
+                queryOffsets: new Map([['a:f1', 0], ['b:f1', 2]]),
+                resultBuffer: { getMappedRange: (): ArrayBuffer => BigUint64Array.from([1n, 3_000_000n, 2n, 4_200_001n]).buffer },
+                async _resolveQueries(): Promise<number> {
+                  this.resultBuffer.getMappedRange();
+                  return 99;
+                },
+              },
+            },
+          };
           shadowMap = { enabled: false, type: 0 };
           samples: number;
           info = { autoReset: true, reset(): void {}, render: { calls: 7, triangles: 300 }, memory: { geometries: 5, textures: 2 } };
@@ -357,7 +370,7 @@ describe('the renderer and its textures', () => {
           }
           init = async (): Promise<void> => {};
           hasFeature = (): boolean => true; // the timestamp query, for ?gpustats (#1581)
-          resolveTimestampsAsync = async (): Promise<number> => 4.2;
+          resolveTimestampsAsync = async (): Promise<number> => this.backend.timestampQueryPool.render._resolveQueries();
           setPixelRatio(): void {}
           setSize(): void {}
           getMaxAnisotropy = (): number => 1;
@@ -384,8 +397,10 @@ describe('the renderer and its textures', () => {
       await booting;
       draw();
       await vi.waitFor(() => expect(Object.keys((window as unknown as { __gpuCost: { modes: object } }).__gpuCost.modes).length).toBeGreaterThan(0));
-      const w = window as unknown as { __gpuCost: object; __renderCost: { gpu: object } };
+      const w = window as unknown as { __gpuCost: { metric: string; modes: Record<string, { avg: number }> }; __renderCost: { gpu: object } };
       expect(w.__renderCost.gpu).toEqual(w.__gpuCost); // the GPU time is in the render cost too
+      expect(w.__gpuCost.metric).toBe('frame-span');
+      expect(Object.values(w.__gpuCost.modes)[0]!.avg).toBeCloseTo(4.2); // the frame's span, not three's 99 ms sum (#1645)
     });
 
     it('keeps the flat look and reports WebGPU', async () => {

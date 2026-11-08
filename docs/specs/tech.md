@@ -200,22 +200,30 @@ dropped. WebGPU-only compute extras stay off the fog and bloom path.
 it in `window.__renderCost.gpu` (also `window.__gpuCost`). Capture: play each mode a few seconds with `?gpustats`, then
 `copy(JSON.stringify(__renderCost.gpu))` into `capture.json`; `bun run scripts/gpu-budget.ts capture.json` (in `client/`)
 checks it against this table and exits 1 naming each mode over its average or p95 budget, or with no row. A backend
-with no timestamp query (SwiftShader, so the CI runners) has nothing to check. Budget = the measure plus about 30 %.
-Measured once, 2026-11-08, on the owner's Mac (Apple GPU, headless Chromium channel `chromium`, WebGPU, 1280x720,
-ratio 1) **under a load average of 36 to 50**, so the numbers are high; a remeasure on an idle machine should lower the
-budgets. The board modes cost 23 ms, over the 10 ms target of 5.5: the gap is the open finding. WebGL (ANGLE on Metal)
-read 4.1 to 4.4 ms on the same board modes, the timer query of that backend does not see the same work: the budgets
-are for WebGPU.
+with no timestamp query (SwiftShader, so the CI runners) has nothing to check. Budget = the larger of A and B plus 30 %.
 
-| Mode | Avg budget (ms) | p95 budget (ms) | Measured WebGPU avg / p95 (ms) |
-|---|---|---|---|
-| bot | 30 | 40 | 23.7 / 30.8 |
-| hub | 30 | 40 | 23.0 / 28.2 |
-| run-fight | 30 | 40 | 22.7 / 29.7 |
-| run-map | 30 | 40 | not measured, the bot's budget |
-| royale | 30 | 40 | not measured, the bot's budget |
-| boss | 30 | 40 | 23.0 / 28.9 |
-| world | 10 | 12 | 7.8 / 8.1 |
+**The frame's time, not the sum of its passes (#1645).** On WebGPU a frame reads its passes laid on the GPU timeline:
+first pass start to last pass end, overlapping passes counted once, a gap with no pass running not counted. three's own
+number summed each pass's begin-to-end span, which overlap on the Apple GPU: 23 ms read for about 2 ms of work (#1641),
+so the 30/40 ms rows it seeded are gone. The capture says `metric: "frame-span"`; `gpu-budget.ts` refuses any other (WebGL
+keeps three's pass sum, its timer queries run one at a time, so its passes never overlap: `pass-sum`, not checked here).
+Measured once, 2026-11-08, owner's Mac (Apple GPU, headless Chromium channel `chromium`, WebGPU, prod build
+`vite build --mode e2e`, 1280x720), 4 runs per mode of 8 s each, a draw asked every frame, **measured under load 40 to
+75** (not quiet after a 30 min wait, 24 other test processes): the four runs of a mode agree within 0.1 ms on A and B.
+A: the e2e path (webdriver: ratio 0.5, a draw every 100 ms). B: the player's path (no webdriver flag, ratio 1, 60 Hz).
+C: B with Chromium's `--disable-gpu-vsync --disable-frame-rate-limit`, the throughput (draws a second); no page mode does it,
+the page cannot turn vsync off. The Open world draws no frame on B and C in this headless setup (as in #1641). All modes sit
+well inside the 10 ms of 5.5.
+
+| Mode | Avg budget (ms) | p95 budget (ms) | A avg / p95 (ms) | B avg / p95 (ms) | C avg / p95 (ms), draws/s |
+|---|---|---|---|---|---|
+| bot | 4.6 | 5 | 2.63 / 2.66 | 3.55 / 3.76 | 1.61 / 2.74, 438 |
+| hub | 4.6 | 5 | not measured, the bot's budget | not measured | not measured |
+| run-fight | 4.6 | 5 | 2.52 / 2.57 | 3.34 / 3.65 | 1.71 / 2.65, 479 |
+| run-map | 4.6 | 5 | not measured, the bot's budget | not measured | not measured |
+| royale | 4.6 | 5 | not measured, the bot's budget | not measured | not measured |
+| boss | 4.6 | 5 | 2.61 / 2.63 | 3.37 / 3.73 | 1.69 / 2.32, 465 |
+| world | 4 | 4.2 | 3.10 / 3.17 | no frame drawn | no frame drawn |
 
 ### 5.x Renderer support per browser (#85)
 

@@ -47,18 +47,27 @@ describe('checkGpuBudget', () => {
   const s = (avg: number, p95: number) => ({ samples: 300, avg, p95, max: p95 + 1 });
 
   it('passes a capture under every budget, and skips a mode not captured', () => {
-    expect(checkGpuBudget({ supported: true, modes: { bot: s(9, 14) } }, budget)).toEqual([]);
+    expect(checkGpuBudget({ supported: true, metric: 'frame-span', modes: { bot: s(9, 14) } }, budget)).toEqual([]);
   });
 
   it('names a mode over its average or its p95 budget', () => {
-    expect(checkGpuBudget({ supported: true, modes: { bot: s(10.5, 13), world: s(9, 12.25) } }, budget)).toEqual([
+    expect(checkGpuBudget({ supported: true, metric: 'frame-span', modes: { bot: s(10.5, 13), world: s(9, 12.25) } }, budget)).toEqual([
       'bot: avg 10.50 ms over its 10 ms budget',
       'world: p95 12.25 ms over its 12 ms budget',
     ]);
   });
 
   it('names a captured mode the table has no row for', () => {
-    expect(checkGpuBudget({ supported: true, modes: { hub: s(1, 1) } }, budget)).toEqual(['hub: no budget row in docs/specs/tech.md']);
+    expect(checkGpuBudget({ supported: true, metric: 'frame-span', modes: { hub: s(1, 1) } }, budget)).toEqual(['hub: no budget row in docs/specs/tech.md']);
+  });
+
+  it('fails a capture of another metric than the frame span the table holds (#1645)', () => {
+    expect(checkGpuBudget({ supported: true, metric: 'pass-sum', modes: { bot: s(1, 1) } }, budget)).toEqual([
+      'the capture is not a frame span (metric pass-sum): the budgets are WebGPU frame spans',
+    ]);
+    expect(checkGpuBudget({ supported: true, modes: { bot: s(1, 1) } } as never, budget)).toEqual([
+      'the capture is not a frame span (metric missing): the budgets are WebGPU frame spans',
+    ]);
   });
 
   it('fails a capture without timestamp queries', () => {
@@ -81,7 +90,7 @@ describe('main', () => {
 
   it('prints OK and returns 0 when the capture fits', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    expect(main(...files({ supported: true, modes: { bot: { samples: 300, avg: 8, p95: 11, max: 12 } } }))).toBe(0);
+    expect(main(...files({ supported: true, metric: 'frame-span', modes: { bot: { samples: 300, avg: 8, p95: 11, max: 12 } } }))).toBe(0);
     expect(log).toHaveBeenCalledWith('gpu budget: OK, 1 mode(s) checked');
   });
 
@@ -93,12 +102,12 @@ describe('main', () => {
 
   it('reads docs/specs/tech.md by default', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    expect(main(files({ supported: true, modes: {} })[0])).toBe(0);
+    expect(main(files({ supported: true, metric: 'frame-span', modes: {} })[0])).toBe(0);
     expect(log).toHaveBeenCalledWith('gpu budget: OK, 0 mode(s) checked');
   });
 
   it('exits with the result when started as a script', async () => {
-    const [capture] = files({ supported: true, modes: {} });
+    const [capture] = files({ supported: true, metric: 'frame-span', modes: {} });
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const argv = process.argv.slice();

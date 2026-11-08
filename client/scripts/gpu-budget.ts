@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { GpuSummary } from '../src/gpucost';
+import type { GpuMetric, GpuSummary } from '../src/gpucost';
 
 // Checks a `?gpustats` capture against the GPU budget per mode of docs/specs/tech.md section 5.6 (#1581), a dev tool.
 // Capture: open the game with `?gpustats`, play each mode a few seconds, then in the console
@@ -14,6 +14,8 @@ export interface ModeBudget {
 
 export interface GpuCapture {
   supported: boolean;
+  /** The frame span since #1645; a capture of three's pass sum (WebGL, or an older `?gpustats`) is not checked. */
+  metric?: GpuMetric;
   modes: Record<string, GpuSummary>;
 }
 
@@ -39,6 +41,7 @@ export function parseGpuBudget(markdown: string): Record<string, ModeBudget> {
 /** One line per mode of the capture over its average or its p95 budget, or with no row. A mode not captured is not checked. */
 export function checkGpuBudget(capture: GpuCapture, budget: Record<string, ModeBudget>): string[] {
   if (!capture.supported) return ['the capture has no GPU time: the backend has no timestamp query'];
+  if (capture.metric !== 'frame-span') return [`the capture is not a frame span (metric ${capture.metric ?? 'missing'}): the budgets are WebGPU frame spans`];
   const failures: string[] = [];
   for (const [mode, s] of Object.entries(capture.modes)) {
     const b = budget[mode];

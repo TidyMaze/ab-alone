@@ -223,7 +223,7 @@ import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, setting
 import { groupSettings } from './settingsgroups';
 import { icon } from './icons';
 import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
-import { GpuCost, gpuStatsOn, modeOfScene } from './gpucost';
+import { GpuCost, gpuFrameReader, gpuMetricOf, gpuStatsOn, modeOfScene, type TimedRenderer } from './gpucost';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
@@ -592,11 +592,10 @@ const renderer = new THREE.WebGPURenderer({ antialias: matchMedia('(pointer: coa
 // which draws nothing, would read 0 draw calls: the counts are zeroed by hand before each real draw instead (#1245).
 renderer.info.autoReset = false;
 await renderer.init().catch(bootFailed);
-const gpu = new GpuCost(gpuOn && renderer.hasFeature('timestamp-query'));
-// One drawn frame's GPU time, read a frame later (three resolves the queries asynchronously) into the window of its mode.
-const gpuFrame = (mode: string): void => {
-  if (gpu.supported) void renderer.resolveTimestampsAsync('render').then((ms) => gpu.record(mode, ms));
-};
+const gpu = new GpuCost(gpuOn && renderer.hasFeature('timestamp-query'), gpuMetricOf(renderer.backend as TimedRenderer['backend']));
+// One drawn frame's GPU time, read a frame later (three resolves the queries asynchronously) into the window of its mode:
+// its span on WebGPU, from the first pass start to the last pass end (#1645).
+const gpuFrame = gpuFrameReader(renderer as unknown as TimedRenderer, gpu);
 const gpuText = (fps: string, mode: string): string => (gpuOn ? `${fps}\n${gpu.text(mode)}` : fps);
 Object.defineProperty(window, '__gpuCost', { configurable: true, get: () => gpu.snapshot() });
 // A machine with no GPU (#1483): the renderer says so, or the first frames do (endWindow). It takes the low tier unless the player
