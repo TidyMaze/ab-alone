@@ -152,26 +152,35 @@ describe('logIcon (#1589)', () => {
 });
 
 describe('townIcon and dungeonIcon (#1514)', () => {
-  it('draw a town as a house on a hexagonal plate with a halo and a rim', () => {
+  it('draw a town as the cyan spire of its silhouette in the world (#1518) on a hexagonal plate with a halo and a rim', () => {
     const { ctx, fills, strokes } = fakeContext();
     townIcon(ctx, 100, 50, 30);
     expect(fills[0]!.colour).toBe(ICON.plate);
     expect(fills[0]!.points).toHaveLength(12); // six points: the tower's plate has four
     expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
-    const house = fills.find((f) => f.colour === ICON.town)!;
-    expect(house.points).toHaveLength(14); // seven points: a roof over four walls
-    const xs = house.points.filter((_, i) => i % 2 === 0);
-    expect(Math.min(...xs)).toBeGreaterThan(85);
-    expect(Math.max(...xs)).toBeLessThan(115);
+    expect(ICON.town).toBe('#19e6ff');
+    const spire = fills.find((f) => f.colour === ICON.town)!;
+    expect(spire.points).toHaveLength(10); // five points: a spike on a foot
+    const xs = spire.points.filter((_, i) => i % 2 === 0);
+    const ys = spire.points.filter((_, i) => i % 2 === 1);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(1.5 * (Math.max(...xs) - Math.min(...xs))); // taller than wide
+    expect(xs[ys.indexOf(Math.min(...ys))]).toBe(100); // the tip on the middle
+    const small = fakeContext();
+    townIcon(small.ctx, 0, 0, 20); // the minimap's size: the spire stands at least 16 px tall (art, #1518)
+    const smallYs = small.fills.find((f) => f.colour === ICON.town)!.points.filter((_, i) => i % 2 === 1);
+    expect(Math.max(...smallYs) - Math.min(...smallYs)).toBeGreaterThanOrEqual(16);
   });
 
-  it('draw a dungeon gate as an arch on a triangular plate, with the same halo and rim', () => {
+  it('draw a dungeon gate as the round sodium arch of its silhouette (#1518) on a triangular plate, with the same halo and rim', () => {
     const { ctx, fills, strokes } = fakeContext();
     dungeonIcon(ctx, 100, 50, 30);
     expect(fills[0]!.colour).toBe(ICON.plate);
     expect(fills[0]!.points).toHaveLength(6); // three points
     expect(strokes.slice(0, 2).map((s) => s.colour)).toEqual([ICON.halo, ICON.rim]);
-    expect(fills.some((f) => f.colour === ICON.dungeon)).toBe(true);
+    expect(ICON.dungeon).toBe('#d9822b');
+    const arch = fills.find((f) => f.colour === ICON.dungeon)!;
+    const ys = new Set(arch.points.filter((_, i) => i % 2 === 1).map((y) => y.toFixed(2)));
+    expect(ys.size).toBeGreaterThan(6); // a round top, not a square doorway
   });
 
   it('give a town, a dungeon, a tower, a portal and a log five different plates', () => {

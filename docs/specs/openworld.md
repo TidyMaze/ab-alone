@@ -375,6 +375,8 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   the lair's cell, tall enough to read from the widest zoom: a dark spire on a hex plinth with a gold band and a floating gold gem
   while the lair is unbeaten, a shorter stump with a green band and no gem once beaten (the shape changes, not only the colour).
   Until the model is loaded, the plain gold or green pillar is drawn.
+  An unbeaten tower wears a crenellated crown in its lamp's colour at 4 units, six merlons on a collar (84 triangles), the top of its
+  map icon, so it reads apart from a town's spire from far away; a beaten one has none (#1518).
 - **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`), the number of the lair, not of its place on the map,
   the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from). The fight is live at once, under the transition of motion.md story 10 (a cue of two doors, the boss's name) (#1519).
 - **Win.** The medal is recorded in `ab-alone.medals` as for any boss win, and the lair is added to `lairs` of the world's save.
@@ -574,7 +576,7 @@ plan as the game.
   stays required: every sextant of the seeds 1 to 2000 holds open ground of its biome. The bridge passes the lairs, the teleporters and the logs, in that order, so none of them moves. It reads the terrain and the
   enemies, never changes them, and needs no record in the save: the places are a function of the seed, so `WORLD_VERSION` does not move
   and the saves keep loading.
-- **Map.** A town is a green house on a hexagonal plate, a dungeon gate an orange arch on a triangular plate, a tower the crenellated
+- **Map.** A town is a cyan spire on a hexagonal plate, a dungeon gate a round sodium arch on a triangular plate, a tower the crenellated
   tower of section 8 on a square plate, a teleporter a round plate and a log a diamond: five shapes (`townIcon`, `dungeonIcon` of
   `openworldlairicon.ts`). Like the towers they are landmarks seen from afar: the map draws every one where it is, the minimap the ones in
   its window, 20 px, no arrow. The violet, amber, green and orange of the icons read 3:1 over the plate (unit test).
@@ -601,7 +603,7 @@ plan as the game.
   as the exit of a lair does. A table or a boss of that Hub leads to the Hub, which keeps it. Any other mode, and the
   Open world of the menu, end it. The Hub or the run reached from the menu leads to the Hub, not to a world. A reload keeps no `placeFrom`, as a reload
   in a lair's fight keeps no `lairFrom`: the Open world of the menu opens the world saved on the entrance.
-- **Marker.** A flat pad on the cell, the teleporter's pad recoloured to the map icons' colours, green on a town and orange on a gate
+- **Marker.** A flat pad on the cell, the teleporter's pad recoloured to the map icons' colours, cyan on a town and sodium on a gate (#1518)
   (`town-pad`, `gate-pad`, `OpenWorldView.setPlaces`), lit at night as the teleporters are. No plate label: lairs have none. Real models are #1518.
 - **Transition** (#1519). Entering a town or a gate, like a tower (section 7), plays the transition of motion.md story 10 over the Hub or the run that starts at once, and "Back to the Open world" plays the matching one over the world.
 - **Not now**: moving the Hub's stations, 3D models of the places (#1518), the door grammar (#1517).

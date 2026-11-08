@@ -203,10 +203,18 @@ export function drawMap(ctx: CanvasRenderingContext2D, { width, height, centre, 
   }
   const edge = round ? midX - 8 : Infinity; // the full map has no edge: every lair is drawn where it is
   const away = (cell: Axial): number => Math.hypot(put(cell).x - midX, put(cell).y - midY);
+  const size = iconSize(unit, round);
+  const covers = [...data.teleporters, ...data.lairs.map((lair) => lair.cell)].map(put); // the icons drawn over the places
   for (const { cell, kind } of data.places) {
     if (away(cell) > edge) continue; // the minimap draws the ones in its window only
-    const { x, y } = put(cell);
-    (kind === 'town' ? townIcon : dungeonIcon)(ctx, x, y, iconSize(unit, round)); // a house, a gate (#1514)
+    let { x, y } = put(cell);
+    const cover = covers.find((c) => Math.hypot(c.x - x, c.y - y) < size);
+    if (cover) {
+      // A portal or a tower under the icon (#1518): the icon moves a full icon off it, away from it, straight up when on the same spot.
+      const d = Math.hypot(x - cover.x, y - cover.y);
+      [x, y] = d > 0 ? [cover.x + ((x - cover.x) / d) * size, cover.y + ((y - cover.y) / d) * size] : [x, y - size];
+    }
+    (kind === 'town' ? townIcon : dungeonIcon)(ctx, x, y, size); // a spire, an arch (#1514, #1518)
   }
   const out = data.lairs.filter(({ cell, beaten, guided }) => !beaten && guided !== false && away(cell) > edge).sort((a, b) => away(a.cell) - away(b.cell));
   const arrows = new Set(out.slice(0, ARROWS).map((lair) => lair.cell));

@@ -5,6 +5,7 @@
 import { accentLights, neonSkyGlow } from './neonfx';
 import * as THREE from 'three/webgpu';
 import { uniform, vertexColor } from 'three/tsl';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './openworldboat';
@@ -329,9 +330,23 @@ export const LAIR_LOOK = { open: 0xffb020, beaten: 0x4caf6a, height: 5 };
 export const TELEPORTER_LOOK = { colour: 0xb36bff, ring: 1.1, emissive: 0.5, nightGlow: 0.9 };
 /** The silhouette of a town (#1518): a tall spire on its pad, seen from far away; a dungeon gate: a wide arch on its pad. */
 export const PLACE_LOOK = {
-  spire: { height: 3.6, radius: 0.32, colour: '#19e6ff' },
-  arch: { radius: 0.6, tube: 0.09, colour: '#d9822b' },
+  spire: { height: 3.6, radius: 0.32, colour: ICON.town },
+  arch: { radius: 0.6, tube: 0.09, colour: ICON.dungeon },
 };
+/** The crown of an unbeaten boss tower (#1518): the crenellated top of its map icon, `merlons` blocks on a collar of `radius` ringing the
+ * spire at `height`, in the lamp's colour, so a tower reads apart from a town's spire from far away. A beaten tower has none. */
+export const TOWER_CROWN = { height: 4, radius: 0.55, merlons: 6, glow: 0.8 };
+
+/** The crown's geometry, in one piece: a hexagonal collar and its merlons (84 triangles). */
+function crownGeometry(): THREE.BufferGeometry {
+  const { height, radius, merlons } = TOWER_CROWN;
+  const parts: THREE.BufferGeometry[] = [new THREE.CylinderGeometry(radius, radius * 0.8, 0.18, 6).translate(0, height, 0)];
+  for (let i = 0; i < merlons; i++) {
+    const a = (i * 2 * Math.PI) / merlons;
+    parts.push(new THREE.BoxGeometry(0.2, 0.26, 0.2).rotateY(-a).translate(Math.cos(a) * radius * 0.85, height + 0.22, Math.sin(a) * radius * 0.85));
+  }
+  return mergeGeometries(parts.map((part) => part.toNonIndexed()))!;
+}
 /** A lore log (#1589): a tall amber stake that glows while unread, a short dull grey one once found (the shape changes, not only the colour). */
 export const LOG_LOOK = { open: 0xffd166, found: 0x8d9792, height: { open: 1, found: 0.45 }, emissive: 0.45, nightGlow: 0.8 };
 /** The most logs a world holds, abalone-core `LOGS`. */
@@ -1618,6 +1633,11 @@ export class OpenWorldView {
         const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.15, 6), material);
         plinth.position.y = 0.075;
         group.add(pillar, plinth);
+      }
+      if (!isBeaten) {
+        const crown = new THREE.Mesh(crownGeometry(), new THREE.MeshStandardMaterial({ color: LAIR_LOOK.open, emissive: LAIR_LOOK.open, emissiveIntensity: TOWER_CROWN.glow, roughness: 0.5, flatShading: true }));
+        crown.name = 'lair-crown'; // the crenellated top of the map icon (#1518)
+        group.add(crown);
       }
       const p = axialTo3D(q, r);
       const tile = this.world.tile(q, r)!;

@@ -276,6 +276,26 @@ describe('drawMinimap', () => {
     expect(gate!.at[0]).toBeLessThan(MIDDLE);
   });
 
+  it('lifts a town or a gate one icon up when a teleporter or a tower shares its spot, so no icon covers it (#1518)', () => {
+    const ys = (fills: { colour: string; at: number[] }[], colour: string) => at(fills, colour)[0]!.at.filter((_, i) => i % 2 === 1);
+    const middleY = (v: number[]) => (Math.min(...v) + Math.max(...v)) / 2;
+    const places: MinimapData['places'] = [{ cell: [0, 0], kind: 'town' }, { cell: [-12, 6], kind: 'dungeon' }];
+    const { ctx, fills } = fakeContext();
+    drawMinimap(ctx, SIZE, data({ teleporters: [[0, 0]], places, lairs: [{ cell: [-12, 6], beaten: false }] }));
+    const alone = fakeContext();
+    drawMinimap(alone.ctx, SIZE, data({ places })); // the hero on the town does not move it
+    expect(middleY(ys(fills, ICON.town))).toBeLessThan(middleY(ys(alone.fills, ICON.town)) - 18); // the minimap's icon is 20 px: lifted clear of the portal
+    expect(at(fills, ICON.town)[0]!.at[0]).toBeCloseTo(MIDDLE); // straight up
+    expect(middleY(ys(alone.fills, ICON.town))).toBeGreaterThan(MIDDLE - 2);
+    expect(middleY(ys(fills, ICON.dungeon))).toBeLessThan(middleY(ys(alone.fills, ICON.dungeon)) - 18); // lifted off its tower
+    const beside = fakeContext();
+    drawMinimap(beside.ctx, SIZE, data({ teleporters: [[1, 0]], places })); // a portal a cell to the right, under the icon: pushed left, a full icon off it
+    const xs = at(beside.fills, ICON.town)[0]!.at.filter((_, i) => i % 2 === 0);
+    const portalX = at(beside.fills, ICON.portal)[0]!.at[0]!; // the portal's core
+    expect(portalX).toBeGreaterThan(MIDDLE);
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeLessThan(portalX - 18);
+  });
+
   it('draws a lair out of the window as an arrow on the edge pointing to it', () => {
     const { ctx, fills } = fakeContext();
     drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [100, -200], beaten: false }] }));

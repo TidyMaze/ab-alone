@@ -29,7 +29,7 @@ describe('the Blender landmark of a boss lair (#1171)', () => {
 
   it('swaps the plain pillars for the models once they are in: the open one for an unbeaten lair, the beaten one for a beaten lair', () => {
     const view = withModels();
-    expect(lair(view, 0).children).toHaveLength(1);
+    expect(lair(view, 0).children).toHaveLength(2); // the model and its crown (#1518)
     expect(heightOf(lair(view, 0))).toBe(5);
     expect(heightOf(lair(view, 1))).toBe(2);
     expect(((lair(view, 0).children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial).vertexColors).toBe(true);
@@ -43,7 +43,7 @@ describe('the Blender landmark of a boss lair (#1171)', () => {
     const bare = new OpenWorldView(new World(flat));
     bare.setLairs([[4, 1]], []);
     bare.useModels({ low: { lair: painted(new THREE.BoxGeometry(1, 5, 1)) }, high: {} });
-    expect(lair(bare, 0).children).toHaveLength(2);
+    expect(lair(bare, 0).children).toHaveLength(3); // pillar, plinth and crown (#1518)
   });
 
   it('loads the landmark file with the models, and keeps going when it fails', async () => {

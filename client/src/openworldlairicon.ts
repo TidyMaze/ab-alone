@@ -33,8 +33,8 @@ export const ICON = {
   portal: '#c58cff',
   here: '#f0e4ff',
   log: '#ffd166',
-  town: '#7be0a0',
-  dungeon: '#ff8a5c',
+  town: '#19e6ff', // the cyan of a town's spire in the world, its pad and its map icon (#1518)
+  dungeon: '#d9822b', // the sodium of a gate's arch, its pad and its map icon (#1518)
 } as const;
 
 /** The icon's side in px: on the map it keeps a minimum when zoomed out and grows with the zoom, on the minimap it is smaller and fixed. */
@@ -138,13 +138,18 @@ export function logIcon(ctx: CanvasRenderingContext2D, x: number, y: number, siz
   }
 }
 
-/** The house of a town (#1514), in half-sides from the middle of the icon: a pitched roof over four walls. */
-const HOUSE = [[0, -0.65], [0.6, -0.1], [0.45, -0.1], [0.45, 0.55], [-0.45, 0.55], [-0.45, -0.1], [-0.6, -0.1]] as const;
-/** The gate of a dungeon: a square arch, the doorway cut out of a block. */
-const GATE = [[-0.5, 0.55], [-0.5, -0.3], [-0.25, -0.55], [0.25, -0.55], [0.5, -0.3], [0.5, 0.55], [0.22, 0.55], [0.22, -0.2], [-0.22, -0.2], [-0.22, 0.55]] as const;
+/** The spire of a town (#1518), in half-sides from the middle of the icon: the tall cyan spike the world stands on its pad, on a foot. */
+const SPIRE = [[0, -0.95], [0.2, 0.35], [0.5, 0.7], [-0.5, 0.7], [-0.2, 0.35]] as const;
+/** The gate of a dungeon (#1518): the round sodium arch the world stands on its pad, a half ring on two feet. */
+const ARCH: readonly (readonly [number, number])[] = [
+  ...Array.from({ length: 9 }, (_, i) => [-0.55 * Math.cos((i * Math.PI) / 8), 0.1 - 0.55 * Math.sin((i * Math.PI) / 8)] as const),
+  [0.55, 0.55], [0.3, 0.55],
+  ...Array.from({ length: 9 }, (_, i) => [0.3 * Math.cos((i * Math.PI) / 8), 0.1 - 0.3 * Math.sin((i * Math.PI) / 8)] as const),
+  [-0.3, 0.55], [-0.55, 0.55],
+];
 
-/** Draws the icon of a town (#1514) centred on `x, y`, `size` px across: a house on a hexagonal plate (the towers' plate is square, the
- * portals' round, the logs' a diamond), in green. */
+/** Draws the icon of a town (#1514) centred on `x, y`, `size` px across: a spire on a hexagonal plate (the towers' plate is square, the
+ * portals' round, the logs' a diamond): the spire the world stands on the town (#1518). */
 export function townIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
   const h = size / 2;
   const at = (points: readonly (readonly [number, number])[]): void => {
@@ -156,12 +161,12 @@ export function townIcon(ctx: CanvasRenderingContext2D, x: number, y: number, si
   ctx.fillStyle = ICON.plate;
   ctx.fill();
   outline(ctx);
-  at(HOUSE);
+  at(SPIRE);
   ctx.fillStyle = ICON.town;
   ctx.fill();
 }
 
-/** Draws the icon of a dungeon gate (#1514) centred on `x, y`, `size` px across: an arched doorway on a triangular plate, in orange. */
+/** Draws the icon of a dungeon gate (#1514) centred on `x, y`, `size` px across: the round arch the world stands on the gate (#1518), on a triangular plate. */
 export function dungeonIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
   const h = size / 2;
   const at = (points: readonly (readonly [number, number])[]): void => {
@@ -173,7 +178,7 @@ export function dungeonIcon(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.fillStyle = ICON.plate;
   ctx.fill();
   outline(ctx);
-  at(GATE.map(([px, py]) => [px * 0.7, py * 0.7 + 0.2] as const));
+  at(ARCH.map(([px, py]) => [px * 0.95, py * 0.95 + 0.3] as const));
   ctx.fillStyle = ICON.dungeon;
   ctx.fill();
 }
