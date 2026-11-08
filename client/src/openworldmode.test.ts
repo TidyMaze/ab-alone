@@ -131,15 +131,29 @@ describe('the Open world mode', () => {
     const high = mode();
     high.enter(1, 800, 600);
     expect(sum()).toBe(0);
+    // the striation of the land is the high tier's (#1555)
+    const surface = (m: OpenWorldMode) => (m as unknown as { view: { surface: { amplitude: { value: number } } } }).view.surface.amplitude.value;
+    expect(surface(high)).toBeGreaterThan(0);
     high.leave();
     document.body.dataset.tier = 'low';
     try {
       const low = mode();
       low.enter(1, 800, 600);
       expect(sum()).toBeGreaterThan(0);
+      expect(surface(low)).toBe(0);
     } finally {
       delete document.body.dataset.tier;
     }
+  });
+
+  it('hands the sounding stations its camera and the towers, towns and gates of the world (#1577), and its camera probe (#1103)', () => {
+    const lairs = new OpenWorldMode((_s, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => Int32Array.of(4, 0));
+    lairs.enter(1, 800, 600);
+    expect(lairs.ears).toBeInstanceOf(THREE.Camera);
+    expect(lairs.stations.filter(({ kind }) => kind === 'tower').map(({ id }) => id)).toEqual(['tower:4,0']);
+    expect(lairs.camera().zoom).toBeGreaterThan(0);
+    lairs.leave();
+    expect(lairs.scene).toBeNull(); // no scene outside the mode (#1234)
   });
 
   it('rolls the hero on an arrow key, and keeps it before a boulder', () => {

@@ -166,4 +166,18 @@ describe('the lore logs of the Open world mode (#1589)', () => {
     withLogs.release('ArrowRight');
     expect(body().openworldLogsFound).toBe('0');
   });
+
+  it('hands the minimap the logs of the discovered cells, the found one marked found', () => {
+    const calls: string[] = [];
+    const ctx = new Proxy({}, { get: (_t, key) => (typeof key === 'string' && !/^(canvas|fillStyle|strokeStyle|lineWidth|globalAlpha|font|textAlign|textBaseline|lineCap|lineJoin)$/.test(key) ? (...args: unknown[]) => (calls.push(key), args.length ? undefined : { width: 0 }) : undefined), set: () => true });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as CanvasRenderingContext2D);
+    const { m } = setup();
+    m.enter(7, 800, 600);
+    m.fixture({ hero: [3, 0], troop: [], enemies: [] });
+    calls.length = 0;
+    m.key('ArrowRight');
+    m.release('ArrowRight');
+    expect(body().openworldLogsFound).toBe('0');
+    expect(calls.length).toBeGreaterThan(0); // the minimap was drawn with the found log on its discovered cell
+  });
 });

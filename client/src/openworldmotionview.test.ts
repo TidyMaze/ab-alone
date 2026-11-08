@@ -6,6 +6,7 @@ import { axialTo3D } from './board';
 import { CHUNK, World } from './openworld';
 import { ROLL_ZOOM } from './openworldglide';
 import { FOAM_GAIN } from './openworldmotion';
+import { BIOME_DETAIL, SURFACE_DETAIL } from './openworldedge';
 import { MAX_ZOOM, OpenWorldView, type Played } from './openworldview';
 
 // The water and the trees move (#1101, #1102, docs/specs/openworld-animation.md sections 3 and 4).
@@ -198,5 +199,24 @@ describe('the water and the trees move (#1101, #1102)', () => {
     view.playPush(played, 2000);
     view.sparkle(2470, false);
     expect(mesh(view, 'particles').count).toBe(0);
+  });
+});
+
+describe('the striation of the land (#1555)', () => {
+  it('follows the biome the hero stands in, and is stronger on a phone, off on the low tier', () => {
+    const view = new OpenWorldView(new World(world(() => GRASS_CODE, DESERT)));
+    view.resize(1280, 720);
+    view.show([0, 0]);
+    view.animate(0, true); // calm too: the striation is no motion, it holds under reduced motion
+    expect([view.surface.frequency.value, view.surface.warp.value]).toEqual([BIOME_DETAIL.desert.frequency, BIOME_DETAIL.desert.warp]);
+    expect(view.surface.amplitude.value).toBe(SURFACE_DETAIL.amplitude);
+    view.resize(390, 844);
+    expect(view.surface.amplitude.value).toBe(SURFACE_DETAIL.phone);
+    view.useSurfaceDetail(false);
+    expect(view.surface.amplitude.value).toBe(0);
+    view.resize(1280, 720);
+    expect(view.surface.amplitude.value).toBe(0); // the low tier holds through a resize
+    view.useSurfaceDetail(true);
+    expect(view.surface.amplitude.value).toBe(SURFACE_DETAIL.amplitude);
   });
 });

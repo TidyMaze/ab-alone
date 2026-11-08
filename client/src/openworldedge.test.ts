@@ -2,7 +2,8 @@ import { float, uniform } from 'three/tsl';
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { NEON_LINE, neonEdgeGeometry, neonEdgeMaterial } from './neonlook';
-import { NEON_GRID, EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial, GAP_FILL, gapFill, SURFACE_DETAIL, surfaceDetail } from './openworldedge';
+import { NEON_GRID, EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial, GAP_FILL, gapFill, SURFACE_DETAIL, surfaceDetail, BIOME_DETAIL, PHONE_WIDTH, surfaceAmplitude, surfaceUniforms } from './openworldedge';
+import { BIOMES } from './openworld';
 
 describe('the hex edge of an Open world ground (#1138)', () => {
   it('is 0 on an edge of the prism, the apothem at the centre, and the same on the six edges of the hex', () => {
@@ -97,9 +98,39 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect(Math.max(...samples)).toBeLessThanOrEqual(1 + amplitude + 1e-9);
     expect(new Set(samples.map((v) => v.toFixed(3))).size).toBeGreaterThan(50); // it varies across the ground
     expect(surfaceDetail(3, -2)).toBe(surfaceDetail(3, -2)); // a fixed function of the place: the same every frame
+    expect(surfaceDetail(3, -2)).toBe(surfaceDetail(3, -2, 'meadow')); // the meadow's is the first slice's
     const look = { emissive: 0, roughness: 0.9, gain: EDGE_GAIN.land };
-    expect(edgeMaterial({ ...look, detail: true }).colorNode).not.toBeNull();
+    const shaded = edgeMaterial({ ...look, detail: surfaceUniforms() }).colorNode;
+    expect(shaded).not.toBeNull();
     expect(edgeMaterial(look).colorNode).not.toBeNull();
+    // under the neon look the light bands glow too, a share of the cell's own colour: no new hue (#1555)
+    expect(SURFACE_DETAIL.glow).toBeGreaterThan(0);
+    const neon = { hero: uniform(new THREE.Vector2()), traces: new THREE.DataTexture(new Uint8Array(4), 1, 1), shine: uniform(0) };
+    expect(edgeMaterial({ ...look, detail: surfaceUniforms(), neon }).emissiveNode).not.toBeNull();
+  });
+
+  it('gives each biome a striation of its own, the meadow keeping the first one (#1555)', () => {
+    expect(BIOME_DETAIL.meadow).toEqual({ frequency: SURFACE_DETAIL.frequency, warp: SURFACE_DETAIL.warp });
+    expect(new Set(BIOMES.map((biome) => `${BIOME_DETAIL[biome].frequency}/${BIOME_DETAIL[biome].warp}`)).size).toBe(BIOMES.length);
+    for (const biome of BIOMES) {
+      const { frequency } = BIOME_DETAIL[biome];
+      expect(frequency, biome).toBeGreaterThanOrEqual(0.8); // a band of 8 cells at most: still read on a phone
+      expect(frequency, biome).toBeLessThanOrEqual(4); // a band of 1.5 cells at least: no shimmer of pixels
+      expect(Math.abs(surfaceDetail(1.3, 2.7, biome) - 1), biome).toBeLessThanOrEqual(SURFACE_DETAIL.amplitude + 1e-9);
+    }
+    expect(surfaceDetail(1.3, 2.7, 'desert')).not.toBeCloseTo(surfaceDetail(1.3, 2.7, 'badlands'), 3);
+  });
+
+  it('is stronger on a phone, where the art read it faint, and off on the low tier (#1555)', () => {
+    expect(surfaceAmplitude(true, 1280)).toBe(SURFACE_DETAIL.amplitude);
+    expect(surfaceAmplitude(true, PHONE_WIDTH)).toBe(SURFACE_DETAIL.phone);
+    expect(surfaceAmplitude(true, PHONE_WIDTH + 1)).toBe(SURFACE_DETAIL.amplitude);
+    expect(SURFACE_DETAIL.phone).toBeGreaterThan(SURFACE_DETAIL.amplitude);
+    expect(SURFACE_DETAIL.phone).toBeLessThanOrEqual(0.3); // still a surface: the cell keeps its own colour
+    expect(surfaceAmplitude(false, 1280)).toBe(0);
+    expect(surfaceAmplitude(false, 390)).toBe(0);
+    const u = surfaceUniforms();
+    expect([u.amplitude.value, u.frequency.value, u.warp.value]).toEqual([SURFACE_DETAIL.amplitude, SURFACE_DETAIL.frequency, SURFACE_DETAIL.warp]);
   });
 
   it('reads its line weight, glow and colour from the arena\'s grid line, one shared constant (#1535)', () => {

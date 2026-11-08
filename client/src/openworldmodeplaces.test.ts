@@ -37,6 +37,7 @@ describe('the towns and dungeon gates of the Open world mode (#1514)', () => {
     m.enter(7, 800, 600);
     expect(placesOf).toHaveBeenCalledWith(7);
     expect(body().openworldPlaces).toBe('town:0,0 dungeon:6,0 town:60,0');
+    expect(m.stations.map(({ id, kind }) => `${kind} ${id}`)).toEqual(['town town:0,0', 'gate dungeon:6,0', 'town town:60,0']); // they sound (#1577)
     m.leave();
     expect(body().openworldPlaces).toBeUndefined();
   });

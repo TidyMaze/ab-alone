@@ -3,7 +3,8 @@
 // extra mesh, no extra draw call): the band is computed from the prism's own position, before the instance moves it.
 import * as THREE from 'three/webgpu';
 import { NEON_LINE } from './neonlook';
-import { abs, attribute, color, float, fwidth, length, materialColor, max, mix, positionLocal, positionWorld, sin, smoothstep, step, texture, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, color, float, fwidth, length, materialColor, max, mix, positionLocal, positionWorld, sin, smoothstep, step, texture, uniform, vec2, vec3 } from 'three/tsl';
+import type { Biome } from './openworld';
 
 /** The radius of a ground prism (a hex of side 0.56 tiles the grid of spacing 1 with a thin gap) and its apothem. */
 export const HEX_RADIUS = 0.56;
@@ -15,15 +16,40 @@ export const EDGE_GAIN = { land: -0.22, water: 0.5 };
 
 /** The surface detail of the land (#1555): a striation of two waves over the top of each cell, a share of its colour lighter or darker,
  * in world space so the bands run across the cells. Procedural: no texture, no draw call, and the hue of the cell is kept. */
-export const SURFACE_DETAIL = { amplitude: 0.12, frequency: 2.1, warp: 1.3, warpFrequency: 0.37 } as const;
+export const SURFACE_DETAIL = { amplitude: 0.12, phone: 0.3, glow: 0.15, frequency: 2.1, warp: 1.3, warpFrequency: 0.37 } as const;
+/** The widest screen (CSS px) that takes the phone's amplitude: at 390 the bands of 0.12 read faint (#1555). */
+export const PHONE_WIDTH = 600;
+/** The striation of each biome (#1555): its frequency (bands per world unit, times 2 pi) and how much the bands bend. The meadow keeps
+ * the first slice's; the forest's are dense and wavy, the tundra's long and straight drifts, the desert's wide bent dunes, the
+ * badlands' tight straight strata, the archipelago's soft swells. */
+export const BIOME_DETAIL: Record<Biome, { frequency: number; warp: number }> = {
+  meadow: { frequency: SURFACE_DETAIL.frequency, warp: SURFACE_DETAIL.warp },
+  forest: { frequency: 3.2, warp: 2.2 },
+  tundra: { frequency: 1.4, warp: 0.4 },
+  desert: { frequency: 1, warp: 2.6 },
+  badlands: { frequency: 3.8, warp: 0.2 },
+  archipelago: { frequency: 1.7, warp: 1.8 },
+};
 /** The direction of the striation (a unit vector in x, z). */
 const STRIPE = [0.6, 0.8] as const;
 
-/** The plain form of the striation's factor at the point `(x, z)`: the colour of a land top times it, within `1 +- amplitude`. */
-export const surfaceDetail = (x: number, z: number): number => {
-  const { amplitude, frequency, warp, warpFrequency } = SURFACE_DETAIL;
+/** The plain form of the striation's factor at the point `(x, z)` in `biome`: the colour of a land top times it, within `1 +- amplitude`. */
+export const surfaceDetail = (x: number, z: number, biome: Biome = 'meadow'): number => {
+  const { amplitude, warpFrequency } = SURFACE_DETAIL;
+  const { frequency, warp } = BIOME_DETAIL[biome];
   return 1 + amplitude * Math.sin((x * STRIPE[0] + z * STRIPE[1]) * frequency + Math.sin(z * warpFrequency) * warp);
 };
+
+/** The amplitude of the striation: none on the low tier (`on` false), the phone's on a screen `width` px wide or narrower. */
+export const surfaceAmplitude = (on: boolean, width: number): number => (!on ? 0 : width <= PHONE_WIDTH ? SURFACE_DETAIL.phone : SURFACE_DETAIL.amplitude);
+
+/** The uniforms of the striation, shared by the land materials: set by the view (the tier, the screen, the hero's biome), no recompile. */
+export interface SurfaceUniforms {
+  amplitude: THREE.UniformNode<'float', number>;
+  frequency: THREE.UniformNode<'float', number>;
+  warp: THREE.UniformNode<'float', number>;
+}
+export const surfaceUniforms = (): SurfaceUniforms => ({ amplitude: uniform(SURFACE_DETAIL.amplitude), frequency: uniform(SURFACE_DETAIL.frequency), warp: uniform(SURFACE_DETAIL.warp) });
 
 /** The edges of a `CylinderGeometry` prism of six sides have their normals at 30, 90 and 150 degrees from +z. */
 const NORMALS = [0, 1, 2].map((k) => [Math.sin(Math.PI / 6 + (k * Math.PI) / 3), Math.cos(Math.PI / 6 + (k * Math.PI) / 3)] as const);
@@ -66,7 +92,7 @@ export const NEON_GRID = { width: NEON_LINE.width, glow: NEON_LINE.glow, colour:
 
 /** A ground material: white until an instance colours it (the colour comes per cell), with the edge band of `gain` on the top face and
  * the `emissiveNode` given in place of the plain emissive colour. */
-export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node; positionNode?: THREE.Node; widen?: THREE.UniformNode<'float', number>; neon?: NeonGrid; detail?: boolean }): THREE.MeshStandardNodeMaterial {
+export function edgeMaterial(look: { emissive: number; roughness: number; gain: number; emissiveNode?: THREE.Node; positionNode?: THREE.Node; widen?: THREE.UniformNode<'float', number>; neon?: NeonGrid; detail?: SurfaceUniforms }): THREE.MeshStandardNodeMaterial {
   const material = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, emissive: look.emissive, roughness: look.roughness });
   const position = attribute('position', 'vec3');
   const flat = vec2(position.x, position.z);
@@ -77,12 +103,16 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
   const fade = smoothstep(FADE_FROM_PX, FADE_TO_PX, float(EDGE_WIDTH).div(pixel));
   const top = step(0.5, attribute('normal', 'vec3').y); // the sides of the column keep their colour
   const shaded = materialColor.mul(float(1).add(band.mul(top).mul(fade).mul(look.gain)));
+  let lift: THREE.Node | null = null;
   if (look.detail) {
     // the striation on the tops of the land only (`top`), the sides keep their colour (#1555): procedural, so it works on WebGPU and WebGL2 alike
     const flatWorld = vec2(positionWorld.x, positionWorld.z);
-    const { amplitude, frequency, warp, warpFrequency } = SURFACE_DETAIL;
-    const wave = sin(flatWorld.dot(vec2(STRIPE[0], STRIPE[1])).mul(frequency).add(sin(flatWorld.y.mul(warpFrequency)).mul(warp)));
+    const { amplitude, frequency, warp } = look.detail;
+    const wave = sin(flatWorld.dot(vec2(STRIPE[0], STRIPE[1])).mul(frequency).add(sin(flatWorld.y.mul(SURFACE_DETAIL.warpFrequency)).mul(warp)));
     material.colorNode = shaded.mul(float(1).add(wave.mul(amplitude).mul(top)));
+    // under the neon night the lit colour is near black, so a share of it barely moves: the light bands also glow a share of the cell's
+    // own colour, so they read on a phone (#1555 art round 1)
+    lift = materialColor.mul(max(wave, 0).mul(amplitude).mul(top).mul(SURFACE_DETAIL.glow));
   } else material.colorNode = shaded;
   if (look.emissiveNode) material.emissiveNode = look.emissiveNode; // the water's foam and ripples (#1101)
   if (look.neon) {
@@ -96,7 +126,7 @@ export function edgeMaterial(look: { emissive: number; roughness: number; gain: 
     const line = float(1).sub(smoothstep(0, lineWidth, distance)).mul(lineFade).mul(top); // the grid line in the gap, never on a cell top
     const glow = color(NEON_GRID.colour).mul(line).mul(float(NEON_GRID.glow).mul(float(1).add(shine.mul(NEON_GRID.nightGlow)))).mul(quiet);
     const circuit = color(0x9a6bff).mul(texture(traces, flatWorld.mul(NEON_GRID.traceScale)).r).mul(NEON_GRID.trace).mul(top).mul(quiet);
-    material.emissiveNode = ((look.emissiveNode ?? vec3(0)) as ReturnType<typeof vec3>).add(glow).add(circuit).add(color(new THREE.Color(...NEON_GRID.floor)));
+    material.emissiveNode = ((look.emissiveNode ?? vec3(0)) as ReturnType<typeof vec3>).add(glow).add(circuit).add(color(new THREE.Color(...NEON_GRID.floor))).add((lift ?? vec3(0)) as ReturnType<typeof vec3>);
   }
   // The desert's shimmer (#1104) and the widening of the prisms (#1347). The position node reads the position after the instance moved it:
   // the corner is pushed out from the cell's centre by its own local position, not scaled from the world's origin.

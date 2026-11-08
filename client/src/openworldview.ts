@@ -10,7 +10,7 @@ import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { bob, boatGeometry, boatMaterial, DRAFT, steer, type Wake } from './openworldboat';
 import { CameraLife, framingShift, Spring } from './openworldcamera';
-import { EDGE_GAIN, edgeMaterial, gapFill, HEX_RADIUS } from './openworldedge';
+import { BIOME_DETAIL, EDGE_GAIN, edgeMaterial, gapFill, HEX_RADIUS, surfaceAmplitude, surfaceUniforms } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { RECRUIT_MAX } from './openworldrecruit';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
@@ -697,6 +697,9 @@ export class OpenWorldView {
   private readonly sparkLook = { x: 0, y: 0, z: 0, s: 0, colour: 0 };
   /** What the water's and the trees' shaders read (#1101, #1102): the clock, the amplitudes and the ripples. No mesh or instance is written. */
   readonly uniforms = motionUniforms();
+  /** What the land's striation reads (#1555): its amplitude by the tier and the screen, its bands by the hero's biome. */
+  readonly surface = surfaceUniforms();
+  private surfaceOn = true;
   private readonly sway = swayPosition(this.uniforms);
   private readonly ripplePool = new RipplePool();
   /** The time of the last `animate` (ms), whether a loop was drawn then, and what moved. */
@@ -736,7 +739,7 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : this.neon ? WORLD_EDGE_GAIN : EDGE_GAIN.land, neon: traces ? { hero: this.heroXZ, traces, shine: this.shine } : undefined, emissiveNode: water ? waterEmissive(this.uniforms, shoreRed(), deepRed()) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen, detail: this.neon && (ground === 'grass' || ground === 'rock' || ground === 'peak') }); // the land's striation (#1555)
+      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : this.neon ? WORLD_EDGE_GAIN : EDGE_GAIN.land, neon: traces ? { hero: this.heroXZ, traces, shine: this.shine } : undefined, emissiveNode: water ? waterEmissive(this.uniforms, shoreRed(), deepRed()) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen, detail: this.neon && (ground === 'grass' || ground === 'rock' || ground === 'peak') ? this.surface : undefined }); // the land's striation (#1555)
       this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, material());
       this.managed.push(this.grounds[ground]);
       this.flats[ground] = this.instances(`terrain-${ground}-flat`, 1, top, material()); // grows on the first low build (`fit`)
@@ -844,6 +847,7 @@ export class OpenWorldView {
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
     this.screen = { width, height };
+    this.surface.amplitude.value = surfaceAmplitude(this.surfaceOn, width);
     this.endLife();
     this.fitted = maxZoomFor(this.camera.aspect);
     this.level = Math.min(this.level, this.limit);
@@ -967,6 +971,9 @@ export class OpenWorldView {
    * `ROLL_ZOOM`. Returns whether the frame must draw: a lake or trees are in view and it moves, or it moved on the last call and is
    * stilled now. */
   animate(now: number, calm: boolean): boolean {
+    const bands = BIOME_DETAIL[this.heroBiome]; // the striation is no motion: it follows the hero's biome under calm too (#1555)
+    this.surface.frequency.value = bands.frequency;
+    this.surface.warp.value = bands.warp;
     const u = this.uniforms;
     const on = !calm && this.drawnLevel <= ROLL_ZOOM;
     const water = on && this.hasWater;
@@ -1935,6 +1942,12 @@ export class OpenWorldView {
       // The corners wind the same way at every turn (the screen's corners through a camera that looks down): inside is the negative side.
       return (-((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x))) / length >= -VIEW_MARGIN;
     });
+  }
+
+  /** Shows the land's striation, or hides it on the low tier (#1555): a uniform, so no shader is built again. */
+  useSurfaceDetail(on: boolean): void {
+    this.surfaceOn = on;
+    this.surface.amplitude.value = surfaceAmplitude(on, this.screen.width);
   }
 
   /** Draws the ground as flat tops where a column shows no side (`useFlatTops`), at the next frame. */
