@@ -106,15 +106,17 @@ describe('the Open world mode', () => {
     byId('openworld').click();
     await settle();
     await game.settle();
-    expect(data().veil).toBe('on'); // the compile runs from the open on
+    expect(data().veil).toBe('on'); // the compile runs from the open on, after a draw of the hero alone
     const draws = game.draws();
     game.frame(); // a frame during the compile draws nothing
     expect(game.draws()).toBe(draws);
     expect(data().veil).toBe('on');
     compiled();
     await settle();
+    expect(game.draws()).toBe(draws + 2); // the shadow pass of each half of the scene, still veiled
+    expect(data().veil).toBe('on');
     game.frame();
-    expect(game.draws()).toBe(draws + 1);
+    expect(game.draws()).toBe(draws + 3);
     expect(data().veil).toBeUndefined();
   });
 

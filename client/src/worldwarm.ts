@@ -41,3 +41,29 @@ export function compileWhole(scene: { traverse(visit: (object: Culled) => void):
   for (const object of culled) object.frustumCulled = true;
   return done;
 }
+
+interface Shown {
+  name: string;
+  visible: boolean;
+  isLight?: boolean;
+}
+type Pick = (child: Shown, index: number) => boolean;
+
+/** The shown children in two halves, every other one. */
+export const halves: Pick[] = [(_, i) => i % 2 === 0, (_, i) => i % 2 === 1];
+
+/** Draws `scene` once per pick, each after `wait` (a task), with the shown children it picks and every light; all are shown again
+ * after each draw. The first draw after a compile built the sun's shadow pass of every mesh at once, 0.2 s at 4x CPU: a draw per half
+ * builds half of it. */
+export async function drawEach(scene: { children: Shown[] }, picks: readonly Pick[], draw: () => void, wait: () => Promise<unknown>): Promise<void> {
+  const shown = scene.children.filter((child) => child.visible && !child.isLight);
+  for (const pick of picks) {
+    await wait();
+    shown.forEach((child, i) => (child.visible = pick(child, i)));
+    try {
+      draw();
+    } finally {
+      for (const child of shown) child.visible = true;
+    }
+  }
+}

@@ -44,6 +44,10 @@ export class OpenWorldHandle {
   get eye(): OpenWorldMode['eye'] {
     return this.parts?.mode.eye ?? null;
   }
+  /** Settles once the props' models are in the world opened: at once with no world (#1582). */
+  get props(): Promise<void> {
+    return this.parts?.mode.props ?? Promise.resolve();
+  }
   get yaw(): number {
     return this.parts?.mode.yaw ?? 0;
   }

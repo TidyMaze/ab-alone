@@ -1728,6 +1728,40 @@ describe('the scene of a world is released to the renderer (#1258)', () => {
     expect(released).toEqual([first, second]);
   });
 
+  it('builds an opened world in three tasks, the world and its view, its first chunks, the rest, so the page answers between them (#1582)', async () => {
+    const m = releasing(() => {});
+    const opened = m.open(1, 800, 600, false);
+    await new Promise<void>((done) => queueMicrotask(done));
+    await Promise.resolve();
+    expect(m.active).toBe(false); // the view is made, the chunks wait for the next task
+    expect(m.scene).toBeNull();
+    const resized = vi.spyOn(OpenWorldView.prototype, 'resize');
+    await new Promise((task) => setTimeout(task));
+    expect(resized).toHaveBeenCalledWith(800, 600); // its first chunks, in a task of their own
+    expect(m.active).toBe(false);
+    resized.mockRestore();
+    await opened;
+    expect(m.active).toBe(true);
+    expect(m.scene).toBeInstanceOf(THREE.Scene);
+  });
+
+  it('settles its props once their models are in the view, and at once before any world (#1582)', async () => {
+    await expect(releasing(() => {}).props).resolves.toBeUndefined();
+    let arrive: (models: PropModels) => void = () => {};
+    const m = mode(() => new Promise<PropModels>((done) => (arrive = done)));
+    m.enter(1, 800, 600);
+    let settled = false;
+    void m.props.then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    const used = vi.spyOn(OpenWorldView.prototype, 'useModels');
+    arrive({ low: {}, high: {} });
+    await m.props;
+    expect(settled).toBe(true);
+    expect(used).toHaveBeenCalled(); // the models are in before it settles
+    used.mockRestore();
+  });
+
   it('gives the camera of the scene drawn, none before the enter and after the leave (#1582)', () => {
     const m = releasing(() => {});
     expect(m.eye).toBeNull();

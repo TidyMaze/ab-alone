@@ -15,6 +15,7 @@ function fakeMode(): { mode: OpenWorldMode; calls: [string, unknown[]][] } {
     biome: 'forest',
     scene: { name: 'world' },
     eye: { name: 'eye' },
+    props: PROPS,
     yaw: 1.5,
     mapShown: true,
     open: method('open', Promise.resolve()),
@@ -40,8 +41,10 @@ function fakeMode(): { mode: OpenWorldMode; calls: [string, unknown[]][] } {
 
 const parts = (mode: OpenWorldMode): OpenWorldParts => ({ mode, saves: {} as OpenWorldParts['saves'], peers: {} as OpenWorldParts['peers'] });
 
+const PROPS = Promise.resolve();
+
 describe('OpenWorldHandle, #1578', () => {
-  it('stands for a world that is off until its code is loaded: nothing is active, drawn or held', () => {
+  it('stands for a world that is off until its code is loaded: nothing is active, drawn or held', async () => {
     const handle = new OpenWorldHandle(async () => {
       throw new Error('never loaded');
     });
@@ -50,6 +53,7 @@ describe('OpenWorldHandle, #1578', () => {
     expect(handle.biome).toBeNull();
     expect(handle.scene).toBeNull();
     expect(handle.eye).toBeNull();
+    await expect(handle.props).resolves.toBeUndefined(); // no world yet: nothing to wait for (#1582)
     expect(handle.yaw).toBe(0);
     expect(handle.mapShown).toBe(false);
     expect(handle.key('ArrowUp', false)).toBe(false);
@@ -95,6 +99,7 @@ describe('OpenWorldHandle, #1578', () => {
     expect(handle.biome).toBe('forest');
     expect(handle.scene).toEqual({ name: 'world' });
     expect(handle.eye).toEqual({ name: 'eye' });
+    expect(handle.props).toBe(PROPS);
     expect(handle.yaw).toBe(1.5);
     expect(handle.mapShown).toBe(true);
     expect(handle.key('ArrowUp', true)).toBe(true);

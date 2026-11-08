@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WarmGate, compileWhole } from './worldwarm';
+import { WarmGate, compileWhole, drawEach, halves } from './worldwarm';
 
 describe('compileWhole (#1582)', () => {
   it('compiles with every object in view, and puts back the culling of each once the compile has started', async () => {
@@ -12,6 +12,27 @@ describe('compileWhole (#1582)', () => {
     expect(seen).toEqual([false, false, false]);
     expect(objects.map((o) => o.frustumCulled)).toEqual([true, false, true]);
     await done;
+  });
+});
+
+describe('drawEach (#1582)', () => {
+  const child = (name: string, visible = true, isLight = false) => ({ name, visible, isLight });
+
+  it('draws the scene once per pick, a task apart, each with the shown children it picks and the lights, then shows them all again', async () => {
+    const children = [child('a'), child('sun', true, true), child('b'), child('hidden', false), child('c')];
+    const seen: string[][] = [];
+    const waits: number[] = [];
+    const draw = () => void seen.push(children.filter((c) => c.visible).map((c) => c.name));
+    await drawEach({ children }, [(c) => c.name === 'b', ...halves], draw, async () => void waits.push(seen.length));
+    expect(seen).toEqual([['sun', 'b'], ['a', 'sun', 'c'], ['sun', 'b']]);
+    expect(waits).toEqual([0, 1, 2]); // each draw in a task of its own
+    expect(children.map((c) => c.visible)).toEqual([true, true, true, false, true]);
+  });
+
+  it('shows every child again when a draw throws', async () => {
+    const children = [child('a'), child('b')];
+    await expect(drawEach({ children }, halves, () => { throw new Error('lost'); }, async () => {})).rejects.toThrow('lost');
+    expect(children.map((c) => c.visible)).toEqual([true, true]);
   });
 });
 

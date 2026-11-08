@@ -41,7 +41,7 @@ import { hasMedal } from './medals';
 import { BOT_NOTE, botLine, bossLine, progressBudget, ratingOfBudget } from './botrating';
 import { bootFailed } from './bootfail';
 import { ScreenExit } from './screenexit';
-import { WarmGate, compileWhole } from './worldwarm';
+import { WarmGate, compileWhole, drawEach, halves } from './worldwarm';
 import { backWay, needsEntry, type Screen, type Way } from './backnav';
 import { EXIT_LABEL, EXIT_NAME, exitOf, type Exit } from './exitslot';
 import { bossHtml, goalShown } from './bosshud';
@@ -7741,9 +7741,17 @@ function setWorldFrame(scene: THREE.Scene, now: number): void {
 }
 // The world's first frame waits for its programs, built with the frame's own settings (#1582). One compile per child of the scene
 // at once was tried: its first render built them again, a 1 s frame at 4x CPU.
-const worldWarm = new WarmGate((scene, camera) => {
+const worldWarm = new WarmGate(async (scene, camera) => {
+  await openWorld.props; // the props' models first: the programs of the ones that came after the compile froze the first frame 0.4 s at 4x CPU
   setWorldFrame(scene as THREE.Scene, performance.now());
-  return compileWhole(scene as THREE.Scene, () => renderer.compileAsync(scene as THREE.Scene, camera as THREE.Camera));
+  const draw = (): void => renderer.render(scene as THREE.Scene, camera as THREE.Camera);
+  const task = (): Promise<unknown> => new Promise((done) => setTimeout(done));
+  // Behind the veil, a task apart: the hero alone first, as the lights' key changes at their first draw (WebGPU's tiled lights) and a
+  // compile before it built every program for a key the first frame no longer has, 1 s at 4x CPU; then the compile; then the sun's
+  // shadow pass, which the compile leaves out, half the scene a draw.
+  await drawEach(scene as THREE.Scene, [(child) => child.name === 'hero'], draw, task);
+  await compileWhole(scene as THREE.Scene, () => renderer.compileAsync(scene as THREE.Scene, camera as THREE.Camera));
+  await drawEach(scene as THREE.Scene, halves, draw, task);
 });
 const EARS_DIRECTION = new THREE.Vector3();
 const NOWHERE: Listener = { x: 0, z: 0, yaw: 0 }; // no place with stations: none sounds

@@ -54,6 +54,16 @@ const MAX_DAY_STEP_MS = 250;
 
 /** The cells as the bridge takes them: `q, r` pairs. */
 const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());
+/** Resolves in a task of its own: the page draws and answers input before what follows (#1582). */
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const settled = (): void => {};
+/** A world made for an entry and its view, before the mode takes them (#1582). */
+interface Made {
+  world: World;
+  fight: FightState;
+  ticked: number;
+  view: OpenWorldView;
+}
 
 /** The places as the bridge gives them (#1514): `kind, q, r` triples, kind 0 a town and 1 a dungeon gate. */
 const placesIn = (flatPlaces: Int32Array): { cell: Axial; kind: 'town' | 'dungeon' }[] =>
@@ -225,28 +235,28 @@ export class OpenWorldMode {
    * The save is read before the first draw, and the seed is remembered as the last world played (#968). */
   async open(seed: number, width: number, height: number, resume = true, from?: PlaceKind): Promise<void> {
     const saved = resume ? await this.saves.load(seed) : null;
-    this.enter(seed, width, height, saved, await this.skins?.());
+    const made = this.make(seed, saved, await this.skins?.());
+    // The build in three tasks, the world and its view, its first chunks, the rest: one froze the page 0.23 s at 4x CPU (#1582)
+    await nextTask();
+    made.view.resize(width, height);
+    await nextTask();
+    this.enter(seed, width, height, saved, undefined, made);
     if (from) this.transition.back(from); // back from a tower, a gate or a town: the matching transition (#1519)
     void this.saves.remember(seed);
   }
 
   /** Enters the world of `seed` with the hero, the troop and the fight of `saved` (a save of this seed), or on the spawn. */
-  enter(seed: number, width: number, height: number, saved: WorldSave | null = null, skins?: MarbleSkins): void {
+  enter(seed: number, width: number, height: number, saved: WorldSave | null = null, skins?: MarbleSkins, made = this.make(seed, saved, skins)): void {
     this.flush(); // the world left (another seed entered over it) is saved first
     this.peers?.leave();
     this.freeView();
     this.seed = seed;
-    const world = new World(
-      (cx, cy) => this.load(seed, cx, cy),
-      (cx, cy) => this.loadEnemies(seed, cx, cy),
-    );
+    const { world, view } = made;
     this.world = world;
-    if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
-    this.fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
+    this.fight = made.fight;
     this.fighting = false;
     this.calmUntil = Infinity; // the marble next to the hero when the world opens does not fight for 5 s from its first draw (#1511, frame)
-    this.ticked = this.wander();
-    this.fight.setClock(seed, this.ticked); // the marbles stand where the clock has them from the first draw (#1511)
+    this.ticked = made.ticked;
     this.pushes = 0;
     const flatLairs = this.lairsOf(seed);
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
@@ -266,12 +276,6 @@ export class OpenWorldMode {
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     this.counted = 0;
     this.tod = saved?.time ?? 0; // an older save, or a new world, starts at the start of day (#1496)
-    const view = new OpenWorldView(world, this.fight, skins);
-    view.setTime(this.tod, !this.reduced());
-    view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
-    view.cullGround(document.body.dataset.software === 'on'); // a software renderer lays the ground in view only (#1483)
-    view.useSurfaceDetail(!this.lowTier()); // the land's striation, on the high tier only (#1555)
-    view.setShadows(!this.lowTier()); // the sun's soft shadow round the hero, on the high tier only (#1364)
     this.hero = new Hero(world, this.fight, this.seed);
     if (saved) {
       this.hero.at = saved.hero;
@@ -306,6 +310,32 @@ export class OpenWorldMode {
       this.dirty = true;
       this.mark(String(seed)); // the detailed props drawn now are published too (#989)
     });
+  }
+
+  /** The world of `seed` and its view, made apart from the mode, whose world open now is not touched: the first half of an entry's
+   * build (#1582). `saved` is a save of this seed, or none for the spawn. */
+  private make(seed: number, saved: WorldSave | null, skins?: MarbleSkins): Made {
+    const world = new World(
+      (cx, cy) => this.load(seed, cx, cy),
+      (cx, cy) => this.loadEnemies(seed, cx, cy),
+    );
+    if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
+    const fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
+    const ticked = this.wander();
+    fight.setClock(seed, ticked); // the marbles stand where the clock has them from the first draw (#1511)
+    const view = new OpenWorldView(world, fight, skins);
+    view.setTime(saved?.time ?? 0, !this.reduced()); // an older save, or a new world, starts at the start of day (#1496)
+    view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
+    view.cullGround(document.body.dataset.software === 'on'); // a software renderer lays the ground in view only (#1483)
+    view.useSurfaceDetail(!this.lowTier()); // the land's striation, on the high tier only (#1555)
+    view.setShadows(!this.lowTier()); // the sun's soft shadow round the hero, on the high tier only (#1364)
+    return { world, fight, ticked, view };
+  }
+
+  /** Settles once the props' models are in the view the world opened with, at once before any world: the page builds the world's
+   * programs after them, as the ones a first render built froze it 0.4 s at 4x CPU (#1582). */
+  get props(): Promise<void> {
+    return Promise.resolve(this.modelsOnce).then(settled);
   }
 
   /** The camera the hero is seen through, the listener's of the sounding stations (#1577): only while the world is open. */
