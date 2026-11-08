@@ -1135,7 +1135,7 @@ Captain`, `Ascension 2` when picked), then **Start** and **More** on one row, 44
 - **Turn it against the boss**: no new rule: the screen only orders what the player picks; the commanders and the ascension levels keep
   their rules (sections 17 and 20).
 
-## 30. The difficulty curve, measured (#1537, #1598)
+## 30. The difficulty curve, measured (#1537, #1598, #1633)
 
 The run was stacked (ten ascension levels, relics, runes) without knowing how often a player gets through it. `run_sim`
 (`crates/abalone-core/examples/run_sim.rs`) plays seeded runs with a bot (the act bosses with the ladder's bot, the fights and the elites with the army's fight bot of #1598) and counts the
@@ -1144,11 +1144,11 @@ cannot say. The table is a measure of the curve (act against act, boss against b
 
 - **Command**: `RUN_SIM_THREADS=8 nice -n 15 cargo run --release --example run_sim` (the defaults are the table's: 40 seeds, 0 to 39, the
   same for every row; levels 0, 5 and 10; the four commanders; the bot searches 3 times the boss's budget; the fights below). It is
-  deterministic: the same command gives the same table on any machine, **after about 48 minutes on 8 threads** (208 CPU minutes, 480 runs,
-  measured on a machine busy with other work, so a quiet one is faster; `RUN_SIM_ARMY=500` takes 20 minutes). `RUN_SIM_RUNS`, `RUN_SIM_BOSS_X` and a list of commanders
+  deterministic: the same command gives the same table on any machine, **after about 225 minutes on 10 threads** (#1633: the army's bot searches 20000 positions, 480 runs,
+  measured on a machine busy with other work, so a quiet one is faster; `RUN_SIM_ARMY=5000` took 48 minutes on 8 threads before #1633 and `RUN_SIM_ARMY=500` 20). `RUN_SIM_RUNS`, `RUN_SIM_BOSS_X` and a list of commanders
   (`... run_sim 0 1`) change the sample, `RUN_SIM_PERCENTS=50,120,200` tries other boss strengths, `RUN_SIM_POOL=1` plays the boss of every act
   for every seed, whatever the runs before did (the tuning sample), and `RUN_SIM_FIGHTS=0` counts the fights and the elites as won again
-  (the table of before #1598, below). The fights have `RUN_SIM_PEAK=2000`, `RUN_SIM_ARMY=5000` and `RUN_SIM_FIGHT_PLIES=400` (below).
+  (the table of before #1598, below). The fights have `RUN_SIM_PEAK=2000`, `RUN_SIM_ARMY=20000` and `RUN_SIM_FIGHT_PLIES=400` (below).
 - **The map and the route**: the engine's (`run::run_map_v` at the current `MAP_VERSION`, since the paced map of section 2, #1543; `RUN_SIM_MAP=0` plays the map of before; a run seed per row of the table). The bot takes a rest when the army is
   under its ceiling (14, 12 from level 2), else a fight or the boss, else a node with nothing to play (an event, a "?", a
   treasure, a shop, a secret room: left at once), an elite last. At the end of an act it takes the first exit offered
@@ -1174,7 +1174,7 @@ cannot say. The table is a measure of the curve (act against act, boss against b
   from level 1, one more when it is the marked elite of its act holding a key), a quarter more from level 10. The page's peak is the bot's progress
   (section 32): the plain bot's 20000 positions at its end, **2000 for a player of about 6 medals**, which is the table's `RUN_SIM_PEAK=2000` (foes
   of 500 to 2000 positions: a 20000 peak costs 5 times more a fight, and the army bot below does not win it much more or less, see the sensitivity).
-- **The army's bot** (`armyfight::fight_move`): a search of `RUN_SIM_ARMY` = 5000 positions (3 plies) with the plain evaluation less its cohesion term and
+- **The army's bot** (`armyfight::fight_move`): a search of `RUN_SIM_ARMY` = 20000 positions (#1633; 5000 before, 3 plies and more) with the plain evaluation less its cohesion term and
   plus one term, the **pressure** (`Weights::pressure`, 30 per marble of the army lined up behind a foe on the rim, in a line that ends off the
   board: one more push and the foe goes off). It never repeats a position into a draw (Auto-play's rule). Measured below.
 - **The levels**: levels 1 (elites 3 times), 2 (rests to 12), 3 and 8 (the foes' special marbles), 6 (12 marbles to start), 7 (bosses a
@@ -1227,6 +1227,25 @@ measured, 0.17 s at 5000 and 0.66 s at 20000) plus the army's (60 us a position 
 40 % of the first fights of the run's curve, the 5000 50 to 60 %, the 10000 70 to 80 % at twice the army's cost again; a run costs 26 CPU seconds at 5000 against 9 at
 500 (the runs that live play more fights). The table below is the 5000, and the table at 500 follows it: the commanders' order depends on the bot's strength.
 
+**The army's bot at 20000 positions (#1633).** The first fights of a run were won 55 to 70 % of the time by the 5000-position bot, and most simulated runs ended at a
+fight, so acts 2 and 3 were measured on 0 to 16 runs a row. **Target**: at least 85 % of the first fights of act 1 won, at the run's own foe budgets (`FIGHT_BOT_PEAK=2000`: the foes
+search 500 positions at the first fight of act 1, 800 at its end and at the start of act 2), 20 seeds, with the error. Only the army bot's budget changed (a bigger node budget than the foes, which is the simulator's
+player stand-in only: the game's own bots, the pressure term and the search are untouched, so every move the game chooses is the same). Measured with
+`FIGHT_BOT_PEAK=2000 FIGHT_BOT_GAMES=20 FIGHT_BOT_ARMY=5000,10000,20000 cargo run --release --example fight_bot` (the first fight of seeds 0 to 19 against foes of 500, 800, 1260 and 2000 positions, 20000 on a busy
+machine, 120 to 240 s a fight in wall clock); fights won, one standard error of the rate:
+
+| army bot | foes 500 | foes 800 | foes 1260 | foes 2000 |
+|---|---|---|---|---|
+| 5000 (before #1633) | 14/20 (70 % +/- 10) | 12/20 (60 % +/- 11) | 13/20 (65 % +/- 11) | 11/20 (55 % +/- 11) |
+| 10000 | 17/20 (85 % +/- 8) | 14/20 (70 % +/- 10) | 15/20 (75 % +/- 10) | 17/20 (85 % +/- 8) |
+| **20000 (kept)** | **17/20 (85 % +/- 8)** | **18/20 (90 % +/- 7)** | 15/20 (75 % +/- 10) | 15/20 (75 % +/- 10) |
+
+The target is met for the first fights of act 1 (35 of 40 won at 500 and 800 foes, 88 %), exactly at it for the very first fight. 10000 is as good at the first fight and
+worse at 800, and costs half as much: the 20000 was kept for the 800 foes, which act 1 ends on, and for the fights of acts 2 and 3 (1260: 75 % against 65 %). The other options (a cheaper pressure term, a better move ordering, a depth) were not tried: the first change met the target, and none of them
+is needed for it (a cheaper position only makes the same budget faster).
+The rates at 1260 and 2000 foes stay under the target, the army is a bot that cannot place its special marbles, and a run is several fights, so the share of runs that
+clear act 1 is lower than the first fight's 88 % (below).
+
 **The paced map changed nothing here (#1543).** The Captain at level 0 on the 40 seeds, the paced map against the map of before: act 1 32/40,
 act 2 15/32, the run 8/15 for both, and the result of each of the 40 runs identical (`RUN_SIM_MAP=0`). **Bot numbers only**: the bot wins
 every fight and elite it takes and plays no shop, so a rest or a shop before a boss, one elite fewer in a row and a fork it never chooses
@@ -1239,7 +1258,25 @@ Targets at ascension 0 (the issue's), bot numbers: **act 1 about 85 %** of the r
 falls act by act between the two is implied (act 2 about 60 % and act 3 about 40 % of the runs that reach them would give 20 %). Each
 cell below is the runs that cleared the act out of those that reached it, and its share of all the runs.
 
-**With the fights played (#1598)**, the command above (the army's bot at 5000 positions, the foes at a peak of 2000), bot-only numbers, in
+**With the army's bot at 20000 positions (#1633)**, the command above (`RUN_SIM_THREADS=10 nice -n 10 cargo run --release --example run_sim`, the foes at a peak of 2000), bot-only numbers, in
+**225 minutes on 10 threads** (480 runs, on a machine busy with other work). The columns are those of the table below:
+
+| commander | level | runs | act 1 | act 2 | act 3 = the run | the runs lost to |
+|---|---|---|---|---|---|---|
+| The Captain | 0 | 40 | 17/40 (42 %), 42 % of runs (+/- 8) | 4/17 (24 %), 10 % of runs (+/- 5) | 0/4 (0 %), 0 % of runs (+/- 0) | fight 30, elite 3, boss 6, army 1 |
+| The Captain | 5 | 40 | 18/40 (45 %), 45 % of runs (+/- 8) | 6/18 (33 %), 15 % of runs (+/- 6) | 0/6 (0 %), 0 % of runs (+/- 0) | fight 34, elite 2, boss 4, army 0 |
+| The Captain | 10 | 40 | 1/40 (2 %), 2 % of runs (+/- 2) | 0/1 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 38, elite 0, boss 2, army 0 |
+| The Warden | 0 | 40 | 21/40 (52 %), 52 % of runs (+/- 8) | 6/21 (29 %), 15 % of runs (+/- 6) | 0/6 (0 %), 0 % of runs (+/- 0) | fight 28, elite 4, boss 8, army 0 |
+| The Warden | 5 | 40 | 14/40 (35 %), 35 % of runs (+/- 8) | 3/14 (21 %), 8 % of runs (+/- 4) | 0/3 (0 %), 0 % of runs (+/- 0) | fight 35, elite 2, boss 3, army 0 |
+| The Warden | 10 | 40 | 2/40 (5 %), 5 % of runs (+/- 3) | 0/2 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 37, elite 1, boss 2, army 0 |
+| The Saboteur | 0 | 40 | 24/40 (60 %), 60 % of runs (+/- 8) | 4/24 (17 %), 10 % of runs (+/- 5) | 0/4 (0 %), 0 % of runs (+/- 0) | fight 26, elite 4, boss 9, army 1 |
+| The Saboteur | 5 | 40 | 15/40 (38 %), 38 % of runs (+/- 8) | 2/15 (13 %), 5 % of runs (+/- 3) | 0/2 (0 %), 0 % of runs (+/- 0) | fight 33, elite 2, boss 4, army 1 |
+| The Saboteur | 10 | 40 | 4/40 (10 %), 10 % of runs (+/- 5) | 0/4 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 39, elite 0, boss 1, army 0 |
+| The Juggernaut | 0 | 40 | 24/40 (60 %), 60 % of runs (+/- 8) | 4/24 (17 %), 10 % of runs (+/- 5) | 1/4 (25 %), 2 % of runs (+/- 2) | fight 25, elite 5, boss 8, army 1 |
+| The Juggernaut | 5 | 40 | 15/40 (38 %), 38 % of runs (+/- 8) | 3/15 (20 %), 8 % of runs (+/- 4) | 0/3 (0 %), 0 % of runs (+/- 0) | fight 31, elite 3, boss 6, army 0 |
+| The Juggernaut | 10 | 40 | 2/40 (5 %), 5 % of runs (+/- 3) | 0/2 (0 %), 0 % of runs (+/- 0) | 0/0 (0 %), 0 % of runs (+/- 0) | fight 39, elite 0, boss 1, army 0 |
+
+**Before #1633 (the army's bot at 5000 positions)**: the tables below are the ones of #1598 and #1632, kept as measured. **With the fights played (#1598)**, the command above (the army's bot at 5000 positions, the foes at a peak of 2000), bot-only numbers, in
 **48 minutes on 8 threads** (12480 CPU seconds, 480 runs, 26 CPU seconds a run, on a machine busy with other work). Each cell is the runs that cleared the act out
 of those that reached it, its share of all the runs and the error of that share (one standard error, in points); the last column is where the runs ended (a
 fight or an elite not won, an act boss not won, the army under 4 marbles):
@@ -1310,7 +1347,16 @@ At level 0 the four are 28, 30, 40 and 45 % (the Juggernaut is 12 points over th
 Error: 40 runs, so a cell at 50 % is known to about 8 points (one standard error), one at 20 % to 6 points, and the cells below
 act 1 count few runs (the Captain's act 2 is 4 runs). The boss fights are shared between the rows that reach them, so the rows are not independent samples either.
 
-**Reading the table with the fights** (bot-only; every number is of the first table above unless said, an error of 5 to 8 points on the rates):
+**Reading the table of #1633** (bot-only, an error of 5 to 8 points on the rates):
+
+- **Acts 2 and 3 are measured now**: act 2 is entered by 17 to 24 runs of 40 at level 0 (0 to 2 of the older table's rows) and cleared by 4 to 6 of them, act 3 by 1 run of the 480 (the Juggernaut's). Still 25 to 30 of the 40 runs of every
+  level 0 row end at a fight (and 3 to 5 at an elite, 6 to 9 at an act boss), so the fight bot remains the limit: the army wins 88 % of the first fights but a run holds several, and the foes grow along the run.
+- **The commanders at level 0** clear act 1 in 42 % (Captain), 52 % (Warden), 60 % (Saboteur) and 60 % (Juggernaut): the Captain is 18 points under the last two (1.6 standard errors of the difference), the other three are within 8 points of each other. All four are **within 2 standard errors of each other** (the widest gap, Captain against Saboteur and Juggernaut, is 1.6); the Juggernaut, tuned in #1632, sits level with the Saboteur. Nothing was retuned here.
+- **The levels** still bite: act 1 cleared at levels 0, 5 and 10: the Captain 42, 45 and 2 %, the Warden 52, 35 and 5 %, the Saboteur 60, 38 and 10 %, the Juggernaut 60, 38 and 5 %. Level 10 ends 37 to 39 of its 40 runs at a fight, which a bot
+  of this kind does not get through (the foes search a quarter more, have two special marbles, and the army starts with 12 marbles).
+- **Written for the table of #1598, before #1633** (the bullets below): they read the first table with the army at 5000 positions and are kept for the comparison.
+
+**Reading the table with the fights, before #1633** (bot-only; every number is of the 5000-position table above unless said, an error of 5 to 8 points on the rates):
 
 - **Written before #1632**: the bullets below read the table with the Juggernaut's two Heavies (52, 40 and 32 %); its tuned rows are above and the three other commanders' are unchanged.
 

@@ -13,7 +13,7 @@
 //! for all four. The progress goes to stderr.
 //!
 //! The fights (#1598): `RUN_SIM_FIGHTS=0` counts every fight and elite as won again, at a flat cost (the table of before),
-//! `RUN_SIM_PEAK=2000` the foes' search at the end of the run (the page's `runNodes` peak: 2000 is the bot of about 6 medals, 20000 the plain bot), `RUN_SIM_ARMY=5000` the army bot's
+//! `RUN_SIM_PEAK=2000` the foes' search at the end of the run (the page's `runNodes` peak: 2000 is the bot of about 6 medals, 20000 the plain bot), `RUN_SIM_ARMY=20000` (#1633) the army bot's
 //! search in a fight, `RUN_SIM_FIGHT_PLIES=400` the plies after which a fight is a loss.
 
 use abalone_core::armyfight::{army_fight, foe_budget, play_out, FightResult};
@@ -372,7 +372,7 @@ fn main() {
         bosses: Mutex::default(),
         fights: setting("RUN_SIM_FIGHTS", 1) != 0,
         peak: setting("RUN_SIM_PEAK", 2000),
-        army_nodes: setting("RUN_SIM_ARMY", 5000),
+        army_nodes: setting("RUN_SIM_ARMY", 20000),
         fight_plies: setting("RUN_SIM_FIGHT_PLIES", 400),
         played: Mutex::default(),
     };
