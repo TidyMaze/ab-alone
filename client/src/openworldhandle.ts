@@ -41,6 +41,9 @@ export class OpenWorldHandle {
   get scene(): OpenWorldMode['scene'] {
     return this.parts?.mode.scene ?? null;
   }
+  get eye(): OpenWorldMode['eye'] {
+    return this.parts?.mode.eye ?? null;
+  }
   get yaw(): number {
     return this.parts?.mode.yaw ?? 0;
   }

@@ -1294,3 +1294,17 @@ describe('the Open world first, and Quick game (#1612, Decision #1513)', () => {
     expect(document.body.dataset.boss).toBeTruthy();
   });
 });
+
+describe('the mode-entry probe (#1582)', () => {
+  it('times the first frame after each entry the hook starts, and reset clears them', async () => {
+    const game = await boot('?bot=off');
+    await game.settle();
+    game.hook('__modeReset');
+    game.hook('__enterMode', 'arena');
+    game.frame(1000);
+    expect(game.hook<Record<string, number[]>>('__modeProbe')).toEqual({ arena: [expect.any(Number)] });
+    game.hook('__modeReset');
+    expect(game.hook('__modeProbe')).toEqual({});
+    expect(game.hook('__modeMarks')).toEqual({});
+  });
+});

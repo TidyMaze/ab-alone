@@ -5,6 +5,7 @@ import type { Axial } from './board';
 import { indexedDbStore } from './idb';
 import { GLIDE_MS } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
+import { NEON_OPEN_WORLD_POINT_LIGHTS } from './neonfx';
 import { SLIDE_MS } from './slide';
 import './test/openworldwasm';
 import { world_can_break } from 'abalone-wasm';
@@ -98,6 +99,25 @@ describe('the Open world mode', () => {
     expect((window as unknown as { __openworldDrawn: () => number }).__openworldDrawn()).toBe(0); // jsdom has no WebGL: the mode counts the draws (openworldmodewander.test.ts)
   });
 
+  it('builds the world programs behind the veil before its first frame, then draws it and lifts the veil, #1582', async () => {
+    let compiled = (): void => {};
+    const game = await boot('?bot=off&openworld=7', { compile: () => new Promise<void>((done) => (compiled = done)) });
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    await game.settle();
+    expect(data().veil).toBe('on'); // the compile runs from the open on
+    const draws = game.draws();
+    game.frame(); // a frame during the compile draws nothing
+    expect(game.draws()).toBe(draws);
+    expect(data().veil).toBe('on');
+    compiled();
+    await settle();
+    game.frame();
+    expect(game.draws()).toBe(draws + 1);
+    expect(data().veil).toBeUndefined();
+  });
+
   it('reads what the camera draws through a test hook, at rest: the shake is 0, #1103', async () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();
@@ -128,7 +148,7 @@ describe('the Open world mode', () => {
     game.openModes();
     byId('openworld').click();
     await settle();
-    expect(cost().pointLights).toBeLessThanOrEqual(OPEN_WORLD_POINT_LIGHTS);
+    expect(cost().pointLights).toBeLessThanOrEqual(NEON_OPEN_WORLD_POINT_LIGHTS); // the default neon look's two accents, lit since the open builds its programs with them (#1582)
   });
 
   it('exposes no test hook on a page that is not a webdriver one', async () => {

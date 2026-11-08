@@ -573,8 +573,12 @@ export class OpenWorldView {
   private drawnLevel = 1;
   /** The factor the sun's shadow square, its distance and its far plane are scaled by: the drawn zoom, never under 1 (#1478). */
   private shadowScale = 1;
-  /** The widest zoom on the screen's aspect, see `maxZoomFor`. */
-  private limit = maxZoomFor(1);
+  /** The widest zoom on the screen's aspect, see `maxZoomFor`: worked out when first read, so a view the page sizes at once never
+   * works out the square aspect's too (half the world's build at its first entry, #1582). */
+  private fitted: number | null = null;
+  private get limit(): number {
+    return (this.fitted ??= maxZoomFor(this.camera.aspect));
+  }
   /** The chunk the loaded square is centred on: kept while the square covers the hero's ball, else the hero's chunk (#1046). */
   private centre: Axial = [0, 0];
   /** The chunks drawn (the centre and the reach): a change lays every mesh again. `drawnKey` adds the hero's cell, which only
@@ -841,7 +845,7 @@ export class OpenWorldView {
     this.camera.aspect = width / height;
     this.screen = { width, height };
     this.endLife();
-    this.limit = maxZoomFor(this.camera.aspect);
+    this.fitted = maxZoomFor(this.camera.aspect);
     this.level = Math.min(this.level, this.limit);
     this.frame();
   }

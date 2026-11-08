@@ -42,6 +42,8 @@ export interface BootOptions {
   /** Loads the code of the Open world and of the online Battle royale (their chunks in the build, #1578) after the page, so a click that enters it finds it ready; true by
    * default. False leaves it to the page, as a first entry in a browser. */
   warmChunks?: boolean;
+  /** The renderer's compileAsync, the Open world's programs built before its first frame (#1582): done at once by default. */
+  compile?: () => Promise<void>;
 }
 
 export interface Game {
@@ -247,6 +249,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       setPixelRatio(): void {}
       setSize(): void {}
       getMaxAnisotropy = (): number => 1;
+      compileAsync = options.compile ?? (async (): Promise<void> => {}); // the Open world's programs, built before its first frame (#1582)
       render(): void {
         draws++;
         this.info.render.drawCalls += 7;

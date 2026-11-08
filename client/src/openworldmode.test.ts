@@ -1713,6 +1713,15 @@ describe('the scene of a world is released to the renderer (#1258)', () => {
     m.leave();
     expect(released).toEqual([first, second]);
   });
+
+  it('gives the camera of the scene drawn, none before the enter and after the leave (#1582)', () => {
+    const m = releasing(() => {});
+    expect(m.eye).toBeNull();
+    m.enter(1, 800, 600);
+    expect(m.eye).toBeInstanceOf(THREE.Camera);
+    m.leave();
+    expect(m.eye).toBeNull();
+  });
 });
 
 describe('the Dungeon button walks to the nearest tower (#1291)', () => {

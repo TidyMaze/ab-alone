@@ -41,6 +41,7 @@ import { hasMedal } from './medals';
 import { BOT_NOTE, botLine, bossLine, progressBudget, ratingOfBudget } from './botrating';
 import { bootFailed } from './bootfail';
 import { ScreenExit } from './screenexit';
+import { WarmGate, compileWhole } from './worldwarm';
 import { backWay, needsEntry, type Screen, type Way } from './backnav';
 import { EXIT_LABEL, EXIT_NAME, exitOf, type Exit } from './exitslot';
 import { bossHtml, goalShown } from './bosshud';
@@ -182,7 +183,11 @@ import { countAttempt, dailyCard, dailyFor, dailyLine, dailySeed, dailyTitle, re
 import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, bossSeatFromHash, type CoopFight } from './invite';
 import { botGameOf, lobbyState, lobbyWaitMs } from './lobby';
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
-import { hookHost, netHook } from './hooks';
+import { hookHost, netHook, testHooks } from './hooks';
+import { createModeProbe } from './modeprobe';
+
+// The mode-entry probe (#1582): two clock reads per entry; only a test build reads it, through its hooks.
+const modeProbe = createModeProbe();
 import { hookTransport, p2pTransport } from './p2p';
 import { PUBLIC_SEED } from './worldpeers';
 import type { Transport } from './transport';
@@ -5679,6 +5684,7 @@ const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null, mirror = false): void {
+  modeProbe.begin('boss');
   leaveMode();
   lairFrom = lair; // a fight picked in a menu, a door or the daily is no lair's (#1170)
   syncBoardLook();
@@ -5981,6 +5987,7 @@ function enterModeRoom(door: Door | undefined): void {
   }
 }
 function startLocal(bot: boolean): void {
+  modeProbe.begin('arena');
   leaveMode();
   applyDeck(deckOf('local'));
   worker = bot ? botWorker : null;
@@ -6604,6 +6611,7 @@ let runMore = false; // More is open on the start screen (#1524): shut for each 
 let lastBanked: number[] = []; // the blueprints the run in progress or the last one banked (#1622): the town's line lists them
 let gateBiome = 0; // the biome of the ground of the gate the next run starts from (#1597): the Meadow for a run of the mode menu or the Hub
 function beginRun(): void {
+  modeProbe.begin('run');
   const first = gateBiome;
   gateBiome = 0;
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
@@ -7030,10 +7038,13 @@ async function publicWorldOnline(): Promise<boolean> {
 }
 /** Opens the world of `seed`, online first when it is the public one and the page may (the opt-in is asked before anything is contacted). */
 async function enterWorld(seed: number, resume = true): Promise<void> {
+  modeProbe.begin('world');
   placeFrom = null; // the world is the player's place again (#1593)
   syncExit();
   worldOnline = seed === PUBLIC_SEED && (await publicWorldOnline());
-  return openWorld.open(seed, innerWidth, innerHeight, resume);
+  await openWorld.open(seed, innerWidth, innerHeight, resume);
+  modeProbe.mark('built');
+  if (openWorld.active && worldWarm.hold(openWorld.scene!, openWorld.eye!)) veilCanvas(); // its programs build from now on, behind the veil (#1582)
 }
 /** The world the menu opens: the public world, or the seed of the URL under automation. */
 async function enterOpenWorld(): Promise<void> {
@@ -7046,6 +7057,11 @@ if (navigator.webdriver) {
   const hooks = hookHost;
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[]; recruits?: number }) => openWorld.loaded.mode.fixture(fixture);
   hooks.__openworldFresh = () => (openWorld.active && openWorld.leave(), enterWorld(openWorldFixedSeed, false)); // the world of ?openworld=<seed> left then entered again from the spawn, no save read, the plate unfolded: a spec shares one page between its tests
+  hooks.__modeProbe = () => modeProbe.samples(); // the first-frame times of the mode entries (#1582)
+  hooks.__modeReset = () => modeProbe.reset();
+  hooks.__modeMarks = () => modeProbe.marks();
+  const entries = { arena: () => startLocal(false), run: beginRun, boss: startDaily, world: enterOpenWorld }; // each mode's own entry, as the menus call it
+  hooks.__enterMode = (mode: keyof typeof entries) => entries[mode]();
   hooks.__openworldEnemies = () => openWorld.loaded.mode.enemies();
   hooks.__openworldDrawn = () => openWorld.loaded.mode.drawn; // the frames drawn since the world opened: a spec waits for one before it reads the wild fight (#1601)
   hooks.__openworldWander = (tick: number | null) => ((wanderTick = tick), openWorld.loaded.mode.stepWander(undefined, true)); // the tick of the marbles' clock, or null for the real one (#1511)
@@ -7711,9 +7727,23 @@ function unveil(): void {
   renderer.domElement.style.opacity = '';
   delete document.body.dataset.veil;
 }
+/** Sets the renderer and the scene as the Open world draws them: its lights, its tone and its shadow, which its programs depend on. */
+function setWorldFrame(scene: THREE.Scene, now: number): void {
+  driveSkyGlow(scene, accentOn(tier, software));
+  driveAccents(scene.children.filter((o): o is THREE.PointLight => o.name === 'neon accent'), accentOn(tier, software), now, reducedMotion());
+  if (!sceneRenderer.terraceOn) sceneRenderer.setWorldTone(neonLook); // a page that opened in the world has no terrace to set them (#1520)
+  sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
+}
+// The world's first frame waits for its programs, built with the frame's own settings (#1582). One compile per child of the scene
+// at once was tried: its first render built them again, a 1 s frame at 4x CPU.
+const worldWarm = new WarmGate((scene, camera) => {
+  setWorldFrame(scene as THREE.Scene, performance.now());
+  return compileWhole(scene as THREE.Scene, () => renderer.compileAsync(scene as THREE.Scene, camera as THREE.Camera));
+});
 const EARS_DIRECTION = new THREE.Vector3();
 const NOWHERE: Listener = { x: 0, z: 0, yaw: 0 }; // no place with stations: none sounds
-renderer.setAnimationLoop((now) => {
+// The frame body (#1582): the probe reads its end, the first frame after an entry.
+function loopFrame(now: number): void {
   pollPad(now); // the gamepad, read once per frame (#1252)
   const heroBiome = openWorld.active ? openWorld.biome : null;
   const music = sceneOf({ hub: hub !== null, royale: royale !== null, run: run ? (run.state.fighting ? 'fight' : 'map') : null, boss: fight?.id ?? null, world: heroBiome ? { biome: heroBiome, phase: openWorld.phase } : null });
@@ -7725,12 +7755,13 @@ renderer.setAnimationLoop((now) => {
   screenExit.sync(screenNow()); // the dim over a new screen (#1562)
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
+    if (worldWarm.hold(openWorld.scene!, openWorld.eye!)) {
+      veilCanvas(); // the world's programs build behind the veil, a few a task: the page never freezes on its first render (#1582)
+      return;
+    }
     const drew = openWorld.frame((scene, camera) => {
-      driveSkyGlow(scene, accentOn(tier, software));
-      driveAccents(scene.children.filter((o): o is THREE.PointLight => o.name === 'neon accent'), accentOn(tier, software), now, reducedMotion());
+      setWorldFrame(scene, now);
       renderer.info.reset();
-      if (!sceneRenderer.terraceOn) sceneRenderer.setWorldTone(neonLook); // a page that opened in the world has no terrace to set them (#1520)
-      sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
       renderer.render(scene, camera);
     }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
     unveil();
@@ -7811,6 +7842,10 @@ renderer.setAnimationLoop((now) => {
   drawAsked = false;
   dirty = Math.max(0, dirty - 1);
   lastDraw = { start: now, cost: performance.now() - now, timed: false };
+}
+renderer.setAnimationLoop((now) => {
+  loopFrame(now);
+  modeProbe.drawn();
 });
 // A link with any ?openworld=<value> opens the public world at the load (#1361), the online notice first. The saved fight stays
 // in its store: the click does the same, and a world only replaces the board on screen.

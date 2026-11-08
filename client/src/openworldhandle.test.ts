@@ -14,6 +14,7 @@ function fakeMode(): { mode: OpenWorldMode; calls: [string, unknown[]][] } {
     phase: 'dusk',
     biome: 'forest',
     scene: { name: 'world' },
+    eye: { name: 'eye' },
     yaw: 1.5,
     mapShown: true,
     open: method('open', Promise.resolve()),
@@ -48,6 +49,7 @@ describe('OpenWorldHandle, #1578', () => {
     expect(handle.phase).toBe('day');
     expect(handle.biome).toBeNull();
     expect(handle.scene).toBeNull();
+    expect(handle.eye).toBeNull();
     expect(handle.yaw).toBe(0);
     expect(handle.mapShown).toBe(false);
     expect(handle.key('ArrowUp', false)).toBe(false);
@@ -92,6 +94,7 @@ describe('OpenWorldHandle, #1578', () => {
     expect(handle.phase).toBe('dusk');
     expect(handle.biome).toBe('forest');
     expect(handle.scene).toEqual({ name: 'world' });
+    expect(handle.eye).toEqual({ name: 'eye' });
     expect(handle.yaw).toBe(1.5);
     expect(handle.mapShown).toBe(true);
     expect(handle.key('ArrowUp', true)).toBe(true);

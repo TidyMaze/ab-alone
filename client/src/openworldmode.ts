@@ -346,6 +346,11 @@ export class OpenWorldMode {
     return this.view?.scene ?? null;
   }
 
+  /** The camera of the scene drawn now, none outside the mode: the page builds the world's programs with it (#1582). */
+  get eye(): THREE.Camera | null {
+    return this.view?.camera ?? null;
+  }
+
   /** Frees the view drawn now, if any, and hands its scene to the renderer to release (#1258). */
   private freeView(): void {
     if (!this.view) return;
