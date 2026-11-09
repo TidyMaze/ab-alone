@@ -143,6 +143,25 @@ describe('what is gathered is saved with the world, and is gathered once (#1655)
   });
 });
 
+describe('the fixture loads the stock of the Workshop (#1655)', () => {
+  it('sets the resources and the army, the plate says the counts, and the world saves them', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    const m = mode(made('boulder', 'meadow'), saves);
+    await m.open(1, 800, 600);
+    const army = { specials: [1, 9], brought: [9], relics: [], relicsBrought: [] };
+    m.fixture({ hero: [0, 2], troop: [], enemies: [], resources: { wood: 3, ore: 4, parts: 5, shards: 6 }, army });
+    expect(line().textContent).toBe('Wood 3 · Ore 4 · Parts 5 · Shards 6');
+    m.frame(vi.fn());
+    await settle();
+    const back = (await saves.load(1))!;
+    expect([back.resources, back.army]).toEqual([{ wood: 3, ore: 4, parts: 5, shards: 6 }, army]);
+    m.fixture({ hero: [0, 2], troop: [], enemies: [], army: { ...army, brought: [] } }); // the army alone keeps the resources
+    expect(body().openworldResources).toBe('3,4,5,6');
+    m.fixture({ hero: [0, 2], troop: [], enemies: [], resources: { wood: 1, ore: 1, parts: 1, shards: 1 } }); // the resources alone keep the army
+    expect(body().openworldResources).toBe('1,1,1,1');
+  });
+});
+
 describe('a lore log found gives a shard, once (#1655)', () => {
   it('the first time only', () => {
     const none = Array.from({ length: 11 }, () => undefined) as [];

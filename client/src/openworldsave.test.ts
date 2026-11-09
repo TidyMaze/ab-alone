@@ -392,6 +392,31 @@ describe('the save of the resources and the army (#1655, record 8)', () => {
   });
 });
 
+describe('the stock the Workshop and a wild fight change (#1655)', () => {
+  const stock = { wood: 1, ore: 2, parts: 3, shards: 4 };
+  const army = { specials: [1, 9], brought: [9], relics: [], relicsBrought: [] };
+
+  it('replaces the resources and the army of the save, the rest of the world untouched', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 1.5, [[3, 3]], [2]);
+    await saves.setStock(7, stock, army);
+    const back = (await saves.load(7))!;
+    expect([back.resources, back.army]).toEqual([stock, army]);
+    expect([back.yaw, back.broken, back.lairs, back.hero]).toEqual([1.5, [[3, 3]], [2], hero]);
+  });
+
+  it('writes a record 7 as record 8, and does nothing without a save or when the store fails', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', { ...record(7), record: 7, yaw: 0, lairs: [], discovered: [], time: 0, logs: [], recruits: 0 });
+    await worldSaves(store, 1).setStock(7, stock, army);
+    expect((store.data.get('openworld:7') as { record: number }).record).toBe(8);
+    await worldSaves(store, 1).setStock(8, stock, army);
+    expect(store.data.has('openworld:8')).toBe(false);
+    const broken: KeyStore = { get: async () => Promise.reject(new Error('blocked')), put: async () => Promise.reject(new Error('blocked')), delete: async () => Promise.reject(new Error('blocked')) };
+    await expect(worldSaves(broken, 1).setStock(7, stock, army)).resolves.toBeUndefined();
+  });
+});
+
 describe('worldSaves', () => {
   it('saves a world under its seed and loads it back with its hero, troop and fight', async () => {
     const saves = worldSaves(memoryStore(), 1);

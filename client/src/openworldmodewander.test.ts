@@ -175,7 +175,7 @@ describe('a marble that touches the hero starts a wild fight (#1511)', () => {
     const { m, onWild } = setup();
     m.fixture({ hero: next, troop: [] });
     expect(onWild).toHaveBeenCalledTimes(1);
-    expect(onWild).toHaveBeenCalledWith(found.seed, found.home);
+    expect(onWild).toHaveBeenCalledWith(found.seed, found.home, []); // no special marble brought
     expect(m.key('ArrowUp')).toBe(false);
     expect(m.key('Escape')).toBe(false);
     expect((m as unknown as { roll(to: Axial): boolean }).roll([next[0], next[1] + 1])).toBe(false); // no step either: a press or a walk under way
@@ -183,6 +183,14 @@ describe('a marble that touches the hero starts a wild fight (#1511)', () => {
     expect(m.active).toBe(true); // the page leaves the world when the transition is half way
     m.fixture({ hero: next, troop: [] });
     expect(onWild).toHaveBeenCalledTimes(1); // once
+  });
+
+  it('tells the special marbles the army brings (#1655): a copy of the loadout the fixture set', () => {
+    const { m, onWild } = setup();
+    const army = { specials: [1, 9], brought: [9, 1], relics: [], relicsBrought: [] };
+    m.fixture({ hero: next, troop: [], army });
+    expect(onWild).toHaveBeenCalledWith(found.seed, found.home, [9, 1]);
+    expect(onWild.mock.calls[0]![2]).not.toBe(army.brought);
   });
 
   it('is saved with the hero where it stands, and a world entered again fights again', async () => {
@@ -221,7 +229,7 @@ describe('a marble that touches the hero starts a wild fight (#1511)', () => {
     m.frame(vi.fn(), 1000 + FLEE_GRACE_MS - 1);
     expect(onWild).not.toHaveBeenCalled();
     m.frame(vi.fn(), 1000 + FLEE_GRACE_MS);
-    expect(onWild).toHaveBeenCalledWith(found.seed, found.home);
+    expect(onWild).toHaveBeenCalledWith(found.seed, found.home, []); // no special marble brought
     m.frame(vi.fn(), 1000 + FLEE_GRACE_MS + 20);
     expect(onWild).toHaveBeenCalledTimes(1);
   });
