@@ -34,14 +34,10 @@ const patch = (page: Page, fields: object) =>
         const open = indexedDB.open('ab-alone');
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
-          const games = open.result.transaction('game', 'readwrite').objectStore('game');
-          const get = games.get(key as string);
-          get.onsuccess = () => {
-            games.put({ ...get.result, ...(changes as object) }, key as string);
-            open.result.transaction('game').oncomplete = () => undefined;
-            open.result.close();
-            resolve();
-          };
+          const tx = open.result.transaction('game', 'readwrite');
+          const get = tx.objectStore('game').get(key as string);
+          get.onsuccess = () => tx.objectStore('game').put({ ...get.result, ...(changes as object) }, key as string);
+          tx.oncomplete = () => (open.result.close(), resolve());
         };
       }),
     [KEY, fields] as const,

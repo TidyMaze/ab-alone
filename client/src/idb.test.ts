@@ -109,6 +109,18 @@ describe('indexedDbStore', () => {
     expect(await store.get('a')).toBe(1);
   });
 
+  it('rejects with the error of a database that cannot be opened, after trying twice', async () => {
+    const error = new DOMException('blocked by the browser', 'UnknownError');
+    const open = vi.fn(() => {
+      const req = { error } as unknown as IDBOpenDBRequest;
+      queueMicrotask(() => req.onerror!(new Event('error')));
+      return req;
+    });
+    vi.stubGlobal('indexedDB', { open });
+    await expect(indexedDbStore().get('a')).rejects.toBe(error);
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects when the database has no game store', async () => {
     const factory = fresh();
     await new Promise<void>((resolve) => {

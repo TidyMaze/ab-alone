@@ -855,12 +855,12 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     expect(body().openworldAt).toBe('0,0');
   });
 
-  it('a stale save is deleted when the world opens, which then starts fresh', async () => {
+  it('a stale save is kept aside, not deleted, when the world opens, which then starts fresh (#1661)', async () => {
     const { m, store } = withSaves();
     store.data.set('openworld:7', { ...savedWorld(), version: 0 });
     await m.open(7, 800, 600);
     expect(body().openworldAt).toBe('0,0');
-    expect(store.data.has('openworld:7')).toBe(false);
+    expect(store.data.get('openworld:7:refused')).toMatchObject({ version: 0 });
   });
 });
 

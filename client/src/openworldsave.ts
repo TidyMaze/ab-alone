@@ -1,7 +1,8 @@
 // The Open world save (docs/specs/openworld.md section 5, #968): the hero, the troop and the fight of a seed's world, one record
 // per seed in the game store of IndexedDB (idb.ts), next to the local game and the run. The last world played is remembered
 // under its own key, so the menu resumes it. A save of another world version (the generator changed, its cells mean something
-// else) or one that does not decode is deleted: the world starts fresh. Storage that fails never throws to the page.
+// else) or one whose hero does not decode is kept aside under `openworld:<seed>:refused`, never deleted, and the world starts fresh; a field that
+// does not decode is reset to its default and the rest of the record is kept (#1661). Storage that fails never throws to the page.
 import type { Axial } from './board';
 import { CYCLE_MS } from './daynight';
 import { TROOP } from './openworld';
@@ -75,51 +76,46 @@ const MAX_BROKEN = 100_000;
 const MAX_LAIRS = 100_000;
 const TROOP_REACH = 20;
 
-/** The save in `raw` when it is a whole save of `seed` for `version`; `null` otherwise. */
+/** The save in `raw` for `seed` and `version`; `null` when it is not one of that world: not an object, another seed or world version, a record version
+ * this build does not know, or a hero that is not a cell. Every other field that does not decode is reset to its default and named in a `console.warn`
+ * (#1661): a record of the right seed and version is never lost for one bad field, the progress in the others is kept. */
 export function decodeWorld(raw: unknown, seed: number, version: number): WorldSave | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const save = raw as Record<keyof WorldSave | 'record', unknown>;
   if (save.version !== version || save.seed !== seed) return null;
   if (save.record !== undefined && ![2, 3, 4, 5, 6, 7, RECORD].includes(save.record as number)) return null;
+  if (!isCell(save.hero)) return null;
+  const hero = save.hero;
   const record = (save.record ?? 1) as number; // version 1 wrote none
+  /** `value` when it decoded (not `null`), else `fallback`, with the field named in a warning. */
+  const kept = <T>(field: string, value: T | null, fallback: T): T => {
+    if (value !== null) return value;
+    console.warn(`openworld: the saved ${field} of world ${seed} does not decode and is reset to its default`);
+    return fallback;
+  };
+  const numbers = (list: unknown): number[] | null => (Array.isArray(list) && list.length <= MAX_LAIRS && list.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_LAIRS) ? (list as number[]) : null);
   const yaw = record === 1 ? 0 : save.yaw; // version 1: no turn yet (#1026)
-  if (typeof yaw !== 'number' || !Number.isFinite(yaw)) return null;
   const broken = save.broken ?? []; // saved before the broken obstacles (#1147): none
-  if (!Array.isArray(broken) || broken.length > MAX_BROKEN || !broken.every(isCell)) return null;
-  const lairs = record >= 3 ? save.lairs : []; // saved before the lairs: none beaten (#1170)
-  if (!Array.isArray(lairs) || lairs.length > MAX_LAIRS || !lairs.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_LAIRS)) return null;
-  const discovered = decodeDiscovered(record >= 4 ? save.discovered : []); // saved before the discovery: none (#1411)
-  if (!discovered) return null;
   const time = record >= 5 ? save.time : 0; // saved before the cycle: the start of day (#1496)
-  if (typeof time !== 'number' || !(time >= 0 && time < CYCLE_MS)) return null;
-  const logs = record >= 6 ? save.logs : []; // saved before the lore logs: none found (#1589)
-  if (!Array.isArray(logs) || logs.length > MAX_LAIRS || !logs.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_LAIRS)) return null;
-  const recruits = record >= 7 ? save.recruits : 0; // saved before the recruits: none (#1531)
-  if (!Number.isInteger(recruits) || (recruits as number) < 0 || (recruits as number) > RECRUIT_MAX) return null;
-  const resources = decodeResources(record >= 8 ? (save.resources ?? null) : undefined); // saved before the resources: none (#1655)
-  const army = decodeArmy(record >= 8 ? (save.army ?? null) : undefined);
-  if (!resources || !army) return null;
-  if (!isCell(save.hero) || !Array.isArray(save.troop) || save.troop.length > TROOP + (recruits as number) || !save.troop.every(isCell)) return null;
-  const [hq, hr] = save.hero;
-  if (!save.troop.every(([q, r]) => Math.max(Math.abs(q! - hq!), Math.abs(r! - hr!), Math.abs(q! - hq! + r! - hr!)) <= TROOP_REACH)) return null; // the troop is the hero's trail
-  const fight = decodeFight(save.fight);
-  if (!fight || !Number.isFinite(save.savedAt)) return null;
+  const recruits = kept('recruits', record < 7 || (Number.isInteger(save.recruits) && (save.recruits as number) >= 0 && (save.recruits as number) <= RECRUIT_MAX) ? ((record >= 7 ? save.recruits : 0) as number) : null, 0); // saved before the recruits: none (#1531)
+  const troop = save.troop;
+  const reach = ([q, r]: Axial): number => Math.max(Math.abs(q - hero[0]), Math.abs(r - hero[1]), Math.abs(q - hero[0] + r - hero[1]));
   return {
     version,
     seed,
-    hero: [save.hero[0], save.hero[1]],
-    troop: save.troop.map(([q, r]): Axial => [q, r]),
-    fight,
-    yaw,
-    broken: broken.map(([q, r]): Axial => [q, r]),
-    lairs: [...lairs] as number[],
-    discovered,
-    time,
-    logs: [...logs] as number[],
-    recruits: recruits as number,
-    resources,
-    army,
-    savedAt: save.savedAt as number,
+    hero: [hero[0], hero[1]],
+    troop: kept('troop', Array.isArray(troop) && troop.length <= TROOP + recruits && troop.every(isCell) && troop.every((cell) => reach(cell) <= TROOP_REACH) ? troop.map(([q, r]): Axial => [q, r]) : null, []), // the troop is the hero's trail
+    fight: kept('fight', decodeFight(save.fight), { removed: [], added: [], beaten: 0 }),
+    yaw: kept('yaw', typeof yaw === 'number' && Number.isFinite(yaw) ? yaw : null, 0),
+    broken: kept('broken', Array.isArray(broken) && broken.length <= MAX_BROKEN && broken.every(isCell) ? broken.map(([q, r]): Axial => [q, r]) : null, []),
+    lairs: kept('lairs', numbers(record >= 3 ? save.lairs : []), []), // saved before the lairs: none beaten (#1170)
+    discovered: kept('discovered', decodeDiscovered(record >= 4 ? save.discovered : []), []), // saved before the discovery: none (#1411)
+    time: kept('time', typeof time === 'number' && time >= 0 && time < CYCLE_MS ? time : null, 0),
+    logs: kept('logs', numbers(record >= 6 ? save.logs : []), []), // saved before the lore logs: none found (#1589)
+    recruits,
+    resources: kept('resources', decodeResources(record >= 8 ? (save.resources ?? null) : undefined), NO_RESOURCES), // saved before the resources: none (#1655)
+    army: kept('army', decodeArmy(record >= 8 ? (save.army ?? null) : undefined), NO_ARMY),
+    savedAt: kept('savedAt', Number.isFinite(save.savedAt) ? (save.savedAt as number) : null, 0),
   };
 }
 
@@ -132,7 +128,7 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
         if (raw === undefined) return null;
         const save = decodeWorld(raw, seed, version);
         if (save) return save;
-        await store.delete(keyOf(seed)); // another version, or garbage: the world starts fresh
+        await store.put(`${keyOf(seed)}:refused`, raw); // another version, another seed or a hero that is no cell: kept aside, never deleted (#1661); the world starts fresh
       } catch {
         // Storage blocked: the world starts fresh.
       }

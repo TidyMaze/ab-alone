@@ -333,16 +333,22 @@ there is no New world control. Under automation (`navigator.webdriver`) `?openwo
 save, and `?openworld=new` opens a new random seed fresh. The push count of a session
 (`openworldPush`) is not saved: it starts at 0 after a reload.
 
-**Versions and garbage.** A record whose `version` is not the `WORLD_VERSION` of the bridge (`world_version()`,
-openworld-terrain.md section 6) is not loaded: its cells would mean something else. A record that does not decode (a wrong
-shape, cells that are not integers, more troop marbles than the troop holds, another seed under the key) is not loaded
-either (a bad `fight` makes a bad record). Both are deleted, and the world starts on the spawn.
+**Versions and garbage (#1661).** A record of the right seed and world version is never deleted. A field that does not decode (a wrong shape,
+cells that are not integers, a `time` out of range, more troop marbles than the troop holds, a bad `fight`) is reset to its default and the
+other fields are kept: `resources`, `army`, `logs`, `recruits`, `time` (start of day), `discovered`, `broken`, `lairs`, `fight`, `troop`
+(none) and `yaw` (0) each fall back alone, and each one reset is named in a `console.warn` (`openworld: the saved <field> of world <seed> does
+not decode ...`). Only a record whose `version` is not the `WORLD_VERSION` of the bridge (`world_version()`, openworld-terrain.md section 6; its
+cells would mean something else), whose `seed` is another, whose `record` version this build does not know, whose `hero` is not a cell, or
+that is no object at all, is refused: the world starts on the spawn, and the refused record is copied under `openworld:<seed>:refused`, not
+deleted. The store (`idb.ts`) forgets a connection that closed under it (a newer page upgraded the database, the browser closed it) and runs
+the call once more on a fresh one, so a closed connection never reads as "no save". The only delete of a world key is New world
+(`discard`).
 
 **Record versions.** `record` 3 adds `lairs`, the numbers of the boss lairs beaten (section 7). A record of version 1 (no `record`
 field) or 2 loads with no lair beaten, so an old save is kept; an unknown later version, or a `lairs` that is not a list of
-whole numbers, is deleted like any garbage. `record` 4 adds `discovered`, the cells discovered (section 9): a record before it loads
-with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is garbage. `record` 5 adds `time`,
-the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage. `record` 6 adds `logs`, the numbers of the lore logs found (section 12): a record before it loads with none found; a `logs` that is not a list of whole numbers is garbage. `record` 8 adds `resources` and `army` (section 19, #1655): a record before it loads with zero resources and an empty army; a `resources` that is not four whole numbers from 0, or an `army` that is not four lists of codes within the army's limits, is garbage. `beat` and `beatMarble` add the shards of a lair and the parts of a wild fight to the record they write, once (a lair already beaten, a marble already gone, gives nothing), and write record 8. `record` 7 adds `recruits`, the marbles that joined the troop (section 16): a record before it loads with none, and its troop holds 15 marbles at most as it always did; a `recruits` that is not a whole number from 0 to 5 is garbage, and so is a troop longer than 15 plus its `recruits`. `beat` and `beatMarble` keep `recruits` and write the current record, so a record of version 6 they touch still loads.
+whole numbers, is refused or reset as above. `record` 4 adds `discovered`, the cells discovered (section 9): a record before it loads
+with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is a bad field, reset as above. `record` 5 adds `time`,
+the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is a bad field, reset as above. `record` 6 adds `logs`, the numbers of the lore logs found (section 12): a record before it loads with none found; a `logs` that is not a list of whole numbers is a bad field, reset as above. `record` 8 adds `resources` and `army` (section 19, #1655): a record before it loads with zero resources and an empty army; a `resources` that is not four whole numbers from 0, or an `army` that is not four lists of codes within the army's limits, is a bad field, reset as above. `beat` and `beatMarble` add the shards of a lair and the parts of a wild fight to the record they write, once (a lair already beaten, a marble already gone, gives nothing), and write record 8. `record` 7 adds `recruits`, the marbles that joined the troop (section 16): a record before it loads with none, and its troop holds 15 marbles at most as it always did; a `recruits` that is not a whole number from 0 to 5 is a bad field, reset as above, and so is a troop longer than 15 plus its `recruits`. `beat` and `beatMarble` keep `recruits` and write the current record, so a record of version 6 they touch still loads.
 
 ## 6. Tests
 

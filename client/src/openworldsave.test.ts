@@ -309,7 +309,7 @@ describe('the save of the recruits (#1531)', () => {
     for (const [recruits, troop] of bad) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...v6, record: 7, recruits, troop });
-      expect(await worldSaves(store, 1).load(7), String(recruits)).toMatchObject({ recruits: expect.any(Number), troop: [], hero });
+      expect(await worldSaves(store, 1).load(7), String(recruits)).toMatchObject({ recruits: recruits === 2 ? 2 : 0, troop: troop.length > 15 ? [] : troop, hero });
       expect(store.data.has('openworld:7')).toBe(true);
     }
   });
