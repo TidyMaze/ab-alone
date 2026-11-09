@@ -984,6 +984,7 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
   #openworld-hud { padding: 0.5rem 0.75rem; max-height: calc(max(50dvh - 5.5rem, min(17.25rem, 100dvh - 5.5rem - 16px - 12.75rem - var(--target) - 0.5rem)) / var(--ui-scale, 1)); }
   body[data-openworld] #openworld-hud:not([data-folded]) { display: flex; flex-wrap: wrap; align-content: flex-start; }
   #openworld-hud:not([data-folded]) > * { flex: 0 0 100%; }
+  #openworld-hud:not([data-folded]) p { margin-bottom: 0.25rem; } /* the counts line of the resources (#1655) must not push the opened plate above the middle */
   #openworld-hud:not([data-folded]) > #openworld-tally { order: 1; }
   #openworld-hud:not([data-folded]) > #openworld-online { order: 2; }
   #openworld-hud:not([data-folded]) > button { flex: 0 1 auto; padding: 0 0.75rem; } /* over the plate buttons' rule, later in this file */
