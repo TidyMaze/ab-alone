@@ -50,7 +50,7 @@ export interface OpenWorldDeps {
   /** The boss lairs of a world as cells (#1305). */
   lairCells: (seed: number) => Axial[];
   /** A wild fight is about to start: the page wipes the screen and opens the arena (#1511). */
-  onWild: (seed: number, home: Axial, phase: Phase) => void;
+  onWild: (seed: number, home: Axial, phase: Phase, brought: number[]) => void;
   cue: (event: WorldCue) => void;
   /** The tick the enemy marbles wander by when a spec fixes it, else null (#1511). */
   wanderTick: () => number | null;
@@ -147,7 +147,7 @@ export function wireOpenWorld(deps: OpenWorldDeps): OpenWorldParts {
   );
   mode.peers = peers;
   mode.store = store; // the one lesson of the roll (#1604)
-  mode.onWild = (seed, home) => deps.onWild(seed, home, mode.phase); // the hour the marble was met at dresses the arena
+  mode.onWild = (seed, home, brought) => deps.onWild(seed, home, mode.phase, brought); // the hour the marble was met at dresses the arena
   // The clock the enemy marbles wander by (#1511): the wall clock in ticks, so every peer sees them in the same places.
   mode.wander = () => deps.wanderTick() ?? Math.floor(Date.now() / FightState.tickMs);
   netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peers.show() : peers.hide()));

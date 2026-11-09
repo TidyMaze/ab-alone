@@ -56,6 +56,9 @@ export interface WorldSaves {
   /** Marks the generated marble that starts on `home` as beaten in the saved world of `seed` (#1511): gone, and counted, as one the troop ejected, with the parts of a wild fight won, once (#1655);
    * nothing when there is no save, the marble is gone already, or the store fails. */
   beatMarble(seed: number, home: Axial): Promise<void>;
+  /** Replaces the resources and the army of the saved world of `seed` (#1655): what the Workshop sold and bought, the loadout, the marbles a wild fight threw off;
+   * nothing when there is no save or the store fails. */
+  setStock(seed: number, resources: Resources, army: Army): Promise<void>;
   /** Deletes the save of `seed`: the New world control discards the world it leaves (#1021). A refusing store keeps it. */
   discard(seed: number): Promise<void>;
   /** Remembers `seed` as the last world played. */
@@ -164,6 +167,15 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
         }
       } catch {
         // Storage blocked: the marble comes back with the world.
+      }
+    },
+    async setStock(seed, resources, army) {
+      try {
+        const raw = await store.get(keyOf(seed));
+        const save = raw === undefined ? null : decodeWorld(raw, seed, version);
+        if (save) await store.put(keyOf(seed), { ...(raw as object), record: RECORD, resources, army });
+      } catch {
+        // Storage blocked: the stock stays as it was saved.
       }
     },
     async discard(seed) {

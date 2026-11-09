@@ -113,9 +113,9 @@ export class OpenWorldMode {
   wander: () => number = () => 0;
   /** The tick the marbles stand at now. */
   private ticked = 0;
-  /** What starts a wild fight with the marble that touches the hero (#1511): the seed and the cell the marble starts on. The page plays the
-   * transition and the fight, and brings the hero back to this world when it ends. */
-  onWild: (seed: number, home: Axial) => void = () => {};
+  /** What starts a wild fight with the marble that touches the hero (#1511): the seed, the cell the marble starts on and the special marbles the army
+   * brings (#1655). The page plays the transition and the fight, and brings the hero back to this world when it ends. */
+  onWild: (seed: number, home: Axial, brought: number[]) => void = () => {};
   /** The page clock (ms) before which no wild fight starts: a world that just opened gives 5 s to walk away. 0 when none is due. */
   private calmUntil = 0;
   /** Frames drawn since the world opened: a spec waits for the first one before it looks at the wild fight (#1601, `__openworldDrawn`). */
@@ -578,9 +578,15 @@ export class OpenWorldMode {
 
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
    * enemies of the loaded square replaced by `enemies`, none pushed (without `enemies`, the generated ones stay, wandering, and a marble that
-   * touches the hero starts a wild fight); `beaten` (#1175) sets the lairs beaten, `recruits` (#1531) the marbles that joined the troop. A fixture ends the calm of a world just opened (#1511). */
-  fixture({ hero, troop, enemies, beaten, recruits }: { hero: Axial; troop: Axial[]; enemies?: Axial[]; beaten?: number[]; recruits?: number }): void {
+   * touches the hero starts a wild fight); `beaten` (#1175) sets the lairs beaten, `recruits` (#1531) the marbles that joined the troop, `resources` and `army` (#1655) the stock of the Workshop. A fixture ends the calm of a world just opened (#1511). */
+  fixture({ hero, troop, enemies, beaten, recruits, resources, army }: { hero: Axial; troop: Axial[]; enemies?: Axial[]; beaten?: number[]; recruits?: number; resources?: Resources; army?: Army }): void {
     this.calmUntil = 0;
+    if (resources || army) {
+      this.resources = resources ?? this.resources; // the stock of the world (#1655): a spec loads the one it needs, it never gathers by walking
+      this.army = army ?? this.army;
+      this.plateResources();
+      this.persist();
+    }
     if (recruits !== undefined) {
       this.recruits = Math.min(recruits, RECRUIT_MAX); // the recruits of the world (#1531)
       this.plateRecruits(false);
@@ -1239,7 +1245,7 @@ export class OpenWorldMode {
     this.route = [];
     this.nextStep = Infinity;
     this.persist();
-    this.onWild(this.seed, touching.home);
+    this.onWild(this.seed, touching.home, [...this.army.brought]);
     return true;
   }
 

@@ -61,7 +61,7 @@ for (const { name, viewport, touch } of sizes) {
       await expect(page.locator('#workshop button[data-kind="2"][data-act="bring"]')).toBeDisabled(); // none owned to bring
       await expect(page.locator('#workshop li[data-kind="1"] .w-why')).toHaveText('');
       await expect(page.locator('#workshop button[data-kind="7"][data-act="buy"]')).toBeEnabled();
-      await page.locator('#workshop li[data-kind="7"]').scrollIntoViewIfNeeded();
+      await page.locator('#workshop').evaluate((el) => (el.scrollTop = 0)); // the first rows in the picture
       await shot(page, { path: `test-results/workshop-${file}.png` });
       await page.keyboard.press('Escape');
       await expect(page.locator('#workshop')).toBeHidden();

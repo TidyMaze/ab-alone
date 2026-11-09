@@ -167,6 +167,8 @@ the hour, reached and left the way a boss lair is (section 7). No new rule.
   `WorldSaves.beatMarble` writes its start cell into the saved `fight.removed` and adds one to `fight.beaten` (once, even if the banner is drawn
   again). "Back to the Open world" resumes the world without it. It is told to the other heroes as a beaten enemy (`PeerHost.wildWon`, the lair's
   owed queue: sent now or when the room opens).
+- **Special marbles** (#1655, section 19.2). When the army brings some, they stand on its side in the arena and the bot plays them; one thrown off, or a Bomb burst, is lost
+  from the army at the end of the fight, win or loss. Flee, Back and a reload keep every marble.
 - **Online (the smallest correct rule).** A wild win is the signed `beaten` event of #1305, unchanged: it names the cell the marble was **generated**
   on, never where it wandered, and the peers check it with `world_is_enemy` against that cell as they do for an enemy the troop ejects
   (`PeerHost.beaten` uses `Played.homes` now). A peer applies it to the marble that starts there if it is still alive (`FightState.alive`), wherever its
@@ -353,7 +355,7 @@ with the Playwright MCP before its PR, with a screenshot.
 Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, enemies })` puts the
 hero, the troop and the enemies of the loaded square (the generated ones are hidden; without `enemies` they stay, wandering, and a marble the hero is put
 beside fights, section 3c), `window.__openworldWander(tick | null)` sets the tick of the marbles' clock (section 3b), and
-`window.__openworldEnemies()` gives the enemies near the hero; the fixture also takes `recruits: n` (section 16), and `window.__openworldPads(seed)` gives the pads of the towers as `q, r` pairs (section 15). The e2e push test uses them. `window.__openworldTime(ms)` sets the time of
+`window.__openworldEnemies()` gives the enemies near the hero; the fixture also takes `recruits: n` (section 16), and `resources` and `army` (section 19.2), and `window.__openworldPads(seed)` gives the pads of the towers as `q, r` pairs (section 15). The e2e push test uses them. `window.__openworldTime(ms)` sets the time of
 day in ms of the 12 minute cycle (section 11), `window.__openworldLogs(seed)` gives the lore logs of a world as `q, r` pairs (section 12); `body[data-openworld-phase]` reads `day`, `dusk` or `night`, and `body[data-fight-board]`
 the same on a lair fight.
 
@@ -602,6 +604,7 @@ plan as the game.
 - **Ledger line** (#1516). Entering a town puts Tally's line for it on the plate of the Hub (`TOWN_LINES` of `tally.ts`, keyed by the town's index among the
   towns: the spawn town 0, then the forest, tundra, desert and badlands towns; `onPlace` of `OpenWorldMode` gives the index), until the first move, and only from the
   stage the line declares: a new player meets none (world.md section 13). A seed with a town left out shifts the later towns' lines by one (none in the seeds 1 to 2000).
+- **Workshop** (#1655). The Hub that a town opens has a Workshop button and sheet (section 19.2); the Hub of the mode menu does not.
 - **Exit.** The exit `#exit`, the first slot of the dock, labelled World (#1517, ui.md section 4.10; it was `#place-back`), is shown while the Hub or the run is on and came from a place
   (`placeFrom` of `main.ts`): it leaves the Hub or the run (a run left is abandoned, as by another mode) and opens the world at the entrance,
   as the exit of a lair does. A table or a boss of that Hub leads to the Hub, which keeps it. Any other mode, and the
@@ -838,7 +841,7 @@ The trait is what the medal's tower teaches the player's side of the board. A to
 ## 19. Resources and the Workshop (#1655, Decision #1654)
 
 The world rewards exploring and winning with a stock that the next fights of the world spend. The Decision (option A) keeps section 1's rules: no HP, no level, no
-stat, and no new engine rule. The move, the push and `rules.md` do not change. The stock is spent in a Workshop (section 19.2, built by slice 2 of #1655) on the special
+stat, and no new engine rule. The move, the push and `rules.md` do not change. The stock is spent in a Workshop (section 19.2) on the special
 marbles and relics of the rogue-lite, which act **only in the fights the Open world itself starts** (the wild fight, section 3c, and a lair or tower entered by walking
 onto it, section 7): never in a rogue-lite run, a dungeon gate's run included, a boss fight from the Modes menu or the Hub, the Daily, a bot or hot-seat table, online,
 Ranked or Royale.
@@ -873,4 +876,45 @@ Ranked or Royale.
 
 ### 19.2 The Workshop (slice 2)
 
-Written by slice 2 of #1655.
+A station of the Hub of a town, where the resources buy the special marbles of the rogue-lite, and the army brings some to the wild fights of the world. Slice 3 adds the
+upgraded types, the army relics and the lairs.
+
+| Special marble | Cost (TUNE) | Refund |
+|---|---|---|
+| Heavy | 6 ore + 4 parts | 3 ore + 2 parts |
+| Anchor | 6 ore + 2 wood + 4 parts | 3 ore + 1 wood + 2 parts |
+| Spark | 4 wood + 6 parts | 2 wood + 3 parts |
+| Shield | 6 wood + 4 parts | 3 wood + 2 parts |
+| Magnet | 4 ore + 6 parts | 2 ore + 3 parts |
+| Bomb | 3 wood + 3 ore + 6 parts | 1 wood + 1 ore + 3 parts |
+| Medic | 6 wood + 6 parts | 3 wood + 3 parts |
+
+- **Where.** `#workshop-open`, a button at the bottom left of the Hub (over the dock on a phone held upright), shown only when the Hub was entered from a town of the Open world
+  (`placeFrom.kind === 'town'`, section 13): the Hub of the mode menu has none. It opens `#workshop`, a sheet over the deck that reads the stock from the world's save, takes the
+  focus and scrolls on a short window. Close and Esc shut it and give the focus back to the button; the arrows of the Hub roll nothing while it is open. Leaving the Hub closes it.
+- **Rows.** One per special marble, in the order of the table: its name and rule (the rogue-lite's own text), its price, how many the army owns and brings, and the buttons
+  **Buy**, **Sell**, **Bring** and **Leave** (tab order: Close, then each row left to right). A button that cannot be pressed is `disabled`, and its `title` and label say why
+  (the Buy reason is also written on the row): "not enough ore", "not enough wood and parts", "army full", "none to sell", "3 already brought", "none left to bring",
+  "none brought". After a press the focus stays on the button, or goes to the first enabled one of its row, or to the sheet.
+- **Rules** (`client/src/openworldworkshop.ts`, pure, no engine). The army owns **6** special marbles at most (the engine's codes in `army.specials`, kept in order) and brings
+  **3** to a fight (`army.brought`, a multiset of the owned ones; 4 with the Quartermaster in slice 3, the rogue-lite's `FIGHT_CAP`). Buy spends the cost; Sell takes one owned
+  marble and gives back half of each part of the cost, rounded down, and takes it out of the loadout when the loadout holds more of its kind than the army keeps. The loadout
+  is kept in the save (`army.brought`) until it is changed. Shards are not spent in this slice. The sheet writes each change to the save at once (`WorldSaves.setStock`, record 8).
+- **In a wild fight** (`startWild` of `main.ts`). The mode tells the page the loadout with the marble (`onWild(seed, home, brought)`). When it is not empty, the fight is the
+  rogue-lite's engine of a full army (`Engine.with_army(14, 14)`, the standard board with the rogue-lite flag, Decision #935) with one special marble placed on each of the
+  brought kinds by `Engine::place_special` (`placeBrought`: the army's marbles nearest the centre, in the order of the loadout), and the bot's request carries the same
+  army, `placed` and `foes` (`engineFor`), so its search plays the board the page plays. An empty loadout starts the plain game, bit for bit as before. The board draws the
+  glyphs of the special marbles and the Bomb's fuse (`built()`), and `body[data-specials]` lists them.
+- **Losses** (`wildThrown`). When the fight is over, a won one or a lost one, the brought marbles that the board no longer holds (thrown off, or a Bomb burst) are gone from the
+  army (`lose`: from `specials` and from `brought`), saved once, and the end banner says "Lost: Heavy, Bomb.". A Medic that came back is still on the board and stays. **Flee**,
+  Back and a reload end the fight before it is over and keep everything.
+- **Scope.** Only the wild fight of the world places them. A rogue-lite run, a dungeon gate, a boss of the Modes menu or the Hub (a lair is slice 3), the Daily, a bot or hot-seat
+  table, online, Ranked and Royale are built as before: their engines never get a `placed` list (`main.workshop.test.ts` checks the arena and the Daily after a world whose army
+  brings two).
+- **Tests.** The rules (`openworldworkshop.test.ts`), the sheet (`workshopview.test.ts`), the save (`openworldsave.test.ts`), the mode's loadout and fixture
+  (`openworldmodewander.test.ts`, `openworldmoderesources.test.ts`), the page (`main.workshop.test.ts`: the button in a town and not in the menu's Hub, the sheet, buy, sell,
+  loadout, reasons, a wild fight placing the marbles, the losses, Flee, the other modes). E2E (`openworld-workshop.spec.ts`): the Workshop on a desktop and two phones, by the
+  keyboard too, and a wild fight with a Heavy and a Bomb placed, each under 15 s. The fixture hook takes `resources` and `army`.
+- **For slice 3.** The loadout is applied in `startWild` (`from.placed`) and read back in `wildThrown`; a lair fight goes through `startBoss`'s `Encounter` (`encounterFor` takes
+  `placed` and the relics mask, the army's build is taken when `takes_build()`), so slice 3 adds `placed` and the relics to `lairFrom` and settles the losses with the same `lose`.
+  `army.relics` and `army.relicsBrought` are already in the record.
