@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Axial } from './board';
+import { MOVE_STRIDE, type Axial } from './board';
 import { indexedDbStore } from './idb';
 import './test/openworldwasm';
 import { world_enemies } from 'edgefall-wasm';
@@ -425,8 +425,9 @@ describe('the army in a lair fight walked into from the world (#1655)', () => {
     return { builds: ids.findIndex((id) => boss_takes_build(id)), plain: ids.findIndex((id) => !boss_takes_build(id)) };
   }
   /** The world of seed 7 with the stock loaded, and the hero stepped onto lair `lair` from the west. */
-  async function walkInto(stock: Stock, lair: number): Promise<Game> {
-    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+  async function walkInto(stock: Stock, lair: number, booted: () => Promise<void> = async () => {}): Promise<Game> {
+    const game = await boot('?openworld=7', { reducedMotion: true });
+    await booted(); // the page's own copy of the bridge is loaded: a spy set here sees what it calls
     game.openModes();
     byId('openworld').click();
     await settle();
@@ -456,13 +457,18 @@ describe('the army in a lair fight walked into from the world (#1655)', () => {
     game.click(q, r);
     game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
   }
-  const placedKinds = (spy: ReturnType<typeof vi.spyOn>): number[] => spy.mock.calls.map((call) => call[2] as number).sort((a, b) => a - b);
+  const placedKinds = (spy: { mock: { calls: unknown[][] } }): number[] => spy.mock.calls.map((call) => call[2] as number).sort((a, b) => a - b);
 
   it('places the brought marbles and sets the brought relics in a lair whose boss takes the build, and the bot gets the same', async () => {
-    const { Encounter } = await import('edgefall-wasm');
-    const place = vi.spyOn(Encounter.prototype, 'place_special');
-    const relics = vi.spyOn(Encounter.prototype, 'set_relics');
-    const game = await walkInto(brought, (await lairs()).builds);
+    let place!: ReturnType<typeof vi.spyOn>, relics!: ReturnType<typeof vi.spyOn>;
+    const game = await walkInto(brought, (await lairs()).builds, async () => {
+      const { Encounter } = await import('edgefall-wasm');
+      place = vi.spyOn(Encounter.prototype, 'place_special');
+      relics = vi.spyOn(Encounter.prototype, 'set_relics');
+      vi.spyOn(Encounter.prototype, 'boss_move').mockImplementation(function (this: InstanceType<typeof Encounter>) {
+        return this.legal_moves().slice(0, MOVE_STRIDE); // the boss answers at once with its first move: the search is not what is tested
+      });
+    });
     expect(data().boss).toBeTruthy();
     expect(data().specials!.split(' ').map((s) => Number(s.split(',')[2])).sort()).toEqual([1, 9]);
     expect(placedKinds(place)).toEqual([1, 9]);
@@ -471,35 +477,40 @@ describe('the army in a lair fight walked into from the world (#1655)', () => {
     const [q, r] = move.cells[0]!;
     game.click(q, r);
     game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
-    await game.settle();
-    game.frame(1000);
+    for (let i = 0; i < 50 && game.hook<number>('__plies') < 2; i++) {
+      await game.settle();
+      game.frame(1000);
+    }
+    expect(game.hook<number>('__plies')).toBe(2); // the boss answered
     expect(placedKinds(place)).toEqual([1, 1, 9, 9]); // the bot's engine of the same fight, in its worker
     expect(relics.mock.calls).toEqual([[0b11], [0b11]]);
     vi.restoreAllMocks();
   });
 
   it('a boss that takes no build places nothing and sets nothing, and a lair with an empty army is the plain fight', async () => {
-    const { Encounter } = await import('edgefall-wasm');
-    const place = vi.spyOn(Encounter.prototype, 'place_special');
-    const relics = vi.spyOn(Encounter.prototype, 'set_relics');
-    await walkInto(brought, (await lairs()).plain);
+    let place!: ReturnType<typeof vi.spyOn>, relics!: ReturnType<typeof vi.spyOn>;
+    const spy = async (): Promise<void> => {
+      const { Encounter } = await import('edgefall-wasm');
+      place = vi.spyOn(Encounter.prototype, 'place_special');
+      relics = vi.spyOn(Encounter.prototype, 'set_relics');
+    };
+    await walkInto(brought, (await lairs()).plain, spy);
     expect(data().specials ?? '').toBe('');
     expect(place).not.toHaveBeenCalled();
     expect(relics).not.toHaveBeenCalled();
-    await walkInto({ army: army([], []), resources: rich }, (await lairs()).builds);
+    await walkInto({ army: army([], []), resources: rich }, (await lairs()).builds, spy);
     expect(relics).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
 
   it('loses the marbles thrown off in a lair fight, once, and the Retry brings only the ones left', async () => {
-    const { Encounter } = await import('edgefall-wasm');
-    const place = vi.spyOn(Encounter.prototype, 'place_special');
     const game = await walkInto(brought, (await lairs()).builds);
     await finish(game, 2, [9]); // the Heavy is thrown off, the Hull plating keeps it
     expect(game.hud()).toContain('Hull plating kept Heavy.');
     expect(await saved()).toMatchObject({ specials: [1, 1, 9], brought: [1, 9] });
     vi.restoreAllMocks();
-    const again = await walkInto({ ...brought, army: { ...brought.army, relics: [0], relicsBrought: [0] } }, (await lairs()).builds);
+    let place!: ReturnType<typeof vi.spyOn>;
+    const again = await walkInto({ ...brought, army: { ...brought.army, relics: [0], relicsBrought: [0] } }, (await lairs()).builds, async () => void (place = vi.spyOn((await import('edgefall-wasm')).Encounter.prototype, 'place_special')));
     await finish(again, 2, [9]);
     expect(again.hud()).toContain('Lost: Heavy.');
     expect(await saved()).toMatchObject({ specials: [1, 9], brought: [9] });

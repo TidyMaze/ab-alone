@@ -1367,19 +1367,20 @@ body[data-look='neon'] .hub-label[data-kind='boss'] { --k: #b79cff; }
 #workshop .w-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space); }
 #workshop h2 { margin: 0; font: 600 0.75rem/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 #workshop p { margin: 4px 0 0; font-weight: 600; }
-#workshop #workshop-army { color: var(--muted); font-weight: 400; }
+#workshop #workshop-army, #workshop #workshop-relics { color: var(--muted); font-weight: 400; }
+#workshop h3 { margin: var(--space) 0 0; font: 600 0.75rem/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 #workshop ul { display: flex; flex-direction: column; gap: 6px; margin: var(--space) 0 0; padding: 0; list-style: none; }
 #workshop li { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--space); align-items: center; padding: 6px 0; border-top: 1px solid var(--edge); }
 #workshop .w-name b { font: 600 0.9375rem/1.2 var(--display); }
 #workshop .w-name small, #workshop .w-why { color: var(--muted); }
 #workshop .w-own { color: var(--muted); }
 #workshop .w-line, #workshop .w-why { grid-column: 1; }
-#workshop .w-btns { grid-column: 2; grid-row: 1 / span 3; display: grid; grid-template-columns: repeat(4, auto); gap: 4px; }
+#workshop .w-btns { grid-column: 2; grid-row: 1 / span 3; display: grid; grid-auto-flow: column; grid-auto-columns: auto; gap: 4px; } /* four buttons, five on a Heavy, an Anchor and a Spark (Upgrade) */
 #workshop .w-why:empty { display: none; }
 #workshop li button:disabled { opacity: 0.45; cursor: default; }
 @media (max-width: 600px), (max-height: 500px) {
   #workshop li { grid-template-columns: 1fr; }
-  #workshop .w-btns { grid-column: 1; grid-row: auto; grid-template-columns: repeat(4, 1fr); }
+  #workshop .w-btns { grid-column: 1; grid-row: auto; grid-auto-columns: 1fr; }
   #workshop li { padding: 4px 0; }
 }
 @media (orientation: portrait) { #workshop-open { bottom: calc(9.5rem + 3.25rem + env(safe-area-inset-bottom)); } } /* above the notice board's line, which sits over the dock */

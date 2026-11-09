@@ -167,7 +167,7 @@ the hour, reached and left the way a boss lair is (section 7). No new rule.
   `WorldSaves.beatMarble` writes its start cell into the saved `fight.removed` and adds one to `fight.beaten` (once, even if the banner is drawn
   again). "Back to the Open world" resumes the world without it. It is told to the other heroes as a beaten enemy (`PeerHost.wildWon`, the lair's
   owed queue: sent now or when the room opens).
-- **Special marbles** (#1655, section 19.2). When the army brings some, they stand on its side in the arena and the bot plays them; one thrown off, or a Bomb burst, is lost
+- **Special marbles and relics** (#1655, sections 19.2 and 19.3). When the army brings some, they stand on its side in the arena, its relics are set (the Saboteur gives the bot 13 marbles) and the bot plays them; one thrown off, or a Bomb burst, is lost
   from the army at the end of the fight, win or loss. Flee, Back and a reload keep every marble.
 - **Online (the smallest correct rule).** A wild win is the signed `beaten` event of #1305, unchanged: it names the cell the marble was **generated**
   on, never where it wandered, and the peers check it with `world_is_enemy` against that cell as they do for an enemy the troop ejects
@@ -398,6 +398,7 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   other than the meadow, `#openworld-tally` shows Tally's line of that kind (`PLACE_LINES` of `client/src/placelines.ts`, eight lines, what
   world.md section 13 says each place is, no secret word): once per kind for the player, the kinds filed in `ab-alone.placelines` next to
   `ab-alone.tally0412`. A step reaching two new kinds files the first (town, gate, tower, then the biome); the next step files the other.
+- **The army in a lair (#1655, section 19.3).** The special marbles and relics the army brings (Workshop, section 19) are placed and set in the lair's fight when its boss takes the army's build, and the marbles lost are settled as in a wild fight. Nothing of it in a boss picked from a menu or the Hub.
 - **Ending (#1175).** When every lair of the world is in `lairs` (beaten), the world counts as beaten: whenever it opens, `#openworld-tally`
   shows "Variance noted. Clamp: open. Crew attached: 6." (the crew is the Trainer's `MARBLES`; "Clamp: locked" while the story is short of stage 7, #1546), in place of the claim line. One line, no
   speech, nothing gated, no new save field (a save from before reads as not over). `__openworldFixture` takes `beaten: [n, ...]` to set the lairs beaten.
@@ -876,7 +877,7 @@ Ranked or Royale.
 
 ### 19.2 The Workshop (slice 2)
 
-A station of the Hub of a town, where the resources buy the special marbles of the rogue-lite, and the army brings some to the wild fights of the world. Slice 3 adds the
+A station of the Hub of a town, where the resources buy the special marbles of the rogue-lite, and the army brings some to the wild fights of the world. Section 19.3 adds the
 upgraded types, the army relics and the lairs.
 
 | Special marble | Cost (TUNE) | Refund |
@@ -897,9 +898,9 @@ upgraded types, the army relics and the lairs.
   (the Buy reason is also written on the row): "not enough ore", "not enough wood and parts", "army full", "none to sell", "3 already brought", "none left to bring",
   "none brought". After a press the focus stays on the button, or goes to the first enabled one of its row, or to the sheet.
 - **Rules** (`client/src/openworldworkshop.ts`, pure, no engine). The army owns **6** special marbles at most (the engine's codes in `army.specials`, kept in order) and brings
-  **3** to a fight (`army.brought`, a multiset of the owned ones; 4 with the Quartermaster in slice 3, the rogue-lite's `FIGHT_CAP`). Buy spends the cost; Sell takes one owned
+  **3** to a fight (`army.brought`, a multiset of the owned ones; 4 with the Quartermaster brought, section 19.3, the rogue-lite's `FIGHT_CAP`). Buy spends the cost; Sell takes one owned
   marble and gives back half of each part of the cost, rounded down, and takes it out of the loadout when the loadout holds more of its kind than the army keeps. The loadout
-  is kept in the save (`army.brought`) until it is changed. Shards are not spent in this slice. The sheet writes each change to the save at once (`WorldSaves.setStock`, record 8).
+  is kept in the save (`army.brought`) until it is changed. The sheet writes each change to the save at once (`WorldSaves.setStock`, record 8).
 - **In a wild fight** (`startWild` of `main.ts`). The mode tells the page the loadout with the marble (`onWild(seed, home, brought)`). When it is not empty, the fight is the
   rogue-lite's engine of a full army (`Engine.with_army(14, 14)`, the standard board with the rogue-lite flag, Decision #935) with one special marble placed on each of the
   brought kinds by `Engine::place_special` (`placeBrought`: the army's marbles nearest the centre, in the order of the loadout), and the bot's request carries the same
@@ -908,13 +909,40 @@ upgraded types, the army relics and the lairs.
 - **Losses** (`wildThrown`). When the fight is over, a won one or a lost one, the brought marbles that the board no longer holds (thrown off, or a Bomb burst) are gone from the
   army (`lose`: from `specials` and from `brought`), saved once, and the end banner says "Lost: Heavy, Bomb.". A Medic that came back is still on the board and stays. **Flee**,
   Back and a reload end the fight before it is over and keep everything.
-- **Scope.** Only the wild fight of the world places them. A rogue-lite run, a dungeon gate, a boss of the Modes menu or the Hub (a lair is slice 3), the Daily, a bot or hot-seat
+- **Scope.** Only the fights the Open world starts place them (the wild fight here, a lair in section 19.3). A rogue-lite run, a dungeon gate, a boss of the Modes menu or the Hub, the Daily, a bot or hot-seat
   table, online, Ranked and Royale are built as before: their engines never get a `placed` list (`main.workshop.test.ts` checks the arena and the Daily after a world whose army
   brings two).
 - **Tests.** The rules (`openworldworkshop.test.ts`), the sheet (`workshopview.test.ts`), the save (`openworldsave.test.ts`), the mode's loadout and fixture
   (`openworldmodewander.test.ts`, `openworldmoderesources.test.ts`), the page (`main.workshop.test.ts`: the button in a town and not in the menu's Hub, the sheet, buy, sell,
   loadout, reasons, a wild fight placing the marbles, the losses, Flee, the other modes). E2E (`openworld-workshop.spec.ts`): the Workshop on a desktop and two phones, by the
   keyboard too, and a wild fight with a Heavy and a Bomb placed, each under 15 s. The fixture hook takes `resources` and `army`.
-- **For slice 3.** The loadout is applied in `startWild` (`from.placed`) and read back in `wildThrown`; a lair fight goes through `startBoss`'s `Encounter` (`encounterFor` takes
-  `placed` and the relics mask, the army's build is taken when `takes_build()`), so slice 3 adds `placed` and the relics to `lairFrom` and settles the losses with the same `lose`.
-  `army.relics` and `army.relicsBrought` are already in the record.
+
+### 19.3 Upgraded types, relics and the lairs (slice 3)
+
+The same sheet sells the upgraded types and the army relics, and a lair walked into from the world gets the army the way a wild fight does.
+
+- **Upgrades.** A Heavy, an Anchor or a Spark the army owns is upgraded to its `+` type (Heavy+ 4, Anchor+ 5, Spark+ 6, the rogue-lite's upgraded kinds, kind + 3) for **3 shards and
+  10 of its main resource** (TUNE: ore for a Heavy and an Anchor, wood for a Spark). The `+` type takes the marble's place in the army, and in the loadout when the loadout held more of
+  the kind than the army keeps. It cannot be bought: its row has Sell, Bring and Leave only, and the plain marble's row has an **Upgrade** button (tab order Buy, Upgrade, Sell, Bring,
+  Leave) that says why when it cannot ("none to upgrade", "not enough ore and shards"). A `+` type counts as one of the six owned and one of the three brought. **Refund:** half of its
+  whole price (the plain marble's and the upgrade's), each part rounded down: a Heavy+ gives back 8 ore, 2 parts and 1 shard.
+- **Relics.** Five, the rogue-lite's relics (section 9) that act inside one fight: Gyroscope, Hull plating, Detonator, Saboteur and Quartermaster, **5 shards and 15 parts** each
+  (refund 2 shards and 7 parts). The army owns one of each ("already owned") and brings **2** to a fight (`army.relicsBrought`, "2 already brought"; "not owned", "already brought",
+  "none brought" say the rest). The sheet has a relics line (`#workshop-relics`, `Relics 1 · Bringing 1 / 2`) and one row per relic with Buy, Sell, Bring and Leave
+  (`data-relic` is the relic's code, the buttons act by `data-act`).
+  - **Gyroscope** and **Detonator**: set on the engine with `Engine::set_relics` (the rogue-lite's bit for each relic, `relicsMask`), before the first move.
+  - **Hull plating**: the first special marble lost in a fight stays in the army (the banner says "Hull plating kept Heavy."); the others are lost as in section 19.2.
+  - **Saboteur** (wild fights only): the bot has 13 marbles instead of 14 (`Engine.with_army(14, 13)`, the bot's search too). A lair has no such count: it is brought and ignored there.
+  - **Quartermaster**: with it brought the loadout holds **4** special marbles (`bringMax`); leaving or selling it takes the fourth out of the loadout.
+- **Lair and tower fights** walked into from the world (section 7). The mode tells the page the loadout with the lair (`onLair(seed, lair, brought, relics)`). When the boss takes the
+  army's build (`takes_build`, the rogue-lite's act bosses' rule), the brought marbles are placed on the army's side of the boss board (`placeBrought` on the encounter's own board, the
+  mirror of the Echo applied first) and the relics set (`encounterFor`, the bot's request carrying the same `placed` and relics so its search plays that board). A boss that takes no
+  build is the plain fight and loses nothing. Losses are settled as in a wild fight (`wildThrown`: thrown off or a burst Bomb is lost once, Hull plating keeps the first, the banner says
+  so), a win or a loss alike; **Retry** places only the marbles that are left; leaving by the exit (Flee), the Back button and a reload keep everything.
+- **Scope.** Never anywhere else: a rogue-lite run, a dungeon gate, a boss of the Modes menu or the Hub, the Daily, a bot or hot-seat table, online, Ranked and Royale never get a `placed`
+  list or a relic (`main.workshop.test.ts` enters the arena and a boss after a world whose army brings two marbles and two relics, and no engine is told of one), so their digests are
+  unchanged.
+- **Tests.** The rules (`openworldworkshop.test.ts`), the sheet (`workshopview.test.ts`), the mode's loadout (`openworldmodewander.test.ts`, `openworldmodelair.test.ts`), the page
+  (`main.workshop.test.ts`: upgrade, relics, the Quartermaster, a wild fight and a lair that place the marbles and set the relics, the bot's request, the Hull plating, losses, Retry,
+  Flee, the other modes). E2E (`openworld-relics.spec.ts`): the Workshop upgrading a Heavy and buying a relic, and a lair fight with a special marble placed, on a desktop and an
+  upright phone, each under 15 s.

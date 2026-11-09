@@ -46,7 +46,7 @@ describe('entering a place starts the transition without holding the place back 
   it('a tower starts its fight in the same step, with the boss name and its own cue', () => {
     const { m, onLair } = make(false);
     walk(m, [2, 0], 'ArrowRight');
-    expect(onLair).toHaveBeenCalledWith(7, 0);
+    expect(onLair).toHaveBeenCalledWith(7, 0, [], []);
     expect(m.active).toBe(false);
     expect(root().dataset.kind).toBe('tower');
     expect(title()).toBe('The Echo');

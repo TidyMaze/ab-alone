@@ -337,7 +337,7 @@ import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
 import { noticeBoard } from './hubboard';
 import { NO_ARMY, NO_RESOURCES, type Army, type Resources } from './openworldresources';
-import { bring, buy as buyMarble, leave as leaveBrought, lose, placeBrought, sell, thrownOff, type Stock } from './openworldworkshop';
+import { armed as fightArmed, bring, bringRelic, buy as buyMarble, buyRelic, hullKeeps, leave as leaveBrought, leaveRelic, lose, placeBrought, relicsMask, sell, sellRelic, thrownOff, upgrade as upgradeMarble, wildFoes, withoutKinds, type Stock } from './openworldworkshop';
 import { workshopHtml } from './workshopview';
 import { bossLockLine, labelsHtml, nextGoal, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
@@ -483,7 +483,7 @@ const closeGoal = (): void => {
 };
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number }; mirror?: boolean } | null = null; // mirror: the player's trait brought in (#1620)
 let hub: HubController | null = null;
-let wildFrom: { seed: number; home: Axial; phase: Phase; placed: number[][] } | null = null; // the Open world marble that started the wild fight (#1511): the world, the cell it starts on, and the phase it was met in, and the special marbles of the army placed on its side (#1655)
+let wildFrom: { seed: number; home: Axial; phase: Phase; placed: number[][]; relics: number[] } | null = null; // the Open world marble that started the wild fight (#1511): the world, the cell it starts on, and the phase it was met in, and the special marbles of the army placed on its side (#1655)
 const PULSAR_DOCK = 1.2; // the near pylons are fitted 20 % further out on the terrace, so the dock does not cover them (#1374)
 const activeRadius =(): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
@@ -522,7 +522,7 @@ let armed = 0;
 // Whether the Swap tactic is picking the army's two marbles (#1460): the first one is the selection.
 let swapping = false;
 // Whether the fight on carries the army's build (#1494): a run's army fight, or an act boss that takes it (special marbles, relics, tactics).
-const built = (): boolean => (run !== null && (engine instanceof Engine || engine.takes_build())) || (wildFrom !== null && wildFrom.placed.length > 0); // the army's marbles are on the board: a run's fight, or a wild fight that brought some (#1655)
+const built = (): boolean => (run !== null && (engine instanceof Engine || engine.takes_build())) || ((wildFrom ?? lairFrom)?.placed.length ?? 0) > 0; // the army's marbles are on the board: a run's fight, or a wild or lair fight of the world that brought some (#1655)
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
 let royaleNet: RoyaleNet<Royale> | null = null;
 let ticking = 0;
@@ -2785,7 +2785,7 @@ applyPalette();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPalette); // System theme follows the OS (#923)
 let hover: Axial | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the hub (#522)
-let lairFrom: { seed: number; lair: number; phase: Phase } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170), and the phase of the world it was entered in (#1496)
+let lairFrom: { seed: number; lair: number; phase: Phase; placed: number[][]; relics: number[] } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170), and the phase of the world it was entered in (#1496)
 let placeFrom: { seed: number; kind: PlaceKind } | null = null; // the Open world a town or a dungeon gate was entered from: the Hub or the run it opened has a way back (#1593)
 /** Dresses the board for the phase the lair or the wild marble was met in (#1496, #1511): day, dusk or night, `body[data-fight-board]` reading the same. A fight that is neither has the ordinary board. */
 function syncBoardLook(): void {
@@ -3057,7 +3057,8 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = liveGame();
   const started = performance.now();
-  const wildBuild = wildFrom?.placed.length ? wildFrom.placed : null; // a wild fight that brought special marbles: the bot searches the board the page plays (#1655)
+  const world = wildFrom ?? lairFrom; // a fight the Open world started that brought special marbles or relics: the bot searches the board the page plays (#1655)
+  const build = world && fightArmed(world) ? world : null;
   const normal = wildFrom ? Math.min(WILD_NODES, budget) : gameNodes(); // an elite searches more (#800); a wild marble a modest fixed search (#1511)
   const searchBudget = trainer ? trainerBudget(trainer.wave, normal) : normal; // past a full army, the bot searches more (#1159)
   const diffPercent = (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]; // an act boss at its act's strength
@@ -3065,7 +3066,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, wildBuild ? FULL_ARMY : run?.state.army, wildBuild ?? run?.state.placed, run ? foesFor(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined, run ? relicMask(run.state) : undefined),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, wildFrom && build ? FULL_ARMY : run?.state.army, build ? build.placed : run?.state.placed, wildFrom && build ? wildFoes(build.relics) : run ? foesFor(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined, build ? relicsMask(build.relics) : run ? relicMask(run.state) : undefined),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
@@ -3914,7 +3915,8 @@ function drawHud(extra = ''): void {
   } else if (end?.anim === 'loss' && fight && status !== 3) end.line = bossEndLine(fight.id, 'loss', storyStage(store))!; // each boss has its own (#1546)
   showLore(end?.anim === 'win' && fight ? bossLore(fight.id) : undefined); // the entry of the boss beaten, in the archive too (#1589)
   if (end?.anim === 'win' && wildFrom) end.line = `${end.line} ${wildWon(wildFrom)}`;
-  if (end && wildFrom) end.line = `${end.line} ${wildThrown(wildFrom)}`.trim(); // a special marble thrown off is lost (#1655)
+  const thrown = end && (wildFrom ?? lairFrom) ? wildThrown((wildFrom ?? lairFrom)!) : ''; // a special marble thrown off is lost (#1655)
+  if (end && thrown) end.line = `${end.line} ${thrown}`.trim();
   if (end && trainer && status === 1 && engine.draw_reason() !== 0) Object.assign(end, { title: 'Stalled', line: 'A draw costs a marble.' }); // not "You win" (#1159)
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
@@ -5699,6 +5701,12 @@ newGameButton.disabled = false; // listener ready (#146)
 const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
+/** What the army brings to the lair `id` entered from the world (#1655): the special marbles on its side and the relics when the boss takes the army's build (`takes_build`), nothing for the others. */
+function lairBuild(id: string, seed: number, mirror: boolean, brought: number[], relics: number[]): { placed: number[][]; relics: number[] } {
+  const probe = new Encounter(id, seed);
+  if (mirror) probe.set_mirror();
+  return probe.takes_build() ? { placed: placeBrought(probe.board(), brought), relics } : { placed: [], relics: [] };
+}
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null, mirror = false): void {
   modeProbe.begin('boss');
   leaveMode();
@@ -5709,7 +5717,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   fight = { id, seed, daily, mirror };
   storyEvent({ on: 'start', id }); // The Ballast Mind's fight starts is stage 6 (#1584)
   goalOpen = false;
-  engine = resumeFrom?.engine ?? encounterFor(Encounter, id, seed, undefined, undefined, mirror); // the mirror of the trait starts with the fight (#1620)
+  engine = resumeFrom?.engine ?? encounterFor(Encounter, id, seed, lair?.placed, lair && fightArmed(lair) ? relicsMask(lair.relics) : undefined, mirror); // a lair of the world gets the army's marbles and relics (#1655) // the mirror of the trait starts with the fight (#1620)
   history.length = 0;
   history.push(...(resumeFrom?.moves ?? []));
   replaying = null;
@@ -5827,7 +5835,7 @@ function startWild(from: NonNullable<typeof wildFrom>): void {
   worker = botWorker;
   stopAnalysis();
   applyDeck(deckOf('local'));
-  engine = from.placed.length ? engineFor(Engine, FULL_ARMY, from.placed, FULL_ARMY) : new Engine(); // the army's special marbles on its side: the rogue-lite flag, as the bot's search has it (#1655)
+  engine = fightArmed(from) ? engineFor(Engine, FULL_ARMY, from.placed, wildFoes(from.relics), undefined, relicsMask(from.relics)) : new Engine(); // the army's special marbles on its side and its relics set: the rogue-lite flag, as the bot's search has it (#1655)
   history.length = 0;
   replaying = null;
   selected = [];
@@ -5874,34 +5882,39 @@ function wildWon(wild: NonNullable<typeof wildFrom>): string {
   }
   return 'The marble is gone from the world.';
 }
-/** The army once a wild fight is over (#1655): the special marbles the board no longer holds (thrown off, a Bomb burst) are gone from the army, saved once per fight. Flee keeps
- * them all, since it ends the fight before this. Says what was lost, '' when nothing was. */
-let thrownSeen: { game: unknown; line: string } | null = null;
-function wildThrown(wild: NonNullable<typeof wildFrom>): string {
+/** The army once a fight the Open world started is over (#1655): the special marbles the board no longer holds (thrown off, a Bomb burst) are gone from the army, saved once per fight,
+ * the first one kept by the Hull plating. Flee and Back keep them all, since they end the fight before this. Says what was lost and what the Hull plating kept, '' when nothing was. */
+let thrownSeen: { game: unknown; line: string; lost: number[] } | null = null;
+function wildThrown(world: { seed: number; placed: number[][]; relics: number[] }): string {
   if (thrownSeen?.game === engine) return thrownSeen.line; // the HUD is drawn again: the same line, nothing saved twice
-  const lost = thrownOff(wild.placed.map(([, , kind]) => kind!), armyKept(engine.board(), engine.specials()));
-  const line = lost.length === 0 ? '' : `Lost: ${lost.map((kind) => SPECIAL_LOOKS[kind - 1]!.name).join(', ')}.`;
-  thrownSeen = { game: engine, line };
+  const { lost, kept } = hullKeeps(world.relics, thrownOff(world.placed.map(([, , kind]) => kind!), armyKept(engine.board(), engine.specials())));
+  const names = (kinds: number[]): string => kinds.map((kind) => SPECIAL_LOOKS[kind - 1]!.name).join(', ');
+  const line = [lost.length > 0 ? `Lost: ${names(lost)}.` : '', kept.length > 0 ? `Hull plating kept ${names(kept)}.` : ''].filter(Boolean).join(' ');
+  thrownSeen = { game: engine, line, lost };
   if (lost.length > 0) {
     const { saves } = openWorld.loaded;
-    void saves.load(wild.seed).then((save) => save && saves.setStock(wild.seed, save.resources, lose(save.army, lost)));
+    void saves.load(world.seed).then((save) => save && saves.setStock(world.seed, save.resources, lose(save.army, lost)));
   }
   return line;
+}
+/** The lair of a retry: the army's marbles thrown off in the fight just lost are not placed again (#1655). */
+function retriedLair(): typeof lairFrom {
+  return lairFrom && thrownSeen?.game === engine ? { ...lairFrom, placed: withoutKinds(lairFrom.placed, thrownSeen.lost) } : lairFrom;
 }
 wildFlee.addEventListener('click', () => wildFrom && returnFromWild());
 addEventListener('keydown', (e) => {
   if ((e.key === 'f' || e.key === 'F') && wildFrom && engine.status() === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement)) wildFlee.click(); // Flee by the keyboard
 });
-retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom, fight!.mirror))); // a lair's retry stays the lair's (#1170), its trait too
+retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, retriedLair(), fight!.mirror))); // a lair's retry stays the lair's (#1170), its trait too
 
 // The hub (#521, game-design.md section 3.5): Hub draws the map of the saved deck, in that deck's look, with the
 // player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
 // and the spot is saved (progress.ts). A new game, a boss fight or Play online leaves it.
 /** Draws the sheet from the stock on show; the focus goes back to the button that was pressed, or to the first one still enabled of its row. */
-function drawWorkshop(pressed?: { kind: string; act: string }): void {
+function drawWorkshop(pressed?: { row: number; act: string }): void {
   workshopBody.innerHTML = workshopHtml(workshopStock!);
   if (!pressed) return;
-  const row = workshopBody.querySelector(`li[data-kind="${pressed.kind}"]`)!;
+  const row = workshopBody.querySelectorAll('li')[pressed.row]!;
   (row.querySelector<HTMLButtonElement>(`button[data-act="${pressed.act}"]:not(:disabled)`) ?? row.querySelector<HTMLButtonElement>('button:not(:disabled)') ?? workshop).focus(); // a row with nothing left to press keeps the focus in the sheet
 }
 /** The Workshop shows only in the Hub of a town of the Open world (#1655), not in the Hub of the mode menu. */
@@ -5926,14 +5939,15 @@ document.getElementById('workshop-close')!.addEventListener('click', () => {
   closeWorkshop();
   workshopOpen.focus();
 });
-const WORKSHOP_ACTS = { buy: buyMarble, sell, bring, leave: leaveBrought };
+const WORKSHOP_ACTS = { buy: buyMarble, upgrade: upgradeMarble, sell, bring, leave: leaveBrought };
+const RELIC_ACTS = { buy: buyRelic, sell: sellRelic, bring: bringRelic, leave: leaveRelic };
 workshopBody.addEventListener('click', ({ target }) => {
   const pressed = (target as Element).closest<HTMLButtonElement>('button[data-act]');
   if (!pressed || !workshopStock) return;
-  const { act, kind } = pressed.dataset as { act: keyof typeof WORKSHOP_ACTS; kind: string };
-  workshopStock = WORKSHOP_ACTS[act](workshopStock, Number(kind));
+  const { act, kind, relic } = pressed.dataset as { act: keyof typeof WORKSHOP_ACTS; kind?: string; relic?: string };
+  workshopStock = relic === undefined ? WORKSHOP_ACTS[act](workshopStock, Number(kind)) : RELIC_ACTS[act as keyof typeof RELIC_ACTS](workshopStock, Number(relic));
   void openWorld.loaded.saves.setStock(placeFrom!.seed, workshopStock.resources, workshopStock.army);
-  drawWorkshop({ kind, act });
+  drawWorkshop({ row: Array.from(workshopBody.querySelectorAll('li')).indexOf(pressed.closest('li')!), act });
 });
 addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || workshop.hidden) return;
@@ -7069,11 +7083,11 @@ const openWorld = new OpenWorldHandle(async () =>
     // The lights node the renderer keeps per scene holds GPU textures (clustered lighting: 2 per scene) that nothing else frees, so
     // each world entered leaked them (#1258).
     releaseScene: (scene) => void (renderer.lighting.getNode(scene) as { dispose?(): void }).dispose?.(),
-    startLair: (seed, lair, phase) => {
+    startLair: (seed, lair, phase, brought, relics) => {
       const ids = boss_ids();
       const id = ids[lair % ids.length]!;
       const fightSeed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-      askMirror(traitChoice, store, boss_takes_mirror(id), (mirror) => startBoss(id, fightSeed, undefined, undefined, { seed, lair, phase }, mirror)); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496); the Echo's mirror is asked first (#1620)
+      askMirror(traitChoice, store, boss_takes_mirror(id), (mirror) => startBoss(id, fightSeed, undefined, undefined, { seed, lair, phase, ...lairBuild(id, fightSeed, mirror, brought, relics) }, mirror)); // a lair starts the normal boss fight (#1170), on the board of the hour (#1496); the Echo's mirror is asked first (#1620)
     },
     onPlace: (seed, kind, index, biome, contract) => {
       // A town opens the Hub and a gate the rogue-lite run, as their mode menu entries do (#1593): every town the same Hub for now.
@@ -7092,9 +7106,9 @@ const openWorld = new OpenWorldHandle(async () =>
     },
     online: () => worldOnline,
     lairCells,
-    onWild: (seed, home, phase, brought) => {
+    onWild: (seed, home, phase, brought, relics) => {
       loadBoard(); // as the wipe closes, half a second before the fight starts (#1520)
-      wipe(document.getElementById('wild-wipe')!, reducedMotion(), () => startWild({ seed, home, phase, placed: placeBrought(new Engine().board(), brought) }));
+      wipe(document.getElementById('wild-wipe')!, reducedMotion(), () => startWild({ seed, home, phase, placed: placeBrought(new Engine().board(), brought), relics }));
     },
     cue: (event) => playCue(event),
     wanderTick: () => wanderTick,

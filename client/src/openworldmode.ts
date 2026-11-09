@@ -113,9 +113,9 @@ export class OpenWorldMode {
   wander: () => number = () => 0;
   /** The tick the marbles stand at now. */
   private ticked = 0;
-  /** What starts a wild fight with the marble that touches the hero (#1511): the seed, the cell the marble starts on and the special marbles the army
-   * brings (#1655). The page plays the transition and the fight, and brings the hero back to this world when it ends. */
-  onWild: (seed: number, home: Axial, brought: number[]) => void = () => {};
+  /** What starts a wild fight with the marble that touches the hero (#1511): the seed, the cell the marble starts on and the special marbles and the relics
+   * the army brings (#1655). The page plays the transition and the fight, and brings the hero back to this world when it ends. */
+  onWild: (seed: number, home: Axial, brought: number[], relics: number[]) => void = () => {};
   /** The page clock (ms) before which no wild fight starts: a world that just opened gives 5 s to walk away. 0 when none is due. */
   private calmUntil = 0;
   /** Frames drawn since the world opened: a spec waits for the first one before it looks at the wild fight (#1601, `__openworldDrawn`). */
@@ -196,7 +196,7 @@ export class OpenWorldMode {
     private readonly saves: WorldSaves,
     /** The boss lairs of a seed's world: `q, r` pairs (the bridge's `world_lairs`), and what starts a lair, given its seed and number. */
     private readonly lairsOf: (seed: number) => Int32Array = () => new Int32Array(),
-    private readonly onLair: (seed: number, lair: number) => void = () => {},
+    private readonly onLair: (seed: number, lair: number, brought: number[], relics: number[]) => void = () => {}, // the special marbles and the relics the army brings (#1655)
     /** The skins of the ship the marbles wear, read when a world opens (#1176): none draws the plain looks. */
     private readonly skins?: () => Promise<MarbleSkins>,
     /** The medals the player holds and the bosses there are, read from the shared medal store when a world opens (#1171). */
@@ -1118,7 +1118,7 @@ export class OpenWorldMode {
     this.transition.enter('tower', placeTitle('tower', ids.length > 0 ? this.bossName(ids[lair % ids.length]!) : '')); // over the fight that starts at once (#1519)
     this.persist();
     this.leave();
-    this.onLair(seed, lair);
+    this.onLair(seed, lair, [...this.army.brought], [...this.army.relicsBrought]);
   }
 
   /** The hero rolls onto a town or a dungeon gate (#1593): the world is saved with the hero on the entrance, as for a lair, and left; the page
@@ -1245,7 +1245,7 @@ export class OpenWorldMode {
     this.route = [];
     this.nextStep = Infinity;
     this.persist();
-    this.onWild(this.seed, touching.home, [...this.army.brought]);
+    this.onWild(this.seed, touching.home, [...this.army.brought], [...this.army.relicsBrought]);
     return true;
   }
 

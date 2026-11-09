@@ -375,7 +375,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
 
   // The bot workers answer in-process, on the next task, with the page's own engine.
   const wasm = await import('edgefall-wasm');
-  const { answer, engineFor } = await import('../bot');
+  const { answer, encounterFor, engineFor } = await import('../bot');
   vi.stubGlobal(
     'Worker',
     class {
@@ -390,7 +390,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           const key = JSON.stringify(query);
           let response = answers.get(key);
           if (!response) {
-            response = answer(req, (army, placed, foes, trainer, relics) => engineFor(wasm.Engine, army, placed, foes, trainer, relics), (boss, seed) => new wasm.Encounter(boss, seed));
+            response = answer(req, (army, placed, foes, trainer, relics) => engineFor(wasm.Engine, army, placed, foes, trainer, relics), (boss, seed, placed, relics, mirror) => encounterFor(wasm.Encounter, boss, seed, placed, relics, mirror));
             answers.set(key, response);
           }
           this.onmessage?.({ data: { ...response, id } } as MessageEvent<BotResponse>);

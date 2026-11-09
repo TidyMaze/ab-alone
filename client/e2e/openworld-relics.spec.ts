@@ -40,6 +40,8 @@ for (const { name, viewport, touch } of sizes) {
       await expect(page.locator('#workshop-stock')).toHaveText('Wood 4 · Ore 10 · Parts 15 · Shards 0');
       await expect(page.locator('#workshop-relics')).toHaveText('Relics 2 · Bringing 2 / 2');
       await expect(page.locator('#workshop button[data-relic="1"][data-act="buy"]')).toBeDisabled();
+      await page.locator('#workshop').evaluate((el) => (el.scrollTop = 0));
+      await shot(page, { path: `test-results/upgrade-${file}.png` });
       await page.locator('#workshop button[data-relic="1"][data-act="buy"]').scrollIntoViewIfNeeded();
       await shot(page, { path: `test-results/relics-${file}.png` });
     });
@@ -49,19 +51,15 @@ for (const { name, viewport, touch } of sizes) {
       const body = page.locator('body');
       await expect(body).toHaveAttribute('data-openworld-at', '0,0');
       const lairs = (await body.getAttribute('data-openworld-lairs'))!.split(' ').map((c) => c.split(',').map(Number) as [number, number]);
-      let walked = '';
-      for (const [q, r] of lairs) {
-        await fixture(page, { hero: [q - 1, r], troop: [], enemies: [], ...stock });
-        await page.keyboard.press('ArrowRight');
-        await expect(body).not.toHaveAttribute('data-openworld', /.*/);
-        await expect(body).toHaveAttribute('data-boss', /.+/);
-        walked = `${q - 1},${r}`;
-        if ((await body.getAttribute('data-specials')) !== null) break; // a boss that takes the army's build
-        await page.locator('#exit').click();
-        await expect(body).toHaveAttribute('data-openworld-at', walked);
-      }
+      const [q, r] = lairs[1]!; // The Hull, a boss that takes the army's build (The Echo, the first lair, takes none)
+      const walked = `${q - 1},${r}`;
+      await fixture(page, { hero: [q - 1, r], troop: [], enemies: [], ...stock });
+      await page.keyboard.press('ArrowRight');
+      await expect(body).not.toHaveAttribute('data-openworld', /.*/);
+      await expect(body).toHaveAttribute('data-boss', 'hull');
       const kinds = (): Promise<number[]> => page.evaluate(() => (document.body.dataset.specials ?? '').split(' ').filter(Boolean).map((s) => Number(s.split(',')[2])).sort());
       await expect.poll(kinds).toEqual([1, 9]);
+      if (process.env.E2E_SHOTS) await page.waitForTimeout(3500); // the boss's entrance card, for the picture only
       await shot(page, { path: `test-results/relics-lair-${name.replaceAll(' ', '-')}.png` });
       await page.locator('#exit').click();
       await expect(body).toHaveAttribute('data-openworld-at', walked);

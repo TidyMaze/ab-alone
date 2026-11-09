@@ -42,7 +42,7 @@ export interface OpenWorldDeps {
   /** The renderer frees what it keeps per scene (#1258). */
   releaseScene: (scene: THREE.Scene) => void;
   /** A lair starts the boss fight on the board of the hour (#1170). */
-  startLair: (seed: number, lair: number, phase: Phase) => void;
+  startLair: (seed: number, lair: number, phase: Phase, brought: number[], relics: number[]) => void;
   /** A town opens the Hub and a gate the rogue-lite run (#1593). */
   onPlace: (seed: number, kind: 'town' | 'dungeon', index: number, biome: Biome, contract: string) => void;
   /** Whether the page took the public world online. */
@@ -50,7 +50,7 @@ export interface OpenWorldDeps {
   /** The boss lairs of a world as cells (#1305). */
   lairCells: (seed: number) => Axial[];
   /** A wild fight is about to start: the page wipes the screen and opens the arena (#1511). */
-  onWild: (seed: number, home: Axial, phase: Phase, brought: number[]) => void;
+  onWild: (seed: number, home: Axial, phase: Phase, brought: number[], relics: number[]) => void;
   cue: (event: WorldCue) => void;
   /** The tick the enemy marbles wander by when a spec fixes it, else null (#1511). */
   wanderTick: () => number | null;
@@ -75,7 +75,7 @@ export function wireOpenWorld(deps: OpenWorldDeps): OpenWorldParts {
     deps.reduced,
     saves,
     (seed) => Int32Array.from(world_lairs(seed)),
-    (seed, lair) => deps.startLair(seed, lair, mode.phase),
+    (seed, lair, brought, relics) => deps.startLair(seed, lair, mode.phase, brought, relics),
     deps.skins,
     () => ({ have: boss_ids().filter((id) => hasMedal(store, id)).length, total: boss_ids().length }), // one medal per boss, from the shared store (#1171)
     () => {
@@ -147,7 +147,7 @@ export function wireOpenWorld(deps: OpenWorldDeps): OpenWorldParts {
   );
   mode.peers = peers;
   mode.store = store; // the one lesson of the roll (#1604)
-  mode.onWild = (seed, home, brought) => deps.onWild(seed, home, mode.phase, brought); // the hour the marble was met at dresses the arena
+  mode.onWild = (seed, home, brought, relics) => deps.onWild(seed, home, mode.phase, brought, relics); // the hour the marble was met at dresses the arena
   // The clock the enemy marbles wander by (#1511): the wall clock in ticks, so every peer sees them in the same places.
   mode.wander = () => deps.wanderTick() ?? Math.floor(Date.now() / FightState.tickMs);
   netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peers.show() : peers.hide()));
