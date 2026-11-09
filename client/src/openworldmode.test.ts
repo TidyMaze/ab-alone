@@ -1695,7 +1695,7 @@ describe('tap to walk and the steering setting (#1137, docs/specs/openworld.md s
     m.enter(1, 800, 600);
     tapFar(m);
     frameAt(m, GLIDE_MS); // a path that went through the lair anyway: the lair opens, as for a step by hand
-    expect(onLair).toHaveBeenCalledWith(1, 0);
+    expect(onLair).toHaveBeenCalledWith(1, 0, [], []); // no special marble nor relic brought
     expect(m.active).toBe(false);
   });
 

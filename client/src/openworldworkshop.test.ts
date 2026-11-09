@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { cellIndex, CELLS } from './board';
 import { NO_ARMY, NO_RESOURCES, type Army, type Resources } from './openworldresources';
-import { BRING_MAX, bring, bringReason, buy, buyReason, leave, leaveReason, lose, OFFERS, OWN_MAX, placeBrought, refund, sell, sellReason, thrownOff, type Stock } from './openworldworkshop';
+import { Relic } from './roguelite';
+import {
+  BRING_MAX, bring, bringMax, bringReason, bringRelic, bringRelicReason, buy, buyReason, buyRelic, buyRelicReason, hullKeeps, leave, leaveReason, leaveRelic, leaveRelicReason, lose, OFFERS, OWN_MAX,
+  placeBrought, refund, RELIC_OFFERS, relicsMask, sell, sellReason, sellRelic, sellRelicReason, thrownOff, upgrade, upgradeCost, upgradeReason, wildFoes, withoutKinds, type Stock,
+} from './openworldworkshop';
 
 // The Workshop of the Open world (#1655, Decision #1654, docs/specs/openworld.md section 19.2): prices, buy, sell, loadout and losses, as pure rules.
 const rich: Resources = { wood: 20, ore: 20, parts: 40, shards: 3 };
@@ -129,5 +133,120 @@ describe('placing the loadout (#1655)', () => {
     for (const [q, r] of placed) expect(board()[cellIndex(q!, r!)]).toBe(1);
     expect(placed[0]).toEqual([-1, 1, 10]); // the nearest ones, by q then r
     expect(placeBrought(board(), [])).toEqual([]);
+  });
+});
+
+describe('upgrading (#1655)', () => {
+  it('turns an owned Heavy, Anchor or Spark into its + type for 3 shards and 10 of its main resource', () => {
+    expect(upgradeCost(1)).toEqual({ wood: 0, ore: 10, parts: 0, shards: 3 });
+    expect(upgradeCost(2)).toEqual({ wood: 0, ore: 10, parts: 0, shards: 3 });
+    expect(upgradeCost(3)).toEqual({ wood: 10, ore: 0, parts: 0, shards: 3 });
+    const stock = stockOf(rich, { specials: [1, 2, 9], brought: [] });
+    expect(upgradeReason(stock, 1)).toBe('');
+    const up = upgrade(stock, 1);
+    expect(up.resources).toEqual({ wood: 20, ore: 10, parts: 40, shards: 0 });
+    expect(up.army.specials).toEqual([2, 4, 9]);
+  });
+
+  it('keeps the loadout: a brought Heavy that is upgraded is brought as a Heavy+, a spare one is not', () => {
+    expect(upgrade(stockOf(rich, { specials: [1], brought: [1] }), 1).army.brought).toEqual([4]);
+    expect(upgrade(stockOf(rich, { specials: [1, 1], brought: [1] }), 1).army.brought).toEqual([1]);
+    expect(upgrade(stockOf(rich, { specials: [1, 1, 2], brought: [1, 1, 2] }), 1).army.brought).toEqual([1, 2, 4]);
+  });
+
+  it('says why it cannot: none owned, or what is missing', () => {
+    expect(upgradeReason(stockOf(rich, { specials: [2] }), 1)).toBe('none to upgrade');
+    expect(upgradeReason(stockOf({ ...rich, shards: 2, ore: 9 }, { specials: [1] }), 1)).toBe('not enough ore and shards');
+    expect(upgradeReason(stockOf({ ...rich, shards: 2 }, { specials: [3] }), 3)).toBe('not enough shards');
+    const none = stockOf(rich, { specials: [2] });
+    expect(upgrade(none, 1)).toBe(none);
+  });
+
+  it('sells a + type for half of its whole price, the plain marble and the upgrade, rounded down', () => {
+    const sold = sell(stockOf(NO_RESOURCES, { specials: [4], brought: [4] }), 4);
+    expect(sold.resources).toEqual({ wood: 0, ore: 8, parts: 2, shards: 1 }); // 6 + 10 ore, 4 parts, 3 shards: half
+    expect(sold.army).toMatchObject({ specials: [], brought: [] });
+    expect(sell(stockOf(NO_RESOURCES, { specials: [6] }), 6).resources).toEqual({ wood: 7, ore: 0, parts: 3, shards: 1 });
+  });
+});
+
+describe('the relics (#1655)', () => {
+  it('sells five: Gyroscope, Hull plating, Detonator, Saboteur and Quartermaster, for 5 shards and 15 parts', () => {
+    expect(RELIC_OFFERS.map(({ code, name }) => `${name}:${code}`)).toEqual(['Gyroscope:0', 'Hull plating:1', 'Detonator:4', 'Saboteur:8', 'Quartermaster:11']);
+    for (const { cost } of RELIC_OFFERS) expect(cost).toEqual({ wood: 0, ore: 0, parts: 15, shards: 5 });
+  });
+
+  it('buys one of each, and says what is missing', () => {
+    const stock = stockOf({ wood: 0, ore: 0, parts: 15, shards: 5 });
+    expect(buyRelicReason(stock, 0)).toBe('');
+    const bought = buyRelic(stock, 0);
+    expect(bought.resources).toEqual(NO_RESOURCES);
+    expect(bought.army.relics).toEqual([0]);
+    expect(buyRelicReason(bought, 0)).toBe('already owned');
+    expect(buyRelic(bought, 0)).toBe(bought);
+    expect(buyRelicReason(stockOf({ ...NO_RESOURCES, parts: 14, shards: 5 }), 1)).toBe('not enough parts');
+    expect(buyRelicReason(stockOf(NO_RESOURCES), 1)).toBe('not enough parts and shards');
+    expect(buyRelic(buyRelic(stockOf({ ...rich, shards: 10 }), 11), 1).army.relics).toEqual([1, 11]); // kept in order
+  });
+
+  it('sells for half, 2 shards and 7 parts, and takes it out of the loadout', () => {
+    const stock = stockOf(NO_RESOURCES, { relics: [0, 4], relicsBrought: [4] });
+    const sold = sellRelic(stock, 4);
+    expect(sold.resources).toEqual({ wood: 0, ore: 0, parts: 7, shards: 2 });
+    expect(sold.army).toMatchObject({ relics: [0], relicsBrought: [] });
+    expect(sellRelicReason(stock, 8)).toBe('none to sell');
+    expect(sellRelic(stock, 8)).toBe(stock);
+    expect(sellRelicReason(stock, 4)).toBe('');
+  });
+
+  it('brings two at most, each one owned and not twice, and leaves them at home', () => {
+    let stock = stockOf(rich, { relics: [0, 1, 4] });
+    expect(bringRelicReason(stock, 8)).toBe('not owned');
+    stock = bringRelic(bringRelic(stock, 4), 0);
+    expect(stock.army.relicsBrought).toEqual([0, 4]);
+    expect(bringRelicReason(stock, 0)).toBe('already brought');
+    expect(bringRelicReason(stock, 1)).toBe('2 already brought');
+    expect(bringRelic(stock, 1)).toBe(stock);
+    expect(leaveRelicReason(stock, 1)).toBe('none brought');
+    expect(leaveRelic(stock, 1)).toBe(stock);
+    expect(leaveRelic(stock, 0).army.relicsBrought).toEqual([4]);
+    expect(leaveRelicReason(stock, 0)).toBe('');
+    expect(bringRelicReason(leaveRelic(stock, 0), 1)).toBe('');
+  });
+
+  it('the Quartermaster brings a fourth special marble, and the loadout shrinks to three without it', () => {
+    const four = stockOf(rich, { specials: [1, 2, 3, 9], brought: [1, 2, 3], relics: [Relic.Quartermaster], relicsBrought: [Relic.Quartermaster] });
+    expect(bringMax(four.army)).toBe(4);
+    expect(bringMax(stockOf().army)).toBe(BRING_MAX);
+    expect(bringReason(four, 9)).toBe('');
+    const full = bring(four, 9);
+    expect(full.army.brought).toEqual([1, 2, 3, 9]);
+    expect(bringReason(full, 9)).toBe('4 already brought');
+    expect(leaveRelic(full, Relic.Quartermaster).army).toMatchObject({ brought: [1, 2, 3], relicsBrought: [] });
+    expect(sellRelic(full, Relic.Quartermaster).army).toMatchObject({ brought: [1, 2, 3], relicsBrought: [], relics: [] });
+    expect(leaveRelic(stockOf(rich, { relics: [0, 1], relicsBrought: [0, 1], brought: [] }), 0).army.brought).toEqual([]);
+  });
+});
+
+describe('what a fight does with the relics (#1655)', () => {
+  it('the engine gets one bit for each relic brought', () => {
+    expect(relicsMask([])).toBe(0);
+    expect(relicsMask([Relic.Gyroscope, Relic.Detonator])).toBe(0b1_0001);
+  });
+
+  it('the Saboteur takes one marble from the bot in a wild fight', () => {
+    expect(wildFoes([])).toBe(14);
+    expect(wildFoes([Relic.Saboteur, Relic.Gyroscope])).toBe(13);
+  });
+
+  it('the Hull plating keeps the first special marble lost', () => {
+    expect(hullKeeps([Relic.HullPlating], [9, 1])).toEqual({ lost: [1], kept: [9] });
+    expect(hullKeeps([Relic.HullPlating], [])).toEqual({ lost: [], kept: [] });
+    expect(hullKeeps([Relic.Gyroscope], [9, 1])).toEqual({ lost: [9, 1], kept: [] });
+  });
+
+  it('drops the lost kinds from the marbles placed, one each', () => {
+    expect(withoutKinds([[0, 1, 1], [1, 1, 9], [2, 1, 1]], [1])).toEqual([[1, 1, 9], [2, 1, 1]]);
+    expect(withoutKinds([[0, 1, 1]], [])).toEqual([[0, 1, 1]]);
   });
 });

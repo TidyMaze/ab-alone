@@ -61,10 +61,21 @@ describe('the boss lairs of the Open world mode (#1170)', () => {
     m.fixture({ hero: [2, 0], troop: [[1, 0]], enemies: [] });
     m.key('ArrowRight');
     m.release('ArrowRight');
-    expect(onLair).toHaveBeenCalledWith(7, 0);
+    expect(onLair).toHaveBeenCalledWith(7, 0, [], []);
     expect(m.active).toBe(false);
     for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
     expect((await saves.load(7))!.hero).toEqual([2, 0]);
+  });
+
+  it('tells the lair the special marbles and the relics the army brings (#1655), as copies', () => {
+    const { m, onLair } = setup();
+    m.enter(7, 800, 600);
+    const army = { specials: [1, 9], brought: [9, 1], relics: [0, 4], relicsBrought: [4, 0] };
+    m.fixture({ hero: [2, 0], troop: [[1, 0]], enemies: [], army });
+    m.key('ArrowRight');
+    m.release('ArrowRight');
+    expect(onLair).toHaveBeenCalledWith(7, 0, [9, 1], [4, 0]);
+    expect(onLair.mock.calls[0]![2]).not.toBe(army.brought);
   });
 
   it('starts the second lair too, and a lair already beaten again', () => {
@@ -73,7 +84,7 @@ describe('the boss lairs of the Open world mode (#1170)', () => {
     m.fixture({ hero: [-4, 3], troop: [], enemies: [] });
     m.key('ArrowLeft');
     m.release('ArrowLeft');
-    expect(onLair).toHaveBeenCalledWith(7, 1);
+    expect(onLair).toHaveBeenCalledWith(7, 1, [], []);
   });
 
   it('ignores a press on a lair cell the hero is not next to', () => {

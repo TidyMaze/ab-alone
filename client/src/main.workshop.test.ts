@@ -39,6 +39,10 @@ const press = async (kind: number, act: string): Promise<void> => {
   document.querySelector<HTMLButtonElement>(`#workshop button[data-kind="${kind}"][data-act="${act}"]`)!.click();
   await settle();
 };
+const pressRelic = async (code: number, act: string): Promise<void> => {
+  document.querySelector<HTMLButtonElement>(`#workshop button[data-relic="${code}"][data-act="${act}"]`)!.click();
+  await settle();
+};
 const text = (id: string): string => byId(id).textContent!;
 
 describe('the Workshop station of the Hub (#1655)', () => {
@@ -131,6 +135,45 @@ describe('the Workshop station of the Hub (#1655)', () => {
     await press(1, 'sell');
     expect(buy(8).disabled).toBe(false);
     expect(document.activeElement).toBe(document.querySelector('#workshop button[data-kind="1"][data-act="sell"]')); // one more to sell: the focus stays
+  });
+
+  it('upgrades a Heavy for 3 shards and 10 ore, sells the Heavy+ for half of its whole price, and the sheet reads the save back', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await inTown(game, { resources: { wood: 0, ore: 10, parts: 0, shards: 3 }, army: army([1], [1]) });
+    await open();
+    await press(1, 'upgrade');
+    expect(text('workshop-stock')).toBe('Wood 0 · Ore 0 · Parts 0 · Shards 0');
+    expect(text('workshop-army')).toBe('Army 1 / 6 · Bringing 1 / 3');
+    expect(document.querySelector('#workshop li[data-kind="4"] .w-own')!.textContent).toBe('Owned 1 · Bringing 1');
+    expect(document.activeElement).toBe(byId('workshop'));
+    byId('workshop-close').click();
+    await open();
+    expect(document.querySelector('#workshop li[data-kind="4"] .w-own')!.textContent).toBe('Owned 1 · Bringing 1');
+    await press(4, 'sell');
+    expect(text('workshop-stock')).toBe('Wood 0 · Ore 8 · Parts 2 · Shards 1');
+    expect(text('workshop-army')).toBe('Army 0 / 6 · Bringing 0 / 3');
+  });
+
+  it('buys, brings, leaves and sells a relic: 5 shards and 15 parts, 2 shards and 7 parts back, and the Quartermaster makes room for a fourth special', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await inTown(game, { resources: { wood: 0, ore: 0, parts: 30, shards: 10 }, army: army([1, 2, 3, 9], [1, 2, 3]) });
+    await open();
+    await pressRelic(11, 'buy');
+    expect(text('workshop-stock')).toBe('Wood 0 · Ore 0 · Parts 15 · Shards 5');
+    expect(text('workshop-relics')).toBe('Relics 1 · Bringing 0 / 2');
+    await pressRelic(11, 'bring');
+    expect(text('workshop-army')).toBe('Army 4 / 6 · Bringing 3 / 4');
+    await press(9, 'bring');
+    expect(text('workshop-army')).toBe('Army 4 / 6 · Bringing 4 / 4');
+    await pressRelic(11, 'leave'); // without the Quartermaster the loadout is three again
+    expect(text('workshop-army')).toBe('Army 4 / 6 · Bringing 3 / 3');
+    await pressRelic(11, 'sell');
+    expect(text('workshop-stock')).toBe('Wood 0 · Ore 0 · Parts 22 · Shards 7');
+    expect(text('workshop-relics')).toBe('Relics 0 · Bringing 0 / 2');
+    byId('workshop-close').click();
+    await open();
+    expect(text('workshop-stock')).toBe('Wood 0 · Ore 0 · Parts 22 · Shards 7');
+    expect(document.querySelector('#workshop button[data-relic="0"][data-act="buy"]')!.hasAttribute('disabled')).toBe(false);
   });
 
   it('keeps the focus in the sheet when the row has no button left to press', async () => {
@@ -303,6 +346,39 @@ describe('the special marbles in a wild fight (#1655)', () => {
     expect(await saved()).toMatchObject({ specials: [1, 9], brought: [1, 9] });
   });
 
+  it('sets the relics brought before the first move, in the army engine too (the bot searches the same board)', async () => {
+    let setRelics: ReturnType<typeof vi.spyOn>;
+    const game = await met({ army: { specials: [1], brought: [1], relics: [0, 4], relicsBrought: [0, 4] } }, undefined, {}, async () => void (setRelics = vi.spyOn((await import('edgefall-wasm')).Engine.prototype, 'set_relics')));
+    expect(setRelics.mock.calls).toEqual([[0b1_0001]]);
+    await exchange(game);
+    expect(game.hook<number>('__plies')).toBe(2);
+    expect(setRelics.mock.calls).toEqual([[0b1_0001], [0b1_0001]]);
+  });
+
+  it('a relic alone, with no special marble, makes the army fight, and the Saboteur gives the bot one marble fewer', async () => {
+    let withArmy: ReturnType<typeof vi.spyOn>;
+    const game = await met({ army: { specials: [], brought: [], relics: [8], relicsBrought: [8] } }, undefined, {}, async () => void (withArmy = vi.spyOn((await import('edgefall-wasm')).Engine, 'with_army')));
+    expect(withArmy.mock.calls).toEqual([[14, 13]]);
+    await exchange(game);
+    expect(game.hook<number>('__plies')).toBe(2);
+    expect(withArmy.mock.calls).toEqual([[14, 13], [14, 13]]);
+  });
+
+  it('the Hull plating keeps the first special marble lost: the army keeps it and the banner says so', async () => {
+    const game = await met({ army: { specials: [1, 1, 9], brought: [1, 9], relics: [1], relicsBrought: [1] } });
+    await over(game, 2, [9]); // the Heavy is thrown off
+    expect(game.hud()).toContain('Hull plating kept Heavy.');
+    expect(game.hud()).not.toContain('Lost:');
+    expect(await saved()).toMatchObject({ specials: [1, 1, 9], brought: [1, 9] });
+  });
+
+  it('the Hull plating keeps only the first of two lost', async () => {
+    const game = await met({ army: { specials: [1, 9], brought: [1, 9], relics: [1], relicsBrought: [1] } });
+    await over(game, 2, []);
+    expect(game.hud()).toContain('Lost: Bomb. Hull plating kept Heavy.');
+    expect(await saved()).toMatchObject({ specials: [1], brought: [1] });
+  });
+
   it('a world whose save is gone loses nothing and writes nothing', async () => {
     const game = await met({ army: army([1], [1]) });
     await indexedDbStore().delete(`openworld:${seed}`);
@@ -313,7 +389,7 @@ describe('the special marbles in a wild fight (#1655)', () => {
 });
 
 describe('no other fight has a special marble (#1655)', () => {
-  const brought = { army: army([1, 9], [1, 9]), resources: rich };
+  const brought = { army: { specials: [1, 9], brought: [1, 9], relics: [0, 11], relicsBrought: [0, 11] }, resources: rich };
 
   it.each(['arena', 'boss'] as const)('the %s entered after the world, with the army brought, has none', async (mode) => {
     const game = await boot(`?openworld=${seed}`);
@@ -323,14 +399,127 @@ describe('no other fight has a special marble (#1655)', () => {
     hooks().__openworldFixture({ hero: [0, 0], troop: [], enemies: [], ...brought });
     byId('exit').click(); // the Hub of the menu: the world is left, its army with it
     await settle();
+    const { Engine, Encounter } = await import('edgefall-wasm');
+    const spies = [vi.spyOn(Engine.prototype, 'set_relics'), vi.spyOn(Engine.prototype, 'place_special'), vi.spyOn(Encounter.prototype, 'set_relics'), vi.spyOn(Encounter.prototype, 'place_special')];
     await game.hook<Promise<void>>('__enterMode', mode);
     await settle();
     expect(data().specials ?? '').toBe('');
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled(); // no relic, no special marble: the fight's digest is the plain one's
+    vi.restoreAllMocks();
   });
 
   it('a plain game of the bot, the Hub of the menu and a run start with no special marble from the world', async () => {
     const game = await boot('?bot=off');
     expect(data().specials ?? '').toBe('');
     void game;
+  });
+});
+
+// The lair of the world (docs/specs/openworld.md section 7) entered by walking onto it: the brought marbles and relics, for the bosses that take a build.
+describe('the army in a lair fight walked into from the world (#1655)', () => {
+  const brought = { army: { specials: [1, 1, 9], brought: [1, 9], relics: [0, 1], relicsBrought: [0, 1] }, resources: rich };
+  /** The lairs of seed 7 by what their boss takes: the index of the first boss that takes the army's build, and of the first that does not. */
+  async function lairs(): Promise<{ builds: number; plain: number }> {
+    const { boss_ids, boss_takes_build } = await import('edgefall-wasm');
+    const ids = boss_ids();
+    return { builds: ids.findIndex((id) => boss_takes_build(id)), plain: ids.findIndex((id) => !boss_takes_build(id)) };
+  }
+  /** The world of seed 7 with the stock loaded, and the hero stepped onto lair `lair` from the west. */
+  async function walkInto(stock: Stock, lair: number): Promise<Game> {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const [q, r] = data().openworldLairs!.split(' ')[lair]!.split(',').map(Number) as unknown as Axial;
+    hooks().__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [], ...stock });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
+    await settle();
+    return game;
+  }
+  const saved = async (): Promise<{ specials: number[]; brought: number[] }> => {
+    await settle();
+    return ((await indexedDbStore().get('openworld:7')) as { army: { specials: number[]; brought: number[] } }).army;
+  };
+  /** The lair fight over with `status` once a move is played, its board holding only the special marbles of `kinds`. */
+  async function finish(game: Game, status: number, kinds: number[]): Promise<void> {
+    const { Encounter } = await import('edgefall-wasm');
+    const real = Encounter.prototype.specials;
+    vi.spyOn(Encounter.prototype, 'status').mockImplementation(() => (game.hook<number>('__plies') > 0 ? status : 0));
+    vi.spyOn(Encounter.prototype, 'result').mockImplementation(() => (game.hook<number>('__plies') > 0 ? status : 0));
+    vi.spyOn(Encounter.prototype, 'specials').mockImplementation(function (this: InstanceType<typeof Encounter>) {
+      const flat = Array.from(real.call(this));
+      return Int32Array.from(Array.from({ length: flat.length / 3 }, (_, i) => flat.slice(3 * i, 3 * i + 3)).filter((rec) => kinds.includes(rec[2]!)).flat());
+    });
+    const move = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4))!;
+    const [q, r] = move.cells[0]!;
+    game.click(q, r);
+    game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
+  }
+  const placedKinds = (spy: ReturnType<typeof vi.spyOn>): number[] => spy.mock.calls.map((call) => call[2] as number).sort((a, b) => a - b);
+
+  it('places the brought marbles and sets the brought relics in a lair whose boss takes the build, and the bot gets the same', async () => {
+    const { Encounter } = await import('edgefall-wasm');
+    const place = vi.spyOn(Encounter.prototype, 'place_special');
+    const relics = vi.spyOn(Encounter.prototype, 'set_relics');
+    const game = await walkInto(brought, (await lairs()).builds);
+    expect(data().boss).toBeTruthy();
+    expect(data().specials!.split(' ').map((s) => Number(s.split(',')[2])).sort()).toEqual([1, 9]);
+    expect(placedKinds(place)).toEqual([1, 9]);
+    expect(relics.mock.calls).toEqual([[0b11]]);
+    const move = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4))!;
+    const [q, r] = move.cells[0]!;
+    game.click(q, r);
+    game.click(q + DIRS[move.dir]![0], r + DIRS[move.dir]![1]);
+    await game.settle();
+    game.frame(1000);
+    expect(placedKinds(place)).toEqual([1, 1, 9, 9]); // the bot's engine of the same fight, in its worker
+    expect(relics.mock.calls).toEqual([[0b11], [0b11]]);
+    vi.restoreAllMocks();
+  });
+
+  it('a boss that takes no build places nothing and sets nothing, and a lair with an empty army is the plain fight', async () => {
+    const { Encounter } = await import('edgefall-wasm');
+    const place = vi.spyOn(Encounter.prototype, 'place_special');
+    const relics = vi.spyOn(Encounter.prototype, 'set_relics');
+    await walkInto(brought, (await lairs()).plain);
+    expect(data().specials ?? '').toBe('');
+    expect(place).not.toHaveBeenCalled();
+    expect(relics).not.toHaveBeenCalled();
+    await walkInto({ army: army([], []), resources: rich }, (await lairs()).builds);
+    expect(relics).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('loses the marbles thrown off in a lair fight, once, and the Retry brings only the ones left', async () => {
+    const { Encounter } = await import('edgefall-wasm');
+    const place = vi.spyOn(Encounter.prototype, 'place_special');
+    const game = await walkInto(brought, (await lairs()).builds);
+    await finish(game, 2, [9]); // the Heavy is thrown off, the Hull plating keeps it
+    expect(game.hud()).toContain('Hull plating kept Heavy.');
+    expect(await saved()).toMatchObject({ specials: [1, 1, 9], brought: [1, 9] });
+    vi.restoreAllMocks();
+    const again = await walkInto({ ...brought, army: { ...brought.army, relics: [0], relicsBrought: [0] } }, (await lairs()).builds);
+    await finish(again, 2, [9]);
+    expect(again.hud()).toContain('Lost: Heavy.');
+    expect(await saved()).toMatchObject({ specials: [1, 9], brought: [9] });
+    place.mockClear();
+    byId('boss-retry').click();
+    expect(placedKinds(place)).toEqual([9]); // the Heavy is not placed again for free
+    vi.restoreAllMocks();
+  });
+
+  it('a won lair fight tells what was lost too, and leaving it keeps everything', async () => {
+    const game = await walkInto({ ...brought, army: { ...brought.army, relics: [], relicsBrought: [] } }, (await lairs()).builds);
+    await finish(game, 1, [1, 9]);
+    expect(game.hud()).toContain('Medal earned');
+    expect(game.hud()).not.toContain('Lost');
+    expect(await saved()).toMatchObject({ specials: [1, 1, 9], brought: [1, 9] });
+    vi.restoreAllMocks();
+    const left = await walkInto({ ...brought, army: { ...brought.army, relics: [], relicsBrought: [] } }, (await lairs()).builds);
+    byId('exit').click(); // Back to the Open world before the end: Flee keeps all
+    await settle();
+    expect(left.hud()).not.toContain('Lost');
+    expect(await saved()).toMatchObject({ specials: [1, 1, 9], brought: [1, 9] });
   });
 });
