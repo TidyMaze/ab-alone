@@ -6,6 +6,7 @@ import { indexedDbStore } from './idb';
 import { FightState } from './openworldfight';
 import { Discovered, type DiscoveredSave } from './openworlddiscovered';
 import { RECRUIT_MAX } from './openworldrecruit';
+import { NO_ARMY, NO_RESOURCES } from './openworldresources';
 import { worldSaves } from './openworldsave';
 import { memoryStore, type KeyStore } from './savegame';
 
@@ -328,12 +329,75 @@ describe('the save of the recruits (#1531)', () => {
   });
 });
 
+describe('the save of the resources and the army (#1655, record 8)', () => {
+  const stock = { wood: 12, ore: 7, parts: 20, shards: 2 };
+  const army = { specials: [1, 2], brought: [1], relics: [3], relicsBrought: [3] };
+  const v7 = { ...record(7), record: 7, yaw: 0, lairs: [], discovered: [], time: 0, logs: [], recruits: 0 };
+
+  it('saves the resources and the army with the world and loads them back', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], [], 0, [], 0, stock, army);
+    const back = (await saves.load(7))!;
+    expect(back.resources).toEqual(stock);
+    expect(back.army).toEqual(army);
+  });
+
+  it('writes record 8', async () => {
+    const store = memoryStore();
+    await worldSaves(store, 1).put(7, hero, troop, new FightState(), 0);
+    expect((store.data.get('openworld:7') as { record: number }).record).toBe(8);
+  });
+
+  it('loads a record 7 with zero resources and no army: old saves still load', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', v7);
+    const back = (await worldSaves(store, 1).load(7))!;
+    expect(back.resources).toEqual(NO_RESOURCES);
+    expect(back.army).toEqual(NO_ARMY);
+  });
+
+  it('discards a record 8 whose resources or army do not decode', async () => {
+    const good = { ...v7, record: 8, resources: stock, army };
+    for (const bad of [{ resources: undefined }, { resources: { wood: -1, ore: 0, parts: 0, shards: 0 } }, { army: undefined }, { army: { ...army, specials: 'x' } }]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...good, ...bad });
+      expect(await worldSaves(store, 1).load(7), JSON.stringify(bad)).toBeNull();
+      expect(store.data.has('openworld:7')).toBe(false);
+    }
+  });
+
+  it('a lair beaten gives its five shards once, and the marble a wild fight won gives its parts once: a second call farms nothing', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [], [], 0, [], 0, stock, army);
+    await saves.beat(7, 2);
+    await saves.beat(7, 2);
+    await saves.beatMarble(7, [5, 5]);
+    await saves.beatMarble(7, [5, 5]);
+    await saves.beatMarble(7, [0, -350]);
+    const back = (await saves.load(7))!;
+    expect(back.resources).toEqual({ wood: 12, ore: 7, parts: 20 + 3 + 6, shards: 2 + 5 });
+    expect(back.army).toEqual(army);
+  });
+
+  it('a record 7 touched by beat or beatMarble is written as record 8 with the gain on zero', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', v7);
+    await worldSaves(store, 1).beat(7, 1);
+    expect((await worldSaves(store, 1).load(7))!.resources).toEqual({ ...NO_RESOURCES, shards: 5 });
+    store.data.set('openworld:7', v7);
+    await worldSaves(store, 1).beatMarble(7, [5, 5]);
+    const back = (await worldSaves(store, 1).load(7))!;
+    expect(back.resources).toEqual({ ...NO_RESOURCES, parts: 3 });
+    expect(back.army).toEqual(NO_ARMY);
+  });
+});
+
 describe('worldSaves', () => {
   it('saves a world under its seed and loads it back with its hero, troop and fight', async () => {
     const saves = worldSaves(memoryStore(), 1);
     expect(await saves.put(7, hero, troop, fightWithPush(), 0)).toBe(true);
     const back = await saves.load(7);
-    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], time: 0, logs: [], recruits: 0, savedAt: expect.any(Number) });
+    expect(back).toEqual({ ...record(7), broken: [], lairs: [], discovered: [], time: 0, logs: [], recruits: 0, resources: NO_RESOURCES, army: NO_ARMY, savedAt: expect.any(Number) });
     expect(back!.fight.beaten).toBe(1);
   });
 

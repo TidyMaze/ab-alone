@@ -3,6 +3,7 @@ import { Discovered, SIGHT } from '../../client/src/openworlddiscovered';
 import { Hero, World } from '../../client/src/openworld';
 import { FightState } from '../../client/src/openworldfight';
 import { RECRUIT_MAX, recruitCell } from '../../client/src/openworldrecruit';
+import { NO_ARMY, NO_RESOURCES } from '../../client/src/openworldresources';
 import { decodeWorld, RECORD, worldSaves } from '../../client/src/openworldsave';
 import { memoryStore } from '../../client/src/savegame';
 import { endingLine } from '../../client/src/tally';
@@ -487,6 +488,8 @@ describe("a save and its resume, in the client's format (client/src/openworldsav
       time: 0,
       logs: [],
       recruits: 0,
+      resources: NO_RESOURCES,
+      army: NO_ARMY,
       savedAt: save.savedAt,
     });
     const seen = Discovered.from(save.discovered!);
@@ -704,3 +707,70 @@ describe('the teleporters (#1412)', () => {
 function hex(a: [number, number], b: [number, number]): number {
   return (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[0] - b[0] + a[1] - b[1])) / 2;
 }
+
+// The resources of the Open world (#1655, docs/specs/openworld.md section 19): gathered as the client gathers them, carried in the state and the save.
+describe('the resources', () => {
+  const BIOMES = ['meadow', 'forest', 'tundra', 'desert', 'badlands', 'archipelago'];
+  const biomeAt = (seed: number, q: number, r: number): string => {
+    const cx = Math.floor(q / 16);
+    const cy = Math.floor(r / 16);
+    return BIOMES[worldRules().world_chunk(seed, cx, cy)[((r - cy * 16) * 16 + (q - cx * 16)) * 3 + 2]!]!;
+  };
+  const stock = { wood: 12, ore: 7, parts: 20, shards: 2 };
+
+  test('a new world has none, in the state and in the save', () => {
+    const open = world();
+    expect(value(open.newWorld({ seed: 1 })).resources).toEqual(NO_RESOURCES);
+    expect(value(open.save()).resources).toEqual(NO_RESOURCES);
+    expect(value(open.save()).army).toEqual(NO_ARMY);
+  });
+
+  test('a boulder broken gives ore and a tree wood, doubled by the biome, as in the client', () => {
+    for (const [code, key, grows] of [[5, 'ore', ['desert', 'badlands']], [6, 'wood', ['forest']]] as const) {
+      const { open, spot } = standBeside([code]);
+      const [dq, dr] = STEPS[spot.dir]!;
+      const biome = biomeAt(1, spot.at[0] + dq!, spot.at[1] + dr!);
+      expect(value(open.step({ direction: spot.dir as 'E' })).smashed).not.toBeNull();
+      const state = value(open.state({}));
+      expect(state.resources[key], key).toBeGreaterThan(0);
+      expect(state.resources[key], `${key} in the ${biome}`).toBe((grows as readonly string[]).includes(biome) ? 2 : 1);
+      expect(Object.values(state.resources).reduce((a, b) => a + b, 0)).toBe(state.resources[key]);
+    }
+  });
+
+  test('a marble the push ejects gives a part', () => {
+    const rules = { ...worldRules(), world_enemies: (_seed: number, cx: number, cy: number) => (cx === 0 && cy === -2 ? Int32Array.of(12, -30) : new Int32Array()) };
+    const open = new OpenWorld(rules, bossIds);
+    value(open.newWorld({ seed: 1 }));
+    value(open.newWorld({ save: { ...value(open.save()), hero: [11, -29], troop: [] } }));
+    expect(value(open.step({ direction: 'NW' })).push?.ejected).toHaveLength(1);
+    expect(value(open.state({})).resources).toEqual({ ...NO_RESOURCES, parts: 1 });
+  });
+
+  test('a lair won from the world gives five shards, once', () => {
+    const session = games();
+    const open = world([1, 0], session);
+    value(open.newWorld({ seed: 0 }));
+    for (const game of ['first', 'again']) {
+      session.now = { game: `before ${game}`, boss: null };
+      value(open.step({ direction: 'E' }));
+      session.now = { game, boss: bossIds()[0]! };
+      expect(value(open.state({})).resources).toEqual({ ...NO_RESOURCES, shards: 5 });
+    }
+  });
+
+  test('a save of the client resumes with its resources and its army, and carries them back; a save from before has none', () => {
+    const army = { specials: [1], brought: [1], relics: [2], relicsBrought: [2] };
+    const open = world();
+    value(open.newWorld({ seed: 1 }));
+    const save = value(open.save());
+    expect(value(open.newWorld({ save: { ...save, resources: stock, army } })).resources).toEqual(stock);
+    const back = value(open.save());
+    expect(back.resources).toEqual(stock);
+    expect(back.army).toEqual(army);
+    expect(decodeWorld(back, 1, VERSION)!.resources).toEqual(stock);
+    const { resources: _r, army: _a, ...before } = save;
+    const old = value(world().newWorld({ save: { ...before, record: 7 } }));
+    expect(old.resources).toEqual(NO_RESOURCES);
+  });
+});

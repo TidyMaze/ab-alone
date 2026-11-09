@@ -77,7 +77,7 @@ describe('the Open world tools', () => {
     await call('new_world', { seed: 3 });
     await call('world_step', { direction: 'E' });
     const save = JSON.parse((await call('save_world')).text);
-    expect(save).toMatchObject({ record: 7, seed: 3, hero: [1, 0], lairs: [], logs: [], recruits: 0 });
+    expect(save).toMatchObject({ record: 8, seed: 3, hero: [1, 0], lairs: [], logs: [], recruits: 0, resources: { wood: 0, ore: 0, parts: 0, shards: 0 }, army: { specials: [], brought: [], relics: [], relicsBrought: [] } });
     await call('new_world', { seed: 0 });
     // The cells discovered come back too (#1411): the spawn's disc and the 21 cells the step uncovered.
     expect(JSON.parse((await call('new_world', { save })).text)).toMatchObject({ seed: 3, hero: '(1,0)', discovered: 352 });
@@ -108,6 +108,19 @@ describe('the Open world tools', () => {
     const { recruits: _recruits, ...before } = save; // a save from before the recruits: the troop holds 15 at most
     expect(JSON.parse((await call('new_world', { save: { ...before, troop: troop(15) } })).text).recruits).toBe(0);
     expect((await call('new_world', { save: { ...before, troop: troop(16) } })).isError).toBe(true);
+  });
+
+  test('the resources and the army of a save of the client come back (#1655), a wrong shape is refused', async () => {
+    await connect();
+    const save = JSON.parse((await call('new_world', { seed: 3 }), await call('save_world')).text);
+    const stock = { wood: 12, ore: 7, parts: 20, shards: 2 };
+    const army = { specials: [1], brought: [1], relics: [], relicsBrought: [] };
+    expect(JSON.parse((await call('new_world', { save: { ...save, resources: stock, army } })).text)).toMatchObject({ resources: stock });
+    expect(JSON.parse((await call('save_world')).text)).toMatchObject({ resources: stock, army });
+    expect((await call('new_world', { save: { ...save, resources: { ...stock, wood: -1 } } })).isError).toBe(true);
+    expect((await call('new_world', { save: { ...save, army: { ...army, specials: [1.5] } } })).isError).toBe(true);
+    const { resources: _r, army: _a, ...before } = save; // a record 7: none
+    expect(JSON.parse((await call('new_world', { save: { ...before, record: 7 } })).text).resources).toEqual({ wood: 0, ore: 0, parts: 0, shards: 0 });
   });
 
   test('the recruits of a save of the client come back (#1531): the troop holds 15 and them, and the cap is 5', async () => {
