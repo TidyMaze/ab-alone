@@ -19,6 +19,7 @@ import { CLAIM_NOTE, contractLine, goalCell, goalLines } from './openworldgoal';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
 import { RECRUIT_MAX, recruitCell } from './openworldrecruit';
 import { WORLD_LOGS } from './lorelogs';
+import { addResources, type Army, breakYield, ejectYield, logYield, NO_ARMY, NO_RESOURCES, resourceLine, type Resources } from './openworldresources';
 import { hubHelpOn, markHubCoachDone, walkLessonDue, WALK_LESSON } from './hubcoach';
 import type { Store } from './quality';
 import { enter, heroStep } from './openworldstep';
@@ -151,6 +152,9 @@ export class OpenWorldMode {
   private found: number[] = [];
   /** The marbles that joined the troop after a push ejected one (#1531), at most `RECRUIT_MAX`. */
   private recruits = 0;
+  /** What the world's own actions gathered (#1655), saved with the world, and the army the Workshop will fill (slice 2), kept as saved. */
+  private resources: Resources = NO_RESOURCES;
+  private army: Army = NO_ARMY;
   private dirty = false;
   /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
   private unsaved = false;
@@ -275,6 +279,9 @@ export class OpenWorldMode {
     this.found = saved ? [...saved.logs] : [];
     this.recruits = saved?.recruits ?? 0;
     this.plateRecruits(false);
+    this.resources = saved?.resources ?? NO_RESOURCES;
+    this.army = saved?.army ?? NO_ARMY;
+    this.plateResources();
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     this.counted = 0;
     this.tod = saved?.time ?? 0; // an older save, or a new world, starts at the start of day (#1496)
@@ -439,6 +446,10 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldRecruits;
     this.recruits = 0;
     this.plateRecruits(false);
+    this.resources = NO_RESOURCES;
+    delete document.body.dataset.openworldResources;
+    const gathered = document.getElementById('openworld-resources');
+    if (gathered) gathered.textContent = '';
     delete document.body.dataset.openworldPush;
     delete document.body.dataset.openworldZoom;
     delete document.body.dataset.openworldYaw;
@@ -1024,6 +1035,7 @@ export class OpenWorldMode {
     if (this.hero!.smashed) {
       this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
       this.peers?.broke(to); // and told to the other heroes (#1305)
+      this.gather(breakYield(this.hero!.smashed, this.world!.tile(to[0], to[1])!.biome)); // wood or ore (#1655)
     }
     this.view!.snap(); // a step during a push's animation ends it first (#967)
     const now = this.reduced() ? null : at;
@@ -1032,6 +1044,7 @@ export class OpenWorldMode {
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: span * slowBy(), pace }); // the step glides (#1040)
     const played = this.wild() ? null : this.troopPush(); // a marble that touches the hero fights: the troop does not push it (#1511)
     const joined = played !== null && this.recruit(played);
+    if (played) this.gather(ejectYield(this.hero!.at, played.push.ejected.length)); // parts for the marbles ejected (#1655)
     this.view!.updateEnemies();
     const log = this.logs.findIndex((cell) => same(cell, this.hero!.at));
     const picked = joined || (log >= 0 && !this.found.includes(log)); // a marble joins the troop, or a log is found for the first time (#1570)
@@ -1070,6 +1083,7 @@ export class OpenWorldMode {
     const { id, title, body } = WORLD_LOGS[log]!;
     if (!this.found.includes(log)) {
       this.found.push(log);
+      this.gather(logYield()); // a shard for a log found (#1655)
       this.view!.setLogs(this.logs, this.found);
       this.persist();
     }
@@ -1158,6 +1172,21 @@ export class OpenWorldMode {
     return true;
   }
 
+  /** The hero gathered `got` (#1655): it is added to the counts, told on the plate and saved with the world. */
+  private gather(got: Resources): void {
+    this.resources = addResources(this.resources, got);
+    this.plateResources();
+    this.persist();
+  }
+
+  /** The plate's line of the counts and the page's mark (`openworldResources`: wood, ore, parts, shards). */
+  private plateResources(): void {
+    const { wood, ore, parts, shards } = this.resources;
+    document.body.dataset.openworldResources = `${wood},${ore},${parts},${shards}`;
+    const line = document.getElementById('openworld-resources');
+    if (line) line.textContent = resourceLine(this.resources);
+  }
+
   /** The plate's line of the recruits (#1531): hidden while there are none, else "Recruits n / 5", with the joining told when one just did. */
   private plateRecruits(joined: boolean): void {
     const line = document.getElementById('openworld-recruits');
@@ -1177,7 +1206,7 @@ export class OpenWorldMode {
     if (!this.unsaved) return;
     this.unsaved = false;
     const { at, troop } = this.hero!;
-    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod, this.found, this.recruits).then((stored) => {
+    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON(), this.tod, this.found, this.recruits, this.resources, this.army).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
   }

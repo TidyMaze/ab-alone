@@ -49,7 +49,7 @@ describe('the save of the camera yaw (#1026)', () => {
 
   it('discards a record of a record version this build does not know, a later one', async () => {
     const store = memoryStore();
-    store.data.set('openworld:7', { ...record(7), record: 8, yaw: 0 });
+    store.data.set('openworld:7', { ...record(7), record: 9, yaw: 0 });
     expect(await worldSaves(store, 1).load(7)).toBeNull();
     expect(store.data.has('openworld:7')).toBe(false);
   });

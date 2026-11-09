@@ -4,7 +4,7 @@ import { shot } from './shot';
 
 lowTierOnCi();
 
-// #1655 (Decision #1654): the Open world's resources. On seed 1 the hero on (0, 2) rolls up onto a boulder of the meadow (0, 1): 1 ore; the hero on
+// #1655 (Decision #1654): the Open world's resources. On seed 1 the hero on (65, -47) rolls right onto a boulder of the meadow (66, -47): 1 ore; the hero on
 // (27, -59) rolls onto a tree of the forest (28, -59): 2 wood. The plate says the counts, and a reload keeps them. The states come from the test hook.
 type Hooks = { __openworldFixture: (f: object) => void };
 const sizes = [
@@ -24,8 +24,8 @@ for (const { name, viewport, touch } of sizes) {
       await page.goto('./?bot=off&openworld=1');
       await expect(page.locator('body')).toHaveAttribute('data-openworld-at', '0,0');
       await expect(page.locator('body')).toHaveAttribute('data-openworld-resources', '0,0,0,0');
-      await fixture(page, { hero: [0, 2], troop: [], enemies: [] });
-      await page.keyboard.press('ArrowLeft');
+      await fixture(page, { hero: [65, -47], troop: [], enemies: [] });
+      await page.keyboard.press('ArrowRight');
       await expect(page.locator('body')).toHaveAttribute('data-openworld-resources', '0,1,0,0');
       await fixture(page, { hero: [27, -59], troop: [], enemies: [] });
       const before = await writes(page);

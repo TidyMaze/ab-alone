@@ -4,7 +4,7 @@ import './test/openworldwasm';
 import { world_chunk } from 'edgefall-wasm';
 import { CHUNK } from './openworld';
 import { FightState } from './openworldfight';
-import { OpenWorldMode } from './openworldmode';
+import { DEFAULT_YAW, OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
 import { stopLeftIntervalsAfterEach } from './test/intervals';
@@ -130,9 +130,10 @@ describe('what is gathered is saved with the world, and is gathered once (#1655)
   it('keeps the army of the save, empty, so the next save does not lose it', async () => {
     const saves = worldSaves(memoryStore(), 1);
     const army = { specials: [1], brought: [1], relics: [], relicsBrought: [] };
-    await saves.put(1, [0, 2], [], new FightState(), 0, [], [], [], 0, [], 0, { wood: 4, ore: 0, parts: 0, shards: 0 }, army);
+    await saves.put(1, [0, 2], [], new FightState(), DEFAULT_YAW, [], [], [], 0, [], 0, { wood: 4, ore: 0, parts: 0, shards: 0 }, army);
     const m = mode(made('tree', 'meadow'), saves);
     await m.open(1, 800, 600);
+    m.fixture({ hero: [0, 2], troop: [], enemies: [] });
     tap(m, 'ArrowLeft');
     m.frame(vi.fn());
     await settle();

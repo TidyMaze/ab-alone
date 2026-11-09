@@ -8,6 +8,7 @@ import { TROOP } from './openworld';
 import { decodeDiscovered, type DiscoveredSave } from './openworlddiscovered';
 import { decodeFight, isCell, type FightSave, type FightState } from './openworldfight';
 import { RECRUIT_MAX } from './openworldrecruit';
+import { addResources, NO_ARMY, NO_RESOURCES, type Army, decodeArmy, decodeResources, lairYield, type Resources, wildYield } from './openworldresources';
 import type { KeyStore } from './savegame';
 
 /** A world as saved: the seed, the hero's cell, the troop's cells (the hero's trail, `TROOP` at most), the fight and the camera's yaw
@@ -31,24 +32,28 @@ export interface WorldSave {
   logs: number[];
   /** The marbles that joined the troop after a push ejected one (#1531), at most `RECRUIT_MAX`: the troop holds `TROOP` and them. A record saved before them has none. */
   recruits: number;
+  /** What the world's own actions gathered (#1655): wood, ore, parts and shards. A record saved before them has none. */
+  resources: Resources;
+  /** The army of the Workshop (#1655, slice 2), empty until it opens. A record saved before it has none. */
+  army: Army;
   savedAt: number;
 }
 
 /** The record version written now: 2 adds the camera's yaw, 3 the beaten lairs (#1170), 4 the discovered cells (#1411), 5 the time of day
- * (#1496), 6 the lore logs found (#1589), 7 the recruits (#1531). A record of version 1 (no `record` field, no yaw) is read with yaw 0, one of version 1 or 2 with no
+ * (#1496), 6 the lore logs found (#1589), 7 the recruits (#1531), 8 the resources and the army (#1655). A record of version 1 (no `record` field, no yaw) is read with yaw 0, one of version 1 or 2 with no
  * beaten lair, one before 4 with no cell discovered, one before 5 at the start of day, one before 6 with no log found, one before 7 with no
- * recruit, so an old save is kept, not lost (#1026). */
-export const RECORD = 7;
+ * recruit, one before 8 with zero resources and no army, so an old save is kept, not lost (#1026). */
+export const RECORD = 8;
 
 /** The saves of the Open world. A failing store gives no save and a `false` put, never a throw. */
 export interface WorldSaves {
   /** The save of `seed` for this world version, `null` when there is none (a stale or garbage one is deleted). */
   load(seed: number): Promise<WorldSave | null>;
   /** Saves the world of `seed` in the state given, the camera's `yaw` too; `true` when it is stored. */
-  put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number, broken?: readonly Axial[], lairs?: readonly number[], discovered?: DiscoveredSave, time?: number, logs?: readonly number[], recruits?: number): Promise<boolean>;
-  /** Marks lair `lair` of the saved world of `seed` as beaten (#1170); nothing when there is no save or the store fails. */
+  put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number, broken?: readonly Axial[], lairs?: readonly number[], discovered?: DiscoveredSave, time?: number, logs?: readonly number[], recruits?: number, resources?: Resources, army?: Army): Promise<boolean>;
+  /** Marks lair `lair` of the saved world of `seed` as beaten (#1170), once, with the shards of a lair beaten (#1655); nothing when there is no save or the store fails. */
   beat(seed: number, lair: number): Promise<void>;
-  /** Marks the generated marble that starts on `home` as beaten in the saved world of `seed` (#1511): gone, and counted, as one the troop ejected;
+  /** Marks the generated marble that starts on `home` as beaten in the saved world of `seed` (#1511): gone, and counted, as one the troop ejected, with the parts of a wild fight won, once (#1655);
    * nothing when there is no save, the marble is gone already, or the store fails. */
   beatMarble(seed: number, home: Axial): Promise<void>;
   /** Deletes the save of `seed`: the New world control discards the world it leaves (#1021). A refusing store keeps it. */
@@ -72,7 +77,7 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
   if (typeof raw !== 'object' || raw === null) return null;
   const save = raw as Record<keyof WorldSave | 'record', unknown>;
   if (save.version !== version || save.seed !== seed) return null;
-  if (save.record !== undefined && ![2, 3, 4, 5, 6, RECORD].includes(save.record as number)) return null;
+  if (save.record !== undefined && ![2, 3, 4, 5, 6, 7, RECORD].includes(save.record as number)) return null;
   const record = (save.record ?? 1) as number; // version 1 wrote none
   const yaw = record === 1 ? 0 : save.yaw; // version 1: no turn yet (#1026)
   if (typeof yaw !== 'number' || !Number.isFinite(yaw)) return null;
@@ -88,6 +93,9 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
   if (!Array.isArray(logs) || logs.length > MAX_LAIRS || !logs.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_LAIRS)) return null;
   const recruits = record >= 7 ? save.recruits : 0; // saved before the recruits: none (#1531)
   if (!Number.isInteger(recruits) || (recruits as number) < 0 || (recruits as number) > RECRUIT_MAX) return null;
+  const resources = decodeResources(record >= 8 ? (save.resources ?? null) : undefined); // saved before the resources: none (#1655)
+  const army = decodeArmy(record >= 8 ? (save.army ?? null) : undefined);
+  if (!resources || !army) return null;
   if (!isCell(save.hero) || !Array.isArray(save.troop) || save.troop.length > TROOP + (recruits as number) || !save.troop.every(isCell)) return null;
   const [hq, hr] = save.hero;
   if (!save.troop.every(([q, r]) => Math.max(Math.abs(q! - hq!), Math.abs(r! - hr!), Math.abs(q! - hq! + r! - hr!)) <= TROOP_REACH)) return null; // the troop is the hero's trail
@@ -106,6 +114,8 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
     time,
     logs: [...logs] as number[],
     recruits: recruits as number,
+    resources,
+    army,
     savedAt: save.savedAt as number,
   };
 }
@@ -125,9 +135,9 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
       }
       return null;
     },
-    async put(seed, hero, troop, fight, yaw, broken = [], lairs = [], discovered = [], time = 0, logs = [], recruits = 0) {
+    async put(seed, hero, troop, fight, yaw, broken = [], lairs = [], discovered = [], time = 0, logs = [], recruits = 0, resources = NO_RESOURCES, army = NO_ARMY) {
       try {
-        const save = { record: RECORD, version, seed, hero, troop, fight: fight.toJSON(), yaw, broken, lairs, discovered, time, logs, recruits, savedAt: Date.now() };
+        const save = { record: RECORD, version, seed, hero, troop, fight: fight.toJSON(), yaw, broken, lairs, discovered, time, logs, recruits, resources, army, savedAt: Date.now() };
         await store.put(keyOf(seed), save);
         return true;
       } catch {
@@ -138,7 +148,7 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
       try {
         const raw = await store.get(keyOf(seed));
         const save = raw === undefined ? null : decodeWorld(raw, seed, version);
-        if (save && !save.lairs.includes(lair)) await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: [...save.lairs, lair], discovered: save.discovered, time: save.time, logs: save.logs, recruits: save.recruits });
+        if (save && !save.lairs.includes(lair)) await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: [...save.lairs, lair], discovered: save.discovered, time: save.time, logs: save.logs, recruits: save.recruits, resources: addResources(save.resources, lairYield()), army: save.army });
       } catch {
         // Storage blocked: the lair is beaten in the medals only.
       }
@@ -150,7 +160,7 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
         const key = home.join(',');
         if (save && !save.fight.removed.includes(key)) {
           const fight = { ...save.fight, removed: [...save.fight.removed, key], beaten: save.fight.beaten + 1 };
-          await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: save.lairs, discovered: save.discovered, time: save.time, logs: save.logs, recruits: save.recruits, fight });
+          await store.put(keyOf(seed), { ...(raw as object), record: RECORD, yaw: save.yaw, broken: save.broken, lairs: save.lairs, discovered: save.discovered, time: save.time, logs: save.logs, recruits: save.recruits, resources: addResources(save.resources, wildYield(home)), army: save.army, fight });
         }
       } catch {
         // Storage blocked: the marble comes back with the world.

@@ -425,7 +425,7 @@ describe('a recruit', () => {
     return open;
   };
 
-  test('a push that ejects a marble brings one, told in the push and in the state, saved in the record 7', () => {
+  test('a push that ejects a marble brings one, told in the push and in the state, saved in the record 8', () => {
     const open = resume();
     const stepped = value(open.step({ direction: 'NW' }));
     expect(stepped.push?.ejected).toHaveLength(1);
@@ -730,11 +730,13 @@ describe('the resources', () => {
       const { open, spot } = standBeside([code]);
       const [dq, dr] = STEPS[spot.dir]!;
       const biome = biomeAt(1, spot.at[0] + dq!, spot.at[1] + dr!);
+      const had = value(open.state({})).resources[key]; // the walk to the spot may have broken others
+      const total = (): number => Object.values(value(open.state({})).resources).reduce((a, b) => a + b, 0);
+      const all = total();
       expect(value(open.step({ direction: spot.dir as 'E' })).smashed).not.toBeNull();
       const state = value(open.state({}));
-      expect(state.resources[key], key).toBeGreaterThan(0);
-      expect(state.resources[key], `${key} in the ${biome}`).toBe((grows as readonly string[]).includes(biome) ? 2 : 1);
-      expect(Object.values(state.resources).reduce((a, b) => a + b, 0)).toBe(state.resources[key]);
+      expect(state.resources[key] - had, `${key} in the ${biome}`).toBe((grows as readonly string[]).includes(biome) ? 2 : 1);
+      expect(total() - all, 'nothing else').toBe(state.resources[key] - had);
     }
   });
 

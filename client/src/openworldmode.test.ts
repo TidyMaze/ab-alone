@@ -735,7 +735,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     fight.apply([], [[3, 0]], [[9, 9]]);
     return fight.toJSON();
   };
-  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], lairs: [], discovered: [], time: 0, logs: [], recruits: 0, savedAt: 1 });
+  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], lairs: [], discovered: [], time: 0, logs: [], recruits: 0, resources: { wood: 0, ore: 0, parts: 0, shards: 0 }, army: { specials: [], brought: [], relics: [], relicsBrought: [] }, savedAt: 1 });
   const withSaves = (store = memoryStore()) => {
     const saves = worldSaves(store, 1);
     return { store, saves, m: mode(undefined, undefined, undefined, undefined, saves) };
@@ -1996,7 +1996,7 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
   it('shows a beaten lair in its own colour', () => {
     const ctx = withCanvas();
     const m = lairer(Int32Array.of(8, 0));
-    m.enter(42, 800, 600, { version: 1, seed: 42, hero: [0, 0], troop: [[1, 0]], fight: { removed: [], added: [], beaten: 0 }, yaw: 0, broken: [], lairs: [0], discovered: [], time: 0, logs: [], recruits: 0, savedAt: 1 });
+    m.enter(42, 800, 600, { version: 1, seed: 42, hero: [0, 0], troop: [[1, 0]], fight: { removed: [], added: [], beaten: 0 }, yaw: 0, broken: [], lairs: [0], discovered: [], time: 0, logs: [], recruits: 0, resources: { wood: 0, ore: 0, parts: 0, shards: 0 }, army: { specials: [], brought: [], relics: [], relicsBrought: [] }, savedAt: 1 });
     expect(ctx.fills).toContain(ICON.done);
     expect(ctx.fills).not.toContain(COLOURS.lair);
   });
@@ -2043,7 +2043,7 @@ describe('the discovered cells and the map of the Open world (#1411, docs/specs/
   };
   const grass = (fills: string[]): number => fills.filter((c) => c === terrainColour('grass')).length;
   const savedAt = (hero: Axial, discovered: WorldSave['discovered'] = []): WorldSave => ({
-    version: 1, seed: 42, hero, troop: [], fight: { removed: [], added: [], beaten: 0 }, yaw: DEFAULT_YAW, broken: [], lairs: [], discovered, time: 0, logs: [], recruits: 0, savedAt: 1,
+    version: 1, seed: 42, hero, troop: [], fight: { removed: [], added: [], beaten: 0 }, yaw: DEFAULT_YAW, broken: [], lairs: [], discovered, time: 0, logs: [], recruits: 0, resources: { wood: 0, ore: 0, parts: 0, shards: 0 }, army: { specials: [], brought: [], relics: [], relicsBrought: [] }, savedAt: 1,
   });
   afterEach(() => {
     document.body.innerHTML = '';

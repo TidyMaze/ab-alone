@@ -44,6 +44,8 @@ const SAVE = z.object({
   time: z.number().min(0).optional(),
   logs: z.array(z.int().min(0)).optional(),
   recruits: z.int().min(0).max(RECRUIT_MAX).optional(),
+  resources: z.object({ wood: z.int().min(0), ore: z.int().min(0), parts: z.int().min(0), shards: z.int().min(0) }).optional(),
+  army: z.object({ specials: z.array(z.int().min(0)).max(6), brought: z.array(z.int().min(0)).max(4), relics: z.array(z.int().min(0)), relicsBrought: z.array(z.int().min(0)).max(2) }).optional(),
 }).refine((save) => save.troop.length <= 15 + (save.recruits ?? 0), { message: 'the troop holds 15 marbles and its recruits' });
 
 export function createServer(

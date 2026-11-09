@@ -24,7 +24,7 @@ A-light Explore (#720 to #725), which it does not touch.
 - **A-light dropped**: #720 and its slices #722 to #725, parked since 2026-10-26, are superseded by this mode and the boss lairs (#1170, #1171). The hero rule and Rewind (#723, #724) were not built.
 - **Delta to Abalone**: none to the move, the push or the legality (`rules.md`). The mode adds a
   map, obstacles and an automatic troop whose only attack is a legal Abalone push (pillar 1).
-- **Not now**: HP, damage, levels, items, economy, real-time fights (each needs a Decision, #313).
+- **Not now**: HP, damage, levels, items, real-time fights (each needs a Decision, #313). The economy of the Open world is the one of section 19 (Decision #1654): four resources and the Workshop, nothing else.
 
 ## 2. The map
 
@@ -316,7 +316,7 @@ The world (seed), the hero and troop cells, and the enemy groups beaten are save
 `ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
 
 **What is saved.** One record per seed, under the key `openworld:<seed>`:
-`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], time, logs: [n, ...], recruits, yaw, savedAt }`, where `fight` is the
+`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], discovered: [[cx, cy, bits], ...], time, logs: [n, ...], recruits, resources: { wood, ore, parts, shards }, army: { specials, brought, relics, relicsBrought }, yaw, savedAt }`, where `fight` is the
 `FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
 The last world played is kept apart under `openworld:last` (`{ seed }`).
 
@@ -340,7 +340,7 @@ either (a bad `fight` makes a bad record). Both are deleted, and the world start
 field) or 2 loads with no lair beaten, so an old save is kept; an unknown later version, or a `lairs` that is not a list of
 whole numbers, is deleted like any garbage. `record` 4 adds `discovered`, the cells discovered (section 9): a record before it loads
 with none, and the mode discovers the cells round the hero at once; a `discovered` that does not decode is garbage. `record` 5 adds `time`,
-the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage. `record` 6 adds `logs`, the numbers of the lore logs found (section 12): a record before it loads with none found; a `logs` that is not a list of whole numbers is garbage. `record` 7 adds `recruits`, the marbles that joined the troop (section 16): a record before it loads with none, and its troop holds 15 marbles at most as it always did; a `recruits` that is not a whole number from 0 to 5 is garbage, and so is a troop longer than 15 plus its `recruits`. `beat` and `beatMarble` keep `recruits` and write the current record, so a record of version 6 they touch still loads.
+the time of day (section 11): a record before it loads at the start of day; a `time` that is not a number in `[0, 12 min)` is garbage. `record` 6 adds `logs`, the numbers of the lore logs found (section 12): a record before it loads with none found; a `logs` that is not a list of whole numbers is garbage. `record` 8 adds `resources` and `army` (section 19, #1655): a record before it loads with zero resources and an empty army; a `resources` that is not four whole numbers from 0, or an `army` that is not four lists of codes within the army's limits, is garbage. `beat` and `beatMarble` add the shards of a lair and the parts of a wild fight to the record they write, once (a lair already beaten, a marble already gone, gives nothing), and write record 8. `record` 7 adds `recruits`, the marbles that joined the troop (section 16): a record before it loads with none, and its troop holds 15 marbles at most as it always did; a `recruits` that is not a whole number from 0 to 5 is garbage, and so is a troop longer than 15 plus its `recruits`. `beat` and `beatMarble` keep `recruits` and write the current record, so a record of version 6 they touch still loads.
 
 ## 6. Tests
 
@@ -736,7 +736,7 @@ section 10.
 - **How it fits "Not now".** Section 1 keeps HP, damage, levels, items and economy out until a Decision (#313). A recruit is a marble of the troop,
   which already pushes, flocks and is pushed under the rules of `rules.md`; it has no hit points, no level and no stat, and it is not spent or
   traded. The pad is a teleporter of section 10, a place on the map. The points of interest are the logs and the gates already specified. Nothing
-  here is a currency, and no push is stronger for it than a troop of 15 plus its recruits can make it by being longer in line.
+  here is a currency, and no push is stronger for it than a troop of 15 plus its recruits can make it by being longer in line. The economy that Decision #1654 adds (four resources and the Workshop, section 19) is separate from these gains, and acts only in the fights the Open world starts.
 - **Tests.** Rust: the pads and the density, above. Client: the recruit's cell and cap (`openworldrecruit.test.ts`), the mode (a recruit for an
   ejection, none past the cap or with no free cell, the plate line, the save and its reload, `openworldmoderecruit.test.ts`), the record 7 and the
   older records (`openworldsave.test.ts`), the pad in the network (`openworldmodepads.test.ts`). MCP: the recruit and the pad, the schema of the save.
@@ -799,7 +799,7 @@ are of a quiet moment (load average 4 on 10 cores), Chromium on the GPU of an Ap
 
 ## 18. The loop: town, dungeon, tower (#1515, Decision #1513)
 
-One loop through the world, each place doing one job. Same rules everywhere (#313): no HP, no levels, no stats, no currency. Only variety carries between runs and never power (Decision #934).
+One loop through the world, each place doing one job. Same rules everywhere (#313): no HP, no levels, no stats, no currency. Only variety carries between runs and never power (Decision #934). The resources and the Workshop of section 19 (Decision #1654) act only in the fights the Open world starts, never in a run.
 
 - **Town (the loadout).** A town is where the hero prepares and recovers. Rolling onto a town opens its loadout panel (the Hub today, section 13; the panel is the first build slice).
   1. **Loadout**: the trait slot of section 18.1, and the special marbles and tactics the player brings to the next run (roguelite.md sections 5 and 11).
@@ -834,3 +834,43 @@ The trait is what the medal's tower teaches the player's side of the board. A to
 **Tests (when built):** Rust for the trait's rule (one trait a fight, the boss's cost applied). Client: the slot, the unlock by medal, the loadout line, the save of the slot. E2E: a fresh profile reaches the first town and reads its contract, each under 15 s.
 
 **Not now:** a trait bought, traded or crafted; a second trait slot; the 3D town (#1518); the story bosses' gates (section 13).
+
+## 19. Resources and the Workshop (#1655, Decision #1654)
+
+The world rewards exploring and winning with a stock that the next fights of the world spend. The Decision (option A) keeps section 1's rules: no HP, no level, no
+stat, and no new engine rule. The move, the push and `rules.md` do not change. The stock is spent in a Workshop (section 19.2, built by slice 2 of #1655) on the special
+marbles and relics of the rogue-lite, which act **only in the fights the Open world itself starts** (the wild fight, section 3c, and a lair or tower entered by walking
+onto it, section 7): never in a rogue-lite run, a dungeon gate's run included, a boss fight from the Modes menu or the Hub, the Daily, a bot or hot-seat table, online,
+Ranked or Royale.
+
+### 19.1 Gathering (slice 1)
+
+| Resource | Source | Bonus |
+|---|---|---|
+| Wood | Breaking a tree (section 2): +1 | x2 in the forest |
+| Ore | Breaking a boulder: +1 | x2 in the badlands and the desert |
+| Parts | A marble the troop's push ejects: +1 each. A wild fight won: +3 | x2 in the rings 4 and 5 |
+| Shards | A tower or a lair beaten from the world: +5. A lore log found: +1 | none |
+
+- **TUNE.** Every number is in `TUNE` of `client/src/openworldresources.ts`, with the pure functions that give a yield (`breakYield`, `ejectYield`, `wildYield`,
+  `lairYield`, `logYield`). The biome is the one of the broken cell (section 2). The client's mode and the MCP server use the same module.
+- **The ring of a cell** (for the parts) is the ring whose towers stand nearest to its hex distance from the spawn (`ringOfCell`): ring 1 below 231, ring 2 from 231,
+  ring 3 from 286, ring 4 from 340, ring 5 from 392, halfway between the medians of the towers of two rings (section 15). An ejection counts at the hero's cell, a wild win
+  at the cell the beaten marble started on.
+- **Gathered once.** A broken obstacle stays broken (`broken`, section 2) and a beaten marble stays gone (`fight.removed`), and the counts are saved in the same record, so a
+  reload gives nothing twice. A wild win and a lair won are paid by `beatMarble` and `beat` of the save, only when the marble or the lair was not beaten already; a log
+  gives its shard the first time it is found (`logs`). Only the hero's own actions pay: an obstacle broken, a marble beaten or a lair won by another hero (`multiplayer.md`
+  section 7) pays nothing, and a boss beaten from the Modes menu or the Hub is no lair beaten from the world (section 16).
+- **Scope.** The counts change only from these actions of the Open world. No other mode reads or writes them.
+- **The plate.** One line under the medals and the recruits, `#openworld-resources`: `Wood 12 · Ore 7 · Parts 20 · Shards 2`, zeros at the start, on the full plate (a phone
+  held upright shows it behind the chip's More, as the recruits line). `body[data-openworld-resources]` holds `wood,ore,parts,shards`, for the browser checks.
+- **Save.** Record 8 (section 5) holds `resources` and `army`. The army is empty in this slice: `{ specials: [], brought: [], relics: [], relicsBrought: [] }`, lists of the
+  engine's codes of the special marbles and the relics owned and brought, so the Workshop adds no record. Limits checked on load: 6 specials owned, 4 brought, 2 relics brought.
+- **MCP.** `world_state` and `save_world` carry `resources`, `new_world` with a `save` resumes them and the `army`, and a step gathers as the client does (`mcp.md` section 5).
+- **Tests.** Client: the yields and the ring (`openworldresources.test.ts`), the mode (`openworldmoderesources.test.ts`: biome factors, ejection, log, reload, record 7), the
+  save (`openworldsave.test.ts`: record 8, record 7, garbage, once-only). MCP: the state, the steps, the lair, the save. E2E (`openworld-resources.spec.ts`): a boulder and a tree
+  broken fill the plate, and a reload keeps the counts, on a desktop and two phones, each under 15 s.
+
+### 19.2 The Workshop (slice 2)
+
+Written by slice 2 of #1655.
