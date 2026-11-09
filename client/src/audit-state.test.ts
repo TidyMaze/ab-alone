@@ -1,6 +1,6 @@
 // Audit (defensive): what the client must refuse when stored or imported data is hostile. Each test fails today.
 // Bounds named here (1e6 cells, 100 lairs, 10000 rating) are the auditor's picks; the fixer may choose others.
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { boardHtml, buildBoard, loadRivals, MAX_RIVALS, ratingHistory } from './leaderboard';
 import { loadRankedProfile, MAX_MATCH_HISTORY } from './ranked';
 import { joinBoard, readRetires } from './shareboard';
@@ -86,21 +86,22 @@ describe('signed results from a relay', () => {
 });
 
 describe('Open world save in IndexedDB', () => {
+  beforeEach(() => void vi.spyOn(console, 'warn').mockImplementation(() => {}));
   const save = { version: 1, seed: 5, record: 4, yaw: 0, hero: [0, 0], troop: [], broken: [], lairs: [], discovered: [], fight: { removed: [], added: [], beaten: 0 }, savedAt: 1 };
   it('S9a a hero at 2^52 is refused', () => {
     expect(decodeWorld({ ...save, hero: [2 ** 52, -(2 ** 52)] }, 5, 1)).toBeNull();
   });
-  it('S9b a lair number 2^52 is refused', () => {
-    expect(decodeWorld({ ...save, lairs: [2 ** 52] }, 5, 1)).toBeNull();
+  it('S9b a lair number 2^52 is not trusted: no lair beaten, the rest kept (#1661)', () => {
+    expect(decodeWorld({ ...save, lairs: [2 ** 52] }, 5, 1)).toMatchObject({ lairs: [], hero: [0, 0] });
   });
-  it('S9c beaten 2^52 is refused', () => {
-    expect(decodeWorld({ ...save, fight: { ...save.fight, beaten: 2 ** 52 } }, 5, 1)).toBeNull();
+  it('S9c beaten 2^52 is not trusted: a fresh fight (#1661)', () => {
+    expect(decodeWorld({ ...save, fight: { ...save.fight, beaten: 2 ** 52 } }, 5, 1)).toMatchObject({ fight: save.fight });
   });
-  it('S10a a troop scattered far from the hero is refused', () => {
-    expect(decodeWorld({ ...save, troop: [[900, 900], [-900, 5]] }, 5, 1)).toBeNull();
+  it('S10a a troop scattered far from the hero is not trusted: no troop (#1661)', () => {
+    expect(decodeWorld({ ...save, troop: [[900, 900], [-900, 5]] }, 5, 1)).toMatchObject({ troop: [] });
   });
-  it('S10b 200000 broken cells are refused', () => {
-    expect(decodeWorld({ ...save, broken: Array.from({ length: 200000 }, (_, i) => [i, i]) }, 5, 1)).toBeNull();
+  it('S10b 200000 broken cells are not trusted: none broken (#1661)', () => {
+    expect(decodeWorld({ ...save, broken: Array.from({ length: 200000 }, (_, i) => [i, i]) }, 5, 1)).toMatchObject({ broken: [] });
   });
   it('S11 50000 discovered chunks are refused', () => {
     const bits = btoa(String.fromCharCode(...new Uint8Array(CHUNK_BYTES)));

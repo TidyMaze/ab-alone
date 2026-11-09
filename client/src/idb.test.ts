@@ -53,7 +53,63 @@ describe('indexedDbStore', () => {
     await expect(indexedDbStore().get('a')).rejects.toThrow(TypeError);
   });
 
-  it('rejects when the database cannot be opened: a newer version is already there', async () => {
+  // #1661: a connection that closed (a newer page upgraded the database, or the browser closed it) must not leave every later call failing.
+  it('keeps working after a newer page upgraded the database: the connection it closed is opened again, and the data is kept', async () => {
+    const factory = fresh();
+    const store = indexedDbStore();
+    await store.put('a', 1);
+    await new Promise<void>((resolve, reject) => {
+      const req = factory.open('ab-alone', 2);
+      req.onblocked = () => reject(new Error('blocked'));
+      req.onsuccess = () => {
+        req.result.close();
+        resolve();
+      };
+    });
+    expect(await store.get('a')).toBe(1);
+    await store.put('b', 2);
+    expect(await store.get('b')).toBe(2);
+    await store.delete('a');
+    expect(await store.get('a')).toBeUndefined();
+  });
+
+  it('retries once on a fresh connection when its connection is closed under it', async () => {
+    fresh();
+    const store = indexedDbStore();
+    await store.put('a', 1);
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementationOnce(() => {
+      throw new DOMException('The database connection is closing.', 'InvalidStateError');
+    });
+    expect(await store.get('a')).toBe(1);
+  });
+
+  it('retries once when the database fails to open, and rejects when it fails twice', async () => {
+    fresh();
+    const store = indexedDbStore();
+    const open = vi.spyOn(indexedDB, 'open').mockImplementationOnce(() => {
+      throw new Error('blocked');
+    });
+    await store.put('a', 1);
+    expect(await store.get('a')).toBe(1);
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens whatever version of the database is there, so an upgraded one is not a failure', async () => {
+    const factory = fresh();
+    await new Promise<void>((resolve) => {
+      const req = factory.open('ab-alone', 3);
+      req.onupgradeneeded = () => req.result.createObjectStore('game');
+      req.onsuccess = () => {
+        req.result.close();
+        resolve();
+      };
+    });
+    const store = indexedDbStore();
+    await store.put('a', 1);
+    expect(await store.get('a')).toBe(1);
+  });
+
+  it('rejects when the database has no game store', async () => {
     const factory = fresh();
     await new Promise<void>((resolve) => {
       const req = factory.open('ab-alone', 3);
@@ -62,7 +118,7 @@ describe('indexedDbStore', () => {
         resolve();
       };
     });
-    await expect(indexedDbStore().get('a')).rejects.toMatchObject({ name: 'VersionError' });
+    await expect(indexedDbStore().get('a')).rejects.toMatchObject({ name: 'NotFoundError' });
   });
 
   it('rejects when the transaction aborts', async () => {

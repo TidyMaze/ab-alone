@@ -47,18 +47,22 @@ describe('the save of the camera yaw (#1026)', () => {
     expect(store.data.has('openworld:7')).toBe(true);
   });
 
-  it('discards a record of a record version this build does not know, a later one', async () => {
+  it('refuses a record of a record version this build does not know, a later one, and keeps it aside, not deleted (#1661)', async () => {
     const store = memoryStore();
-    store.data.set('openworld:7', { ...record(7), record: 9, yaw: 0 });
+    const later = { ...record(7), record: 9, yaw: 0 };
+    store.data.set('openworld:7', later);
     expect(await worldSaves(store, 1).load(7)).toBeNull();
-    expect(store.data.has('openworld:7')).toBe(false);
+    expect(store.data.get('openworld:7')).toEqual(later);
+    expect(store.data.get('openworld:7:refused')).toEqual(later);
   });
 
-  it('discards a record of this record version whose yaw is not a number', async () => {
+  it('keeps a record of this record version whose yaw is not a number, with the default angle, and says so (#1661)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const store = memoryStore();
     store.data.set('openworld:7', { ...record(7), record: 2, yaw: 'x' });
-    expect(await worldSaves(store, 1).load(7)).toBeNull();
-    expect(store.data.has('openworld:7')).toBe(false);
+    expect(await worldSaves(store, 1).load(7)).toMatchObject({ yaw: 0, hero });
+    expect(store.data.has('openworld:7')).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('yaw'));
   });
 });
 
@@ -75,11 +79,13 @@ describe('the save of the broken obstacles (#1147)', () => {
     expect((await worldSaves(store, 1).load(7))!.broken).toEqual([]);
   });
 
-  it('discards a record whose broken cells are not cells', async () => {
+  it('keeps a record whose broken cells are not cells, with none broken (#1661)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const broken of ['x', [[1]], [[1.5, 0]]]) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...record(7), record: 2, broken });
-      expect(await worldSaves(store, 1).load(7)).toBeNull();
+      expect(await worldSaves(store, 1).load(7)).toMatchObject({ broken: [], hero });
+      expect(store.data.has('openworld:7')).toBe(true);
     }
   });
 });
@@ -99,12 +105,13 @@ describe('the save of the beaten lairs (#1170)', () => {
     }
   });
 
-  it('discards a record of this record version whose lairs are not a list of lair numbers', async () => {
+  it('keeps a record of this record version whose lairs are not a list of lair numbers, with none beaten (#1661)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const lairs of [undefined, 'x', [-1], [1.5], ['a']]) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...record(7), record: 3, yaw: 0, lairs });
-      expect(await worldSaves(store, 1).load(7)).toBeNull();
-      expect(store.data.has('openworld:7')).toBe(false);
+      expect(await worldSaves(store, 1).load(7)).toMatchObject({ lairs: [], hero });
+      expect(store.data.has('openworld:7')).toBe(true);
     }
   });
 
@@ -188,11 +195,13 @@ describe('the save of the discovered cells (#1411)', () => {
     }
   });
 
-  it('discards a record of this record version whose discovered cells do not decode', async () => {
+  it('keeps a record of this record version whose discovered cells do not decode, with none discovered (#1661)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const bad of [undefined, 'x', [[0, 0, '!!']]]) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...record(7), record: 4, yaw: 0, lairs: [], discovered: bad });
-      expect(await worldSaves(store, 1).load(7)).toBeNull();
+      expect(await worldSaves(store, 1).load(7)).toMatchObject({ discovered: [], hero });
+      expect(store.data.has('openworld:7')).toBe(true);
     }
   });
 
@@ -219,12 +228,13 @@ describe('the save of the time of day (#1496)', () => {
     expect((await worldSaves(store, 1).load(7))!.time).toBe(0);
   });
 
-  it('discards a record of this record version whose time is not inside one cycle', async () => {
+  it('keeps a record of this record version whose time is not inside one cycle, at the start of day (#1661)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const bad of ['x', -1, Number.NaN, 12 * 60_000, undefined]) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...record(7), record: 5, yaw: 0, lairs: [], discovered: [], time: bad });
-      expect(await worldSaves(store, 1).load(7), String(bad)).toBeNull();
-      expect(store.data.has('openworld:7')).toBe(false);
+      expect(await worldSaves(store, 1).load(7), String(bad)).toMatchObject({ time: 0, hero });
+      expect(store.data.has('openworld:7')).toBe(true);
     }
   });
 
@@ -252,12 +262,13 @@ describe('the save of the lore logs found (#1589)', () => {
     expect((await worldSaves(store, 1).load(7))!.logs).toEqual([]);
   });
 
-  it('discards a record of this record version whose logs are not a list of log numbers', async () => {
+  it('keeps a record of this record version whose logs are not a list of log numbers, with none found (#1661)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const bad of ['x', undefined, [-1], [1.5], ['a'], [[1]], Array.from({ length: 100_001 }, () => 1)]) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...record(7), record: 6, yaw: 0, lairs: [], discovered: [], time: 0, logs: bad });
-      expect(await worldSaves(store, 1).load(7), String(bad).slice(0, 20)).toBeNull();
-      expect(store.data.has('openworld:7')).toBe(false);
+      expect(await worldSaves(store, 1).load(7), String(bad).slice(0, 20)).toMatchObject({ logs: [], hero });
+      expect(store.data.has('openworld:7')).toBe(true);
     }
   });
 
@@ -292,13 +303,14 @@ describe('the save of the recruits (#1531)', () => {
     expect((await worldSaves(store, 1).load(7))!.recruits).toBe(0);
   });
 
-  it('discards a record of this record version whose recruits are not a whole number up to the cap, or whose troop is longer than 15 and them', async () => {
+  it('keeps a record of this record version whose recruits are not a whole number up to the cap, with none, and one whose troop is longer than 15 and them, with no troop (#1661)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const bad: [unknown, Axial[]][] = [['x', crowd(2)], [undefined, crowd(2)], [-1, crowd(2)], [1.5, crowd(2)], [RECRUIT_MAX + 1, crowd(2)], [0, crowd(16)], [2, crowd(18)]];
     for (const [recruits, troop] of bad) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...v6, record: 7, recruits, troop });
-      expect(await worldSaves(store, 1).load(7), String(recruits)).toBeNull();
-      expect(store.data.has('openworld:7')).toBe(false);
+      expect(await worldSaves(store, 1).load(7), String(recruits)).toMatchObject({ recruits: expect.any(Number), troop: [], hero });
+      expect(store.data.has('openworld:7')).toBe(true);
     }
   });
 
@@ -307,7 +319,8 @@ describe('the save of the recruits (#1531)', () => {
     store.data.set('openworld:7', { ...v6, record: 7, recruits: RECRUIT_MAX, troop: crowd(15 + RECRUIT_MAX) });
     expect((await worldSaves(store, 1).load(7))!.troop).toHaveLength(15 + RECRUIT_MAX);
     store.data.set('openworld:7', { ...v6, troop: crowd(16) });
-    expect(await worldSaves(store, 1).load(7)).toBeNull();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect((await worldSaves(store, 1).load(7))!.troop).toEqual([]);
   });
 
   it('beat and beatMarble keep the recruits, and on a record of version 6 write a record that still loads', async () => {
@@ -356,13 +369,17 @@ describe('the save of the resources and the army (#1655, record 8)', () => {
     expect(back.army).toEqual(NO_ARMY);
   });
 
-  it('discards a record 8 whose resources or army do not decode', async () => {
+  it('keeps a record 8 whose resources or army do not decode, with the other one and the rest kept (#1661)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const good = { ...v7, record: 8, resources: stock, army };
     for (const bad of [{ resources: undefined }, { resources: { wood: -1, ore: 0, parts: 0, shards: 0 } }, { army: undefined }, { army: { ...army, specials: 'x' } }]) {
       const store = memoryStore();
       store.data.set('openworld:7', { ...good, ...bad });
-      expect(await worldSaves(store, 1).load(7), JSON.stringify(bad)).toBeNull();
-      expect(store.data.has('openworld:7')).toBe(false);
+      const back = (await worldSaves(store, 1).load(7))!;
+      expect(back.resources, JSON.stringify(bad)).toEqual('resources' in bad ? NO_RESOURCES : stock);
+      expect(back.army).toEqual('army' in bad ? NO_ARMY : army);
+      expect(back.hero).toEqual(hero);
+      expect(store.data.has('openworld:7')).toBe(true);
     }
   });
 
@@ -452,34 +469,43 @@ describe('worldSaves', () => {
     expect(await saves.last()).toBe(9);
   });
 
-  it('discards a save of another world version and starts that world fresh', async () => {
+  it('refuses a save of another world version and starts that world fresh, the old one kept aside, not deleted (#1661)', async () => {
     const store = memoryStore();
     store.data.set('openworld:7', record(7, 0));
     expect(await worldSaves(store, 1).load(7)).toBeNull();
-    expect(store.data.has('openworld:7')).toBe(false);
+    expect(store.data.get('openworld:7:refused')).toEqual(record(7, 0));
   });
 
-  it('discards a garbage record: the wrong shape, cells that are not integers, too many marbles, another seed', async () => {
+  it('refuses a record whose hero or seed is unusable and keeps it aside: the wrong shape, a hero that is not a cell, another seed (#1661)', async () => {
     const garbage: unknown[] = [
       'x',
       null,
       { ...record(7), hero: 'a' },
       { ...record(7), hero: [1] },
       { ...record(7), hero: [1.5, 0] },
-      { ...record(7), troop: [[0, 0], ['a', 0]] },
-      { ...record(7), troop: Array.from({ length: 16 }, () => [0, 0]) }, // more than the troop
-      { ...record(7), troop: 'x' },
-      { ...record(7), fight: null },
-      { ...record(7), fight: { removed: ['2,0'], added: [], beaten: -1 } },
-      { ...record(7), savedAt: 'now' },
       record(8), // the record of another seed under this key
     ];
     for (const raw of garbage) {
       const store = memoryStore();
       store.data.set('openworld:7', raw);
       expect(await worldSaves(store, 1).load(7), JSON.stringify(raw)).toBeNull();
-      expect(store.data.has('openworld:7'), JSON.stringify(raw)).toBe(false);
+      expect(store.data.get('openworld:7:refused'), JSON.stringify(raw)).toEqual(raw);
+      expect(store.data.get('openworld:7'), JSON.stringify(raw)).toEqual(raw); // never deleted
     }
+  });
+
+  it('keeps a record whose troop, fight or savedAt is garbage, with those fields at their defaults, and the progress kept (#1661)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const progress = { ...record(7), record: 3, yaw: 0.5, lairs: [4], broken: [[9, 9]] };
+    for (const bad of [{ troop: [[0, 0], ['a', 0]] }, { troop: Array.from({ length: 16 }, () => [0, 0]) }, { troop: 'x' }, { fight: null }, { fight: { removed: ['2,0'], added: [], beaten: -1 } }, { savedAt: 'now' }]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...progress, ...bad });
+      const back = (await worldSaves(store, 1).load(7))!;
+      expect(back, JSON.stringify(bad)).toMatchObject({ hero, yaw: 0.5, lairs: [4], broken: [[9, 9]] });
+      expect(store.data.has('openworld:7:refused'), JSON.stringify(bad)).toBe(false);
+      expect(Object.keys(bad).every((field) => warn.mock.calls.some(([line]) => String(line).includes(field)))).toBe(true);
+    }
+    expect((await worldSaves(memoryStore(), 1).load(7))).toBeNull();
   });
 
   it('gives the last world only as a seed: a garbage record is no last world', async () => {
@@ -503,10 +529,10 @@ describe('worldSaves', () => {
     expect(await saves.last()).toBeNull();
   });
 
-  it('a stale save that cannot be deleted is still no save, and no throw', async () => {
+  it('a stale save that cannot be kept aside is still no save, and no throw', async () => {
     const store = memoryStore();
     store.data.set('openworld:7', record(7, 0));
-    store.delete = async () => Promise.reject(new Error('full'));
+    store.put = async () => Promise.reject(new Error('full'));
     expect(await worldSaves(store, 1).load(7)).toBeNull();
   });
 
