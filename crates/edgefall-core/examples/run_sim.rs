@@ -322,7 +322,7 @@ fn pool(set: &Settings, runs: u64, threads: u32) {
     });
     println!("| act | percent | fights won | lost to |");
     println!("|---|---|---|---|");
-    for act in 0..ACTS {
+    for (act, percent) in set.percents.iter().enumerate().take(ACTS) {
         let of: Vec<_> = fights.iter().skip(act).step_by(ACTS).collect();
         let won = of.iter().filter(|f| f.1).count();
         let mut lost: Vec<String> = LadderBoss::ALL
@@ -336,7 +336,7 @@ fn pool(set: &Settings, runs: u64, threads: u32) {
         println!(
             "| {} | {} | {won}/{} ({:.0} %) | {} |",
             act + 1,
-            set.percents[act],
+            percent,
             of.len(),
             100.0 * won as f64 / of.len() as f64,
             lost.join(", ")
