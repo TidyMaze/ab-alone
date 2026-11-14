@@ -1,8 +1,6 @@
-import './test/openworldwasm';
-import { Engine } from 'edgefall-wasm';
 import { describe, expect, it } from 'vitest';
-import { cellIndex, encodeMove } from './board';
-import { COACH, COLD_OPEN, FIRST_FIGHT, FIRST_PUSH, firstRunDone, firstRunDue, markFirstRunDone } from './firstrun';
+import type { Move } from './board';
+import { COACH, COLD_OPEN, firstRunDone, firstRunDue, isBroadside, isPush, markFirstRunDone, nextStep, stepLine, verb } from './firstrun';
 import type { Store } from './quality';
 import { SECRETS } from './story';
 import { tallyLine } from './tally';
@@ -48,7 +46,7 @@ describe('the first run (#1521, docs/specs/ui.md section 4.7)', () => {
 });
 
 describe('the cold open (#1523)', () => {
-  const lines = [COLD_OPEN.title, ...COLD_OPEN.lines, COACH.push, COACH.tally, COACH.done];
+  const lines = [COLD_OPEN.title, ...COLD_OPEN.lines, ...Object.values(COACH)];
 
   it('is three short lines: the place, the last clear visor, Tally\'s rule', () => {
     expect(COLD_OPEN.lines).toHaveLength(3);
@@ -67,7 +65,8 @@ describe('the cold open (#1523)', () => {
 
   it('speaks White and Black, as the HUD does, never glass and shell', () => {
     for (const line of lines) expect(line).not.toMatch(/pale|shell|glass/i);
-    expect(COACH.push).toMatch(/White.*Black/);
+    expect(COACH.push).toMatch(/Black/);
+    expect(COACH.select).toMatch(/White/);
   });
 
   it('explains the first Tally line of the HUD, the line of the bot table: whose seats they are', () => {
@@ -75,34 +74,66 @@ describe('the cold open (#1523)', () => {
     expect(COACH.tally).toMatch(/ledger.*seat is yours.*bot/);
   });
 
-  it('ends the fight on Tally\'s eject line, the lore\'s words for a marble pushed off: over the edge (#1649)', () => {
-    expect(COACH.done).toContain('Tally: "Another one over the edge."');
+  it('ends on Tally\'s eject line, the lore\'s words for a marble pushed off: over the edge (#1649)', () => {
+    expect(COACH.won).toContain('Tally: "Another one over the edge."');
   });
 });
 
-describe('the scripted fight (#1521)', () => {
-  const stand = (): Engine => {
-    const engine = new Engine();
-    for (const move of FIRST_FIGHT) engine.play(Int32Array.from(encodeMove(move)));
-    return engine;
-  };
+const m = (cells: [number, number][], dir: number): Move => ({ cells, dir });
+const grid = (marbles: Record<string, number>) => (q: number, r: number): number => marbles[q + ',' + r] ?? 0;
 
-  it('plays on the standard board with the engine\'s own rules, six legal plies leaving the player (side 1) to move, nothing out yet', () => {
-    expect(FIRST_FIGHT).toHaveLength(6);
-    const engine = stand();
-    expect(engine.to_move()).toBe(1);
-    expect(engine.status()).toBe(0);
-    expect([engine.ejected(1), engine.ejected(2)]).toEqual([0, 0]);
+describe('the guided steps (#1663)', () => {
+  it('names the pointer verb and the keyboard once, on the first step only', () => {
+    expect([verb(false), verb(true)]).toEqual(['Click', 'Tap']);
+    expect(stepLine('select', false)).toBe('Click one of your White marbles, or a line of up to three touching ones, to pick it. The arrow keys and Enter work too.');
+    expect(stepLine('select', true)).toMatch(/^Tap one.*pick it\.$/);
+    expect(stepLine('move', true)).toMatch(/^Tap a ringed cell/);
+    expect(stepLine('push', false)).toBe(COACH.push);
   });
 
-  it('leaves one obvious push: three White marbles in a line against the lone Black marble on the rim, which ejects it', () => {
-    const engine = stand();
-    const board = engine.board();
-    expect(board[cellIndex(-2, -2)]).toBe(2); // the lone marble, on the rim
-    expect(FIRST_PUSH.cells).toHaveLength(3);
-    for (const [q, r] of FIRST_PUSH.cells) expect(board[cellIndex(q, r)]).toBe(1);
-    engine.play(Int32Array.from(encodeMove(FIRST_PUSH)));
-    expect(engine.ejected(1)).toBe(1);
-    expect(engine.board()[cellIndex(-2, -2)]).toBe(1);
+  it('tells a broadside from an in-line move, whichever way the cells are listed', () => {
+    expect(isBroadside(m([[0, 0]], 4))).toBe(false); // one marble
+    expect(isBroadside(m([[0, 0], [1, 0]], 4))).toBe(true); // a pair on the E axis rolling NW
+    expect(isBroadside(m([[1, 0], [0, 0]], 5))).toBe(true); // listed from the other end
+    expect(isBroadside(m([[0, 0], [1, 0]], 0))).toBe(false); // along its axis
+    expect(isBroadside(m([[0, 0], [1, 0]], 1))).toBe(false); // backwards along its axis
+    expect(isBroadside(m([[1, 0], [0, 0]], 0))).toBe(false);
+    expect(isBroadside(m([[0, 1], [0, 0]], 5))).toBe(false); // the SE axis, one q: along it
+    expect(isBroadside(m([[0, 1], [0, 0]], 0))).toBe(true);
+    expect(isBroadside(m([[0, 2], [0, 0], [0, 1]], 3))).toBe(true); // three marbles on the SE axis listed out of order, rolling SW
+    expect(isBroadside(m([[1, -1], [0, 0]], 2))).toBe(false); // the NE axis
+    expect(isBroadside(m([[1, -1], [0, 0]], 0))).toBe(true);
+  });
+
+  it('sees a push: an in-line line rolling into a marble of the other side, not into a free cell, an own marble or a broadside', () => {
+    const line = m([[0, 0], [1, 0]], 0);
+    expect(isPush(line, grid({ '2,0': 2 }), 1)).toBe(true);
+    expect(isPush(m([[1, 0], [0, 0]], 0), grid({ '2,0': 2 }), 1)).toBe(true); // listed from the other end
+    expect(isPush(m([[1, 0], [0, 0]], 1), grid({ '-1,0': 2 }), 1)).toBe(true); // the other way
+    expect(isPush(line, grid({}), 1)).toBe(false);
+    expect(isPush(line, grid({ '2,0': 1 }), 1)).toBe(false);
+    expect(isPush(m([[0, 0], [1, 0]], 4), grid({ '0,-1': 2 }), 1)).toBe(false); // a broadside
+    expect(isPush(m([[0, 0]], 0), grid({ '1,0': 2 }), 1)).toBe(false); // one marble pushes nothing
+  });
+
+  it("walks select, move, broadside, push, free, each on the player's real input", () => {
+    expect(nextStep('select', { selected: 0 })).toBe('select');
+    expect(nextStep('select', { selected: 2 })).toBe('move');
+    expect(nextStep('move', { selected: 1 })).toBe('move'); // a later selection does not move it
+    expect(nextStep('move', { move: m([[0, 0]], 4), pushed: false })).toBe('broadside');
+    expect(nextStep('select', { move: m([[0, 0]], 4), pushed: false })).toBe('broadside'); // a move without the selection step
+    expect(nextStep('broadside', { move: m([[0, 0]], 4), pushed: false })).toBe('broadside'); // a single marble is not one
+    expect(nextStep('broadside', { move: m([[0, 0], [1, 0]], 4), pushed: false })).toBe('push');
+    expect(nextStep('move', { move: m([[0, 0], [1, 0]], 4), pushed: false })).toBe('push'); // a broadside first skips its step
+    expect(nextStep('push', { move: m([[0, 0], [1, 0]], 0), pushed: false })).toBe('push');
+    expect(nextStep('push', { move: m([[0, 0], [1, 0]], 4), pushed: false })).toBe('push');
+    expect(nextStep('push', { move: m([[0, 0], [1, 0]], 0), pushed: true })).toBe('free');
+    expect(nextStep('select', { move: m([[0, 0], [1, 0]], 0), pushed: true })).toBe('free'); // a push first ends the lesson
+    expect(nextStep('free', { move: m([[0, 0]], 4), pushed: false })).toBe('free');
+  });
+
+  it('the refusal gives the push rule, in plain words', () => {
+    expect(COACH.refused).toMatch(/more marbles push fewer/);
+    expect(COACH.refused).toMatch(/behind the target blocks/);
   });
 });

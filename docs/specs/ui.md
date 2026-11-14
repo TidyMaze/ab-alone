@@ -564,22 +564,27 @@ timer.
 
 A new player does not get five pages of rules first (#1521). Since #1665 a fresh profile does not reach this first run at the start: it lands on the
 standard board against the bot (section 4.10), and the first run (`client/src/firstrun.ts`), then the Hub, plays only for a profile that holds the first-win
-flag and has not seen it (the guided first match, #1663, replaces it). It plays once and can be skipped.
+flag and has not seen it. It plays once and can be skipped.
 
 1. **Cold open (#1523).** A plate over the board, the guide's own: a title (`Mess, deck 1`) and three lines in Tally's flat
    register, the place, the last clear visor and Tally's rule ("CSV Ballast, drifting over Hollow. Power: 11%." / "The crew
    has gone Black. Yours is the last clear visor." / "Tally keeps the count: six out, one winner."). It is stage 1 of the
    story (world.md section 12.2): no line holds a secret word of a later stage, and `firstrun.test.ts` checks it against
    `SECRETS`. Buttons: Skip (left) and Begin. Skip and Escape (B on the pad) go to the Hub.
-2. **Scripted fight.** Begin plays six plies on the standard board without a click (`FIRST_FIGHT`: White rolls a line of
-   three up the left edge while Black walks one marble to the rim), so the player, White, is to move with nothing out yet.
-   The obvious push (`FIRST_PUSH`, the line of three against the lone Black marble on the rim) is shown as the Hint ghost
-   (`Hint.show`, no engine asked). A coach plate at the top (above the dock on a phone held upright) says in one sentence
-   what to do, with Skip; the HUD keeps Tally's first line, which stays instead of fading, and explains it once under it
-   ("Tally is the ship's ledger. It counts every match: one seat is yours, the other is the bot's."). Any move can be played:
-   the bot answers as in any game, and the first ejection of the player ends the fight.
-3. **First ejection.** The bot does not answer. The coach plate reads "White ejected 1/6: Tally enters it. Six win a match.
-   The Echo, the first boss, waits in the Hub." with To the Hub, which opens the Hub.
+2. **First match (#1663).** Begin starts the standard 14-v-14 game on the standard board, nothing scripted, against a very weak bot
+   (`client/src/firstbot.ts`: a 1-ply mover, any legal move one time in two, else one that brings marbles towards the centre; seeded by the ply.
+   `firstbot.test.ts`, 200 seeded games each: it never wins against a random mover (every game draws at 100 plies: a random mover ejects almost
+   nothing) and loses to a greedy pusher in 194 of 200, the rest draws; 30 of 30 lost to the engine's 1-node search). The HUD names it
+   `Practice bot · easy win`, with no rating. A new player under the lock (section 4.10)
+   lands here directly, with no cold open and no Hub. A coach plate at the top (above the dock on a phone held upright) gives one sentence per
+   step, each waiting for the player's real input: select (Click or Tap, by the device; the keyboard named once), pick the ringed cell,
+   a broadside move, a push (the rule: three push two or one, two push one, a marble behind blocks). A broadside played first skips to the push step,
+   a push played first ends the lesson. After 10 moves without a push the push step comes back, with a push of the position as the hint. After the push the plate fades at the next move and the game goes on. For the whole match an illegal move
+   says the push rule in the HUD (`COACH.refused`). The HUD keeps Tally's first line and explains it once under it ("Tally is the ship's ledger.
+   It counts every match: one seat is yours, the other is the bot's."). The match is never saved as the player's local game.
+3. **End.** A win: for a new player the unlock card of section 4.10; for anyone else the plate reads "You won the first match..." with To the
+   Hub. A draw or a loss: the plate says New game starts it again (a draw says so apart), the lock stays on. The end plate shows once. Skip hides the plate (a new player keeps the board and the lock,
+   anyone else goes to the Hub).
 4. **Hub with a goal.** The Hub says the next thing to do (#1524, below): until a boss is beaten it is The Echo. Its door is the one
    solid amber plate (`goalRoom` in `hubview.ts`), the Mess row of the lift-shaft rail is ringed in amber, and the line of the rail
    reads "Next goal: Beat The Echo on the Mess deck." The door's glow breathes; Reduced motion zeroes the animation and keeps the
@@ -590,8 +595,8 @@ flag and has not seen it (the guided first match, #1663, replaces it). It plays 
   (`ab-alone.firstrun = done`, localStorage) as soon as it starts, so it plays once even when the tab closes. The scripted
   game is never saved as the player's local game.
 - **Tests.** An automated browser does not play it, and is never locked by section 4.10 (unless `?newplayer`), so the e2e specs boot on a fresh profile as before; `?firstrun` makes
-  it a first launch (`client/e2e/first-run.spec.ts`: a fresh profile reaches its first ejection with no menu opened, then the
-  Hub shows The Echo as the goal, well inside the 60 s of #1521). `body[data-firstrun]` reads `open`, `fight` or `done`.
+  it a first launch (`client/e2e/first-run.spec.ts`: a fresh profile plays the guided steps to its first push, then a won match opens the
+  Hub with The Echo as the goal, well inside the 60 s of #1521). `body[data-firstrun]` reads `open` or `match`.
 - **Vocabulary.** White and Black everywhere in rules text, as the HUD says (#1523): the guide no longer says pale glass and
   black shells.
 

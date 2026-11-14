@@ -30,7 +30,8 @@ import { publishResult } from './publish';
 import { RankedSeal, parseSeal, type Step } from './rankedseal';
 import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joinBoard, leaveBoard, newKey, readChoice, readRetires, readBoardName, writeChoice } from './shareboard';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
-import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFirstRunDone } from './firstrun';
+import { firstBotMove } from './firstbot';
+import { COACH, COLD_OPEN, PRACTICE_BOT, firstRunDue, isPush, markFirstRunDone, nextStep, stepLine, type MatchStep } from './firstrun';
 import { openWorldLeads } from './menuorder';
 import { doorLocked, existingPlayer, firstWinGame, isLocked, LOCK_BANNER, markFirstWin, paintLocks, UNLOCK_CARD } from './unlock';
 import { worldSaves } from './openworldsave';
@@ -1372,17 +1373,22 @@ document.addEventListener(
   },
   true,
 );
-// The first run (#1521, #1523, firstrun.ts, ui.md 4.7): a fresh profile gets the cold open, then a scripted fight (the standard
-// board played six plies, no click), the push shown as the hint and the coach plate, until the player's first ejection, then the Hub
-// with The Echo as the goal. Skip, at the cold open or in the fight, goes to the Hub. It is marked done when it starts: it plays
-// once. The scripted game is never saved as the player's. body[data-firstrun] reads open, fight or done, for the e2e tests.
+// The first run (#1521, #1523, #1663, firstrun.ts, ui.md 4.7): a fresh profile gets the cold open, then the first match: the standard 14-v-14
+// board against a very weak bot (firstbot.ts), a coach plate over it with one sentence per step (select, move, a broadside, a push), each
+// waiting for the player's real input, which fades after the push. A new player (the lock on) lands in it with no cold open. It is never saved
+// as the player's game, and a skipped or lost one leaves the lock on. body[data-firstrun] reads open or match, for the tests.
 const coldBox = document.getElementById('coldopen')!;
 const coldBegin = document.getElementById('coldopen-begin') as HTMLButtonElement;
 const coach = document.getElementById('coach')!;
 const coachStep = document.getElementById('coach-step')!;
 const coachSkip = document.getElementById('coach-skip') as HTMLButtonElement;
 const coachHub = document.getElementById('coach-hub') as HTMLButtonElement;
-let firstRun: 'open' | 'fight' | 'done' | null = null;
+let firstRun: 'open' | 'match' | null = null;
+let matchStep: MatchStep = 'select';
+let guided = false; // the coach plate is on: Skip turns it off
+let matchOver = false; // the end plate shows once
+let stuck = 0; // the player's moves since the lesson began, without a push
+let nudge = false; // the push step is shown again, with the hint, at the player's next turn
 function setFirstRun(phase: typeof firstRun): void {
   firstRun = phase;
   if (phase) document.body.dataset.firstrun = phase;
@@ -1391,6 +1397,7 @@ function setFirstRun(phase: typeof firstRun): void {
 /** Closes the first run's plates, wherever it was: another mode, a new game or its own end. */
 function dropFirstRun(): void {
   coldBox.hidden = coach.hidden = true;
+  guided = false;
   setFirstRun(null);
 }
 function startFirstRun(): void {
@@ -1402,34 +1409,69 @@ function startFirstRun(): void {
   coldBegin.focus();
   analyse(); // the board behind it is the start position
 }
-function beginFirstFight(): void {
-  coldBox.hidden = true;
-  setFirstRun('fight');
-  for (const record of FIRST_FIGHT_RECORDS) {
-    engine.play(Int32Array.from(record));
-    history.push(record);
-  }
-  coachStep.textContent = COACH.push;
+function showStep(step: MatchStep): void {
+  matchStep = step;
+  if (!guided) return;
+  coachStep.textContent = stepLine(step, matchMedia('(pointer: coarse)').matches);
   coach.hidden = false;
-  hint.show(engine, history, encodeMove(FIRST_PUSH));
+}
+/** The first match: the standard start position, the coach at its first step. */
+function beginFirstMatch(): void {
+  coldBox.hidden = true;
+  setFirstRun('match');
+  guided = true;
+  matchOver = false;
+  stuck = 0;
+  nudge = false;
+  coachSkip.hidden = false;
+  coachHub.hidden = true;
+  showStep('select');
   refresh();
   analyse();
 }
-/** The player's first ejection: Tally enters it, the bot does not answer, and the way to the Hub opens. */
-function finishFirstFight(): void {
-  setFirstRun('done');
-  coachStep.textContent = COACH.done;
+const cellAhead = (q: number, r: number): number => engine.board()[cellIndex(q, r)]!; // a legal in-line move has a cell ahead of its front marble
+/** The player's move in the first match: the next step, or the plate fades once the push is done. After 10 moves without a push the push step comes back, with a push as the hint. */
+function advanceMatch(move: Move, pushed: boolean): void {
+  if (matchStep === 'free') {
+    coach.hidden = true;
+    return;
+  }
+  const next = nextStep(matchStep, { move, pushed });
+  stuck = next === 'free' ? 0 : stuck + 1;
+  nudge = guided && stuck > 0 && stuck % 10 === 0;
+  showStep(nudge ? 'push' : next);
+}
+/** The player's turn again after a nudge: a push of the position, when it has one, shows as the hint. */
+function nudgePush(): void {
+  if (!nudge) return;
+  nudge = false;
+  const push = parseMoves(engine.legal_moves()).find((move) => isPush(move, cellAhead, PLAYER));
+  if (push) hint.show(engine, history, encodeMove(push));
+}
+/** The match is over, once: the win shows the unlock card (#1665) or, for a player the lock is off for, the way to the Hub; a draw or a loss says New game starts it again. */
+function finishFirstMatch(anim: EndAnim | undefined): void {
+  if (matchOver) return; // the plate does not come back after the card is dismissed
+  matchOver = true;
+  const won = anim === 'win';
   coachSkip.hidden = true;
-  coachHub.hidden = false;
-  coachHub.focus();
+  coachStep.textContent = won ? COACH.won : anim === 'draw' ? COACH.draw : COACH.lost;
+  coachHub.hidden = !won || locked;
+  coach.hidden = won && !document.getElementById('unlock')!.hidden; // the card says it already
 }
 function endFirstRun(): void {
   dropFirstRun();
   enterHub(loadProgress(store).at);
 }
-coldBegin.addEventListener('click', beginFirstFight);
+/** Skip: a new player (the lock on) keeps the board with the plate gone, anyone else goes to the Hub. */
+function skipFirstRun(): void {
+  if (firstRun === 'match' && locked) {
+    guided = false;
+    coach.hidden = true;
+  } else endFirstRun();
+}
+coldBegin.addEventListener('click', beginFirstMatch);
 document.getElementById('coldopen-skip')!.addEventListener('click', endFirstRun);
-coachSkip.addEventListener('click', endFirstRun);
+coachSkip.addEventListener('click', skipFirstRun);
 coachHub.addEventListener('click', endFirstRun);
 coldBox.addEventListener('keydown', (e) => {
   e.stopPropagation(); // the board and the menus never see it
@@ -3074,6 +3116,7 @@ function gameNodes(): number {
  * (#1611); none for the Trainer, a wild marble, an online game that is no boss and the map of a run. The tooltip says it is an estimate; the test
  * hook is the number. */
 function ratingLine(): string {
+  if (firstRun === 'match') return `<span class="bot-rating">${PRACTICE_BOT}</span>`; // the weak first bot has no rating (#1663)
   const boss = fight && engine instanceof Encounter ? engine : null; // a boss, co-op and duel ones too, rated by its own search budget at the percent the bot searches it at (#1611)
   if (!boss && (!worker || fight || online || trainer || wildFrom || (run && !run.state.fighting))) return '';
   const nodes = boss ? boss.node_budget(online ? 100 : (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]) : gameNodes(); // online: shown, not scaled
@@ -3082,7 +3125,7 @@ function ratingLine(): string {
 }
 
 async function botTurn(): Promise<void> {
-  if (online || replaying || thinking || engine.status() !== 0 || firstRun === 'done') return;
+  if (online || replaying || thinking || engine.status() !== 0) return;
   const bots = worker !== null && engine.to_move() === BOT_SIDE;
   const auto = autoPlay && !bots; // the player's side, played by the bot (#792)
   const mover = worker ?? botWorker;
@@ -3101,7 +3144,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, wildFrom && build ? FULL_ARMY : run?.state.army, build ? build.placed : run?.state.placed, wildFrom && build ? wildFoes(build.relics) : run ? foesFor(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined, build ? relicsMask(build.relics) : run ? relicMask(run.state) : undefined),
+      bots && firstRun === 'match' ? firstBotMove(engine.legal_moves(), history.length) : askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, wildFrom && build ? FULL_ARMY : run?.state.army, build ? build.placed : run?.state.placed, wildFrom && build ? wildFoes(build.relics) : run ? foesFor(run.map, run.state) : undefined, trainer ? { wave: trainer.wave, left: MARBLES - trainer.lost } : undefined, build ? relicsMask(build.relics) : run ? relicMask(run.state) : undefined),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
@@ -3121,6 +3164,7 @@ async function botTurn(): Promise<void> {
     }
     if (auto && run?.state.fighting) run.state = { ...run.state, auto: true }; // a run that used Auto-play is marked (#1542)
     playMove(move);
+    if (firstRun === 'match') nudgePush();
     if (bots && turnBack(engine.to_move(), PLAYER, engine.status(), replaying !== null)) playCue('turn-start', AFTER_SLIDE); // the bot has answered
     refresh();
     void botTurn(); // the other side's reply, or the next auto-played move
@@ -3926,11 +3970,11 @@ function drawHud(extra = ''): void {
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
   const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
-  const opening = (shownPly() === 0 || firstRun === 'fight') && status === 0;
+  const opening = shownPly() === 0 && status === 0;
   const flavour = opening ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id, stage: storyStage(store) }) : '';
   sawLines(flavour); // the line of the story at the start of a match (#1585), kept in the ledger whatever the plate shows
   // The plate's subtitle: a match says who plays and the goal (#1568); a boss fight and the first run keep Tally's line.
-  const scripted = firstRun === 'open' || firstRun === 'fight'; // the first run keeps Tally's line, its coach note explains it (#1521)
+  const scripted = firstRun === 'open' || firstRun === 'match'; // the first run keeps Tally's line, its coach note explains it (#1521)
   const tally = opening && !fight && !scripted ? matchLine({ mode: online ? 'online' : run ? 'run' : trainer ? 'trainer' : worker ? 'bot' : 'local', win: win[0] }) : flavour;
   const moves = run?.state.fighting ? movesLine(run.map, run.state) : ''; // the budget and the count of the act in a fight (#1473), the map has its own
   // End banner (#282): body[data-over] carries the animation id for the CSS and the e2e tests.
@@ -3944,6 +3988,7 @@ function drawHud(extra = ''): void {
   if (end && (fight || worker || online?.role === 'player') && !replaying) endCue(engine, end.anim, AFTER_EJECTION);
   if (end?.anim === 'win' && (fight || worker || online?.role === 'player') && !replaying) winOnce(); // the wins of any mode, a hot seat and a spectator apart (#1584)
   if (locked && firstWinGame(end?.anim, { bot: worker !== null, fight: fight !== null, run: run !== null, trainer: trainer !== null, online: online !== null, wild: wildFrom !== null, replaying: replaying !== null })) unlockFirstWin(); // the first win against the bot opens the other modes (#1665)
+  if (firstRun === 'match' && status !== 0) finishFirstMatch(end?.anim);
   if (end?.anim === 'win' && fight) {
     const note = medalNote(fight); // a won fight: Black is the player's side. The story is at the stage this win reaches before its line is chosen (#1546)
     const won = bossEndLine(fight.id, 'win', storyStage(store))!;
@@ -3974,7 +4019,7 @@ function drawHud(extra = ''): void {
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
     botMove: botMoved?.game === engine && botMoved.len === history.length && status === 0 ? botMoved.text : '',
-    tallyNote: firstRun === 'fight' ? COACH.tally : '', // the first Tally line explained once, under it (#1521)
+    tallyNote: firstRun === 'match' ? COACH.tally : '', // the first Tally line explained once, under it (#1521)
     tally,
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
     rematch:
@@ -4995,6 +5040,7 @@ function blocked(retry: () => void): boolean {
 
 function play(seenMove: Move): void {
   const record = encodeMove(seenMove);
+  const pushed = firstRun === 'match' && isPush(seenMove, cellAhead, PLAYER);
   try {
     playMove(record);
   } catch (refusal) {
@@ -5006,7 +5052,7 @@ function play(seenMove: Move): void {
   }
   selected = [];
   keyDir = -1;
-  if (firstRun === 'fight' && engine.ejected(1) > 0) finishFirstFight(); // before the bot's turn: it never answers (botTurn)
+  if (firstRun === 'match') advanceMatch(seenMove, pushed);
   void online?.send(record);
   if (online && fight && !duel) void answerBoss(true); // co-op: our move's boss reply; in a duel the boss seat answers (#1485)
 }
@@ -5039,6 +5085,7 @@ function click(q: number, r: number): void {
     selected = toggleSelection(selected, [q, r]);
     keyDir = -1;
     hint.clear(); // a new selection
+    if (firstRun === 'match' && guided) showStep(nextStep(matchStep, { selected: selected.length }));
   } else {
     // The engine is the only judge: a click that is not a legal move changes nothing.
     const mv = moveForClick(legalMoves(), selected, [q, r]);
@@ -5047,7 +5094,7 @@ function click(q: number, r: number): void {
       refresh();
       cue(document.body, 'refused', MOTION.fast); // the turn line shakes (#1097); the text says why nothing moved
       playCue('illegal-move'); // a hover never comes here: only a press with a selection
-      return hud(' · not a legal move');
+      return hud(firstRun === 'match' ? ` · ${COACH.refused}` : ' · not a legal move'); // the first match says why (#1663)
     }
   }
   refresh();
@@ -7705,7 +7752,8 @@ else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
 else if (duelInvite && boss_ids().includes(duelInvite.boss)) void goOnline(duelInvite.room, 2, duelInvite, creator, true); // the joiner plays the boss (#1316)
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite, creator); // an unknown boss starts nothing
 else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
-else if (!resumed && !locked && firstRunDue(store, location.search, navigator.webdriver, location.hash, loadProgress(store).beaten.length > 0)) startFirstRun(); // a fresh profile plays the first run (#1521)
+else if (!resumed && (!locked || new URLSearchParams(location.search).has('firstrun')) && firstRunDue(store, location.search, navigator.webdriver, location.hash, loadProgress(store).beaten.length > 0)) startFirstRun(); // a fresh profile plays the first run (#1521); a locked one only when ?firstrun asks (the landing below is its first match, #1663)
+else if (!resumed && locked && !location.search && !location.hash) beginFirstMatch(); // a new player lands in the guided first match, no cold open (#1663)
 else if (!resumed && !locked && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Hub (#602)
 else analyse(); // the start position
 

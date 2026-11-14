@@ -23,10 +23,10 @@ async function finish(game: Game, moves: number[][]): Promise<void> {
 }
 
 describe('the landing of a new player', () => {
-  it('is the standard board against the bot, with no cold open and no Hub, and the other modes locked', async () => {
+  it('is the standard board against the bot (the guided first match, #1663), with no cold open and no Hub, and the other modes locked', async () => {
     await boot('/', { webdriver: false });
     expect(byId('coldopen').hidden).toBe(true);
-    expect(document.body.dataset.firstrun).toBeUndefined();
+    expect(document.body.dataset.firstrun).toBe('match');
     expect(document.body.dataset.hub).toBeUndefined();
     expect(unlocked()).toBe('0');
     expect(byId('open-world-entry').hidden).toBe(true); // the Open world does not lead a new player
