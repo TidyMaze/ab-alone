@@ -1634,6 +1634,14 @@ body[data-place-transition] #screen-exit { display: none; }
 #support #board-zoom[hidden], body:has(#dock-wrap :is(#lore, #goal-sheet, #trainer-card):not([hidden]), #settings-menu:not([hidden])) #board-zoom { display: none; } /* a sheet over the dock, or the open settings menu, covers its place */
 #support #board-zoom[aria-pressed='true'] { background: var(--active-fill); color: var(--active-ink); }
 #support #board-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The question of a wild marble in the way (#1662): top centre, so it covers neither the plate and chip at the bottom nor the hero; the world waits for the answer. */
+#openworld-ask { display: none; position: fixed; z-index: 3; top: 4.5rem; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(22rem, calc(100vw - 2rem)); padding: 0.75rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--plate-accent); border-radius: var(--r-card); font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); }
+body[data-openworld] #openworld-ask:not([hidden]) { display: block; }
+#openworld-ask p { margin: 0 0 0.5rem; font-size: 1rem; } /* the question reads at 16 px on a phone (#1662) */
+#openworld-ask-buttons { display: flex; gap: 0.5rem; }
+#openworld-ask-buttons button { flex: 1; min-height: var(--target); cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+#openworld-ask-fight { border-color: var(--plate-accent); color: var(--plate-accent); }
+#openworld-ask-buttons button:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
 /* Screen transitions (#1099, docs/specs/motion.md story 9): entering or leaving the Open world cross-fades the canvas in on --motion-base. The
    rule that stops matching swaps the animation for the other keyframes (the same name would not restart), so each change replays the fade. Opacity only: nothing waits, the game takes input from the first frame.
    A game that is over (the loss dim, end-dim) keeps its own animation. Reduced motion: the tokens are 0ms, a hard cut. */
@@ -1658,11 +1666,3 @@ body[data-look='neon']:not([data-tier='low']) :is(#modes, #new-game, #hint, #ope
 body[data-look='neon']:not([data-tier='low']) #modes[aria-expanded='true'] { box-shadow: 0 0 10px rgba(25, 230, 255, 0.55); animation: neon-breathe 4s ease-in-out infinite; }
 @keyframes neon-breathe { 50% { box-shadow: 0 0 5px rgba(25, 230, 255, 0.3); } }
 
-/* The question of a wild marble in the way (#1662): top centre, so it covers neither the plate and chip at the bottom nor the hero; the world waits for the answer. */
-#openworld-ask { display: none; position: fixed; z-index: 3; top: 4.5rem; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(22rem, calc(100vw - 2rem)); padding: 0.75rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--plate-accent); border-radius: var(--r-card); font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); }
-body[data-openworld] #openworld-ask:not([hidden]) { display: block; }
-#openworld-ask p { margin: 0 0 0.5rem; font-size: 1rem; } /* the question reads at 16 px on a phone (#1662) */
-#openworld-ask-buttons { display: flex; gap: 0.5rem; }
-#openworld-ask-buttons button { flex: 1; min-height: var(--target); cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
-#openworld-ask-fight { border-color: var(--plate-accent); color: var(--plate-accent); }
-#openworld-ask-buttons button:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
