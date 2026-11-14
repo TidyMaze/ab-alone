@@ -162,8 +162,8 @@ pub fn turn(board: &Board, phase: u8, seed: u64) -> (Board, Vec<Carry>) {
     });
     belts.turns += 1;
     if phase == 2 && belts.turns % ASSEMBLY_STRIKE_EVERY == 0 {
-        for belt in 0..3 {
-            belts.strike[belt] = Some(2 * (mix(seed.wrapping_add(belt as u64)) % 4) as u8 + 1);
+        for (belt, strike) in belts.strike.iter_mut().enumerate() {
+            *strike = Some(2 * (mix(seed.wrapping_add(belt as u64)) % 4) as u8 + 1);
         }
     }
     out.set_belts(Some(belts));
