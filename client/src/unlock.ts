@@ -83,12 +83,13 @@ export interface GameKind {
   online: boolean;
   wild: boolean;
   replaying: boolean;
+  undone?: boolean; // the game had an Undo (#1672)
 }
 
 /** Whether a game over counts as the first win: the player beat the bot in a standard game (`anim` is the end banner's: a loss or a draw unlocks nothing),
  * not a boss, a run, the Trainer, an online room, a wild fight or a replay. */
 export const firstWinGame = (anim: string | undefined, game: GameKind): boolean =>
-  anim === 'win' && game.bot && !game.fight && !game.run && !game.trainer && !game.online && !game.wild && !game.replaying;
+  anim === 'win' && game.bot && !game.fight && !game.run && !game.trainer && !game.online && !game.wild && !game.replaying && !game.undone;
 
 /** The card of the first win. */
 export const UNLOCK_CARD = { title: 'You won.', text: 'Unlocked: Open world, Bosses, Runs, Daily, Royale, Ranked, Leaderboard', world: 'Open world', hub: 'Hub', dismiss: 'Dismiss' } as const;

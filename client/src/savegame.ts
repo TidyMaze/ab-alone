@@ -14,6 +14,8 @@ export interface LocalGame {
   moves: number[][];
   /** A Stalker boss fight (#1122): rebuilt from its seed, the fog is back on after a reload. Absent for the others. */
   boss?: BossFight;
+  /** The game had an Undo (#1672): it does not count for the first win, also after a reload. Absent otherwise. */
+  undone?: boolean;
 }
 
 /** The boss fight a save holds: only the Stalker is saved. */
@@ -26,13 +28,13 @@ export interface BossFight {
 
 /** The stored form, also the export file of #219. */
 export type SavedGame =
-  | { version: typeof SAVE_VERSION; mode: 'local'; layout: 'standard'; bot: boolean; moves: number[][] }
+  | { version: typeof SAVE_VERSION; mode: 'local'; layout: 'standard'; bot: boolean; moves: number[][]; undone?: true }
   | { version: typeof SAVE_VERSION; mode: 'local'; boss: 'stalker'; seed: number; moves: number[][] };
 
-export function encodeGame({ bot, moves, boss }: LocalGame): SavedGame {
+export function encodeGame({ bot, moves, boss, undone }: LocalGame): SavedGame {
   const copy = moves.map((mv) => [...mv]);
   if (boss) return { version: SAVE_VERSION, mode: 'local', boss: 'stalker', seed: boss.seed, moves: copy };
-  return { version: SAVE_VERSION, mode: 'local', layout: 'standard', bot, moves: copy };
+  return { version: SAVE_VERSION, mode: 'local', layout: 'standard', bot, moves: copy, ...(undone ? { undone: true as const } : {}) };
 }
 
 /** A move record of the bridge: `MOVE_STRIDE` 32-bit integers. The engine judges the rest. */
@@ -48,7 +50,7 @@ export function decodeGame(raw: unknown): LocalGame | null {
   const moves = save.moves.map((mv) => [...mv]);
   if (save.boss !== undefined) return save.boss === 'stalker' && Number.isInteger(save.seed) && (save.seed as number) >= 0 && (save.seed as number) <= 0xffffffff ? { bot: true, moves, boss: { id: 'stalker', seed: save.seed as number } } : null;
   if (save.layout !== 'standard' || typeof save.bot !== 'boolean') return null;
-  return { bot: save.bot, moves };
+  return { bot: save.bot, moves, ...(save.undone === true ? { undone: true } : {}) };
 }
 
 export interface ReplayEngine {
@@ -123,7 +125,7 @@ export class LocalSaves {
   async load<E extends ReplayEngine>(
     bot: boolean | undefined,
     make: (boss?: BossFight) => E,
-  ): Promise<{ engine: E; moves: number[][]; bot: boolean; boss?: BossFight } | null> {
+  ): Promise<{ engine: E; moves: number[][]; bot: boolean; boss?: BossFight; undone?: boolean } | null> {
     try {
       const raw = await this.store.get(LOCAL_GAME);
       if (raw === undefined) return null;
@@ -131,7 +133,7 @@ export class LocalSaves {
       if (game && bot !== undefined && game.bot !== bot) return null;
       const engine = game && replay(game.moves, () => make(game.boss));
       this.mine = engine !== null;
-      if (engine) return { engine, moves: game.moves, bot: game.bot, ...(game.boss ? { boss: game.boss } : {}) };
+      if (engine) return { engine, moves: game.moves, bot: game.bot, ...(game.boss ? { boss: game.boss } : {}), ...(game.undone ? { undone: true } : {}) };
       await this.store.delete(LOCAL_GAME);
     } catch {
       // Storage blocked: a new game.

@@ -346,6 +346,7 @@ import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
 import { LEGACY_UNLOCKED, readUnlocked, recordUnlocked } from './collector';
+import { undoAllowed, undoLength } from './undo';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
 import { CONFIRM_MS, newGameLabel, pressNewGame, quickGameHidden, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
@@ -2905,6 +2906,7 @@ const botWorker =
     : lazyWorker(() => new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' })); // created at its first request (#1579)
 let worker = botWorker; // the bot of this game: none at the hub's hot-seat table either (#522)
 const history: number[][] = [];
+let undone = false; // this game had an Undo (#1672): it does not count for the first win, and the flag is saved with the game
 let thinking = false;
 
 // A local game survives a reload: saved in IndexedDB after every move, replayed through the engine on
@@ -2933,6 +2935,7 @@ if (resumed) {
   if (!resumed.bot) worker = null;
   engine = resumed.engine;
   history.push(...resumed.moves);
+  undone = resumed.undone === true;
 }
 
 // Evaluation bar (#191): the search score of every position of a local or bot game, from a second
@@ -2988,7 +2991,28 @@ function syncHint(): void {
   hintButton.disabled = thinking || engine.status() !== 0 || replaying !== null;
   hintButton.setAttribute('aria-pressed', String(state !== 'off'));
   document.body.dataset.hint = state; // read by the e2e tests
+  syncUndo();
 }
+// Undo (#1672, undo.ts): in a casual bot game it takes back the player's move and the bot's reply. Absent elsewhere; the game is marked, no first win.
+const undoButton = document.getElementById('undo') as HTMLButtonElement;
+const undoOk = (): boolean => undoAllowed({ bot: worker !== null, fight: fight !== null, run: run !== null, trainer: trainer !== null, online: online !== null, wild: wildFrom !== null, replaying: replaying !== null, first: firstRun !== null, auto: autoPlay, thinking, over: engine.status() !== 0, hub: hub !== null, plies: history.length });
+function syncUndo(): void {
+  undoButton.hidden = !undoOk();
+}
+undoButton.addEventListener('click', () => {
+  if (!undoOk()) return; // the rules again: a press on a stale button, or while the bot thinks, does nothing
+  const to = undoLength(history.length, (ply) => engineAt(history, ply, makeGame).to_move(), PLAYER);
+  engine = engineAt(history, to, makeGame);
+  history.length = to;
+  undone = true;
+  selected = [];
+  keyDir = -1;
+  hint.clear();
+  skipEjections();
+  void saves.save(savedGame(), false);
+  refresh();
+  analyse();
+});
 hintButton.addEventListener('click', () => {
   selected = []; // the ghost shows the hint alone
   hint.press(engine, history);
@@ -3987,7 +4011,7 @@ function drawHud(extra = ''): void {
   });
   if (end && (fight || worker || online?.role === 'player') && !replaying) endCue(engine, end.anim, AFTER_EJECTION);
   if (end?.anim === 'win' && (fight || worker || online?.role === 'player') && !replaying) winOnce(); // the wins of any mode, a hot seat and a spectator apart (#1584)
-  if (locked && firstWinGame(end?.anim, { bot: worker !== null, fight: fight !== null, run: run !== null, trainer: trainer !== null, online: online !== null, wild: wildFrom !== null, replaying: replaying !== null })) unlockFirstWin(); // the first win against the bot opens the other modes (#1665)
+  if (locked && firstWinGame(end?.anim, { bot: worker !== null, fight: fight !== null, run: run !== null, trainer: trainer !== null, online: online !== null, wild: wildFrom !== null, replaying: replaying !== null, undone })) unlockFirstWin(); // the first win against the bot opens the other modes (#1665)
   if (firstRun === 'match' && status !== 0) finishFirstMatch(end?.anim);
   if (end?.anim === 'win' && fight) {
     const note = medalNote(fight); // a won fight: Black is the player's side. The story is at the stage this win reaches before its line is chosen (#1546)
@@ -4215,7 +4239,7 @@ const stalkerBoss = (): boolean => fight?.id === 'stalker' && engine instanceof 
 const fogged = stalkerBoss;
 /** Only the Stalker fight is saved among the boss fights (#1122), and not the daily: a reload could not tell it was one. */
 const stalkerSaved = (): boolean => stalkerBoss() && !fight!.daily;
-const savedGame = (): LocalGame => ({ bot: worker !== null, moves: history, ...(stalkerSaved() ? { boss: { id: 'stalker', seed: fight!.seed, mirror: fight!.mirror } } : {}) });
+const savedGame = (): LocalGame => ({ bot: worker !== null, moves: history, ...(undone ? { undone } : {}), ...(stalkerSaved() ? { boss: { id: 'stalker', seed: fight!.seed, mirror: fight!.mirror } } : {}) });
 /** The HUD line of the Stalker boss: the sight, and the ejections before it narrows. */
 function sightNote(): string {
   const [sight, left] = (engine as Encounter).stalker() as unknown as number[];
@@ -5796,6 +5820,7 @@ function newGame(): void {
   }
   engine = new Engine();
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   replaying = null;
   selected = [];
   thinking = false; // the bot's reply to the old game is dropped (botTurn)
@@ -5830,6 +5855,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   goalOpen = false;
   engine = resumeFrom?.engine ?? encounterFor(Encounter, id, seed, lair?.placed, lair && fightArmed(lair) ? relicsMask(lair.relics) : undefined, mirror); // a lair of the world gets the army's marbles and relics (#1655) // the mirror of the trait starts with the fight (#1620)
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   history.push(...(resumeFrom?.moves ?? []));
   replaying = null;
   selected = [];
@@ -5948,6 +5974,7 @@ function startWild(from: NonNullable<typeof wildFrom>): void {
   applyDeck(deckOf('local'));
   engine = fightArmed(from) ? engineFor(Engine, FULL_ARMY, from.placed, wildFoes(from.relics), undefined, relicsMask(from.relics)) : new Engine(); // the army's special marbles on its side and its relics set: the rogue-lite flag, as the bot's search has it (#1655)
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   replaying = null;
   selected = [];
   thinking = false;
@@ -5965,7 +5992,9 @@ async function restoreLocal(): Promise<void> {
   worker = back && !back.bot ? null : botWorker;
   engine = back?.engine ?? new Engine();
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   history.push(...(back?.moves ?? []));
+  undone = back?.undone === true;
   replaying = null;
   selected = [];
   thinking = false;
@@ -6381,6 +6410,7 @@ importFile.addEventListener('change', async () => {
   if ('refused' in read) return hud(` · ${read.refused}`);
   engine = read.engine;
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   replaying = null;
   history.push(...read.moves);
   selected = [];
@@ -6588,6 +6618,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     newGameButton.hidden = true;
     engine = makeGame();
     history.length = 0;
+    undone = false; // a fresh game (#1672)
     replaying = null;
     selected = [];
   };
@@ -6648,6 +6679,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
       restart: () => {
         engine = makeGame();
         history.length = 0;
+        undone = false; // a fresh game (#1672)
         replaying = null;
       },
       // A seat's turn is its main move and the Echo's free moves before it (#958).
@@ -6837,6 +6869,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
   worker = botWorker;
   engine = new Engine(); // the board under the map: the saved local game is left alone, as by a boss fight
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   replaying = null;
   selected = [];
   thinking = false; // a bot reply to the old game is dropped (botTurn)
@@ -6924,6 +6957,7 @@ function fightRun(game: Engine | Encounter, fresh = true): void {
   specialHover = null;
   specialTapped = 0;
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   history.push(...run!.state.moves);
   replaying = null;
   selected = [];
@@ -7120,6 +7154,7 @@ function startTrainer(wave: number, lost = 0): void {
   trainer = { wave, lost };
   engine = Engine.trainer(wave, MARBLES - lost);
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   replaying = null;
   selected = [];
   thinking = false; // a bot reply to the old wave is dropped (botTurn)
@@ -7330,6 +7365,7 @@ function startRoyale(file: RoyaleFile): void {
   stopAnalysis();
   engine = new Engine(); // a bot reply to the old game is dropped (botTurn)
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   replaying = null;
   thinking = false;
   selected = [];
@@ -7786,7 +7822,9 @@ async function backToTable(): Promise<void> {
   worker = saved.bot ? botWorker : null;
   engine = saved.engine;
   history.length = 0;
+  undone = false; // a fresh game (#1672)
   history.push(...saved.moves);
+  undone = saved.undone === true;
   replaying = null;
   selected = [];
   thinking = false;

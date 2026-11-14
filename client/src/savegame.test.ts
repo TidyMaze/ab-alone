@@ -272,6 +272,17 @@ describe('LocalSaves', () => {
     expect(store.data.has(LOCAL_GAME)).toBe(true);
   });
 
+  it('keeps the Undo mark of a game (#1672) through the save, the decode and the load, and writes none otherwise', async () => {
+    expect(encodeGame({ bot: true, moves: [A], undone: true })).toMatchObject({ undone: true });
+    expect(encodeGame({ bot: true, moves: [A], undone: false })).not.toHaveProperty('undone');
+    expect(decodeGame(encodeGame({ bot: true, moves: [A], undone: true }))).toEqual({ bot: true, moves: [A], undone: true });
+    expect(decodeGame({ ...encodeGame({ bot: true, moves: [A] }), undone: 'yes' })).toEqual({ bot: true, moves: [A] });
+    const store = memoryStore();
+    await new LocalSaves(store).save({ bot: true, moves: [A, B], undone: true }, false);
+    const { make, engines } = fake();
+    expect(await new LocalSaves(store).load(true, make)).toEqual({ engine: engines[0], moves: [A, B], bot: true, undone: true });
+  });
+
   it('loads nothing when nothing is saved', async () => {
     const store = memoryStore();
     const { make, engines } = fake();

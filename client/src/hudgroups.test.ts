@@ -18,6 +18,7 @@ describe('The page controls', () => {
       'boss-goal',
       'new-game',
       'hint',
+      'undo',
       'dock-replay',
       'royale-hold',
       'lobby',
