@@ -343,7 +343,7 @@ mod tests {
         assert_eq!((h.dir, h.behind), (2, (1, 1)));
         let both = vec![((1, 0), Terrain::Tree), ((1, 1), Terrain::Tree)];
         let h = herd(&[(0, 0)], &[(2, 0)], world(5, 50, both), 1);
-        assert_ne!(h.map(|h| h.behind), Some((1, 0)));
+        assert!(h.is_none());
     }
 
     #[test]
