@@ -49,8 +49,8 @@ export function freeMarbles(free: Move[]): Axial[] {
 }
 
 /** The HUD line of the offer: `offered` free moves, `onTarget` when the selection shows a free target. */
-export function freeText(offered: number, onTarget: boolean): string {
-  if (offered === 0) return '';
+export function freeText(offered: number, onTarget: boolean, echo = false): string {
+  if (offered === 0) return echo ? 'Echo rule: when one of your marbles is ringed, it moves for free; any other move declines it' : '';
   if (onTarget) return 'Free move: the diamond target is free, then you move again';
   if (offered === 1) return 'Free move: a ringed marble moves for free, any other move declines it';
   return `Free move: ${offered} ringed moves are free, any other move declines them`;

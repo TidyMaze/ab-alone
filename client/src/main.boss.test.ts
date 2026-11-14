@@ -872,7 +872,7 @@ describe('main.ts boss tells', () => {
     expect(game.hook('__plies')).toBe(3);
     expect(game.turn()).toBe(player);
     expect([body().echoFree, body().echoFreeTarget]).toEqual(['0', '0']);
-    expect(tell()).toBe('');
+    expect(tell()).toBe('Echo rule: when one of your marbles is ringed, it moves for free; any other move declines it'); // the rule stays on the plate (#1674)
   });
 
   it('a normal move declines the free move: the boss replies to it (#958)', async () => {

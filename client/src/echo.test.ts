@@ -62,4 +62,9 @@ describe('freeText', () => {
     expect(freeText(2, false)).toBe('Free move: 2 ringed moves are free, any other move declines them');
     expect(freeText(1, true)).toBe('Free move: the diamond target is free, then you move again');
   });
+
+  it('keeps the rule on the plate in the Echo fight when nothing is offered (#1674)', () => {
+    expect(freeText(0, false, true)).toBe('Echo rule: when one of your marbles is ringed, it moves for free; any other move declines it');
+    expect(freeText(1, false, true)).toBe(freeText(1, false));
+  });
 });

@@ -39,7 +39,7 @@ test('The Echo offers a free move: its marble ringed, a diamond on the selected 
   await click(page, -1, 1);
   await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(3);
   await expect(body).toHaveAttribute('data-echo-free', '0');
-  await expect(tell).toHaveCount(0);
+  await expect(tell).toHaveText('Echo rule: when one of your marbles is ringed, it moves for free; any other move declines it'); // the rule stays on the plate (#1674)
 });
 
 // The goal card (#1524, docs/specs/ui.md section 4.8): two short steps and a picture of marbles, in the HUD before the first move and in the Goal
