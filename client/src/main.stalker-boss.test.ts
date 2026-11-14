@@ -36,7 +36,7 @@ describe('main.ts The Stalker boss (#1111)', () => {
   });
 
   it('draws the marbles a refused move revealed, from the engine, and the player plays again', async () => {
-    const game = await boot('/');
+    const game = await boot('/', { storage: { 'ab-alone.difficulty': 'normal' } });
     const { Encounter } = await import('edgefall-wasm'); // the harness's instance
     pickStalker();
     const play = vi.spyOn(Encounter.prototype, 'play').mockImplementationOnce(() => {
