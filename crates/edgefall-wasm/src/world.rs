@@ -1006,6 +1006,17 @@ mod tests {
     }
 
     #[test]
+    fn the_hero_behind_a_foe_near_the_water_herds_it_one_cell_with_the_world_terrain() {
+        // Seed 1, as the herd goals: the foe on (9,-30) with water three cells east, the hero right behind it (#1682).
+        let mut fight = WorldFight::new();
+        let out = fight
+            .troop_push(1, vec![8, -30], vec![0, -2, 1, 9, -30], vec![], 1)
+            .unwrap();
+        assert!(out.ejected.is_empty());
+        assert_eq!(out.enemies, vec![10, -30]);
+    }
+
+    #[test]
     fn no_legal_push_is_undefined_and_leaves_the_fight() {
         let mut fight = WorldFight::new();
         assert!(fight
