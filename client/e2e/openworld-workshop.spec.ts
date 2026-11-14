@@ -85,6 +85,7 @@ for (const { name, viewport, touch } of sizes.slice(0, 2)) {
       await expect(body).toHaveAttribute('data-openworld-at', '0,0');
       const [q, r] = (await page.evaluate(() => (window as unknown as Hooks).__openworldEnemies()))[0]!;
       await fixture(page, { hero: [q + 1, r], troop: [], army: army([1, 9], [1, 9]) });
+      await page.locator('#openworld-ask-fight').click(); // the wild marble asks first (#1662)
       await expect(body).not.toHaveAttribute('data-openworld', /.*/);
       await expect(page.getByRole('button', { name: 'Flee' })).toBeVisible();
       await expect(page.locator('#wild-wipe')).toBeHidden();

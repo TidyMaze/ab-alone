@@ -7189,7 +7189,7 @@ let sheetOpen = false;
 addEventListener('keydown', () => (sheetOpen = reading !== null || menuIsOpen || modesOpen || goalOpen || lobbyOpen), { capture: true });
 addEventListener('keydown', (e) => {
   if (!openWorld.active || e.target instanceof HTMLInputElement || (e.key === 'Escape' && sheetOpen)) return;
-  if (e.key === 'Escape' && !openWorld.mapShown) return e.preventDefault(), exitButton.click(); // Escape presses the exit of the dock, as Browser Back does (#1605, ui.md 4.10); the map closes first, below
+  if (e.key === 'Escape' && !openWorld.mapShown && !openWorld.asking) return e.preventDefault(), exitButton.click(); // Escape presses the exit of the dock, as Browser Back does (#1605, ui.md 4.10); the map closes first, below
   if (!openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
 });

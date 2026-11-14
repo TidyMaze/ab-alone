@@ -51,6 +51,10 @@ export class OpenWorldHandle {
   get yaw(): number {
     return this.parts?.mode.yaw ?? 0;
   }
+  /** Whether the prompt of a wild marble waits for its answer (#1662). */
+  get asking(): boolean {
+    return this.parts?.mode.asking ?? false;
+  }
   get mapShown(): boolean {
     return this.parts?.mode.mapShown ?? false;
   }

@@ -18,6 +18,7 @@ function fakeMode(): { mode: OpenWorldMode; calls: [string, unknown[]][] } {
     props: PROPS,
     yaw: 1.5,
     mapShown: true,
+    asking: true,
     open: method('open', Promise.resolve()),
     leave: method('leave'),
     resize: method('resize'),
@@ -56,6 +57,7 @@ describe('OpenWorldHandle, #1578', () => {
     await expect(handle.props).resolves.toBeUndefined(); // no world yet: nothing to wait for (#1582)
     expect(handle.yaw).toBe(0);
     expect(handle.mapShown).toBe(false);
+    expect(handle.asking).toBe(false);
     expect(handle.key('ArrowUp', false)).toBe(false);
     expect(handle.frame(() => {}, 1)).toBe(false);
     // the questions of every pointer, key, resize and setting are answered with nothing to do
@@ -102,6 +104,7 @@ describe('OpenWorldHandle, #1578', () => {
     expect(handle.props).toBe(PROPS);
     expect(handle.yaw).toBe(1.5);
     expect(handle.mapShown).toBe(true);
+    expect(handle.asking).toBe(true);
     expect(handle.key('ArrowUp', true)).toBe(true);
     const render = (): void => {};
     expect(handle.frame(render, 5)).toBe(true);

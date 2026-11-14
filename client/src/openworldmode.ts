@@ -86,6 +86,8 @@ const TURNS = new Map<string, number>([
   ['E', -TURN_STEP],
 ]);
 /** The keys that step the hero. */
+/** The distance in cells between two cells of the hex grid. */
+const cellDistance = (a: Axial, b: Axial): number => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[0] - b[0] + a[1] - b[1]));
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 /** The keys that open and close the map (#1411); Escape closes it too. */
 const MAP_KEYS = new Set(['m', 'M']);
@@ -122,6 +124,12 @@ export class OpenWorldMode {
   drawn = 0;
   /** Whether a wild fight has started: the hero takes no more steps while the page plays the transition. */
   private fighting = false;
+  /** The prompt shown when a wild marble touches the hero (#1662): the home of the group asked about, the world paused until Fight or Back away. */
+  private asked: { home: Axial; at: Axial; from: Axial | null } | null = null;
+  /** The home of the group the hero backed away from (#1662): it asks nothing until the hero leaves contact. */
+  private declined: Axial | null = null;
+  /** Tells the page the prompt opened (true) or closed (false) (#1662). */
+  onAsk: (open: boolean) => void = () => {};
   /** The timer that keeps the hero alive for the room while the tab is hidden (#1371). */
   private keepalive: ReturnType<typeof setInterval> | null = null;
   private view: OpenWorldView | null = null;
@@ -261,6 +269,9 @@ export class OpenWorldMode {
     this.world = world;
     this.fight = made.fight;
     this.fighting = false;
+    this.asked = null;
+    this.declined = null;
+    this.onAsk(false);
     this.calmUntil = Infinity; // the marble next to the hero when the world opens does not fight for 5 s from its first draw (#1511, frame)
     this.ticked = made.ticked;
     this.pushes = 0;
@@ -425,6 +436,9 @@ export class OpenWorldMode {
     this.stopKeepAlive();
     this.peers?.leave();
     this.active = false;
+    this.asked = null;
+    this.declined = null;
+    this.onAsk(false);
     this.held.clear();
     this.freeView();
     document.getElementById('openworld-minimap')?.remove(); // the minimap goes with the world (#1275)
@@ -687,6 +701,7 @@ export class OpenWorldMode {
    * keys are not the mode's. Reports whether the key was the mode's. */
   key(key: string, repeat = false): boolean {
     if (this.fighting) return false; // the transition into a wild fight takes the keys (#1511)
+    if (this.asked && (key === 'Enter' || key === 'Escape')) return key === 'Enter' ? this.startFight() : this.backAway(), true; // the prompt's keys (#1662)
     if (this.mapShown && key === 'Enter' && this.worldMap!.choosing) return this.choose(this.worldMap!.chosen), true; // the ringed teleporter (#1412)
     if (this.mapShown) return (key === 'Escape' || MAP_KEYS.has(key) || TELEPORT_KEYS.has(key)) && (this.toggleMap(), true);
     if (MAP_KEYS.has(key)) return this.toggleMap(), true;
@@ -698,7 +713,7 @@ export class OpenWorldMode {
     const turn = TURNS.get(key);
     if (turn !== undefined) return this.turn(turn), true;
     if (!ARROWS.has(key)) return false;
-    if (!repeat) this.arrows(() => this.held.add(key));
+    if (!repeat && !this.asked) this.arrows(() => this.held.add(key)); // the world waits for the answer (#1662)
     return true;
   }
 
@@ -710,7 +725,7 @@ export class OpenWorldMode {
   /** The stick (#1025, #1026) holds the arrows of its drag, none when the thumb lets go: the hero steps by them on the cadence of the
    * held arrows, as by the keys (#1059). Nothing while the mode is off. */
   hold(keys: readonly string[]): void {
-    if (!this.active) return;
+    if (!this.active || this.asked) return;
     if (keys.length > 0) this.route = []; // the stick takes over from a walk to a far cell (#1137)
     this.arrows(() => (this.pad = [...keys]));
   }
@@ -755,6 +770,7 @@ export class OpenWorldMode {
   /** A press at `x`, `y` pixels of a `width` x `height` screen rolls the hero onto the cell under it when it is next to it; with
    * steering on, a far cell is walked to, round the obstacles (#1137). */
   press(x: number, y: number, width: number, height: number): void {
+    if (this.asked) return;
     const [nx, ny] = [(x / width) * 2 - 1, 1 - (y / height) * 2];
     const near = this.view!.pick(nx, ny);
     if (!this.steering() || !same(near, this.hero!.at)) return void this.roll(near);
@@ -797,7 +813,7 @@ export class OpenWorldMode {
   /** Opens the map of the cells discovered (#1411) over the world, on the hero, or closes it: the HUD's Map button, M, the pad's View.
    * The hero ends its walk and lets go of the arrows held: it stays while the map is open. Nothing outside a world. */
   toggleMap(): void {
-    if (!this.active) return;
+    if (!this.active || this.asked) return; // the prompt is modal (#1662)
     if (this.mapShown) return this.closeMap();
     this.openMap(false);
   }
@@ -819,7 +835,7 @@ export class OpenWorldMode {
   /** The Teleport action (#1412): the HUD's Teleport button, T and the pad's Y. On a teleporter it opens the map in the choice of a
    * teleporter, and closes it again; nothing off a teleporter or outside a world. */
   teleport(): void {
-    if (!this.active) return;
+    if (!this.active || this.asked) return; // the prompt is modal (#1662)
     if (this.mapShown) return this.closeMap();
     if (this.onTeleporter()) this.openMap(true);
   }
@@ -1025,7 +1041,7 @@ export class OpenWorldMode {
   /** The hero steps to `to`, at `at` (ms); `pace` is the pace of its glide: a `tap` (a press on the screen) eases out, the steps of
    * the held arrows keep one speed (#1065). */
   private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): boolean {
-    if (this.fighting) return false;
+    if (this.fighting || this.asked) return false;
     this.closeLog(); // the next move closes the panel of a log (#1589)
     const lair = this.lairs.findIndex((cell) => same(cell, to));
     const next = neighbours(this.hero!.at).some((n) => same(n, to));
@@ -1048,7 +1064,7 @@ export class OpenWorldMode {
     if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)
     if (now !== null) this.view!.ripple(from, this.hero!.at, now, this.lowTier()); // a ring on the water next to it (#1101)
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: span * slowBy(), pace }); // the step glides (#1040)
-    const played = this.wild() ? null : this.troopPush(); // a marble that touches the hero fights: the troop does not push it (#1511)
+    const played = this.wild(from) ? null : this.troopPush(); // a marble that touches the hero fights: the troop does not push it (#1511)
     const joined = played !== null && this.recruit(played);
     if (played) this.gather(ejectYield(this.hero!.at, played.push.ejected.length)); // parts for the marbles ejected (#1655)
     this.view!.updateEnemies();
@@ -1223,7 +1239,7 @@ export class OpenWorldMode {
   stepWander(now = performance.now(), snap = false): void {
     const tick = this.wander();
     if (snap) this.view?.snap();
-    if (tick === this.ticked || !this.view || this.view.animating) return;
+    if (tick === this.ticked || !this.view || this.view.animating || this.asked) return;
     this.ticked = tick;
     this.fight.setHeld(this.hero!.troop);
     this.fight.setClock(this.seed, tick);
@@ -1233,20 +1249,56 @@ export class OpenWorldMode {
     this.wild(); // a marble that walked up to the hero fights
   }
 
-  /** Starts the wild fight (#1511) when a generated marble no push has moved touches the hero (within one cell) and no calm is due: the
-   * walk ends, the world is saved with the hero where it stands, and the page takes over (`onWild`). Reports whether one started. */
-  private wild(): boolean {
-    if (this.fighting || this.calmUntil > 0 || !this.view) return false;
+  /** Asks (#1662) when a generated marble no push has moved touches the hero (within one cell) and no calm is due: the walk ends, the world is
+   * saved with the hero where it stands and waits for Fight (`startFight`, #1511) or Back away (`backAway`). `from` is the cell the hero stepped
+   * from, null when it stood still. A group the hero backed away from asks nothing until the hero has left contact. Reports whether it asked. */
+  private wild(from: Axial | null = null): boolean {
+    if (this.fighting || this.asked || !this.view) return false;
     const touching = this.fight.wildContact(this.world!, this.hero!.at);
-    if (!touching) return false;
-    this.fighting = true;
+    if (!touching) return (this.declined = null), false;
+    if (this.calmUntil > 0) return false;
+    if (this.declined && same(this.declined, touching.home)) return false;
+    this.declined = null;
+    this.closeMap(); // a map open when the marble arrives: Esc and the keys answer the prompt, not the map
+    this.asked = { home: touching.home, at: touching.at, from };
     this.held.clear();
     this.pad = [];
     this.route = [];
     this.nextStep = Infinity;
     this.persist();
-    this.onWild(this.seed, touching.home, [...this.army.brought], [...this.army.relicsBrought]);
+    this.onAsk(true);
     return true;
+  }
+
+  /** Whether a prompt waits for the answer: the world is paused (#1662). */
+  get asking(): boolean {
+    return this.asked !== null;
+  }
+
+  /** Fight, the prompt's answer (#1662): the wild fight starts, with the seed, the cell the marble starts on and what the army brings. */
+  startFight(): void {
+    const asked = this.asked;
+    if (!asked) return;
+    this.asked = null;
+    this.fighting = true;
+    this.onAsk(false);
+    this.onWild(this.seed, asked.home, [...this.army.brought], [...this.army.relicsBrought]);
+  }
+
+  /** Back away, the prompt's answer (#1662): the hero goes back to the cell it came from, or when it stood still to the free neighbour
+   * farthest from the marble (none free: it stays); the group asks nothing until contact is remade, and the marbles are calm for 5 s. */
+  backAway(): void {
+    const asked = this.asked;
+    if (!asked) return;
+    this.asked = null;
+    this.declined = asked.home;
+    this.calmUntil = performance.now() + FLEE_GRACE_MS;
+    this.onAsk(false);
+    const hero = this.hero!;
+    const free = (to: Axial): boolean => enter(this.world!, this.fight, hero.at, to) === 'rolls' && !this.lairs.some((cell) => same(cell, to)) && !this.places.some(({ cell }) => same(cell, to));
+    const farthest = neighbours(hero.at).filter(free).sort((a, b) => cellDistance(b, asked.at) - cellDistance(a, asked.at))[0];
+    const to = asked.from && free(asked.from) ? asked.from : farthest;
+    if (to) this.roll(to);
   }
 
   /** The mark of a push being drawn (`openworldAnim`, for the browser checks): set while the view draws it, removed otherwise. */

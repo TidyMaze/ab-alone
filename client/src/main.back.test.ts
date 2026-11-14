@@ -349,6 +349,7 @@ describe('main.ts, browser Back (#1564)', () => {
     await pick(game, 'openworld');
     const beside: Axial = [world.home[0] + 1, world.home[1]];
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: beside, troop: [] });
+    document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
     await new Promise((done) => setTimeout(done, 400)); // the wipe closes, the arena opens
     await game.settle();
     game.frame();

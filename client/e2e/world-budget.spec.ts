@@ -74,6 +74,7 @@ for (let run = 1; run <= RUNS; run++) {
     for (let fight = 0; fight < 2; fight++) {
       await longest(page);
       await page.evaluate((hero) => (window as unknown as Hooks).__openworldFixture({ hero, troop: [] }), beside); // beside a marble: it touches
+      await page.locator('#openworld-ask-fight').click(); // it asks first (#1662)
       await expect(page.getByRole('button', { name: 'Flee' })).toBeVisible();
       await expect.poll(() => data(page, 'fightBoard')).toBeDefined();
       await page.waitForTimeout(1000);

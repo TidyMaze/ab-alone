@@ -1,6 +1,7 @@
 // The Open world as one chunk of the build (#1578): the root of everything only the world needs, loaded by `import()` at the first
 // entry (modechunk.ts, openworldhandle.ts). `wireOpenWorld` makes the mode, its saves and its online layer from the page's `deps`, and
 // binds the world's own HUD controls. The page keeps what it shares with the table: the keys, the pointer, the frame and the fights.
+import { bindAsk } from './openworldask';
 import { boss_ids, boss_name, world_cairns, world_can_break, world_chunk, world_dungeon, world_enemies, world_is_enemy, world_lairs, world_logs, world_pads, world_path, world_places, world_rings, world_teleporters, world_version } from 'edgefall-wasm';
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
@@ -146,6 +147,7 @@ export function wireOpenWorld(deps: OpenWorldDeps): OpenWorldParts {
     store, // the signed events are kept in this browser (#1305)
   );
   mode.peers = peers;
+  bindAsk(mode, document.querySelector<HTMLElement>('canvas[aria-label="Edgefall board"]')!); // the question of a wild marble (#1662)
   mode.store = store; // the one lesson of the roll (#1604)
   mode.onWild = (seed, home, brought, relics) => deps.onWild(seed, home, mode.phase, brought, relics); // the hour the marble was met at dresses the arena
   // The clock the enemy marbles wander by (#1511): the wall clock in ticks, so every peer sees them in the same places.

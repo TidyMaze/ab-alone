@@ -74,6 +74,14 @@
         <input id="replay-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Position in the move log" />
         <div id="replay-label" aria-live="polite"></div>
       </div>
+      <!-- The question of a wild marble in the way (#1662): the Open world waits for Fight or Back away. -->
+      <div id="openworld-ask" role="alertdialog" aria-labelledby="openworld-ask-text" aria-modal="false" hidden>
+        <p id="openworld-ask-text">A wild marble is in your way.</p>
+        <div id="openworld-ask-buttons">
+          <button id="openworld-ask-fight" type="button" autocomplete="off">Fight</button>
+          <button id="openworld-ask-back" type="button" autocomplete="off">Back away</button>
+        </div>
+      </div>
       <div id="openworld-hud" role="group" aria-label="Open world">
         <p id="openworld-live" role="status" class="sr-only"></p>
         <p id="openworld-goal"></p>

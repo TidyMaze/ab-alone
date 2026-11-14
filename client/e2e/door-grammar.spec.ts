@@ -180,6 +180,7 @@ test('a wild fight is left by the first slot too: Flee, and the hero is back in 
   await expect(body(page)).toHaveAttribute('data-openworld-at', '0,0');
   const [q, r] = (await page.evaluate(() => (window as unknown as Hooks).__openworldEnemies()))[0]!;
   await page.evaluate((h) => (window as unknown as Hooks).__openworldFixture({ hero: h, troop: [] }), [q + 1, r]);
+  await page.locator('#openworld-ask-fight').click(); // the wild marble asks first (#1662)
   await expect(body(page)).not.toHaveAttribute('data-openworld', /.*/);
   await expect(firstSlot(page)).toHaveAttribute('id', 'wild-flee');
   await firstSlot(page).click();

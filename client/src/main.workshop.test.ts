@@ -251,6 +251,7 @@ describe('the special marbles in a wild fight (#1655)', () => {
     await settle();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     hooks().__openworldFixture({ hero: beside, troop: [], ...stock });
+    document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
     vi.advanceTimersByTime(1000);
     vi.useRealTimers();
     return game;

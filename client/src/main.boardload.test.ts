@@ -123,6 +123,7 @@ describe('the files of the board (#1520)', () => {
     expect(boardFiles(game)).toEqual([]);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     hooks().__openworldFixture({ hero: neighbours(home)[0]!, troop: [] });
+    document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
     expect(boardFiles(game).sort()).toEqual([...BOARD_FILES].sort()); // asked for as the wipe closes, half a second before the fight
     expect(deckFiles(game)).toEqual(expect.arrayContaining(DECK_FILES.slice(0, 4))); // the deck set comes with them (#1603)
     vi.advanceTimersByTime(500);

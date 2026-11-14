@@ -62,6 +62,7 @@ async function fighting(page: Page): Promise<{ at: string; cells: number }> {
   const [[q, r]] = await page.evaluate(() => (window as unknown as Hooks).__openworldEnemies());
   const at: [number, number] = [q! + 1, r!];
   await page.evaluate((h) => (window as unknown as Hooks).__openworldFixture({ hero: h, troop: [] }), at);
+  await page.locator('#openworld-ask-fight').click(); // the wild marble asks first (#1662)
   await expect(page.getByRole('button', { name: 'Flee' })).toBeVisible();
   await expect.poll(async () => (await read(page))?.hero).toEqual(at); // the world is saved as the fight starts
   const record = (await read(page))!;

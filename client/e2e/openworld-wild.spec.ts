@@ -25,6 +25,7 @@ async function opened(page: Page): Promise<[number, number]> {
 test('a marble beside the hero starts the wipe, then the arena with Flee; Flee puts the hero back and the marble waits 5 s, #1511', async ({ page }) => {
   const [q, r] = await opened(page);
   await hooks(page).put([q + 1, r]);
+  await page.locator('#openworld-ask-fight').click(); // the wild marble asks first (#1662)
   await expect(page.locator('#wild-wipe')).toBeVisible();
   await page.waitForTimeout(220);
   await shot(page, { path: 'test-results/openworld-wild-wipe.png' });

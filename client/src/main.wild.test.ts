@@ -69,6 +69,7 @@ describe('a wild fight (#1511)', () => {
     await openWorld(game);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     hooks().__openworldFixture({ hero: beside, troop: [] });
+    document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
     return game;
   }
   const wipe = (): HTMLElement => byId('wild-wipe');
@@ -171,6 +172,7 @@ describe('a wild fight (#1511)', () => {
       await openWorld(game);
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       hooks().__openworldFixture({ hero: beside, troop: [] });
+      document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
       vi.advanceTimersByTime(1000);
       expect(game.hook<number>('__plies')).toBe(0); // the wild fight is a fresh game
       vi.useRealTimers();
@@ -195,6 +197,7 @@ describe('a wild fight (#1511)', () => {
     await openWorld(game);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     hooks().__openworldFixture({ hero: beside, troop: [] });
+    document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
     vi.advanceTimersByTime(1000);
     vi.useRealTimers();
     expect(byId('wild-flee').hidden).toBe(false);
@@ -224,6 +227,7 @@ describe('a wild fight (#1511)', () => {
     vi.advanceTimersByTime(1000);
     expect(data().openworld).toBe(String(seed)); // the marble is at home, two cells off: no fight
     hooks().__openworldWander(tick);
+    document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
     vi.advanceTimersByTime(1000);
     expect(data().openworld).toBeUndefined(); // the fight starts on the tick the marble arrives
     expect(byId('wild-flee').hidden).toBe(false);
@@ -254,6 +258,7 @@ describe('a wild fight (#1511)', () => {
       await openWorld(game);
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       hooks().__openworldFixture({ hero: beside, troop: [] });
+      document.getElementById('openworld-ask-fight')!.click(); // the wild marble asks first (#1662)
       vi.advanceTimersByTime(1000);
       vi.useRealTimers();
       const move = game.hook<Move[]>('__legal').filter((m) => m.cells.length === 1).at(-1)!; // not the move of the other tests: the harness keeps the bot's answers

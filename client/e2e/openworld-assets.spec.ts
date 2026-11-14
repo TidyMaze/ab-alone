@@ -33,6 +33,7 @@ test('a wild fight fetches the files of the board, and the arena is drawn on the
   await expect(page.locator('body')).toHaveAttribute('data-openworld-at', '0,0');
   const [marble] = await page.evaluate(() => (window as unknown as Hooks).__openworldEnemies());
   await page.evaluate((hero) => (window as unknown as Hooks).__openworldFixture({ hero, troop: [] }), [marble![0] + 1, marble![1]]);
+  await page.locator('#openworld-ask-fight').click(); // the wild marble asks first (#1662)
   await expect(page.getByRole('button', { name: 'Flee' })).toBeVisible();
   await expect.poll(() => names.filter((name) => BOARD_FILE.test(`/${name}`)).length).toBe(9);
   await expect.poll(() => names.filter((name) => DECK_FILE.test(`/${name}`))).toEqual(expect.arrayContaining(['deck-albedo.ktx2', 'deck-roughness.ktx2', 'crack-decal.ktx2']));
