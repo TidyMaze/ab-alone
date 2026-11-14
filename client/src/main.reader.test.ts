@@ -189,3 +189,36 @@ describe('main.ts, the terminal reader (#512)', () => {
     expect((document.getElementById('console-entry') as HTMLButtonElement).hidden).toBe(true);
   });
 });
+
+describe('the props during a fight (#1668)', () => {
+  const inFight = async (): Promise<Game> => {
+    const game = await ready();
+    game.openModes();
+    document.getElementById('boss-fight')!.click();
+    [...document.getElementById('boss-list')!.querySelectorAll('button')].find((b) => b.textContent!.startsWith('The Echo'))!.click();
+    expect(game.hook('__fight')).not.toBeNull();
+    game.frame();
+    return game;
+  };
+
+  it('a tap on the console screen opens no reader while a boss fight is on', async () => {
+    const game = await inFight();
+    expect(rect(game).width).toBeGreaterThan(0);
+    tap(centre(rect(game)));
+    expect(reader().hidden).toBe(true);
+    expect(data().reading).toBeUndefined();
+  });
+
+  it('a tap on the recorder plays no log while a boss fight is on', async () => {
+    const game = await inFight();
+    const recorder: Rect = game.hook('__recorderRect');
+    tap(centre(recorder));
+    expect(data().log).toBeUndefined();
+  });
+
+  it('a tap on the console screen still opens the reader when no fight is on', async () => {
+    const game = await ready('?bot=off&scene=room');
+    tap(centre(rect(game)));
+    expect(reader().hidden).toBe(false);
+  });
+});

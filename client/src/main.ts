@@ -5022,9 +5022,24 @@ function aim(e: PointerEvent | MouseEvent): void {
   const at = unkick(kick ? drawnKick : REST, e.clientX, e.clientY, innerWidth, innerHeight); // the picture is kicked while an ejection plays (#1560)
   raycaster.setFromCamera(new THREE.Vector2((at.x / innerWidth) * 2 - 1, -(at.y / innerHeight) * 2 + 1), camera);
 }
+// The nearest drawn marble under the ray, its upper part too: the cell discs are flat, a tap above one is a miss (#1668). Run per pointer event, not per frame.
+function marbleHit(group: THREE.Group): THREE.Intersection | undefined {
+  const drawn = group.children.filter((c): c is THREE.Mesh => (c as THREE.Mesh).geometry === marbleGeometry && c.visible); // only the shells: not the sprites, rings and glows
+  group.updateWorldMatrix(true, false); // picking can run before the first render places them
+  for (const mesh of drawn) mesh.updateWorldMatrix(false, false);
+  return raycaster.intersectObjects(drawn, false)[0];
+}
+// The cell a marble stands over: the nearest disc to its centre.
+function cellUnder(marble: THREE.Object3D, shown: THREE.Mesh[]): number {
+  const at = (royale ? arena : scene).worldToLocal(marble.getWorldPosition(new THREE.Vector3()));
+  const apart = shown.map((disc) => disc.position.distanceToSquared(at));
+  return apart.indexOf(Math.min(...apart));
+}
 function cellAt(e: PointerEvent | MouseEvent): Axial | null {
   aim(e);
   const [shown, cells] = royale ? [arenaDiscs, ARENA] : [discs, BOARD_CELLS];
+  const marble = marbleHit(royale ? arenaMarbles : marbles); // a marble hides the disc behind it, as it does on the screen
+  if (marble) return cells[cellUnder(marble.object, shown)]!;
   const hit = raycaster.intersectObjects(shown.filter((disc) => disc.visible))[0]; // no cell where no disc is drawn
   return hit ? cells[shown.indexOf(hit.object as THREE.Mesh)]! : null;
 }
@@ -5039,6 +5054,8 @@ const ours = (cell: Axial | null): cell is Axial =>
   !!cell && (royale ? seatAt(royale.board()[cellIndex(cell[0], cell[1], ARENA)]!) === me() : engine.board()[cellIndex(cell[0], cell[1])] === engine.to_move());
 // No drag play now: the arena once the game is over or while the round waits for no order, the board as `blocked` says.
 const dragBlocked = (): boolean => (royale ? royale.placement().length > 0 || !canOrder() : blocked(() => {}));
+// A fight is on, outside the hub: the console and the recorder are not to be opened by a stray tap.
+const propsShut = (): boolean => !hub && (fight !== null || run !== null);
 function onProp(e: PointerEvent, prop: THREE.Mesh): boolean {
   aim(e);
   return raycaster.intersectObject(prop).length > 0;
@@ -5152,6 +5169,7 @@ function release(e: PointerEvent): void {
   const cell = cellAt(e);
   if (cell) click(cell[0], cell[1]);
   else if (royale && raycaster.intersectObjects(arenaDiscs).length) return; // the hole (#610): no prop behind it
+  else if (propsShut()) return; // a fight is on: no prop behind the board opens (#1668)
   else if (onProp(e, consoleScreen)) openReader();
   else if (onProp(e, recorder)) playLog(logOf(deck)); // the deck's recorder prop (#517)
 }

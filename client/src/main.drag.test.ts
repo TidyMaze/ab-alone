@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
-import { type Axial, DIRECTIONS } from './board';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { type Axial, BOARD_CELLS, cellIndex, DIRECTIONS } from './board';
 import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 
@@ -152,5 +152,72 @@ describe('the drag play', () => {
     pointer('pointerdown', at);
     pointer('pointerup', at);
     expect(rings(game)).toEqual([mv.cells[0]]);
+  });
+});
+
+describe('a tap on the upper part of a marble (#1668)', () => {
+  const tapTop = async (): Promise<{ game: Game; cell: Axial }> => {
+    const [w, h] = [innerWidth, innerHeight];
+    Object.assign(window, { innerWidth: 390, innerHeight: 844 }); // a phone: the marble's top is seen over the gap behind its disc
+    onTestFinished(() => void Object.assign(window, { innerWidth: w, innerHeight: h }));
+    const game = await boot('?bot=off');
+    const cell = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
+    const at: { x: number; y: number } = game.hook('__cellToScreen', cell[0], cell[1], 0.6); // the marble's upper part
+    pointer('pointerdown', at);
+    pointer('pointerup', at);
+    return { game, cell };
+  };
+
+  it('selects the marble whose upper part is tapped, wherever the disc behind it lies', async () => {
+    const { game, cell } = await tapTop();
+    expect(rings(game)).toEqual([cell]);
+  });
+
+  it('ignores a marble that is not drawn', async () => {
+    const [w, h] = [innerWidth, innerHeight];
+    Object.assign(window, { innerWidth: 390, innerHeight: 844 });
+    onTestFinished(() => void Object.assign(window, { innerWidth: w, innerHeight: h }));
+    const game = await boot('?bot=off');
+    const cell = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
+    for (const o of game.hook<{ children: { visible: boolean }[] }>('__marbles').children) o.visible = false;
+    const at: { x: number; y: number } = game.hook('__cellToScreen', cell[0], cell[1], 0.6);
+    pointer('pointerdown', at);
+    pointer('pointerup', at);
+    expect(rings(game)).toEqual([]);
+  });
+
+  it('opens no prop when the upper part of a marble is tapped', async () => {
+    await tapTop();
+    expect(document.body.dataset.reading).toBeUndefined();
+  });
+
+  const phone = async (): Promise<Game> => {
+    const [w, h] = [innerWidth, innerHeight];
+    Object.assign(window, { innerWidth: 390, innerHeight: 844 });
+    onTestFinished(() => void Object.assign(window, { innerWidth: w, innerHeight: h }));
+    return boot('?bot=off');
+  };
+  const top = (game: Game, [q, r]: Axial): { x: number; y: number } => game.hook('__cellToScreen', q, r, 0.6);
+
+  it('reaches an opponent marble by its upper part: with a marble selected, the tap is a refused move', async () => {
+    const game = await phone();
+    const mine = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
+    game.click(...mine);
+    const board = game.hook<number[]>('__board');
+    const mover = board[cellIndex(mine[0], mine[1])]!;
+    const foe = BOARD_CELLS.find(([q, r]) => board[cellIndex(q, r)] !== 0 && board[cellIndex(q, r)] !== mover)!;
+    pointer('pointerdown', top(game, foe));
+    pointer('pointerup', top(game, foe));
+    expect(document.getElementById('hud')!.textContent).toContain('not a legal move');
+    expect(plies(game)).toBe(0);
+  });
+
+  it('starts a drag on the upper part of a marble of the player, and plays the move released toward a direction', async () => {
+    const game = await phone();
+    const mv = legal(game).find((m) => m.cells.length === 1)!;
+    pointer('pointerdown', top(game, mv.cells[0]!));
+    pointer('pointermove', past(game, mv.cells, mv.dir));
+    pointer('pointerup', past(game, mv.cells, mv.dir));
+    expect(plies(game)).toBe(1);
   });
 });
