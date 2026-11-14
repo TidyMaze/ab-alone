@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Move } from './board';
-import { announce, KEY_DIRS, legalGroups, moveFor, nextGroup } from './keyboard';
+import { announce, KEY_DIRS, KEY_HELP, KEY_HINT, legalGroups, moveFor, nextGroup } from './keyboard';
 
 // Two groups: the single marble (0,0) with two moves, and the pair (1,0),(0,0) listed in the other order.
 const moves: Move[] = [
@@ -61,5 +61,17 @@ describe('keyboard play', () => {
     expect(announce(moves, [[0, 0]], -1, true)).toBe('group 1 of 3, 1 marble, stick to aim, LB RB to switch');
     expect(announce(moves, [[0, 0]], 5, true)).toBe('group 1 of 3, 1 marble, south-east, A to play, B to back out');
     expect(announce(moves, [[0, 0]], 4, true)).toBe('group 1 of 3, 1 marble, no move north-west');
+  });
+});
+
+describe('KEY_HELP (#1673)', () => {
+  it('names every key of the board', () => {
+    expect(KEY_HELP).toBe('Tab picks a group, Q W E A S D a direction, Enter plays, Esc backs out.');
+  });
+});
+
+describe('KEY_HINT (#1673)', () => {
+  it('is one short line of the keys', () => {
+    expect(KEY_HINT).toBe('Keys: Tab group, Q W E / A S D direction, Enter play, Esc cancel, ? hide');
   });
 });

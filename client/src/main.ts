@@ -22,7 +22,7 @@ import {
 } from './board';
 import { extendPath, releaseDir } from './drag';
 import { keyTip } from './touchwording';
-import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
+import { KEY_DIRS, KEY_HINT, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
 import { readBoard, sharedHtml, type SharedResult } from './boardfeed';
@@ -5227,6 +5227,14 @@ canvas.addEventListener('pointercancel', release);
 // The right button turns the Open world's camera: no browser menu over the canvas (#1026).
 canvas.addEventListener('contextmenu', (e) => {
   if (openWorld.active) e.preventDefault();
+});
+
+// ? shows or hides the key hint (#1673), one line from keyboard.ts.
+document.getElementById('keyhint')!.textContent = KEY_HINT;
+addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (e.key !== '?' || e.repeat || t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLElement && t.isContentEditable)) return;
+  document.body.toggleAttribute('data-keyhint');
 });
 
 // Keyboard play (#738), only while the canvas has focus: Tab and Shift+Tab walk the legal groups (past the ends the

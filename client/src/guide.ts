@@ -2,6 +2,7 @@
 // controls, each with an inline SVG of the game's marbles on deck cells. It no longer opens by itself (#1521: a first launch plays
 // the first run, firstrun.ts): `?guide` or the settings menu opens it, and a skip or the end stores it as seen. Pure functions and
 // data only: main.ts builds the dialog.
+import { KEY_HELP } from './keyboard';
 import { read, write, type Store } from './quality';
 
 const GUIDE_KEY = 'ab-alone.guide';
@@ -107,7 +108,7 @@ export const GUIDE: readonly GuidePage[] = [
   {
     title: 'Controls',
     text:
-      '<p data-controls="mouse">Click your marbles, up to three in a line, then the cell they go to. Drag the board to turn the camera, scroll to zoom. Keys: Tab picks a group, Q W E A S D a direction, Enter plays, Esc backs out.</p>' +
+      '<p data-controls="mouse">Click your marbles, up to three in a line, then the cell they go to. Drag the board to turn the camera, scroll to zoom. Keys: ' + KEY_HELP + '</p>' +
       '<p data-controls="touch">Tap your marbles, up to three in a line, then the cell they go to, or drag them there. Drag the board to turn the camera, pinch to zoom.</p>' +
       '<p data-controls="pad">RB and LB pick a group, the D-pad or the left stick a direction, A plays, B backs out. The right stick turns the camera, the triggers zoom, Start opens the settings.</p>',
     art: controlsArt,

@@ -3,6 +3,11 @@ import { type Axial, type Move } from './board';
 
 /** Key to direction code (E, W, NE, SW, NW, SE), laid out like the hexagon: Q NW, W NE, A W, E E, S SW, D SE. */
 export const KEY_DIRS: Readonly<Record<string, number>> = { q: 4, w: 2, e: 0, a: 1, s: 3, d: 5 };
+/** The keys of the board in one line, shown over the board to a keyboard player (#1673) and in the Guide. */
+export const KEY_HELP = `Tab picks a group, ${Object.keys(KEY_DIRS).join(' ').toUpperCase()} a direction, Enter plays, Esc backs out.`;
+const DIR_KEYS = Object.keys(KEY_DIRS).join('').toUpperCase();
+/** The short form for the hint over the board (#1673): one line, the six direction keys in their two rows. */
+export const KEY_HINT = `Keys: Tab group, ${[...DIR_KEYS.slice(0, 3)].join(' ')} / ${[...DIR_KEYS.slice(3)].join(' ')} direction, Enter play, Esc cancel, ? hide`;
 const DIR_NAMES = ['east', 'west', 'north-east', 'south-west', 'north-west', 'south-east'];
 
 const inOrder = (cells: readonly Axial[]): Axial[] => [...cells].sort((a, b) => a[1] - b[1] || a[0] - b[0]);

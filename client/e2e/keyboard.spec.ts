@@ -25,3 +25,15 @@ test('a move is played with the keyboard alone: Tab, a direction key, Enter', as
   await page.keyboard.press('Enter');
   await expect(page.locator('#hud')).toContainText('White to move');
 });
+
+test('the keys show over the board when it has keyboard focus, and ? toggles them (#1673)', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await expect(page.locator('#keyhint')).toBeHidden();
+  await page.keyboard.press('?');
+  await expect(page.locator('#keyhint')).toContainText('Tab group');
+  await page.keyboard.press('?');
+  await expect(page.locator('#keyhint')).toBeHidden();
+  for (let i = 0; i < 20 && !(await page.evaluate(() => document.activeElement?.tagName === 'CANVAS')); i++) await page.keyboard.press('Tab');
+  await expect(page.locator('#keyhint')).toBeVisible();
+});

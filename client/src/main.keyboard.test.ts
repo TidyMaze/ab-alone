@@ -135,4 +135,25 @@ describe('the keyboard on the board', () => {
     expect(press('Tab')).toBe(true);
     expect(rings(game)).toEqual([]);
   });
+
+  it('? shows and hides the key hint (#1673), ignored in a text field', async () => {
+    await boot('?bot=off');
+    expect(document.getElementById('keyhint')!.textContent).toContain('Tab group, Q W E / A S D');
+    const q = (el: EventTarget): void => void el.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    q(document.body);
+    expect(document.body.hasAttribute('data-keyhint')).toBe(true);
+    q(document.body);
+    expect(document.body.hasAttribute('data-keyhint')).toBe(false);
+    q(document.body.appendChild(document.createElement('input')));
+    q(document.body.appendChild(document.createElement('textarea')));
+    q(document.body.appendChild(document.createElement('select')));
+    const ce = document.body.appendChild(document.createElement('div'));
+    Object.defineProperty(ce, 'isContentEditable', { value: true });
+    q(ce);
+    expect(document.body.hasAttribute('data-keyhint')).toBe(false);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true, repeat: true }));
+    expect(document.body.hasAttribute('data-keyhint')).toBe(false);
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+    expect(document.body.hasAttribute('data-keyhint')).toBe(false);
+  });
 });
