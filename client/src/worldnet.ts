@@ -56,6 +56,10 @@ export interface NetStatus {
   text: string;
 }
 
+/** After a join error with nobody connected, the room is left and joined again this long after (#1670): a fresh announce and fresh offers
+ * instead of waiting for the relays' 60 s cycle to retry the pair that failed. */
+export const RETRY_MS = 15000;
+
 const NOBODY = 'Online: nobody else here yet.';
 const heroes = (n: number): string => `Online: ${n} other ${n === 1 ? 'hero' : 'heroes'} here.`;
 const ERRORS: Record<string, string> = {
@@ -77,6 +81,8 @@ export class WorldPeersHost implements PeerHost {
   private text = '';
   private lastCount = 0;
   private failed = '';
+  /** When to join the room again after a join error, or null. */
+  private retryAt: number | null = null;
   /** The cells broken this visit, what is owed to peers that joined (a queue each), and when a peer last sent a break. */
   private readonly held: BreakSet;
   private syncing: { peer: string; events: BreakEvent[] }[] = [];
@@ -130,6 +136,7 @@ export class WorldPeersHost implements PeerHost {
     const peers = new Peers();
     net.onJoin((peer) => {
       this.failed = '';
+      this.retryAt = null;
       net.send(encodeHello(this.name()), peer);
       const here = sender.now();
       if (here) net.send(here, peer);
@@ -153,11 +160,13 @@ export class WorldPeersHost implements PeerHost {
     });
     net.onError((message) => {
       this.failed = ERRORS[joinErrorCause(message)]!;
+      this.retryAt ??= this.clock() + RETRY_MS;
       this.update();
     });
     this.running = { net, sender, peers, layer: new PeersLayer(scene, camera, world, this.root) };
     this.lastCount = 0;
     this.failed = '';
+    this.retryAt = null;
     this.text = '';
     this.update();
     this.sendOwed();
@@ -258,6 +267,7 @@ export class WorldPeersHost implements PeerHost {
     const army = run.sender.dueTroop(now);
     if (army) run.net.send(army);
     run.peers.expire(now);
+    if (this.retryAt !== null && now >= this.retryAt && run.peers.cells(hero).length === 0) return this.rejoin(hero);
     const owed = this.syncing[0];
     if (owed && now - this.lastSync >= SYNC_MS) {
       this.lastSync = now;
@@ -268,6 +278,16 @@ export class WorldPeersHost implements PeerHost {
     this.lastCount = cells.length;
     this.update();
     return run.layer.update(cells, hero, [hero, ...troop], bobNow);
+  }
+
+  /** Joins the room again, keeping the error text until a peer connects. */
+  private rejoin(hero: Axial): boolean {
+    const failed = this.failed;
+    this.stop();
+    this.start();
+    this.failed = failed;
+    this.update();
+    return this.running!.layer.update([], hero, [hero]);
   }
 
   /** Stops sending and receiving: peers drop this hero after 10 s, and it sees nobody. */

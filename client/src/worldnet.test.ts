@@ -13,7 +13,7 @@ import { generateKeys } from './moverecord';
 import type { Store } from './quality';
 import { EVENTS_KEY, SYNC_MAX, signBeaten, signBreak, signLair } from './worldevents';
 import { SETTLE_MS, decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
-import { WorldPeersHost, type NetStatus } from './worldnet';
+import { RETRY_MS, WorldPeersHost, type NetStatus } from './worldnet';
 import { PeersLayer } from './worldpeersview';
 
 class FakeNet implements PeerNet {
@@ -256,6 +256,46 @@ describe('WorldPeersHost', () => {
     nets[0]!.join('p');
     host.frame(0, [0, 0]);
     expect(reports.at(-1)!.text).toBe('Online: nobody else here yet.');
+  });
+
+  it('joins the room again RETRY_MS after a join error with nobody connected, keeping the error text (#1670)', () => {
+    const { nets, host, reports, rooms, clock, enter } = setup();
+    enter();
+    clock.now = 1000;
+    nets[0]!.fail('could not connect to peer p after exchanging SDP');
+    nets[0]!.fail('handshake timed out'); // a second error does not push the retry back
+    host.frame(1000 + RETRY_MS - 1, [0, 0]);
+    expect(rooms).toHaveLength(1);
+    host.frame(1000 + RETRY_MS, [0, 0]);
+    expect(nets[0]!.closed).toBe(true);
+    expect(rooms).toHaveLength(2);
+    expect(reports.at(-1)!.text).toBe('Online: a connection problem, still trying.');
+    host.frame(1000 + RETRY_MS + 1, [0, 0]);
+    expect(rooms).toHaveLength(2); // the timer is reset
+    clock.now = 1000 + RETRY_MS + 100;
+    nets[1]!.join('p');
+    nets[1]!.data(encodeHello(), 'p');
+    nets[1]!.data(encodePos(200, 0, 0), 'p');
+    host.frame(1000 + RETRY_MS + 200, [0, 0]);
+    expect(reports.at(-1)!.text).toBe('Online: 1 other hero here.');
+  });
+
+  it('does not rejoin when a hero is connected, or after the join error cleared', () => {
+    const { nets, host, rooms, clock, enter } = setup();
+    enter();
+    nets[0]!.data(encodeHello(), 'p');
+    nets[0]!.data(encodePos(200, 0, 0), 'p');
+    clock.now = 0;
+    nets[0]!.fail('handshake timed out');
+    host.frame(200, [0, 0]);
+    clock.now = RETRY_MS;
+    nets[0]!.data(encodeHello(), 'p');
+    nets[0]!.data(encodePos(200, 0, 0), 'p'); // still heard
+    host.frame(RETRY_MS + 200, [0, 0]);
+    expect(rooms).toHaveLength(1);
+    nets[0]!.join('q'); // a peer connected: the retry is cancelled
+    host.frame(RETRY_MS * 3, [0, 0]);
+    expect(rooms).toHaveLength(1);
   });
 
   it('Hide leaves the room and the screen and Show joins again; leaving the world forgets both', () => {
