@@ -214,6 +214,12 @@ describe('the Tally line, #294', () => {
     expect(css).toMatch(/body\[data-firstrun\] #hud \.tally \{[^}]*animation:\s*none/); // the line stays while the note explains it
   });
 
+  it('puts the bot move on its own status line, not in the note (#1680)', () => {
+    const html = hudHtml({ ...base, botMove: 'Bot moved 2 marbles left' });
+    expect(html).toContain('<div class="botmove" role="status">Bot moved 2 marbles left</div>');
+    expect(hudHtml(base)).not.toContain('botmove');
+  });
+
   it('shows no tally element when there is no line', () => {
     expect(hudHtml(base)).not.toContain('class="tally"');
   });

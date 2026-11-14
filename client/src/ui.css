@@ -1480,6 +1480,7 @@ body[data-pad] #guide [data-controls='pad'] { display: block; }
 #coach-step, #hub-coach, #hub-confirm-text { flex: 1; font-weight: 600; }
 #coach .actions, #hub-confirm .actions { margin-top: 0; }
 #coach .actions button, #hub-confirm .actions button { min-height: var(--target); }
+#hud .botmove { margin-top: 0.25rem; font-size: 0.8125rem; color: var(--text); }
 #hud .tally-note { margin-top: 0.25rem; font-size: 0.8125rem; color: var(--text); }
 body[data-firstrun] #hud .tally { animation: none; } /* the line stays while the note explains it */
 @media (orientation: portrait) {

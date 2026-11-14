@@ -71,7 +71,7 @@ import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
 import { MOTION, cue, ghostFade } from './motion';
-import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
+import { LAST_MOVE_REST, botMoveNote, lastMovePulse, pushedMarbles } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
@@ -2039,6 +2039,7 @@ const evacMaterial = new THREE.MeshBasicMaterial({ color: 0xfff1c1, transparent:
 const evacGlow = Object.assign(new THREE.InstancedMesh(crackGeometry, evacMaterial, 61), { name: 'swarm-evac' }); // one, reused
 let evac: { game: unknown; start: number; reduced: boolean; light: number; lift: number; done: boolean } | null = null;
 let swarmShown: SwarmState | null = null; // read by the tests
+let botMoved: { game: unknown; len: number; text: string } | null = null; // the bot's last move in words (#1680), shown until the player's next move
 let lastLanding: Axial[] = []; // where the bot's last move landed
 let stalkerShown: { visible: Axial[]; drawn: Axial[]; revealed: Axial[]; last: Axial[] } | null = null; // read by the tests
 // The Chaplain's martyr tell (#748): a steady ember ring and a tall glyph on the marble that explodes next boss turn.
@@ -3220,6 +3221,7 @@ function afterPlay(before: number[], record: number[], live = true, pulls: Pull[
   const mv = parseMoves(record)[0]!;
   revealed.clear();
   lastLanding = fogged() && engine.to_move() === PLAYER ? landing(mv) : []; // the bot's move, shown for one turn
+  if (live && worker !== null && !fight && !fogged() && engine.to_move() === PLAYER) botMoved = { game: engine, len: history.length, text: botMoveNote(mv, pushedMarbles(before, mv)) }; // a core is not a marble of yours; a new game has a new engine, so an old note never shows in it
   const reduced = reducedMotion();
   // The Magnetizer's repulsions (#645): the move slides to the board before the first one, then each plays in turn.
   const repulsions = live && !reduced && engine instanceof Encounter ? parseRepulsions(engine.repulsions()) : [];
@@ -3971,6 +3973,7 @@ function drawHud(extra = ''): void {
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && duel ? duelTurn(online.side, online.ourTurn()) : online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
+    botMove: botMoved?.game === engine && botMoved.len === history.length && status === 0 ? botMoved.text : '',
     tallyNote: firstRun === 'fight' ? COACH.tally : '', // the first Tally line explained once, under it (#1521)
     tally,
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).

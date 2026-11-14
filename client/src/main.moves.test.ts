@@ -530,9 +530,9 @@ describe('the frame loop', () => {
     expect(data().lastMove).not.toBe('0');
     game.frame(0);
     game.frame(SLIDE_MS + MOTION.base / 2);
-    expect(game.hook<{ opacity: number; scale: number }>('__lastMoveRing').opacity).toBeGreaterThan(0.55);
+    expect(game.hook<{ opacity: number; scale: number }>('__lastMoveRing').opacity).toBeGreaterThan(0.9);
     game.frame(MOTION.base);
-    expect(game.hook<{ opacity: number; scale: number }>('__lastMoveRing')).toEqual({ opacity: 0.55, scale: 1 });
+    expect(game.hook<{ opacity: number; scale: number }>('__lastMoveRing')).toEqual({ opacity: 0.9, scale: 1 });
   });
 
   it('under automation draws at most every 100 ms', async () => {
