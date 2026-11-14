@@ -41,13 +41,13 @@ export const nextDifficulty = (current: Difficulty): Difficulty =>
 
 export type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
-/** Reads difficulty from storage, defaulting to 'normal'. */
+/** Reads difficulty from storage, defaulting to 'easy' (#1664). */
 export function readDifficulty(storage: Store): Difficulty {
   try {
     const value = storage?.getItem('ab-alone.difficulty');
-    return value === 'easy' || value === 'hard' ? value : 'normal';
+    return value === 'normal' || value === 'hard' ? value : 'easy';
   } catch {
-    return 'normal';
+    return 'easy';
   }
 }
 

@@ -720,7 +720,7 @@ id and its listener, moved under its heading (`client/src/settingsgroups.ts`); n
 - **Advanced** is a `details` disclosure, shut at every start and kept as the player left it while the page is open; its summary is a 44 px row with a + or a minus.
   The developer tools in it keep their rules in the other specs (Export game and Import game are hidden in the Hub and online, Copy diagnostics is the last row of the menu).
 - **Labels.** Every item shows a visible label, an icon then a word, on a phone as on a desktop. The three that were a bare value say what they are:
-  Difficulty: 100%, Shell: Leather, Glass: Marble. A toggle shows its state as it did, filled while it is on (`aria-pressed`).
+  Difficulty: 50% (a fresh profile plays on Easy, #1664), Shell: Leather, Glass: Marble. A toggle shows its state as it did, filled while it is on (`aria-pressed`).
 - **Size and place.** The menu is a column 20 rem wide at most (the window less 32 px), hung under the cog at its right edge and fixed to the window. It is as tall
   as its items and no taller than the window less a clearance at the bottom (above the score bar and the dock held upright and on a desktop, above the score bar
   held sideways, above the exit in the Open world). Taller than that, it scrolls inside itself, nothing is cut, and every item and heading stays 44 px. It covers

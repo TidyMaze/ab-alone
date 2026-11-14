@@ -182,6 +182,7 @@ const cellScreen = (page: Page, q: number, r: number) =>
 test('start The Chaplain: a hovered move shows the marbles it flips, #150', async ({ page }, testInfo) => {
   const body = page.locator('body');
   const hud = page.locator('#hud');
+  await page.addInitScript(() => localStorage.setItem('ab-alone.difficulty', 'normal')); // the recorded game is measured at a known difficulty, not the default (Easy, #1664)
   await startChaplain(page);
   const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
   const exposing = () =>

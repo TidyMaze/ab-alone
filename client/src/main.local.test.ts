@@ -66,7 +66,7 @@ afterEach(() => vi.useRealTimers());
 
 describe('main.ts, the bot', () => {
   it('answers a move of the human with its own, searched with the ?nodes budget, and blocks the hint meanwhile', async () => {
-    const game = await boot('?nodes=50');
+    const game = await boot('?nodes=50', { storage: { 'ab-alone.difficulty': 'normal' } });
     await game.settle();
     expect(botSearches()).toEqual([]); // the human moves first
     const mine = game.turn();
@@ -92,7 +92,7 @@ describe('main.ts, the bot', () => {
   });
 
   it('drops its reply to a game New game replaced while it was thinking', async () => {
-    const game = await boot('?nodes=50');
+    const game = await boot('?nodes=50', { storage: { 'ab-alone.difficulty': 'normal' } });
     const mine = game.turn();
     playMove(game);
     newGame().click();

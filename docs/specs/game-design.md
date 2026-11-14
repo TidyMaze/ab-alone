@@ -34,7 +34,7 @@ Feature issues: #38 (input), #40 (anti-stalling), #41 (online), #42 (encounter f
 2. **Readable dread.** Every threat is shown one turn before it hits (tell). Horror comes from
    the mood and the pressure, never from hidden rules.
 3. **Die, learn, retry.** A loss teaches one thing. Retry in under 5 seconds. No stat grind: the
-   player gets better, not the character. The difficulty setting (Easy, Normal, Hard, #704, #1538)
+   player gets better, not the character. The difficulty setting (Easy, Normal, Hard, #704, #1538; Easy for a profile with none stored, #1664)
    changes the opponent and what the player is shown, never the player's own marbles or powers. A rogue-lite run, a secondary
    mode like the boss fights (the core of the game stays Abalone 1v1), may grow its army inside
    the run; a run starts from zero, and what carries over is variety (other starting armies,

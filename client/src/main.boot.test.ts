@@ -867,28 +867,28 @@ describe('the settings toggles', () => {
 
   it('cycles difficulty and saves it to localStorage', async () => {
     await boot('?bot=off');
+    expect(row('difficulty').textContent).toBe('Difficulty: 50%'); // a fresh profile plays on Easy (#1664)
+    row('difficulty').click();
     expect(row('difficulty').textContent).toBe('Difficulty: 100%');
+    expect(localStorage.getItem('ab-alone.difficulty')).toBe('normal');
     row('difficulty').click();
     expect(row('difficulty').textContent).toBe('Difficulty: 200%');
     expect(localStorage.getItem('ab-alone.difficulty')).toBe('hard');
     row('difficulty').click();
     expect(row('difficulty').textContent).toBe('Difficulty: 50%');
     expect(localStorage.getItem('ab-alone.difficulty')).toBe('easy');
-    row('difficulty').click();
-    expect(row('difficulty').textContent).toBe('Difficulty: 100%');
-    expect(localStorage.getItem('ab-alone.difficulty')).toBe('normal');
   });
 
   it('the difficulty control says what each level changes, in its line, tooltip and name (#1538)', async () => {
     await boot('?bot=off');
     const note = (): string => document.getElementById('difficulty-note')!.textContent!;
-    expect(note()).toBe('Normal: full boss search; hover tells on hover.');
-    expect(row('difficulty').title).toBe('Difficulty: normal (100%). Normal: full boss search; hover tells on hover.');
+    expect(note()).toBe('Easy: half the boss search; hover tells always on.');
+    expect(row('difficulty').title).toBe('Difficulty: easy (50%). Easy: half the boss search; hover tells always on.');
     expect(row('difficulty').getAttribute('aria-label')).toBe(row('difficulty').title);
     row('difficulty').click();
-    expect(note()).toBe('Hard: double the boss search; hover tells off.');
+    expect(note()).toBe('Normal: full boss search; hover tells on hover.');
     row('difficulty').click();
-    expect(note()).toBe('Easy: half the boss search; hover tells always on.');
+    expect(note()).toBe('Hard: double the boss search; hover tells off.');
   });
 
   it('starts on the saved difficulty', async () => {

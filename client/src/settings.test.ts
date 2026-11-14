@@ -8,6 +8,11 @@ import { PALETTE_NAMES } from './palettes';
 import { skinById } from './skins';
 
 describe('settingsList', () => {
+  it('without a difficulty argument, the row reads Easy: 50% (#1664)', () => {
+    const row = settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true).find((x) => x.id === 'difficulty');
+    expect(row!.label).toBe('Difficulty: 50%');
+  });
+
   it('lists Clear board, Reduced motion, Flat HUD, Sound, Transcript, Difficulty, Theme, Palette, shell and glass skin, Export and Import game', () => {
     expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },

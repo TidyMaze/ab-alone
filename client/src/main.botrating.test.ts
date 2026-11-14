@@ -7,20 +7,21 @@ import { boot } from './test/harness';
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const badge = (): HTMLElement | null => document.querySelector('#hud .bot-rating');
+const normal = { 'ab-alone.difficulty': 'normal' }; // the bot rating is measured at a known difficulty, not at the default (Easy, #1664)
 const medals = (n: number): Record<string, string> => ({ 'ab-alone.medals': JSON.stringify(Object.fromEntries(Array.from({ length: n }, (_, i) => [`boss${i}`, 9]))) });
 
 describe('main.ts, the bot rating, #1611', () => {
   it('a new player meets the lowest bot: about 1070, Easy, and says it is an estimate', async () => {
-    await boot('?real=1');
+    await boot('?real=1', { storage: normal });
     expect(badge()!.textContent).toBe('Bot ~1070 · Easy');
     expect(badge()!.title).toMatch(/estimate/i);
     expect(document.body.dataset.botRating).toBe('1070');
   });
 
   it('the bot grows with the bosses beaten: all fifteen medals is the peak, 60000 positions, Hard', async () => {
-    await boot('?real=1', { storage: medals(15) });
+    await boot('?real=1', { storage: { ...normal, ...medals(15) } });
     expect(badge()!.textContent).toBe('Bot ~1600 · Hard');
-    await boot('?real=1', { storage: medals(40) }); // more than the roster counts for nothing more
+    await boot('?real=1', { storage: { ...normal, ...medals(40) } }); // more than the roster counts for nothing more
     expect(badge()!.textContent).toBe('Bot ~1600 · Hard');
   });
 
@@ -30,12 +31,12 @@ describe('main.ts, the bot rating, #1611', () => {
   });
 
   it('a test budget (?nodes) is not scaled by the medals', async () => {
-    await boot('?nodes=50', { storage: medals(15) });
+    await boot('?nodes=50', { storage: { ...normal, ...medals(15) } });
     expect(badge()!.textContent).toBe('Bot ~940 · Easy');
   });
 
   it('the first fight of a run is at a quarter of the bot of the medals, and no badge on the map', async () => {
-    const game = await boot('?real=1', { indexedDB: new IDBFactory() });
+    const game = await boot('?real=1', { storage: normal, indexedDB: new IDBFactory() });
     game.openModes();
     byId('roguelite').click();
     expect(badge()).toBeNull();
@@ -44,7 +45,7 @@ describe('main.ts, the bot rating, #1611', () => {
   });
 
   it('a boss fight reads Boss from its own search budget, with the same tooltip, the difficulty percent applied as the engine does', async () => {
-    const game = await boot('?real=1');
+    const game = await boot('?real=1', { storage: normal });
     game.openModes();
     byId('boss-fight').click();
     byId('boss-list').querySelector('button')!.click(); // The Echo: 100 positions
@@ -58,7 +59,7 @@ describe('main.ts, the bot rating, #1611', () => {
   });
 
   it('the Choir and the Swarm read their own budgets, and a boss fight needs no bot worker', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off', { storage: normal });
     game.openModes();
     byId('boss-fight').click();
     const pick = (name: string) => [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === name)!.click();
@@ -69,14 +70,14 @@ describe('main.ts, the bot rating, #1611', () => {
   });
 
   it('the Daily shows its boss rating too', async () => {
-    const game = await boot('?real=1');
+    const game = await boot('?real=1', { storage: normal });
     game.openModes();
     byId('daily').click();
     expect(badge()!.textContent).toMatch(/^Boss ~\d+ · /);
   });
 
   it('a boss of a run reads its act percent: the first act boss searches half', async () => {
-    const game = await boot('?real=1', { indexedDB: new IDBFactory() });
+    const game = await boot('?real=1', { storage: normal, indexedDB: new IDBFactory() });
     const { boss_ids, run_map } = await import('edgefall-wasm');
     const { actBoss, parseMap, pick, newRun } = await import('./roguelite');
     const { LEGACY_UNLOCKED } = await import('./collector');

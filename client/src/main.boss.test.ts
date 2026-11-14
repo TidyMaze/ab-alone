@@ -682,7 +682,7 @@ describe('main.ts boss tells', () => {
   }, 60_000);
 
   it('The Chaplain: a hovered move shows the marbles it flips, with one cue per new tell', async () => {
-    const game = await boot('?nodes=200', { reducedMotion: true, audio: true });
+    const game = await boot('?nodes=200', { reducedMotion: true, audio: true, storage: { 'ab-alone.difficulty': 'normal' } });
     gesture();
     fightBoss(game, 'The Chaplain', SEED);
     const exposing = (): Move | undefined =>
@@ -816,7 +816,7 @@ describe('main.ts boss tells', () => {
   });
 
   it('The Echo rings the bonus a hovered move gives it, and crosses a free move that would not be offered (#859)', async () => {
-    const game = await boot('?bot=off', { reducedMotion: true });
+    const game = await boot('?bot=off', { reducedMotion: true, storage: { 'ab-alone.difficulty': 'normal' } });
     fightBoss(game, 'The Echo');
     game.click(0, 2);
     hover(game, [0, 1]);

@@ -262,7 +262,7 @@ describe('co-op: the encounter judges the room', () => {
   });
 
   it('asks no boss reply after a human move that ends the fight', async () => {
-    const { game } = await hosted();
+    const { game } = await hosted({ 'ab-alone.difficulty': 'normal' });
     const { Encounter } = await import('edgefall-wasm');
     const { play: played, status } = Encounter.prototype;
     let over = false;

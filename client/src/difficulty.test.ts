@@ -32,9 +32,12 @@ describe('difficulty (#704)', () => {
     expect(nextDifficulty('hard')).toBe('easy');
   });
 
-  it('reads difficulty from storage, defaulting to normal', () => {
+  it('reads difficulty from storage, defaulting to easy (#1664)', () => {
     const store = new Map<string, string>();
     const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) };
+    expect(readDifficulty(storage)).toBe('easy');
+
+    writeDifficulty(storage, 'normal');
     expect(readDifficulty(storage)).toBe('normal');
 
     writeDifficulty(storage, 'easy');
@@ -44,11 +47,11 @@ describe('difficulty (#704)', () => {
     expect(readDifficulty(storage)).toBe('hard');
 
     store.set('ab-alone.difficulty', 'invalid');
-    expect(readDifficulty(storage)).toBe('normal');
+    expect(readDifficulty(storage)).toBe('easy');
   });
 
   it('handles null storage and storage exceptions gracefully', () => {
-    expect(readDifficulty(null)).toBe('normal');
+    expect(readDifficulty(null)).toBe('easy');
     expect(() => writeDifficulty(null, 'easy')).not.toThrow();
 
     const throwing = {
@@ -59,7 +62,7 @@ describe('difficulty (#704)', () => {
         throw new Error('blocked');
       },
     };
-    expect(readDifficulty(throwing)).toBe('normal');
+    expect(readDifficulty(throwing)).toBe('easy');
     expect(() => writeDifficulty(throwing, 'hard')).not.toThrow();
   });
 

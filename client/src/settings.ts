@@ -62,7 +62,7 @@ export const settingsList = (
   flat: boolean,
   palette: Palette,
   transcript: boolean,
-  difficulty: Difficulty = 'normal',
+  difficulty: Difficulty = 'easy',
   renderMode: RenderMode = 'normal',
   freeCam = false,
   steering = true,
