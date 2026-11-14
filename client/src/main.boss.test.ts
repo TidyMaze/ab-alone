@@ -967,7 +967,7 @@ describe('the boss menu locks the bosses the Hub would not reach (#1527)', () =>
   const progress = (...beaten: string[]) => ({ 'ab-alone.progress': JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0], beaten }) });
 
   it('shows the bosses above the progress locked with the boss to beat, and starts none of them', async () => {
-    const game = await boot('?bot=off', { webdriver: false });
+    const game = await boot('?bot=off&unlock', { webdriver: false });
     open(game);
     expect(entry('The Echo').getAttribute('aria-disabled')).toBeNull();
     expect(entry('The Dual Room').getAttribute('aria-disabled')).toBeNull();
@@ -999,7 +999,7 @@ describe('the boss menu locks the bosses the Hub would not reach (#1527)', () =>
   });
 
   it('reads the progress each time the menu opens, and drops a lock that no longer holds', async () => {
-    const game = await boot('?bot=off', { webdriver: false });
+    const game = await boot('?bot=off&unlock', { webdriver: false });
     open(game);
     expect(entry('The Hull').getAttribute('aria-disabled')).toBe('true');
     byId('boss-fight').click(); // closed

@@ -665,7 +665,7 @@ describe('the public Open world online', () => {
   });
 
   it('asks a real browser too, and a private seed never asks nor connects', async () => {
-    const real = await boot('?bot=off', { webdriver: false });
+    const real = await boot('?bot=off&unlock', { webdriver: false });
     real.openModes();
     byId('openworld').click();
     await settle();

@@ -4,6 +4,7 @@ import { CELLS, VANISHED, type Axial } from './board';
 import { DECK_NAMES, deckOf, type Deck } from './deck';
 import { modeLabel, terminalLabel } from './doorlabels';
 import { medalLabel } from './medals';
+import { doorLocked, LOCK_LINE } from './unlock';
 import { BOSS_IDS } from './tally';
 import { bossOpen, canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, type Door, type Spot } from './hub';
 
@@ -132,7 +133,12 @@ export interface RoomLabel {
 /** The plate of a room of `deck`: a lift points up or down to its deck, a boss door names its boss and says its seat or station, and once it is
  * beaten its medal's best turns (`medals`, boss id -> turns, medals.ts); any other room wears its name of the ship and its plain line (doorlabels.ts, #1547). A phone
  * shows the boss's name without "The". */
-export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}): RoomLabel {
+export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}, waiting = false): RoomLabel {
+  if (waiting && doorLocked(door.kind)) {
+    // Until the first win (#1665): a boss or a mode room keeps its name and says what opens it; a lift and a table are never locked.
+    const { name, short } = door.kind === 'boss' ? { name: bossTitle(door.boss), short: bossTitle(door.boss).replace(/^The /, '') } : modeLabel(door.kind);
+    return { name, state: LOCK_LINE, short: `${short} locked`, mark: 'locked' };
+  }
   if (door.kind === 'boss') {
     const boss = bossTitle(door.boss);
     const won = beaten.includes(door.boss);
@@ -154,15 +160,15 @@ export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], med
 const wayTo = (deck: Deck, to: Deck): Deck => DECK_NAMES[DECK_NAMES.indexOf(deck) + Math.sign(DECK_NAMES.indexOf(to) - DECK_NAMES.indexOf(deck))]!;
 
 /** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked, and the room of the next `goal` is marked when it is on this deck: the deck's own boss door (not the Dual Room's) or the Rogue-lite room. A goal on another deck marks the lift on its way (`wayTo`). Then every other plate is quiet, but the one under the marble (#1526). */
-export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}, goal: Goal | null = null): string {
+export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}, goal: Goal | null = null, waiting = false): string {
   const goalRoom = (door: Door): boolean => {
-    if (!goal?.deck) return false;
+    if (!goal?.deck || (waiting && doorLocked(door.kind))) return false; // a locked door is never the amber plate (#1665)
     if (goal.deck !== deck) return door.kind === 'lift' && door.to === wayTo(deck, goal.deck);
     return goal.room === 'run' ? door.kind === 'run' : door.kind === 'boss' && door.boss === bossOf(deck);
   };
   const goalOnDeck = roomsOf(deck).some(({ door }) => goalRoom(door)); // the goal room is the loud plate, the others are quiet (#1526)
   const plates = roomsOf(deck).map(({ cell: [q, r], door }) => {
-    const { name, state, short, mark } = roomLabel(deck, door, beaten, medals);
+    const { name, state, short, mark } = roomLabel(deck, door, beaten, medals, waiting);
     const here = q === mq && r === mr;
     const attrs = `${mark ? ` data-mark="${mark}"` : ''}${goalRoom(door) ? ' data-goal' : ''}${here ? ' data-here' : ''}${goalOnDeck && !goalRoom(door) && !here ? ' data-quiet' : ''}`;
     return `<div class="hub-label" data-cell="${q},${r}" data-kind="${door.kind}"${attrs}><b>${name}</b><small>${state}</small><span class="short">${short}</span></div>`;
@@ -210,11 +216,11 @@ export function nextBossTitle(beaten: readonly string[]): string | null {
 }
 
 /** The lift-shaft rail: the five decks from the Bridge down, each with its state, and where the marble is; under them the line of the next `goal`, and its deck's row ringed. */
-export function railHtml(at: Deck, beaten: readonly string[], goal: Goal | null = null): string {
+export function railHtml(at: Deck, beaten: readonly string[], goal: Goal | null = null, waiting = false): string {
   const rows = DECK_NAMES.map((deck, i) => {
     const state = deckState(deck, beaten);
     const boss = bossTitle(bossOf(deck));
-    const line = state === 'locked' ? 'Lift locked' : `Seat: ${boss} ${state === 'beaten' ? 'beaten' : 'waits'}`;
+    const line = state === 'locked' ? 'Lift locked' : waiting && state === 'open' ? 'Seat: win your first game' : `Seat: ${boss} ${state === 'beaten' ? 'beaten' : 'waits'}`;
     const here = deck === at;
     return `<li data-deck="${deck}" data-state="${state}"${deck === goal?.deck ? ' data-goal' : ''}${here ? ' aria-current="location"' : ''}><span class="n">0${i + 1}</span><b>${title(deck)}</b><small>${line}${here ? ' · you are here' : ''}</small></li>`;
   });

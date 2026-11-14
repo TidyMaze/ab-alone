@@ -219,6 +219,8 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 
 ## 8. Unlocks and the run summary (#801)
 
+The run itself is locked until the player's first win against the bot (`ui.md` section 4.10, #1665); a profile with a run history or a saved run is unlocked at once.
+
 Only variety carries over between runs, never power (Decision #934): every starting army has 14
 marbles, and an unlock only widens what a run may hold.
 

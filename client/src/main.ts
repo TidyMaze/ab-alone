@@ -32,6 +32,7 @@ import { BOARD_TEXT, publishAllowed, publishFlag, boardAskNeeded, boardKeys, joi
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { COACH, COLD_OPEN, FIRST_FIGHT_RECORDS, FIRST_PUSH, firstRunDue, markFirstRunDone } from './firstrun';
 import { openWorldLeads } from './menuorder';
+import { doorLocked, existingPlayer, firstWinGame, isLocked, LOCK_BANNER, markFirstWin, paintLocks, UNLOCK_CARD } from './unlock';
 import { worldSaves } from './openworldsave';
 import { askBot, askEval, BOT_NODES, botBudget, encounterFor, engineFor, WILD_NODES } from './bot';
 import { askMirror } from './traitchoice';
@@ -481,6 +482,7 @@ const closeGoal = (): void => {
   goalOpen = false;
   hud();
 };
+let locked = false; // the first-win lock (#1665, unlock.ts): on for a new player until the first win against the bot
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number }; mirror?: boolean } | null = null; // mirror: the player's trait brought in (#1620)
 let hub: HubController | null = null;
 let wildFrom: { seed: number; home: Axial; phase: Phase; placed: number[][]; relics: number[] } | null = null; // the Open world marble that started the wild fight (#1511): the world, the cell it starts on, and the phase it was met in, and the special marbles of the army placed on its side (#1655)
@@ -1338,6 +1340,38 @@ guideBox.addEventListener('keydown', (e) => {
     nextFocus(document.activeElement, e.shiftKey ? -1 : 1, guideBox).focus();
   }
 });
+// The first-win lock (#1665, unlock.ts, ui.md 4.10): a new player plays the normal game first. The entries that wait for the first win are dimmed
+// and a press starts nothing, whatever opens them (the menu, the dock, a door of the Hub); a link, Settings, New game and Play online never ask.
+// The first win against the bot saves one flag, lifts the lock and shows a card once. body[data-unlocked] reads 0 or 1.
+function syncLocks(): void {
+  paintLocks(document, locked);
+  document.body.dataset.unlocked = locked ? '0' : '1';
+}
+function unlockFirstWin(): void {
+  markFirstWin(store);
+  locked = false;
+  syncLocks();
+  const card = document.getElementById('unlock')!;
+  document.getElementById('unlock-title')!.textContent = UNLOCK_CARD.title;
+  document.getElementById('unlock-text')!.textContent = UNLOCK_CARD.text;
+  card.hidden = false;
+  document.getElementById('unlock-world')!.focus();
+}
+for (const [id, press] of [['unlock-world', () => openWorldButton.click()], ['unlock-hub', () => shipButton.click()], ['unlock-dismiss', () => undefined]] as const) {
+  document.getElementById(id)!.addEventListener('click', () => {
+    document.getElementById('unlock')!.hidden = true;
+    press();
+  });
+}
+// One guard for the whole page, in the capture phase: a press on a locked entry (the menu, the dock's Open world, the pad's Enter, a call of .click() such
+// as ?openworld=, Browser Back or a door of the Hub) starts nothing. The entry keeps the focus and its aria-disabled.
+document.addEventListener(
+  'click',
+  (e) => {
+    if (locked && (e.target as Element).closest('[data-locked]')) e.stopPropagation();
+  },
+  true,
+);
 // The first run (#1521, #1523, firstrun.ts, ui.md 4.7): a fresh profile gets the cold open, then a scripted fight (the standard
 // board played six plies, no click), the push shown as the hint and the coach plate, until the player's first ejection, then the Hub
 // with The Echo as the goal. Skip, at the cold open or in the fight, goes to the Hub. It is marked done when it starts: it plays
@@ -3907,6 +3941,7 @@ function drawHud(extra = ''): void {
   });
   if (end && (fight || worker || online?.role === 'player') && !replaying) endCue(engine, end.anim, AFTER_EJECTION);
   if (end?.anim === 'win' && (fight || worker || online?.role === 'player') && !replaying) winOnce(); // the wins of any mode, a hot seat and a spectator apart (#1584)
+  if (locked && firstWinGame(end?.anim, { bot: worker !== null, fight: fight !== null, run: run !== null, trainer: trainer !== null, online: online !== null, wild: wildFrom !== null, replaying: replaying !== null })) unlockFirstWin(); // the first win against the bot opens the other modes (#1665)
   if (end?.anim === 'win' && fight) {
     const note = medalNote(fight); // a won fight: Black is the player's side. The story is at the stage this win reaches before its line is chosen (#1546)
     const won = bossEndLine(fight.id, 'win', storyStage(store))!;
@@ -4311,13 +4346,13 @@ function refresh(): void {
     const glyphOf = props && ((door: Door, options: GlyphOptions) => { const room = createKitGlyph(props, door, options); room.position.y = -TERRACE_LIFT - 0.02; return room; });
     hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim, glyphOf ?? undefined);
     syncDishes();
-    const goal = nextGoal(beaten, ranRun(store)); // the next thing to do (#1524)
-    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store), goal); // a beaten boss's door shows its medal (#1249)
-    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten, goal);
+    const goal = locked ? { text: LOCK_BANNER, deck: null, room: null } : nextGoal(beaten, ranRun(store)); // the next thing to do (#1524); the first win while the lock is on
+    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store), goal, locked); // a beaten boss's door shows its medal (#1249)
+    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten, goal, locked);
     document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten, loadMedals(store));
     const day = utcDay(Date.now());
     hubBoard.hidden = !hubCoach.hidden; // the notice board waits while the coach line teaches (#1528)
-    hubBoard.innerHTML = noticeBoard(store, day, boss_name(dailyFor(day, boss_ids()).id)!, beaten, loadMedals(store));
+    hubBoard.innerHTML = noticeBoard(store, day, boss_name(dailyFor(day, boss_ids()).id)!, beaten, loadMedals(store), locked);
     placeHubLabels();
     hud();
     return;
@@ -6067,6 +6102,7 @@ hubConfirmYes.addEventListener('click', () => {
 function enterRoom(at: HubSpot): void {
   const from = placeFrom; // a table or a boss of the Hub of a town is still that visit (#1593)
   const door = roomAt(at.deck, at.cell);
+  if (locked && door && doorLocked(door.kind)) return; // the Hub stays as it is: its boss and mode doors wait for the first win (#1665)
   if (door?.kind === 'terminal') return openReader(door.lore);
   if (door?.kind === 'medals') return openReader(MEDAL_ROOM);
   if (door?.kind === 'boss') startBoss(door.boss, crypto.getRandomValues(new Uint32Array(1))[0]!);
@@ -7168,7 +7204,7 @@ if (navigator.webdriver) {
   hooks.__modeProbe = () => modeProbe.samples(); // the first-frame times of the mode entries (#1582)
   hooks.__modeReset = () => modeProbe.reset();
   hooks.__modeMarks = () => modeProbe.marks();
-  const entries = { arena: () => startLocal(false), run: beginRun, boss: startDaily, world: enterOpenWorld }; // each mode's own entry, as the menus call it
+  const entries = { arena: () => startLocal(false), run: beginRun, boss: startDaily, world: enterOpenWorld, hub: () => enterHub(loadProgress(store).at) }; // each mode's own entry, as the menus call it
   hooks.__enterMode = (mode: keyof typeof entries) => entries[mode]();
   hooks.__openworldEnemies = () => openWorld.loaded.mode.enemies();
   hooks.__openworldDrawn = () => openWorld.loaded.mode.drawn; // the frames drawn since the world opened: a spec waits for one before it reads the wild fight (#1601)
@@ -7646,7 +7682,11 @@ const creator = creatorFromHash(location.hash); // the fingerprint of the creato
 // The Open world leads the mode menu of a fresh profile (#1612, menuorder.ts); a profile with a save or a boss beaten keeps its menu.
 // A saved run or a saved public world is a save too: the profile keeps its menu (#1612).
 const worldSaved = (await worldSaves(gameStore, world_version()).load(PUBLIC_SEED)) !== null;
-const leadsMenu = openWorldLeads(resumed !== null || resumedRun !== null || worldSaved, loadProgress(store).beaten.length);
+const saved = resumed !== null || resumedRun !== null || worldSaved;
+if (new URLSearchParams(location.search).has('unlock')) markFirstWin(store); // dev: the lock is lifted for good (#1665)
+locked = isLocked(location.search, navigator.webdriver, existingPlayer(store, saved, loadProgress(store).beaten.length));
+syncLocks();
+const leadsMenu = !locked && openWorldLeads(saved, loadProgress(store).beaten.length);
 if (leadsMenu) modeMenu.insertBefore(openWorldButton, document.getElementById('play-online'));
 document.getElementById('open-world-entry')!.hidden = !leadsMenu;
 if (invited) void goOnline(invited, 2, undefined, creator);
@@ -7654,8 +7694,8 @@ else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
 else if (duelInvite && boss_ids().includes(duelInvite.boss)) void goOnline(duelInvite.room, 2, duelInvite, creator, true); // the joiner plays the boss (#1316)
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite, creator); // an unknown boss starts nothing
 else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
-else if (!resumed && firstRunDue(store, location.search, navigator.webdriver, location.hash, loadProgress(store).beaten.length > 0)) startFirstRun(); // a fresh profile plays the first run (#1521)
-else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Hub (#602)
+else if (!resumed && !locked && firstRunDue(store, location.search, navigator.webdriver, location.hash, loadProgress(store).beaten.length > 0)) startFirstRun(); // a fresh profile plays the first run (#1521)
+else if (!resumed && !locked && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Hub (#602)
 else analyse(); // the start position
 
 // Browser Back and the Android Back gesture (#1564, backnav.ts, ui.md "Browser Back"): the screens other than the one the page started on

@@ -166,6 +166,8 @@
       </nav>
       <div id="mode-menu" role="group" aria-label="Game modes" hidden>
         <button id="update" type="button" hidden>New version: reload</button>
+        <p id="lock-banner" hidden>Win your first game vs the bot</p>
+        <p id="lock-note" hidden>More unlocks after your first win</p>
         <button autocomplete="off" id="play-online" type="button" title="Play a friend or a stranger over the network." disabled>Play online</button>
         <button autocomplete="off" id="fight-together" type="button" title="You and a partner against one boss, taking turns." aria-expanded="false" disabled>Boss with a partner</button>
         <div id="coop-list" hidden></div>
@@ -224,6 +226,18 @@
     <div id="run-map" role="region" aria-label="Rogue-lite map" hidden></div>
     <div id="bubble" hidden><span id="bubble-text" aria-hidden="true"></span><span id="bubble-line" role="status"></span></div>
     <div id="reader" role="region" aria-label="Terminal" aria-live="polite" hidden></div>
+    <!-- The first win (#1665): the card that says what opened, shown once (unlock.ts). -->
+    <div id="unlock" role="dialog" aria-modal="true" aria-labelledby="unlock-title" aria-describedby="unlock-text" tabindex="-1" hidden>
+      <div class="card">
+        <h2 id="unlock-title"></h2>
+        <p id="unlock-text"></p>
+        <div class="actions">
+          <button id="unlock-dismiss" type="button">Dismiss</button>
+          <button id="unlock-hub" type="button">Hub</button>
+          <button id="unlock-world" type="button">Open world</button>
+        </div>
+      </div>
+    </div>
     <!-- The choice before a tower (#1620): the Echo's mirror is brought into the fight or not, asked once The Echo is beaten. -->
     <div id="trait" role="alertdialog" aria-modal="true" aria-labelledby="trait-text" tabindex="-1" hidden>
       <div class="card">

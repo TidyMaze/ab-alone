@@ -139,13 +139,13 @@ of its own under Boss fight or Fight together that scrolls sideways, so a new bo
 12 bosses and more on a phone 360 px wide, #666). In a desktop window (wider than tall, over 1100 px wide, a mouse) the items of the mode menu sit side by side when they fit, and an open boss list takes a row of its own as wide as the column with two bosses a row, each row compact, so 12 bosses and more with Daily challenge fit a 1280x720 or 1280x800 window without a scroll (#653, #699). One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
 and once a mode starts (a boss picked, Daily challenge, Play online, Hub, Battle royale). On a phone each item is at
 least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, the exit, Hold, the invite link)
-stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Hub (Mess deck, #602), after the first run of a fresh profile (section 4.7). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
+stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Hub (Mess deck, #602) for a player who has won a game; a new player lands on the standard board against the bot, and the other modes are locked until the first win (section 4.10, #1665). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
 
 The boss list follows the Hub's lifts (#1527): a boss above the player's progress is locked, dimmed with `Beat The Hull first` under its
 name (`aria-disabled`, `data-locked`), and a press starts nothing. The rule is `bossOpen` of `hub.ts`, the lift of the boss's deck; a boss
 already beaten stays open, so an older save loses nothing, and the list reads the progress each time it opens. A link, a test hook, the Hub's
 doors, the Open world's lairs and the MCP do not go through the list and stay open. The lock is a player's: an automated page
-(`navigator.webdriver`, every e2e spec) has the list open unless the URL holds `?locks`, as `?firstrun` gives it a first launch.
+(`navigator.webdriver`, every e2e spec) has the list open unless the URL holds `?locks`, as `?firstrun` gives it a first launch. The first-win lock of section 4.10 comes before it: while it holds, the whole Solo boss fight entry waits.
 
 ```
 +---------------------------------+
@@ -562,8 +562,9 @@ timer.
 
 #### First run
 
-A new player does not get five pages of rules first (#1521). A fresh profile on the plain root URL plays the **first run**
-(`client/src/firstrun.ts`), then the Hub; it plays once and can be skipped.
+A new player does not get five pages of rules first (#1521). Since #1665 a fresh profile does not reach this first run at the start: it lands on the
+standard board against the bot (section 4.10), and the first run (`client/src/firstrun.ts`), then the Hub, plays only for a profile that holds the first-win
+flag and has not seen it (the guided first match, #1663, replaces it). It plays once and can be skipped.
 
 1. **Cold open (#1523).** A plate over the board, the guide's own: a title (`Mess, deck 1`) and three lines in Tally's flat
    register, the place, the last clear visor and Tally's rule ("CSV Ballast, drifting over Hollow. Power: 11%." / "The crew
@@ -588,7 +589,7 @@ A new player does not get five pages of rules first (#1521). A fresh profile on 
   boss beaten. A returning player, or one who saw the guide, gets the Hub as before (#602). The first run is marked done
   (`ab-alone.firstrun = done`, localStorage) as soon as it starts, so it plays once even when the tab closes. The scripted
   game is never saved as the player's local game.
-- **Tests.** An automated browser does not play it, so the e2e specs boot on a fresh profile as before; `?firstrun` makes
+- **Tests.** An automated browser does not play it, and is never locked by section 4.10 (unless `?newplayer`), so the e2e specs boot on a fresh profile as before; `?firstrun` makes
   it a first launch (`client/e2e/first-run.spec.ts`: a fresh profile reaches its first ejection with no menu opened, then the
   Hub shows The Echo as the goal, well inside the 60 s of #1521). `body[data-firstrun]` reads `open`, `fight` or `done`.
 - **Vocabulary.** White and Black everywhere in rules text, as the HUD says (#1523): the guide no longer says pale glass and
@@ -675,6 +676,29 @@ strip only where it fits: on a landscape window of at most 1100 px (9 rem wide),
 always holds the strip and the steps. The other bosses keep their one line; their cards are a later step.
 `boss.goal()` of the bridge is unchanged (the MCP server reads it). Tests: `goalcard.test.ts`, `main.boss.test.ts` and the Echo
 spec of `client/e2e/echo.spec.ts` (the card in the HUD, then in the sheet, inside the window and clear of the boss bar).
+
+### 4.10 The first-win lock (#1665)
+
+A new player first plays a normal Abalone game against the bot (Easy, #1664); the rest unlocks after the **first win**. `client/src/unlock.ts`.
+
+- **Locked until the first win:** Open world, Solo boss fight (the list and the Hub's doors), Rogue-lite run, Daily challenge, Battle royale, Ranked, Leaderboard,
+  Boss with a partner, Boss vs a player, the Hub, the Trainer, and the Hub's boss and mode rooms. **Never locked:** Settings, the guide and rules, New game and Quick
+  game against the bot, Play online with a friend, an `#room=` invite link (a person is waiting), and the Hub's tables, comms desk, terminals and lifts.
+- **Look.** A locked entry stays visible and focusable (never `disabled`: Tab reaches it, Enter starts nothing): a dashed edge, `aria-disabled="true"`, `data-locked` (the line) and `data-lock-short`, a padlock before its name and
+  "Win your first game to unlock" under it ("Win 1st game" under 600 px), 12 px in the text colour. Every row is at least 44 px tall. The menu opens on an amber
+  banner "Win your first game vs the bot" with "More unlocks after your first win" right under it, in view without a scroll. The locked Daily keeps one line (its name is cut with an ellipsis, the whole name stays in the title). A press starts nothing, whatever the way in: one capture-phase guard on the page
+  (the menu, the dock, the pad, `?openworld=` of a real player, Back, the Hub's doors). While locked the Hub's goal reads "Win your first game vs the bot" and no door is the amber plate; the notice board says "Next: win your first game vs the bot." and the open deck's seat in the rail "Seat: win your first game", not "The Echo waits". A locked Hub plate wears the line and the dashed grey of a
+  locked lift. No animation, so reduced motion needs no case.
+- **Start.** A new player on the plain URL gets the board, no cold open and no Hub (the cold open waits for the unlock too). Importing a game file that holds a won game
+  against the bot unlocks like a win. The Open world does not lead the menu (`openWorldLeads`, `menuorder.ts`,
+  stays for a profile that is unlocked and fresh, which is none on a browser).
+- **First win.** The first win against the bot in a standard game (not a boss, run, Trainer, online room, wild fight or replay; a loss or a draw counts for
+  nothing) saves `ab-alone.firstwin=1` and shows a card once: "You won." / "Unlocked: Open world, Bosses, Runs, Daily, Royale, Ranked, Leaderboard", with Open world (the filled button), Hub and Dismiss.
+- **Existing players** are unlocked at once, with no card, when any holds: `ab-alone.firstwin`, a boss beaten, a saved local game, run or Open world, or any
+  non-empty `ab-alone.*` key but the settings (difficulty, palette, sound, theme, transcript, motion, tier, quality, skins, scale, HUD, zoom, steering, look, volume and light keys) and the guide's (reading it is not play: a guide-only profile stays locked, the win is still needed): the tally, the story, the run, rating and world records, a name. A profile that holds only settings stays locked. Nobody loses access.
+- **Hooks.** An automated page is unlocked unless `?newplayer` (`?locks` stays the boss list's own hook). `?unlock` saves the flag. `body[data-unlocked]` is `0` or `1`.
+  The e2e loads a finished game through `#import-file`; `__enterMode('hub')` opens the Hub whatever the lock.
+- The MCP has no browser profile and is not touched (mcp.md).
 
 ### 4.9 Browser Back (#1564)
 

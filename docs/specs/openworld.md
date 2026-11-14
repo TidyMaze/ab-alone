@@ -16,7 +16,7 @@ A-light Explore (#720 to #725), which it does not touch.
 
 ## 1. The mode
 
-- **Entry**: "Open world" in the mode menu, for everyone, no flag (#1000). A click opens the public
+- **Entry**: "Open world" in the mode menu, locked until the first win against the bot (#1665, `ui.md` section 4.10; it no longer leads the menu of a new player), then for everyone, no flag (#1000). A click opens the public
   world, seed 1305 (owner's choice, #1361: a player cannot change the seed for now); any `?openworld=...` link opens it at the
   load, the online notice first. The seed of the URL is read only under automation (tests). Leave returns to where the player
   came from.

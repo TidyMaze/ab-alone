@@ -278,6 +278,18 @@ describe('the room labels (#1249)', () => {
     expect(html).toContain('<div class="hub-label you" data-cell="0,0">You</div>');
   });
 
+  it('lock the boss and mode rooms until the first win (#1665), and leave the tables, the desk and the lifts', () => {
+    const boss = roomLabel('mess', { kind: 'boss', boss: 'dual' }, [], {}, true);
+    expect(boss).toMatchObject({ name: 'The Dual Room', state: 'Win your first game to unlock', short: 'Dual Room locked', mark: 'locked' });
+    expect(roomLabel('mess', { kind: 'world' }, [], {}, true)).toMatchObject({ state: 'Win your first game to unlock', mark: 'locked' });
+    expect(roomLabel('mess', { kind: 'bot' }, [], {}, true)).toEqual(roomLabel('mess', { kind: 'bot' }, []));
+    expect(roomLabel('mess', { kind: 'lift', to: 'cargo' }, ['echo'], {}, true).mark).toBe('');
+    const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, null, true);
+    expect(html).toContain('data-kind="world" data-mark="locked"');
+    expect(html).toContain('data-kind="bot"><b>');
+    expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, [])).not.toContain('data-kind="world" data-mark="locked"');
+  });
+
   it('marks the plate of the room the marble stands on, with no YOU plate of its own', () => {
     const html = labelsHtml({ deck: 'cargo', cell: [2, 0] }, ['echo', 'hull']);
     expect(html).toContain('<div class="hub-label" data-cell="2,0" data-kind="boss" data-mark="beaten" data-here>');
@@ -391,6 +403,12 @@ describe('the next goal (#1521, #1524)', () => {
     expect(nextGoal(BOSSES, false).deck).toBe('cargo'); // the run is still the goal until it is started
   });
 
+  it('says the first win on the open deck while the lock is on, and The Echo waits again after (#1665)', () => {
+    expect(railHtml('mess', [], null, true)).toContain('<small>Seat: win your first game · you are here</small>');
+    expect(railHtml('mess', [], null, true)).not.toContain('Echo waits');
+    expect(railHtml('mess', [], null, false)).toContain('Seat: The Echo waits');
+  });
+
   it('puts the goal in a line of the rail, under the five decks, and rings the row of its deck', () => {
     const html = railHtml('mess', [], nextGoal([], false));
     expect(html).toContain('<p class="goal"><span class="lead">Next goal: </span>Beat The Echo on the Mess deck.</p>');
@@ -450,5 +468,13 @@ describe('the next goal (#1521, #1524)', () => {
     expect(run).not.toMatch(/data-kind="boss"[^>]*data-goal/);
     expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, [])).not.toContain('data-goal');
     expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, BOSSES, {}, nextGoal(BOSSES, true))).not.toContain('data-goal');
+  });
+});
+
+describe('a locked door is never the goal (#1665)', () => {
+  it('while waiting for the first win no plate carries the amber goal, whatever the goal says', () => {
+    const goal = nextGoal([], false);
+    expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, goal, false)).toContain('data-goal');
+    expect(labelsHtml({ deck: 'mess', cell: [0, 0] }, [], {}, goal, true)).not.toContain('data-goal');
   });
 });

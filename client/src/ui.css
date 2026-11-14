@@ -1129,6 +1129,9 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
     var(--panel);
 }
 #dock-wrap #mode-menu #daily { max-width: none; overflow: visible; }
+/* #1665: a locked Daily keeps one line for its name, cut with an ellipsis (the whole name stays in the title), so it is as tall as every other locked row. */
+#dock-wrap #mode-menu #daily[data-locked] { padding-block: 0.25rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#dock-wrap #mode-menu #daily[data-locked] span { display: inline; }
 /* Trainer result card (#1159): the wave and the scores, Next wave under them (Retry is in the dock). */
 #dock-wrap #trainer-card { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 #dock-wrap #trainer-card[hidden] { display: none; }
@@ -1415,17 +1418,30 @@ body[data-look='neon'] .hub-label[data-kind='boss'] { --k: #b79cff; }
 /* The first-launch guide (#1293, ui.md 4.7): a plate bolted over the dimmed game, one page at a time, its art on the dark
    deck in both themes. The controls page shows the paragraph of the input in use: the mouse and keys, touch on a coarse
    pointer, the pad's buttons once the pad is in use (body[data-pad]). Above every layer: it opens once the page is up. */
-#guide, #coldopen, #epilogue, #trait {
+#guide, #coldopen, #epilogue, #trait, #unlock {
   position: fixed; inset: 0; z-index: 11; display: flex; align-items: center; justify-content: center; padding: 16px;
   box-sizing: border-box; background: rgba(11, 13, 15, 0.72); outline: none;
 }
-#guide[hidden], #coldopen[hidden], #epilogue[hidden], #trait[hidden] { display: none; }
-#guide .card, #coldopen .card, #epilogue .card, #trait .card {
+#guide[hidden], #coldopen[hidden], #epilogue[hidden], #trait[hidden], #unlock[hidden] { display: none; }
+#guide .card, #coldopen .card, #epilogue .card, #trait .card, #unlock .card {
   box-sizing: border-box; width: min(calc(26rem * var(--ui-scale)), 100%); max-height: 100%; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--space); padding: 1rem 1.25rem;
   color: var(--text); background-color: var(--panel); border: 1px solid var(--edge); border-left: 3px solid var(--plate-accent);
   border-radius: var(--r-card); box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); font: 1rem/1.45 var(--ui);
 }
+#unlock-title { margin: 0; font: 600 1.375rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+#unlock-text { margin: 0; }
+#unlock-dismiss { margin-left: auto; }
+/* The first-win lock (#1665, unlock.ts, ui.md 4.10): a locked entry of the mode menu stays in sight and focusable: a dashed edge, a padlock before its name and the line that
+   opens it under it (the short form under 600 px), 12 px in the text colour, never fainter. A banner above names the first move, a note below says more opens. */
+#mode-menu > [data-locked] { cursor: not-allowed; border-style: dashed; color: var(--muted); }
+#mode-menu > [data-locked='Win your first game to unlock']::before { content: '\1F512\00a0'; }
+#mode-menu > [data-locked='Win your first game to unlock']::after { content: attr(data-locked); display: block; font-size: 0.75rem; font-weight: 600; line-height: 1.1; color: var(--text); }
+@media (max-width: 600px) { #mode-menu > [data-locked='Win your first game to unlock']::after { content: attr(data-lock-short); } }
+#lock-banner { margin: 0; padding: 0.5rem 0.75rem; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; color: #1a1300; background: var(--amber); border-radius: var(--r-button); font: 700 0.875rem/1.2 var(--ui); }
+#lock-note { margin: 0; padding: 0.25rem 0.5rem; color: var(--text); font: 500 0.75rem/1.2 var(--ui); }
+#lock-banner[hidden], #lock-note[hidden] { display: none; }
+#unlock #unlock-world { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
 #guide-count { margin: 0; color: var(--muted); font: 600 0.75rem/1 var(--display); letter-spacing: 0.12em; }
 #guide-art svg { display: block; width: 100%; height: auto; animation: guide-in var(--motion-base) var(--ease-out); }
 @keyframes guide-in { from { opacity: 0; transform: translateX(8px); } }
@@ -1439,13 +1455,13 @@ body[data-look='neon'] .hub-label[data-kind='boss'] { --k: #b79cff; }
 }
 body[data-pad] #guide [data-controls] { display: none; }
 body[data-pad] #guide [data-controls='pad'] { display: block; }
-#guide .actions, #coldopen .actions, #epilogue .actions, #coach .actions, #hub-confirm .actions, #trait .actions { display: flex; gap: var(--space); margin-top: var(--space); }
-#guide .actions button, #coldopen .actions button, #epilogue .actions button, #coach .actions button, #hub-confirm .actions button, #trait .actions button {
+#guide .actions, #coldopen .actions, #epilogue .actions, #coach .actions, #hub-confirm .actions, #trait .actions, #unlock .actions { display: flex; gap: var(--space); margin-top: var(--space); }
+#guide .actions button, #coldopen .actions button, #epilogue .actions button, #coach .actions button, #hub-confirm .actions button, #trait .actions button, #unlock .actions button {
   min-height: var(--target); padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: var(--r-button); font: 500 0.9375rem/1.2 var(--ui);
 }
 #guide-skip, #coldopen-skip, #epilogue-skip, #coach-skip, #hub-confirm-no { margin-right: auto; }
-#guide #guide-next, #coldopen-begin, #epilogue-next, #coach-hub, #hub-confirm-yes, #trait-yes { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
+#guide #guide-next, #coldopen-begin, #epilogue-next, #coach-hub, #hub-confirm-yes, #trait-yes, #unlock-world { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
 #guide .actions button:disabled { opacity: 0.4; cursor: default; }
 #guide .actions button:focus-visible, #coldopen .actions button:focus-visible, #epilogue .actions button:focus-visible, #coach .actions button:focus-visible, #hub-confirm .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 

@@ -35,7 +35,7 @@ function plugPad(game: Game): (button: number) => void {
 
 describe('the cold open', () => {
   it('opens first on a fresh profile with no query, three lines of story, no guide, and is marked done at once', async () => {
-    await boot('/', { webdriver: false });
+    await boot('/', { webdriver: false, storage: { 'ab-alone.firstwin': '1' } }); // a player who won, the lock off (#1665)
     expect(byId('coldopen').hidden).toBe(false);
     expect(byId('coldopen').getAttribute('role')).toBe('dialog');
     expect(byId('coldopen-title').textContent).toBe(COLD_OPEN.title);
@@ -58,10 +58,11 @@ describe('the cold open', () => {
     expect(document.body.dataset.hub).toBe('mess 0,0');
   });
 
-  it('does not open for a returning player: the guide seen, or a boss beaten; the Hub opens as before', async () => {
+  it('does not open for a returning player: a boss beaten; the Hub opens as before. A guide-only profile lands locked, on the board (#1665)', async () => {
     await boot('/', { webdriver: false, storage: { 'ab-alone.guide': 'seen' } });
     expect(byId('coldopen').hidden).toBe(true);
-    expect(document.body.dataset.hub).toBe('mess 0,0');
+    expect(document.body.dataset.hub).toBeUndefined();
+    expect(document.body.dataset.unlocked).toBe('0');
     expect(done()).toBeNull();
     await boot('/', { webdriver: false, storage: { 'ab-alone.progress': JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0], beaten: ['echo'] }) } });
     expect(byId('coldopen').hidden).toBe(true);

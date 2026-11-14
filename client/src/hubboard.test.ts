@@ -13,6 +13,12 @@ describe('the lines of the board', () => {
     expect(boardLines(base)).toEqual({ daily: 'Daily: The Hull. Not played.', next: 'Next boss: The Echo.', medals: 'Medals missing: 15.', streak: '' });
   });
 
+  it('points to the first win instead of the next boss while the lock is on (#1665)', () => {
+    expect(boardLines(base, true).next).toBe('Next: win your first game vs the bot.');
+    expect(boardLines(base, false).next).toBe('Next boss: The Echo.');
+    expect(boardHtml(base, true)).not.toContain('Echo');
+  });
+
   it('gives the status of a daily played: won or lost in its player turns, or started and not finished', () => {
     expect(boardLines({ ...base, record: { result: 'won', turns: 12 } }).daily).toBe('Daily: The Hull. Won in 12 turns.');
     expect(boardLines({ ...base, record: { result: 'won', turns: 1 } }).daily).toBe('Daily: The Hull. Won in 1 turn.');

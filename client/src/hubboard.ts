@@ -28,28 +28,31 @@ const STATUS = {
 };
 
 /** The four lines of the board; the streak is '' when there is none. */
-export function boardLines({ boss, record, next, missing, streak }: BoardState): { daily: string; next: string; medals: string; streak: string } {
+export function boardLines({ boss, record, next, missing, streak }: BoardState, waiting = false): { daily: string; next: string; medals: string; streak: string } {
   return {
     daily: `Daily: ${boss}. ${record ? STATUS[record.result](record) : 'Not played.'}`,
-    next: `Next boss: ${next ?? 'none left'}.`,
+    next: waiting ? 'Next: win your first game vs the bot.' : `Next boss: ${next ?? 'none left'}.`, // until the first win (#1665) the boss is not the next thing
     medals: `Medals missing: ${missing === 0 ? 'none' : missing}.`,
     streak: streak === 0 ? '' : `Streak: ${streak} day${streak === 1 ? '' : 's'}.`,
   };
 }
 
 /** The card: its title and the lines in a list, the streak left out when there is none. A phone keeps the daily and the streak (ui.css). */
-export function boardHtml(state: BoardState): string {
-  const { daily, next, medals, streak } = boardLines(state);
+export function boardHtml(state: BoardState, waiting = false): string {
+  const { daily, next, medals, streak } = boardLines(state, waiting);
   const rows = [['daily', daily], ['next', next], ['medals', medals], ['streak', streak]] as const;
   return `<h2>Notice board</h2><ul>${rows.filter(([, text]) => text).map(([name, text]) => `<li class="${name}">${text}</li>`).join('')}</ul>`;
 }
 
 /** The card of `day`, today, from what the player has done: the daily's `boss` and how it went, the next boss of the `beaten` ones, the roster's bosses with no medal, the streak. */
-export const noticeBoard = (store: Store, day: string, boss: string, beaten: readonly string[], medals: Medals): string =>
-  boardHtml({
-    boss,
-    record: dailyRecord(store, day),
-    next: nextBossTitle(beaten),
-    missing: BOSS_IDS.filter((id) => medals[id] === undefined).length,
-    streak: dailyStreak(store, day),
-  });
+export const noticeBoard = (store: Store, day: string, boss: string, beaten: readonly string[], medals: Medals, waiting = false): string =>
+  boardHtml(
+    {
+      boss,
+      record: dailyRecord(store, day),
+      next: nextBossTitle(beaten),
+      missing: BOSS_IDS.filter((id) => medals[id] === undefined).length,
+      streak: dailyStreak(store, day),
+    },
+    waiting,
+  );

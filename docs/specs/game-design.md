@@ -136,6 +136,8 @@ See section 6.
 
 ### 3.5 Open world hub (Phase 5, #50)
 
+Until a player's first win against the bot, the Hub, its boss and mode doors and the Open world are locked (`ui.md` section 4.10, #1665): `ab-alone.firstwin` is the flag next to `ab-alone.progress`; a profile with any progress is unlocked at once.
+
 | Item | Rule |
 |---|---|
 | Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Hub (Mess deck, #602), after the first run of a fresh profile (ui.md section 4.7, #1521). A "Hub" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
